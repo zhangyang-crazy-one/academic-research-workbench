@@ -135,23 +135,67 @@
 
 ## Traceability
 
-Roadmap creation will map every v1 requirement to exactly one phase.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01..PKG-05 | TBD | Pending |
-| SUP-01..SUP-05 | TBD | Pending |
-| RUN-01..RUN-08 | TBD | Pending |
-| FILE-01..FILE-08 | TBD | Pending |
-| AGT-01..AGT-07 | TBD | Pending |
-| GRAPH-01..GRAPH-06 | TBD | Pending |
-| SCI-01..SCI-07 | TBD | Pending |
-| VER-01..VER-08 | TBD | Pending |
+| PKG-01 | Phase 1 | Pending |
+| PKG-02 | Phase 1 | Pending |
+| PKG-03 | Phase 1 | Pending |
+| PKG-04 | Phase 1 | Pending |
+| PKG-05 | Phase 4 | Pending |
+| SUP-01 | Phase 1 | Pending |
+| SUP-02 | Phase 1 | Pending |
+| SUP-03 | Phase 1 | Pending |
+| SUP-04 | Phase 1 | Pending |
+| SUP-05 | Phase 1 | Pending |
+| RUN-01 | Phase 1 | Pending |
+| RUN-02 | Phase 1 | Pending |
+| RUN-03 | Phase 2 | Pending |
+| RUN-04 | Phase 2 | Pending |
+| RUN-05 | Phase 2 | Pending |
+| RUN-06 | Phase 2 | Pending |
+| RUN-07 | Phase 2 | Pending |
+| RUN-08 | Phase 2 | Pending |
+| FILE-01 | Phase 3 | Pending |
+| FILE-02 | Phase 3 | Pending |
+| FILE-03 | Phase 3 | Pending |
+| FILE-04 | Phase 3 | Pending |
+| FILE-05 | Phase 1 | Pending |
+| FILE-06 | Phase 3 | Pending |
+| FILE-07 | Phase 3 | Pending |
+| FILE-08 | Phase 3 | Pending |
+| AGT-01 | Phase 4 | Pending |
+| AGT-02 | Phase 4 | Pending |
+| AGT-03 | Phase 4 | Pending |
+| AGT-04 | Phase 4 | Pending |
+| AGT-05 | Phase 4 | Pending |
+| AGT-06 | Phase 4 | Pending |
+| AGT-07 | Phase 4 | Pending |
+| GRAPH-01 | Phase 5 | Pending |
+| GRAPH-02 | Phase 5 | Pending |
+| GRAPH-03 | Phase 5 | Pending |
+| GRAPH-04 | Phase 5 | Pending |
+| GRAPH-05 | Phase 5 | Pending |
+| GRAPH-06 | Phase 5 | Pending |
+| SCI-01 | Phase 6 | Pending |
+| SCI-02 | Phase 4 | Pending |
+| SCI-03 | Phase 4 | Pending |
+| SCI-04 | Phase 6 | Pending |
+| SCI-05 | Phase 6 | Pending |
+| SCI-06 | Phase 6 | Pending |
+| SCI-07 | Phase 6 | Pending |
+| VER-01 | Phase 1 | Pending |
+| VER-02 | Phase 7 | Pending |
+| VER-03 | Phase 3 | Pending |
+| VER-04 | Phase 7 | Pending |
+| VER-05 | Phase 5 | Pending |
+| VER-06 | Phase 7 | Pending |
+| VER-07 | Phase 6 | Pending |
+| VER-08 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 54 total
-- Mapped to phases: 0
-- Unmapped: 54
+- Mapped to phases: 54
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-12*
