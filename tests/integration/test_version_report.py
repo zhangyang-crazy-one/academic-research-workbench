@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import jsonschema
+import pytest
 from referencing import Registry, Resource
 
 
@@ -99,3 +100,43 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         entry["path"] != "share/arw/build-identity.json"
         for entry in identity["staged_payloads"]
     )
+
+
+def test_identity_loader_rejects_tampered_packaged_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    smoke_script = REPOSITORY_ROOT / "scripts/smoke-staged-plugin"
+    stage_root = tmp_path / "stage" / PLUGIN_NAME
+    result = subprocess.run(
+        [
+            str(smoke_script),
+            "--version",
+            "--fresh-home",
+            str(tmp_path / "installed-home"),
+            "--evidence-root",
+            str(tmp_path / "evidence"),
+            str(stage_root),
+        ],
+        cwd=tmp_path,
+        env={
+            "HOME": str(tmp_path / "caller-home"),
+            "CODEX_HOME": str(tmp_path / "caller-codex-home"),
+            "PATH": os.environ["PATH"],
+            "PIP_NO_INDEX": "1",
+            "PYTHONNOUSERSITE": "1",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    from arw.build_identity import BuildIdentityError, load_packaged_build_identity
+
+    schema = stage_root / "share/arw/schemas/build-identity.schema.json"
+    schema.write_text(schema.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(stage_root))
+    monkeypatch.setenv("ARW_BUILD_IDENTITY", str(stage_root / "share/arw/build-identity.json"))
+    monkeypatch.setenv("ARW_SCHEMA_ROOT", str(stage_root / "share/arw/schemas"))
+    with pytest.raises(BuildIdentityError, match="packaged schema digest mismatch"):
+        load_packaged_build_identity()
