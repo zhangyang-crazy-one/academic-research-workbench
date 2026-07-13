@@ -459,6 +459,14 @@ class ResumeRequest(RuntimeCommandRequest):
     passport_sha256: Sha256
 
 
+class RecoveryRequest(RuntimeCommandRequest):
+    expected_head_sha256: Sha256
+    recovery_id: StableRuntimeId
+    original_segment_sha256: Sha256
+    reason_code: StableRuntimeId
+    reason_text: Annotated[str, Field(min_length=1, max_length=2048)]
+
+
 class InitRunRequest(StrictModel):
     """Strict operator request used to construct manifest and initial event."""
 

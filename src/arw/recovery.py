@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import os
+import signal
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import ValidationError
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.models import CanonicalEvent, RecoveryCompletedPayload, RecoveryReceipt
+from arw.models import (
+    CanonicalEvent,
+    RecoveryCompletedPayload,
+    RecoveryReceipt,
+    RecoveryRequest,
+)
 
 
 class RecoveryError(RuntimeError):
@@ -22,6 +30,181 @@ class DamagedSegment(Protocol):
     accepted_byte_end: int
     fault_offset: int | None
     fault_class: str | None
+
+
+class RecoverableReplay(Protocol):
+    run_id: str
+    revision: int
+    last_event_sha256: str
+    segments: tuple[DamagedSegment, ...]
+
+
+@dataclass(frozen=True)
+class PreparedRecovery:
+    receipt: RecoveryReceipt
+    receipt_sha256: str
+    raw_sha256: str
+    segment: DamagedSegment
+
+
+POST_RAW_FSYNC_SIGKILL = "post-quarantine-raw-fsync-sigkill"
+POST_RECEIPT_FSYNC_SIGKILL = "post-recovery-receipt-fsync-sigkill"
+POST_SEGMENT_PUBLICATION_SIGKILL = "post-recovery-segment-publication-sigkill"
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _trigger_failpoint(name: str) -> None:
+    if os.environ.get("ARW_TEST_FAILPOINT") == name:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def _ensure_directory(root: Path, relative: Path) -> Path:
+    root = root.resolve()
+    cursor = root
+    for part in relative.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise RecoveryError("recovery directory path contains a symlink")
+        if cursor.exists() and not cursor.is_dir():
+            raise RecoveryError("recovery directory path contains a non-directory")
+        if not cursor.exists():
+            cursor.mkdir()
+            _fsync_directory(cursor.parent)
+    return cursor
+
+
+def _write_immutable(path: Path, value: bytes) -> None:
+    if path.is_symlink():
+        raise RecoveryError("recovery evidence target must not be a symlink")
+    if path.exists():
+        if not path.is_file() or path.read_bytes() != value:
+            raise RecoveryError("existing recovery evidence differs from this request")
+        return
+    try:
+        with path.open("xb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as error:
+        raise RecoveryError("recovery evidence was concurrently created") from error
+    _fsync_directory(path.parent)
+
+
+def _preflight_immutable(root: Path, relative: Path, value: bytes) -> None:
+    cursor = root.resolve()
+    for part in relative.parent.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise RecoveryError("recovery evidence path contains a symlink")
+        if cursor.exists() and not cursor.is_dir():
+            raise RecoveryError("recovery evidence path contains a non-directory")
+        if not cursor.exists():
+            return
+    target = cursor / relative.name
+    if target.is_symlink():
+        raise RecoveryError("recovery evidence target must not be a symlink")
+    if target.exists() and (not target.is_file() or target.read_bytes() != value):
+        raise RecoveryError("existing recovery evidence differs from this request")
+
+
+def prepare_recovery_evidence(
+    root: Path,
+    request: RecoveryRequest,
+    state: RecoverableReplay,
+) -> PreparedRecovery:
+    """Write or verify the immutable raw copy and canonical receipt."""
+
+    if not state.segments:
+        raise RecoveryError("recoverable replay has no damaged segment")
+    damaged = state.segments[-1]
+    if damaged.fault_offset is None or damaged.fault_class not in {
+        "incomplete-record",
+        "malformed-record",
+        "truncated-utf8",
+    }:
+        raise RecoveryError("last segment is not a recoverable terminal tail")
+    original_path = _safe_file(root, damaged.relative_path)
+    original = original_path.read_bytes()
+    if (
+        sha256_hex(original) != damaged.sha256
+        or len(original) != damaged.byte_count
+        or request.original_segment_sha256 != damaged.sha256
+    ):
+        raise RecoveryError("damaged segment changed after classification")
+    raw_relative = f"quarantine/{request.recovery_id}/segment.raw"
+    receipt = RecoveryReceipt(
+        schema_version="1.0.0",
+        run_id=state.run_id,
+        recovery_id=request.recovery_id,
+        segment_relative_path=damaged.relative_path,
+        original_segment_sha256=damaged.sha256,
+        original_segment_byte_count=damaged.byte_count,
+        accepted_byte_end=damaged.accepted_byte_end,
+        fault_offset=damaged.fault_offset,
+        fault_class=damaged.fault_class,
+        quarantine_raw_path=raw_relative,
+        quarantine_raw_sha256=sha256_hex(original),
+        prior_valid_revision=state.revision,
+        prior_valid_head_sha256=state.last_event_sha256,
+        operator_id=request.actor_id,
+        reason_code=request.reason_code,
+        reason_text=request.reason_text,
+        command_id=request.command_id,
+        event_id=request.event_id,
+        occurred_at=request.occurred_at,
+    )
+    receipt_bytes = canonical_json_bytes(receipt.model_dump(mode="json"))
+    bundle_relative = Path("quarantine") / request.recovery_id
+    _preflight_immutable(root, bundle_relative / "segment.raw", original)
+    _preflight_immutable(root, bundle_relative / "receipt.json", receipt_bytes)
+    bundle = _ensure_directory(root, bundle_relative)
+    raw_path = bundle / "segment.raw"
+    _write_immutable(raw_path, original)
+    _trigger_failpoint(POST_RAW_FSYNC_SIGKILL)
+    _write_immutable(bundle / "receipt.json", receipt_bytes)
+    _trigger_failpoint(POST_RECEIPT_FSYNC_SIGKILL)
+    return PreparedRecovery(
+        receipt=receipt,
+        receipt_sha256=sha256_hex(receipt_bytes),
+        raw_sha256=sha256_hex(original),
+        segment=damaged,
+    )
+
+
+def publish_recovery_segment(
+    root: Path,
+    *,
+    segment_index: int,
+    event: CanonicalEvent,
+) -> Path:
+    """Atomically publish the recovery-first continuation segment."""
+
+    segments = root / "journal/segments"
+    target = segments / f"{segment_index:08d}.jsonl"
+    value = canonical_json_bytes(event.model_dump(mode="json"))
+    temporary = root / "journal" / f".{target.name}.{os.getpid()}.tmp"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            if target.is_symlink() or not target.is_file() or target.read_bytes() != value:
+                raise RecoveryError("recovery segment target already differs")
+        _fsync_directory(segments)
+    finally:
+        temporary.unlink(missing_ok=True)
+    _trigger_failpoint(POST_SEGMENT_PUBLICATION_SIGKILL)
+    return target
 
 
 def _safe_file(root: Path, relative: str) -> Path:
