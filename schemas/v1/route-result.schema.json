@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Read-only routing decision exposed by the installed skill.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "workflow_family": {
+      "const": "academic-pipeline",
+      "title": "Workflow Family",
+      "type": "string"
+    },
+    "execution_mode": {
+      "const": "inline-role-prompts",
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "source_adapter_version": {
+      "const": "0.1.19",
+      "title": "Source Adapter Version",
+      "type": "string"
+    },
+    "experiment_execution": {
+      "const": "disabled",
+      "title": "Experiment Execution",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "workflow_family",
+    "execution_mode",
+    "source_adapter_version",
+    "experiment_execution"
+  ],
+  "title": "RouteResult",
+  "type": "object"
+}

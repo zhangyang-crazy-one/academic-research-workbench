@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-bypass-selection = true
+packages = ["src/arw"]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
