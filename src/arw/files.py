@@ -281,7 +281,6 @@ class FilesAdminService:
             )
             failpoint("index_complete")
             self._verify_database(candidate / "files.sqlite3")
-            self._invoke_native_builder(Path(root.canonical_path), candidate)
             database_sha = hashlib.sha256((candidate / "files.sqlite3").read_bytes()).hexdigest()
             contract_header = Path(__file__).resolve().parents[2] / "generated/file-contracts.h"
             contract_sha = hashlib.sha256(contract_header.read_bytes()).hexdigest()
@@ -316,6 +315,7 @@ class FilesAdminService:
             manifest_bytes = canonical_file_model_bytes(manifest)
             self._write_closed(candidate / "generation-manifest.json", manifest_bytes)
             _fsync_directory(candidate)
+            self._invoke_native_builder(Path(root.canonical_path), candidate)
             failpoint("manifest_closed")
             receipt = FileAdminReceipt(
                 schema_version="1.0.0",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from tests.file_plane_helpers import snapshot_tree
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+NATIVE_BUILDER = REPOSITORY_ROOT / ".file-base/bin/file-base"
 
 
 def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -173,3 +175,107 @@ def test_failed_generation_preserves_selected_pointer_and_emits_receipt(tmp_path
     assert blocked["selected_generation_id"] == first.selected_generation_id
     assert "injected_failure" in blocked["blocking_reasons"]
     assert not list((service.root_control_path("research-root") / "generations").glob(".building-*"))
+
+
+def test_native_builder_attests_closed_candidate_and_rejects_unsafe_inputs(
+    tmp_path: Path,
+) -> None:
+    assert NATIVE_BUILDER.is_file()
+    root = tmp_path / "root"
+    root.mkdir()
+    _write_root(root)
+    service = _service(tmp_path / "control", builder=NATIVE_BUILDER)
+    service.register_root(root_id="research-root", root_path=root, policy_id="research-files-v1")
+    receipt = service.sync("research-root", extractor_version="1.0.0")
+    generation = service.generation_path("research-root", receipt.selected_generation_id)
+
+    accepted = subprocess.run(
+        [
+            str(NATIVE_BUILDER),
+            "files-build",
+            "--root",
+            str(root),
+            "--candidate",
+            str(generation),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    attestation = json.loads(accepted.stdout)
+    assert attestation["profile"] == "files-build"
+    assert attestation["status"] == "ok"
+
+    duplicate_root = subprocess.run(
+        [
+            str(NATIVE_BUILDER),
+            "files-build",
+            "--root",
+            str(root),
+            "--root",
+            str(root),
+            "--candidate",
+            str(generation),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert duplicate_root.returncode != 0
+    assert "invalid_arguments" in duplicate_root.stderr
+
+    inside_root = root / "candidate"
+    inside_root.mkdir()
+    ownership = subprocess.run(
+        [
+            str(NATIVE_BUILDER),
+            "files-build",
+            "--root",
+            str(root),
+            "--candidate",
+            str(inside_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert ownership.returncode != 0
+    assert "ownership_violation" in ownership.stderr
+
+    corrupt = tmp_path / "corrupt-candidate"
+    shutil.copytree(generation, corrupt)
+    (corrupt / "files.sqlite3").write_bytes(b"not a SQLite database")
+    corrupted = subprocess.run(
+        [
+            str(NATIVE_BUILDER),
+            "files-build",
+            "--root",
+            str(root),
+            "--candidate",
+            str(corrupt),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert corrupted.returncode != 0
+    assert "database_" in corrupted.stderr
+
+    linked = tmp_path / "linked-candidate"
+    linked.symlink_to(generation, target_is_directory=True)
+    symlinked = subprocess.run(
+        [
+            str(NATIVE_BUILDER),
+            "files-build",
+            "--root",
+            str(root),
+            "--candidate",
+            str(linked),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert symlinked.returncode != 0
+    assert "candidate_unsafe" in symlinked.stderr
