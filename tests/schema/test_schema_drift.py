@@ -50,3 +50,40 @@ def test_registry_rejects_unknown_or_incompatible_schema_drift(tmp_path: Path) -
     incompatible["properties"]["command"] = {"const": "not-version"}
     with pytest.raises(SchemaRegistryError, match="command"):
         validate_schema_document("version-report.schema.json", incompatible)
+
+
+def test_runtime_request_instances_validate_independently() -> None:
+    from arw.schema_registry import validate_instance
+
+    common = {
+        "schema_version": "1.0.0",
+        "run_id": "run-00000000-0000-4000-8000-000000000031",
+        "event_id": "evt-00000000-0000-4000-8000-000000000032",
+        "command_id": "cmd-00000000-0000-4000-8000-000000000032",
+        "expected_revision": 1,
+        "occurred_at": "2026-07-13T02:00:01Z",
+        "actor_id": "parent.runtime",
+        "actor_role": "parent_control_plane",
+    }
+    validate_instance(
+        "transition-request.schema.json",
+        {**common, "transition_id": "start", "from_stage": "initialized"},
+    )
+    validate_instance(
+        "attempt-request.schema.json",
+        {
+            **common,
+            "attempt_id": "attempt.writer-001",
+            "base_revision": 1,
+            "consumed_sha256": ["a" * 64],
+        },
+    )
+    validate_instance(
+        "attempt-request.schema.json",
+        {
+            **common,
+            "attempt_id": "attempt.writer-001",
+            "outcome": "completed",
+            "proposal_sha256": "b" * 64,
+        },
+    )

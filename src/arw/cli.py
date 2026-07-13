@@ -15,8 +15,19 @@ from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
-from arw.models import AppendProbeRequest, InitRunRequest, Rejection
+from arw.models import (
+    AppendProbeRequest,
+    AttemptCloseRequest,
+    AttemptStartRequest,
+    HumanDecisionRequest,
+    HumanDecisionResolveRequest,
+    InitRunRequest,
+    LifecycleTransitionRequest,
+    Rejection,
+    StrictModel,
+)
 from arw.reducer import ReducerError, reduce_events
+from arw.runtime import RuntimeCommandService
 from arw.status import build_status_report, render_status_text
 
 
@@ -74,6 +85,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="UTC_TIMESTAMP",
         help="Evaluate dynamic freshness at an explicit YYYY-MM-DDTHH:MM:SSZ instant.",
     )
+    for name, help_text in (
+        ("transition", "Submit one registered lifecycle transition."),
+        ("decision-request", "Record one pending human decision."),
+        ("decision-resolve", "Resolve one pending human decision."),
+        ("attempt-start", "Record one parent-controlled attempt start."),
+        ("attempt-close", "Close one active parent-controlled attempt."),
+    ):
+        command = subparsers.add_parser(name, help=help_text)
+        _add_run_request_arguments(command)
     return parser
 
 
@@ -83,7 +103,7 @@ def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lock-timeout", type=float, default=0.2)
 
 
-def _load_request(path: Path, model: type[InitRunRequest] | type[AppendProbeRequest]):
+def _load_request(path: Path, model: type[StrictModel]) -> StrictModel:
     try:
         raw = path.read_bytes()
         payload = strict_json_loads(raw)
@@ -185,6 +205,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 sys.stdout.write(render_status_text(report))
             return 0
+        runtime_commands = {
+            "transition": (LifecycleTransitionRequest, "execute_transition"),
+            "decision-request": (HumanDecisionRequest, "request_decision"),
+            "decision-resolve": (HumanDecisionResolveRequest, "resolve_decision"),
+            "attempt-start": (AttemptStartRequest, "start_attempt"),
+            "attempt-close": (AttemptCloseRequest, "close_attempt"),
+        }
+        if args.command in runtime_commands:
+            model, method_name = runtime_commands[args.command]
+            request = _load_request(args.request, model)
+            service = RuntimeCommandService(args.run_root, lock_timeout=args.lock_timeout)
+            outcome = getattr(service, method_name)(request)
+            _write_json(outcome.model_dump(mode="json", exclude_none=True))
+            return 0 if outcome.accepted else 65
     except (JournalError, ReducerError) as error:
         if args.command == "status" and args.json_output:
             _write_rejection(error)
