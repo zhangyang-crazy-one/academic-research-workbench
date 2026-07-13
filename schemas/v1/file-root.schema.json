@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/file-root.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "root_instance_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Instance Id",
+      "type": "string"
+    },
+    "policy_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "canonical_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Canonical Path",
+      "type": "string"
+    },
+    "created_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "root_instance_id",
+    "policy_id",
+    "canonical_path",
+    "created_at"
+  ],
+  "title": "FileRoot",
+  "type": "object"
+}

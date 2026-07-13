@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-read-result.schema.json",
+  "$defs": {
+    "FilesReadDenied": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "denied",
+            "encoding_error",
+            "budget_exceeded",
+            "timeout"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "root_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "Root Id",
+          "type": "string"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File Id"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relative Path"
+        },
+        "error_code": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "Error Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "root_id",
+        "file_id",
+        "relative_path",
+        "error_code",
+        "message"
+      ],
+      "title": "FilesReadDenied",
+      "type": "object"
+    },
+    "FilesReadStale": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "const": "stale_conflict",
+          "title": "Status",
+          "type": "string"
+        },
+        "root_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "Root Id",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "expected_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Digest",
+          "type": "string"
+        },
+        "current_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Digest"
+        },
+        "error_code": {
+          "enum": [
+            "digest_mismatch",
+            "descriptor_changed",
+            "deleted"
+          ],
+          "title": "Error Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "root_id",
+        "file_id",
+        "relative_path",
+        "expected_digest",
+        "current_digest",
+        "error_code",
+        "message"
+      ],
+      "title": "FilesReadStale",
+      "type": "object"
+    },
+    "FilesReadSuccess": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "const": "ok",
+          "title": "Status",
+          "type": "string"
+        },
+        "root_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "Root Id",
+          "type": "string"
+        },
+        "file_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "current_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Current Digest",
+          "type": "string"
+        },
+        "encoding": {
+          "enum": [
+            "bytes",
+            "utf-8"
+          ],
+          "title": "Encoding",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "root_id",
+        "file_id",
+        "relative_path",
+        "current_digest",
+        "encoding",
+        "content",
+        "truncated",
+        "next_cursor"
+      ],
+      "title": "FilesReadSuccess",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "budget_exceeded": "#/$defs/FilesReadDenied",
+      "denied": "#/$defs/FilesReadDenied",
+      "encoding_error": "#/$defs/FilesReadDenied",
+      "ok": "#/$defs/FilesReadSuccess",
+      "stale_conflict": "#/$defs/FilesReadStale",
+      "timeout": "#/$defs/FilesReadDenied"
+    },
+    "propertyName": "status"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FilesReadSuccess"
+    },
+    {
+      "$ref": "#/$defs/FilesReadStale"
+    },
+    {
+      "$ref": "#/$defs/FilesReadDenied"
+    }
+  ],
+  "title": "FilesReadResult"
+}

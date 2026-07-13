@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/extraction-registration.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "registration_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Registration Id",
+      "type": "string"
+    },
+    "source_file_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Source File Id",
+      "type": "string"
+    },
+    "source_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "extracted_text_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Extracted Text Digest",
+      "type": "string"
+    },
+    "extractor_name": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Extractor Name",
+      "type": "string"
+    },
+    "extractor_version": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][a-z0-9.-]+)?$",
+      "title": "Extractor Version",
+      "type": "string"
+    },
+    "extracted_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Extracted At",
+      "type": "string"
+    },
+    "quality_state": {
+      "enum": [
+        "complete",
+        "failed",
+        "malformed"
+      ],
+      "title": "Quality State",
+      "type": "string"
+    },
+    "access_state": {
+      "enum": [
+        "accessible",
+        "missing",
+        "denied"
+      ],
+      "title": "Access State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "registration_id",
+    "source_file_id",
+    "source_digest",
+    "extracted_text_digest",
+    "extractor_name",
+    "extractor_version",
+    "extracted_at",
+    "quality_state",
+    "access_state"
+  ],
+  "title": "ExtractionRegistration",
+  "type": "object"
+}

@@ -12,6 +12,8 @@ from typing import Any
 import jsonschema
 from referencing import Registry, Resource
 
+from arw.file_contracts import FILE_SCHEMA_NAMES
+
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "build-identity.schema.json",
@@ -38,7 +40,7 @@ SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "resume-request.schema.json",
     "status.schema.json",
     "transition-request.schema.json",
-)
+) + FILE_SCHEMA_NAMES
 
 
 def _schema_root() -> Path:

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-list-request.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "max_files": {
+      "default": 200,
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Files",
+      "type": "integer"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cursor"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id"
+  ],
+  "title": "FilesListRequest",
+  "type": "object"
+}
