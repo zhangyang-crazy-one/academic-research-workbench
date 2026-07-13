@@ -6,10 +6,13 @@ PLUGIN_NAME="academic-research-workbench"
 STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
 CLEAN=0
 CACHEBUSTER=""
+VALIDATE_ONLY=0
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/stage"
 
 usage() {
   cat <<'EOF'
 Usage: stage-plugin [--clean] [--stage-root PATH] [--cachebuster TOKEN]
+                    [--evidence-root PATH] [--validate-only]
 
 Build the first-party wheel and assemble the exact positive-allowlist plugin stage.
 EOF
@@ -36,6 +39,15 @@ while [[ $# -gt 0 ]]; do
       CACHEBUSTER="$2"
       shift 2
       ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --validate-only)
+      VALIDATE_ONLY=1
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -50,8 +62,66 @@ PYTHON="$PROJECT_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
 
 STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
 [[ "$STAGE_ROOT" != "/" && "$STAGE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe stage root" 64
+[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe evidence root" 64
+
+if [[ "$VALIDATE_ONLY" -eq 1 ]]; then
+  [[ "$CLEAN" -eq 0 ]] || fail "--clean and --validate-only are mutually exclusive" 64
+  [[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] || fail "stage root is unsafe or missing" 66
+  "$PYTHON" - "$STAGE_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+
+stage_root = Path(sys.argv[1]).resolve()
+inventory_path = stage_root / "supply-chain/stage-inventory.json"
+try:
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"stage allowlist inventory is missing or invalid: {error}")
+
+actual: set[str] = set()
+for path in stage_root.rglob("*"):
+    relative = path.relative_to(stage_root).as_posix()
+    if path.is_symlink():
+        raise SystemExit(f"symlink rejected from stage: {relative}")
+    if path.is_file():
+        actual.add(relative)
+
+expected = set(inventory.get("files", []))
+if actual != expected:
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    raise SystemExit(f"stage allowlist mismatch; missing={missing}; extra={extra}")
+
+private_path = re.compile(
+    r"(^|/)(?:\.cache|\.git|extracted-text|papers?|runs?|indexes?|credentials?|private|undeclared)(?:/|$)|"
+    r"\.(?:db|sqlite|pem|key)$",
+    re.IGNORECASE,
+)
+for relative in actual:
+    if private_path.search(relative):
+        raise SystemExit(f"private path class rejected from stage: {relative}")
+
+covered = {item["path"]: item for item in inventory.get("covered_files", [])}
+if set(covered) != actual - {"supply-chain/stage-inventory.json"}:
+    raise SystemExit("stage coverage inventory does not cover the exact allowlist")
+for relative, record in covered.items():
+    actual_digest = hashlib.sha256((stage_root / relative).read_bytes()).hexdigest()
+    if actual_digest != record["sha256"]:
+        raise SystemExit(f"stage coverage digest mismatch: {relative}")
+PY
+  printf 'stage valid: %s\n' "$STAGE_ROOT"
+  exit 0
+fi
 
 if [[ -e "$STAGE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "stage root exists; pass --clean" 73
@@ -303,4 +373,91 @@ PY
 mv "$TEMP_STAGE" "$STAGE_ROOT"
 trap - EXIT INT TERM
 rm -rf -- "$WORK_ROOT"
+
+if [[ -e "$EVIDENCE_ROOT" ]]; then
+  [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
+    || fail "unsafe evidence root" 64
+  rm -rf -- "$EVIDENCE_ROOT"
+fi
+mkdir -p "$EVIDENCE_ROOT"
+"$PYTHON" - "$PROJECT_ROOT" "$STAGE_ROOT" "$EVIDENCE_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+stage_root = Path(sys.argv[2]).resolve()
+evidence_root = Path(sys.argv[3]).resolve()
+inventory = json.loads(
+    (stage_root / "supply-chain/stage-inventory.json").read_text(encoding="utf-8")
+)
+actual = {
+    path.relative_to(stage_root).as_posix()
+    for path in stage_root.rglob("*")
+    if path.is_file()
+}
+expected = set(inventory["files"])
+canary_payload = json.loads(
+    (project_root / "tests/fixtures/private-canaries/canaries.json").read_text(encoding="utf-8")
+)
+stage_files = [path for path in stage_root.rglob("*") if path.is_file()]
+canary_results = []
+for canary in canary_payload["canaries"]:
+    token = canary["token"].encode()
+    present = any(token in path.read_bytes() for path in stage_files)
+    canary_results.append(
+        {
+            "class": canary["class"],
+            "fixture_path": canary["path"],
+            "present": present,
+            "token_sha256": hashlib.sha256(token).hexdigest(),
+        }
+    )
+if any(item["present"] for item in canary_results):
+    raise SystemExit("private canary detected in stage")
+
+verdict = json.loads(
+    (stage_root / "supply-chain/license-verdict.json").read_text(encoding="utf-8")
+)
+if verdict["technical_qualification"] != "PASS":
+    raise SystemExit("stage legal technical qualification is not PASS")
+
+(evidence_root / "inventory.json").write_text(
+    json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+(evidence_root / "inventory-diff.json").write_text(
+    json.dumps(
+        {"missing": sorted(expected - actual), "unexpected": sorted(actual - expected)},
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+(evidence_root / "canary-scan.json").write_text(
+    json.dumps(
+        {"technical_qualification": "PASS", "canaries": canary_results},
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+(evidence_root / "verdict.json").write_text(
+    json.dumps(
+        {
+            "technical_qualification": verdict["technical_qualification"],
+            "release_qualification": verdict["release_qualification"],
+        },
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
 printf 'stage ready: %s\n' "$STAGE_ROOT"

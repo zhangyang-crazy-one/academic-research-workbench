@@ -115,6 +115,10 @@ def test_component_identity_and_release_classifier_do_not_collapse_licenses() ->
     assert use_distribution["distribution_class"]["status"] == "unknown"
     assert use_distribution["accountable_approval"]["status"] == "missing"
     assert use_distribution["permission_references"] == []
+    assert use_distribution["evidence_hashes"]
+    for evidence in use_distribution["evidence_hashes"]:
+        assert evidence["purpose"] == "technical-provenance-only"
+        assert _sha256(REPOSITORY_ROOT / evidence["path"]) == evidence["sha256"]
 
     source_components = {item["id"]: item for item in source_manifest["components"]}
     classified = {item["component_id"]: item for item in verdict["components"]}
