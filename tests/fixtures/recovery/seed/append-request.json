@@ -1,0 +1,15 @@
+{
+  "actor_id": "operator.phase1",
+  "command_id": "cmd-00000000-0000-4000-8000-000000000002",
+  "event_id": "evt-00000000-0000-4000-8000-000000000002",
+  "event_type": "baseline.probe_recorded",
+  "expected_revision": 1,
+  "occurred_at": "2026-07-13T00:00:01Z",
+  "payload": {
+    "probe_id": "seed.probe",
+    "status": "pass",
+    "summary": "durable baseline event"
+  },
+  "run_id": "run-00000000-0000-4000-8000-000000000001",
+  "schema_version": "1.0.0"
+}
