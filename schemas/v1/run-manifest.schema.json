@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/run-manifest.schema.json",
+  "additionalProperties": false,
+  "description": "Immutable Phase 1 run identity and declared execution capabilities.",
+  "properties": {
+    "schema_version": {"const": "1.0.0", "type": "string"},
+    "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
+    "created_at": {"format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "type": "string"},
+    "immutable_input": {"$ref": "#/$defs/immutable_input"},
+    "workflow_family": {"const": "academic-pipeline", "type": "string"},
+    "workflow_mode": {"const": "inline-role-prompts", "type": "string"},
+    "capabilities": {
+      "items": {"enum": ["canonical-journal", "forced-stop-replay"], "type": "string"},
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": ["schema_version", "run_id", "created_at", "immutable_input", "workflow_family", "workflow_mode", "capabilities"],
+  "title": "RunManifest",
+  "type": "object",
+  "$defs": {
+    "immutable_input": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))[^\\u0000]+$",
+          "type": "string"
+        },
+        "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["path", "sha256"],
+      "type": "object"
+    }
+  }
+}

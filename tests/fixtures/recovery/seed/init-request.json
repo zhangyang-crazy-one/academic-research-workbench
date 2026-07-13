@@ -1,0 +1,18 @@
+{
+  "actor_id": "operator.phase1",
+  "capabilities": [
+    "canonical-journal",
+    "forced-stop-replay"
+  ],
+  "command_id": "cmd-00000000-0000-4000-8000-000000000001",
+  "event_id": "evt-00000000-0000-4000-8000-000000000001",
+  "immutable_input": {
+    "path": "input/source.txt",
+    "sha256": "951f16ffc83bc5dda8766945f11d5a13e8c4897d66aa2a031cf966d82c4fedb1"
+  },
+  "occurred_at": "2026-07-13T00:00:00Z",
+  "run_id": "run-00000000-0000-4000-8000-000000000001",
+  "schema_version": "1.0.0",
+  "workflow_family": "academic-pipeline",
+  "workflow_mode": "inline-role-prompts"
+}
