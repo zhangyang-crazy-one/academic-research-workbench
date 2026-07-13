@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-02"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/phase-02-academic-research-workbench"
+CLEAN=0
+
+usage() {
+  cat <<'EOF'
+Usage: verify-phase-2 [--clean] [--evidence-root PATH]
+
+Stage and verify the durable provenance runtime offline. Raw commands, streams,
+tree hashes, recovery bindings, and the final verdict remain under EVIDENCE_ROOT.
+EOF
+}
+
+fail() {
+  printf 'verify-phase-2: %s\n' "$1" >&2
+  exit "${2:-70}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PYTHON" ]] || fail "project environment is missing" 66
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe evidence root" 64
+if [[ -e "$EVIDENCE_ROOT" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "evidence root exists; pass --clean" 73
+  rm -rf -- "$EVIDENCE_ROOT"
+fi
+mkdir -p "$EVIDENCE_ROOT/commands/stage" "$EVIDENCE_ROOT/commands/runtime"
+
+write_command() {
+  local path="$1"
+  shift
+  "$PYTHON" - "$path" "$PROJECT_ROOT" "$@" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+path = Path(sys.argv[1])
+project_root = Path(sys.argv[2])
+argv = sys.argv[3:]
+path.write_text(
+    json.dumps(
+        {
+            "argv": argv,
+            "cwd": str(project_root),
+            "environment": {
+                "PIP_NO_INDEX": "1",
+                "PYTHONNOUSERSITE": "1",
+                "UV_OFFLINE": "1",
+            },
+        },
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+STAGE_COMMAND=(
+  "$PROJECT_ROOT/scripts/stage-plugin"
+  --clean
+  --stage-root "$STAGE_ROOT"
+  --evidence-root "$EVIDENCE_ROOT/stage"
+)
+write_command "$EVIDENCE_ROOT/commands/stage/command.json" "${STAGE_COMMAND[@]}"
+set +e
+UV_OFFLINE=1 PIP_NO_INDEX=1 PYTHONNOUSERSITE=1 \
+  "${STAGE_COMMAND[@]}" \
+  >"$EVIDENCE_ROOT/commands/stage/stdout.log" \
+  2>"$EVIDENCE_ROOT/commands/stage/stderr.log"
+STAGE_STATUS=$?
+set -e
+printf '{"returncode":%d}\n' "$STAGE_STATUS" > "$EVIDENCE_ROOT/commands/stage/exit.json"
+[[ "$STAGE_STATUS" -eq 0 ]] || fail "staged package verification failed"
+
+RUNTIME_COMMAND=(
+  "$PYTHON" -m pytest -q
+  tests/integration/test_phase2_durable_runtime.py
+)
+write_command "$EVIDENCE_ROOT/commands/runtime/command.json" "${RUNTIME_COMMAND[@]}"
+set +e
+ARW_PHASE2_STAGE_ROOT="$STAGE_ROOT" \
+ARW_PHASE2_EVIDENCE_ROOT="$EVIDENCE_ROOT/runtime" \
+UV_OFFLINE=1 PIP_NO_INDEX=1 PYTHONNOUSERSITE=1 \
+  "${RUNTIME_COMMAND[@]}" \
+  >"$EVIDENCE_ROOT/commands/runtime/stdout.log" \
+  2>"$EVIDENCE_ROOT/commands/runtime/stderr.log"
+RUNTIME_STATUS=$?
+set -e
+printf '{"returncode":%d}\n' "$RUNTIME_STATUS" > "$EVIDENCE_ROOT/commands/runtime/exit.json"
+[[ "$RUNTIME_STATUS" -eq 0 ]] || fail "durable runtime end-to-end fixture failed"
+
+"$PYTHON" - "$PROJECT_ROOT" "$EVIDENCE_ROOT" "$STAGE_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+evidence_root = Path(sys.argv[2]).resolve()
+stage_root = Path(sys.argv[3]).resolve()
+
+
+def load(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+runtime_verdict_path = evidence_root / "runtime/verdict.json"
+runtime = load(runtime_verdict_path)
+requirements = runtime.get("requirements", {})
+decisions = runtime.get("decisions", {})
+expected_requirements = {f"RUN-0{number}" for number in range(3, 9)}
+expected_decisions = {f"D-{number:02d}" for number in range(1, 16)}
+if (
+    runtime.get("technical_qualification") != "PASS"
+    or set(requirements) != expected_requirements
+    or not all(requirements.values())
+    or set(decisions) != expected_decisions
+    or not all(decisions.values())
+):
+    raise SystemExit("runtime verdict does not prove every Phase 2 contract")
+license_verdict = load(project_root / "supply-chain/license-verdict.json")
+if license_verdict.get("release_qualification") != "BLOCKED":
+    raise SystemExit("Phase 2 must not weaken unresolved SUP-04 release blocking")
+identity_path = stage_root / "share/arw/build-identity.json"
+identity = load(identity_path)
+if len(identity["schemas"]["files"]) != 22:
+    raise SystemExit("staged schema identity is incomplete")
+
+raw_files = []
+for path in sorted(evidence_root.rglob("*")):
+    if path.is_file() and path != evidence_root / "verdict.json":
+        raw_files.append(
+            {
+                "path": path.relative_to(evidence_root).as_posix(),
+                "sha256": digest(path),
+                "size": path.stat().st_size,
+            }
+        )
+verdict = {
+    "schema_version": "1.0.0",
+    "technical_qualification": "PASS",
+    "release_qualification": "BLOCKED",
+    "build_identity_sha256": digest(identity_path),
+    "runtime_verdict_sha256": digest(runtime_verdict_path),
+    "requirements": requirements,
+    "decisions": decisions,
+    "raw_evidence_files": raw_files,
+}
+(evidence_root / "verdict.json").write_text(
+    json.dumps(verdict, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+
+printf 'phase 2 technical PASS; release BLOCKED; evidence %s\n' "$EVIDENCE_ROOT"

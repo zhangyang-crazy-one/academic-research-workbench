@@ -161,6 +161,9 @@ copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
 copy_file "hooks/hooks.json"
+copy_file "docs/runtime/durable-provenance.md"
+copy_file "scripts/verify-phase-2" 0755
+copy_file "tests/integration/test_phase2_durable_runtime.py"
 copy_file "schemas/v1/route-result.schema.json"
 copy_file "schemas/v1/source-manifest.schema.json"
 copy_file "schemas/v1/mcp-read-request.schema.json"
@@ -410,6 +413,7 @@ static_files = {
     "SBOM.cdx.json",
     "THIRD_PARTY_NOTICES.md",
     "bin/arw",
+    "docs/runtime/durable-provenance.md",
     "hooks/hooks.json",
     "libexec/file-base-mcp",
     "pyproject.toml",
@@ -420,6 +424,7 @@ static_files = {
     "schemas/v1/route-result.schema.json",
     "schemas/v1/source-manifest.schema.json",
     "scripts/file-base-mcp",
+    "scripts/verify-phase-2",
     "share/arw/build-identity.json",
     "share/arw/schemas/artifact-manifest.schema.json",
     "share/arw/schemas/artifact-request.schema.json",
@@ -446,6 +451,7 @@ static_files = {
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
+    "tests/integration/test_phase2_durable_runtime.py",
     "uv.lock",
     "vendor/python/wheelhouse.lock.json",
     "vendor/python/wheelhouse/requirements-installed.txt",
