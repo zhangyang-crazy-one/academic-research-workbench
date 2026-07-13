@@ -198,7 +198,9 @@ class CursorCodec:
 
 
 def _canonical_model_value(model: BaseModel) -> object:
-    value = model.model_dump(mode="json")
+    # Persist only declared contract fields. Computed convenience properties are
+    # intentionally absent from validation schemas and immutable manifests.
+    value = model.model_dump(mode="json", exclude_computed_fields=True)
     if isinstance(model, FileGenerationManifest):
         value["files"] = sorted(value["files"], key=lambda item: item["relative_path"])
         value["integrity_failures"] = sorted(

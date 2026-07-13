@@ -61,8 +61,13 @@ def test_generation_change_matrix_preserves_only_unambiguous_identity(tmp_path: 
 
     (root / "same/modified.txt").write_text("version two", encoding="utf-8")
     (root / "rename/old.txt").rename(root / "rename/new.txt")
-    (root / "ambiguous/old-a.txt").rename(root / "ambiguous/new-a.txt")
-    (root / "ambiguous/old-b.txt").rename(root / "ambiguous/new-b.txt")
+    # Copy then delete both duplicates so neither inode nor digest establishes a
+    # unique old-to-new mapping.
+    duplicate = (root / "ambiguous/old-a.txt").read_bytes()
+    (root / "ambiguous/new-a.txt").write_bytes(duplicate)
+    (root / "ambiguous/new-b.txt").write_bytes(duplicate)
+    (root / "ambiguous/old-a.txt").unlink()
+    (root / "ambiguous/old-b.txt").unlink()
     (root / "delete/remove.txt").unlink()
     (root / ".arwignore").write_text("ignore/\n", encoding="utf-8")
     second = service.sync("research-root", extractor_version="1.0.0")
