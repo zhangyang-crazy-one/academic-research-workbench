@@ -9,6 +9,7 @@ import json
 import os
 import stat
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -78,7 +79,9 @@ def _sensitive(relative_path: str) -> bool:
     return False
 
 
-def _read_live(root: Path, relative_path: str) -> _LiveFile:
+def _read_live(root: Path, relative_path: str, *, deadline: float) -> _LiveFile:
+    if time.monotonic() > deadline:
+        raise LiveReadError("timeout", "live verification exceeded the server deadline")
     if _sensitive(relative_path):
         raise LiveReadError("sensitive_path", "sensitive path names are not readable")
     parts = PurePosixPath(relative_path).parts
@@ -112,6 +115,8 @@ def _read_live(root: Path, relative_path: str) -> _LiveFile:
         chunks: list[bytes] = []
         remaining = MAX_LIVE_FILE_BYTES + 1
         while remaining:
+            if time.monotonic() > deadline:
+                raise LiveReadError("timeout", "live verification exceeded the server deadline")
             chunk = os.read(file_fd, min(1 << 20, remaining))
             if not chunk:
                 break
@@ -195,17 +200,18 @@ class FilesMcpServer:
             return {"error_code": "invalid_request", "message": str(error)}, True
         if request.root_id != self.generation.root.root_id:
             return {"error_code": "root_denied", "message": "request names another root"}, True
+        deadline = time.monotonic() + (CONTRACT_LIMITS["timeout_ms"] / 1000)
         if name == "list_files":
-            return self.list_files(request), False
+            return self.list_files(request, deadline=deadline), False
         if name == "read_file":
-            result = self.read_file(request)
+            result = self.read_file(request, deadline=deadline)
             return result, result.status not in {"ok", "stale_conflict", "encoding_error"}
         return {
             "error_code": "tool_not_ready",
             "message": f"{name} requires the format/search projection plan",
         }, True
 
-    def list_files(self, request: FilesListRequest) -> FilesListResult:
+    def list_files(self, request: FilesListRequest, *, deadline: float) -> FilesListResult:
         parameters = {"max_files": request.max_files}
         offset = 0
         if request.cursor is not None:
@@ -228,8 +234,16 @@ class FilesMcpServer:
             generation_file = self.generation_by_id[record.file_id]
             live: _LiveFile | None
             try:
-                live = _read_live(Path(self.generation.root.canonical_path), record.relative_path)
-            except (LiveReadError, OSError):
+                live = _read_live(
+                    Path(self.generation.root.canonical_path),
+                    record.relative_path,
+                    deadline=deadline,
+                )
+            except LiveReadError as error:
+                if error.code == "timeout":
+                    raise
+                live = None
+            except OSError:
                 live = None
             if record.file_type == "pdf":
                 extraction_state = (
@@ -286,7 +300,7 @@ class FilesMcpServer:
         )
 
     def read_file(
-        self, request: FilesReadRequest
+        self, request: FilesReadRequest, *, deadline: float
     ) -> FilesReadSuccess | FilesReadStale | FilesReadDenied:
         record = self.identity_by_id.get(request.file_id)
         if record is None or record.relative_path != request.relative_path:
@@ -298,8 +312,14 @@ class FilesMcpServer:
                 request, "denied", "sensitive_path", "sensitive path names are not readable"
             )
         try:
-            live = _read_live(Path(self.generation.root.canonical_path), request.relative_path)
+            live = _read_live(
+                Path(self.generation.root.canonical_path),
+                request.relative_path,
+                deadline=deadline,
+            )
         except LiveReadError as error:
+            if error.code == "timeout":
+                return self._read_denied(request, "timeout", "timeout", str(error))
             if error.code in {"deleted", "descriptor_changed", "symlink_escape"}:
                 stale_code = "deleted" if error.code == "deleted" else "descriptor_changed"
                 return FilesReadStale(
@@ -441,7 +461,7 @@ class FilesMcpServer:
                     "id": identifier,
                     "error": {"code": -32601, "message": "Method not found"},
                 }
-        except CursorError as error:
+        except (CursorError, LiveReadError) as error:
             result = _tool_envelope({"error_code": error.code, "message": str(error)}, error=True)
         return {"jsonrpc": "2.0", "id": identifier, "result": result}
 
@@ -454,7 +474,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments.count("--control-root") != 1 or arguments.count("--root-id") != 1:
+        print(
+            "files-mcp: startup-error: exactly one control root and root ID are required",
+            file=sys.stderr,
+        )
+        return 64
+    args = build_parser().parse_args(arguments)
     try:
         generation = load_query_generation(args.control_root, args.root_id)
     except FilesAdminError as error:

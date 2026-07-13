@@ -129,6 +129,25 @@ def test_startup_requires_one_registered_root_and_closed_generation(tmp_path: Pa
     assert unknown.completed.returncode != 0
     assert "root" in unknown.completed.stderr.lower()
 
+    duplicate = invoke_jsonrpc_process(
+        [
+            sys.executable,
+            "-m",
+            "arw.files_mcp",
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+            "--root-id",
+            "another-root",
+        ],
+        [canonical_request(1, "tools/list", {})],
+        cwd=REPOSITORY_ROOT,
+        environment={**os.environ, "PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1"},
+    )
+    assert duplicate.completed.returncode == 64
+    assert "exactly one" in duplicate.completed.stderr
+
 
 def test_list_is_paginated_restart_safe_and_live_freshness_aware(tmp_path: Path) -> None:
     root, control, _, records = _prepared_root(tmp_path)
