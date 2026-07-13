@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "synthetic_only": true,
+  "duplicate_group": {
+    "paths": [
+      "root/duplicates/copy-a.txt",
+      "root/duplicates/copy-b.txt"
+    ],
+    "sha256": "126dfbc31c58255d0ea09a88e1b0f5ef092c573826787d44d4795c439fe3692a",
+    "expected_identity": "distinct-file-ids"
+  },
+  "rename_groups": [
+    {
+      "paths": ["root/rename/unambiguous-old.txt"],
+      "sha256": "d6d45b820e5b2ec0259605a8ce094f59127ca3878429d9373210d87efae05055",
+      "expected_identity": "preserve-on-one-to-one-rename"
+    },
+    {
+      "paths": [
+        "root/rename/ambiguous-old-a.txt",
+        "root/rename/ambiguous-old-b.txt"
+      ],
+      "sha256": "82b814bc618e38cda4c2070fd3c064256cef0739aa3cb3bbfd1e6c59126bee33",
+      "expected_identity": "delete-plus-create"
+    }
+  ],
+  "malformed_utf8": {
+    "path": "root/malformed/malformed-utf8.hex",
+    "encoding": "hex",
+    "decoded_size": 3,
+    "decoded_sha256": "f746fa15da32d029aa90d8f573b35d5947499ab4f05ba8e86a742a9520f04cbb"
+  },
+  "registered_extraction": {
+    "source_path": "root/pdf/registered-paper.pdf",
+    "source_sha256": "eeb0e5697f5330cc2493a8672ce9330ea9820bc1257e495a14a032df98a71b76",
+    "text_path": "registrations/registered-paper.txt",
+    "text_sha256": "f8793379a5699d51a23454a44cd8c24adb0a4cdba54bdf37f70159aa21e65bf3",
+    "registration_path": "registrations/registered-paper.json"
+  },
+  "canary_metadata": "canaries.json"
+}

@@ -1,0 +1,3 @@
+Evidence 链路 links English claims, 中文来源, 日本語メモ, and 한국어 기록.
+Identifier ARW_MIXED_CJK_V1 remains literal and case-sensitive in exact mode.
+

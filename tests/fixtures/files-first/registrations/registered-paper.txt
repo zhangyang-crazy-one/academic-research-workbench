@@ -1,0 +1,3 @@
+Registered extraction text: reproducible PDF evidence with explicit provenance.
+This text is complete and accessible; the raw PDF canary is intentionally absent.
+

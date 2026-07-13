@@ -1,0 +1,2 @@
+Identical synthetic bytes must not imply identical logical file identity.
+
