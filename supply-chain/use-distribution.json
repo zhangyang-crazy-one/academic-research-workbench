@@ -12,5 +12,21 @@
   "accountable_approval": {
     "status": "missing"
   },
-  "evidence_hashes": []
+  "evidence_hashes": [
+    {
+      "path": "vendor/source-manifest.json",
+      "purpose": "technical-provenance-only",
+      "sha256": "15969eae28e0b1d037c79b9e0454648c3941c777602430325b9715b156442aa1"
+    },
+    {
+      "path": "SBOM.cdx.json",
+      "purpose": "technical-provenance-only",
+      "sha256": "bd07d4aafa0b52e0edfd9bb35f47fc0bdcb73b4bffe9b63c294253c0c5cc7d92"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "purpose": "technical-provenance-only",
+      "sha256": "5ae8df06232efbd301584efe71c171eed911c671028b44281edf817d2f97bc8d"
+    }
+  ]
 }

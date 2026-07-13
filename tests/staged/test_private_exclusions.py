@@ -20,10 +20,13 @@ def _environment() -> dict[str, str]:
 
 
 def _run_stage(stage_root: Path, *, validate_only: bool = False) -> subprocess.CompletedProcess[str]:
+    evidence_root = stage_root.parents[1] / "evidence"
     command = [
         str(REPOSITORY_ROOT / "scripts/stage-plugin"),
         "--stage-root",
         str(stage_root),
+        "--evidence-root",
+        str(evidence_root),
     ]
     if validate_only:
         command.append("--validate-only")
@@ -84,6 +87,21 @@ def test_positive_allowlist_excludes_every_private_class_and_canary(tmp_path: Pa
     assert not any(forbidden_segments & set(Path(path).parts) for path in staged_paths)
     assert not any(path.is_symlink() for path in stage_root.rglob("*"))
 
+    evidence_root = stage_root.parents[1] / "evidence"
+    inventory_diff = json.loads((evidence_root / "inventory-diff.json").read_text(encoding="utf-8"))
+    canary_scan = json.loads((evidence_root / "canary-scan.json").read_text(encoding="utf-8"))
+    verdict = json.loads((evidence_root / "verdict.json").read_text(encoding="utf-8"))
+    assert inventory_diff == {"missing": [], "unexpected": []}
+    assert canary_scan["technical_qualification"] == "PASS"
+    assert {item["class"] for item in canary_scan["canaries"]} == {
+        item["class"] for item in _canaries()
+    }
+    assert all(item["present"] is False for item in canary_scan["canaries"])
+    assert verdict == {
+        "release_qualification": "BLOCKED",
+        "technical_qualification": "PASS",
+    }
+
 
 @pytest.mark.parametrize("kind", ["undeclared-file", "absolute-symlink"])
 def test_stage_validation_rejects_post_build_extras_and_symlinks(
@@ -104,4 +122,3 @@ def test_stage_validation_rejects_post_build_extras_and_symlinks(
     validated = _run_stage(stage_root, validate_only=True)
     assert validated.returncode != 0
     assert kind.split("-", 1)[-1] in validated.stderr.lower() or "allowlist" in validated.stderr.lower()
-
