@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import itertools
 import json
@@ -145,6 +146,24 @@ def test_list_is_paginated_restart_safe_and_live_freshness_aware(tmp_path: Path)
     assert len(first_page["files"]) == 1
     assert first_page["next_cursor"]
 
+    token = first_page["next_cursor"]
+    tampered_token = token[:-1] + ("A" if token[-1] != "A" else "B")
+    tampered = _invoke(
+        control,
+        "research-root",
+        [_call(1, "list_files", {**request, "cursor": tampered_token})],
+    )
+    assert tampered.responses[0]["result"]["isError"] is True
+    assert _tool_payload(tampered.responses[0])["error_code"] == "cursor_tampered"
+
+    rebound = _invoke(
+        control,
+        "research-root",
+        [_call(1, "list_files", {**request, "max_files": 2, "cursor": token})],
+    )
+    assert rebound.responses[0]["result"]["isError"] is True
+    assert _tool_payload(rebound.responses[0])["error_code"] == "cursor_query_mismatch"
+
     second_request = {**request, "cursor": first_page["next_cursor"]}
     second = _invoke(control, "research-root", [_call(1, "list_files", second_request)])
     second_page = _tool_payload(second.responses[0])
@@ -187,6 +206,7 @@ def test_read_byte_line_continuations_and_encoding_fail_closed(tmp_path: Path) -
     chunk = _tool_payload(first.responses[0])
     assert chunk["status"] == "ok"
     assert chunk["encoding"] == "bytes"
+    assert base64.b64decode(chunk["content"]) == b"alpha"
     assert chunk["truncated"] is True
     assert chunk["next_cursor"]
 

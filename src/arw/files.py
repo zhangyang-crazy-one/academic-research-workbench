@@ -55,6 +55,17 @@ class SelectedGeneration(StrictFileModel):
 
 
 @dataclass(frozen=True)
+class FilesQueryGeneration:
+    root: FileRoot
+    selected: SelectedGeneration
+    identity: FileIdentityManifest
+    manifest: FileGenerationManifest
+    generation_path: Path
+    database_path: Path
+    cursor_secret: bytes
+
+
+@dataclass(frozen=True)
 class _ObservedFile:
     observation: FileObservation
     body_bytes: bytes
@@ -156,6 +167,10 @@ class FilesAdminService:
         control.mkdir(parents=True)
         for child in ("generations", "receipts", "extractions"):
             (control / child).mkdir()
+        cursor_key = control / "cursor.key"
+        _write_atomic(cursor_key, os.urandom(32))
+        cursor_key.chmod(0o600)
+        _fsync_directory(control)
         root = FileRoot(
             schema_version="1.0.0",
             root_id=root_id,
@@ -663,3 +678,79 @@ class FilesAdminService:
             raise FilesAdminError("native_builder_invalid", "native builder emitted invalid JSON") from error
         if result.get("status") != "ok" or result.get("profile") != "files-build":
             raise FilesAdminError("native_builder_invalid", "native builder did not attest files-build")
+
+
+def load_query_generation(control_root: Path, root_id: str) -> FilesQueryGeneration:
+    """Load and integrity-check one immutable generation without creating state."""
+
+    if not root_id or any(
+        character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in root_id
+    ):
+        raise FilesAdminError("root_id_invalid", "root ID is not a stable identifier")
+    if control_root.is_symlink() or not control_root.is_dir():
+        raise FilesAdminError("control_root_unsafe", "control root must be an existing real directory")
+    resolved_control = control_root.resolve(strict=True)
+    root_control = resolved_control / "roots" / root_id
+    if root_control.is_symlink() or not root_control.is_dir():
+        raise FilesAdminError("root_unregistered", f"root is not registered: {root_id}")
+
+    root = _load_model(root_control / "root.json", FileRoot)
+    try:
+        selected = _load_model(root_control / "selected-generation.json", SelectedGeneration)
+    except FilesAdminError as error:
+        if error.code == "manifest_unsafe":
+            raise FilesAdminError(
+                "selected_generation_missing", "root has no selected generation"
+            ) from error
+        raise
+    assert isinstance(root, FileRoot)
+    assert isinstance(selected, SelectedGeneration)
+    if root.root_id != root_id or selected.root_id != root_id:
+        raise FilesAdminError("root_binding_mismatch", "root and selected generation disagree")
+
+    live_root = Path(root.canonical_path)
+    if live_root.is_symlink() or not live_root.is_dir() or live_root.resolve(strict=True) != live_root:
+        raise FilesAdminError("root_unsafe", "registered root is no longer a real canonical directory")
+    generation = root_control / "generations" / selected.generation_id
+    if generation.is_symlink() or not generation.is_dir():
+        raise FilesAdminError("selected_generation_unsafe", "selected generation is absent or unsafe")
+    identity = _load_model(generation / "identity-manifest.json", FileIdentityManifest)
+    manifest = _load_model(generation / "generation-manifest.json", FileGenerationManifest)
+    assert isinstance(identity, FileIdentityManifest)
+    assert isinstance(manifest, FileGenerationManifest)
+    if (
+        manifest.root_id != root_id
+        or manifest.root_instance_id != root.root_instance_id
+        or identity.root_id != root_id
+        or identity.root_instance_id != root.root_instance_id
+        or identity.generation_id != selected.generation_id
+        or manifest.generation_id != selected.generation_id
+    ):
+        raise FilesAdminError("generation_binding_mismatch", "selected generation bindings disagree")
+    if canonical_file_model_sha256(manifest) != selected.generation_manifest_sha256:
+        raise FilesAdminError("generation_manifest_digest_mismatch", "selected manifest digest changed")
+    if canonical_file_model_sha256(identity) != manifest.identity_manifest_sha256:
+        raise FilesAdminError("identity_manifest_digest_mismatch", "identity manifest digest changed")
+
+    database = generation / "files.sqlite3"
+    if database.is_symlink() or not database.is_file():
+        raise FilesAdminError("database_unsafe", "selected database is absent or unsafe")
+    if hashlib.sha256(database.read_bytes()).hexdigest() != manifest.database_sha256:
+        raise FilesAdminError("database_digest_mismatch", "selected database digest changed")
+    FilesAdminService._verify_database(database)
+
+    key_path = root_control / "cursor.key"
+    if key_path.is_symlink() or not key_path.is_file():
+        raise FilesAdminError("cursor_key_unsafe", "cursor key is absent or unsafe")
+    cursor_secret = key_path.read_bytes()
+    if len(cursor_secret) != 32:
+        raise FilesAdminError("cursor_key_invalid", "cursor key must contain exactly 32 bytes")
+    return FilesQueryGeneration(
+        root=root,
+        selected=selected,
+        identity=identity,
+        manifest=manifest,
+        generation_path=generation,
+        database_path=database,
+        cursor_secret=cursor_secret,
+    )

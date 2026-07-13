@@ -32,7 +32,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild) ;;
+  health|route|version|files|_files-mcp|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -218,6 +218,9 @@ PY
     export ARW_BUILD_IDENTITY="$PLUGIN_ROOT/share/arw/build-identity.json"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
     exec "$RUNTIME_PYTHON" -m arw.cli version "$@"
+    ;;
+  _files-mcp)
+    exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
     ;;
   *)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"

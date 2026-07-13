@@ -53,6 +53,22 @@ def test_launcher_rejects_implicit_root_and_cache(tmp_path: Path) -> None:
     assert str(Path.home()) not in result.stderr
 
 
+def test_launcher_rejects_partial_files_profile_capability(tmp_path: Path) -> None:
+    launcher = _required_executable("scripts/file-base-mcp")
+    environment = _isolated_environment(tmp_path / "isolation")
+    environment["ARW_FILES_CONTROL_ROOT"] = str(tmp_path / "control")
+    result = subprocess.run(
+        [str(launcher)],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 64
+    assert "control root and root ID" in result.stderr
+
+
 def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> None:
     smoke_script = _required_executable("scripts/smoke-staged-plugin")
     unrelated_cwd = tmp_path / "unrelated-working-directory"

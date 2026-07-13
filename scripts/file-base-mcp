@@ -4,6 +4,21 @@ set -euo pipefail
 PLUGIN_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CBM_BIN="$PLUGIN_ROOT/libexec/file-base-mcp"
 
+if [[ -n "${ARW_FILES_CONTROL_ROOT:-}" || -n "${ARW_FILES_ROOT_ID:-}" ]]; then
+  [[ -n "${ARW_FILES_CONTROL_ROOT:-}" && -n "${ARW_FILES_ROOT_ID:-}" ]] \
+    || { printf 'file-base-mcp: ARW files mode requires control root and root ID\n' >&2; exit 64; }
+  [[ "$ARW_FILES_CONTROL_ROOT" == /* ]] \
+    || { printf 'file-base-mcp: ARW_FILES_CONTROL_ROOT must be absolute\n' >&2; exit 64; }
+  [[ -d "$ARW_FILES_CONTROL_ROOT" && ! -L "$ARW_FILES_CONTROL_ROOT" ]] \
+    || { printf 'file-base-mcp: ARW_FILES_CONTROL_ROOT must be a non-symlink directory\n' >&2; exit 66; }
+  [[ "$ARW_FILES_ROOT_ID" =~ ^[a-z][a-z0-9._-]{2,127}$ ]] \
+    || { printf 'file-base-mcp: ARW_FILES_ROOT_ID is invalid\n' >&2; exit 64; }
+  unset PYTHONPATH PYTHONHOME VIRTUAL_ENV LD_PRELOAD
+  export PYTHONDONTWRITEBYTECODE=1
+  exec "$PLUGIN_ROOT/bin/arw" _files-mcp \
+    --control-root "$ARW_FILES_CONTROL_ROOT" --root-id "$ARW_FILES_ROOT_ID"
+fi
+
 missing=()
 for name in CBM_ALLOWED_ROOT CBM_ALLOWED_ROOT_ID CBM_CACHE_DIR; do
   if [[ -z "${!name:-}" ]]; then
