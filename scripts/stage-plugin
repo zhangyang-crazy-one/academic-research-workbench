@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_NAME="academic-research-workbench"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
+CLEAN=0
+
+usage() {
+  cat <<'EOF'
+Usage: stage-plugin [--clean] [--stage-root PATH]
+
+Build the first-party wheel and assemble the exact positive-allowlist plugin stage.
+EOF
+}
+
+fail() {
+  printf 'stage-plugin: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --stage-root)
+      [[ $# -ge 2 ]] || fail "--stage-root requires a path" 64
+      STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+
+STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
+[[ "$STAGE_ROOT" != "/" && "$STAGE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe stage root" 64
+
+if [[ -e "$STAGE_ROOT" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "stage root exists; pass --clean" 73
+  rm -rf -- "$STAGE_ROOT"
+fi
+
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/arw-stage.XXXXXX")"
+TEMP_STAGE="$STAGE_ROOT.tmp.$$"
+cleanup() {
+  rm -rf -- "$WORK_ROOT" "$TEMP_STAGE"
+}
+trap cleanup EXIT INT TERM
+mkdir -p "$(dirname -- "$STAGE_ROOT")" "$TEMP_STAGE"
+
+copy_file() {
+  local relative="$1"
+  local mode="${2:-0644}"
+  local source="$PROJECT_ROOT/$relative"
+  [[ -f "$source" && ! -L "$source" ]] || fail "allowlisted source is unsafe or missing: $relative" 66
+  install -D -m "$mode" -- "$source" "$TEMP_STAGE/$relative"
+}
+
+copy_file ".python-version"
+copy_file "pyproject.toml"
+copy_file "uv.lock"
+copy_file ".codex-plugin/plugin.json"
+copy_file "skills/academic-research-workbench/SKILL.md"
+copy_file "bin/arw" 0755
+copy_file "vendor/python/wheelhouse.lock.json"
+copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
+
+while IFS= read -r -d '' wheel; do
+  relative="${wheel#"$PROJECT_ROOT/"}"
+  copy_file "$relative"
+done < <(find "$PROJECT_ROOT/vendor/python/wheelhouse" -maxdepth 1 -type f -name '*.whl' -print0 | sort -z)
+
+DIST_ROOT="$WORK_ROOT/dist"
+mkdir -p "$DIST_ROOT"
+(
+  cd "$PROJECT_ROOT"
+  "$PYTHON" -m hatchling build --target wheel --directory "$DIST_ROOT"
+)
+
+mapfile -t first_party_wheels < <(find "$DIST_ROOT" -maxdepth 1 -type f -name "${PLUGIN_NAME//-/_}-*.whl" -print | sort)
+[[ "${#first_party_wheels[@]}" -eq 1 ]] || fail "expected exactly one first-party wheel" 70
+FIRST_PARTY_WHEEL="${first_party_wheels[0]}"
+FIRST_PARTY_NAME="$(basename -- "$FIRST_PARTY_WHEEL")"
+FIRST_PARTY_SHA256="$(sha256sum "$FIRST_PARTY_WHEEL" | awk '{print $1}')"
+install -D -m 0644 -- "$FIRST_PARTY_WHEEL" "$TEMP_STAGE/vendor/python/wheelhouse/$FIRST_PARTY_NAME"
+
+INSTALL_REQUIREMENTS_REL="vendor/python/wheelhouse/requirements-installed.txt"
+cp -- "$TEMP_STAGE/vendor/python/wheelhouse/requirements-runtime.txt" "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL"
+printf '\n%s==0.1.0 \\\n    --hash=sha256:%s\n' "$PLUGIN_NAME" "$FIRST_PARTY_SHA256" >> "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL"
+INSTALL_REQUIREMENTS_SHA256="$(sha256sum "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL" | awk '{print $1}')"
+
+"$PYTHON" - \
+  "$TEMP_STAGE/vendor/python/wheelhouse.lock.json" \
+  "$FIRST_PARTY_NAME" \
+  "$FIRST_PARTY_SHA256" \
+  "$INSTALL_REQUIREMENTS_REL" \
+  "$INSTALL_REQUIREMENTS_SHA256" <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+
+lock_path = Path(sys.argv[1])
+payload = json.loads(lock_path.read_text(encoding="utf-8"))
+payload["first_party_wheel"] = {
+    "file": sys.argv[2],
+    "package": "academic-research-workbench",
+    "registry": "first-party",
+    "sha256": sys.argv[3],
+    "source": "built-from-clean-stage-inputs",
+    "version": "0.1.0",
+}
+payload["install_requirements"] = {
+    "path": sys.argv[4],
+    "sha256": sys.argv[5],
+}
+temporary = lock_path.with_suffix(".json.tmp")
+temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(temporary, lock_path)
+PY
+
+"$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$FIRST_PARTY_NAME" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+stage_root = Path(sys.argv[2]).resolve()
+first_party_name = sys.argv[3]
+source_lock = json.loads(
+    (project_root / "vendor/python/wheelhouse.lock.json").read_text(encoding="utf-8")
+)
+stage_lock = json.loads(
+    (stage_root / "vendor/python/wheelhouse.lock.json").read_text(encoding="utf-8")
+)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+if digest(project_root / source_lock["uv_lock"]["path"]) != source_lock["uv_lock"]["sha256"]:
+    raise SystemExit("uv.lock does not match the wheelhouse lock")
+
+for wheel in source_lock["wheels"]:
+    source = project_root / "vendor/python/wheelhouse" / wheel["file"]
+    if source.is_symlink() or digest(source) != wheel["sha256"]:
+        raise SystemExit(f"source wheel mismatch: {wheel['file']}")
+
+static_files = {
+    ".python-version",
+    ".codex-plugin/plugin.json",
+    "bin/arw",
+    "pyproject.toml",
+    "skills/academic-research-workbench/SKILL.md",
+    "uv.lock",
+    "vendor/python/wheelhouse.lock.json",
+    "vendor/python/wheelhouse/requirements-installed.txt",
+    "vendor/python/wheelhouse/requirements-runtime.txt",
+}
+expected = static_files | {
+    f"vendor/python/wheelhouse/{wheel['file']}" for wheel in source_lock["wheels"]
+} | {f"vendor/python/wheelhouse/{first_party_name}"}
+
+actual: set[str] = set()
+for path in stage_root.rglob("*"):
+    if path.is_symlink():
+        raise SystemExit(f"symlink rejected from stage: {path.relative_to(stage_root)}")
+    if path.is_file():
+        actual.add(path.relative_to(stage_root).as_posix())
+
+if actual != expected:
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    raise SystemExit(f"stage allowlist mismatch; missing={missing}; extra={extra}")
+
+private_path = re.compile(
+    r"(^|/)(?:\.env|\.git|papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
+    r"\.(?:db|sqlite|pem|key)$",
+    re.IGNORECASE,
+)
+for relative in actual:
+    if private_path.search(relative):
+        raise SystemExit(f"private path class rejected from stage: {relative}")
+
+first_party = stage_root / "vendor/python/wheelhouse" / stage_lock["first_party_wheel"]["file"]
+if digest(first_party) != stage_lock["first_party_wheel"]["sha256"]:
+    raise SystemExit("first-party wheel hash mismatch")
+PY
+
+mv "$TEMP_STAGE" "$STAGE_ROOT"
+trap - EXIT INT TERM
+rm -rf -- "$WORK_ROOT"
+printf 'stage ready: %s\n' "$STAGE_ROOT"

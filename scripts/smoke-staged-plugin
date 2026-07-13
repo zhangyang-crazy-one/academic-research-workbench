@@ -1,0 +1,372 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_NAME="academic-research-workbench"
+MARKETPLACE_NAME="arw-isolated"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
+FRESH_ROOT=""
+EVIDENCE_ROOT=""
+INSTALL_CLI=0
+
+usage() {
+  cat <<'EOF'
+Usage: smoke-staged-plugin --install-cli --fresh-home PATH --evidence-root PATH [STAGE_ROOT]
+
+Install the exact stage into an isolated marketplace and run its cached CLI offline.
+EOF
+}
+
+fail() {
+  printf 'smoke-staged-plugin: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install-cli)
+      INSTALL_CLI=1
+      shift
+      ;;
+    --fresh-home)
+      [[ $# -ge 2 ]] || fail "--fresh-home requires a path" 64
+      FRESH_ROOT="$2"
+      shift 2
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --*)
+      fail "unknown argument: $1" 64
+      ;;
+    *)
+      STAGE_ROOT="$1"
+      shift
+      ;;
+  esac
+done
+
+[[ "$INSTALL_CLI" -eq 1 ]] || fail "--install-cli is required" 64
+[[ -n "$FRESH_ROOT" ]] || fail "--fresh-home is required" 64
+[[ -n "$EVIDENCE_ROOT" ]] || fail "--evidence-root is required" 64
+[[ -d "$STAGE_ROOT" ]] || fail "stage root is missing" 66
+[[ ! -d "$STAGE_ROOT/vendor/sources" ]] || fail "vendor/sources must remain absent in Plan 01" 65
+
+PYTHON="$(command -v python3.14 || command -v python3.13 || command -v python3 || true)"
+[[ -n "$PYTHON" ]] || fail "Python >=3.13,<3.15 is required" 78
+"$PYTHON" -c 'import sys; raise SystemExit(0 if (3, 13) <= sys.version_info[:2] < (3, 15) else 1)' \
+  || fail "Python >=3.13,<3.15 is required" 78
+
+FRESH_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$FRESH_ROOT")"
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
+[[ "$FRESH_ROOT" != "/" && "$EVIDENCE_ROOT" != "/" ]] || fail "refusing unsafe output root" 64
+
+rm -rf -- "$FRESH_ROOT" "$EVIDENCE_ROOT"
+mkdir -p "$FRESH_ROOT" "$EVIDENCE_ROOT/stage" \
+  "$EVIDENCE_ROOT/plugin/validate" "$EVIDENCE_ROOT/plugin/install" \
+  "$EVIDENCE_ROOT/plugin/launcher"
+
+ISO_HOME="$FRESH_ROOT/home"
+ISO_CODEX_HOME="$FRESH_ROOT/codex-home"
+MARKETPLACE_ROOT="$FRESH_ROOT/marketplace"
+MARKETPLACE_PLUGIN="$MARKETPLACE_ROOT/plugins/$PLUGIN_NAME"
+UNRELATED_CWD="$FRESH_ROOT/unrelated-working-directory"
+mkdir -p "$ISO_HOME" "$ISO_CODEX_HOME" "$MARKETPLACE_PLUGIN" "$UNRELATED_CWD"
+cp -a -- "$STAGE_ROOT/." "$MARKETPLACE_PLUGIN/"
+
+"$PYTHON" - "$MARKETPLACE_ROOT/.agents/plugins/marketplace.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = {
+    "name": "arw-isolated",
+    "interface": {"displayName": "ARW Isolated Qualification"},
+    "plugins": [
+        {
+            "name": "academic-research-workbench",
+            "source": {
+                "source": "local",
+                "path": "./plugins/academic-research-workbench",
+            },
+            "policy": {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL",
+            },
+            "category": "Productivity",
+        }
+    ],
+}
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
+
+"$PYTHON" - "$STAGE_ROOT" "$MARKETPLACE_PLUGIN" "$EVIDENCE_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+
+stage = Path(sys.argv[1])
+marketplace = Path(sys.argv[2])
+evidence = Path(sys.argv[3])
+private_path = re.compile(
+    r"(^|/)(?:\.env|\.git|papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
+    r"\.(?:db|sqlite|pem|key)$",
+    re.IGNORECASE,
+)
+
+
+def inventory(root: Path) -> tuple[list[str], dict[str, str], str]:
+    entries: list[tuple[str, str]] = []
+    digests: dict[str, str] = {}
+    aggregate = hashlib.sha256()
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            raise SystemExit(f"stage symlink rejected: {relative}")
+        if path.is_file():
+            if private_path.search(relative):
+                raise SystemExit(f"private path class rejected: {relative}")
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            entries.append((relative, digest))
+    for relative, digest in sorted(entries):
+        digests[relative] = digest
+        aggregate.update(relative.encode("utf-8") + b"\0" + digest.encode("ascii") + b"\n")
+    files = [relative for relative, _ in sorted(entries)]
+    return files, digests, aggregate.hexdigest()
+
+
+stage_files, stage_digests, stage_sha256 = inventory(stage)
+market_files, market_digests, market_sha256 = inventory(marketplace)
+if (stage_files, stage_digests, stage_sha256) != (
+    market_files,
+    market_digests,
+    market_sha256,
+):
+    raise SystemExit("marketplace copy differs from exact stage")
+
+(evidence / "stage" / "inventory.json").write_text(
+    json.dumps({"files": stage_files, "symlinks": []}, indent=2) + "\n",
+    encoding="utf-8",
+)
+(evidence / "stage" / "digests.json").write_text(
+    json.dumps(
+        {"files": stage_digests, "stage_sha256": stage_sha256},
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
+
+write_command_metadata() {
+  local directory="$1"
+  local operation="$2"
+  "$PYTHON" - "$directory/command.json" "$operation" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+operation = sys.argv[2]
+argv = {
+    "validate": ["codex", "plugin", "marketplace", "add", "./<isolated-marketplace>", "--json"],
+    "install": ["codex", "plugin", "add", "academic-research-workbench@arw-isolated", "--json"],
+    "launcher": ["<installed-plugin>/bin/arw", "health", "--json"],
+}[operation]
+payload = {
+    "argv": argv,
+    "cwd": "<isolated-working-directory>",
+    "environment": {
+        "CODEX_HOME": "<isolated-codex-home>",
+        "HOME": "<isolated-home>",
+        "PYTHONPATH": "unset",
+    },
+}
+Path(sys.argv[1]).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+write_exit() {
+  local directory="$1"
+  local status="$2"
+  "$PYTHON" - "$directory/exit.json" "$status" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(
+    json.dumps({"status": int(sys.argv[2])}, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+run_codex() {
+  env -i \
+    PATH="$PATH" \
+    HOME="$ISO_HOME" \
+    CODEX_HOME="$ISO_CODEX_HOME" \
+    PYTHONNOUSERSITE=1 \
+    "$@"
+}
+
+write_command_metadata "$EVIDENCE_ROOT/plugin/validate" validate
+set +e
+(
+  cd "$FRESH_ROOT"
+  run_codex codex plugin marketplace add ./marketplace --json
+) >"$EVIDENCE_ROOT/plugin/validate/stdout.log" 2>"$EVIDENCE_ROOT/plugin/validate/stderr.log"
+VALIDATE_STATUS=$?
+set -e
+write_exit "$EVIDENCE_ROOT/plugin/validate" "$VALIDATE_STATUS"
+[[ "$VALIDATE_STATUS" -eq 0 ]] || fail "isolated marketplace validation failed" 70
+
+write_command_metadata "$EVIDENCE_ROOT/plugin/install" install
+set +e
+(
+  cd "$FRESH_ROOT"
+  run_codex codex plugin add "$PLUGIN_NAME@$MARKETPLACE_NAME" --json
+) >"$EVIDENCE_ROOT/plugin/install/stdout.log" 2>"$EVIDENCE_ROOT/plugin/install/stderr.log"
+INSTALL_STATUS=$?
+set -e
+write_exit "$EVIDENCE_ROOT/plugin/install" "$INSTALL_STATUS"
+[[ "$INSTALL_STATUS" -eq 0 ]] || fail "isolated plugin install failed" 70
+
+mapfile -t installed_manifests < <(
+  find "$ISO_CODEX_HOME" -type f -path '*/.codex-plugin/plugin.json' -print | sort
+)
+[[ "${#installed_manifests[@]}" -eq 1 ]] \
+  || fail "expected exactly one installed plugin manifest, found ${#installed_manifests[@]}" 70
+INSTALLED_ROOT="$(cd -P -- "$(dirname -- "${installed_manifests[0]}")/.." && pwd)"
+[[ -x "$INSTALLED_ROOT/bin/arw" ]] || fail "installed launcher is missing" 70
+
+"$PYTHON" - "$STAGE_ROOT" "$INSTALLED_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import sys
+from pathlib import Path
+
+
+def inventory(root: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise SystemExit(f"installed symlink rejected: {path.relative_to(root)}")
+        if path.is_file():
+            result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
+
+if inventory(Path(sys.argv[1])) != inventory(Path(sys.argv[2])):
+    raise SystemExit("installed plugin differs from exact stage")
+PY
+
+write_command_metadata "$EVIDENCE_ROOT/plugin/launcher" launcher
+set +e
+bwrap \
+  --unshare-net \
+  --die-with-parent \
+  --ro-bind / / \
+  --dev /dev \
+  --proc /proc \
+  --tmpfs "$PROJECT_ROOT" \
+  --bind "$FRESH_ROOT" "$FRESH_ROOT" \
+  --chdir "$UNRELATED_CWD" \
+  --clearenv \
+  --setenv PATH "$PATH" \
+  --setenv HOME "$ISO_HOME" \
+  --setenv CODEX_HOME "$ISO_CODEX_HOME" \
+  --setenv PYTHONNOUSERSITE 1 \
+  --setenv PIP_NO_INDEX 1 \
+  "$INSTALLED_ROOT/bin/arw" health --json \
+  >"$EVIDENCE_ROOT/plugin/launcher/stdout.log" \
+  2>"$EVIDENCE_ROOT/plugin/launcher/stderr.log"
+LAUNCHER_STATUS=$?
+set -e
+write_exit "$EVIDENCE_ROOT/plugin/launcher" "$LAUNCHER_STATUS"
+[[ "$LAUNCHER_STATUS" -eq 0 ]] || fail "installed offline launcher failed" 70
+
+"$PYTHON" - \
+  "$EVIDENCE_ROOT" \
+  "$PROJECT_ROOT" \
+  "$HOME" \
+  "$FRESH_ROOT" \
+  "$STAGE_ROOT" \
+  "$INSTALLED_ROOT" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+root = Path(sys.argv[1])
+replacements = {
+    sys.argv[2]: "<repository-root>",
+    sys.argv[3]: "<operator-home>",
+    sys.argv[4]: "<isolated-root>",
+    sys.argv[5]: "<stage-root>",
+    sys.argv[6]: "<installed-plugin>",
+}
+for log in root.rglob("*.log"):
+    contents = log.read_text(encoding="utf-8", errors="replace")
+    for original, replacement in sorted(
+        replacements.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        if original:
+            contents = contents.replace(original, replacement)
+    log.write_text(contents, encoding="utf-8")
+
+(root / "redactions.json").write_text(
+    json.dumps(
+        {
+            "policy": "replace source, operator-home, stage, and isolated absolute prefixes",
+            "tokens": sorted(set(replacements.values())),
+        },
+        indent=2,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+
+for operation in ("validate", "install", "launcher"):
+    status = json.loads((root / "plugin" / operation / "exit.json").read_text())["status"]
+    (root / "plugin" / operation / "verdict.json").write_text(
+        json.dumps({"status": "PASS" if status == 0 else "FAIL"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+(root / "summary.json").write_text(
+    json.dumps(
+        {
+            "inherited_pythonpath": False,
+            "installed_from_exact_stage": True,
+            "network_isolation": "linux-user-network-namespace",
+            "source_imported": False,
+            "stage_name": "academic-research-workbench",
+            "technical_qualification": "PASS",
+        },
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
+
+printf 'installed stage smoke passed\n'

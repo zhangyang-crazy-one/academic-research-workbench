@@ -165,6 +165,7 @@ if ! runtime_ready; then
     "$PYTHON" -m venv "$TEMP_ROOT/venv" \
       || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
     "$TEMP_ROOT/venv/bin/python" -m pip install \
+      --quiet \
       --no-index \
       --only-binary=:all: \
       --require-hashes \
