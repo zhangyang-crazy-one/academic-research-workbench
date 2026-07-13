@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/build-identity.schema.json",
+  "title": "Academic Research Workbench packaged build identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "platform_claim",
+    "plugin",
+    "runtime",
+    "components",
+    "patches",
+    "native",
+    "wheelhouse",
+    "schemas",
+    "evidence",
+    "staged_payloads"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "platform_claim": {"const": "linux"},
+    "plugin": {"$ref": "#/$defs/plugin"},
+    "runtime": {"$ref": "#/$defs/runtime"},
+    "components": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/component"}
+    },
+    "patches": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/patch"}
+    },
+    "native": {"$ref": "#/$defs/native"},
+    "wheelhouse": {"$ref": "#/$defs/wheelhouse"},
+    "schemas": {"$ref": "#/$defs/schemaSet"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "staged_payloads": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/digestPath"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "digestPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "academic-research-workbench"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:\\+[a-z0-9.-]+)?$"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python_requires", "build_interpreter"],
+      "properties": {
+        "python_requires": {"const": ">=3.13,<3.15"},
+        "build_interpreter": {"type": "string", "pattern": "^3\\.(13|14)\\.[0-9]+$"}
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "revision", "tree_sha256"],
+      "properties": {
+        "id": {"enum": ["academic-research-skills", "experiment-agent", "file-base"]},
+        "version": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "path", "sha256"],
+      "properties": {
+        "order": {"type": "integer", "minimum": 1},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "native": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary", "upstream_test_tree_sha256"],
+      "properties": {
+        "binary": {"$ref": "#/$defs/digestPath"},
+        "upstream_test_tree_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "wheelhouse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock", "requirements"],
+      "properties": {
+        "lock": {"$ref": "#/$defs/digestPath"},
+        "requirements": {"$ref": "#/$defs/digestPath"}
+      }
+    },
+    "schemaSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aggregate_sha256", "files"],
+      "properties": {
+        "aggregate_sha256": {"$ref": "#/$defs/sha256"},
+        "files": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/digestPath"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pre_vendor", "legal", "upstream", "asan_ubsan", "tsan"],
+      "properties": {
+        "pre_vendor": {"$ref": "#/$defs/digestPath"},
+        "legal": {"$ref": "#/$defs/digestPath"},
+        "upstream": {"$ref": "#/$defs/digestPath"},
+        "asan_ubsan": {"$ref": "#/$defs/digestPath"},
+        "tsan": {"$ref": "#/$defs/digestPath"}
+      }
+    }
+  }
+}

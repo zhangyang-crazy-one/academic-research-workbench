@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/version-report.schema.json",
+  "title": "Academic Research Workbench installed version report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command", "build_identity_sha256", "identity"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "command": {"const": "version"},
+    "build_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {"$ref": "build-identity.schema.json"}
+  }
+}
