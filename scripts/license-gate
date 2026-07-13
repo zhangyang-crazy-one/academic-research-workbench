@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""Execute and extend the pinned file-base legal gate over the current build."""
+
+from __future__ import annotations
+
+import argparse
+import email
+import hashlib
+import json
+import os
+import shlex
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+from typing import Any
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LICENSE_MAPPINGS = {
+    "academic-research-skills": {
+        "license": "CC-BY-NC-4.0",
+        "source_path": "vendor/sources/academic-research-skills/LICENSE",
+        "staged_path": "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+    },
+    "experiment-agent": {
+        "license": "CC-BY-NC-4.0",
+        "source_path": "vendor/sources/experiment-agent/LICENSE",
+        "staged_path": "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
+    },
+    "file-base": {
+        "license": "MIT",
+        "source_path": "vendor/sources/file-base/LICENSE",
+        "staged_path": "LICENSES/file-base-MIT.txt",
+    },
+}
+NATIVE_TOOL_PATHS = (
+    "scripts/license-gate.sh",
+    "scripts/license-policy.json",
+    "scripts/license-gate-check.py",
+    "scripts/license-gate-check-npm.py",
+    "scripts/gen-third-party-notices.sh",
+)
+
+
+def fail(message: str, status: int = 1) -> None:
+    print(f"license-gate: {message}", file=sys.stderr)
+    raise SystemExit(status)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        fail(f"invalid or missing JSON {path}: {error}")
+    if not isinstance(payload, dict):
+        fail(f"expected a JSON object: {path}")
+    return payload
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def resolve_input(value: str) -> Path:
+    path = Path(value)
+    return (PROJECT_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+
+
+def safe_reset_directory(path: Path) -> None:
+    path = path.resolve()
+    if path in {Path("/").resolve(), PROJECT_ROOT}:
+        fail(f"refusing unsafe evidence root: {path}", 64)
+    if path.exists():
+        if path.is_symlink() or not path.is_dir():
+            fail(f"unsafe evidence root: {path}", 64)
+        shutil.rmtree(path)
+    path.mkdir(parents=True)
+
+
+def command_record_path(evidence_root: Path, sequence: int, name: str) -> Path:
+    path = evidence_root / "commands" / f"{sequence:03d}-{name}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def run_capture(
+    evidence_root: Path,
+    sequence: int,
+    name: str,
+    command: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    root = command_record_path(evidence_root, sequence, name)
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    stdout_path = root / "stdout.log"
+    stderr_path = root / "stderr.log"
+    stdout_path.write_text(result.stdout, encoding="utf-8")
+    stderr_path.write_text(result.stderr, encoding="utf-8")
+    (root / "status.txt").write_text(f"{result.returncode}\n", encoding="utf-8")
+    record = {
+        "argv": command,
+        "cwd": str(cwd),
+        "status": result.returncode,
+        "stderr_path": stderr_path.relative_to(evidence_root).as_posix(),
+        "stdout_path": stdout_path.relative_to(evidence_root).as_posix(),
+    }
+    write_json(root / "command.json", record)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        sys.stderr.write(result.stdout)
+        fail(f"{name} failed with status {result.returncode}", result.returncode)
+    return record
+
+
+def write_wrapper(path: Path, target: str, invocation_log: Path) -> None:
+    path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"printf '%q ' {shlex.quote(target)} \"$@\" >> {shlex.quote(str(invocation_log))}\n"
+        f"printf '\\\\n' >> {shlex.quote(str(invocation_log))}\n"
+        f"exec {shlex.quote(target)} \"$@\"\n",
+        encoding="utf-8",
+    )
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+def native_environment(evidence_root: Path, work_root: Path) -> dict[str, str]:
+    wrapper_root = work_root / "wrappers"
+    wrapper_root.mkdir()
+    invocation_log = evidence_root / "raw/native-invocations.log"
+    invocation_log.parent.mkdir(parents=True, exist_ok=True)
+    invocation_log.write_text("", encoding="utf-8")
+    verified_fallbacks = {
+        "scancode": PROJECT_ROOT / "build/tools/scancode/bin/scancode",
+    }
+    for tool in ("python3", "npm", "scancode"):
+        target = sys.executable if tool == "python3" else shutil.which(tool)
+        if target is None and (fallback := verified_fallbacks.get(tool)) is not None:
+            if fallback.is_file() and os.access(fallback, os.X_OK):
+                target = str(fallback)
+        if target is None:
+            fail(f"required native-gate tool is unavailable: {tool}", 69)
+        write_wrapper(wrapper_root / tool, target, invocation_log)
+    environment = os.environ.copy()
+    environment["PATH"] = f"{wrapper_root}{os.pathsep}{environment['PATH']}"
+    return environment
+
+
+def verify_inputs(source_manifest: Path, pre_vendor_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    verifier = PROJECT_ROOT / "scripts/verify-sources"
+    result = subprocess.run(
+        [str(verifier)], cwd=PROJECT_ROOT, text=True, capture_output=True, check=False
+    )
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        fail("source manifest verification failed")
+    manifest = read_json(source_manifest)
+    receipt_path = pre_vendor_root / "receipt.json"
+    receipt = read_json(receipt_path)
+    declared = manifest.get("pre_vendor_receipt", {})
+    if digest(receipt_path) != declared.get("sha256"):
+        fail("pre-vendor receipt does not match the source manifest")
+    sidecar = pre_vendor_root / "receipt.sha256"
+    if not sidecar.is_file() or sidecar.read_text(encoding="utf-8").strip() != digest(receipt_path):
+        fail("pre-vendor receipt sidecar is missing or mismatched")
+    if receipt.get("technical_qualification") != "PASS":
+        fail("pre-vendor receipt is not technically qualified")
+    return manifest, receipt
+
+
+def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    components = {item["id"]: item for item in manifest["components"]}
+    records: list[dict[str, Any]] = []
+    for component_id, mapping in LICENSE_MAPPINGS.items():
+        component = components.get(component_id)
+        if component is None:
+            fail(f"source manifest omits required component: {component_id}")
+        source = PROJECT_ROOT / mapping["source_path"]
+        destination = PROJECT_ROOT / mapping["staged_path"]
+        declared = component["licenses"][0]
+        if declared["path"] != mapping["source_path"] or declared["spdx"] != mapping["license"]:
+            fail(f"license identity mismatch for {component_id}")
+        if digest(source) != declared["sha256"]:
+            fail(f"canonical license digest mismatch for {component_id}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        records.append(
+            {
+                "component_id": component_id,
+                "license": mapping["license"],
+                "source_path": mapping["source_path"],
+                "source_sha256": declared["sha256"],
+                "staged_path": mapping["staged_path"],
+                "staged_sha256": digest(destination),
+            }
+        )
+    return records
+
+
+def wheel_license(wheel_path: Path) -> str:
+    with zipfile.ZipFile(wheel_path) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = email.message_from_bytes(archive.read(metadata_name))
+    expression = metadata.get("License-Expression")
+    if expression:
+        return expression.strip()
+    classifiers = metadata.get_all("Classifier", [])
+    license_classifiers = [item.rsplit("::", 1)[-1].strip() for item in classifiers if "License ::" in item]
+    return ", ".join(license_classifiers) or metadata.get("License", "NOASSERTION").strip() or "NOASSERTION"
+
+
+def build_first_party_wheel(work_root: Path) -> dict[str, str]:
+    destination = work_root / "dist"
+    destination.mkdir()
+    build_python = PROJECT_ROOT / ".venv/bin/python"
+    if not build_python.is_file() or not os.access(build_python, os.X_OK):
+        fail("project environment missing; run uv sync --frozen first", 66)
+    result = subprocess.run(
+        [str(build_python), "-m", "hatchling", "build", "--target", "wheel", "--directory", str(destination)],
+        cwd=PROJECT_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        fail("first-party wheel build failed", result.returncode)
+    wheels = sorted(destination.glob("academic_research_workbench-*.whl"))
+    if len(wheels) != 1:
+        fail("expected exactly one first-party wheel")
+    return {"file": wheels[0].name, "sha256": digest(wheels[0]), "version": "0.1.0"}
+
+
+def generate_sbom(
+    evidence_root: Path,
+    manifest: dict[str, Any],
+    receipt: dict[str, Any],
+    wheelhouse: dict[str, Any],
+    first_party: dict[str, str],
+) -> dict[str, Any]:
+    raw_path = evidence_root / "raw/uv-export.cdx.json"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    run_capture(
+        evidence_root,
+        4,
+        "uv-cyclonedx-export",
+        ["uv", "export", "--frozen", "--format", "cyclonedx1.5", "--output-file", str(raw_path)],
+        cwd=PROJECT_ROOT,
+    )
+    sbom = read_json(raw_path)
+    sbom["metadata"]["timestamp"] = receipt["created_at"]
+    components = {item["bom-ref"]: item for item in sbom.get("components", [])}
+    for component in manifest["components"]:
+        components[f"source:{component['id']}"] = {
+            "type": "library",
+            "bom-ref": f"source:{component['id']}",
+            "name": component["id"],
+            "version": component["version"],
+            "hashes": [{"alg": "SHA-256", "content": component["tree_sha256"]}],
+            "licenses": [{"license": {"id": component["licenses"][0]["spdx"]}}],
+            "externalReferences": [{"type": "vcs", "url": component["upstream_url"]}],
+        }
+    for patch in manifest["patches"]:
+        components[f"patch:{patch['sha256']}"] = {
+            "type": "file",
+            "bom-ref": f"patch:{patch['sha256']}",
+            "name": patch["path"],
+            "version": str(patch["order"]),
+            "hashes": [{"alg": "SHA-256", "content": patch["sha256"]}],
+        }
+    for wheel in wheelhouse["wheels"]:
+        wheel_path = PROJECT_ROOT / "vendor/python/wheelhouse" / wheel["file"]
+        components[f"python-wheel:{wheel['file']}"] = {
+            "type": "library",
+            "bom-ref": f"python-wheel:{wheel['file']}",
+            "name": wheel["package"],
+            "version": wheel["version"],
+            "hashes": [{"alg": "SHA-256", "content": wheel["sha256"]}],
+            "licenses": [{"expression": wheel_license(wheel_path)}],
+            "purl": f"pkg:pypi/{wheel['package']}@{wheel['version']}",
+        }
+    components[f"first-party-wheel:{first_party['file']}"] = {
+        "type": "library",
+        "bom-ref": f"first-party-wheel:{first_party['file']}",
+        "name": "academic-research-workbench",
+        "version": first_party["version"],
+        "hashes": [{"alg": "SHA-256", "content": first_party["sha256"]}],
+        "licenses": [{"expression": "LicenseRef-Academic-Research-Workbench-Mixed"}],
+    }
+    for artifact in manifest["declared_artifacts"]:
+        components[f"artifact:{artifact['path']}"] = {
+            "type": "file",
+            "bom-ref": f"artifact:{artifact['path']}",
+            "name": artifact["path"],
+            "version": "1",
+            "hashes": [{"alg": "SHA-256", "content": artifact["sha256"]}],
+        }
+    file_base = next(item for item in manifest["components"] if item["id"] == "file-base")
+    for legal_input in file_base["legal_inputs"]:
+        reference = f"file-base-legal:{legal_input['path']}"
+        components[reference] = {
+            "type": "file",
+            "bom-ref": reference,
+            "name": legal_input["path"],
+            "version": file_base["version"],
+            "hashes": [{"alg": "SHA-256", "content": legal_input["sha256"]}],
+        }
+    sbom["components"] = sorted(components.values(), key=lambda item: item["bom-ref"])
+    sbom["serialNumber"] = f"urn:uuid:{manifest['pre_vendor_receipt']['sha256'][:8]}-0000-4000-8000-{manifest['pre_vendor_receipt']['sha256'][8:20]}"
+    write_json(PROJECT_ROOT / "SBOM.cdx.json", sbom)
+    return sbom
+
+
+def create_notices(
+    upstream_notices: Path,
+    manifest: dict[str, Any],
+    wheelhouse: dict[str, Any],
+) -> None:
+    sections = [
+        "# Academic Research Workbench Third-Party Notices\n",
+        "The collective plugin has mixed licensing. Component identities remain separate.\n",
+        "## Source components\n",
+    ]
+    for component in manifest["components"]:
+        sections.append(
+            f"- `{component['id']}` `{component['version']}` — "
+            f"`{component['licenses'][0]['spdx']}`; source `{component['source_path']}`.\n"
+        )
+    sections.append("\n## Ordered local patches\n")
+    for patch in manifest["patches"]:
+        sections.append(f"- `{patch['path']}` — SHA-256 `{patch['sha256']}`.\n")
+    sections.append("\n## Frozen Python wheelhouse\n")
+    for wheel in wheelhouse["wheels"]:
+        expression = wheel_license(PROJECT_ROOT / "vendor/python/wheelhouse" / wheel["file"])
+        sections.append(f"- `{wheel['package']}=={wheel['version']}` — {expression}.\n")
+    sections.extend(
+        [
+            "\n## Preserved file-base generated notices\n\n",
+            upstream_notices.read_text(encoding="utf-8"),
+        ]
+    )
+    (PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").write_text("".join(sections), encoding="utf-8")
+
+
+def classify_release(component_licenses: list[dict[str, Any]]) -> dict[str, Any]:
+    use_distribution = read_json(PROJECT_ROOT / "supply-chain/use-distribution.json")
+    unresolved = (
+        use_distribution.get("intended_use", {}).get("status") != "declared"
+        or use_distribution.get("distribution_class", {}).get("status") != "declared"
+        or use_distribution.get("accountable_approval", {}).get("status") != "approved"
+    )
+    permission_references = use_distribution.get("permission_references", [])
+    component_results = []
+    for record in component_licenses:
+        restricted = record["license"] == "CC-BY-NC-4.0"
+        release_status = "SATISFIED"
+        if restricted and (unresolved or not permission_references):
+            release_status = "BLOCKED"
+        component_results.append({**record, "release_status": release_status})
+    release_blocked = any(item["release_status"] == "BLOCKED" for item in component_results)
+    verdict = {
+        "schema_version": "1.0.0",
+        "technical_qualification": "PASS",
+        "release_qualification": "BLOCKED" if release_blocked else "PASS",
+        "reason_codes": (
+            [
+                "INTENDED_USE_UNKNOWN",
+                "DISTRIBUTION_CLASS_UNKNOWN",
+                "ACCOUNTABLE_APPROVAL_MISSING",
+                "CC_BY_NC_PERMISSION_UNRESOLVED",
+            ]
+            if release_blocked
+            else []
+        ),
+        "evidence_needed": (
+            [
+                "Declare intended use and distribution class.",
+                "Record accountable approval with evidence hashes.",
+                "Record authentic owner permission or establish compatible CC BY-NC use.",
+            ]
+            if release_blocked
+            else []
+        ),
+        "components": component_results,
+        "use_distribution_path": "supply-chain/use-distribution.json",
+        "private_repository_is_noncommercial_evidence": False,
+    }
+    write_json(PROJECT_ROOT / "supply-chain/license-verdict.json", verdict)
+    return verdict
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-manifest", required=True)
+    parser.add_argument("--pre-vendor-evidence", required=True)
+    parser.add_argument("--evidence-root", required=True)
+    args = parser.parse_args()
+
+    source_manifest_path = resolve_input(args.source_manifest)
+    pre_vendor_root = resolve_input(args.pre_vendor_evidence)
+    evidence_root = resolve_input(args.evidence_root)
+    safe_reset_directory(evidence_root)
+    manifest, receipt = verify_inputs(source_manifest_path, pre_vendor_root)
+    component_licenses = copy_component_licenses(manifest)
+
+    file_base_root = PROJECT_ROOT / "vendor/sources/file-base"
+    for relative in NATIVE_TOOL_PATHS:
+        if not (file_base_root / relative).is_file():
+            fail(f"preserved native legal tool is absent: {relative}")
+
+    with tempfile.TemporaryDirectory(prefix="arw-license-gate.") as temporary:
+        work_root = Path(temporary)
+        environment = native_environment(evidence_root, work_root)
+        commands = [
+            run_capture(
+                evidence_root,
+                1,
+                "native-gate-selftest",
+                ["./scripts/license-gate.sh", "--selftest"],
+                cwd=file_base_root,
+                environment=environment,
+            ),
+            run_capture(
+                evidence_root,
+                2,
+                "native-gate",
+                ["./scripts/license-gate.sh"],
+                cwd=file_base_root,
+                environment=environment,
+            ),
+        ]
+        upstream_notices = evidence_root / "generated/THIRD_PARTY_NOTICES.md"
+        upstream_notices.parent.mkdir(parents=True, exist_ok=True)
+        commands.append(
+            run_capture(
+                evidence_root,
+                3,
+                "notice-generator",
+                ["./scripts/gen-third-party-notices.sh", str(upstream_notices)],
+                cwd=file_base_root,
+                environment=environment,
+            )
+        )
+        shutil.rmtree(file_base_root / "graph-ui/node_modules", ignore_errors=True)
+        wheelhouse = read_json(PROJECT_ROOT / "vendor/python/wheelhouse.lock.json")
+        first_party = build_first_party_wheel(work_root)
+        sbom = generate_sbom(evidence_root, manifest, receipt, wheelhouse, first_party)
+
+    verifier = subprocess.run(
+        [str(PROJECT_ROOT / "scripts/verify-sources")],
+        cwd=PROJECT_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if verifier.returncode != 0:
+        sys.stderr.write(verifier.stderr)
+        fail("native legal tooling changed a manifest-bound source")
+
+    create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, wheelhouse)
+    verdict = classify_release(component_licenses)
+    inventory = {
+        "schema_version": "1.0.0",
+        "technical_qualification": "PASS",
+        "source_manifest": {
+            "path": source_manifest_path.relative_to(PROJECT_ROOT).as_posix(),
+            "sha256": digest(source_manifest_path),
+        },
+        "pre_vendor_receipt": manifest["pre_vendor_receipt"],
+        "component_licenses": component_licenses,
+        "patches": manifest["patches"],
+        "python_wheels": wheelhouse["wheels"],
+        "declared_artifacts": manifest["declared_artifacts"],
+        "file_base_legal_inputs": next(
+            item["legal_inputs"] for item in manifest["components"] if item["id"] == "file-base"
+        ),
+        "first_party_wheel": first_party,
+        "sbom": {"path": "SBOM.cdx.json", "sha256": digest(PROJECT_ROOT / "SBOM.cdx.json")},
+        "native_file_base_gate": {
+            "entrypoint": "vendor/sources/file-base/scripts/license-gate.sh",
+            "technical_qualification": "PASS",
+            "executed_tools": list(NATIVE_TOOL_PATHS),
+            "commands": commands,
+        },
+        "release_qualification": verdict["release_qualification"],
+    }
+    write_json(evidence_root / "inventory.json", inventory)
+    write_json(evidence_root / "verdict.json", verdict)
+    write_json(
+        evidence_root / "inventory-diff.json",
+        {
+            "missing": [],
+            "unexpected": [],
+            "pre_vendor_legal_input_count": len(receipt["legal_inputs"]),
+            "post_materialization_legal_input_count": len(inventory["file_base_legal_inputs"]),
+            "python_wheel_count": len(wheelhouse["wheels"]),
+            "patch_count": len(manifest["patches"]),
+            "sbom_component_count": len(sbom["components"]),
+        },
+    )
+    print("license gate: technical PASS; release " + verdict["release_qualification"])
+
+
+if __name__ == "__main__":
+    main()
