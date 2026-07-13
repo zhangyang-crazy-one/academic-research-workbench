@@ -10,6 +10,7 @@ from pydantic import Field
 from arw.models import (
     AttemptClosedPayload,
     AttemptStartedPayload,
+    ArtifactAcceptedPayload,
     CanonicalEvent,
     HumanDecisionRequestedPayload,
     HumanDecisionResolvedPayload,
@@ -186,7 +187,10 @@ def reduce_events(
                 raise ReducerError("attempt is not active")
             attempts.pop(payload.attempt_id)
         elif event.event_type == "artifact.accepted":
-            artifacts.append(payload.manifest_sha256)  # type: ignore[union-attr]
+            assert isinstance(payload, ArtifactAcceptedPayload)
+            if payload.manifest_sha256 in artifacts:
+                raise ReducerError("artifact manifest was already accepted")
+            artifacts.append(payload.manifest_sha256)
         elif event.event_type == "passport.accepted":
             assert isinstance(payload, PassportAcceptedPayload)
             if payload.stage != stage or payload.based_on_revision > revision:

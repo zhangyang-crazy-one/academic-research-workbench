@@ -68,6 +68,7 @@ def _base(number: int, revision: int, *, role: str = "parent_control_plane"):
 def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) -> None:
     from arw.manifests import install_artifact_manifest
     from arw.models import ArtifactAcceptanceRequest, ArtifactManifest
+    from arw.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     content = root / "outputs" / "figure.png"
@@ -92,21 +93,24 @@ def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) 
     )
     install_artifact_manifest(root, orphan)
     assert service.read_state().accepted_artifact_manifest_sha256 == []
-    accepted = service.accept_artifact(
-        ArtifactAcceptanceRequest.model_validate(
-            {
-                **_base(52, 1),
-                "artifact_id": "artifact.figure-001",
-                "artifact_kind": "figure",
-                "media_type": "image/png",
-                "content_path": "outputs/figure.png",
-                "content_sha256": content_hash,
-                "attempt_id": None,
-                "base_revision": 1,
-                "consumed_sha256": [],
-            }
-        )
+    request = ArtifactAcceptanceRequest.model_validate(
+        {
+            **_base(52, 1),
+            "artifact_id": "artifact.figure-001",
+            "artifact_kind": "figure",
+            "media_type": "image/png",
+            "content_path": "outputs/figure.png",
+            "content_sha256": content_hash,
+            "attempt_id": None,
+            "base_revision": 1,
+            "consumed_sha256": [],
+        }
     )
+    validate_instance(
+        "artifact-request.schema.json",
+        request.model_dump(mode="json", exclude_none=True),
+    )
+    accepted = service.accept_artifact(request)
     assert accepted.accepted
     assert len(accepted.state.accepted_artifact_manifest_sha256) == 1
     assert accepted.event.event_type == "artifact.accepted"

@@ -24,6 +24,8 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "version-report.schema.json",
 )
 SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
+    "artifact-manifest.schema.json",
+    "artifact-request.schema.json",
     "attempt-request.schema.json",
     "rejection.schema.json",
     "status.schema.json",

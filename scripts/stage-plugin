@@ -421,6 +421,8 @@ static_files = {
     "schemas/v1/source-manifest.schema.json",
     "scripts/file-base-mcp",
     "share/arw/build-identity.json",
+    "share/arw/schemas/artifact-manifest.schema.json",
+    "share/arw/schemas/artifact-request.schema.json",
     "share/arw/schemas/build-identity.schema.json",
     "share/arw/schemas/attempt-request.schema.json",
     "share/arw/schemas/event.schema.json",
