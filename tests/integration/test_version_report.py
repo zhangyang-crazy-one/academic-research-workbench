@@ -89,7 +89,7 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         "asan_ubsan",
         "tsan",
     }
-    assert len(identity["schemas"]["files"]) == 20
+    assert len(identity["schemas"]["files"]) == 22
     assert identity["staged_payloads"]
 
     inventory = json.loads(

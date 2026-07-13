@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "run_id": {"pattern": "^run-[0-9a-f-]{36}$", "type": "string"},
+    "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "passport_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "accepted_revision": {"minimum": 1, "type": "integer"},
     "ledger_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}

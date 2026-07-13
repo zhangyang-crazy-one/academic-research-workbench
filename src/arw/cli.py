@@ -237,7 +237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             request = _load_request(args.request, model)
             service = RuntimeCommandService(args.run_root, lock_timeout=args.lock_timeout)
             outcome = getattr(service, method_name)(request)
-            _write_json(outcome.model_dump(mode="json", exclude_none=True))
+            _write_json(outcome.model_dump(mode="json"))
             return 0 if outcome.accepted else 65
         if args.command == "passport-pointer-rebuild":
             pointer = RuntimeCommandService(

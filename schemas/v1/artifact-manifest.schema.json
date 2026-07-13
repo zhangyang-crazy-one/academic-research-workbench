@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "run_id": {"pattern": "^run-[0-9a-f-]{36}$", "type": "string"},
+    "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "artifact_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "artifact_kind": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "media_type": {"minLength": 3, "maxLength": 127, "type": "string"},
