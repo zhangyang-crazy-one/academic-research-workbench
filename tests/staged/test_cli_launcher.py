@@ -75,6 +75,34 @@ def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> N
     assert health["python"].split(".")[:2] in (["3", "13"], ["3", "14"])
     assert len(health["runtime_identity"]) == 64
 
+    runtime_commands = (
+        "init",
+        "append",
+        "replay",
+        "status",
+        "transition",
+        "decision-request",
+        "decision-resolve",
+        "attempt-start",
+        "attempt-close",
+        "artifact-accept",
+        "checkpoint",
+        "resume",
+        "recover",
+        "passport-pointer-rebuild",
+    )
+    for command in runtime_commands:
+        help_result = subprocess.run(
+            [str(stage_root / "bin/arw"), command, "--help"],
+            cwd=unrelated_cwd,
+            env={**environment, "CODEX_HOME": str(tmp_path / "isolated-codex-home")},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, (command, help_result.stderr)
+        assert f"usage: arw {command}" in help_result.stdout
+
     evidence_text = "\n".join(
         path.read_text(errors="replace")
         for path in evidence_root.rglob("*")

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/command-outcome.schema.json",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"accepted": {"const": true}}, "required": ["accepted"]},
+      "then": {"properties": {"event": {"$ref": "https://academic-research-workbench.local/schemas/v1/event.schema.json"}, "rejection": {"type": "null"}}},
+      "else": {"properties": {"event": {"type": "null"}, "rejection": {"$ref": "https://academic-research-workbench.local/schemas/v1/rejection.schema.json"}}}
+    }
+  ],
+  "properties": {
+    "accepted": {"type": "boolean"},
+    "state": {"$ref": "#/$defs/runtime_state"},
+    "event": {"anyOf": [{"$ref": "https://academic-research-workbench.local/schemas/v1/event.schema.json"}, {"type": "null"}]},
+    "rejection": {"anyOf": [{"$ref": "https://academic-research-workbench.local/schemas/v1/rejection.schema.json"}, {"type": "null"}]}
+  },
+  "required": ["accepted", "state", "event", "rejection"],
+  "title": "CommandOutcome",
+  "type": "object",
+  "$defs": {
+    "runtime_state": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
+        "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "stage": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "accepted_revision": {"minimum": 0, "type": "integer"},
+        "ledger_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "current_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "recovery_health": {"enum": ["healthy", "recoverable_tail", "blocked"], "type": "string"},
+        "blockers": {"items": {"$ref": "#/$defs/blocker"}, "type": "array"},
+        "pending_human_decisions": {"items": {"$ref": "#/$defs/decision"}, "type": "array"},
+        "active_attempts": {"items": {"$ref": "#/$defs/attempt"}, "type": "array"},
+        "legal_next_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"},
+        "accepted_artifact_manifest_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
+        "accepted_passport_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
+        "consumed_passport_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
+        "reducer_version": {"const": "1.0.0", "type": "string"},
+        "schema_version": {"const": "1.0.0", "type": "string"}
+      },
+      "required": ["run_id", "workflow_definition_id", "stage", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "recovery_health", "blockers", "pending_human_decisions", "active_attempts", "legal_next_transitions", "accepted_artifact_manifest_sha256", "accepted_passport_sha256", "consumed_passport_sha256", "reducer_version", "schema_version"],
+      "type": "object"
+    },
+    "blocker": {
+      "additionalProperties": false,
+      "properties": {"code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "source_event_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
+      "required": ["code", "source_event_id"],
+      "type": "object"
+    },
+    "decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "blocker_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "source_event_ids": {"items": {"type": "string"}, "type": "array"},
+        "starting_revision": {"minimum": 0, "type": "integer"},
+        "allowed_choices": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"},
+        "rationale_required": {"type": "boolean"},
+        "unlock_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"}
+      },
+      "required": ["decision_id", "blocker_code", "source_event_ids", "starting_revision", "allowed_choices", "rationale_required", "unlock_transitions"],
+      "type": "object"
+    },
+    "attempt": {
+      "additionalProperties": false,
+      "properties": {"attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "base_revision": {"minimum": 0, "type": "integer"}, "consumed_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"}},
+      "required": ["attempt_id", "base_revision", "consumed_sha256"],
+      "type": "object"
+    }
+  }
+}

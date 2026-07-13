@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "run_id": {"pattern": "^run-[0-9a-f-]{36}$", "type": "string"},
+    "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "workflow_definition_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "based_on_revision": {"minimum": 0, "type": "integer"},
@@ -29,7 +29,7 @@
       "properties": {
         "decision_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
         "blocker_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
-        "source_event_ids": {"items": {"pattern": "^evt-[0-9a-f-]{36}$", "type": "string"}, "type": "array"},
+        "source_event_ids": {"items": {"pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"}, "type": "array"},
         "starting_revision": {"minimum": 0, "type": "integer"},
         "allowed_choices": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"},
         "rationale_required": {"type": "boolean"},

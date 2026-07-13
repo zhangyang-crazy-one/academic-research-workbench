@@ -19,7 +19,14 @@ def test_checked_in_schemas_regenerate_byte_stably(tmp_path: Path) -> None:
     )
 
     assert len(PHASE1_SCHEMA_NAMES) == 8
-    assert {"rejection.schema.json", "status.schema.json"} <= set(SCHEMA_NAMES)
+    assert {
+        "command-outcome.schema.json",
+        "decision-request.schema.json",
+        "recovery-receipt.schema.json",
+        "recovery-request.schema.json",
+        "rejection.schema.json",
+        "status.schema.json",
+    } <= set(SCHEMA_NAMES)
     assert validate_checked_in_schemas() == SCHEMA_NAMES
     first = regenerate_schemas(tmp_path / "first")
     second = regenerate_schemas(tmp_path / "second")

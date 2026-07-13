@@ -425,6 +425,8 @@ static_files = {
     "share/arw/schemas/artifact-request.schema.json",
     "share/arw/schemas/build-identity.schema.json",
     "share/arw/schemas/checkpoint-request.schema.json",
+    "share/arw/schemas/command-outcome.schema.json",
+    "share/arw/schemas/decision-request.schema.json",
     "share/arw/schemas/attempt-request.schema.json",
     "share/arw/schemas/event.schema.json",
     "share/arw/schemas/mcp-read-request.schema.json",
