@@ -2,7 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://academic-research-workbench.local/schemas/v1/run-manifest.schema.json",
   "additionalProperties": false,
-  "description": "Immutable Phase 1 run identity and declared execution capabilities.",
+  "description": "Immutable run identity and declared execution capabilities; legacy manifests omit the paired workflow definition fields.",
+  "dependentRequired": {
+    "workflow_definition_id": ["workflow_definition_sha256"],
+    "workflow_definition_sha256": ["workflow_definition_id"]
+  },
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
     "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
@@ -10,6 +14,8 @@
     "immutable_input": {"$ref": "#/$defs/immutable_input"},
     "workflow_family": {"const": "academic-pipeline", "type": "string"},
     "workflow_mode": {"const": "inline-role-prompts", "type": "string"},
+    "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+    "workflow_definition_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "capabilities": {
       "items": {"enum": ["canonical-journal", "forced-stop-replay"], "type": "string"},
       "minItems": 1,

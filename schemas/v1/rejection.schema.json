@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/rejection.schema.json",
+  "additionalProperties": false,
+  "description": "Side-effect-free canonical command rejection.",
+  "properties": {
+    "schema_version": {"const": "1.0.0", "type": "string"},
+    "code": {"pattern": "^[a-z][a-z0-9.-]{2,95}$", "type": "string"},
+    "message": {"minLength": 1, "maxLength": 2048, "type": "string"},
+    "run_id": {"anyOf": [{"pattern": "^run-", "type": "string"}, {"type": "null"}]},
+    "accepted_revision": {"anyOf": [{"minimum": 0, "type": "integer"}, {"type": "null"}]},
+    "ledger_head_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "current_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "legal_next_transitions": {"items": {"pattern": "^[a-z][a-z0-9.-]{2,95}$", "type": "string"}, "type": "array"},
+    "recovery_health": {"anyOf": [{"enum": ["healthy", "recoverable_tail", "blocked"], "type": "string"}, {"type": "null"}]}
+  },
+  "required": ["schema_version", "code", "message", "run_id", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "legal_next_transitions", "recovery_health"],
+  "title": "Rejection",
+  "type": "object"
+}

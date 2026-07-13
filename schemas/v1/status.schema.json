@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/status.schema.json",
+  "additionalProperties": false,
+  "description": "Read-only durable runtime status projection.",
+  "properties": {
+    "schema_version": {"const": "1.0.0", "type": "string"},
+    "reducer_version": {"const": "1.0.0", "type": "string"},
+    "run_id": {"pattern": "^run-", "type": "string"},
+    "workflow_definition_id": {"type": "string"},
+    "current_stage": {"type": "string"},
+    "accepted_revision": {"minimum": 0, "type": "integer"},
+    "ledger_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "current_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "recovery_health": {"enum": ["healthy", "recoverable_tail", "blocked"], "type": "string"},
+    "blockers": {"items": {"type": "object"}, "type": "array"},
+    "pending_human_decisions": {"items": {"type": "object"}, "type": "array"},
+    "active_attempts": {"items": {"type": "object"}, "type": "array"},
+    "legal_next_transitions": {"items": {"type": "string"}, "type": "array"}
+  },
+  "required": ["schema_version", "reducer_version", "run_id", "workflow_definition_id", "current_stage", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "recovery_health", "blockers", "pending_human_decisions", "active_attempts", "legal_next_transitions"],
+  "title": "StatusReport",
+  "type": "object"
+}

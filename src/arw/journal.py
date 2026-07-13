@@ -27,6 +27,7 @@ from arw.models import (
     RunManifest,
     ZERO_HASH,
 )
+from arw.workflows import WorkflowDefinitionError, require_workflow
 
 
 MANIFEST_NAME = "run-manifest.json"
@@ -140,6 +141,13 @@ def initialize_run(
 
     root = _validated_root(run_root)
     _input_digest_matches(root, request.immutable_input)
+    if request.workflow_definition_id is not None:
+        try:
+            definition = require_workflow(request.workflow_definition_id)
+        except WorkflowDefinitionError as error:
+            raise JournalError(str(error)) from error
+        if definition.sha256 != request.workflow_definition_sha256:
+            raise JournalError("workflow definition digest does not match the registry")
     manifest = RunManifest(
         schema_version=request.schema_version,
         run_id=request.run_id,
@@ -147,9 +155,11 @@ def initialize_run(
         immutable_input=request.immutable_input,
         workflow_family=request.workflow_family,
         workflow_mode=request.workflow_mode,
+        workflow_definition_id=request.workflow_definition_id,
+        workflow_definition_sha256=request.workflow_definition_sha256,
         capabilities=request.capabilities,
     )
-    manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json"))
+    manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True))
     initial = _event_from_unsigned(
         {
             "schema_version": request.schema_version,
@@ -168,7 +178,7 @@ def initialize_run(
             ).model_dump(mode="json"),
         }
     )
-    event_bytes = canonical_json_bytes(initial.model_dump(mode="json"))
+    event_bytes = canonical_json_bytes(initial.model_dump(mode="json", exclude_none=True))
     manifest_path = root / MANIFEST_NAME
     journal_path = root / JOURNAL_NAME
     try:
@@ -210,8 +220,15 @@ def _replay_unlocked(root: Path) -> ReplayState:
     except (OSError, UnicodeError, ValueError) as error:
         raise JournalError(f"manifest is missing or malformed: {error}") from error
     manifest: RunManifest = _strict_model(RunManifest, manifest_payload, "manifest")
-    if canonical_json_bytes(manifest.model_dump(mode="json")) != manifest_bytes:
+    if canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True)) != manifest_bytes:
         raise JournalError("manifest bytes are not canonical")
+    if manifest.workflow_definition_id is not None:
+        try:
+            definition = require_workflow(manifest.workflow_definition_id)
+        except WorkflowDefinitionError as error:
+            raise JournalError(str(error)) from error
+        if definition.sha256 != manifest.workflow_definition_sha256:
+            raise JournalError("manifest workflow definition digest does not match the registry")
 
     try:
         journal_bytes = journal_path.read_bytes()
@@ -232,9 +249,11 @@ def _replay_unlocked(root: Path) -> ReplayState:
         except (UnicodeError, ValueError) as error:
             raise JournalError(f"journal event {index} is malformed: {error}") from error
         event: CanonicalEvent = _strict_model(CanonicalEvent, payload, f"event {index}")
-        if canonical_json_bytes(event.model_dump(mode="json")) != line:
+        if canonical_json_bytes(event.model_dump(mode="json", exclude_none=True)) != line:
             raise JournalError(f"journal event {index} bytes are not canonical")
-        actual_hash = sha256_hex(canonical_event_bytes(event.model_dump(mode="json")))
+        actual_hash = sha256_hex(
+            canonical_event_bytes(event.model_dump(mode="json", exclude_none=True))
+        )
         if event.event_sha256 != actual_hash:
             raise JournalError(f"journal event {index} hash does not cover its bytes")
         if event.run_id != manifest.run_id:
@@ -323,7 +342,7 @@ def append_probe(
                     "payload": request.payload.model_dump(mode="json"),
                 }
             )
-            event_bytes = canonical_json_bytes(event.model_dump(mode="json"))
+            event_bytes = canonical_json_bytes(event.model_dump(mode="json", exclude_none=True))
             if journal_path.stat().st_size != before_size:
                 raise JournalError("journal changed during locked replay")
             with journal_path.open("ab") as handle:
