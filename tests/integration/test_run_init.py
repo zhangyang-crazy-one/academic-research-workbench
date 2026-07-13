@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import jsonschema
@@ -118,3 +119,85 @@ def test_append_replays_chain_and_rejects_stale_or_malformed_state_without_mutat
     )
     assert malformed.returncode != 0
     assert journal.read_bytes() == malformed_before
+
+
+def test_append_is_locked_hash_chained_and_duplicate_free(tmp_path: Path) -> None:
+    run_root = _seed_run(tmp_path)
+    initialized = _run_cli(
+        "init", "--run-root", str(run_root), "--request", str(SEED / "init-request.json")
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    journal = run_root / "events.jsonl"
+    initial_bytes = journal.read_bytes()
+
+    holder_code = textwrap.dedent(
+        """
+        import pathlib
+        import portalocker
+        import sys
+        import time
+
+        lock_path = pathlib.Path(sys.argv[1])
+        with portalocker.Lock(lock_path, mode="a+b", timeout=0):
+            print("locked", flush=True)
+            time.sleep(30)
+        """
+    )
+    holder = subprocess.Popen(
+        [sys.executable, "-c", holder_code, str(run_root / ".journal.lock")],
+        cwd=REPOSITORY_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        assert holder.stdout is not None
+        assert holder.stdout.readline().strip() == "locked"
+        contended = _run_cli(
+            "append",
+            "--lock-timeout",
+            "0",
+            "--run-root",
+            str(run_root),
+            "--request",
+            str(SEED / "append-request.json"),
+        )
+        assert contended.returncode != 0
+        assert journal.read_bytes() == initial_bytes
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+
+    appended = _run_cli(
+        "append", "--run-root", str(run_root), "--request", str(SEED / "append-request.json")
+    )
+    assert appended.returncode == 0, appended.stderr
+    appended_bytes = journal.read_bytes()
+    lines = appended_bytes.splitlines()
+    assert len(lines) == 2
+    first, second = map(json.loads, lines)
+    _validate("event.schema.json", second)
+    assert second["sequence"] == 2
+    assert second["expected_revision"] == 1
+    assert second["resulting_revision"] == 2
+    assert second["prev_event_sha256"] == first["event_sha256"]
+
+    duplicate_request = json.loads((SEED / "append-request.json").read_text(encoding="utf-8"))
+    duplicate_request["expected_revision"] = 2
+    duplicate_path = tmp_path / "duplicate.json"
+    duplicate_path.write_text(json.dumps(duplicate_request), encoding="utf-8")
+    duplicate = _run_cli(
+        "append", "--run-root", str(run_root), "--request", str(duplicate_path)
+    )
+    assert duplicate.returncode != 0
+    assert journal.read_bytes() == appended_bytes
+
+    replayed = _run_cli("replay", "--run-root", str(run_root))
+    assert replayed.returncode == 0, replayed.stderr
+    replay = json.loads(replayed.stdout)
+    assert replay == {
+        "event_count": 2,
+        "last_event_sha256": second["event_sha256"],
+        "revision": 2,
+        "run_id": second["run_id"],
+    }
