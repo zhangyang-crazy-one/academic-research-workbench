@@ -196,6 +196,12 @@ run_capture \
   ./scripts/gen-third-party-notices.sh \
   "$EVIDENCE_ROOT/generated/THIRD_PARTY_NOTICES.md"
 
+# The unmodified gate intentionally creates graph-ui/node_modules to audit the
+# production npm tree. It is legal-tool output, not part of the pinned source
+# tree or the receipt-bound git archive.
+rm -rf -- "$FILE_BASE/graph-ui/node_modules"
+[[ -z "$(git -C "$FILE_BASE" status --porcelain --untracked-files=all)" ]] \
+  || fail "native gate left the pinned file-base checkout dirty" 65
 observe_absence "after"
 
 "$PYTHON" - \
@@ -273,7 +279,7 @@ for component_id, version, url, revision in component_specs:
             "git_tree": git_value(root, "rev-parse", "HEAD^{tree}"),
             "id": component_id,
             "revision": revision,
-            "status_porcelain": git_value(root, "status", "--porcelain", "--untracked-files=no"),
+            "status_porcelain": git_value(root, "status", "--porcelain", "--untracked-files=all"),
             "tree_sha256": tree_digest(root),
             "upstream_url": url,
             "version": version,

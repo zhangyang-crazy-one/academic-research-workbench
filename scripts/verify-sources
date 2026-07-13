@@ -1,0 +1,416 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+MATERIALIZE=0
+INPUTS_ONLY=0
+PATCH_SOURCE=""
+
+usage() {
+  cat <<'EOF'
+Usage: verify-sources [--project-root PATH] [--inputs-only]
+       verify-sources --materialize --patch-source PATH [--project-root PATH]
+
+Verify the receipt-bound source, legal, lock, wheelhouse, patch, binary, and
+declared artifact digests. Materialization is allowed only from a passing
+pre-vendor receipt and its exact source archives.
+EOF
+}
+
+fail() {
+  printf 'verify-sources: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-root)
+      [[ $# -ge 2 ]] || fail "--project-root requires a path" 64
+      PROJECT_ROOT="$2"
+      shift 2
+      ;;
+    --materialize)
+      MATERIALIZE=1
+      shift
+      ;;
+    --patch-source)
+      [[ $# -ge 2 ]] || fail "--patch-source requires a path" 64
+      PATCH_SOURCE="$2"
+      shift 2
+      ;;
+    --inputs-only)
+      INPUTS_ONLY=1
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+PROJECT_ROOT="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$PROJECT_ROOT")"
+[[ -d "$PROJECT_ROOT" ]] || fail "project root is absent: $PROJECT_ROOT" 66
+if [[ "$MATERIALIZE" -eq 1 ]]; then
+  [[ "$INPUTS_ONLY" -eq 0 ]] || fail "--materialize and --inputs-only are mutually exclusive" 64
+  [[ -n "$PATCH_SOURCE" ]] || fail "--materialize requires --patch-source" 64
+fi
+
+exec python3 - "$PROJECT_ROOT" "$MATERIALIZE" "$INPUTS_ONLY" "$PATCH_SOURCE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path, PurePosixPath
+
+
+project_root = Path(sys.argv[1]).resolve()
+materialize = sys.argv[2] == "1"
+inputs_only = sys.argv[3] == "1"
+patch_source = Path(sys.argv[4]).resolve() if sys.argv[4] else None
+manifest_path = project_root / "vendor/source-manifest.json"
+expected_patch_sha256 = "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+expected_components = {
+    "academic-research-skills": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
+    "experiment-agent": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
+    "file-base": "ee68144af5453addda995a27cce8142999f318fb",
+}
+
+
+def fail(digest_class: str, message: str) -> None:
+    print(f"verify-sources: {digest_class} digest failure: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def digest(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise FileNotFoundError(path) from error
+
+
+def tree_digest(root: Path) -> str:
+    if not root.is_dir() or root.is_symlink():
+        fail("source", f"unsafe or missing source tree: {root}")
+    hasher = hashlib.sha256()
+    paths = sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix())
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            record = f"L\0{relative}\0{os.readlink(path)}\n".encode()
+        elif path.is_file():
+            mode = "755" if path.stat().st_mode & stat.S_IXUSR else "644"
+            record = f"F\0{mode}\0{relative}\0{digest(path)}\n".encode()
+        else:
+            continue
+        hasher.update(record)
+    return hasher.hexdigest()
+
+
+def load_json(path: Path, digest_class: str) -> dict[str, object]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        fail(digest_class, f"invalid or missing JSON {path}: {error}")
+
+
+def require_digest(path: Path, expected: str, digest_class: str) -> None:
+    try:
+        actual = digest(path)
+    except FileNotFoundError:
+        fail(digest_class, f"missing {path}")
+    if actual != expected:
+        fail(digest_class, f"{path}: expected {expected}, got {actual}")
+
+
+def verify_receipt(path: Path, expected: str) -> dict[str, object]:
+    require_digest(path, expected, "legal-receipt")
+    receipt = load_json(path, "legal-receipt")
+    if receipt.get("technical_qualification") != "PASS":
+        fail("legal-receipt", "technical qualification is not PASS")
+    observations = receipt.get("vendor_sources_observations")
+    if not isinstance(observations, list) or not observations:
+        fail("legal-receipt", "vendor absence observations are missing")
+    if any(item.get("exists") is not False for item in observations if isinstance(item, dict)):
+        fail("legal-receipt", "vendor/sources was present during preflight")
+    return receipt
+
+
+def safe_extract(archive: Path, destination: Path) -> None:
+    with tarfile.open(archive, "r:") as source:
+        for member in source.getmembers():
+            pure = PurePosixPath(member.name)
+            if pure.is_absolute() or ".." in pure.parts:
+                fail("source", f"unsafe archive member: {member.name}")
+            if member.isdev() or member.isfifo():
+                fail("source", f"special archive member rejected: {member.name}")
+        source.extractall(destination, filter="data")
+
+
+def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root: Path) -> str:
+    with tempfile.TemporaryDirectory(prefix="arw-patch-check.") as temporary:
+        candidate = Path(temporary) / "file-base"
+        shutil.copytree(source, candidate, symlinks=True)
+        for expected_order, patch in enumerate(patches, start=1):
+            if patch.get("order") != expected_order:
+                fail("patch", "patch order is not contiguous")
+            patch_path = patch_root / str(patch["path"])
+            require_digest(patch_path, str(patch["sha256"]), "patch")
+            checked = subprocess.run(
+                ["git", "apply", "--check", str(patch_path)],
+                cwd=candidate,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if checked.returncode != 0:
+                fail("patch", checked.stderr.strip() or "git apply --check failed")
+            applied = subprocess.run(
+                ["git", "apply", str(patch_path)],
+                cwd=candidate,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if applied.returncode != 0:
+                fail("patch", applied.stderr.strip() or "git apply failed")
+        return tree_digest(candidate)
+
+
+if materialize:
+    if (project_root / "vendor/sources").exists() or manifest_path.exists():
+        fail("source", "materialization requires absent vendor/sources and source manifest")
+    receipt_path = project_root / "build/evidence/phase-01/pre-vendor-license/receipt.json"
+    sidecar = project_root / "build/evidence/phase-01/pre-vendor-license/receipt.sha256"
+    try:
+        sidecar_digest = sidecar.read_text(encoding="utf-8").strip()
+    except OSError:
+        fail("legal-receipt", "receipt digest sidecar is missing")
+    receipt = verify_receipt(receipt_path, sidecar_digest)
+    if patch_source is None or not patch_source.is_file():
+        fail("patch", "canonical patch source is missing")
+    require_digest(patch_source, expected_patch_sha256, "patch")
+
+    receipt_components = {item["id"]: item for item in receipt["components"]}
+    raw = {item["path"]: item["sha256"] for item in receipt["raw_evidence"]}
+    if set(receipt_components) != set(expected_components):
+        fail("legal-receipt", "component set mismatch")
+
+    vendor_root = project_root / "vendor"
+    temporary_root = vendor_root / f".materialize.tmp.{os.getpid()}"
+    if temporary_root.exists():
+        shutil.rmtree(temporary_root)
+    temporary_sources = temporary_root / "sources"
+    temporary_patches = temporary_root / "patches/file-base"
+    temporary_sources.mkdir(parents=True)
+    temporary_patches.mkdir(parents=True)
+    try:
+        for component_id, revision in expected_components.items():
+            component = receipt_components[component_id]
+            if component["revision"] != revision or component["clean"] is not True:
+                fail("legal-receipt", f"invalid component identity: {component_id}")
+            relative_archive = f"source-archives/{component_id}.tar"
+            archive = receipt_path.parent / relative_archive
+            if relative_archive not in raw:
+                fail("legal-receipt", f"archive omitted from raw receipt: {component_id}")
+            require_digest(archive, raw[relative_archive], "legal-receipt")
+            destination = temporary_sources / component_id
+            destination.mkdir()
+            safe_extract(archive, destination)
+            actual_tree = tree_digest(destination)
+            if actual_tree != component["tree_sha256"]:
+                fail("source", f"archive tree mismatch for {component_id}")
+
+        patch_destination = temporary_patches / "0001-file-base-server-name.patch"
+        shutil.copyfile(patch_source, patch_destination)
+        os.chmod(patch_destination, 0o644)
+        pre_tree = tree_digest(temporary_sources / "file-base")
+        provisional_patch = {
+            "component": "file-base",
+            "order": 1,
+            "path": "patches/file-base/0001-file-base-server-name.patch",
+            "sha256": expected_patch_sha256,
+            "pre_tree_sha256": pre_tree,
+            "post_tree_sha256": "0" * 64,
+        }
+        post_tree = post_patch_digest(
+            temporary_sources / "file-base", [provisional_patch], temporary_root
+        )
+        provisional_patch["path"] = "vendor/patches/file-base/0001-file-base-server-name.patch"
+        provisional_patch["post_tree_sha256"] = post_tree
+
+        license_records = {item["component"]: item for item in receipt["component_licenses"]}
+        component_payloads = []
+        spdx = {
+            "academic-research-skills": "CC-BY-NC-4.0",
+            "experiment-agent": "CC-BY-NC-4.0",
+            "file-base": "MIT",
+        }
+        for component_id in ("academic-research-skills", "experiment-agent", "file-base"):
+            source_path = f"vendor/sources/{component_id}"
+            source = temporary_sources / component_id
+            receipt_component = receipt_components[component_id]
+            license_info = license_records[component_id]
+            license_relative = str(license_info["source_path"])
+            legal_inputs = []
+            for item in receipt["legal_inputs"]:
+                if item["component"] != component_id:
+                    continue
+                legal_inputs.append(
+                    {
+                        "kind": item["kind"],
+                        "path": f"{source_path}/{item['path']}",
+                        "sha256": item["sha256"],
+                    }
+                )
+            component_payloads.append(
+                {
+                    "git_tree": receipt_component["git_tree"],
+                    "id": component_id,
+                    "legal_inputs": legal_inputs,
+                    "licenses": [
+                        {
+                            "path": f"{source_path}/{license_relative}",
+                            "sha256": license_info["sha256"],
+                            "spdx": spdx[component_id],
+                        }
+                    ],
+                    "revision": receipt_component["revision"],
+                    "source_path": source_path,
+                    "tree_sha256": tree_digest(source),
+                    "upstream_url": receipt_component["upstream_url"],
+                    "version": receipt_component["version"],
+                }
+            )
+
+        schema_path = project_root / "schemas/v1/source-manifest.schema.json"
+        notice_path = receipt_path.parent / "generated/THIRD_PARTY_NOTICES.md"
+        manifest = {
+            "components": component_payloads,
+            "declared_artifacts": [
+                {
+                    "class": "schema",
+                    "path": "schemas/v1/source-manifest.schema.json",
+                    "required_before_staging": True,
+                    "sha256": digest(schema_path),
+                },
+                {
+                    "class": "build-evidence",
+                    "path": "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+                    "required_before_staging": True,
+                    "sha256": digest(notice_path),
+                },
+            ],
+            "locks": [
+                {"path": "uv.lock", "sha256": digest(project_root / "uv.lock")},
+                {
+                    "path": "vendor/python/wheelhouse.lock.json",
+                    "sha256": digest(project_root / "vendor/python/wheelhouse.lock.json"),
+                },
+            ],
+            "patches": [provisional_patch],
+            "pre_vendor_receipt": {
+                "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
+                "sha256": digest(receipt_path),
+            },
+            "schema_version": "1.0.0",
+        }
+        temporary_manifest = temporary_root / "source-manifest.json"
+        temporary_manifest.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+        (vendor_root / "patches").mkdir(exist_ok=True)
+        os.replace(temporary_sources, vendor_root / "sources")
+        final_patch_parent = vendor_root / "patches/file-base"
+        if final_patch_parent.exists():
+            shutil.rmtree(final_patch_parent)
+        os.replace(temporary_patches, final_patch_parent)
+        os.replace(temporary_manifest, manifest_path)
+    finally:
+        if temporary_root.exists():
+            shutil.rmtree(temporary_root)
+    print("materialized receipt-bound source snapshots and patch")
+    raise SystemExit(0)
+
+
+manifest = load_json(manifest_path, "artifact")
+if manifest.get("schema_version") != "1.0.0":
+    fail("artifact", "unsupported source manifest schema")
+receipt_record = manifest.get("pre_vendor_receipt")
+if not isinstance(receipt_record, dict):
+    fail("legal-receipt", "receipt record is missing")
+receipt = verify_receipt(
+    project_root / str(receipt_record["path"]), str(receipt_record["sha256"])
+)
+
+for lock in manifest.get("locks", []):
+    require_digest(project_root / str(lock["path"]), str(lock["sha256"]), "lock")
+
+wheelhouse_lock_path = project_root / "vendor/python/wheelhouse.lock.json"
+wheelhouse_lock = load_json(wheelhouse_lock_path, "lock")
+uv_record = wheelhouse_lock.get("uv_lock")
+if not isinstance(uv_record, dict):
+    fail("lock", "wheelhouse lock omits uv.lock relationship")
+require_digest(project_root / str(uv_record["path"]), str(uv_record["sha256"]), "lock")
+for wheel in wheelhouse_lock.get("wheels", []):
+    require_digest(
+        project_root / "vendor/python/wheelhouse" / str(wheel["file"]),
+        str(wheel["sha256"]),
+        "wheelhouse",
+    )
+
+for artifact in manifest.get("declared_artifacts", []):
+    artifact_path = project_root / str(artifact["path"])
+    if inputs_only and str(artifact["path"]).startswith(".file-base/"):
+        continue
+    digest_class = "binary" if artifact["class"] == "binary" else "artifact"
+    require_digest(artifact_path, str(artifact["sha256"]), digest_class)
+
+components = {item["id"]: item for item in manifest.get("components", [])}
+if set(components) != set(expected_components):
+    fail("source", "component set mismatch")
+for component_id, revision in expected_components.items():
+    component = components[component_id]
+    if component.get("revision") != revision:
+        fail("source", f"revision mismatch for {component_id}")
+    for legal_input in component.get("legal_inputs", []):
+        require_digest(
+            project_root / str(legal_input["path"]),
+            str(legal_input["sha256"]),
+            "legal-input",
+        )
+    for license_record in component.get("licenses", []):
+        require_digest(
+            project_root / str(license_record["path"]),
+            str(license_record["sha256"]),
+            "legal-input",
+        )
+    actual_tree = tree_digest(project_root / str(component["source_path"]))
+    if actual_tree != component.get("tree_sha256"):
+        fail("source", f"tree mismatch for {component_id}")
+
+patches = manifest.get("patches", [])
+if not patches:
+    fail("patch", "ordered patch set is empty")
+file_base = components["file-base"]
+if patches[0].get("pre_tree_sha256") != file_base.get("tree_sha256"):
+    fail("patch", "pre-patch tree is not bound to file-base source")
+actual_post_tree = post_patch_digest(
+    project_root / str(file_base["source_path"]), patches, project_root
+)
+if actual_post_tree != patches[-1].get("post_tree_sha256"):
+    fail("patch", "post-patch tree mismatch")
+
+print("source verification PASS")
+PY

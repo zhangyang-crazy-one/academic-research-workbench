@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT=""
+
+usage() {
+  cat <<'EOF'
+Usage: offline-exec --evidence-root PATH COMMAND [ARG ...]
+
+Run a command in a denied Linux network namespace while auditing every network
+syscall with strace. Any AF_INET or AF_INET6 attempt fails the run.
+EOF
+}
+
+fail() {
+  printf 'offline-exec: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+[[ -n "$EVIDENCE_ROOT" ]] || fail "--evidence-root is required" 64
+[[ $# -gt 0 ]] || fail "a command is required" 64
+[[ "$(uname -s)" == "Linux" ]] || fail "network namespace denial is supported only on Linux" 69
+
+STRACE="$(command -v strace || true)"
+if [[ -z "$STRACE" && -x "$PROJECT_ROOT/build/tools/strace/root/usr/bin/strace" ]]; then
+  STRACE="$PROJECT_ROOT/build/tools/strace/root/usr/bin/strace"
+fi
+[[ -n "$STRACE" && -x "$STRACE" ]] || fail "strace is unavailable; refusing unaudited execution" 69
+
+EVIDENCE_ROOT="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe evidence root" 64
+[[ ! -e "$EVIDENCE_ROOT" ]] || fail "evidence root already exists" 73
+mkdir -p "$EVIDENCE_ROOT"
+
+MECHANISM=""
+if command -v bwrap >/dev/null 2>&1 \
+  && bwrap --die-with-parent --unshare-net --dev-bind / / -- /bin/true >/dev/null 2>&1; then
+  MECHANISM="bwrap-unshare-net"
+elif command -v unshare >/dev/null 2>&1 \
+  && unshare --user --map-root-user --net /bin/true >/dev/null 2>&1; then
+  MECHANISM="unshare-user-net"
+else
+  fail "neither bwrap nor unshare can establish a denied network namespace" 69
+fi
+
+HOST_NAMESPACE="$(readlink /proc/self/ns/net)"
+CHILD_NAMESPACE_FILE="$EVIDENCE_ROOT/network-namespace.txt"
+TRACE_FILE="$EVIDENCE_ROOT/network.strace"
+STDOUT_FILE="$EVIDENCE_ROOT/stdout.log"
+STDERR_FILE="$EVIDENCE_ROOT/stderr.log"
+STATUS_FILE="$EVIDENCE_ROOT/status.txt"
+COMMAND_FILE="$EVIDENCE_ROOT/command.json"
+VERDICT_FILE="$EVIDENCE_ROOT/verdict.json"
+STARTED="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+namespace_command=(
+  /bin/bash -c
+  'set -euo pipefail; readlink /proc/self/ns/net > "$1"; shift; export ARW_OFFLINE_EXEC_ACTIVE=1; export ARW_NETWORK_DENIAL_MECHANISM="$1"; shift; exec "$@"'
+  offline-exec
+  "$CHILD_NAMESPACE_FILE"
+  "$MECHANISM"
+  "$@"
+)
+
+if [[ "$MECHANISM" == "bwrap-unshare-net" ]]; then
+  denied_command=(bwrap --die-with-parent --unshare-net --dev-bind / / -- "${namespace_command[@]}")
+else
+  denied_command=(unshare --user --map-root-user --net --mount-proc "${namespace_command[@]}")
+fi
+
+set +e
+"$STRACE" -f -qq -s 256 -e trace=network -o "$TRACE_FILE" -- "${denied_command[@]}" \
+  >"$STDOUT_FILE" 2>"$STDERR_FILE"
+COMMAND_STATUS=$?
+set -e
+printf '%s\n' "$COMMAND_STATUS" > "$STATUS_FILE"
+ENDED="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+CHILD_NAMESPACE=""
+if [[ -f "$CHILD_NAMESPACE_FILE" ]]; then
+  CHILD_NAMESPACE="$(cat "$CHILD_NAMESPACE_FILE")"
+fi
+NAMESPACE_DENIED=0
+if [[ -n "$CHILD_NAMESPACE" && "$CHILD_NAMESPACE" != "$HOST_NAMESPACE" ]]; then
+  NAMESPACE_DENIED=1
+fi
+
+python3 - "$COMMAND_FILE" "$STARTED" "$ENDED" "$MECHANISM" "$STRACE" "$@" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+destination, started, ended, mechanism, tracer, *argv = sys.argv[1:]
+payload = {
+    "argv": argv,
+    "cwd": str(Path.cwd()),
+    "ended_at": ended,
+    "environment": {
+        "ARW_OFFLINE_EXEC_ACTIVE": "1",
+        "ARW_NETWORK_DENIAL_MECHANISM": mechanism,
+    },
+    "network_denial_mechanism": mechanism,
+    "started_at": started,
+    "strace": tracer,
+}
+Path(destination).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
+python3 - \
+  "$TRACE_FILE" "$VERDICT_FILE" "$COMMAND_STATUS" "$NAMESPACE_DENIED" \
+  "$HOST_NAMESPACE" "$CHILD_NAMESPACE" "$MECHANISM" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+trace_path, verdict_path, status, namespace_denied, host_ns, child_ns, mechanism = sys.argv[1:]
+trace_lines = Path(trace_path).read_text(encoding="utf-8", errors="replace").splitlines()
+attempts = [line for line in trace_lines if "AF_INET" in line or "AF_INET6" in line]
+passed = int(status) == 0 and namespace_denied == "1" and not attempts
+payload = {
+    "child_network_namespace": child_ns,
+    "command_status": int(status),
+    "host_network_namespace": host_ns,
+    "network_denial_mechanism": mechanism,
+    "network_namespace_denied": namespace_denied == "1",
+    "network_syscall_attempts": attempts,
+    "schema_version": "1.0.0",
+    "strace_network_audit": True,
+    "technical_qualification": "PASS" if passed else "FAIL",
+}
+Path(verdict_path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+raise SystemExit(0 if passed else 97)
+PY

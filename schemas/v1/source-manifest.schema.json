@@ -69,20 +69,17 @@
       }
     },
     "legalInput": {
-      "allOf": [
-        {"$ref": "#/$defs/digestPath"},
-        {
-          "type": "object",
-          "required": ["kind"],
-          "properties": {
-            "kind": {
-              "type": "string",
-              "enum": ["license", "notice", "policy", "checker", "generator", "package-lock"]
-            }
-          }
-        }
-      ],
-      "unevaluatedProperties": false
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "sha256"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["license", "notice", "policy", "checker", "generator", "package-lock"]
+        },
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
     },
     "component": {
       "type": "object",
@@ -135,18 +132,15 @@
       }
     },
     "artifact": {
-      "allOf": [
-        {"$ref": "#/$defs/digestPath"},
-        {
-          "type": "object",
-          "required": ["class", "required_before_staging"],
-          "properties": {
-            "class": {"type": "string", "enum": ["schema", "binary", "build-evidence"]},
-            "required_before_staging": {"type": "boolean"}
-          }
-        }
-      ],
-      "unevaluatedProperties": false
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "path", "required_before_staging", "sha256"],
+      "properties": {
+        "class": {"type": "string", "enum": ["schema", "binary", "build-evidence"]},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "required_before_staging": {"type": "boolean"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
     }
   }
 }
