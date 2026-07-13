@@ -81,12 +81,16 @@ def test_each_digest_class_fails_before_staging(verification_root: Path) -> None
     mutations = [
         ("source", "vendor/sources/academic-research-skills/README.md"),
         ("patch", "vendor/patches/file-base/0001-file-base-server-name.patch"),
+        ("patch", "vendor/patches/file-base/0002-phase1-confined-read.patch"),
+        ("test-suite", "vendor/sources/file-base/tests/test_main.c"),
         ("legal-receipt", "build/evidence/phase-01/pre-vendor-license/receipt.json"),
         ("legal-input", "vendor/sources/file-base/LICENSE"),
         ("lock", "uv.lock"),
         ("wheelhouse", "vendor/python/wheelhouse/pytest-9.1.1-py3-none-any.whl"),
         ("binary", ".file-base/bin/file-base"),
         ("artifact", "schemas/v1/source-manifest.schema.json"),
+        ("artifact", "schemas/v1/mcp-read-request.schema.json"),
+        ("artifact", "schemas/v1/mcp-read-result.schema.json"),
     ]
     staging_marker = verification_root / "build/stage-created"
     for digest_class, target in mutations:

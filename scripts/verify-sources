@@ -164,6 +164,13 @@ def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root
         for expected_order, patch in enumerate(patches, start=1):
             if patch.get("order") != expected_order:
                 fail("patch", "patch order is not contiguous")
+            actual_pre_tree = tree_digest(candidate)
+            if actual_pre_tree != patch.get("pre_tree_sha256"):
+                fail(
+                    "patch",
+                    f"patch {expected_order} pre-tree mismatch: expected "
+                    f"{patch.get('pre_tree_sha256')}, got {actual_pre_tree}",
+                )
             patch_path = patch_root / str(patch["path"])
             require_digest(patch_path, str(patch["sha256"]), "patch")
             checked = subprocess.run(
@@ -184,6 +191,14 @@ def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root
             )
             if applied.returncode != 0:
                 fail("patch", applied.stderr.strip() or "git apply failed")
+            actual_post_tree = tree_digest(candidate)
+            expected_post_tree = patch.get("post_tree_sha256")
+            if expected_post_tree != "0" * 64 and actual_post_tree != expected_post_tree:
+                fail(
+                    "patch",
+                    f"patch {expected_order} post-tree mismatch: expected "
+                    f"{expected_post_tree}, got {actual_post_tree}",
+                )
         return tree_digest(candidate)
 
 
@@ -318,6 +333,14 @@ if materialize:
                     "sha256": digest(project_root / "vendor/python/wheelhouse.lock.json"),
                 },
             ],
+            "native_test_suites": [
+                {
+                    "component": "file-base",
+                    "path": "vendor/sources/file-base/tests",
+                    "runner": "Makefile.cbm:test",
+                    "tree_sha256": tree_digest(temporary_sources / "file-base/tests"),
+                }
+            ],
             "patches": [provisional_patch],
             "pre_vendor_receipt": {
                 "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
@@ -376,6 +399,20 @@ for artifact in manifest.get("declared_artifacts", []):
         continue
     digest_class = "binary" if artifact["class"] == "binary" else "artifact"
     require_digest(artifact_path, str(artifact["sha256"]), digest_class)
+
+native_test_suites = manifest.get("native_test_suites", [])
+if len(native_test_suites) != 1:
+    fail("test-suite", "exactly one native test suite must be manifest-bound")
+native_test_suite = native_test_suites[0]
+if (
+    native_test_suite.get("component") != "file-base"
+    or native_test_suite.get("path") != "vendor/sources/file-base/tests"
+    or native_test_suite.get("runner") != "Makefile.cbm:test"
+):
+    fail("test-suite", "native test suite identity is invalid")
+actual_test_tree = tree_digest(project_root / str(native_test_suite["path"]))
+if actual_test_tree != native_test_suite.get("tree_sha256"):
+    fail("test-suite", "native test suite tree mismatch")
 
 components = {item["id"]: item for item in manifest.get("components", [])}
 if set(components) != set(expected_components):

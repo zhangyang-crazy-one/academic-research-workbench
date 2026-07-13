@@ -980,13 +980,13 @@
       "class": "binary",
       "path": ".file-base/bin/file-base",
       "required_before_staging": true,
-      "sha256": "7cf325817f9f3520e6942dd929e2d18679655edd18b15af321c9fcf8c2dff2a3"
+      "sha256": "0298722bb49453b2879946c6715184971d46ed52acb9de92d18b26c6cf7aade4"
     },
     {
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "4966d21903e8a81c3960a6955ae971964449879cc1c6ef38b16b03b95e24cad6"
+      "sha256": "328c3a5b46d3176a2bed8db103e0c046c721f29307a1626437c8f2c99c1b6823"
     },
     {
       "class": "build-evidence",
@@ -996,9 +996,21 @@
     },
     {
       "class": "schema",
+      "path": "schemas/v1/mcp-read-request.schema.json",
+      "required_before_staging": true,
+      "sha256": "c1841f664fb1792ff2e153ce8234284e21436e47a12619d7a1d4818232987597"
+    },
+    {
+      "class": "schema",
+      "path": "schemas/v1/mcp-read-result.schema.json",
+      "required_before_staging": true,
+      "sha256": "9b55e654272d3c5ff8f45aac2e30c4fb25f8585af1c07b01c7a5f36fe63d0eb0"
+    },
+    {
+      "class": "schema",
       "path": "schemas/v1/source-manifest.schema.json",
       "required_before_staging": true,
-      "sha256": "b475b6b47b992493002419ae60b046809930eb490d52bdaa8d6c31e8f9ff188a"
+      "sha256": "3fb0d67ea2e4efb58fbf9f798c2a8b6c0df8c22740744c10156106208873f8df"
     }
   ],
   "locks": [
@@ -1011,6 +1023,14 @@
       "sha256": "8a93ecbbda59861611f06bac172498f5edade66c0cba957c75180637909b6041"
     }
   ],
+  "native_test_suites": [
+    {
+      "component": "file-base",
+      "path": "vendor/sources/file-base/tests",
+      "runner": "Makefile.cbm:test",
+      "tree_sha256": "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
+    }
+  ],
   "patches": [
     {
       "component": "file-base",
@@ -1019,6 +1039,14 @@
       "post_tree_sha256": "39ee8f274443a40f2abcf8efc5e0b0c6cceb9e40ff4bc4a75d654f8abeb9b64c",
       "pre_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
       "sha256": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+    },
+    {
+      "component": "file-base",
+      "order": 2,
+      "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
+      "post_tree_sha256": "04460b941a8da073d40cd7921455b233f41650fe0d251d9ace3f593e4550804b",
+      "pre_tree_sha256": "39ee8f274443a40f2abcf8efc5e0b0c6cceb9e40ff4bc4a75d654f8abeb9b64c",
+      "sha256": "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029"
     }
   ],
   "pre_vendor_receipt": {
