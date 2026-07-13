@@ -80,7 +80,8 @@
     "hit_id": {
       "anyOf": [
         {
-          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "maxLength": 4096,
+          "minLength": 1,
           "type": "string"
         },
         {
