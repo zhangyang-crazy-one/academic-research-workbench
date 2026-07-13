@@ -36,6 +36,7 @@ def test_installed_host_reports_honest_compatibility_boundary(
     assert compatibility["technical_qualification"] == "PASS"
     assert compatibility["host"]["fresh_process"] is True
     assert compatibility["host"]["installed_skill_invoked"] is True
+    assert compatibility["host"]["authentication_material_retained"] is False
     assert compatibility["hooks"] == {
         "canonical_write": False,
         "contract": "default-plugin-hooks-file",

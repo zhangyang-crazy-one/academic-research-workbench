@@ -609,6 +609,7 @@ def finalize_route(
         "schema_version": "1.0.0",
         "technical_qualification": "PASS",
         "host": {
+            "authentication_material_retained": False,
             "codex_version": subprocess.run(
                 ["codex", "--version"],
                 text=True,
@@ -750,6 +751,7 @@ def run_route(args: argparse.Namespace) -> int:
             )
             return 77
         except CanaryDefect as error:
+            (attempt_fresh / "codex-home/auth.json").unlink(missing_ok=True)
             classification = {
                 "attempt": attempt,
                 "classification": "non-authentication-defect",
@@ -775,6 +777,7 @@ def run_route(args: argparse.Namespace) -> int:
             attempt_dir / "direct",
         )
         if health.returncode != 0 or direct.returncode != 0:
+            (installed["codex_home"] / "auth.json").unlink(missing_ok=True)
             classification = {
                 "attempt": attempt,
                 "classification": "non-authentication-defect",
@@ -797,7 +800,10 @@ def run_route(args: argparse.Namespace) -> int:
             installed["installed_root"] / "schemas/v1/route-result.schema.json",
             attempt_dir / "direct/route-result.schema.json",
         )
-        host = run_host_route(installed, attempt_dir)
+        try:
+            host = run_host_route(installed, attempt_dir)
+        finally:
+            (installed["codex_home"] / "auth.json").unlink(missing_ok=True)
         classification = classify_attempt(
             attempt,
             installed,
