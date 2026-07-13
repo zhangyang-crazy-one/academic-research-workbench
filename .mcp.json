@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "file-base": {
+      "command": "./scripts/file-base-mcp",
+      "env": {
+        "CBM_DISABLE_UPDATE_CHECK": "1",
+        "CBM_LOG_LEVEL": "warn"
+      }
+    }
+  }
+}

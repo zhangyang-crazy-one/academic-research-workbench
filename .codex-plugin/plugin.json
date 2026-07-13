@@ -12,6 +12,7 @@
     "reproducibility"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Academic Research Workbench",
     "shortDescription": "Run auditable academic research workflows.",

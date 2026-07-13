@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLUGIN_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+CBM_BIN="$PLUGIN_ROOT/libexec/file-base-mcp"
+
+missing=()
+for name in CBM_ALLOWED_ROOT CBM_ALLOWED_ROOT_ID CBM_CACHE_DIR; do
+  if [[ -z "${!name:-}" ]]; then
+    missing+=("$name")
+  fi
+done
+if [[ "${#missing[@]}" -ne 0 ]]; then
+  printf 'file-base-mcp: explicit configuration required: %s\n' "${missing[*]}" >&2
+  exit 64
+fi
+
+[[ "$CBM_ALLOWED_ROOT" == /* ]] \
+  || { printf 'file-base-mcp: CBM_ALLOWED_ROOT must be absolute\n' >&2; exit 64; }
+[[ -d "$CBM_ALLOWED_ROOT" && ! -L "$CBM_ALLOWED_ROOT" ]] \
+  || { printf 'file-base-mcp: CBM_ALLOWED_ROOT must be a non-symlink directory\n' >&2; exit 66; }
+[[ "$CBM_ALLOWED_ROOT_ID" =~ ^[A-Za-z0-9._-]{1,64}$ ]] \
+  || { printf 'file-base-mcp: CBM_ALLOWED_ROOT_ID is invalid\n' >&2; exit 64; }
+[[ "$CBM_CACHE_DIR" == /* ]] \
+  || { printf 'file-base-mcp: CBM_CACHE_DIR must be absolute\n' >&2; exit 64; }
+
+mkdir -p -- "$CBM_CACHE_DIR"
+[[ -d "$CBM_CACHE_DIR" && ! -L "$CBM_CACHE_DIR" ]] \
+  || { printf 'file-base-mcp: CBM_CACHE_DIR must be a non-symlink directory\n' >&2; exit 66; }
+[[ -x "$CBM_BIN" ]] \
+  || { printf 'file-base-mcp: installed native executable is missing\n' >&2; exit 127; }
+
+export CBM_DISABLE_UPDATE_CHECK="${CBM_DISABLE_UPDATE_CHECK:-1}"
+export CBM_LOG_LEVEL="${CBM_LOG_LEVEL:-warn}"
+unset PYTHONPATH
+exec "$CBM_BIN" "$@"
