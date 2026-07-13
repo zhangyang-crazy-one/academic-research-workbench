@@ -125,6 +125,11 @@ fi
 
 if [[ -e "$STAGE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "stage root exists; pass --clean" 73
+  [[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] \
+    || fail "refusing to clean unsafe stage root" 64
+  [[ -f "$STAGE_ROOT/supply-chain/stage-inventory.json" \
+      && ! -L "$STAGE_ROOT/supply-chain/stage-inventory.json" ]] \
+    || fail "refusing to clean stage root without its ownership inventory" 64
   rm -rf -- "$STAGE_ROOT"
 fi
 
@@ -536,9 +541,15 @@ rm -rf -- "$WORK_ROOT"
 if [[ -e "$EVIDENCE_ROOT" ]]; then
   [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
     || fail "unsafe evidence root" 64
+  [[ -f "$EVIDENCE_ROOT/.arw-stage-evidence" \
+      || ( -f "$EVIDENCE_ROOT/inventory.json" \
+           && -f "$EVIDENCE_ROOT/verdict.json" ) ]] \
+    || fail "refusing to clean evidence root without an ownership marker" 64
   rm -rf -- "$EVIDENCE_ROOT"
 fi
 mkdir -p "$EVIDENCE_ROOT"
+printf 'academic-research-workbench stage evidence v1\n' \
+  > "$EVIDENCE_ROOT/.arw-stage-evidence"
 "$PYTHON" - "$PROJECT_ROOT" "$STAGE_ROOT" "$EVIDENCE_ROOT" <<'PY'
 from __future__ import annotations
 

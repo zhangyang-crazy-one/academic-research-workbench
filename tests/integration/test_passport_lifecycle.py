@@ -147,6 +147,143 @@ def test_artifact_rejection_preserves_store_and_journal(tmp_path: Path) -> None:
     assert _tree(root) == before
 
 
+def test_duplicate_artifact_id_rejects_before_installing_an_orphan_manifest(
+    tmp_path: Path,
+) -> None:
+    from arw.models import ArtifactAcceptanceRequest
+
+    root, service = _service(tmp_path)
+    outputs = root / "outputs"
+    outputs.mkdir()
+    first_content = outputs / "first.txt"
+    first_content.write_text("first\n", encoding="utf-8")
+    first = ArtifactAcceptanceRequest.model_validate(
+        {
+            **_base(56, 1),
+            "artifact_id": "artifact.stable-001",
+            "artifact_kind": "result",
+            "media_type": "text/plain",
+            "content_path": "outputs/first.txt",
+            "content_sha256": hashlib.sha256(first_content.read_bytes()).hexdigest(),
+            "attempt_id": None,
+            "base_revision": 1,
+            "consumed_sha256": [],
+        }
+    )
+    assert service.accept_artifact(first).accepted
+
+    second_content = outputs / "second.txt"
+    second_content.write_text("second\n", encoding="utf-8")
+    second = ArtifactAcceptanceRequest.model_validate(
+        {
+            **_base(57, 2),
+            "artifact_id": "artifact.stable-001",
+            "artifact_kind": "result",
+            "media_type": "text/plain",
+            "content_path": "outputs/second.txt",
+            "content_sha256": hashlib.sha256(second_content.read_bytes()).hexdigest(),
+            "attempt_id": None,
+            "base_revision": 2,
+            "consumed_sha256": [],
+        }
+    )
+    before = _tree(root)
+    rejected = service.accept_artifact(second)
+
+    assert rejected.rejection is not None
+    assert rejected.rejection.code == "duplicate-artifact"
+    assert _tree(root) == before
+
+
+def test_replay_blocks_resealed_passport_that_does_not_bind_checkpoint_state(
+    tmp_path: Path,
+) -> None:
+    from arw.canonical import canonical_json_bytes, seal_event
+    from arw.models import CheckpointRequest
+
+    root, service = _service(tmp_path)
+    checkpoint = service.create_checkpoint(
+        CheckpointRequest.model_validate(
+            {**_base(58, 1), "checkpoint_kind": "explicit", "fresh_until": None}
+        )
+    )
+    assert checkpoint.accepted
+    original_hash = checkpoint.state.current_passport_sha256
+    original_path = root / "passports/sha256" / f"{original_hash}.json"
+    passport = json.loads(original_path.read_bytes())
+    passport["ledger_head_sha256"] = "f" * 64
+    tampered_bytes = canonical_json_bytes(passport)
+    tampered_hash = hashlib.sha256(tampered_bytes).hexdigest()
+    (root / "passports/sha256" / f"{tampered_hash}.json").write_bytes(tampered_bytes)
+
+    journal = root / "journal/segments/00000001.jsonl"
+    records = [json.loads(line) for line in journal.read_bytes().splitlines()]
+    records[-1]["payload"]["passport_sha256"] = tampered_hash
+    records[-1] = seal_event(records[-1])
+    journal.write_bytes(b"".join(canonical_json_bytes(record) for record in records))
+    before = _tree(root)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "arw.cli",
+            "status",
+            "--json",
+            "--run-root",
+            str(root),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    status = json.loads(result.stdout)
+    assert status["accepted_revision"] == 1
+    assert status["current_passport_sha256"] is None
+    assert status["recovery_health"] == "blocked"
+    assert _tree(root) == before
+
+
+def test_status_without_at_uses_current_utc_for_passport_freshness(
+    tmp_path: Path,
+) -> None:
+    from arw.models import CheckpointRequest
+
+    root, service = _service(tmp_path)
+    checkpoint = service.create_checkpoint(
+        CheckpointRequest.model_validate(
+            {
+                **_base(59, 1),
+                "checkpoint_kind": "explicit",
+                "fresh_until": "2026-07-13T03:00:01Z",
+            }
+        )
+    )
+    assert checkpoint.accepted
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "arw.cli",
+            "status",
+            "--json",
+            "--run-root",
+            str(root),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    status = json.loads(result.stdout)
+    assert [item["code"] for item in status["blockers"]] == ["evidence-expired"]
+    assert status["legal_next_transitions"] == []
+
+
 def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -> None:
     from arw.manifests import load_material_passport
     from arw.models import CheckpointRequest

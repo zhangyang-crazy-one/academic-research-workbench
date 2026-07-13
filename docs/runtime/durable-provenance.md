@@ -45,7 +45,8 @@ bin/arw replay --run-root RUN
 Status is read-only and reports run/workflow identity, stage, accepted revision,
 ledger head, current Passport, recovery health, blockers, pending decisions,
 active attempts, and legal next transitions. `--at` injects the time used for
-freshness projection; it never changes Passport bytes.
+freshness projection; without it, status uses current UTC. Neither mode changes
+Passport bytes.
 
 A healthy, recoverable-tail, or blocked state with at least one trustworthy
 event exits `0`. Missing authority or damage before any trustworthy prefix exits

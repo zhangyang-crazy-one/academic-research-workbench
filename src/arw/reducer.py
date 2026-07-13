@@ -25,6 +25,7 @@ from arw.models import (
     ZERO_HASH,
 )
 from arw.workflows import (
+    LEGACY_WORKFLOW_ID,
     WorkflowDefinitionError,
     actor_can_commit,
     event_category,
@@ -113,19 +114,26 @@ def reduce_events(
     revision = 0
     head = ZERO_HASH
     decisions: dict[str, PendingDecisionState] = {}
+    decision_ids: set[str] = set()
+    accepted_event_ids: set[str] = set()
     attempts: dict[str, AttemptState] = {}
+    attempt_ids: set[str] = set()
     blockers: dict[str, BlockerState] = {}
     artifacts: list[str] = []
+    artifact_ids: set[str] = set()
     passports: list[str] = []
     consumed_passports: list[str] = []
     current_passport: str | None = None
+    current_passport_stage: str | None = None
     fresh_until: str | None = None
 
-    for event in events:
+    for event_index, event in enumerate(events):
         if event.run_id != run_id:
             raise ReducerError("event run identity changed")
         if event.expected_revision != revision or event.resulting_revision != revision + 1:
             raise ReducerError("event revision is not contiguous")
+        if event.actor_role is None and workflow_definition_id != LEGACY_WORKFLOW_ID:
+            raise ReducerError("Phase 2 events require an explicit actor role")
         role = event.actor_role or "parent_control_plane"
         try:
             category = event_category(event.event_type)
@@ -139,6 +147,10 @@ def reduce_events(
                 raise ReducerError("run.initialized must be first")
         elif event.event_type == "lifecycle.transitioned":
             assert isinstance(payload, LifecycleTransitionedPayload)
+            if blockers:
+                raise ReducerError("runtime blockers prevent lifecycle transitions")
+            if fresh_until and _parse_utc(event.occurred_at) > _parse_utc(fresh_until):
+                raise ReducerError("expired Passport evidence prevents lifecycle transitions")
             if payload.from_stage != stage:
                 raise ReducerError("transition from_stage differs from accepted stage")
             try:
@@ -150,8 +162,15 @@ def reduce_events(
             stage = payload.to_stage
         elif event.event_type == "human_decision.requested":
             assert isinstance(payload, HumanDecisionRequestedPayload)
-            if payload.decision_id in decisions:
-                raise ReducerError("decision ID already pending")
+            if payload.decision_id in decision_ids:
+                raise ReducerError("decision ID was already used")
+            if payload.starting_revision != revision:
+                raise ReducerError("decision starting revision is not current")
+            if any(
+                source not in accepted_event_ids for source in payload.source_event_ids
+            ):
+                raise ReducerError("decision references an unknown source event")
+            decision_ids.add(payload.decision_id)
             decisions[payload.decision_id] = PendingDecisionState(
                 decision_id=payload.decision_id,
                 blocker_code=payload.blocker_code,
@@ -172,11 +191,20 @@ def reduce_events(
             if pending.rationale_required and not payload.rationale:
                 raise ReducerError("decision rationale is required")
             decisions.pop(payload.decision_id)
-            blockers.pop(pending.blocker_code, None)
+            if not any(
+                item.blocker_code == pending.blocker_code for item in decisions.values()
+            ):
+                blockers.pop(pending.blocker_code, None)
         elif event.event_type == "attempt.started":
             assert isinstance(payload, AttemptStartedPayload)
-            if payload.attempt_id in attempts:
-                raise ReducerError("attempt ID is already active")
+            if payload.attempt_id in attempt_ids:
+                raise ReducerError("attempt ID was already used")
+            if payload.base_revision != revision:
+                raise ReducerError("attempt base revision is not current")
+            known_hashes = {head, *artifacts, *passports}
+            if any(value not in known_hashes for value in payload.consumed_sha256):
+                raise ReducerError("attempt consumes an unknown or stale hash")
+            attempt_ids.add(payload.attempt_id)
             attempts[payload.attempt_id] = AttemptState(
                 attempt_id=payload.attempt_id,
                 base_revision=payload.base_revision,
@@ -189,11 +217,40 @@ def reduce_events(
             attempts.pop(payload.attempt_id)
         elif event.event_type == "artifact.accepted":
             assert isinstance(payload, ArtifactAcceptedPayload)
+            if payload.artifact_id in artifact_ids:
+                raise ReducerError("artifact ID was already used")
             if payload.manifest_sha256 in artifacts:
                 raise ReducerError("artifact manifest was already accepted")
+            artifact_ids.add(payload.artifact_id)
             artifacts.append(payload.manifest_sha256)
         elif event.event_type == "passport.accepted":
             assert isinstance(payload, PassportAcceptedPayload)
+            previous = events[event_index - 1] if event_index else None
+            coherent = payload.checkpoint_kind == "explicit"
+            if (
+                payload.checkpoint_kind == "stage_handoff"
+                and previous is not None
+                and previous.event_type == "lifecycle.transitioned"
+                and isinstance(previous.payload, LifecycleTransitionedPayload)
+            ):
+                transition = require_transition(
+                    workflow_definition_id,
+                    previous.payload.from_stage,
+                    previous.payload.transition_id,
+                )
+                coherent = transition.coherent_checkpoint
+            elif payload.checkpoint_kind == "human_decision":
+                coherent = (
+                    previous is not None
+                    and previous.event_type == "human_decision.resolved"
+                )
+            elif payload.checkpoint_kind == "recovery":
+                coherent = (
+                    previous is not None
+                    and previous.event_type == "recovery.completed"
+                )
+            if not coherent:
+                raise ReducerError("Passport checkpoint boundary is not coherent")
             if payload.stage != stage or payload.based_on_revision != revision:
                 raise ReducerError("Passport does not bind the accepted stage/revision")
             if payload.parent_passport_sha256 != current_passport:
@@ -204,6 +261,7 @@ def reduce_events(
                 raise ReducerError("Passport was already accepted")
             passports.append(payload.passport_sha256)
             current_passport = payload.passport_sha256
+            current_passport_stage = payload.stage
             fresh_until = payload.fresh_until
         elif event.event_type == "resume.accepted":
             assert isinstance(payload, ResumeAcceptedPayload)
@@ -211,6 +269,10 @@ def reduce_events(
                 raise ReducerError("resume Passport is stale")
             if payload.passport_sha256 in consumed_passports:
                 raise ReducerError("resume Passport was already consumed")
+            if current_passport_stage != stage:
+                raise ReducerError("resume Passport stage is stale")
+            if fresh_until and _parse_utc(event.occurred_at) > _parse_utc(fresh_until):
+                raise ReducerError("resume Passport evidence is expired")
             consumed_passports.append(payload.passport_sha256)
         elif event.event_type == "recovery.completed":
             assert isinstance(payload, RecoveryCompletedPayload)
@@ -222,6 +284,7 @@ def reduce_events(
 
         revision = event.resulting_revision
         head = event.event_sha256
+        accepted_event_ids.add(event.event_id)
 
     effective_now = now
     if effective_now is not None and effective_now.tzinfo is None:

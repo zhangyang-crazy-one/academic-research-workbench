@@ -53,7 +53,11 @@ def test_reducer_applies_legal_lifecycle_decisions_attempts_and_passport() -> No
         ),
         _event(
             "attempt.started",
-            {"attempt_id": "attempt.writer-001", "base_revision": 3, "consumed_sha256": ["b" * 64]},
+            {
+                "attempt_id": "attempt.writer-001",
+                "base_revision": 3,
+                "consumed_sha256": [f"{3:064x}"],
+            },
             revision=4,
         ),
         _event(
@@ -102,6 +106,147 @@ def test_reducer_rejects_unauthorized_or_illegal_transition() -> None:
     )
     with pytest.raises(ReducerError, match="legal"):
         reduce_events("core-research.v1", [initialized, illegal])
+
+
+def test_reducer_requires_explicit_actor_role_for_phase2_initialization() -> None:
+    from arw.reducer import ReducerError, reduce_events
+
+    initialized = _event(
+        "run.initialized", {"manifest_sha256": "a" * 64}, revision=1
+    ).model_copy(update={"actor_role": None})
+
+    with pytest.raises(ReducerError, match="explicit actor role"):
+        reduce_events("core-research.v1", [initialized])
+
+    legacy = reduce_events("academic-pipeline.legacy-v1", [initialized])
+    assert legacy.accepted_revision == 1
+
+
+def test_reducer_keeps_shared_blocker_until_every_decision_is_resolved() -> None:
+    from arw.reducer import reduce_events
+
+    events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
+    for revision, decision_id in ((2, "decision.first"), (3, "decision.second")):
+        events.append(
+            _event(
+                "human_decision.requested",
+                {
+                    "decision_id": decision_id,
+                    "blocker_code": "human-choice-required",
+                    "starting_revision": revision - 1,
+                    "allowed_choices": ["continue"],
+                    "rationale_required": False,
+                    "source_event_ids": [],
+                    "unlock_transitions": ["start"],
+                },
+                revision=revision,
+            )
+        )
+    events.append(
+        _event(
+            "human_decision.resolved",
+            {"decision_id": "decision.first", "choice": "continue", "rationale": None},
+            revision=4,
+        )
+    )
+
+    state = reduce_events("core-research.v1", events)
+    assert [item.decision_id for item in state.pending_human_decisions] == [
+        "decision.second"
+    ]
+    assert [item.code for item in state.blockers] == ["human-choice-required"]
+    assert state.legal_next_transitions == []
+
+
+@pytest.mark.parametrize("identity", ["decision", "attempt", "artifact"])
+def test_reducer_rejects_reused_stable_runtime_identity(identity: str) -> None:
+    from arw.reducer import ReducerError, reduce_events
+
+    events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
+    if identity == "decision":
+        events.extend(
+            [
+                _event(
+                    "human_decision.requested",
+                    {
+                        "decision_id": "decision.once",
+                        "blocker_code": "human-choice-required",
+                        "starting_revision": 1,
+                        "allowed_choices": ["continue"],
+                        "rationale_required": False,
+                        "source_event_ids": [],
+                        "unlock_transitions": ["start"],
+                    },
+                    revision=2,
+                ),
+                _event(
+                    "human_decision.resolved",
+                    {"decision_id": "decision.once", "choice": "continue", "rationale": None},
+                    revision=3,
+                ),
+                _event(
+                    "human_decision.requested",
+                    {
+                        "decision_id": "decision.once",
+                        "blocker_code": "human-choice-required",
+                        "starting_revision": 3,
+                        "allowed_choices": ["continue"],
+                        "rationale_required": False,
+                        "source_event_ids": [],
+                        "unlock_transitions": ["start"],
+                    },
+                    revision=4,
+                ),
+            ]
+        )
+    elif identity == "attempt":
+        events.extend(
+            [
+                _event(
+                    "attempt.started",
+                    {"attempt_id": "attempt.once", "base_revision": 1, "consumed_sha256": []},
+                    revision=2,
+                ),
+                _event(
+                    "attempt.closed",
+                    {"attempt_id": "attempt.once", "outcome": "completed", "proposal_sha256": None},
+                    revision=3,
+                ),
+                _event(
+                    "attempt.started",
+                    {"attempt_id": "attempt.once", "base_revision": 3, "consumed_sha256": []},
+                    revision=4,
+                ),
+            ]
+        )
+    else:
+        events.extend(
+            [
+                _event(
+                    "artifact.accepted",
+                    {
+                        "artifact_id": "artifact.once",
+                        "manifest_sha256": "b" * 64,
+                        "artifact_sha256": "c" * 64,
+                        "attempt_id": None,
+                    },
+                    revision=2,
+                ),
+                _event(
+                    "artifact.accepted",
+                    {
+                        "artifact_id": "artifact.once",
+                        "manifest_sha256": "d" * 64,
+                        "artifact_sha256": "e" * 64,
+                        "attempt_id": None,
+                    },
+                    revision=3,
+                ),
+            ]
+        )
+
+    with pytest.raises(ReducerError, match="already used"):
+        reduce_events("core-research.v1", events)
 
 
 def test_freshness_is_dynamic_and_does_not_change_events() -> None:

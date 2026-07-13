@@ -205,14 +205,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "replay":
             state = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            reduce_events(
+                state.workflow_definition_id,
+                state.events,
+                recovery_health=state.recovery_health,
+            )
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
             replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            status_now = _parse_utc(args.at) or datetime.now(UTC)
             state = reduce_events(
                 replayed.workflow_definition_id,
                 replayed.events,
-                now=_parse_utc(args.at),
+                now=status_now,
                 recovery_health=replayed.recovery_health,
             )
             report = build_status_report(state)

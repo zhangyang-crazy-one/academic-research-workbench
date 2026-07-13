@@ -223,6 +223,8 @@ class RuntimeCommandService:
         transition_holder = {}
 
         def validate(state, _replayed):
+            if state.blockers:
+                return "runtime-blocked", "accepted blockers prevent lifecycle transitions"
             if request.from_stage != state.stage:
                 return "stale-stage", "request from-stage differs from accepted stage"
             try:
@@ -348,13 +350,26 @@ class RuntimeCommandService:
         )
 
     def accept_artifact(self, request: ArtifactAcceptanceRequest) -> CommandOutcome:
-        manifest_holder: dict[str, ArtifactManifest] = {}
         digest_holder: dict[str, str] = {}
 
-        def validate(state, _replayed):
+        def validate(state, replayed):
+            if any(
+                event.event_type == "artifact.accepted"
+                and isinstance(event.payload, ArtifactAcceptedPayload)
+                and event.payload.artifact_id == request.artifact_id
+                for event in replayed.events
+            ):
+                return "duplicate-artifact", "artifact ID was already accepted"
             if request.attempt_id is None:
                 if request.base_revision != state.accepted_revision:
                     return "stale-artifact-base", "artifact base revision is not current"
+                known_hashes = {
+                    state.ledger_head_sha256,
+                    *state.accepted_artifact_manifest_sha256,
+                    *state.accepted_passport_sha256,
+                }
+                if any(value not in known_hashes for value in request.consumed_sha256):
+                    return "stale-consumed-input", "artifact consumes an unknown hash"
             else:
                 attempt = next(
                     (
@@ -394,7 +409,6 @@ class RuntimeCommandService:
                 installed = install_artifact_manifest(self.run_root, manifest)
             except ManifestError as error:
                 return "artifact-manifest-invalid", str(error)
-            manifest_holder["value"] = manifest
             digest_holder["value"] = installed.stem
             return None
 

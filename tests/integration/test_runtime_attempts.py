@@ -186,3 +186,39 @@ def test_stale_or_unknown_attempt_requests_append_nothing(tmp_path: Path) -> Non
     assert rejected.rejection is not None
     assert rejected.rejection.code == "unknown-attempt"
     assert _tree(root) == before
+
+
+def test_pending_decision_blocks_lifecycle_transition_without_mutation(
+    tmp_path: Path,
+) -> None:
+    from arw.models import HumanDecisionRequest, LifecycleTransitionRequest
+
+    root, service = _service(tmp_path)
+    requested = service.request_decision(
+        HumanDecisionRequest.model_validate(
+            {
+                **_base(70, 1),
+                "decision_id": "decision.blocks-transition",
+                "blocker_code": "human-choice-required",
+                "allowed_choices": ["continue", "abort"],
+                "rationale_required": True,
+                "source_event_ids": [],
+                "unlock_transitions": ["start"],
+            }
+        )
+    )
+    assert requested.accepted
+    before = _tree(root)
+    rejected = service.execute_transition(
+        LifecycleTransitionRequest.model_validate(
+            {
+                **_base(71, 2),
+                "transition_id": "start",
+                "from_stage": "initialized",
+            }
+        )
+    )
+
+    assert rejected.rejection is not None
+    assert rejected.rejection.code == "runtime-blocked"
+    assert _tree(root) == before

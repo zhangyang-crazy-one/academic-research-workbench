@@ -111,3 +111,61 @@ def test_replay_continues_chain_across_ordered_segments(tmp_path: Path) -> None:
         "00000001.jsonl",
         "00000002.jsonl",
     ]
+
+
+def test_legacy_append_cannot_bypass_segmented_runtime_authority(tmp_path: Path) -> None:
+    from arw.journal import JournalError, append_probe
+    from arw.models import AppendProbeRequest
+
+    root = tmp_path / "segmented-append"
+    _initialize(root)
+    before = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    request = AppendProbeRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "event_type": "baseline.probe_recorded",
+            "event_id": "evt-00000000-0000-4000-8000-000000000023",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000023",
+            "run_id": RUN_ID,
+            "occurred_at": "2026-07-13T01:00:02Z",
+            "expected_revision": 1,
+            "actor_id": "legacy.caller",
+            "payload": {
+                "probe_id": "probe-segmented-bypass",
+                "status": "pass",
+                "summary": "must not append",
+            },
+        }
+    )
+
+    with pytest.raises(JournalError, match="only supports legacy"):
+        append_probe(root, request)
+    after = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+
+
+def test_writer_lock_symlink_is_rejected_without_touching_target(tmp_path: Path) -> None:
+    from arw.journal import JournalError, initialize_run
+
+    root = tmp_path / "lock-symlink"
+    root.mkdir()
+    outside = tmp_path / "outside-lock"
+    outside.write_bytes(b"outside must remain unchanged\n")
+    (root / ".journal.lock").symlink_to(outside)
+    request = _request(root)
+    before = outside.read_bytes()
+
+    with pytest.raises(JournalError, match="lock file is unsafe"):
+        initialize_run(root, request)
+
+    assert outside.read_bytes() == before
+    assert not (root / "run-manifest.json").exists()
+    assert not (root / "journal").exists()
