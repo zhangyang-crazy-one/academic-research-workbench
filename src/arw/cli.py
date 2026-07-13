@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -14,6 +15,8 @@ from pydantic import ValidationError
 from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
+from arw.files import FilesAdminError, FilesAdminService
+from arw.file_models import ExtractionRegistration
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
 from arw.manifests import ManifestError
 from arw.models import (
@@ -109,6 +112,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rebuild_pointer.add_argument("--run-root", required=True, type=Path)
     rebuild_pointer.add_argument("--lock-timeout", type=float, default=0.2)
+    files = subparsers.add_parser(
+        "files",
+        help="Parent-only file root, extraction, and generation administration.",
+    )
+    files_subcommands = files.add_subparsers(dest="files_command", required=True)
+    for resource in ("root", "extraction"):
+        command = files_subcommands.add_parser(resource)
+        actions = command.add_subparsers(dest="files_action", required=True)
+        register = actions.add_parser("register")
+        register.add_argument("--control-root", required=True, type=Path)
+        register.add_argument("--root-id", required=True)
+        if resource == "root":
+            register.add_argument("--root-path", required=True, type=Path)
+            register.add_argument("--policy-id", required=True)
+        else:
+            register.add_argument("--request", required=True, type=Path)
+            register.add_argument("--text", required=True, type=Path)
+    for name in ("sync", "rebuild", "repair", "status"):
+        command = files_subcommands.add_parser(name)
+        command.add_argument("--control-root", required=True, type=Path)
+        command.add_argument("--root-id", required=True)
+        if name in {"sync", "rebuild", "repair"}:
+            command.add_argument("--extractor-version", required=True)
     return parser
 
 
@@ -171,6 +197,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
         )
         return 0
+    if args.command == "files":
+        try:
+            builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
+            service = FilesAdminService(
+                args.control_root,
+                native_builder=None if builder_value is None else Path(builder_value),
+            )
+            if args.files_command == "root":
+                result = service.register_root(
+                    root_id=args.root_id,
+                    root_path=args.root_path,
+                    policy_id=args.policy_id,
+                )
+                _write_json(result.model_dump(mode="json"))
+            elif args.files_command == "extraction":
+                registration = _load_request(args.request, ExtractionRegistration)
+                service.register_extraction(args.root_id, registration, args.text)
+                _write_json(
+                    registration.model_dump(mode="json", exclude_computed_fields=True)
+                )
+            elif args.files_command in {"sync", "rebuild", "repair"}:
+                method = getattr(service, args.files_command)
+                receipt = method(args.root_id, extractor_version=args.extractor_version)
+                _write_json(receipt.model_dump(mode="json"))
+            else:
+                _write_json(service.status(args.root_id))
+            return 0
+        except (FilesAdminError, JournalError, ValidationError) as error:
+            print(f"arw: files-admin-error: {error}", file=sys.stderr)
+            return 65
 
     try:
         if args.command == "init":

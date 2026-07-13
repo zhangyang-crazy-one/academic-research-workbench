@@ -149,14 +149,20 @@ def test_fixture_malformed_utf8_and_canaries_are_explicit_and_non_private() -> N
 
 
 def test_later_phase_modules_collect_under_explicit_plan_ownership() -> None:
-    ownership = {
+    active = {
         "tests/integration/test_files_admin.py": "Plan 03-02",
         "tests/integration/test_file_generations.py": "Plan 03-02",
+    }
+    pending = {
         "tests/integration/test_files_mcp.py": "Plan 03-03",
         "tests/integration/test_files_formats.py": "Plan 03-04",
         "tests/integration/test_files_security.py": "Plan 03-05",
     }
-    for relative, owner in ownership.items():
+    for relative, owner in active.items():
+        source = (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+        assert "pytest.mark.skip" not in source
+        assert owner not in source
+    for relative, owner in pending.items():
         source = (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
         assert "pytest.mark.skip" in source
         assert owner in source

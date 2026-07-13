@@ -164,8 +164,8 @@ if license_verdict.get("release_qualification") != "BLOCKED":
     raise SystemExit("Phase 2 must not weaken unresolved SUP-04 release blocking")
 identity_path = stage_root / "share/arw/build-identity.json"
 identity = load(identity_path)
-if len(identity["schemas"]["files"]) != 22:
-    raise SystemExit("staged schema identity is incomplete")
+if len(identity["schemas"]["files"]) < 22:
+    raise SystemExit("staged schema identity lost the Phase 2 baseline")
 
 raw_files = []
 for path in sorted(evidence_root.rglob("*")):

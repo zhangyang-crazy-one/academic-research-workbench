@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from tests.file_plane_helpers import snapshot_tree
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment.update({"PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1"})
+    return subprocess.run(
+        [sys.executable, "-m", "arw.cli", *arguments],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
 
 def _service(control_root: Path, *, builder: Path | None = None):
@@ -37,6 +56,52 @@ def _service(control_root: Path, *, builder: Path | None = None):
 def _write_root(root: Path) -> None:
     (root / "papers").mkdir(parents=True)
     (root / "papers/current.md").write_text("# Current\n\ncurrent evidence\n", encoding="utf-8")
+
+
+def test_files_cli_uses_parent_only_resource_commands(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    _write_root(root)
+    control = tmp_path / "control"
+    registered = _run_cli(
+        "files",
+        "root",
+        "register",
+        "--control-root",
+        str(control),
+        "--root-id",
+        "research-root",
+        "--root-path",
+        str(root),
+        "--policy-id",
+        "research-files-v1",
+    )
+    assert registered.returncode == 0, registered.stderr
+    assert json.loads(registered.stdout)["root_id"] == "research-root"
+
+    synced = _run_cli(
+        "files",
+        "sync",
+        "--control-root",
+        str(control),
+        "--root-id",
+        "research-root",
+        "--extractor-version",
+        "1.0.0",
+    )
+    assert synced.returncode == 0, synced.stderr
+    assert json.loads(synced.stdout)["selected_generation_id"]
+
+    status = _run_cli(
+        "files",
+        "status",
+        "--control-root",
+        str(control),
+        "--root-id",
+        "research-root",
+    )
+    assert status.returncode == 0, status.stderr
+    assert json.loads(status.stdout)["selected_generation"]["generation_id"]
 
 
 def test_parent_only_admin_commands_build_complete_sibling_generation(tmp_path: Path) -> None:

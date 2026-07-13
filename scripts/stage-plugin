@@ -463,6 +463,26 @@ static_files = {
     "vendor/python/wheelhouse/requirements-runtime.txt",
     "vendor/source-manifest.json",
 }
+phase3_schema_names = {
+    "extraction-registration.schema.json",
+    "file-admin-receipt.schema.json",
+    "file-generation-manifest.schema.json",
+    "file-identity-manifest.schema.json",
+    "file-root.schema.json",
+    "files-context-request.schema.json",
+    "files-context-result.schema.json",
+    "files-list-request.schema.json",
+    "files-list-result.schema.json",
+    "files-outline-request.schema.json",
+    "files-outline-result.schema.json",
+    "files-read-request.schema.json",
+    "files-read-result.schema.json",
+    "files-search-request.schema.json",
+    "files-search-result.schema.json",
+}
+static_files.update(
+    f"share/arw/schemas/{name}" for name in phase3_schema_names
+)
 expected = static_files | {
     f"vendor/python/wheelhouse/{wheel['file']}" for wheel in source_lock["wheels"]
 } | {f"vendor/python/wheelhouse/{first_party_name}"}
