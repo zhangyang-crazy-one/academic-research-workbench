@@ -85,7 +85,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-04-PLAN.md - Explicit quarantine recovery, corruption blocking, and crash evidence
+- [x] 02-04-PLAN.md - Explicit quarantine recovery, corruption blocking, and crash evidence
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -173,7 +173,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
-| 2. Durable Provenance Runtime | 3/5 | In Progress|  |
+| 2. Durable Provenance Runtime | 4/5 | In Progress|  |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |

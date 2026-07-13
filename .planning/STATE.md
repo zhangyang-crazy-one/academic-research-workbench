@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-07-13T13:14:26.745Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-07-13T13:36:39.876Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 02 (Durable Provenance Runtime) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 83%
 | Phase 02 P01 | 12 min | 3 tasks | 19 files |
 | Phase 02 P02 | 9 min | 3 tasks | 15 files |
 | Phase 02 P03 | 14 min | 3 tasks | 19 files |
+| Phase 02 P04 | 16 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Installed artifact or Passport files are non-authoritative until a hash-binding event accepts them. — Store presence cannot replace canonical ledger authority.
 - [Phase 02]: Passport lineage is exact and linear: based-on revision, parent, and superseded hash must match the pre-event reducer state. — Exact lineage prevents implicit branches and stale resume.
 - [Phase 02]: Freshness is evaluated from an injected clock and blocks lifecycle/resume without changing historical Passport bytes. — Historical evidence remains immutable while current legality is projected dynamically.
+- [Phase 02]: Recovery eligibility is limited to a final malformed, incomplete, or truncated-UTF-8 record after at least one fully validated event. — Accepted-event, middle-chain, manifest, and recovery-binding damage must remain blocked for forensics.
+- [Phase 02]: A recovered chain is healthy only when the next segment begins with recovery.completed and its event, original segment, raw copy, and canonical receipt all cross-validate. — Recovery authority must be independently reconstructible from unchanged canonical and forensic bytes.
+- [Phase 02]: Status and replay return the last trustworthy prefix for recoverable or blocked damage; only explicit operator recovery writes quarantine or continuation bytes. — Observation and repair remain separate authority boundaries.
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T13:13:40.035Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-07-13T13:36:07.605Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
