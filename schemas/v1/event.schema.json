@@ -177,11 +177,14 @@
         "prior_valid_revision": {"minimum": 0, "type": "integer"},
         "prior_valid_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
         "original_segment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "original_segment_byte_count": {"minimum": 1, "type": "integer"},
         "quarantine_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "quarantine_receipt_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
         "fault_offset": {"minimum": 0, "type": "integer"},
+        "fault_class": {"enum": ["incomplete-record", "malformed-record", "truncated-utf8"], "type": "string"},
         "reason_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}
       },
-      "required": ["recovery_id", "prior_valid_revision", "prior_valid_head_sha256", "original_segment_sha256", "quarantine_sha256", "fault_offset", "reason_code"],
+      "required": ["recovery_id", "prior_valid_revision", "prior_valid_head_sha256", "original_segment_sha256", "original_segment_byte_count", "quarantine_sha256", "quarantine_receipt_sha256", "fault_offset", "fault_class", "reason_code"],
       "type": "object"
     }
   }

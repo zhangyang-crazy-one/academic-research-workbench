@@ -17,6 +17,7 @@ from arw.models import (
     LifecycleTransitionedPayload,
     PassportAcceptedPayload,
     RecoveryHealth,
+    RecoveryCompletedPayload,
     ResumeAcceptedPayload,
     Sha256,
     StableRuntimeId,
@@ -211,6 +212,13 @@ def reduce_events(
             if payload.passport_sha256 in consumed_passports:
                 raise ReducerError("resume Passport was already consumed")
             consumed_passports.append(payload.passport_sha256)
+        elif event.event_type == "recovery.completed":
+            assert isinstance(payload, RecoveryCompletedPayload)
+            if (
+                payload.prior_valid_revision != revision
+                or payload.prior_valid_head_sha256 != head
+            ):
+                raise ReducerError("recovery event does not bind the accepted prefix")
 
         revision = event.resulting_revision
         head = event.event_sha256
@@ -222,8 +230,14 @@ def reduce_events(
         blockers["evidence-expired"] = BlockerState(code="evidence-expired")
 
     if recovery_health == "recoverable_tail":
+        blockers["tail-recovery-required"] = BlockerState(
+            code="tail-recovery-required"
+        )
         next_transitions = ["recover"]
-    elif recovery_health == "blocked" or blockers:
+    elif recovery_health == "blocked":
+        blockers["recovery-blocked"] = BlockerState(code="recovery-blocked")
+        next_transitions = []
+    elif blockers:
         next_transitions = []
     else:
         next_transitions = list(legal_transitions(workflow_definition_id, stage))
