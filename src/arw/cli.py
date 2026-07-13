@@ -17,6 +17,7 @@ from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
 from arw.models import (
     AppendProbeRequest,
+    ArtifactAcceptanceRequest,
     AttemptCloseRequest,
     AttemptStartRequest,
     HumanDecisionRequest,
@@ -91,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("decision-resolve", "Resolve one pending human decision."),
         ("attempt-start", "Record one parent-controlled attempt start."),
         ("attempt-close", "Close one active parent-controlled attempt."),
+        ("artifact-accept", "Accept one immutable content-addressed artifact."),
     ):
         command = subparsers.add_parser(name, help=help_text)
         _add_run_request_arguments(command)
@@ -211,6 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "decision-resolve": (HumanDecisionResolveRequest, "resolve_decision"),
             "attempt-start": (AttemptStartRequest, "start_attempt"),
             "attempt-close": (AttemptCloseRequest, "close_attempt"),
+            "artifact-accept": (ArtifactAcceptanceRequest, "accept_artifact"),
         }
         if args.command in runtime_commands:
             model, method_name = runtime_commands[args.command]

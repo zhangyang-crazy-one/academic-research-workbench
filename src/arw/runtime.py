@@ -13,7 +13,11 @@ from arw.journal import (
     locked_replay,
     replay_run,
 )
+from arw.manifests import ManifestError, install_artifact_manifest, validate_content_file
 from arw.models import (
+    ArtifactAcceptanceRequest,
+    ArtifactAcceptedPayload,
+    ArtifactManifest,
     AttemptCloseRequest,
     AttemptClosedPayload,
     AttemptStartRequest,
@@ -272,5 +276,68 @@ class RuntimeCommandService:
                 attempt_id=request.attempt_id,
                 outcome=request.outcome,
                 proposal_sha256=request.proposal_sha256,
+            ),
+        )
+
+    def accept_artifact(self, request: ArtifactAcceptanceRequest) -> CommandOutcome:
+        manifest_holder: dict[str, ArtifactManifest] = {}
+        digest_holder: dict[str, str] = {}
+
+        def validate(state, _replayed):
+            if request.attempt_id is None:
+                if request.base_revision != state.accepted_revision:
+                    return "stale-artifact-base", "artifact base revision is not current"
+            else:
+                attempt = next(
+                    (
+                        item
+                        for item in state.active_attempts
+                        if item.attempt_id == request.attempt_id
+                    ),
+                    None,
+                )
+                if attempt is None:
+                    return "stale-artifact-attempt", "artifact attempt is not active"
+                if request.base_revision != attempt.base_revision:
+                    return "stale-artifact-base", "artifact base differs from its attempt"
+                if request.consumed_sha256 != attempt.consumed_sha256:
+                    return "stale-consumed-input", "artifact inputs differ from its attempt"
+            try:
+                validate_content_file(
+                    self.run_root, request.content_path, request.content_sha256
+                )
+            except ManifestError as error:
+                return "artifact-content-invalid", str(error)
+            manifest = ArtifactManifest(
+                schema_version=request.schema_version,
+                run_id=request.run_id,
+                artifact_id=request.artifact_id,
+                artifact_kind=request.artifact_kind,
+                media_type=request.media_type,
+                content_path=request.content_path,
+                content_sha256=request.content_sha256,
+                producer_id=request.actor_id,
+                attempt_id=request.attempt_id,
+                base_revision=request.base_revision,
+                consumed_sha256=list(request.consumed_sha256),
+                created_at=request.occurred_at,
+            )
+            try:
+                installed = install_artifact_manifest(self.run_root, manifest)
+            except ManifestError as error:
+                return "artifact-manifest-invalid", str(error)
+            manifest_holder["value"] = manifest
+            digest_holder["value"] = installed.stem
+            return None
+
+        return self._execute(
+            request,
+            event_type="artifact.accepted",
+            prevalidate=validate,
+            payload_factory=lambda _state, _replayed: ArtifactAcceptedPayload(
+                artifact_id=request.artifact_id,
+                manifest_sha256=digest_holder["value"],
+                artifact_sha256=request.content_sha256,
+                attempt_id=request.attempt_id,
             ),
         )

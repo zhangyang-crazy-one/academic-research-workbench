@@ -9,6 +9,7 @@ import pytest
 def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None:
     from arw.manifests import install_artifact_manifest, manifest_bytes_and_sha256
     from arw.models import ArtifactManifest
+    from arw.schema_registry import validate_instance
 
     root = tmp_path / "run"
     root.mkdir()
@@ -29,6 +30,10 @@ def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None
         }
     )
     canonical, digest = manifest_bytes_and_sha256(manifest)
+    validate_instance(
+        "artifact-manifest.schema.json",
+        manifest.model_dump(mode="json", exclude_none=True),
+    )
     installed = install_artifact_manifest(root, manifest)
     assert installed == root / "manifests" / "artifacts" / "sha256" / f"{digest}.json"
     assert installed.read_bytes() == canonical

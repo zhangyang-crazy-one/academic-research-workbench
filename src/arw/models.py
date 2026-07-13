@@ -318,6 +318,47 @@ class AttemptCloseRequest(RuntimeCommandRequest):
     proposal_sha256: Sha256 | None = None
 
 
+class ArtifactManifest(StrictModel):
+    schema_version: Literal["1.0.0"]
+    run_id: RunId
+    artifact_id: StableRuntimeId
+    artifact_kind: StableRuntimeId
+    media_type: Annotated[str, Field(min_length=3, max_length=127)]
+    content_path: str
+    content_sha256: Sha256
+    producer_id: ActorId
+    attempt_id: StableRuntimeId | None = None
+    base_revision: Annotated[int, Field(ge=0)]
+    consumed_sha256: list[Sha256]
+    created_at: UtcTimestamp
+
+    @field_validator("content_path")
+    @classmethod
+    def normalized_content_path(cls, value: str) -> str:
+        if not value or "\x00" in value or "\\" in value:
+            raise ValueError("content path must be a normalized relative POSIX path")
+        path = PurePosixPath(value)
+        if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+            raise ValueError("content path must be a normalized relative POSIX path")
+        return value
+
+
+class ArtifactAcceptanceRequest(RuntimeCommandRequest):
+    artifact_id: StableRuntimeId
+    artifact_kind: StableRuntimeId
+    media_type: Annotated[str, Field(min_length=3, max_length=127)]
+    content_path: str
+    content_sha256: Sha256
+    attempt_id: StableRuntimeId | None = None
+    base_revision: Annotated[int, Field(ge=0)]
+    consumed_sha256: list[Sha256]
+
+    @field_validator("content_path")
+    @classmethod
+    def normalized_content_path(cls, value: str) -> str:
+        return ArtifactManifest.normalized_content_path(value)
+
+
 class InitRunRequest(StrictModel):
     """Strict operator request used to construct manifest and initial event."""
 
