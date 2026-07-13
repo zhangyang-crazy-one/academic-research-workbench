@@ -27,7 +27,7 @@
 - [x] **RUN-02**: Every accepted canonical transition is appended as a deterministic, sequence-ordered, hash-chained event by one runtime writer.
 - [x] **RUN-03**: The runtime rejects invalid, duplicate, stale-revision, out-of-order, or unauthorized canonical transitions without partially changing accepted state.
 - [x] **RUN-04**: An operator can reconstruct the same validated run state from canonical events and immutable manifests without chat history or projection databases.
-- [ ] **RUN-05**: Accepted artifacts and Material Passport revisions are immutable, content-addressed, and linked to the transition that accepted or superseded them.
+- [x] **RUN-05**: Accepted artifacts and Material Passport revisions are immutable, content-addressed, and linked to the transition that accepted or superseded them.
 - [x] **RUN-06**: An operator can checkpoint and resume a run after process termination without repeating accepted work or accepting stale worker results.
 - [x] **RUN-07**: Status output identifies the current stage, accepted revision, blockers, pending human decisions, active attempts, and next legal transition.
 - [ ] **RUN-08**: Recovery quarantines torn, corrupt, or unverifiable tail data and reports the last fully committed canonical revision.
@@ -151,7 +151,7 @@
 | RUN-02 | Phase 1 | Complete |
 | RUN-03 | Phase 2 | Complete |
 | RUN-04 | Phase 2 | Complete |
-| RUN-05 | Phase 2 | Pending |
+| RUN-05 | Phase 2 | Complete |
 | RUN-06 | Phase 2 | Complete |
 | RUN-07 | Phase 2 | Complete |
 | RUN-08 | Phase 2 | Pending |

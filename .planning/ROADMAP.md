@@ -81,7 +81,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md - Content-addressed artifacts, Material Passports, freshness, and exact resume
+- [x] 02-03-PLAN.md - Content-addressed artifacts, Material Passports, freshness, and exact resume
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -173,7 +173,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
-| 2. Durable Provenance Runtime | 2/5 | In Progress|  |
+| 2. Durable Provenance Runtime | 3/5 | In Progress|  |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |

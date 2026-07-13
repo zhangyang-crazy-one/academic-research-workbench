@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-13T12:56:19.495Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-07-13T13:14:26.745Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 02 (Durable Provenance Runtime) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [████████░░] 75%
 | Phase 01 P07 | 10m | 3 tasks | 15 files |
 | Phase 02 P01 | 12 min | 3 tasks | 19 files |
 | Phase 02 P02 | 9 min | 3 tasks | 15 files |
+| Phase 02 P03 | 14 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 02]: New manifests bind a registered workflow ID and digest; legacy manifests select one frozen compatibility identity. — This prevents mutable workflow definitions from rewriting historical transition legality while preserving Phase 1 bytes.
 - [Phase 02]: Status is a pure projection and opens only an existing read-only lock. — Every status path must remain side-effect-free, including damaged runs without a lock file.
 - [Phase 02]: Phase 2 runtime commands require segmented-v1 and legacy events.jsonl remains read-only. — This preserves frozen Phase 1 semantics and prevents append-then-reject partial mutation.
+- [Phase 02]: Installed artifact or Passport files are non-authoritative until a hash-binding event accepts them. — Store presence cannot replace canonical ledger authority.
+- [Phase 02]: Passport lineage is exact and linear: based-on revision, parent, and superseded hash must match the pre-event reducer state. — Exact lineage prevents implicit branches and stale resume.
+- [Phase 02]: Freshness is evaluated from an injected clock and blocks lifecycle/resume without changing historical Passport bytes. — Historical evidence remains immutable while current legality is projected dynamically.
 
 ### Pending Todos
 
@@ -112,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T12:56:19.038Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-07-13T13:13:40.035Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
