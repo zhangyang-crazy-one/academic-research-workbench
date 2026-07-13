@@ -20,7 +20,9 @@ OUTSIDE_SECRET = FIXTURE_ROOT / "outside/secret.txt"
 NATIVE_BINARY = REPOSITORY_ROOT / ".file-base/bin/file-base"
 SCHEMA_ROOT = REPOSITORY_ROOT / "schemas/v1"
 EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/confinement"
+NATIVE_EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/native"
 ROOT_CAPABILITY = "phase1-fixture"
+UPSTREAM_TEST_TREE_SHA256 = "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,7 @@ def _write_evidence(
                     "CBM_ALLOWED_ROOT": "<phase1-fixture-root>",
                     "CBM_ALLOWED_ROOT_ID": ROOT_CAPABILITY,
                     "CBM_CACHE_DIR": "<isolated-cache>",
+                    "CBM_DISABLE_UPDATE_CHECK": "1",
                     "CBM_LOG_LEVEL": "error",
                 },
                 "transport": "json-rpc-2.0-line-delimited-stdio",
@@ -152,6 +155,7 @@ def _invoke_native(case: ReadCase, tmp_path: Path) -> tuple[dict[str, Any], Path
         "CBM_ALLOWED_ROOT": str(ALLOWED_ROOT.resolve()),
         "CBM_ALLOWED_ROOT_ID": ROOT_CAPABILITY,
         "CBM_CACHE_DIR": str(tmp_path / "cache"),
+        "CBM_DISABLE_UPDATE_CHECK": "1",
         "CBM_LOG_LEVEL": "error",
         "HOME": str(tmp_path / "home"),
         "PATH": os.environ["PATH"],
@@ -228,6 +232,55 @@ def test_confinement_schemas_are_strict_and_phase1_budgeted() -> None:
     }
     result_validator.validate(denied)
     assert list(result_validator.iter_errors({**denied, "content": "forbidden"}))
+
+
+@pytest.mark.parametrize(
+    ("suite", "required_libraries"),
+    [
+        ("asan-ubsan", {"libasan.so", "libubsan.so"}),
+        ("tsan", {"libtsan.so"}),
+    ],
+)
+def test_sanitizer_evidence_uses_verified_user_runtime(
+    suite: str, required_libraries: set[str]
+) -> None:
+    evidence = NATIVE_EVIDENCE_ROOT / suite
+    verdict = json.loads((evidence / "verdict.json").read_text(encoding="utf-8"))
+    sanitizer_verdict = json.loads(
+        (evidence / "sanitizer-verdict.json").read_text(encoding="utf-8")
+    )
+    runtime = json.loads((evidence / "sanitizer-runtime.json").read_text(encoding="utf-8"))
+    inventory = json.loads((evidence / "test-inventory.json").read_text(encoding="utf-8"))
+    flags = json.loads((evidence / "flags.json").read_text(encoding="utf-8"))
+
+    assert verdict["technical_qualification"] == "PASS"
+    assert verdict["network_namespace_denied"] is True
+    assert verdict["strace_network_audit"] is True
+    assert verdict["network_syscall_attempts"] == []
+    assert sanitizer_verdict == {
+        "fatal_diagnostic_patterns_absent": True,
+        "schema_version": "1.0.0",
+        "suite": suite,
+        "technical_qualification": "PASS",
+        "test_status": 0,
+    }
+    assert inventory["manifest_test_tree_sha256"] == UPSTREAM_TEST_TREE_SHA256
+    assert inventory["observed_test_tree_sha256"] == UPSTREAM_TEST_TREE_SHA256
+    assert flags["sanitizer_set"] == suite
+    assert flags["sanitize_variable"].startswith("-B")
+    assert flags["sanitizer_runtime_environment"]["source"] == "ARW_SANITIZER_RUNTIME_DIR"
+    if suite == "asan-ubsan":
+        assert flags["address_leak_detection"] == (
+            "disabled: mandatory strace network audit uses ptrace"
+        )
+    else:
+        assert flags["address_leak_detection"] == "not-applicable"
+    assert runtime["suite"] == suite
+    assert len(runtime["directory_tree_sha256"]) == 64
+    assert {item["link_name"] for item in runtime["libraries"]} == required_libraries
+    for library in runtime["libraries"]:
+        assert library["runtime_abi_version"] != "unversioned"
+        assert len(library["sha256"]) == 64
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case.case_id)

@@ -9,7 +9,8 @@ usage() {
 Usage: offline-exec --evidence-root PATH COMMAND [ARG ...]
 
 Run a command in a denied Linux network namespace while auditing every network
-syscall with strace. Any AF_INET or AF_INET6 attempt fails the run.
+syscall with strace. Namespace-local loopback traffic is permitted for native
+server tests; external-address and unclassified INET sockets fail the run.
 EOF
 }
 
@@ -55,6 +56,16 @@ EVIDENCE_ROOT="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
 [[ ! -e "$EVIDENCE_ROOT" ]] || fail "evidence root already exists" 73
 mkdir -p "$EVIDENCE_ROOT"
 
+if [[ -n "${ARW_SANITIZER_RUNTIME_DIR:-}" ]]; then
+  ARW_SANITIZER_RUNTIME_DIR="$(
+    python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve(strict=True))' \
+      "$ARW_SANITIZER_RUNTIME_DIR"
+  )" || fail "sanitizer runtime directory cannot be resolved" 66
+  [[ -d "$ARW_SANITIZER_RUNTIME_DIR" ]] \
+    || fail "sanitizer runtime directory is absent: $ARW_SANITIZER_RUNTIME_DIR" 66
+  export ARW_SANITIZER_RUNTIME_DIR
+fi
+
 MECHANISM=""
 if command -v bwrap >/dev/null 2>&1 \
   && bwrap --die-with-parent --unshare-net --dev-bind / / -- /bin/true >/dev/null 2>&1; then
@@ -78,10 +89,11 @@ STARTED="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 namespace_command=(
   /bin/bash -c
-  'set -euo pipefail; readlink /proc/self/ns/net > "$1"; shift; export ARW_OFFLINE_EXEC_ACTIVE=1; export ARW_NETWORK_DENIAL_MECHANISM="$1"; shift; exec "$@"'
+  'set -euo pipefail; readlink /proc/self/ns/net > "$1"; shift; export ARW_OFFLINE_EXEC_ACTIVE=1; export ARW_NETWORK_DENIAL_MECHANISM="$1"; shift; export ARW_OFFLINE_EVIDENCE_ROOT="$1"; shift; exec "$@"'
   offline-exec
   "$CHILD_NAMESPACE_FILE"
   "$MECHANISM"
+  "$EVIDENCE_ROOT"
   "$@"
 )
 
@@ -110,18 +122,24 @@ fi
 
 python3 - "$COMMAND_FILE" "$STARTED" "$ENDED" "$MECHANISM" "$STRACE" "$@" <<'PY'
 import json
+import os
 import sys
 from pathlib import Path
 
 destination, started, ended, mechanism, tracer, *argv = sys.argv[1:]
+environment = {
+    "ARW_OFFLINE_EXEC_ACTIVE": "1",
+    "ARW_OFFLINE_EVIDENCE_ROOT": str(Path(destination).parent),
+    "ARW_NETWORK_DENIAL_MECHANISM": mechanism,
+}
+sanitizer_runtime = os.environ.get("ARW_SANITIZER_RUNTIME_DIR")
+if sanitizer_runtime:
+    environment["ARW_SANITIZER_RUNTIME_DIR"] = sanitizer_runtime
 payload = {
     "argv": argv,
     "cwd": str(Path.cwd()),
     "ended_at": ended,
-    "environment": {
-        "ARW_OFFLINE_EXEC_ACTIVE": "1",
-        "ARW_NETWORK_DENIAL_MECHANISM": mechanism,
-    },
+    "environment": environment,
     "network_denial_mechanism": mechanism,
     "started_at": started,
     "strace": tracer,
@@ -133,20 +151,49 @@ python3 - \
   "$TRACE_FILE" "$VERDICT_FILE" "$COMMAND_STATUS" "$NAMESPACE_DENIED" \
   "$HOST_NAMESPACE" "$CHILD_NAMESPACE" "$MECHANISM" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
 trace_path, verdict_path, status, namespace_denied, host_ns, child_ns, mechanism = sys.argv[1:]
 trace_lines = Path(trace_path).read_text(encoding="utf-8", errors="replace").splitlines()
-attempts = [line for line in trace_lines if "AF_INET" in line or "AF_INET6" in line]
-passed = int(status) == 0 and namespace_denied == "1" and not attempts
+socket_pattern = re.compile(r"^(\d+)\s+socket\((AF_INET6?),.*\)\s+=\s+(\d+)$")
+operation_pattern = re.compile(r"^(\d+)\s+(bind|connect|sendto)\((\d+),")
+sockets = {}
+violations = []
+namespace_local_lines = []
+for line in trace_lines:
+    socket_match = socket_pattern.match(line)
+    if socket_match:
+        key = (socket_match.group(1), socket_match.group(3))
+        sockets[key] = {"line": line, "classified": False}
+        continue
+    operation_match = operation_pattern.match(line)
+    if not operation_match or ("AF_INET" not in line and "AF_INET6" not in line):
+        continue
+    key = (operation_match.group(1), operation_match.group(3))
+    record = sockets.get(key)
+    if record is not None:
+        record["classified"] = True
+    operation = operation_match.group(2)
+    loopback = 'inet_addr("127.' in line or 'inet_pton(AF_INET6, "::1"' in line
+    namespace_bind = operation == "bind"
+    if loopback or namespace_bind:
+        namespace_local_lines.append(line)
+    else:
+        violations.append(line)
+for record in sockets.values():
+    if not record["classified"]:
+        violations.append(record["line"])
+passed = int(status) == 0 and namespace_denied == "1" and not violations
 payload = {
     "child_network_namespace": child_ns,
     "command_status": int(status),
     "host_network_namespace": host_ns,
     "network_denial_mechanism": mechanism,
     "network_namespace_denied": namespace_denied == "1",
-    "network_syscall_attempts": attempts,
+    "namespace_local_network_syscall_count": len(namespace_local_lines),
+    "network_syscall_attempts": violations,
     "schema_version": "1.0.0",
     "strace_network_audit": True,
     "technical_qualification": "PASS" if passed else "FAIL",

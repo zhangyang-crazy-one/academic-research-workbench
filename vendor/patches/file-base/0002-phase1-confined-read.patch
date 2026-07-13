@@ -1,0 +1,560 @@
+diff --git a/src/discover/discover.c b/src/discover/discover.c
+index 1fb5b93..99b4284 100644
+--- a/src/discover/discover.c
++++ b/src/discover/discover.c
+@@ -70,7 +70,7 @@ static const char *ALWAYS_IGNORED_SUFFIXES[] = {
+ static const char *FAST_IGNORED_SUFFIXES[] = {
+     ".zip", ".tar",  ".gz",       ".bz2",  ".xz",  ".rar",    ".7z",      ".jar",
+     ".war", ".ear",  ".mp3",      ".mp4",  ".avi", ".mov",    ".wav",     ".flac",
+-    ".ogg", ".mkv",  ".webm",     ".doc",  ".docx", ".xls",   ".xlsx",
++    ".ogg", ".mkv",  ".webm",     ".pdf",  ".doc",  ".docx", ".xls",   ".xlsx",
+     ".ppt", ".pptx", ".odt",      ".ods",  ".map", ".min.js", ".min.css", ".pem",
+     ".crt", ".key",  ".cer",      ".p12",  ".pb",  ".avro",   ".parquet", ".beam",
+     ".elc", ".rlib", ".coverage", ".prof", ".out", NULL};
+@@ -526,13 +526,17 @@ static bool should_skip_directory(const char *entry_name, const char *rel_path,
+ }
+ 
+ /* Check if a regular file should be skipped (filters + gitignore + size). */
+-static bool should_skip_file(const char *entry_name, const char *rel_path,
++static bool pdf_has_direct_text(const char *abs_path);
++
++static bool should_skip_file(const char *abs_path, const char *entry_name, const char *rel_path,
+                              const cbm_discover_opts_t *opts, const cbm_gitignore_t *gitignore,
+                              const cbm_gitignore_t *global_gi, const cbm_gitignore_t *cbmignore,
+                              const cbm_gitignore_t *local_gi, const char *local_gi_prefix,
+                              off_t file_size) {
+     cbm_index_mode_t mode = opts ? opts->mode : CBM_MODE_FULL;
+-    if (cbm_has_ignored_suffix(entry_name, mode)) {
++    const char *dot = strrchr(entry_name, '.');
++    bool readable_pdf = dot && ascii_ieq(dot, ".pdf") && pdf_has_direct_text(abs_path);
++    if (cbm_has_ignored_suffix(entry_name, mode) && !readable_pdf) {
+         return true;
+     }
+     if (cbm_should_skip_filename(entry_name, mode)) {
+@@ -730,6 +734,10 @@ static CBMLanguage detect_file_language(const char *entry_name, const char *abs_
+ 
+     CBMLanguage lang = cbm_language_for_filename(entry_name);
+     if (lang == CBM_LANG_COUNT) {
++        if (entry_name[0] == '.' || strcmp(entry_name, "commondir") == 0 ||
++            strcmp(entry_name, "exclude") == 0) {
++            return CBM_LANG_COUNT;
++        }
+         return detect_text_fallback_language(abs_path);
+     }
+     /* Special: .m files need content-based disambiguation */
+@@ -797,7 +805,7 @@ static void walk_dir_process_file(const char *abs_path, const char *rel_path, co
+                                   const cbm_gitignore_t *global_gi,
+                                   const cbm_gitignore_t *cbmignore, const cbm_gitignore_t *local_gi,
+                                   const char *local_gi_prefix, off_t size, file_list_t *out) {
+-    if (should_skip_file(name, rel_path, opts, gitignore, global_gi, cbmignore, local_gi,
++    if (should_skip_file(abs_path, name, rel_path, opts, gitignore, global_gi, cbmignore, local_gi,
+                          local_gi_prefix, size)) {
+         return;
+     }
+diff --git a/src/discover/language.c b/src/discover/language.c
+index 88d848a..d2b8017 100644
+--- a/src/discover/language.c
++++ b/src/discover/language.c
+@@ -674,8 +674,6 @@ static const filename_entry_t FILENAME_TABLE[] = {
+     {".env", CBM_LANG_DOTENV},
+     {".env.local", CBM_LANG_DOTENV},
+     {".gitattributes", CBM_LANG_GITATTRIBUTES},
+-    {".gitignore", CBM_LANG_GITIGNORE},
+-
+ };
+ 
+ #define FILENAME_TABLE_SIZE (sizeof(FILENAME_TABLE) / sizeof(FILENAME_TABLE[0]))
+diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
+index 012c992..5e37be1 100644
+--- a/src/mcp/mcp.c
++++ b/src/mcp/mcp.c
+@@ -28,6 +28,9 @@ enum {
+     MCP_DEFAULT_LIMIT = 10,
+     MCP_BFS_LIMIT = 100,
+     MCP_N_DEFAULTS_2 = 2,
++    MCP_READ_MAX_BYTES = 4096,
++    MCP_READ_MAX_LINES = 200,
++    MCP_READ_PATH_MAX = 1024,
+     MCP_URI_PREFIX = 7,      /* strlen("file://") */
+     MCP_CONTENT_PREFIX = 15, /* strlen("Content-Length:") */
+     MCP_RETURN_2 = 2,
+@@ -312,6 +315,19 @@ typedef struct {
+ } tool_def_t;
+ 
+ static const tool_def_t TOOLS[] = {
++    {"read_file", "Read confined file",
++     "Read one bounded UTF-8 file beneath an explicitly configured allowed-root capability. "
++     "The native process rejects traversal, absolute paths, symlinks, sensitive names, "
++     "non-regular files, and requests above the Phase 1 byte or line ceilings before content.",
++     "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
++     "\"schema_version\":{\"type\":\"string\",\"const\":\"1.0.0\"},"
++     "\"allowed_root\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":64},"
++     "\"relative_path\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1024},"
++     "\"max_bytes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":4096},"
++     "\"max_lines\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}},"
++     "\"required\":[\"schema_version\",\"allowed_root\",\"relative_path\","
++     "\"max_bytes\",\"max_lines\"]}"},
++
+     {"index_repository", "Index repository",
+      "Index a repository into the knowledge graph. "
+      "Special mode 'cross-repo-intelligence': skip extraction, only match Routes/Channels "
+@@ -665,6 +681,7 @@ char *cbm_mcp_initialize_response(const char *params_json) {
+ 
+     yyjson_mut_val *impl = yyjson_mut_obj(doc);
+     yyjson_mut_obj_add_str(doc, impl, "name", "file-base");
++    yyjson_mut_obj_add_str(doc, impl, "upstreamCompatibilityName", "codebase-memory-mcp");
+     yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
+     yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
+ 
+@@ -5758,6 +5775,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
+     return result;
+ }
+ 
++/* ── read_file (Phase 1 confined native read) ─────────────────── */
++
++static char *mcp_read_denial(const char *allowed_root, const char *relative_path,
++                             const char *reason, const char *message) {
++    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
++    yyjson_mut_val *root = yyjson_mut_obj(doc);
++    yyjson_mut_doc_set_root(doc, root);
++    yyjson_mut_obj_add_str(doc, root, "schema_version", "1.0.0");
++    yyjson_mut_obj_add_str(doc, root, "status", "denied");
++    yyjson_mut_obj_add_str(doc, root, "error_type", "access_denied");
++    yyjson_mut_obj_add_str(doc, root, "reason", reason);
++    yyjson_mut_obj_add_str(doc, root, "message", message);
++    yyjson_mut_obj_add_str(doc, root, "allowed_root",
++                           allowed_root && *allowed_root ? allowed_root : "<invalid>");
++    yyjson_mut_obj_add_str(doc, root, "relative_path",
++                           relative_path && *relative_path ? relative_path : "<invalid>");
++#if defined(__linux__)
++    yyjson_mut_obj_add_str(doc, root, "platform_claim", "linux");
++#else
++    yyjson_mut_obj_add_str(doc, root, "platform_claim", "unproven");
++#endif
++    char *json = yy_doc_to_str(doc);
++    yyjson_mut_doc_free(doc);
++    char *result = cbm_mcp_text_result(json, false);
++    free(json);
++    return result;
++}
++
++static bool mcp_read_ascii_equal(const char *left, const char *right) {
++    if (!left || !right) {
++        return false;
++    }
++    while (*left && *right) {
++        unsigned char l = (unsigned char)*left++;
++        unsigned char r = (unsigned char)*right++;
++        if (l >= 'A' && l <= 'Z') {
++            l = (unsigned char)(l - 'A' + 'a');
++        }
++        if (r >= 'A' && r <= 'Z') {
++            r = (unsigned char)(r - 'A' + 'a');
++        }
++        if (l != r) {
++            return false;
++        }
++    }
++    return *left == '\0' && *right == '\0';
++}
++
++static bool mcp_read_ascii_ends_with(const char *value, const char *suffix) {
++    size_t value_len = strlen(value);
++    size_t suffix_len = strlen(suffix);
++    return value_len >= suffix_len &&
++           mcp_read_ascii_equal(value + value_len - suffix_len, suffix);
++}
++
++static bool mcp_read_ascii_starts_with(const char *value, const char *prefix) {
++    size_t value_len = strlen(value);
++    size_t prefix_len = strlen(prefix);
++    if (value_len < prefix_len) {
++        return false;
++    }
++    for (size_t index = 0; index < prefix_len; index++) {
++        unsigned char left = (unsigned char)value[index];
++        unsigned char right = (unsigned char)prefix[index];
++        if (left >= 'A' && left <= 'Z') {
++            left = (unsigned char)(left - 'A' + 'a');
++        }
++        if (right >= 'A' && right <= 'Z') {
++            right = (unsigned char)(right - 'A' + 'a');
++        }
++        if (left != right) {
++            return false;
++        }
++    }
++    return true;
++}
++
++static bool mcp_read_sensitive_component(const char *component) {
++    if (mcp_read_ascii_equal(component, ".env") ||
++        mcp_read_ascii_starts_with(component, ".env.") ||
++        mcp_read_ascii_equal(component, ".git") || mcp_read_ascii_equal(component, ".ssh") ||
++        mcp_read_ascii_equal(component, "credential") ||
++        mcp_read_ascii_equal(component, "credentials") ||
++        mcp_read_ascii_equal(component, "secret") || mcp_read_ascii_equal(component, "secrets")) {
++        return true;
++    }
++    return mcp_read_ascii_ends_with(component, ".key") ||
++           mcp_read_ascii_ends_with(component, ".pem") ||
++           mcp_read_ascii_ends_with(component, ".p12");
++}
++
++static bool mcp_read_valid_utf8(const unsigned char *value, size_t length) {
++    size_t i = 0;
++    while (i < length) {
++        unsigned char first = value[i++];
++        if (first == 0) {
++            return false;
++        }
++        if (first < 0x80) {
++            continue;
++        }
++        int continuation = 0;
++        uint32_t codepoint = 0;
++        uint32_t minimum = 0;
++        if (first >= 0xC2 && first <= 0xDF) {
++            continuation = 1;
++            codepoint = (uint32_t)(first & 0x1F);
++            minimum = 0x80;
++        } else if (first >= 0xE0 && first <= 0xEF) {
++            continuation = 2;
++            codepoint = (uint32_t)(first & 0x0F);
++            minimum = 0x800;
++        } else if (first >= 0xF0 && first <= 0xF4) {
++            continuation = 3;
++            codepoint = (uint32_t)(first & 0x07);
++            minimum = 0x10000;
++        } else {
++            return false;
++        }
++        if (i + (size_t)continuation > length) {
++            return false;
++        }
++        for (int index = 0; index < continuation; index++) {
++            unsigned char next = value[i++];
++            if ((next & 0xC0) != 0x80) {
++                return false;
++            }
++            codepoint = (codepoint << 6) | (uint32_t)(next & 0x3F);
++        }
++        if (codepoint < minimum || codepoint > 0x10FFFF ||
++            (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++static char *mcp_read_success(const char *allowed_root, const char *relative_path,
++                              const char *content, size_t bytes_read, int lines_read,
++                              bool truncated) {
++    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
++    yyjson_mut_val *root = yyjson_mut_obj(doc);
++    yyjson_mut_doc_set_root(doc, root);
++    yyjson_mut_obj_add_str(doc, root, "schema_version", "1.0.0");
++    yyjson_mut_obj_add_str(doc, root, "status", "ok");
++    yyjson_mut_obj_add_str(doc, root, "allowed_root", allowed_root);
++    yyjson_mut_obj_add_str(doc, root, "relative_path", relative_path);
++    yyjson_mut_obj_add_str(doc, root, "content", content);
++    yyjson_mut_obj_add_uint(doc, root, "bytes_read", bytes_read);
++    yyjson_mut_obj_add_int(doc, root, "lines_read", lines_read);
++    yyjson_mut_obj_add_bool(doc, root, "truncated", truncated);
++    yyjson_mut_obj_add_str(doc, root, "platform_claim", "linux");
++    char *json = yy_doc_to_str(doc);
++    yyjson_mut_doc_free(doc);
++    char *result = cbm_mcp_text_result(json, false);
++    free(json);
++    return result;
++}
++
++static char *handle_read_file(cbm_mcp_server_t *srv, const char *args) {
++    (void)srv;
++    yyjson_doc *doc = args ? yyjson_read(args, strlen(args), 0) : NULL;
++    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
++    if (!root || !yyjson_is_obj(root)) {
++        if (doc) {
++            yyjson_doc_free(doc);
++        }
++        return mcp_read_denial(NULL, NULL, "invalid_request", "request must be a JSON object");
++    }
++
++    yyjson_val *schema_value = yyjson_obj_get(root, "schema_version");
++    yyjson_val *allowed_value = yyjson_obj_get(root, "allowed_root");
++    yyjson_val *path_value = yyjson_obj_get(root, "relative_path");
++    yyjson_val *bytes_value = yyjson_obj_get(root, "max_bytes");
++    yyjson_val *lines_value = yyjson_obj_get(root, "max_lines");
++    const char *allowed_root = yyjson_is_str(allowed_value) ? yyjson_get_str(allowed_value) : NULL;
++    const char *relative_path = yyjson_is_str(path_value) ? yyjson_get_str(path_value) : NULL;
++    bool valid_shape = yyjson_obj_size(root) == 5 && yyjson_is_str(schema_value) &&
++                       strcmp(yyjson_get_str(schema_value), "1.0.0") == 0 && allowed_root &&
++                       *allowed_root && strlen(allowed_root) <= 64 && relative_path &&
++                       *relative_path && strlen(relative_path) <= MCP_READ_PATH_MAX &&
++                       yyjson_is_int(bytes_value) && yyjson_is_int(lines_value);
++    if (!valid_shape) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "invalid_request",
++                                       "request fields are missing, unknown, or invalid");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++    int64_t requested_bytes = yyjson_get_int(bytes_value);
++    int64_t requested_lines = yyjson_get_int(lines_value);
++    if (requested_bytes < 1 || requested_bytes > MCP_READ_MAX_BYTES || requested_lines < 1 ||
++        requested_lines > MCP_READ_MAX_LINES) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "budget_exceeded",
++                                       "requested byte or line budget exceeds the Phase 1 ceiling");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++    const char *configured_id = getenv("CBM_ALLOWED_ROOT_ID");
++    const char *configured_path = getenv("CBM_ALLOWED_ROOT");
++    if (!configured_id || !*configured_id || !configured_path || configured_path[0] != '/' ||
++        strcmp(allowed_root, configured_id) != 0) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "root_denied",
++                                       "allowed-root capability is not configured");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++#if !defined(__linux__)
++    char *unsupported = mcp_read_denial(allowed_root, relative_path, "unsupported_platform",
++                                        "Phase 1 confinement is proven only on Linux");
++    yyjson_doc_free(doc);
++    return unsupported;
++#else
++    if (relative_path[0] == '/' || relative_path[0] == '\\' ||
++        (strlen(relative_path) > 1 && relative_path[1] == ':')) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "absolute_path",
++                                       "absolute paths are not permitted");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++    char path_copy[MCP_READ_PATH_MAX + 1];
++    memcpy(path_copy, relative_path, strlen(relative_path) + 1);
++    int directory_fd = open(configured_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++    if (directory_fd < 0) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "root_denied",
++                                       "configured allowed root cannot be opened safely");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++    char *save = NULL;
++    char *component = strtok_r(path_copy, "/", &save);
++    int file_fd = -1;
++    while (component) {
++        if (strcmp(component, "..") == 0) {
++            close(directory_fd);
++            char *result = mcp_read_denial(allowed_root, relative_path, "path_traversal",
++                                           "parent traversal is not permitted");
++            yyjson_doc_free(doc);
++            return result;
++        }
++        if (strcmp(component, ".") == 0 || *component == '\0') {
++            close(directory_fd);
++            char *result = mcp_read_denial(allowed_root, relative_path, "invalid_request",
++                                           "path components must name a file beneath the root");
++            yyjson_doc_free(doc);
++            return result;
++        }
++        if (mcp_read_sensitive_component(component)) {
++            close(directory_fd);
++            char *result = mcp_read_denial(allowed_root, relative_path, "sensitive_path",
++                                           "sensitive path names are not readable");
++            yyjson_doc_free(doc);
++            return result;
++        }
++
++        char *next_component = strtok_r(NULL, "/", &save);
++        struct stat entry_stat;
++        if (fstatat(directory_fd, component, &entry_stat, AT_SYMLINK_NOFOLLOW) != 0) {
++            const char *reason = errno == ELOOP ? "symlink_escape" : "not_found";
++            close(directory_fd);
++            char *result = mcp_read_denial(allowed_root, relative_path, reason,
++                                           "path cannot be resolved beneath the allowed root");
++            yyjson_doc_free(doc);
++            return result;
++        }
++        if (S_ISLNK(entry_stat.st_mode)) {
++            close(directory_fd);
++            char *result = mcp_read_denial(allowed_root, relative_path, "symlink_escape",
++                                           "symbolic links are not followed");
++            yyjson_doc_free(doc);
++            return result;
++        }
++
++        if (next_component) {
++            if (!S_ISDIR(entry_stat.st_mode)) {
++                close(directory_fd);
++                char *result = mcp_read_denial(allowed_root, relative_path, "not_regular_file",
++                                               "intermediate path component is not a directory");
++                yyjson_doc_free(doc);
++                return result;
++            }
++            int next_fd = openat(directory_fd, component,
++                                 O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++            if (next_fd < 0) {
++                close(directory_fd);
++                char *result = mcp_read_denial(allowed_root, relative_path, "symlink_escape",
++                                               "directory component changed during safe open");
++                yyjson_doc_free(doc);
++                return result;
++            }
++            close(directory_fd);
++            directory_fd = next_fd;
++        } else {
++            if (!S_ISREG(entry_stat.st_mode)) {
++                close(directory_fd);
++                char *result = mcp_read_denial(allowed_root, relative_path, "not_regular_file",
++                                               "final path is not a regular file");
++                yyjson_doc_free(doc);
++                return result;
++            }
++            file_fd = openat(directory_fd, component, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++            close(directory_fd);
++            directory_fd = -1;
++            if (file_fd < 0) {
++                char *result = mcp_read_denial(allowed_root, relative_path, "symlink_escape",
++                                               "file changed during safe open");
++                yyjson_doc_free(doc);
++                return result;
++            }
++            struct stat opened_stat;
++            if (fstat(file_fd, &opened_stat) != 0 || !S_ISREG(opened_stat.st_mode)) {
++                close(file_fd);
++                char *result = mcp_read_denial(allowed_root, relative_path, "not_regular_file",
++                                               "opened target is not a regular file");
++                yyjson_doc_free(doc);
++                return result;
++            }
++        }
++        component = next_component;
++    }
++
++    if (file_fd < 0) {
++        close(directory_fd);
++        char *result = mcp_read_denial(allowed_root, relative_path, "invalid_request",
++                                       "relative path does not name a file");
++        yyjson_doc_free(doc);
++        return result;
++    }
++
++    char content[MCP_READ_MAX_BYTES + 1];
++    size_t bytes_read = 0;
++    int complete_lines = 0;
++    bool read_failed = false;
++    while (bytes_read < (size_t)requested_bytes && complete_lines < (int)requested_lines) {
++        unsigned char byte = 0;
++        ssize_t count = read(file_fd, &byte, 1);
++        if (count == 0) {
++            break;
++        }
++        if (count < 0) {
++            if (errno == EINTR) {
++                continue;
++            }
++            read_failed = true;
++            break;
++        }
++        content[bytes_read++] = (char)byte;
++        if (byte == '\n') {
++            complete_lines++;
++        }
++    }
++    unsigned char extra = 0;
++    ssize_t extra_count = read_failed ? -1 : read(file_fd, &extra, 1);
++    close(file_fd);
++    if (read_failed || extra_count < 0) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "invalid_request",
++                                       "file read failed before content could be returned");
++        yyjson_doc_free(doc);
++        return result;
++    }
++    if (!mcp_read_valid_utf8((const unsigned char *)content, bytes_read)) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "invalid_request",
++                                       "file content is not bounded UTF-8 text");
++        yyjson_doc_free(doc);
++        return result;
++    }
++    content[bytes_read] = '\0';
++    int lines_read = complete_lines;
++    if (bytes_read > 0 && content[bytes_read - 1] != '\n') {
++        lines_read++;
++    }
++    char *result = mcp_read_success(allowed_root, relative_path, content, bytes_read, lines_read,
++                                    extra_count > 0);
++    yyjson_doc_free(doc);
++    return result;
++#endif
++}
++
+ /* ── Tool dispatch ────────────────────────────────────────────── */
+ 
+ char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
+@@ -5765,6 +6164,10 @@ char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const ch
+         return cbm_mcp_text_result("missing tool name", true);
+     }
+ 
++    if (strcmp(tool_name, "read_file") == 0) {
++        return handle_read_file(srv, args_json);
++    }
++
+     if (strcmp(tool_name, "list_projects") == 0) {
+         return handle_list_projects(srv, args_json);
+     }
+@@ -6047,6 +6450,11 @@ static void start_update_check(cbm_mcp_server_t *srv) {
+         return;
+     }
+     srv->update_checked = true; /* prevent double-launch */
++    const char *disabled = getenv("CBM_DISABLE_UPDATE_CHECK");
++    if (disabled && *disabled && strcmp(disabled, "0") != 0) {
++        cbm_log_info("update.skip", "reason", "disabled_by_environment");
++        return;
++    }
+     if (cbm_thread_create(&srv->update_tid, 0, update_check_thread, srv) == 0) {
+         srv->update_thread_active = true;
+     }
+diff --git a/src/pipeline/pass_semantic_edges.c b/src/pipeline/pass_semantic_edges.c
+--- a/src/pipeline/pass_semantic_edges.c
++++ b/src/pipeline/pass_semantic_edges.c
+@@ -993,7 +993,9 @@ static int phase1_scan_functions(cbm_gbuf_t *gbuf, cbm_sem_func_t **out_funcs,
+      * emitted. Sort the cheap pointer array by qualified name (unique) and
+      * re-derive the three fields set so far; the heavy per-func payloads are
+      * filled in later phases, so no 12.7 KB structs are moved. */
+-    qsort(node_ptrs, (size_t)func_count, sizeof(node_ptrs[0]), cmp_node_ptr_by_qn);
++    if (func_count > 1) {
++        qsort(node_ptrs, (size_t)func_count, sizeof(node_ptrs[0]), cmp_node_ptr_by_qn);
++    }
+     for (int k = 0; k < func_count; k++) {
+         funcs[k].node_id = node_ptrs[k]->id;
+         funcs[k].file_path = node_ptrs[k]->file_path;
+@@ -1072,7 +1074,9 @@ static int phase6b_merge_edges(cbm_gbuf_t *gbuf, deferred_edge_buf_t *worker_buf
+     int n = 0;
+     for (int w = 0; w < worker_count; w++) {
+-        memcpy(&pairs[n], worker_bufs[w].edges,
+-               (size_t)worker_bufs[w].count * sizeof(deferred_edge_t));
++        if (worker_bufs[w].count > 0) {
++            memcpy(&pairs[n], worker_bufs[w].edges,
++                   (size_t)worker_bufs[w].count * sizeof(deferred_edge_t));
++        }
+         n += worker_bufs[w].count;
+         deferred_buf_free(&worker_bufs[w]);
+     }
+diff --git a/src/pipeline/pass_similarity.c b/src/pipeline/pass_similarity.c
+--- a/src/pipeline/pass_similarity.c
++++ b/src/pipeline/pass_similarity.c
+@@ -149,7 +149,9 @@ static int collect_fp_entries(cbm_gbuf_t *gbuf, fp_entry_t **out_entries) {
+         }
+     }
+     /* Canonicalize (determinism) — see cmp_fp_entry_by_qn. */
+-    qsort(entries, (size_t)count, sizeof(fp_entry_t), cmp_fp_entry_by_qn);
++    if (count > 1) {
++        qsort(entries, (size_t)count, sizeof(fp_entry_t), cmp_fp_entry_by_qn);
++    }
+     *out_entries = entries;
+     return count;
+ }

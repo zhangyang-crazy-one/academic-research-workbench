@@ -3,14 +3,23 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CLEAN=0
+RUN_UPSTREAM_TESTS=0
+SANITIZERS="none"
+# Commit time of the pinned file-base revision. GCC maps __DATE__/__TIME__ to
+# SOURCE_DATE_EPOCH, preventing vendored mimalloc from making binary bytes vary
+# with the wall clock.
+SOURCE_DATE_EPOCH="1783517828"
+export SOURCE_DATE_EPOCH
 
 usage() {
   cat <<'EOF'
-Usage: build-file-base [--clean]
+Usage: build-file-base [--clean] [--run-upstream-tests]
+                       [--sanitizers asan,ubsan|tsan]
 
 Verify immutable inputs, reconstruct file-base in a clean temporary directory,
-apply ordered patches, build without network access, and atomically promote the
-digest-closed binary and deterministic build evidence.
+apply ordered patches, optionally run the unchanged manifest-bound native suite,
+and atomically promote the digest-closed production binary and build evidence.
+The command must run through scripts/offline-exec.
 EOF
 }
 
@@ -25,6 +34,15 @@ while [[ $# -gt 0 ]]; do
       CLEAN=1
       shift
       ;;
+    --run-upstream-tests)
+      RUN_UPSTREAM_TESTS=1
+      shift
+      ;;
+    --sanitizers)
+      [[ $# -ge 2 ]] || fail "--sanitizers requires a value" 64
+      SANITIZERS="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -35,13 +53,51 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$SANITIZERS" in
+  none)
+    SANITIZE_FLAGS=""
+    SUITE_KIND="upstream"
+    ;;
+  asan,ubsan)
+    SANITIZE_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+    SUITE_KIND="asan-ubsan"
+    ;;
+  tsan)
+    SANITIZE_FLAGS="-fsanitize=thread -fno-omit-frame-pointer"
+    SUITE_KIND="tsan"
+    ;;
+  *)
+    fail "unsupported sanitizer set: $SANITIZERS" 64
+    ;;
+esac
+[[ "$SANITIZERS" == "none" || "$RUN_UPSTREAM_TESTS" -eq 1 ]] \
+  || fail "sanitizer builds require --run-upstream-tests" 64
+
+SANITIZER_RUNTIME_DIR=""
+SANITIZER_COMPILER_PREFIX=""
+if [[ "$SANITIZERS" != "none" ]]; then
+  [[ -n "${ARW_SANITIZER_RUNTIME_DIR:-}" ]] \
+    || fail "sanitizer builds require ARW_SANITIZER_RUNTIME_DIR" 64
+  SANITIZER_RUNTIME_DIR="$(
+    python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve(strict=True))' \
+      "$ARW_SANITIZER_RUNTIME_DIR"
+  )" || fail "sanitizer runtime directory cannot be resolved" 66
+  [[ -d "$SANITIZER_RUNTIME_DIR" ]] \
+    || fail "sanitizer runtime directory is absent: $SANITIZER_RUNTIME_DIR" 66
+  SANITIZER_COMPILER_PREFIX="-B${SANITIZER_RUNTIME_DIR%/}/"
+  SANITIZE_FLAGS="$SANITIZER_COMPILER_PREFIX $SANITIZE_FLAGS"
+fi
+
 [[ "${ARW_OFFLINE_EXEC_ACTIVE:-}" == "1" ]] \
   || fail "must run through scripts/offline-exec" 69
 [[ -n "${ARW_NETWORK_DENIAL_MECHANISM:-}" ]] \
   || fail "network denial mechanism identity is absent" 69
+[[ -n "${ARW_OFFLINE_EVIDENCE_ROOT:-}" && -d "$ARW_OFFLINE_EVIDENCE_ROOT" ]] \
+  || fail "offline evidence root is absent" 69
 
 SOURCE_ROOT="$PROJECT_ROOT/vendor/sources/file-base"
 MANIFEST="$PROJECT_ROOT/vendor/source-manifest.json"
+EVIDENCE_ROOT="$ARW_OFFLINE_EVIDENCE_ROOT"
 [[ -d "$SOURCE_ROOT" && -f "$MANIFEST" ]] || fail "materialized source inputs are absent" 66
 if [[ -e "$PROJECT_ROOT/.file-base" && "$CLEAN" -ne 1 ]]; then
   fail "existing file-base output requires --clean" 73
@@ -79,18 +135,34 @@ for patch in "${PATCH_PATHS[@]}"; do
   git -C "$BUILD_SOURCE" apply "$patch"
 done
 
-python3 - "$PROJECT_ROOT" "$BUILD_SOURCE" <<'PY'
+mapfile -t TEST_SOURCES < <(
+  make -s -C "$BUILD_SOURCE" -f Makefile.cbm --no-print-directory \
+    --eval='arw-print-tests: ; @printf "%s\n" $(ALL_TEST_SRCS)' arw-print-tests
+)
+[[ "${#TEST_SOURCES[@]}" -gt 0 ]] || fail "upstream test inventory is empty" 65
+
+python3 - \
+  "$PROJECT_ROOT" "$BUILD_SOURCE" "$EVIDENCE_ROOT" "$SUITE_KIND" "$SANITIZE_FLAGS" \
+  "$SANITIZER_RUNTIME_DIR" \
+  "${TEST_SOURCES[@]}" <<'PY'
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
 source = Path(sys.argv[2])
+evidence = Path(sys.argv[3])
+suite_kind = sys.argv[4]
+sanitize_flags = sys.argv[5]
+sanitizer_runtime = Path(sys.argv[6]) if sys.argv[6] else None
+test_sources = sys.argv[7:]
 
 
 def digest(path: Path) -> str:
@@ -113,13 +185,255 @@ def tree_digest(tree: Path) -> str:
 
 
 manifest = json.loads((root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
-expected = sorted(manifest["patches"], key=lambda item: item["order"])[-1]["post_tree_sha256"]
-actual = tree_digest(source)
-if actual != expected:
-    raise SystemExit(f"post-patch source digest mismatch: expected {expected}, got {actual}")
+patches = sorted(manifest["patches"], key=lambda item: item["order"])
+actual_source_tree = tree_digest(source)
+if actual_source_tree != patches[-1]["post_tree_sha256"]:
+    raise SystemExit(
+        f"post-patch source digest mismatch: expected {patches[-1]['post_tree_sha256']}, "
+        f"got {actual_source_tree}"
+    )
+
+suites = manifest.get("native_test_suites", [])
+if len(suites) != 1:
+    raise SystemExit("exactly one native test suite must be manifest-bound")
+suite = suites[0]
+actual_test_tree = tree_digest(source / "tests")
+if actual_test_tree != suite["tree_sha256"]:
+    raise SystemExit(
+        f"upstream test tree digest mismatch: expected {suite['tree_sha256']}, "
+        f"got {actual_test_tree}"
+    )
+
+normalized = []
+seen = set()
+for relative in test_sources:
+    if relative in seen:
+        raise SystemExit(f"duplicate upstream test source: {relative}")
+    seen.add(relative)
+    path = source / relative
+    if not relative.startswith("tests/") or "/repro/" in relative or not path.is_file():
+        raise SystemExit(f"invalid ALL_TEST_SRCS member: {relative}")
+    normalized.append({"path": relative, "sha256": digest(path)})
+
+compiler = {
+    "cc": subprocess.check_output(["cc", "--version"], text=True).splitlines()[0],
+    "cc_path": shutil.which("cc"),
+    "make": subprocess.check_output(["make", "--version"], text=True).splitlines()[0],
+    "schema_version": "1.0.0",
+}
+flags = {
+    "external_command_policy": "HTTP(S) git/curl denied before syscall; local git forwarded",
+    "make_target": "test",
+    "path_policy": "generated wrappers plus /usr/bin:/bin only",
+    "sanitizer_set": suite_kind,
+    "sanitize_variable": sanitize_flags,
+    "address_leak_detection": (
+        "disabled: mandatory strace network audit uses ptrace"
+        if suite_kind == "asan-ubsan"
+        else "not-applicable"
+    ),
+    "sanitizer_compiler_prefix": (
+        f"-B{sanitizer_runtime}/" if sanitizer_runtime is not None else None
+    ),
+    "sanitizer_runtime_environment": (
+        {
+            "LD_LIBRARY_PATH": str(sanitizer_runtime),
+            "LIBRARY_PATH": str(sanitizer_runtime),
+            "source": "ARW_SANITIZER_RUNTIME_DIR",
+        }
+        if sanitizer_runtime is not None
+        else None
+    ),
+    "schema_version": "1.0.0",
+    "source_date_epoch": int(os.environ["SOURCE_DATE_EPOCH"]),
+    "test_makefile": "Makefile.cbm",
+}
+inventory = {
+    "all_test_sources": normalized,
+    "all_test_sources_count": len(normalized),
+    "manifest_runner": suite["runner"],
+    "manifest_test_tree_sha256": suite["tree_sha256"],
+    "observed_test_tree_sha256": actual_test_tree,
+    "schema_version": "1.0.0",
+}
+patch_evidence = {
+    "patches": [
+        {key: item[key] for key in ("order", "path", "sha256", "pre_tree_sha256", "post_tree_sha256")}
+        for item in patches
+    ],
+    "post_patch_tree_sha256": actual_source_tree,
+    "schema_version": "1.0.0",
+}
+for name, payload in (
+    ("compiler.json", compiler),
+    ("flags.json", flags),
+    ("test-inventory.json", inventory),
+    ("patches.json", patch_evidence),
+):
+    (evidence / name).write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+(evidence / "test-suite.sha256").write_text(actual_test_tree + "\n", encoding="utf-8")
+
+if sanitizer_runtime is not None:
+    if not sanitizer_runtime.is_dir():
+        raise SystemExit("sanitizer runtime directory disappeared before evidence capture")
+    required_names = {
+        "asan-ubsan": ("libasan.so", "libubsan.so"),
+        "tsan": ("libtsan.so",),
+    }.get(suite_kind)
+    if required_names is None:
+        raise SystemExit(f"sanitizer runtime supplied for unsupported suite: {suite_kind}")
+
+    runtime_hasher = hashlib.sha256()
+    for path in sorted(sanitizer_runtime.iterdir(), key=lambda item: item.name):
+        if path.is_symlink():
+            runtime_hasher.update(f"L\0{path.name}\0{os.readlink(path)}\n".encode())
+        elif path.is_file():
+            runtime_hasher.update(f"F\0{path.name}\0{digest(path)}\n".encode())
+
+    libraries = []
+    for name in required_names:
+        link = sanitizer_runtime / name
+        try:
+            resolved = link.resolve(strict=True)
+        except OSError as error:
+            raise SystemExit(f"required sanitizer runtime is absent: {name}: {error}") from error
+        try:
+            resolved.relative_to(sanitizer_runtime)
+        except ValueError as error:
+            raise SystemExit(f"sanitizer runtime escapes configured directory: {name}") from error
+        marker = ".so."
+        abi_version = resolved.name.split(marker, 1)[1] if marker in resolved.name else "unversioned"
+        libraries.append(
+            {
+                "link_name": name,
+                "resolved_filename": resolved.name,
+                "runtime_abi_version": abi_version,
+                "sha256": digest(resolved),
+            }
+        )
+    runtime_payload = {
+        "compiler": compiler["cc"],
+        "directory_tree_sha256": runtime_hasher.hexdigest(),
+        "environment_variable": "ARW_SANITIZER_RUNTIME_DIR",
+        "libraries": libraries,
+        "schema_version": "1.0.0",
+        "suite": suite_kind,
+    }
+    (evidence / "sanitizer-runtime.json").write_text(
+        json.dumps(runtime_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 PY
 
-make -C "$BUILD_SOURCE" -f Makefile.cbm cbm
+if [[ "$RUN_UPSTREAM_TESTS" -eq 1 ]]; then
+  TEST_HOME="$WORK_ROOT/test-home"
+  TEST_BIN="$WORK_ROOT/test-bin"
+  REAL_GIT="$(command -v git)"
+  REAL_CURL="$(command -v curl)"
+  mkdir -p "$TEST_HOME/xdg-config" "$TEST_BIN"
+  python3 - "$TEST_BIN/git" "$REAL_GIT" "$TEST_BIN/curl" "$REAL_CURL" <<'PY'
+import shlex
+import sys
+from pathlib import Path
+
+git_destination = Path(sys.argv[1])
+real_git = shlex.quote(sys.argv[2])
+curl_destination = Path(sys.argv[3])
+real_curl = shlex.quote(sys.argv[4])
+git_destination.write_text(
+    "#!/usr/bin/env bash\n"
+    "set -euo pipefail\n"
+    "if [[ \" $* \" == *\" http://\"* || \" $* \" == *\" https://\"* ]]; then exit 69; fi\n"
+    f"exec {real_git} \"$@\"\n",
+    encoding="utf-8",
+)
+git_destination.chmod(0o755)
+curl_destination.write_text(
+    "#!/usr/bin/env bash\n"
+    "set -euo pipefail\n"
+    "if [[ \" $* \" == *\" http://\"* || \" $* \" == *\" https://\"* ]]; then exit 69; fi\n"
+    f"exec {real_curl} \"$@\"\n",
+    encoding="utf-8",
+)
+curl_destination.chmod(0o755)
+PY
+  export HOME="$TEST_HOME"
+  export XDG_CONFIG_HOME="$TEST_HOME/xdg-config"
+  export CBM_DISABLE_UPDATE_CHECK="1"
+  export DO_NOT_TRACK="1"
+  export GIT_CONFIG_COUNT="4"
+  export GIT_CONFIG_KEY_0="protocol.http.allow"
+  export GIT_CONFIG_VALUE_0="never"
+  export GIT_CONFIG_KEY_1="protocol.https.allow"
+  export GIT_CONFIG_VALUE_1="never"
+  export GIT_CONFIG_KEY_2="protocol.git.allow"
+  export GIT_CONFIG_VALUE_2="never"
+  export GIT_CONFIG_KEY_3="protocol.ssh.allow"
+  export GIT_CONFIG_VALUE_3="never"
+  export NO_PROXY="*"
+  export PATH="$TEST_BIN:/usr/bin:/bin"
+  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+  ORIGINAL_LIBRARY_PATH="${LIBRARY_PATH-}"
+  ORIGINAL_LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}"
+  ORIGINAL_LIBRARY_PATH_SET="${LIBRARY_PATH+x}"
+  ORIGINAL_LD_LIBRARY_PATH_SET="${LD_LIBRARY_PATH+x}"
+  if [[ -n "$SANITIZER_RUNTIME_DIR" ]]; then
+    export LIBRARY_PATH="$SANITIZER_RUNTIME_DIR${ORIGINAL_LIBRARY_PATH:+:$ORIGINAL_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$SANITIZER_RUNTIME_DIR${ORIGINAL_LD_LIBRARY_PATH:+:$ORIGINAL_LD_LIBRARY_PATH}"
+  fi
+  make -C "$BUILD_SOURCE" -f Makefile.cbm clean-c
+  # LeakSanitizer cannot execute under the mandatory strace/ptrace network
+  # audit. AddressSanitizer and UBSan findings remain fatal; only leak scanning
+  # is disabled and the reason is retained in flags.json.
+  export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0"
+  export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+  export TSAN_OPTIONS="halt_on_error=1:abort_on_error=1"
+  set +e
+  make -C "$BUILD_SOURCE" -f Makefile.cbm test SANITIZE="$SANITIZE_FLAGS" \
+    > >(tee "$EVIDENCE_ROOT/test-stdout.log") \
+    2> >(tee "$EVIDENCE_ROOT/test-stderr.log" >&2)
+  TEST_STATUS=$?
+  wait
+  set -e
+  printf '%s\n' "$TEST_STATUS" > "$EVIDENCE_ROOT/test-status.txt"
+  [[ "$TEST_STATUS" -eq 0 ]] || fail "$SUITE_KIND upstream suite failed" 70
+  if grep -E -q \
+    'ERROR: AddressSanitizer|SUMMARY: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: LeakSanitizer|runtime error:|WARNING: ThreadSanitizer|SUMMARY: ThreadSanitizer|FATAL: ThreadSanitizer' \
+    "$EVIDENCE_ROOT/test-stdout.log" "$EVIDENCE_ROOT/test-stderr.log"; then
+    fail "$SUITE_KIND sanitizer diagnostics were emitted" 70
+  fi
+  python3 - "$EVIDENCE_ROOT" "$SUITE_KIND" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+payload = {
+    "fatal_diagnostic_patterns_absent": True,
+    "schema_version": "1.0.0",
+    "suite": sys.argv[2],
+    "technical_qualification": "PASS",
+    "test_status": int((root / "test-status.txt").read_text(encoding="utf-8").strip()),
+}
+(root / "sanitizer-verdict.json").write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+PY
+  if [[ -n "$ORIGINAL_LIBRARY_PATH_SET" ]]; then
+    export LIBRARY_PATH="$ORIGINAL_LIBRARY_PATH"
+  else
+    unset LIBRARY_PATH
+  fi
+  if [[ -n "$ORIGINAL_LD_LIBRARY_PATH_SET" ]]; then
+    export LD_LIBRARY_PATH="$ORIGINAL_LD_LIBRARY_PATH"
+  else
+    unset LD_LIBRARY_PATH
+  fi
+fi
+
+make -C "$BUILD_SOURCE" -f Makefile.cbm clean-c
+make -C "$BUILD_SOURCE" -f Makefile.cbm cbm SANITIZE=""
 BUILT_BINARY="$BUILD_SOURCE/build/c/codebase-memory-mcp"
 [[ -x "$BUILT_BINARY" ]] || fail "native build did not produce the expected binary" 70
 
@@ -151,31 +465,59 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+patch_identity = [
+    {"order": item["order"], "path": item["path"], "sha256": item["sha256"]}
+    for item in sorted(manifest["patches"], key=lambda item: item["order"])
+]
 binary_sha256 = digest(binary)
 evidence = {
     "binary": {"path": ".file-base/bin/file-base", "sha256": binary_sha256},
     "compiler": subprocess.check_output(["cc", "--version"], text=True).splitlines()[0],
     "component": {
         "id": "file-base",
-        "revision": next(item["revision"] for item in manifest["components"] if item["id"] == "file-base"),
+        "revision": next(
+            item["revision"] for item in manifest["components"] if item["id"] == "file-base"
+        ),
     },
     "make": subprocess.check_output(["make", "--version"], text=True).splitlines()[0],
+    "native_test_suite": manifest["native_test_suites"][0],
     "network_denial_mechanism": mechanism,
-    "patches": [
-        {"order": item["order"], "path": item["path"], "sha256": item["sha256"]}
-        for item in sorted(manifest["patches"], key=lambda item: item["order"])
-    ],
-    "post_patch_tree_sha256": sorted(manifest["patches"], key=lambda item: item["order"])[-1]["post_tree_sha256"],
+    "patches": patch_identity,
+    "post_patch_tree_sha256": sorted(
+        manifest["patches"], key=lambda item: item["order"]
+    )[-1]["post_tree_sha256"],
     "schema_version": "1.0.0",
+    "source_date_epoch": int(os.environ["SOURCE_DATE_EPOCH"]),
 }
-evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+evidence_path.write_text(
+    json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
 evidence_sha256 = digest(evidence_path)
 
+existing_evidence_path = root / ".file-base/build-evidence.json"
+existing_evidence = {}
+if existing_evidence_path.is_file():
+    try:
+        existing_evidence = json.loads(existing_evidence_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        existing_evidence = {}
+build_input_rebaseline = (
+    existing_evidence.get("patches") != patch_identity
+    or existing_evidence.get("source_date_epoch") != evidence["source_date_epoch"]
+)
 expected = {item["path"]: item for item in manifest["declared_artifacts"]}
-if ".file-base/bin/file-base" in expected and expected[".file-base/bin/file-base"]["sha256"] != binary_sha256:
-    raise SystemExit("binary digest drift from checked-in source manifest")
-if ".file-base/build-evidence.json" in expected and expected[".file-base/build-evidence.json"]["sha256"] != evidence_sha256:
-    raise SystemExit("build-evidence digest drift from checked-in source manifest")
+if (
+    ".file-base/bin/file-base" in expected
+    and expected[".file-base/bin/file-base"]["sha256"] != binary_sha256
+    and not build_input_rebaseline
+):
+    raise SystemExit("binary digest drift from an unchanged checked-in patch set")
+if (
+    ".file-base/build-evidence.json" in expected
+    and expected[".file-base/build-evidence.json"]["sha256"] != evidence_sha256
+    and not build_input_rebaseline
+):
+    raise SystemExit("build-evidence digest drift from an unchanged checked-in patch set")
 
 records = [
     item
@@ -200,7 +542,9 @@ records.extend(
 )
 manifest["declared_artifacts"] = sorted(records, key=lambda item: item["path"])
 temporary_manifest = manifest_path.with_suffix(".json.tmp")
-temporary_manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+temporary_manifest.write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
 os.replace(temporary_manifest, manifest_path)
 PY
 
@@ -211,4 +555,4 @@ install -m 0644 -- "$TEMP_EVIDENCE" "$PROJECT_ROOT/.file-base/build-evidence.jso
 mv -f -- "$PROJECT_ROOT/.file-base/build-evidence.json.tmp.$$" "$PROJECT_ROOT/.file-base/build-evidence.json"
 
 "$PROJECT_ROOT/scripts/verify-sources"
-printf 'file-base binary ready: %s\n' "$PROJECT_ROOT/.file-base/bin/file-base"
+printf 'file-base binary ready: %s (%s)\n' "$PROJECT_ROOT/.file-base/bin/file-base" "$SUITE_KIND"
