@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-search-request.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "exact",
+        "full_text"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "max_hits": {
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Max Hits",
+      "type": "integer"
+    },
+    "max_snippet_bytes": {
+      "maximum": 2048,
+      "minimum": 0,
+      "title": "Max Snippet Bytes",
+      "type": "integer"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cursor"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "mode",
+    "query",
+    "max_hits",
+    "max_snippet_bytes",
+    "cursor"
+  ],
+  "title": "FilesSearchRequest",
+  "type": "object"
+}

@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-search-result.schema.json",
+  "$defs": {
+    "FileSearchHit": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "indexed_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Indexed Digest",
+          "type": "string"
+        },
+        "current_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Digest"
+        },
+        "freshness": {
+          "enum": [
+            "current",
+            "stale_metadata"
+          ],
+          "title": "Freshness",
+          "type": "string"
+        },
+        "sync_required": {
+          "title": "Sync Required",
+          "type": "boolean"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snippet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Snippet"
+        }
+      },
+      "required": [
+        "file_id",
+        "relative_path",
+        "indexed_digest",
+        "current_digest",
+        "freshness",
+        "sync_required",
+        "score",
+        "location",
+        "snippet"
+      ],
+      "title": "FileSearchHit",
+      "type": "object"
+    },
+    "SourceLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "start_byte": {
+          "minimum": 0,
+          "title": "Start Byte",
+          "type": "integer"
+        },
+        "end_byte": {
+          "minimum": 0,
+          "title": "End Byte",
+          "type": "integer"
+        },
+        "start_line": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Line"
+        },
+        "end_line": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Line"
+        }
+      },
+      "required": [
+        "start_byte",
+        "end_byte"
+      ],
+      "title": "SourceLocation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "generation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Generation Id",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "exact",
+        "full_text"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "normalized_query": {
+      "title": "Normalized Query",
+      "type": "string"
+    },
+    "tokenizer_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Tokenizer Id",
+      "type": "string"
+    },
+    "ranking_version": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Ranking Version",
+      "type": "string"
+    },
+    "hits": {
+      "items": {
+        "$ref": "#/$defs/FileSearchHit"
+      },
+      "title": "Hits",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "complete_page": {
+      "const": true,
+      "title": "Complete Page",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "generation_id",
+    "mode",
+    "normalized_query",
+    "tokenizer_id",
+    "ranking_version",
+    "hits",
+    "next_cursor",
+    "complete_page"
+  ],
+  "title": "FilesSearchResult",
+  "type": "object"
+}

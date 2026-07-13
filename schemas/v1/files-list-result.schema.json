@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-list-result.schema.json",
+  "$defs": {
+    "FileListEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+          "title": "File Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "file_type": {
+          "enum": [
+            "text",
+            "markdown",
+            "latex",
+            "bibtex",
+            "source",
+            "pdf",
+            "binary"
+          ],
+          "title": "File Type",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "current_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Digest"
+        },
+        "indexed_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Indexed Digest"
+        },
+        "extraction_state": {
+          "enum": [
+            "direct_text",
+            "registered",
+            "degraded",
+            "not_applicable"
+          ],
+          "title": "Extraction State",
+          "type": "string"
+        },
+        "freshness": {
+          "enum": [
+            "live",
+            "current",
+            "stale_metadata",
+            "stale_conflict"
+          ],
+          "title": "Freshness",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id",
+        "relative_path",
+        "file_type",
+        "size_bytes",
+        "current_digest",
+        "indexed_digest",
+        "extraction_state",
+        "freshness"
+      ],
+      "title": "FileListEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "selected_generation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Selected Generation Id",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileListEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "complete_page": {
+      "const": true,
+      "title": "Complete Page",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "selected_generation_id",
+    "files",
+    "next_cursor",
+    "complete_page"
+  ],
+  "title": "FilesListResult",
+  "type": "object"
+}

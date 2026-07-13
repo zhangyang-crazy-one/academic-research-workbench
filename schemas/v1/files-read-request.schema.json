@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-read-request.schema.json",
+  "$defs": {
+    "ByteRange": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "max_bytes": {
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Max Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "max_bytes"
+      ],
+      "title": "ByteRange",
+      "type": "object"
+    },
+    "LineRange": {
+      "additionalProperties": false,
+      "properties": {
+        "start_line": {
+          "minimum": 1,
+          "title": "Start Line",
+          "type": "integer"
+        },
+        "max_lines": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Max Lines",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_line",
+        "max_lines"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "file_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "File Id",
+      "type": "string"
+    },
+    "relative_path": {
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "expected_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Expected Digest"
+    },
+    "byte_range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ByteRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "line_range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LineRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cursor"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "file_id",
+    "relative_path",
+    "expected_digest",
+    "byte_range",
+    "line_range",
+    "cursor"
+  ],
+  "title": "FilesReadRequest",
+  "type": "object"
+}

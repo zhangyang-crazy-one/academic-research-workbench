@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/files-outline-request.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "generation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "Generation Id",
+      "type": "string"
+    },
+    "file_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$",
+      "title": "File Id",
+      "type": "string"
+    },
+    "expected_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Digest",
+      "type": "string"
+    },
+    "max_nodes": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Nodes",
+      "type": "integer"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cursor"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "generation_id",
+    "file_id",
+    "expected_digest",
+    "max_nodes",
+    "cursor"
+  ],
+  "title": "FilesOutlineRequest",
+  "type": "object"
+}
