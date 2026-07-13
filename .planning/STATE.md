@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-07-13T02:01:36.545Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-07-13T02:43:10.125Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
-  percent: 14
+  completed_plans: 2
+  percent: 29
 ---
 
 # Project State
@@ -26,30 +26,30 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
-- Average duration: 24 min
-- Total execution time: 0.4 hours
+- Total plans completed: 2
+- Average duration: 28 min
+- Total execution time: 0.9 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1 | 24 min | 24 min |
+| 01 | 2 | 55 min | 28 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 24 min
-- Trend: Baseline established
+- Last 5 plans: 24 min, 31 min
+- Trend: Installed baseline converging
 
 *Updated after each plan completion*
 
@@ -66,6 +66,10 @@ Recent decisions affecting current work:
 - [Phase 01]: Runtime identity is the SHA-256 of the staged wheelhouse lock; cache-local environments live only under CODEX_HOME. — This makes dependency drift create a new environment and prevents mutable source or user-site fallback.
 - [Phase 01]: Installed qualification uses an isolated repo-owned marketplace with the source checkout hidden and networking disabled. — PKG-01 must be demonstrated from exact installed bytes rather than from repository imports.
 - [Phase 01]: The plugin manifest uses LicenseRef-Academic-Research-Workbench-Mixed. — The collective plugin must not collapse CC BY-NC and MIT component identities into a blanket MIT label.
+- [Phase 01]: Installed route canary is academic-pipeline / inline-role-prompts with ARS 0.1.19 and experiments disabled. — This matches the current adapter without claiming deferred orchestration or experiment ownership.
+- [Phase 01]: Plugin-native custom-agent distribution remains unproven; use native Codex subagents with immutable assignment-injected roles. — The supported host contract proves native subagents but not plugin-distributed custom-agent registration.
+- [Phase 01]: Plugin hooks are observational and read-only, never authorization or canonical-state enforcement. — Untrusted hooks can be skipped, so route correctness and scientific authority cannot depend on them.
+- [Phase 01]: PKG-02 host PASS requires installed command_execution evidence; schema-shaped model output alone is rejected. — Attempt 008 proved exact installed bytes while attempts without command evidence remained defects.
 
 ### Pending Todos
 
@@ -86,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T02:00:33.843Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-07-13T02:42:50.081Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

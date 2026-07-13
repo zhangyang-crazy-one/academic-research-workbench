@@ -39,7 +39,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Installed skill route and fresh-host compatibility convergence
+- [x] 01-02-PLAN.md — Installed skill route and fresh-host compatibility convergence
 - [ ] 01-03-PLAN.md — Pre-vendoring license gate, offline source materialization, and digest closure
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract, License, and Executable Baseline | 1/7 | In Progress |  |
+| 1. Contract, License, and Executable Baseline | 2/7 | In Progress|  |
 | 2. Durable Provenance Runtime | 0/TBD | Not started | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
