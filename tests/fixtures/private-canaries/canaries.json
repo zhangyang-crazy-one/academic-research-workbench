@@ -1,0 +1,12 @@
+{
+  "canaries": [
+    {"class": "paper", "path": "papers/private-paper.pdf", "token": "ARW-PRIVATE-PAPER-CANARY-7A9D11"},
+    {"class": "extracted-text", "path": "extracted-text/private-paper.txt", "token": "ARW-PRIVATE-EXTRACTED-CANARY-B2F540"},
+    {"class": "run-data", "path": "runs/private-run.jsonl", "token": "ARW-PRIVATE-RUN-CANARY-CB327A"},
+    {"class": "credentials", "path": "credentials/auth.json", "token": "ARW-PRIVATE-CREDENTIAL-CANARY-D9126E"},
+    {"class": "index", "path": "indexes/private.sqlite", "token": "ARW-PRIVATE-INDEX-CANARY-E86AC4"},
+    {"class": "vcs-metadata", "path": "vcs-metadata/git-config", "token": "ARW-PRIVATE-VCS-CANARY-F2D103"},
+    {"class": "cache", "path": "cache/private.cache", "token": "ARW-PRIVATE-CACHE-CANARY-06AC8B"},
+    {"class": "undeclared", "path": "undeclared/private.bin", "token": "ARW-PRIVATE-UNDECLARED-CANARY-8E68F3"}
+  ]
+}
