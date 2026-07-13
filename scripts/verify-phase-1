@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01"
+SOURCE_EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01"
+CLEAN=0
+
+usage() {
+  cat <<'EOF'
+Usage: verify-phase-1 [--clean] [--evidence-root PATH]
+
+Validate the complete Phase 1 evidence chain and retain an identity-named
+technical/release dossier. This never changes release BLOCKED semantics.
+EOF
+}
+
+fail() {
+  printf 'verify-phase-1: %s\n' "$1" >&2
+  exit "${2:-70}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe evidence root" 64
+mkdir -p "$EVIDENCE_ROOT"
+
+"$PROJECT_ROOT/scripts/stage-plugin" \
+  --clean \
+  --stage-root "$PROJECT_ROOT/build/stage/academic-research-workbench" \
+  --evidence-root "$EVIDENCE_ROOT/stage-final"
+
+IDENTITY="$PROJECT_ROOT/build/stage/academic-research-workbench/share/arw/build-identity.json"
+[[ -f "$IDENTITY" && ! -L "$IDENTITY" ]] || fail "stage did not produce build identity" 70
+IDENTITY_SHA256="$(sha256sum "$IDENTITY" | awk '{print $1}')"
+TARGET="$EVIDENCE_ROOT/$IDENTITY_SHA256"
+if [[ -e "$TARGET" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "identity dossier exists; pass --clean" 73
+  rm -rf -- "$TARGET"
+fi
+mkdir -p "$TARGET"
+
+"$PROJECT_ROOT/scripts/smoke-staged-plugin" \
+  --version \
+  --fresh-home "$EVIDENCE_ROOT/isolated/version-home" \
+  --evidence-root "$EVIDENCE_ROOT/version" \
+  "$PROJECT_ROOT/build/stage/academic-research-workbench"
+
+"$PYTHON" - "$PROJECT_ROOT" "$SOURCE_EVIDENCE_ROOT" "$EVIDENCE_ROOT" "$TARGET" "$IDENTITY" "$IDENTITY_SHA256" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+source_evidence_root = Path(sys.argv[2]).resolve()
+evidence_root = Path(sys.argv[3]).resolve()
+target = Path(sys.argv[4]).resolve()
+identity_path = Path(sys.argv[5]).resolve()
+identity_sha256 = sys.argv[6]
+identity = json.loads(identity_path.read_text(encoding="utf-8"))
+license_verdict = json.loads(
+    (project_root / "supply-chain/license-verdict.json").read_text(encoding="utf-8")
+)
+
+required = {
+    "pre-vendor-license": source_evidence_root / "pre-vendor-license",
+    "source": source_evidence_root / "source",
+    "native": source_evidence_root / "native",
+    "license-0002": source_evidence_root / "license-0002",
+    "stage": evidence_root / "stage-final",
+    "route": source_evidence_root / "route",
+    "runtime": source_evidence_root / "runtime",
+    "confinement": source_evidence_root / "confinement",
+    "mcp-launcher": source_evidence_root / "mcp-launcher",
+    "version": evidence_root / "version",
+}
+missing = [name for name, path in required.items() if not path.exists()]
+if missing:
+    raise SystemExit(f"missing mandatory Phase 1 evidence domains: {', '.join(missing)}")
+
+for name, source in required.items():
+    destination = target / name
+    shutil.copytree(source, destination, symlinks=False)
+
+def load_verdict(relative: str) -> dict[str, object]:
+    payload = json.loads((project_root / relative).read_text(encoding="utf-8"))
+    if payload.get("technical_qualification") != "PASS":
+        raise SystemExit(f"technical qualification failed: {relative}")
+    return payload
+
+for relative in (
+    "build/evidence/phase-01/native/upstream/verdict.json",
+    "build/evidence/phase-01/native/asan-ubsan/verdict.json",
+    "build/evidence/phase-01/native/tsan/verdict.json",
+    "build/evidence/phase-01/license-0002/verdict.json",
+):
+    load_verdict(relative)
+
+summary = {
+    "schema_version": "1.0.0",
+    "build_identity_sha256": identity_sha256,
+    "technical_qualification": "PASS",
+    "release_qualification": license_verdict["release_qualification"],
+    "release_reason_codes": license_verdict["reason_codes"],
+    "release_evidence_needed": license_verdict["evidence_needed"],
+    "domains": sorted(required),
+}
+if summary["release_qualification"] != "BLOCKED":
+    raise SystemExit("Phase 1 release qualification must remain BLOCKED without SUP-04 evidence")
+(target / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(target / "SUMMARY.md").write_text(
+    "# Phase 1 Evidence Dossier\n\n"
+    f"- Build identity: `{identity_sha256}`\n"
+    "- Technical qualification: `PASS`\n"
+    "- Release qualification: `BLOCKED`\n"
+    "- Release remains blocked pending intended-use, distribution, approval, and permission evidence.\n",
+    encoding="utf-8",
+)
+PY
+
+printf 'phase 1 technical PASS; release BLOCKED; identity %s\n' "$IDENTITY_SHA256"
