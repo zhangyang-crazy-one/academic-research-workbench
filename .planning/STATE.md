@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-07-13T02:43:10.125Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-07-13T03:26:16.964Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
-  percent: 29
+  completed_plans: 3
+  percent: 43
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [███░░░░░░░] 29%
+Progress: [████░░░░░░] 43%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 2
-- Average duration: 28 min
-- Total execution time: 0.9 hours
+- Total plans completed: 3
+- Average duration: 31 min
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2 | 55 min | 28 min |
+| 01 | 3 | 94 min | 31 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 24 min, 31 min
+- Last 5 plans: 24 min, 31 min, 39 min
 - Trend: Installed baseline converging
 
 *Updated after each plan completion*
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Plugin-native custom-agent distribution remains unproven; use native Codex subagents with immutable assignment-injected roles. — The supported host contract proves native subagents but not plugin-distributed custom-agent registration.
 - [Phase 01]: Plugin hooks are observational and read-only, never authorization or canonical-state enforcement. — Untrusted hooks can be skipped, so route correctness and scientific authority cannot depend on them.
 - [Phase 01]: PKG-02 host PASS requires installed command_execution evidence; schema-shaped model output alone is rejected. — Attempt 008 proved exact installed bytes while attempts without command evidence remained defects.
+- [Phase 01]: Receipt-bound source archives are the only permitted input to materialization before vendor/sources exists.
+- [Phase 01]: Offline execution requires a changed network namespace plus syscall tracing and rejects every AF_INET or AF_INET6 attempt.
+- [Phase 01]: The generated file-base binary remains ignored while its exact digest and build-evidence digest are bound into the source manifest.
 
 ### Pending Todos
 
@@ -90,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T02:42:50.081Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-07-13T03:26:16.956Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
