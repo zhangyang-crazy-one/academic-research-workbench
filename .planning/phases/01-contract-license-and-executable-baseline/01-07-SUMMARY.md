@@ -104,10 +104,17 @@ completed: 2026-07-13
 - **Verification:** Legal gate reported technical PASS/release BLOCKED; license, inventory, schema, version, and walking-skeleton tests passed.
 - **Committed in:** `237fc67`
 
+**2. [Rule 1 - Security Boundary] Bound installed schemas to the packaged identity**
+- **Found during:** Phase 1 code/security review
+- **Issue:** The installed version path validated an identity against staged schemas but did not compare those schema bytes with the identity's per-file and aggregate digests.
+- **Fix:** The identity loader now requires every staged schema to be a regular file under the packaged schema root, verifies each SHA-256 and the ordered aggregate before returning a report; a tampering test proves rejection.
+- **Verification:** Focused staged tests passed, formal verifier remained technical PASS/release BLOCKED, and the post-review full suite passed.
+- **Committed in:** `21d13fc`
+
 ---
 
-**Total deviations:** 1 auto-fixed provenance closure.
-**Impact on plan:** Identity, legal, and installed-byte claims now reference the same first-party wheel generation; no release authorization was inferred.
+**Total deviations:** 2 auto-fixed (1 provenance closure, 1 packaged-schema integrity gap).
+**Impact on plan:** Identity, legal, schema, and installed-byte claims now bind the same stage inputs; no release authorization was inferred.
 
 ## Issues Encountered
 
@@ -125,8 +132,8 @@ None for PKG-04/VER-01. Future lifecycle, file-plane, orchestration, graph, and 
 
 - Schema drift and cross-language contracts: `4 passed`.
 - Installed version, walking skeleton, and legal classifier subset: `8 passed in 74.03s`.
-- Formal gate: `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` completed with identity `b482dcbbb44390d238b3dadca34aeb4394e42cbe607222abbc34fb246061b539`, technical `PASS`, release `BLOCKED`.
-- Full repository regression: `53 passed in 115.19s`.
+- Formal gate: `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` completed with identity `b05fd7bd1d6f9d1b44993937db310daed9d0a01a0d5f053dc9eaf879fc690007`, technical `PASS`, release `BLOCKED`.
+- Post-review full repository regression: `54 passed in 122.27s`.
 - Legal gate: technical `PASS`; release `BLOCKED` because intended use, distribution class, accountable approval, and compatible permission evidence remain absent.
 
 ## Next Phase Readiness

@@ -6,7 +6,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 
 ## Phases
 
-- [ ] **Phase 1: Contract, License, and Executable Baseline** - Prove the staged plugin, source and license chain, authority schemas, filesystem boundary, and seed verification fixture before deeper implementation.
+- [x] **Phase 1: Contract, License, and Executable Baseline** - Prove the staged plugin, source and license chain, authority schemas, filesystem boundary, and seed verification fixture before deeper implementation. (completed 2026-07-13)
 - [ ] **Phase 2: Durable Provenance Runtime** - Make canonical research runs deterministic, immutable, replayable, and recoverable through the sole writer.
 - [ ] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge.
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
@@ -53,7 +53,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-07-PLAN.md — Final build identity, independent schemas, and clean integrated evidence
+- [x] 01-07-PLAN.md — Final build identity, independent schemas, and clean integrated evidence
 
 ### Phase 2: Durable Provenance Runtime
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract, License, and Executable Baseline | 6/7 | In Progress|  |
+| 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 0/TBD | Not started | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |

@@ -10,7 +10,7 @@
 - [x] **PKG-01**: An operator can install the repository as a Codex plugin from a clean checkout and pass manifest validation.
 - [x] **PKG-02**: An operator can invoke the workbench skill and route a request to a declared ARS workflow family and execution mode.
 - [x] **PKG-03**: An installed plugin can start its bundled files-first MCP without relying on the source checkout's absolute path.
-- [ ] **PKG-04**: An operator can inspect plugin, runtime, ARS snapshot, file-base snapshot, schema, and patch-set versions from one command.
+- [x] **PKG-04**: An operator can inspect plugin, runtime, ARS snapshot, file-base snapshot, schema, and patch-set versions from one command.
 - [ ] **PKG-05**: A run records whether each requested role used a native subagent, an assignment-injected role, or an explicitly degraded inline mode.
 
 ### Supply Chain And Licensing
@@ -74,7 +74,7 @@
 
 ### Verification And Release Evidence
 
-- [ ] **VER-01**: Continuous integration validates schemas independently across Python and MCP boundaries and blocks incompatible schema drift.
+- [x] **VER-01**: Continuous integration validates schemas independently across Python and MCP boundaries and blocks incompatible schema drift.
 - [ ] **VER-02**: Installed-plugin tests exercise manifest discovery, skill routing, launcher resolution, MCP negotiation, hooks, and version reporting from a staged package.
 - [ ] **VER-03**: Security tests cover traversal, symlink or junction escape, race-sensitive file replacement, sensitive files, malformed input, and output-budget exhaustion.
 - [ ] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
@@ -140,7 +140,7 @@
 | PKG-01 | Phase 1 | Complete |
 | PKG-02 | Phase 1 | Complete |
 | PKG-03 | Phase 1 | Complete |
-| PKG-04 | Phase 1 | Pending |
+| PKG-04 | Phase 1 | Complete |
 | PKG-05 | Phase 4 | Pending |
 | SUP-01 | Phase 1 | Complete |
 | SUP-02 | Phase 1 | Complete |
@@ -183,7 +183,7 @@
 | SCI-05 | Phase 6 | Pending |
 | SCI-06 | Phase 6 | Pending |
 | SCI-07 | Phase 6 | Pending |
-| VER-01 | Phase 1 | Pending |
+| VER-01 | Phase 1 | Complete |
 | VER-02 | Phase 7 | Pending |
 | VER-03 | Phase 3 | Pending |
 | VER-04 | Phase 7 | Pending |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-07-13T08:08:54.365Z"
+status: verifying
+stopped_at: Completed 01-07-PLAN.md; Phase 1 ready for verification
+last_updated: "2026-07-13T08:27:01.087Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 6
-  percent: 0
+  completed_plans: 7
+  percent: 14
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-13
 
-Progress: [█████████░] 86%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [█████████░] 86%
 
 *Updated after each plan completion*
 | Phase 01 P06 | 188m | 3 tasks | 26 files |
+| Phase 01 P07 | 10m | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Filesystem confinement is enforced inside the native MCP; launcher and host configuration are not the security boundary. — Policy evaluation, descriptor-relative no-follow traversal, and content ceilings must remain effective for every client path.
 - [Phase 01]: Native safety evidence uses separate clean normal, ASan+UBSan, and TSan builds under network denial. — TSan is incompatible with ASan, and distinct retained evidence prevents one sanitizer configuration from masking another.
 - [Phase 01]: The installed MCP launcher requires explicit allowed-root, capability identifier, and cache configuration and resolves only a plugin-root-relative libexec binary. — Installed qualification must not inherit source paths, PYTHONPATH, an implicit root, or an operator-specific cache.
+- [Phase 01]: Phase 1 build identity is a stage payload, not a source constant; installed version rejects absent, outside-root, symlinked, or schema-invalid identity bytes. — Installed claims must bind exact staged bytes and cannot fall back to source checkouts or hard-coded versions.
+- [Phase 01]: Technical qualification requires all retained evidence gates, while release remains BLOCKED until SUP-04 human legal evidence is supplied. — Private repository status and technical provenance do not establish intended use, authorization, or CC BY-NC compatibility.
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T08:08:54.359Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-07-13T08:27:01.080Z
+Stopped at: Completed 01-07-PLAN.md; Phase 1 ready for verification
 Resume file: None
