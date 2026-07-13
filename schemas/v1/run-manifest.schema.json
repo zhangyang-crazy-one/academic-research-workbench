@@ -7,6 +7,12 @@
     "workflow_definition_id": ["workflow_definition_sha256"],
     "workflow_definition_sha256": ["workflow_definition_id"]
   },
+  "allOf": [
+    {
+      "if": {"required": ["journal_layout"]},
+      "then": {"required": ["workflow_definition_id", "workflow_definition_sha256"]}
+    }
+  ],
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
     "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
@@ -16,6 +22,7 @@
     "workflow_mode": {"const": "inline-role-prompts", "type": "string"},
     "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "workflow_definition_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "journal_layout": {"const": "segmented-v1", "type": "string"},
     "capabilities": {
       "items": {"enum": ["canonical-journal", "forced-stop-replay"], "type": "string"},
       "minItems": 1,
