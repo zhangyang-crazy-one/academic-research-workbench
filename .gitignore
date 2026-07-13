@@ -3,3 +3,7 @@
 build/
 __pycache__/
 *.py[cod]
+
+# Pinned third-party source snapshots are materialized locally, never committed.
+vendor/sources/
+vendor/.materialize.tmp.*/

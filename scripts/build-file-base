@@ -98,7 +98,8 @@ fi
 SOURCE_ROOT="$PROJECT_ROOT/vendor/sources/file-base"
 MANIFEST="$PROJECT_ROOT/vendor/source-manifest.json"
 EVIDENCE_ROOT="$ARW_OFFLINE_EVIDENCE_ROOT"
-[[ -d "$SOURCE_ROOT" && -f "$MANIFEST" ]] || fail "materialized source inputs are absent" 66
+[[ -d "$SOURCE_ROOT" && -f "$MANIFEST" ]] \
+  || fail "materialized source inputs are absent; run ./scripts/materialize-sources first" 66
 if [[ -e "$PROJECT_ROOT/.file-base" && "$CLEAN" -ne 1 ]]; then
   fail "existing file-base output requires --clean" 73
 fi

@@ -40,6 +40,25 @@ def _manifest() -> dict[str, object]:
     return payload
 
 
+def test_source_work_area_is_ignored_and_materializer_is_available() -> None:
+    materializer = REPOSITORY_ROOT / "scripts/materialize-sources"
+    assert materializer.is_file() and os.access(materializer, os.X_OK)
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "vendor/sources/file-base/LICENSE"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+    )
+    assert ignored.returncode == 0
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "vendor/sources/file-base/LICENSE"],
+        cwd=REPOSITORY_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert tracked.returncode != 0, tracked.stdout
+
+
 def test_exact_snapshots_patch_and_canonical_license_paths_are_materialized() -> None:
     manifest = _manifest()
     components = {item["id"]: item for item in manifest["components"]}
