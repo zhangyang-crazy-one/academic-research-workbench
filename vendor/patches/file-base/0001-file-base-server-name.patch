@@ -1,0 +1,467 @@
+diff --git a/internal/cbm/cbm.h b/internal/cbm/cbm.h
+index 6b42281..77bb9d0 100644
+--- a/internal/cbm/cbm.h
++++ b/internal/cbm/cbm.h
+@@ -170,9 +170,15 @@ typedef enum {
+     CBM_LANG_QML,       // Qt QML (Qt Modeling Language — declarative UI + embedded JS)
+     CBM_LANG_CFSCRIPT,  // CFML script dialect (.cfc components — Lucee/ColdFusion)
+     CBM_LANG_CFML,      // CFML tag dialect (.cfm templates — Lucee/ColdFusion)
++    CBM_LANG_TEXT,      // Generic local text/document file; structure-only, no AST extraction
++    CBM_LANG_PDF_TEXT,  // PDF with directly extractable text; structure-only, no AST extraction
+     CBM_LANG_COUNT
+ } CBMLanguage;
+ 
++static inline bool cbm_language_is_file_only(CBMLanguage lang) {
++    return lang == CBM_LANG_TEXT || lang == CBM_LANG_PDF_TEXT;
++}
++
+ // --- Extraction result structs ---
+ 
+ typedef struct {
+diff --git a/internal/cbm/lang_specs.c b/internal/cbm/lang_specs.c
+index e7c97fc..7b1dbe3 100644
+--- a/internal/cbm/lang_specs.c
++++ b/internal/cbm/lang_specs.c
+@@ -2571,6 +2571,17 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
+                        pine_branch_types, pine_var_types, pine_assign_types, empty_types, NULL,
+                        empty_types, NULL, NULL, tree_sitter_pine, NULL},
+ 
++    // CBM_LANG_TEXT — structure-only local text/document files.
++    [CBM_LANG_TEXT] = {CBM_LANG_TEXT, empty_types, empty_types, empty_types, empty_types,
++                       empty_types, empty_types, empty_types, empty_types, empty_types,
++                       empty_types, empty_types, NULL, empty_types, NULL, NULL, NULL, NULL},
++
++    // CBM_LANG_PDF_TEXT — PDFs with directly extractable text; structure-only.
++    [CBM_LANG_PDF_TEXT] = {CBM_LANG_PDF_TEXT, empty_types, empty_types, empty_types,
++                           empty_types, empty_types, empty_types, empty_types, empty_types,
++                           empty_types, empty_types, empty_types, NULL, empty_types, NULL, NULL,
++                           NULL, NULL},
++
+ };
+ 
+ _Static_assert(sizeof(lang_specs) / sizeof(lang_specs[0]) == CBM_LANG_COUNT,
+diff --git a/src/discover/discover.c b/src/discover/discover.c
+index d38a74f..1fb5b93 100644
+--- a/src/discover/discover.c
++++ b/src/discover/discover.c
+@@ -56,8 +56,8 @@ static const char *FAST_SKIP_DIRS[] = {
+     "doc",       "documentation", "examples",       "example",      "samples",     "sample",
+     "assets",    "static",        "public",         "media",        "third_party", "thirdparty",
+     "3rdparty",  "external",      "migrations",     "seeds",        "e2e",         "integration",
+-    "locale",    "locales",       "i18n",           "l10n",         "scripts",     "tools",
+-    "hack",      "bin",           "build",          "out",          NULL};
++    "locale",    "locales",       "i18n",           "l10n",         "tools",       "hack",
++    "bin",       "build",         "out",            NULL};
+ 
+ /* ── Ignored suffixes ───────────────────────────────── */
+ 
+@@ -70,10 +70,10 @@ static const char *ALWAYS_IGNORED_SUFFIXES[] = {
+ static const char *FAST_IGNORED_SUFFIXES[] = {
+     ".zip", ".tar",  ".gz",       ".bz2",  ".xz",  ".rar",    ".7z",      ".jar",
+     ".war", ".ear",  ".mp3",      ".mp4",  ".avi", ".mov",    ".wav",     ".flac",
+-    ".ogg", ".mkv",  ".webm",     ".pdf",  ".doc", ".docx",   ".xls",     ".xlsx",
++    ".ogg", ".mkv",  ".webm",     ".doc",  ".docx", ".xls",   ".xlsx",
+     ".ppt", ".pptx", ".odt",      ".ods",  ".map", ".min.js", ".min.css", ".pem",
+     ".crt", ".key",  ".cer",      ".p12",  ".pb",  ".avro",   ".parquet", ".beam",
+-    ".elc", ".rlib", ".coverage", ".prof", ".out", ".patch",  ".diff",    NULL};
++    ".elc", ".rlib", ".coverage", ".prof", ".out", NULL};
+ 
+ /* ── Fast-mode skip filenames ─────────────────────── */
+ 
+@@ -566,14 +566,173 @@ static bool should_skip_file(const char *entry_name, const char *rel_path,
+     return global_ignored;
+ }
+ 
++static size_t pdf_count_literal_string(const unsigned char *buf, size_t n, size_t *idx) {
++    size_t i = *idx + SKIP_ONE;
++    size_t count = 0;
++    int depth = 1;
++    bool escaped = false;
++    while (i < n && depth > 0) {
++        unsigned char c = buf[i++];
++        if (escaped) {
++            if (c >= 0x20 && c < 0x7f) {
++                count++;
++            }
++            escaped = false;
++            continue;
++        }
++        if (c == '\\') {
++            escaped = true;
++            continue;
++        }
++        if (c == '(') {
++            depth++;
++            continue;
++        }
++        if (c == ')') {
++            depth--;
++            continue;
++        }
++        if (c >= 0x20 && c < 0x7f) {
++            count++;
++        }
++    }
++    *idx = i;
++    return count;
++}
++
++/* Conservative, dependency-free PDF text test.
++ * This intentionally admits only PDFs whose content stream exposes direct text
++ * drawing operators. Image-only scans and compressed/opaque PDFs do not pass;
++ * a later optional pdftotext-backed path can broaden this without changing the
++ * file-only graph semantics. */
++static bool pdf_has_direct_text(const char *abs_path) {
++    enum {
++        PDF_SAMPLE_MAX = 1024 * 1024,
++        PDF_HEADER_SCAN = 1024,
++        PDF_MIN_TEXT_CHARS = 12,
++        PDF_MIN_TEXT_OPS = 1,
++    };
++    FILE *f = cbm_fopen(abs_path, "rb");
++    if (!f) {
++        return false;
++    }
++    unsigned char *buf = malloc(PDF_SAMPLE_MAX);
++    if (!buf) {
++        (void)fclose(f);
++        return false;
++    }
++    size_t n = fread(buf, SKIP_ONE, PDF_SAMPLE_MAX, f);
++    (void)fclose(f);
++    if (n < 5) {
++        free(buf);
++        return false;
++    }
++    bool has_pdf_header = false;
++    size_t header_limit = n < PDF_HEADER_SCAN ? n : PDF_HEADER_SCAN;
++    for (size_t i = 0; i + 5 <= header_limit; i++) {
++        if (memcmp(buf + i, "%PDF-", 5) == 0) {
++            has_pdf_header = true;
++            break;
++        }
++    }
++    if (!has_pdf_header) {
++        free(buf);
++        return false;
++    }
++
++    bool in_text_object = false;
++    size_t text_chars = 0;
++    int text_ops = 0;
++    for (size_t i = 0; i + SKIP_ONE < n; i++) {
++        if (!in_text_object && buf[i] == 'B' && buf[i + SKIP_ONE] == 'T') {
++            in_text_object = true;
++            i++;
++            continue;
++        }
++        if (in_text_object && buf[i] == 'E' && buf[i + SKIP_ONE] == 'T') {
++            in_text_object = false;
++            i++;
++            continue;
++        }
++        if (!in_text_object) {
++            continue;
++        }
++        if (buf[i] == '(') {
++            text_chars += pdf_count_literal_string(buf, n, &i);
++        } else if (buf[i] == 'T' && (buf[i + SKIP_ONE] == 'j' || buf[i + SKIP_ONE] == 'J')) {
++            text_ops++;
++            i++;
++        } else if (buf[i] == '\'' || buf[i] == '"') {
++            text_ops++;
++        }
++        if (text_chars >= PDF_MIN_TEXT_CHARS && text_ops >= PDF_MIN_TEXT_OPS) {
++            free(buf);
++            return true;
++        }
++    }
++    free(buf);
++    return false;
++}
++
++static bool sample_contains(const unsigned char *buf, size_t n, const char *needle) {
++    size_t m = strlen(needle);
++    if (m == 0 || m > n) {
++        return false;
++    }
++    for (size_t i = 0; i + m <= n; i++) {
++        if (memcmp(buf + i, needle, m) == 0) {
++            return true;
++        }
++    }
++    return false;
++}
++
++static CBMLanguage detect_text_fallback_language(const char *abs_path) {
++    enum { TEXT_SAMPLE_MAX = 4096, TEXT_RATIO_MIN = 85 };
++    FILE *f = cbm_fopen(abs_path, "rb");
++    if (!f) {
++        return CBM_LANG_COUNT;
++    }
++    unsigned char buf[TEXT_SAMPLE_MAX];
++    size_t n = fread(buf, SKIP_ONE, sizeof(buf), f);
++    (void)fclose(f);
++    if (n == 0) {
++        return CBM_LANG_COUNT;
++    }
++
++    size_t textish = 0;
++    for (size_t i = 0; i < n; i++) {
++        unsigned char c = buf[i];
++        if (c == '\0') {
++            return CBM_LANG_COUNT;
++        }
++        if (c == '\n' || c == '\r' || c == '\t' || c >= 0x20) {
++            textish++;
++        }
++    }
++    if (textish * 100 < n * TEXT_RATIO_MIN) {
++        return CBM_LANG_COUNT;
++    }
++    if (n >= PAIR_LEN && buf[0] == '#' && buf[SKIP_ONE] == '!' &&
++        (sample_contains(buf, n, "bash") || sample_contains(buf, n, "/sh") ||
++         sample_contains(buf, n, " zsh") || sample_contains(buf, n, "/zsh"))) {
++        return CBM_LANG_BASH;
++    }
++    return CBM_LANG_TEXT;
++}
++
+ /* Detect language for a file, handling .m disambiguation and JSON filtering. */
+ static CBMLanguage detect_file_language(const char *entry_name, const char *abs_path) {
++    const char *dot = strrchr(entry_name, '.');
++    if (dot && ascii_ieq(dot, ".pdf")) {
++        return pdf_has_direct_text(abs_path) ? CBM_LANG_PDF_TEXT : CBM_LANG_COUNT;
++    }
++
+     CBMLanguage lang = cbm_language_for_filename(entry_name);
+     if (lang == CBM_LANG_COUNT) {
+-        return CBM_LANG_COUNT;
++        return detect_text_fallback_language(abs_path);
+     }
+     /* Special: .m files need content-based disambiguation */
+-    const char *dot = strrchr(entry_name, '.');
+     if (dot && strcmp(dot, ".m") == 0) {
+         lang = cbm_disambiguate_m(abs_path);
+     }
+diff --git a/src/discover/language.c b/src/discover/language.c
+index 917651d..88d848a 100644
+--- a/src/discover/language.c
++++ b/src/discover/language.c
+@@ -577,6 +577,12 @@ static const ext_entry_t EXT_TABLE[] = {
+     /* Tcl */
+     {".tcl", CBM_LANG_TCL},
+ 
++    /* Generic text / local documents */
++    {".latex", CBM_LANG_TEXT},
++    {".tex", CBM_LANG_TEXT},
++    {".text", CBM_LANG_TEXT},
++    {".txt", CBM_LANG_TEXT},
++
+     /* TableGen */
+     {".td", CBM_LANG_TABLEGEN},
+ 
+@@ -668,6 +674,7 @@ static const filename_entry_t FILENAME_TABLE[] = {
+     {".env", CBM_LANG_DOTENV},
+     {".env.local", CBM_LANG_DOTENV},
+     {".gitattributes", CBM_LANG_GITATTRIBUTES},
++    {".gitignore", CBM_LANG_GITIGNORE},
+ 
+ };
+ 
+@@ -835,6 +842,8 @@ static const char *LANG_NAMES[CBM_LANG_COUNT] = {
+     [CBM_LANG_APEX] = "Apex",
+     [CBM_LANG_SOQL] = "SOQL",
+     [CBM_LANG_SOSL] = "SOSL",
++    [CBM_LANG_TEXT] = "Text",
++    [CBM_LANG_PDF_TEXT] = "PDF Text",
+ 
+ };
+ 
+diff --git a/src/main.c b/src/main.c
+index 80a9c0d..211abcd 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -204,7 +204,7 @@ static int watcher_index_fn(const char *project_name, const char *root_path, voi
+ 
+ /* ── CLI mode ───────────────────────────────────────────────────── */
+ 
+-#define CLI_USAGE "Usage: codebase-memory-mcp cli [--progress] [--json] <tool_name> [json_args]\n"
++#define CLI_USAGE "Usage: file-base cli [--progress] [--json] <tool_name> [json_args]\n"
+ 
+ /* Extract text content from MCP tool result envelope and print it.
+  * MCP results: {"content":[{"type":"text","text":"..."}],"isError":...}
+@@ -503,16 +503,16 @@ static int run_cli(int argc, char **argv) {
+ /* ── Help ───────────────────────────────────────────────────────── */
+ 
+ static void print_help(void) {
+-    printf("codebase-memory-mcp %s\n\n", CBM_VERSION);
++    printf("file-base %s\n\n", CBM_VERSION);
+     printf("Usage:\n");
+-    printf("  codebase-memory-mcp              Run MCP server on stdio\n");
+-    printf("  codebase-memory-mcp cli <tool> [json]  Run a single tool\n");
+-    printf("  codebase-memory-mcp install [-y|-n] [--force] [--dry-run]\n");
+-    printf("  codebase-memory-mcp uninstall [-y|-n] [--dry-run]\n");
+-    printf("  codebase-memory-mcp update [-y|-n]\n");
+-    printf("  codebase-memory-mcp config <list|get|set|reset>\n");
+-    printf("  codebase-memory-mcp --version    Print version\n");
+-    printf("  codebase-memory-mcp --help       Print this help\n");
++    printf("  file-base              Run MCP server on stdio\n");
++    printf("  file-base cli <tool> [json]  Run a single tool\n");
++    printf("  file-base install [-y|-n] [--force] [--dry-run]\n");
++    printf("  file-base uninstall [-y|-n] [--dry-run]\n");
++    printf("  file-base update [-y|-n]\n");
++    printf("  file-base config <list|get|set|reset>\n");
++    printf("  file-base --version    Print version\n");
++    printf("  file-base --help       Print this help\n");
+     printf("\nUI options:\n");
+     printf("  --ui=true    Enable HTTP graph visualization (persisted)\n");
+     printf("  --ui=false   Disable HTTP graph visualization (persisted)\n");
+@@ -539,7 +539,7 @@ static int handle_subcommand(int argc, char **argv) {
+     }
+     for (int i = SKIP_ONE; i < argc; i++) {
+         if (strcmp(argv[i], "--version") == 0) {
+-            printf("codebase-memory-mcp %s\n", CBM_VERSION);
++            printf("file-base %s\n", CBM_VERSION);
+             return 0;
+         }
+         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+@@ -732,7 +732,7 @@ int main(int argc, char **argv) {
+      * and which build to use (#350). */
+     if (explicit_ui_enable && CBM_EMBEDDED_FILE_COUNT == 0) {
+         (void)fprintf(stderr,
+-                      "codebase-memory-mcp: --ui requested, but this binary was built without the "
++                      "file-base: --ui requested, but this binary was built without the "
+                       "embedded UI, so the HTTP server will not start.\n"
+                       "Use the UI release asset (codebase-memory-mcp-ui) or rebuild with: "
+                       "make -f Makefile.cbm cbm-with-ui\n");
+diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
+index 6702fd1..012c992 100644
+--- a/src/mcp/mcp.c
++++ b/src/mcp/mcp.c
+@@ -664,7 +664,7 @@ char *cbm_mcp_initialize_response(const char *params_json) {
+     yyjson_mut_obj_add_str(doc, root, "protocolVersion", version);
+ 
+     yyjson_mut_val *impl = yyjson_mut_obj(doc);
+-    yyjson_mut_obj_add_str(doc, impl, "name", "codebase-memory-mcp");
++    yyjson_mut_obj_add_str(doc, impl, "name", "file-base");
+     yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
+     yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
+ 
+@@ -3360,7 +3360,7 @@ static bool write_skip_logfile(const char *project, const cbm_file_error_t *errs
+         cbm_log_warn("index.logfile_open_fail", "path", path);
+         return false;
+     }
+-    (void)fprintf(f, "# codebase-memory-mcp index skip report\n");
++    (void)fprintf(f, "# file-base index skip report\n");
+     (void)fprintf(f, "# project=%s skipped=%d\n", project ? project : "", count);
+     (void)fprintf(f, "# columns: phase\treason\tpath\n");
+     for (int i = 0; i < count; i++) {
+@@ -5954,7 +5954,7 @@ static void maybe_auto_index(cbm_mcp_server_t *srv) {
+ 
+     if (!auto_index) {
+         cbm_log_info("autoindex.skip", "reason", "disabled", "hint",
+-                     "run: codebase-memory-mcp config set auto_index true");
++                     "run: file-base config set auto_index true");
+         return;
+     }
+ 
+@@ -6029,8 +6029,8 @@ static void *update_check_thread(void *arg) {
+         const char *current = cbm_cli_get_version();
+         if (cbm_compare_versions(tag_str, current) > 0) {
+             snprintf(srv->update_notice, sizeof(srv->update_notice),
+-                     "Update available: %s -> %s -- run: codebase-memory-mcp update  |  "
+-                     "Enjoying codebase-memory-mcp? Please leave a star: "
++                     "Update available: %s -> %s -- run: file-base update  |  "
++                     "Enjoying file-base? Please leave a star: "
+                      "https://github.com/DeusData/codebase-memory-mcp",
+                      current, tag_str);
+             cbm_log_info("update.available", "current", current, "latest", tag_str);
+diff --git a/src/pipeline/fqn.c b/src/pipeline/fqn.c
+index d0594ff..1764614 100644
+--- a/src/pipeline/fqn.c
++++ b/src/pipeline/fqn.c
+@@ -116,7 +116,9 @@ char *cbm_pipeline_fqn_compute(const char *project, const char *rel_path, const
+ 
+     char *path = strdup(rel_path ? rel_path : "");
+     cbm_normalize_path_sep(path);
+-    strip_file_extension(path);
++    if (!name || strcmp(name, "__file__") != 0) {
++        strip_file_extension(path);
++    }
+ 
+     const char *segments[CBM_SZ_256];
+     int seg_count = 0;
+diff --git a/src/pipeline/pass_calls.c b/src/pipeline/pass_calls.c
+index 38087fc..887cb42 100644
+--- a/src/pipeline/pass_calls.c
++++ b/src/pipeline/pass_calls.c
+@@ -585,6 +585,9 @@ static int resolve_single_call(cbm_pipeline_ctx_t *ctx, CBMCall *call,
+ static CBMFileResult *calls_get_or_extract(cbm_pipeline_ctx_t *ctx, int idx,
+                                            const cbm_file_info_t *fi, bool *owned) {
+     *owned = false;
++    if (cbm_language_is_file_only(fi->language)) {
++        return NULL;
++    }
+     if (ctx->result_cache && ctx->result_cache[idx]) {
+         return ctx->result_cache[idx];
+     }
+diff --git a/src/pipeline/pass_definitions.c b/src/pipeline/pass_definitions.c
+index acda8b2..1aa46a5 100644
+--- a/src/pipeline/pass_definitions.c
++++ b/src/pipeline/pass_definitions.c
+@@ -534,6 +534,10 @@ int cbm_pipeline_pass_definitions(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t
+             continue;
+         }
+ 
++        if (cbm_language_is_file_only(lang)) {
++            continue;
++        }
++
+         /* Read source file */
+         int source_len = 0;
+         long file_size = 0;
+diff --git a/src/pipeline/pass_parallel.c b/src/pipeline/pass_parallel.c
+index 8e0d356..3f70009 100644
+--- a/src/pipeline/pass_parallel.c
++++ b/src/pipeline/pass_parallel.c
+@@ -842,6 +842,10 @@ static void extract_worker(int worker_id, void *ctx_ptr) {
+             continue;
+         }
+ 
++        if (cbm_language_is_file_only(fi->language)) {
++            continue;
++        }
++
+         /* Read + extract */
+         int source_len = 0;
+         long file_size = 0;
+diff --git a/src/pipeline/pass_semantic.c b/src/pipeline/pass_semantic.c
+index 8a3bb01..5ec76b5 100644
+--- a/src/pipeline/pass_semantic.c
++++ b/src/pipeline/pass_semantic.c
+@@ -476,6 +476,9 @@ static void sem_process_def_edges(cbm_pipeline_ctx_t *ctx, const CBMDefinition *
+ static CBMFileResult *sem_get_or_extract(cbm_pipeline_ctx_t *ctx, int file_idx,
+                                          const cbm_file_info_t *fi, bool *owned) {
+     *owned = false;
++    if (cbm_language_is_file_only(fi->language)) {
++        return NULL;
++    }
+     if (ctx->result_cache && ctx->result_cache[file_idx]) {
+         return ctx->result_cache[file_idx];
+     }
+diff --git a/src/pipeline/pass_usages.c b/src/pipeline/pass_usages.c
+index b8bb211..8ec03f6 100644
+--- a/src/pipeline/pass_usages.c
++++ b/src/pipeline/pass_usages.c
+@@ -336,6 +336,10 @@ int cbm_pipeline_pass_usages(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *fil
+         const char *path = files[i].path;
+         const char *rel = files[i].rel_path;
+ 
++        if (cbm_language_is_file_only(files[i].language)) {
++            continue;
++        }
++
+         CBMFileResult *result = NULL;
+         bool result_owned = false;
+         if (ctx->result_cache) {

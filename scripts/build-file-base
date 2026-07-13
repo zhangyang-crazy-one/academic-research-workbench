@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+CLEAN=0
+
+usage() {
+  cat <<'EOF'
+Usage: build-file-base [--clean]
+
+Verify immutable inputs, reconstruct file-base in a clean temporary directory,
+apply ordered patches, build without network access, and atomically promote the
+digest-closed binary and deterministic build evidence.
+EOF
+}
+
+fail() {
+  printf 'build-file-base: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+[[ "${ARW_OFFLINE_EXEC_ACTIVE:-}" == "1" ]] \
+  || fail "must run through scripts/offline-exec" 69
+[[ -n "${ARW_NETWORK_DENIAL_MECHANISM:-}" ]] \
+  || fail "network denial mechanism identity is absent" 69
+
+SOURCE_ROOT="$PROJECT_ROOT/vendor/sources/file-base"
+MANIFEST="$PROJECT_ROOT/vendor/source-manifest.json"
+[[ -d "$SOURCE_ROOT" && -f "$MANIFEST" ]] || fail "materialized source inputs are absent" 66
+if [[ -e "$PROJECT_ROOT/.file-base" && "$CLEAN" -ne 1 ]]; then
+  fail "existing file-base output requires --clean" 73
+fi
+
+"$PROJECT_ROOT/scripts/verify-sources" --inputs-only
+
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/arw-file-base-build.XXXXXX")"
+cleanup() {
+  rm -rf -- "$WORK_ROOT"
+}
+trap cleanup EXIT INT TERM
+BUILD_SOURCE="$WORK_ROOT/file-base"
+mkdir -p "$BUILD_SOURCE"
+cp -a -- "$SOURCE_ROOT/." "$BUILD_SOURCE/"
+
+mapfile -t PATCH_PATHS < <(
+  python3 - "$PROJECT_ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+manifest = json.loads((root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
+patches = sorted(manifest["patches"], key=lambda item: item["order"])
+if [item["order"] for item in patches] != list(range(1, len(patches) + 1)):
+    raise SystemExit("patch order is not contiguous")
+for patch in patches:
+    print(root / patch["path"])
+PY
+)
+[[ "${#PATCH_PATHS[@]}" -gt 0 ]] || fail "ordered patch set is empty" 65
+for patch in "${PATCH_PATHS[@]}"; do
+  git -C "$BUILD_SOURCE" apply --check "$patch"
+  git -C "$BUILD_SOURCE" apply "$patch"
+done
+
+python3 - "$PROJECT_ROOT" "$BUILD_SOURCE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+source = Path(sys.argv[2])
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def tree_digest(tree: Path) -> str:
+    hasher = hashlib.sha256()
+    for path in sorted(tree.rglob("*"), key=lambda item: item.relative_to(tree).as_posix()):
+        relative = path.relative_to(tree).as_posix()
+        if path.is_symlink():
+            record = f"L\0{relative}\0{os.readlink(path)}\n".encode()
+        elif path.is_file():
+            mode = "755" if path.stat().st_mode & stat.S_IXUSR else "644"
+            record = f"F\0{mode}\0{relative}\0{digest(path)}\n".encode()
+        else:
+            continue
+        hasher.update(record)
+    return hasher.hexdigest()
+
+
+manifest = json.loads((root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
+expected = sorted(manifest["patches"], key=lambda item: item["order"])[-1]["post_tree_sha256"]
+actual = tree_digest(source)
+if actual != expected:
+    raise SystemExit(f"post-patch source digest mismatch: expected {expected}, got {actual}")
+PY
+
+make -C "$BUILD_SOURCE" -f Makefile.cbm cbm
+BUILT_BINARY="$BUILD_SOURCE/build/c/codebase-memory-mcp"
+[[ -x "$BUILT_BINARY" ]] || fail "native build did not produce the expected binary" 70
+
+TEMP_BINARY="$WORK_ROOT/file-base.bin"
+install -m 0755 -- "$BUILT_BINARY" "$TEMP_BINARY"
+TEMP_EVIDENCE="$WORK_ROOT/build-evidence.json"
+
+python3 - \
+  "$PROJECT_ROOT" "$TEMP_BINARY" "$TEMP_EVIDENCE" \
+  "$ARW_NETWORK_DENIAL_MECHANISM" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+binary = Path(sys.argv[2])
+evidence_path = Path(sys.argv[3])
+mechanism = sys.argv[4]
+manifest_path = root / "vendor/source-manifest.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+binary_sha256 = digest(binary)
+evidence = {
+    "binary": {"path": ".file-base/bin/file-base", "sha256": binary_sha256},
+    "compiler": subprocess.check_output(["cc", "--version"], text=True).splitlines()[0],
+    "component": {
+        "id": "file-base",
+        "revision": next(item["revision"] for item in manifest["components"] if item["id"] == "file-base"),
+    },
+    "make": subprocess.check_output(["make", "--version"], text=True).splitlines()[0],
+    "network_denial_mechanism": mechanism,
+    "patches": [
+        {"order": item["order"], "path": item["path"], "sha256": item["sha256"]}
+        for item in sorted(manifest["patches"], key=lambda item: item["order"])
+    ],
+    "post_patch_tree_sha256": sorted(manifest["patches"], key=lambda item: item["order"])[-1]["post_tree_sha256"],
+    "schema_version": "1.0.0",
+}
+evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+evidence_sha256 = digest(evidence_path)
+
+expected = {item["path"]: item for item in manifest["declared_artifacts"]}
+if ".file-base/bin/file-base" in expected and expected[".file-base/bin/file-base"]["sha256"] != binary_sha256:
+    raise SystemExit("binary digest drift from checked-in source manifest")
+if ".file-base/build-evidence.json" in expected and expected[".file-base/build-evidence.json"]["sha256"] != evidence_sha256:
+    raise SystemExit("build-evidence digest drift from checked-in source manifest")
+
+records = [
+    item
+    for item in manifest["declared_artifacts"]
+    if item["path"] not in {".file-base/bin/file-base", ".file-base/build-evidence.json"}
+]
+records.extend(
+    [
+        {
+            "class": "binary",
+            "path": ".file-base/bin/file-base",
+            "required_before_staging": True,
+            "sha256": binary_sha256,
+        },
+        {
+            "class": "build-evidence",
+            "path": ".file-base/build-evidence.json",
+            "required_before_staging": True,
+            "sha256": evidence_sha256,
+        },
+    ]
+)
+manifest["declared_artifacts"] = sorted(records, key=lambda item: item["path"])
+temporary_manifest = manifest_path.with_suffix(".json.tmp")
+temporary_manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(temporary_manifest, manifest_path)
+PY
+
+mkdir -p "$PROJECT_ROOT/.file-base/bin"
+install -m 0755 -- "$TEMP_BINARY" "$PROJECT_ROOT/.file-base/bin/file-base.tmp.$$"
+mv -f -- "$PROJECT_ROOT/.file-base/bin/file-base.tmp.$$" "$PROJECT_ROOT/.file-base/bin/file-base"
+install -m 0644 -- "$TEMP_EVIDENCE" "$PROJECT_ROOT/.file-base/build-evidence.json.tmp.$$"
+mv -f -- "$PROJECT_ROOT/.file-base/build-evidence.json.tmp.$$" "$PROJECT_ROOT/.file-base/build-evidence.json"
+
+"$PROJECT_ROOT/scripts/verify-sources"
+printf 'file-base binary ready: %s\n' "$PROJECT_ROOT/.file-base/bin/file-base"
