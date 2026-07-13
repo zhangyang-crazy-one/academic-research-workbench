@@ -49,7 +49,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-06-PLAN.md — Red-first confined native MCP, upstream/sanitizer suites, and installed launcher
+- [x] 01-06-PLAN.md — Red-first confined native MCP, upstream/sanitizer suites, and installed launcher
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract, License, and Executable Baseline | 5/7 | In Progress|  |
+| 1. Contract, License, and Executable Baseline | 6/7 | In Progress|  |
 | 2. Durable Provenance Runtime | 0/TBD | Not started | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |

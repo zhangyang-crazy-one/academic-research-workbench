@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-07-13T04:32:55.986Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-07-13T08:08:54.365Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 0
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [███████░░░] 71%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [███████░░░] 71%
 - Trend: Installed baseline converging
 
 *Updated after each plan completion*
+| Phase 01 P06 | 188m | 3 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Fresh recovery uses only run-manifest.json and events.jsonl; hooks, transcripts, projections, and evidence remain non-authoritative.
 - [Phase 01]: The test-only forced-stop boundary is SIGKILL immediately after journal fsync and before CLI output.
 - [Phase 01]: Recovery evidence is parent-side and non-authoritative, retaining relative argv/cwd, allowlisted environment, raw streams, status, byte snapshots, hashes, replay, and verdict only.
+- [Phase 01]: Filesystem confinement is enforced inside the native MCP; launcher and host configuration are not the security boundary. — Policy evaluation, descriptor-relative no-follow traversal, and content ceilings must remain effective for every client path.
+- [Phase 01]: Native safety evidence uses separate clean normal, ASan+UBSan, and TSan builds under network denial. — TSan is incompatible with ASan, and distinct retained evidence prevents one sanitizer configuration from masking another.
+- [Phase 01]: The installed MCP launcher requires explicit allowed-root, capability identifier, and cache configuration and resolves only a plugin-root-relative libexec binary. — Installed qualification must not inherit source paths, PYTHONPATH, an implicit root, or an operator-specific cache.
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T04:31:59.463Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-07-13T08:08:54.359Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None

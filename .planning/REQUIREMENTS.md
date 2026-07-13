@@ -9,7 +9,7 @@
 
 - [x] **PKG-01**: An operator can install the repository as a Codex plugin from a clean checkout and pass manifest validation.
 - [x] **PKG-02**: An operator can invoke the workbench skill and route a request to a declared ARS workflow family and execution mode.
-- [ ] **PKG-03**: An installed plugin can start its bundled files-first MCP without relying on the source checkout's absolute path.
+- [x] **PKG-03**: An installed plugin can start its bundled files-first MCP without relying on the source checkout's absolute path.
 - [ ] **PKG-04**: An operator can inspect plugin, runtime, ARS snapshot, file-base snapshot, schema, and patch-set versions from one command.
 - [ ] **PKG-05**: A run records whether each requested role used a native subagent, an assignment-injected role, or an explicitly degraded inline mode.
 
@@ -38,7 +38,7 @@
 - [ ] **FILE-02**: An authorized client can read bounded byte or line ranges and receives explicit truncation, encoding, and continuation metadata.
 - [ ] **FILE-03**: An authorized client can run bounded exact and full-text searches with pagination, source locations, snippets, and freshness metadata.
 - [ ] **FILE-04**: An authorized client can request bounded document outlines and context windows for supported research formats.
-- [ ] **FILE-05**: The MCP rejects path traversal, symlink or junction escape, disallowed roots, sensitive-path access, and over-budget requests before returning content.
+- [x] **FILE-05**: The MCP rejects path traversal, symlink or junction escape, disallowed roots, sensitive-path access, and over-budget requests before returning content.
 - [ ] **FILE-06**: Index updates correctly represent create, modify, rename, delete, ignore-rule, and extraction-version changes without retaining stale searchable content.
 - [ ] **FILE-07**: CJK text, Markdown, LaTeX, BibTeX, source code, and declared direct-text or extracted-PDF cases have explicit coverage and extraction provenance.
 - [ ] **FILE-08**: Agent-facing MCP tools are read-only and bounded, while crawl, extraction, rebuild, and repair operations require parent-controlled administrative commands.
@@ -139,7 +139,7 @@
 |-------------|-------|--------|
 | PKG-01 | Phase 1 | Complete |
 | PKG-02 | Phase 1 | Complete |
-| PKG-03 | Phase 1 | Pending |
+| PKG-03 | Phase 1 | Complete |
 | PKG-04 | Phase 1 | Pending |
 | PKG-05 | Phase 4 | Pending |
 | SUP-01 | Phase 1 | Complete |
@@ -159,7 +159,7 @@
 | FILE-02 | Phase 3 | Pending |
 | FILE-03 | Phase 3 | Pending |
 | FILE-04 | Phase 3 | Pending |
-| FILE-05 | Phase 1 | Pending |
+| FILE-05 | Phase 1 | Complete |
 | FILE-06 | Phase 3 | Pending |
 | FILE-07 | Phase 3 | Pending |
 | FILE-08 | Phase 3 | Pending |
