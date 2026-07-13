@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,13 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "source-manifest.schema.json",
     "version-report.schema.json",
 )
-_SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "v1"
+
+
+def _schema_root() -> Path:
+    packaged_root = os.environ.get("ARW_SCHEMA_ROOT")
+    if packaged_root:
+        return Path(packaged_root).resolve()
+    return Path(__file__).resolve().parents[2] / "schemas" / "v1"
 
 
 class SchemaRegistryError(ValueError):
@@ -32,7 +39,7 @@ class SchemaRegistryError(ValueError):
 def _schema_path(name: str) -> Path:
     if name not in PHASE1_SCHEMA_NAMES:
         raise SchemaRegistryError(f"unknown Phase 1 schema: {name}")
-    return _SCHEMA_ROOT / name
+    return _schema_root() / name
 
 
 def _load_document(name: str) -> dict[str, Any]:

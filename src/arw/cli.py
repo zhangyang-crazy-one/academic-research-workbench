@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
@@ -31,6 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="json_output",
         help="Write the strict route contract as JSON.",
+    )
+    version = subparsers.add_parser(
+        "version",
+        help="Report the installed packaged build identity.",
+    )
+    version.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Write the strict version-report contract as JSON.",
     )
     init = subparsers.add_parser(
         "init",
@@ -78,6 +89,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.json_output:
             parser.error("route requires --json")
         _write_json(installed_route().model_dump(mode="json"))
+        return 0
+    if args.command == "version":
+        if not args.json_output:
+            parser.error("version requires --json")
+        try:
+            identity, digest = load_packaged_build_identity()
+        except BuildIdentityError as error:
+            print(f"arw: build-identity-error: {error}", file=sys.stderr)
+            return 65
+        _write_json(
+            {
+                "schema_version": "1.0.0",
+                "command": "version",
+                "build_identity_sha256": digest,
+                "identity": identity,
+            }
+        )
         return 0
 
     try:

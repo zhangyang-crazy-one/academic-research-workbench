@@ -8,6 +8,7 @@ Usage: arw <command> [options]
 Commands:
   health --json  Verify the installed offline Python package and runtime.
   route --json   Emit the installed read-only ARS workflow route.
+  version --json Report the installed packaged build identity.
   help           Show this help text.
 EOF
 }
@@ -29,7 +30,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route) ;;
+  health|route|version) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -209,5 +210,11 @@ PY
     ;;
   route)
     exec "$RUNTIME_PYTHON" -m arw.cli route "$@"
+    ;;
+  version)
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_BUILD_IDENTITY="$PLUGIN_ROOT/share/arw/build-identity.json"
+    export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    exec "$RUNTIME_PYTHON" -m arw.cli version "$@"
     ;;
 esac
