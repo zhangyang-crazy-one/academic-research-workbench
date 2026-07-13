@@ -15,16 +15,19 @@ from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
+from arw.manifests import ManifestError, validate_accepted_event_manifests
 from arw.models import (
     AppendProbeRequest,
     ArtifactAcceptanceRequest,
     AttemptCloseRequest,
     AttemptStartRequest,
+    CheckpointRequest,
     HumanDecisionRequest,
     HumanDecisionResolveRequest,
     InitRunRequest,
     LifecycleTransitionRequest,
     Rejection,
+    ResumeRequest,
     StrictModel,
 )
 from arw.reducer import ReducerError, reduce_events
@@ -93,9 +96,17 @@ def build_parser() -> argparse.ArgumentParser:
         ("attempt-start", "Record one parent-controlled attempt start."),
         ("attempt-close", "Close one active parent-controlled attempt."),
         ("artifact-accept", "Accept one immutable content-addressed artifact."),
+        ("checkpoint", "Create one coherent immutable Material Passport."),
+        ("resume", "Resume once from the exact current Material Passport."),
     ):
         command = subparsers.add_parser(name, help=help_text)
         _add_run_request_arguments(command)
+    rebuild_pointer = subparsers.add_parser(
+        "passport-pointer-rebuild",
+        help="Explicitly rebuild the derived Passport pointer from accepted events.",
+    )
+    rebuild_pointer.add_argument("--run-root", required=True, type=Path)
+    rebuild_pointer.add_argument("--lock-timeout", type=float, default=0.2)
     return parser
 
 
@@ -192,10 +203,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "replay":
             state = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            validate_accepted_event_manifests(args.run_root, state.events)
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
             replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            validate_accepted_event_manifests(args.run_root, replayed.events)
             state = reduce_events(
                 replayed.workflow_definition_id,
                 replayed.events,
@@ -214,6 +227,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "attempt-start": (AttemptStartRequest, "start_attempt"),
             "attempt-close": (AttemptCloseRequest, "close_attempt"),
             "artifact-accept": (ArtifactAcceptanceRequest, "accept_artifact"),
+            "checkpoint": (CheckpointRequest, "create_checkpoint"),
+            "resume": (ResumeRequest, "resume"),
         }
         if args.command in runtime_commands:
             model, method_name = runtime_commands[args.command]
@@ -222,7 +237,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             outcome = getattr(service, method_name)(request)
             _write_json(outcome.model_dump(mode="json", exclude_none=True))
             return 0 if outcome.accepted else 65
-    except (JournalError, ReducerError) as error:
+        if args.command == "passport-pointer-rebuild":
+            pointer = RuntimeCommandService(
+                args.run_root, lock_timeout=args.lock_timeout
+            ).rebuild_passport_pointer()
+            _write_json(pointer.model_dump(mode="json"))
+            return 0
+    except (JournalError, ManifestError, ReducerError) as error:
         if args.command == "status" and args.json_output:
             _write_rejection(error)
         else:

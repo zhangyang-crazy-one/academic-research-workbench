@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import signal
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import model_validator
@@ -13,7 +16,15 @@ from arw.journal import (
     locked_replay,
     replay_run,
 )
-from arw.manifests import ManifestError, install_artifact_manifest, validate_content_file
+from arw.manifests import (
+    ManifestError,
+    install_artifact_manifest,
+    install_material_passport,
+    load_material_passport,
+    validate_accepted_event_manifests,
+    validate_content_file,
+    write_passport_pointer,
+)
 from arw.models import (
     ArtifactAcceptanceRequest,
     ArtifactAcceptedPayload,
@@ -29,7 +40,16 @@ from arw.models import (
     HumanDecisionResolvedPayload,
     LifecycleTransitionRequest,
     LifecycleTransitionedPayload,
+    MaterialPassport,
+    PassportAcceptedPayload,
+    PassportAttemptSnapshot,
+    PassportDecisionSnapshot,
+    PassportPointer,
+    CheckpointRequest,
     Rejection,
+    RecoveryCompletedPayload,
+    ResumeAcceptedPayload,
+    ResumeRequest,
     RuntimeCommandRequest,
     StrictModel,
 )
@@ -39,6 +59,7 @@ from arw.workflows import (
     actor_can_commit,
     event_category,
     require_transition,
+    require_workflow,
 )
 
 
@@ -64,9 +85,10 @@ class RuntimeCommandService:
         self.run_root = run_root
         self.lock_timeout = lock_timeout
 
-    def read_state(self) -> RuntimeState:
+    def read_state(self, *, now: datetime | None = None) -> RuntimeState:
         replayed = replay_run(self.run_root, lock_timeout=self.lock_timeout)
-        return reduce_events(replayed.workflow_definition_id, replayed.events)
+        validate_accepted_event_manifests(self.run_root, replayed.events)
+        return reduce_events(replayed.workflow_definition_id, replayed.events, now=now)
 
     @staticmethod
     def _rejection(state: RuntimeState, code: str, message: str) -> CommandOutcome:
@@ -92,9 +114,17 @@ class RuntimeCommandService:
         event_type: str,
         payload_factory,
         prevalidate=None,
+        after_append=None,
+        now: datetime | None = None,
     ) -> CommandOutcome:
+        effective_now = now or datetime.strptime(
+            request.occurred_at, "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=UTC)
         with locked_replay(self.run_root, lock_timeout=self.lock_timeout) as (root, replayed):
-            state = reduce_events(replayed.workflow_definition_id, replayed.events)
+            validate_accepted_event_manifests(root, replayed.events)
+            state = reduce_events(
+                replayed.workflow_definition_id, replayed.events, now=effective_now
+            )
             if request.run_id != replayed.run_id:
                 return self._rejection(state, "run-id-mismatch", "request run identity differs")
             if replayed.journal_layout != "segmented-v1":
@@ -122,6 +152,12 @@ class RuntimeCommandService:
                     "unauthorized-actor",
                     f"actor role {request.actor_role!r} cannot commit {category}",
                 )
+            if category == "lifecycle" and any(
+                item.code == "evidence-expired" for item in state.blockers
+            ):
+                return self._rejection(
+                    state, "evidence-expired", "expired Passport evidence blocks transitions"
+                )
             if prevalidate is not None:
                 rejection = prevalidate(state, replayed)
                 if rejection is not None:
@@ -142,13 +178,20 @@ class RuntimeCommandService:
                 reduced = reduce_events(
                     replayed.workflow_definition_id,
                     (*replayed.events, candidate),
+                    now=effective_now,
                 )
             except (ReducerError, WorkflowDefinitionError) as error:
                 return self._rejection(state, "invalid-command", str(error))
             event, appended = append_runtime_event_unlocked(root, replayed, candidate)
-            accepted_state = reduce_events(appended.workflow_definition_id, appended.events)
+            accepted_state = reduce_events(
+                appended.workflow_definition_id,
+                appended.events,
+                now=effective_now,
+            )
             if accepted_state != reduced:
                 raise JournalError("post-append reducer state differs from validated candidate")
+            if after_append is not None:
+                after_append(accepted_state, event)
             return CommandOutcome(accepted=True, state=accepted_state, event=event)
 
     def execute_transition(self, request: LifecycleTransitionRequest) -> CommandOutcome:
@@ -341,3 +384,142 @@ class RuntimeCommandService:
                 attempt_id=request.attempt_id,
             ),
         )
+
+    def create_checkpoint(self, request: CheckpointRequest) -> CommandOutcome:
+        digest_holder: dict[str, str] = {}
+
+        def validate(state, replayed):
+            coherent = request.checkpoint_kind == "explicit"
+            if request.checkpoint_kind == "stage_handoff" and replayed.events:
+                last = replayed.events[-1]
+                if last.event_type == "lifecycle.transitioned" and isinstance(
+                    last.payload, LifecycleTransitionedPayload
+                ):
+                    transition = require_transition(
+                        state.workflow_definition_id,
+                        last.payload.from_stage,
+                        last.payload.transition_id,
+                    )
+                    coherent = transition.coherent_checkpoint
+            elif request.checkpoint_kind == "human_decision" and replayed.events:
+                coherent = replayed.events[-1].event_type == "human_decision.resolved"
+            elif request.checkpoint_kind == "recovery" and replayed.events:
+                coherent = replayed.events[-1].event_type == "recovery.completed" and isinstance(
+                    replayed.events[-1].payload, RecoveryCompletedPayload
+                )
+            if not coherent:
+                return "incoherent-checkpoint", "checkpoint kind does not match the boundary"
+            workflow = require_workflow(state.workflow_definition_id)
+            passport = MaterialPassport(
+                schema_version="1.0.0",
+                run_id=state.run_id,
+                workflow_definition_id=state.workflow_definition_id,
+                workflow_definition_sha256=workflow.sha256,
+                based_on_revision=state.accepted_revision,
+                ledger_head_sha256=state.ledger_head_sha256,
+                stage=state.stage,
+                checkpoint_kind=request.checkpoint_kind,
+                parent_passport_sha256=state.current_passport_sha256,
+                supersedes_passport_sha256=state.current_passport_sha256,
+                accepted_artifact_manifest_sha256=list(
+                    state.accepted_artifact_manifest_sha256
+                ),
+                pending_human_decisions=[
+                    PassportDecisionSnapshot.model_validate(item.model_dump(mode="json"))
+                    for item in state.pending_human_decisions
+                ],
+                active_attempts=[
+                    PassportAttemptSnapshot.model_validate(item.model_dump(mode="json"))
+                    for item in state.active_attempts
+                ],
+                fresh_until=request.fresh_until,
+                created_at=request.occurred_at,
+                created_by=request.actor_id,
+            )
+            try:
+                installed = install_material_passport(self.run_root, passport)
+            except ManifestError as error:
+                return "passport-manifest-invalid", str(error)
+            digest_holder["value"] = installed.stem
+            return None
+
+        def after_append(state, _event):
+            if os.environ.get("ARW_TEST_FAILPOINT") == "post-passport-event-pre-pointer-sigkill":
+                os.kill(os.getpid(), signal.SIGKILL)
+            write_passport_pointer(
+                self.run_root,
+                PassportPointer(
+                    run_id=state.run_id,
+                    passport_sha256=digest_holder["value"],
+                    accepted_revision=state.accepted_revision,
+                    ledger_head_sha256=state.ledger_head_sha256,
+                ),
+            )
+
+        return self._execute(
+            request,
+            event_type="passport.accepted",
+            prevalidate=validate,
+            payload_factory=lambda state, _replayed: PassportAcceptedPayload(
+                passport_sha256=digest_holder["value"],
+                parent_passport_sha256=state.current_passport_sha256,
+                supersedes_passport_sha256=state.current_passport_sha256,
+                checkpoint_kind=request.checkpoint_kind,
+                based_on_revision=state.accepted_revision,
+                stage=state.stage,
+                fresh_until=request.fresh_until,
+            ),
+            after_append=after_append,
+        )
+
+    def resume(self, request: ResumeRequest) -> CommandOutcome:
+        now = datetime.strptime(request.occurred_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=UTC
+        )
+
+        def validate(state, _replayed):
+            if state.current_passport_sha256 != request.passport_sha256:
+                return "stale-passport", "resume Passport is not current"
+            if request.passport_sha256 in state.consumed_passport_sha256:
+                return "passport-consumed", "resume Passport was already consumed"
+            if any(item.code == "evidence-expired" for item in state.blockers):
+                return "evidence-expired", "Passport evidence is expired"
+            try:
+                passport = load_material_passport(self.run_root, request.passport_sha256)
+            except ManifestError as error:
+                return "passport-invalid", str(error)
+            if passport.run_id != state.run_id or passport.stage != state.stage:
+                return "passport-invalid", "Passport does not match accepted run state"
+            return None
+
+        return self._execute(
+            request,
+            event_type="resume.accepted",
+            prevalidate=validate,
+            payload_factory=lambda _state, _replayed: ResumeAcceptedPayload(
+                passport_sha256=request.passport_sha256
+            ),
+            now=now,
+        )
+
+    def rebuild_passport_pointer(self) -> PassportPointer:
+        with locked_replay(self.run_root, lock_timeout=self.lock_timeout) as (root, replayed):
+            validate_accepted_event_manifests(root, replayed.events)
+            state = reduce_events(replayed.workflow_definition_id, replayed.events)
+            if state.current_passport_sha256 is None:
+                raise JournalError("run has no accepted Passport")
+            accepted_event = next(
+                event
+                for event in reversed(replayed.events)
+                if event.event_type == "passport.accepted"
+                and isinstance(event.payload, PassportAcceptedPayload)
+                and event.payload.passport_sha256 == state.current_passport_sha256
+            )
+            pointer = PassportPointer(
+                run_id=state.run_id,
+                passport_sha256=state.current_passport_sha256,
+                accepted_revision=accepted_event.resulting_revision,
+                ledger_head_sha256=accepted_event.event_sha256,
+            )
+            write_passport_pointer(root, pointer)
+            return pointer

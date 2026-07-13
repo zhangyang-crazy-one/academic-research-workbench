@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import signal
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -145,6 +150,7 @@ def test_artifact_rejection_preserves_store_and_journal(tmp_path: Path) -> None:
 def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -> None:
     from arw.manifests import load_material_passport
     from arw.models import CheckpointRequest
+    from arw.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -159,15 +165,66 @@ def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -
     assert checkpoint.accepted
     passport_hash = checkpoint.state.current_passport_sha256
     passport = load_material_passport(root, passport_hash)
+    validate_instance(
+        "material-passport.schema.json",
+        passport.model_dump(mode="json", exclude_none=True),
+    )
     assert passport.based_on_revision == 1
     assert passport.ledger_head_sha256 != checkpoint.state.ledger_head_sha256
     assert passport.parent_passport_sha256 is None
     assert passport.supersedes_passport_sha256 is None
     pointer = root / "passport.json"
+    validate_instance("passport-pointer.schema.json", json.loads(pointer.read_bytes()))
     pointer.unlink()
     assert service.read_state().current_passport_sha256 == passport_hash
     pointer.write_text("corrupt pointer\n", encoding="utf-8")
     assert service.read_state().current_passport_sha256 == passport_hash
+    rebuilt = service.rebuild_passport_pointer()
+    assert rebuilt.passport_sha256 == passport_hash
+    validate_instance("passport-pointer.schema.json", json.loads(pointer.read_bytes()))
+
+
+def test_passport_snapshots_pending_decisions_and_active_attempts(tmp_path: Path) -> None:
+    from arw.manifests import load_material_passport
+    from arw.models import AttemptStartRequest, CheckpointRequest, HumanDecisionRequest
+
+    root, service = _service(tmp_path)
+    decision = service.request_decision(
+        HumanDecisionRequest.model_validate(
+            {
+                **_base(63, 1),
+                "decision_id": "decision.route",
+                "blocker_code": "human-choice-required",
+                "allowed_choices": ["continue", "abort"],
+                "rationale_required": True,
+                "source_event_ids": [],
+                "unlock_transitions": ["start"],
+            }
+        )
+    )
+    attempt = service.start_attempt(
+        AttemptStartRequest.model_validate(
+            {
+                **_base(64, 2),
+                "attempt_id": "attempt.writer-001",
+                "base_revision": 2,
+                "consumed_sha256": [decision.state.ledger_head_sha256],
+            }
+        )
+    )
+    checkpoint = service.create_checkpoint(
+        CheckpointRequest.model_validate(
+            {**_base(65, 3), "checkpoint_kind": "explicit", "fresh_until": None}
+        )
+    )
+    assert decision.accepted and attempt.accepted and checkpoint.accepted
+    passport = load_material_passport(root, checkpoint.state.current_passport_sha256)
+    assert [item.decision_id for item in passport.pending_human_decisions] == [
+        "decision.route"
+    ]
+    assert [item.attempt_id for item in passport.active_attempts] == [
+        "attempt.writer-001"
+    ]
 
 
 def test_checkpoint_kind_requires_a_coherent_boundary(tmp_path: Path) -> None:
@@ -226,7 +283,7 @@ def test_passport_supersession_and_exact_single_use_resume(tmp_path: Path) -> No
 
 
 def test_freshness_blocks_resume_without_mutating_passport(tmp_path: Path) -> None:
-    from arw.models import CheckpointRequest, ResumeRequest
+    from arw.models import CheckpointRequest, LifecycleTransitionRequest, ResumeRequest
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -245,8 +302,60 @@ def test_freshness_blocks_resume_without_mutating_passport(tmp_path: Path) -> No
     assert [item.code for item in stale_state.blockers] == ["evidence-expired"]
     rejected = service.resume(
         ResumeRequest.model_validate(
-            {**_base(62, 2, role="operator"), "passport_sha256": passport_hash}
+            {
+                **_base(62, 2, role="operator"),
+                "occurred_at": "2026-07-13T05:00:00Z",
+                "passport_sha256": passport_hash,
+            }
         )
     )
     assert rejected.rejection.code == "evidence-expired"
     assert passport_path.read_bytes() == immutable_bytes
+    before_transition = _tree(root)
+    transition = service.execute_transition(
+        LifecycleTransitionRequest.model_validate(
+            {
+                **_base(66, 2),
+                "occurred_at": "2026-07-13T05:01:00Z",
+                "transition_id": "start",
+                "from_stage": "initialized",
+            }
+        )
+    )
+    assert transition.rejection.code == "evidence-expired"
+    assert _tree(root) == before_transition
+
+
+def test_passport_event_survives_sigkill_before_pointer(tmp_path: Path) -> None:
+    from arw.models import CheckpointRequest
+
+    root, service = _service(tmp_path)
+    request = CheckpointRequest.model_validate(
+        {**_base(67, 1), "checkpoint_kind": "explicit", "fresh_until": None}
+    )
+    request_path = tmp_path / "checkpoint.json"
+    request_path.write_text(
+        json.dumps(request.model_dump(mode="json")), encoding="utf-8"
+    )
+    environment = os.environ.copy()
+    environment["ARW_TEST_FAILPOINT"] = "post-passport-event-pre-pointer-sigkill"
+    killed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "arw.cli",
+            "checkpoint",
+            "--run-root",
+            str(root),
+            "--request",
+            str(request_path),
+        ],
+        env=environment,
+        capture_output=True,
+        check=False,
+    )
+    assert killed.returncode == -signal.SIGKILL
+    assert not (root / "passport.json").exists()
+    replayed = service.read_state()
+    assert replayed.accepted_revision == 2
+    assert replayed.current_passport_sha256 is not None

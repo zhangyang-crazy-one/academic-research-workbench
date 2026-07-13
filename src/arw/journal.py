@@ -169,6 +169,13 @@ def _event_from_unsigned(unsigned: dict[str, object]) -> CanonicalEvent:
         raise JournalError(f"writer constructed an invalid event: {error}") from error
 
 
+def _event_wire_mapping(event: CanonicalEvent) -> dict[str, object]:
+    value = event.model_dump(mode="json")
+    if event.actor_role is None:
+        value.pop("actor_role")
+    return value
+
+
 def _requested_failpoint() -> str | None:
     value = os.environ.get(FAILPOINT_ENV)
     if value in {None, ""}:
@@ -229,7 +236,7 @@ def initialize_run(
     if request.journal_layout is not None:
         unsigned["actor_role"] = "parent_control_plane"
     initial = _event_from_unsigned(unsigned)
-    event_bytes = canonical_json_bytes(initial.model_dump(mode="json", exclude_none=True))
+    event_bytes = canonical_json_bytes(_event_wire_mapping(initial))
     manifest_path = root / MANIFEST_NAME
     segmented = request.journal_layout == "segmented-v1"
     journal_path = root / SEGMENTS_RELATIVE / "00000001.jsonl" if segmented else root / JOURNAL_NAME
@@ -362,11 +369,10 @@ def _replay_unlocked(root: Path) -> ReplayState:
             event: CanonicalEvent = _strict_model(
                 CanonicalEvent, payload, f"event {event_number}"
             )
-            if canonical_json_bytes(event.model_dump(mode="json", exclude_none=True)) != line:
+            wire_event = _event_wire_mapping(event)
+            if canonical_json_bytes(wire_event) != line:
                 raise JournalError(f"journal event {event_number} bytes are not canonical")
-            actual_hash = sha256_hex(
-                canonical_event_bytes(event.model_dump(mode="json", exclude_none=True))
-            )
+            actual_hash = sha256_hex(canonical_event_bytes(wire_event))
             if event.event_sha256 != actual_hash:
                 raise JournalError(f"journal event {event_number} hash does not cover its bytes")
             if event.run_id != manifest.run_id:
@@ -460,7 +466,7 @@ def build_runtime_event(
     """Construct one canonical event using only writer-owned chain fields."""
 
     payload_value = (
-        payload.model_dump(mode="json", exclude_none=True)
+        payload.model_dump(mode="json")
         if hasattr(payload, "model_dump")
         else payload
     )
@@ -504,7 +510,7 @@ def append_runtime_event_unlocked(
         raise JournalError("runtime event does not extend the accepted tip")
     segment_path = root / state.segments[-1].relative_path
     before_size = segment_path.stat().st_size
-    event_bytes = canonical_json_bytes(event.model_dump(mode="json", exclude_none=True))
+    event_bytes = canonical_json_bytes(_event_wire_mapping(event))
     if segment_path.stat().st_size != before_size:
         raise JournalError("journal changed during locked replay")
     with segment_path.open("ab") as handle:
@@ -555,7 +561,7 @@ def append_probe(
                     "payload": request.payload.model_dump(mode="json"),
                 }
             )
-            event_bytes = canonical_json_bytes(event.model_dump(mode="json", exclude_none=True))
+            event_bytes = canonical_json_bytes(_event_wire_mapping(event))
             if journal_path.stat().st_size != before_size:
                 raise JournalError("journal changed during locked replay")
             with journal_path.open("ab") as handle:

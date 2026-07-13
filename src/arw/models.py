@@ -359,6 +359,58 @@ class ArtifactAcceptanceRequest(RuntimeCommandRequest):
         return ArtifactManifest.normalized_content_path(value)
 
 
+class PassportDecisionSnapshot(StrictModel):
+    decision_id: StableRuntimeId
+    blocker_code: StableRuntimeId
+    source_event_ids: list[EventId]
+    starting_revision: Annotated[int, Field(ge=0)]
+    allowed_choices: list[StableRuntimeId]
+    rationale_required: bool
+    unlock_transitions: list[StableRuntimeId]
+
+
+class PassportAttemptSnapshot(StrictModel):
+    attempt_id: StableRuntimeId
+    base_revision: Annotated[int, Field(ge=0)]
+    consumed_sha256: list[Sha256]
+
+
+class MaterialPassport(StrictModel):
+    schema_version: Literal["1.0.0"]
+    run_id: RunId
+    workflow_definition_id: StableRuntimeId
+    workflow_definition_sha256: Sha256
+    based_on_revision: Annotated[int, Field(ge=0)]
+    ledger_head_sha256: Sha256
+    stage: StableRuntimeId
+    checkpoint_kind: CheckpointKind
+    parent_passport_sha256: Sha256 | None = None
+    supersedes_passport_sha256: Sha256 | None = None
+    accepted_artifact_manifest_sha256: list[Sha256]
+    pending_human_decisions: list[PassportDecisionSnapshot]
+    active_attempts: list[PassportAttemptSnapshot]
+    fresh_until: UtcTimestamp | None = None
+    created_at: UtcTimestamp
+    created_by: ActorId
+
+
+class PassportPointer(StrictModel):
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    run_id: RunId
+    passport_sha256: Sha256
+    accepted_revision: Annotated[int, Field(ge=1)]
+    ledger_head_sha256: Sha256
+
+
+class CheckpointRequest(RuntimeCommandRequest):
+    checkpoint_kind: CheckpointKind
+    fresh_until: UtcTimestamp | None = None
+
+
+class ResumeRequest(RuntimeCommandRequest):
+    passport_sha256: Sha256
+
+
 class InitRunRequest(StrictModel):
     """Strict operator request used to construct manifest and initial event."""
 

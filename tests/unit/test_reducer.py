@@ -131,3 +131,36 @@ def test_freshness_is_dynamic_and_does_not_change_events() -> None:
     )
     assert "evidence-expired" in [blocker.code for blocker in state.blockers]
     assert [event.model_dump(mode="json") for event in events] == before
+
+
+@pytest.mark.parametrize(
+    ("based_on_revision", "supersedes", "message"),
+    [
+        (0, None, "stage/revision"),
+        (1, "d" * 64, "supersession"),
+    ],
+)
+def test_reducer_rejects_non_exact_or_branching_passport(
+    based_on_revision: int, supersedes: str | None, message: str
+) -> None:
+    from arw.reducer import ReducerError, reduce_events
+
+    events = [
+        _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
+        _event(
+            "passport.accepted",
+            {
+                "passport_sha256": "c" * 64,
+                "parent_passport_sha256": None,
+                "supersedes_passport_sha256": supersedes,
+                "checkpoint_kind": "explicit",
+                "based_on_revision": based_on_revision,
+                "stage": "initialized",
+                "fresh_until": None,
+            },
+            revision=2,
+        ),
+    ]
+
+    with pytest.raises(ReducerError, match=message):
+        reduce_events("core-research.v1", events)
