@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Materialize exact third-party source snapshots outside Git tracking.
+
+The source manifest pins the upstream URL, commit, Git tree, and a content-tree
+digest for every source dependency. This command checks all four before
+atomically placing the sources in the ignored ``vendor/sources`` work area.
+It intentionally performs network I/O and must run before offline build checks.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+
+def fail(message: str, status: int = 1) -> None:
+    print(f"materialize-sources: {message}", file=sys.stderr)
+    raise SystemExit(status)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def tree_digest(root: Path) -> str:
+    if not root.is_dir() or root.is_symlink():
+        fail(f"unsafe or missing source tree: {root}")
+    hasher = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            record = f"L\\0{relative}\\0{os.readlink(path)}\\n".encode()
+        elif path.is_file():
+            mode = "755" if path.stat().st_mode & stat.S_IXUSR else "644"
+            record = f"F\\0{mode}\\0{relative}\\0{digest(path)}\\n".encode()
+        else:
+            continue
+        hasher.update(record)
+    return hasher.hexdigest()
+
+
+def run(command: list[str], *, cwd: Path | None = None) -> str:
+    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "command failed"
+        fail(f"{' '.join(command[:3])}: {detail}", result.returncode)
+    return result.stdout.strip()
+
+
+def load_manifest(path: Path) -> list[dict[str, object]]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        components = payload["components"]
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+        fail(f"invalid source manifest: {error}")
+    if not isinstance(components, list) or not components:
+        fail("source manifest has no components")
+    return components
+
+
+def materialize_component(component: dict[str, object], destination: Path) -> None:
+    component_id = component.get("id")
+    url = component.get("upstream_url")
+    revision = component.get("revision")
+    git_tree = component.get("git_tree")
+    expected_tree = component.get("tree_sha256")
+    if not all(isinstance(value, str) for value in (component_id, url, revision, git_tree, expected_tree)):
+        fail("component identity is incomplete")
+    if not url.startswith("https://github.com/"):
+        fail(f"unsupported upstream URL for {component_id}: {url}")
+
+    run(["git", "init", "--quiet", str(destination)])
+    run(["git", "remote", "add", "origin", url], cwd=destination)
+    run(["git", "fetch", "--depth", "1", "--no-tags", "origin", revision], cwd=destination)
+    run(["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"], cwd=destination)
+
+    actual_revision = run(["git", "rev-parse", "HEAD"], cwd=destination)
+    actual_git_tree = run(["git", "rev-parse", "HEAD^{tree}"], cwd=destination)
+    if actual_revision != revision:
+        fail(f"revision mismatch for {component_id}: expected {revision}, got {actual_revision}")
+    if actual_git_tree != git_tree:
+        fail(f"Git tree mismatch for {component_id}: expected {git_tree}, got {actual_git_tree}")
+
+    shutil.rmtree(destination / ".git")
+    actual_tree = tree_digest(destination)
+    if actual_tree != expected_tree:
+        fail(f"content-tree mismatch for {component_id}: expected {expected_tree}, got {actual_tree}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--clean", action="store_true", help="replace an existing ignored source work area")
+    args = parser.parse_args()
+
+    root = args.project_root.resolve()
+    manifest_path = root / "vendor/source-manifest.json"
+    target = root / "vendor/sources"
+    if not manifest_path.is_file():
+        fail(f"source manifest is absent: {manifest_path}", 66)
+    if target.exists():
+        if not args.clean:
+            fail("vendor/sources already exists; use --clean to replace it", 73)
+        if target.is_symlink() or not target.is_dir():
+            fail("refusing to remove an unsafe vendor/sources path", 64)
+        shutil.rmtree(target)
+
+    components = load_manifest(manifest_path)
+    temporary = root / "vendor" / f".materialize.tmp.{os.getpid()}"
+    if temporary.exists():
+        fail(f"temporary path already exists: {temporary}", 73)
+    temporary.mkdir(parents=True)
+    try:
+        for component in components:
+            component_id = component.get("id")
+            source_path = component.get("source_path")
+            if not isinstance(component_id, str) or source_path != f"vendor/sources/{component_id}":
+                fail(f"unsafe materialization path for component: {component_id}")
+            materialize_component(component, temporary / component_id)
+        os.replace(temporary, target)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    print(f"materialized {len(components)} verified source snapshots at {target}")
+
+
+if __name__ == "__main__":
+    main()
