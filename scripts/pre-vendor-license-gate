@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/pre-vendor-license"
+CLEAN=0
+
+ARS_URL="https://github.com/Imbad0202/academic-research-skills.git"
+ARS_REV="c22c17eed8a5753aa60681be9734919f2e2f5b42"
+EXPERIMENT_URL="https://github.com/Imbad0202/experiment-agent.git"
+EXPERIMENT_REV="9b063fa895eaf1f63ac99ac03f924f8d31aa8d26"
+FILE_BASE_URL="https://github.com/DeusData/codebase-memory-mcp.git"
+FILE_BASE_REV="ee68144af5453addda995a27cce8142999f318fb"
+
+usage() {
+  cat <<'EOF'
+Usage: pre-vendor-license-gate [--clean] [--evidence-root PATH]
+
+Fetch exact clean upstream pins, execute the unmodified native legal toolchain,
+and retain digest-bound raw evidence while vendor/sources remains absent.
+EOF
+}
+
+fail() {
+  printf 'pre-vendor-license-gate: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+[[ ! -e "$PROJECT_ROOT/vendor/sources" ]] \
+  || fail "vendor/sources must be absent before the legal preflight" 65
+
+for tool in git python3 npm node scancode sha256sum; do
+  command -v "$tool" >/dev/null 2>&1 || fail "required native-gate tool is unavailable: $tool" 69
+done
+
+PYTHON="$(command -v python3)"
+REAL_NPM="$(command -v npm)"
+REAL_SCANCODE="$(command -v scancode)"
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe evidence root" 64
+
+if [[ -e "$EVIDENCE_ROOT" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "evidence root exists; pass --clean" 73
+  rm -rf -- "$EVIDENCE_ROOT"
+fi
+mkdir -p "$EVIDENCE_ROOT/commands" "$EVIDENCE_ROOT/generated" "$EVIDENCE_ROOT/source-archives"
+
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/arw-pre-vendor.XXXXXX")"
+cleanup() {
+  rm -rf -- "$WORK_ROOT"
+}
+trap cleanup EXIT INT TERM
+
+WORK_SOURCES="$WORK_ROOT/sources"
+mkdir -p "$WORK_SOURCES"
+OBSERVATIONS="$WORK_ROOT/vendor-observations.jsonl"
+printf '{"exists":false,"phase":"before"}\n' > "$OBSERVATIONS"
+
+observe_absence() {
+  local phase="$1"
+  [[ ! -e "$PROJECT_ROOT/vendor/sources" ]] \
+    || fail "vendor/sources appeared during preflight phase: $phase" 65
+  "$PYTHON" - "$OBSERVATIONS" "$phase" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+with Path(sys.argv[1]).open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps({"exists": False, "phase": sys.argv[2]}, separators=(",", ":")) + "\n")
+PY
+}
+
+clone_exact() {
+  local component="$1"
+  local url="$2"
+  local revision="$3"
+  local destination="$WORK_SOURCES/$component"
+  git init -q "$destination"
+  git -C "$destination" remote add origin "$url"
+  git -C "$destination" fetch -q --depth=1 --no-tags origin "$revision"
+  git -C "$destination" checkout -q --detach FETCH_HEAD
+  [[ "$(git -C "$destination" rev-parse HEAD)" == "$revision" ]] \
+    || fail "$component revision mismatch" 65
+  [[ "$(git -C "$destination" remote get-url origin)" == "$url" ]] \
+    || fail "$component upstream URL mismatch" 65
+  [[ -z "$(git -C "$destination" status --porcelain --untracked-files=all)" ]] \
+    || fail "$component checkout is not clean" 65
+  git -C "$destination" archive --format=tar HEAD > "$EVIDENCE_ROOT/source-archives/$component.tar"
+  observe_absence "during:fetch-$component"
+}
+
+clone_exact "academic-research-skills" "$ARS_URL" "$ARS_REV"
+clone_exact "experiment-agent" "$EXPERIMENT_URL" "$EXPERIMENT_REV"
+clone_exact "file-base" "$FILE_BASE_URL" "$FILE_BASE_REV"
+
+[[ "$(sha256sum "$WORK_SOURCES/academic-research-skills/LICENSE" | awk '{print $1}')" == \
+  "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c" ]] \
+  || fail "academic-research-skills canonical LICENSE mismatch" 65
+[[ "$(sha256sum "$WORK_SOURCES/experiment-agent/LICENSE" | awk '{print $1}')" == \
+  "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25" ]] \
+  || fail "experiment-agent canonical LICENSE mismatch" 65
+
+FILE_BASE="$WORK_SOURCES/file-base"
+WRAPPER_BIN="$WORK_ROOT/wrappers"
+INVOCATIONS="$EVIDENCE_ROOT/commands/native-invocations.log"
+mkdir -p "$WRAPPER_BIN"
+
+write_wrapper() {
+  local path="$1"
+  local target="$2"
+  cat > "$path" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' '$target' "\$@" >> '$INVOCATIONS'
+printf '\\n' >> '$INVOCATIONS'
+exec '$target' "\$@"
+EOF
+  chmod 0755 "$path"
+}
+
+write_wrapper "$WRAPPER_BIN/python3" "$PYTHON"
+write_wrapper "$WRAPPER_BIN/npm" "$REAL_NPM"
+write_wrapper "$WRAPPER_BIN/scancode" "$REAL_SCANCODE"
+
+run_capture() {
+  local sequence="$1"
+  local name="$2"
+  local cwd="$3"
+  shift 3
+  local command_root="$EVIDENCE_ROOT/commands/${sequence}-${name}"
+  local started ended status
+  mkdir -p "$command_root"
+  started="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  set +e
+  (
+    cd "$cwd"
+    PATH="$WRAPPER_BIN:$PATH" "$@"
+  ) > "$command_root/stdout.log" 2> "$command_root/stderr.log"
+  status=$?
+  set -e
+  ended="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  printf '%s\n' "$status" > "$command_root/status.txt"
+  "$PYTHON" - "$command_root/command.json" "$cwd" "$started" "$ended" "$status" "$@" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+destination, cwd, started, ended, status, *argv = sys.argv[1:]
+payload = {
+    "argv": argv,
+    "cwd": cwd,
+    "ended_at": ended,
+    "started_at": started,
+    "status": int(status),
+    "stderr_path": str(Path(destination).parent.relative_to(Path(destination).parents[2]) / "stderr.log"),
+    "stdout_path": str(Path(destination).parent.relative_to(Path(destination).parents[2]) / "stdout.log"),
+}
+Path(destination).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+  observe_absence "during:$name"
+  [[ "$status" -eq 0 ]] || {
+    cat "$command_root/stderr.log" >&2
+    cat "$command_root/stdout.log" >&2
+    fail "$name failed with status $status" "$status"
+  }
+}
+
+run_capture "001" "native-gate-selftest" "$FILE_BASE" ./scripts/license-gate.sh --selftest
+run_capture "002" "native-gate" "$FILE_BASE" ./scripts/license-gate.sh
+run_capture \
+  "003" \
+  "notice-generator" \
+  "$FILE_BASE" \
+  ./scripts/gen-third-party-notices.sh \
+  "$EVIDENCE_ROOT/generated/THIRD_PARTY_NOTICES.md"
+
+observe_absence "after"
+
+"$PYTHON" - \
+  "$PROJECT_ROOT" \
+  "$EVIDENCE_ROOT" \
+  "$WORK_SOURCES" \
+  "$OBSERVATIONS" \
+  "$ARS_URL" "$ARS_REV" \
+  "$EXPERIMENT_URL" "$EXPERIMENT_REV" \
+  "$FILE_BASE_URL" "$FILE_BASE_REV" \
+  "$REAL_SCANCODE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+
+(
+    project_root_raw,
+    evidence_root_raw,
+    work_sources_raw,
+    observations_raw,
+    ars_url,
+    ars_revision,
+    experiment_url,
+    experiment_revision,
+    file_base_url,
+    file_base_revision,
+    scancode_path,
+) = sys.argv[1:]
+project_root = Path(project_root_raw)
+evidence_root = Path(evidence_root_raw)
+work_sources = Path(work_sources_raw)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def tree_digest(root: Path) -> str:
+    hasher = hashlib.sha256()
+    for path in sorted((item for item in root.rglob("*") if ".git" not in item.parts), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            record = f"L\0{relative}\0{os.readlink(path)}\n".encode()
+        elif path.is_file():
+            mode = "755" if path.stat().st_mode & stat.S_IXUSR else "644"
+            record = f"F\0{mode}\0{relative}\0{digest(path)}\n".encode()
+        else:
+            continue
+        hasher.update(record)
+    return hasher.hexdigest()
+
+
+def git_value(root: Path, *args: str) -> str:
+    return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
+
+
+component_specs = [
+    ("academic-research-skills", "0.1.19", ars_url, ars_revision),
+    ("experiment-agent", "pinned", experiment_url, experiment_revision),
+    ("file-base", "v0.9.0-2-gee68144", file_base_url, file_base_revision),
+]
+components = []
+for component_id, version, url, revision in component_specs:
+    root = work_sources / component_id
+    components.append(
+        {
+            "clean": True,
+            "git_tree": git_value(root, "rev-parse", "HEAD^{tree}"),
+            "id": component_id,
+            "revision": revision,
+            "status_porcelain": git_value(root, "status", "--porcelain", "--untracked-files=no"),
+            "tree_sha256": tree_digest(root),
+            "upstream_url": url,
+            "version": version,
+        }
+    )
+
+file_base = work_sources / "file-base"
+native_tool_paths = [
+    "scripts/license-gate.sh",
+    "scripts/license-policy.json",
+    "scripts/license-gate-check.py",
+    "scripts/license-gate-check-npm.py",
+    "scripts/gen-third-party-notices.sh",
+]
+command_records = []
+for command_path in sorted((evidence_root / "commands").glob("[0-9]*-*/command.json")):
+    record = json.loads(command_path.read_text(encoding="utf-8"))
+    command_records.append(record)
+
+legal_inputs: list[dict[str, str]] = []
+seen: set[tuple[str, str]] = set()
+
+
+def add_legal(component: str, root: Path, relative: str, kind: str) -> None:
+    key = (component, relative)
+    if key in seen:
+        return
+    path = root / relative
+    if not path.is_file():
+        raise SystemExit(f"missing legal input: {component}:{relative}")
+    seen.add(key)
+    legal_inputs.append(
+        {"component": component, "kind": kind, "path": relative, "sha256": digest(path)}
+    )
+
+
+add_legal("academic-research-skills", work_sources / "academic-research-skills", "LICENSE", "license")
+add_legal("academic-research-skills", work_sources / "academic-research-skills", "NOTICE.md", "notice")
+add_legal("experiment-agent", work_sources / "experiment-agent", "LICENSE", "license")
+add_legal("file-base", file_base, "LICENSE", "license")
+for relative in native_tool_paths:
+    kind = {
+        "scripts/license-policy.json": "policy",
+        "scripts/license-gate-check.py": "checker",
+        "scripts/license-gate-check-npm.py": "checker",
+        "scripts/gen-third-party-notices.sh": "generator",
+    }.get(relative, "checker")
+    add_legal("file-base", file_base, relative, kind)
+add_legal("file-base", file_base, "graph-ui/package-lock.json", "package-lock")
+for root_name in ("vendored", "internal/cbm/vendored"):
+    for path in sorted((file_base / root_name).rglob("*")):
+        upper = path.name.upper()
+        if path.is_file() and upper.startswith(("LICENSE", "LICENCE", "COPYING", "UNLICENSE", "NOTICE")):
+            add_legal("file-base", file_base, path.relative_to(file_base).as_posix(), "notice" if upper.startswith("NOTICE") else "license")
+
+generated_notice = evidence_root / "generated/THIRD_PARTY_NOTICES.md"
+native = {
+    "commands": command_records,
+    "entrypoint": "scripts/license-gate.sh",
+    "generated_notices": [
+        {
+            "path": "generated/THIRD_PARTY_NOTICES.md",
+            "sha256": digest(generated_notice),
+        }
+    ],
+    "tools": [{"path": path, "sha256": digest(file_base / path)} for path in native_tool_paths],
+    "unmodified": True,
+}
+
+raw_evidence = []
+for path in sorted(item for item in evidence_root.rglob("*") if item.is_file()):
+    if path.name in {"receipt.json", "receipt.sha256"}:
+        continue
+    raw_evidence.append({"path": path.relative_to(evidence_root).as_posix(), "sha256": digest(path)})
+
+observations = [
+    json.loads(line)
+    for line in Path(observations_raw).read_text(encoding="utf-8").splitlines()
+    if line
+]
+receipt = {
+    "component_licenses": [
+        {
+            "attribution_required": True,
+            "component": "academic-research-skills",
+            "modification_marking_required": True,
+            "noncommercial_restriction": True,
+            "sha256": "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c",
+            "source_path": "LICENSE",
+        },
+        {
+            "attribution_required": True,
+            "component": "experiment-agent",
+            "modification_marking_required": True,
+            "noncommercial_restriction": True,
+            "sha256": "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25",
+            "source_path": "LICENSE",
+        },
+        {
+            "attribution_required": True,
+            "component": "file-base",
+            "modification_marking_required": False,
+            "noncommercial_restriction": False,
+            "sha256": digest(file_base / "LICENSE"),
+            "source_path": "LICENSE",
+        },
+    ],
+    "components": components,
+    "created_at": subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"], text=True).strip(),
+    "legal_inputs": sorted(legal_inputs, key=lambda item: (item["component"], item["path"])),
+    "native_file_base_gate": native,
+    "raw_evidence": raw_evidence,
+    "schema_version": "1.0.0",
+    "technical_qualification": "PASS",
+    "tool_identities": {
+        "git": subprocess.check_output(["git", "--version"], text=True).strip(),
+        "node": subprocess.check_output(["node", "--version"], text=True).strip(),
+        "npm": subprocess.check_output(["npm", "--version"], text=True).strip(),
+        "python": sys.version.split()[0],
+        "scancode": subprocess.check_output([scancode_path, "--version"], text=True).strip(),
+    },
+    "vendor_sources_observations": observations,
+}
+receipt_path = evidence_root / "receipt.json"
+receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(evidence_root / "receipt.sha256").write_text(digest(receipt_path) + "\n", encoding="utf-8")
+PY
+
+[[ ! -e "$PROJECT_ROOT/vendor/sources" ]] \
+  || fail "vendor/sources appeared before receipt completion" 65
+
+printf 'pre-vendor legal receipt: %s\n' "$EVIDENCE_ROOT/receipt.json"

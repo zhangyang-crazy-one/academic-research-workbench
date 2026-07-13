@@ -76,6 +76,11 @@ def test_exact_clean_pins_pass_native_gate_before_vendor_copy() -> None:
     assert all(command["status"] == 0 for command in native["commands"])
     assert all(command["argv"] for command in native["commands"])
     assert all(command["stdout_path"] and command["stderr_path"] for command in native["commands"])
+    invocations = (EVIDENCE_ROOT / "commands/native-invocations.log").read_text(encoding="utf-8")
+    assert "scancode --license --quiet --processes 2" in invocations
+    assert "scripts/license-gate-check.py" in invocations
+    assert "scripts/license-gate-check-npm.py" in invocations
+    assert "npm ci --ignore-scripts --silent" in invocations
 
 
 def test_receipt_closes_every_legal_input_and_raw_output() -> None:
@@ -100,3 +105,9 @@ def test_receipt_closes_every_legal_input_and_raw_output() -> None:
         assert path.is_file(), f"missing raw evidence: {item['path']}"
         assert _sha256(path) == item["sha256"]
 
+    identities = receipt["tool_identities"]
+    assert identities["git"].startswith("git version ")
+    assert identities["python"]
+    assert identities["node"].startswith("v")
+    assert identities["npm"]
+    assert "ScanCode version: 32.5.0" in identities["scancode"]
