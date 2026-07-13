@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-07-13T04:02:14.970Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-07-13T04:32:55.986Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
-  percent: 57
+  completed_plans: 5
+  percent: 71
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [██████░░░░] 57%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
-- Average duration: 31 min
-- Total execution time: 2.1 hours
+- Total plans completed: 5
+- Average duration: 30 min
+- Total execution time: 2.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 4 | 124 min | 31 min |
+| 01 | 5 | 149 min | 30 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 24 min, 31 min, 39 min, 30 min
+- Last 5 plans: 24 min, 31 min, 39 min, 30 min, 25 min
 - Trend: Installed baseline converging
 
 *Updated after each plan completion*
@@ -76,6 +76,10 @@ Recent decisions affecting current work:
 - [Phase 01]: Post-materialization qualification executes the preserved file-base gate, policy, both checkers, and notice generator before extending their inventory. — This preserves upstream legal semantics while adding manifest and dependency closure.
 - [Phase 01]: Technical provenance hashes do not satisfy intended-use, distribution, approval, or permission evidence; release remains BLOCKED. — Private repository status and technical evidence cannot establish CC BY-NC compatibility or owner permission.
 - [Phase 01]: The distributable stage is built and revalidated from an exact positive allowlist whose files are individually digest-covered. — This prevents undeclared or private material and symlinks from crossing the release boundary.
+- [Phase 01]: Canonical requests never choose sequence, resulting revision, previous hash, or event hash; the locked writer derives them from fully replayed durable state.
+- [Phase 01]: Fresh recovery uses only run-manifest.json and events.jsonl; hooks, transcripts, projections, and evidence remain non-authoritative.
+- [Phase 01]: The test-only forced-stop boundary is SIGKILL immediately after journal fsync and before CLI output.
+- [Phase 01]: Recovery evidence is parent-side and non-authoritative, retaining relative argv/cwd, allowlisted environment, raw streams, status, byte snapshots, hashes, replay, and verdict only.
 
 ### Pending Todos
 
@@ -96,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T04:01:54.177Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-07-13T04:31:59.463Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None

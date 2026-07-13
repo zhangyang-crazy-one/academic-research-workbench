@@ -23,8 +23,8 @@
 
 ### Runtime And Provenance
 
-- [ ] **RUN-01**: An operator can initialize a run with a stable identifier, immutable input snapshot, schema version, workflow mode, and declared capability set.
-- [ ] **RUN-02**: Every accepted canonical transition is appended as a deterministic, sequence-ordered, hash-chained event by one runtime writer.
+- [x] **RUN-01**: An operator can initialize a run with a stable identifier, immutable input snapshot, schema version, workflow mode, and declared capability set.
+- [x] **RUN-02**: Every accepted canonical transition is appended as a deterministic, sequence-ordered, hash-chained event by one runtime writer.
 - [ ] **RUN-03**: The runtime rejects invalid, duplicate, stale-revision, out-of-order, or unauthorized canonical transitions without partially changing accepted state.
 - [ ] **RUN-04**: An operator can reconstruct the same validated run state from canonical events and immutable manifests without chat history or projection databases.
 - [ ] **RUN-05**: Accepted artifacts and Material Passport revisions are immutable, content-addressed, and linked to the transition that accepted or superseded them.
@@ -147,8 +147,8 @@
 | SUP-03 | Phase 1 | Complete |
 | SUP-04 | Phase 1 | Complete |
 | SUP-05 | Phase 1 | Complete |
-| RUN-01 | Phase 1 | Pending |
-| RUN-02 | Phase 1 | Pending |
+| RUN-01 | Phase 1 | Complete |
+| RUN-02 | Phase 1 | Complete |
 | RUN-03 | Phase 2 | Pending |
 | RUN-04 | Phase 2 | Pending |
 | RUN-05 | Phase 2 | Pending |
