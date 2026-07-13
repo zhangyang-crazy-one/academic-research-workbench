@@ -333,7 +333,7 @@ def test_only_complete_version_matched_registered_pdf_text_is_searchable(tmp_pat
         if item.relative_path == "pdf/registered-paper.pdf"
     )
     assert pdf_file.index_state == "degraded"
-    assert pdf_file.degraded_reason == "extraction_version_mismatch"
+    assert pdf_file.degraded_reason == "extractor_version_mismatch"
 
     _, _, _, missing, _ = _prepare(tmp_path / "missing", register_pdf=False)
     assert _search(missing, "reproducible PDF evidence")["hits"] == []

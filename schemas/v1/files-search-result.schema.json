@@ -5,6 +5,19 @@
     "FileSearchHit": {
       "additionalProperties": false,
       "properties": {
+        "hit_id": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hit Id"
+        },
         "file_id": {
           "pattern": "^[a-z][a-z0-9._-]{2,127}$",
           "title": "File Id",
@@ -12,6 +25,19 @@
         },
         "relative_path": {
           "title": "Relative Path",
+          "type": "string"
+        },
+        "file_type": {
+          "enum": [
+            "text",
+            "markdown",
+            "latex",
+            "bibtex",
+            "source",
+            "pdf",
+            "binary"
+          ],
+          "title": "File Type",
           "type": "string"
         },
         "indexed_digest": {
@@ -30,6 +56,18 @@
             }
           ],
           "title": "Current Digest"
+        },
+        "extraction_registration_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Extraction Registration Sha256"
         },
         "freshness": {
           "enum": [
@@ -77,10 +115,13 @@
         }
       },
       "required": [
+        "hit_id",
         "file_id",
         "relative_path",
+        "file_type",
         "indexed_digest",
         "current_digest",
+        "extraction_registration_sha256",
         "freshness",
         "sync_required",
         "score",

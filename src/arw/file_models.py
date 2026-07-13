@@ -453,6 +453,13 @@ class FilesSearchRequest(StrictFileModel):
     max_snippet_bytes: Annotated[int, Field(ge=0, le=CONTRACT_LIMITS["snippet_bytes"])]
     cursor: Annotated[str, Field(min_length=1, max_length=CONTRACT_LIMITS["cursor_bytes"])] | None
 
+    @field_validator("query")
+    @classmethod
+    def query_fits_byte_ceiling(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > CONTRACT_LIMITS["query_bytes"]:
+            raise ValueError("query exceeds the UTF-8 byte ceiling")
+        return value
+
     @model_validator(mode="after")
     def no_raw_fts_language(self) -> Self:
         if self.mode == "full_text":
@@ -468,12 +475,26 @@ class SourceLocation(StrictFileModel):
     start_line: Annotated[int, Field(ge=1)] | None = None
     end_line: Annotated[int, Field(ge=1)] | None = None
 
+    @model_validator(mode="after")
+    def ordered_span(self) -> Self:
+        if self.end_byte < self.start_byte:
+            raise ValueError("source location byte range is reversed")
+        if (self.start_line is None) != (self.end_line is None):
+            raise ValueError("source location line bounds must be supplied together")
+        if self.start_line is not None and self.end_line is not None:
+            if self.end_line < self.start_line:
+                raise ValueError("source location line range is reversed")
+        return self
+
 
 class FileSearchHit(RelativePathMixin, StrictFileModel):
+    hit_id: Annotated[str, Field(min_length=1, max_length=CONTRACT_LIMITS["cursor_bytes"])] | None
     file_id: StableId
     relative_path: str
+    file_type: FileType
     indexed_digest: Sha256
     current_digest: Sha256 | None
+    extraction_registration_sha256: Sha256 | None
     freshness: Literal["current", "stale_metadata"]
     sync_required: bool
     score: float | None
@@ -483,11 +504,18 @@ class FileSearchHit(RelativePathMixin, StrictFileModel):
     @model_validator(mode="after")
     def stale_has_no_body_fields(self) -> Self:
         if self.freshness == "stale_metadata" and (
-            self.score is not None or self.location is not None or self.snippet is not None
+            self.hit_id is not None
+            or self.score is not None
+            or self.location is not None
+            or self.snippet is not None
         ):
             raise ValueError("stale search metadata cannot carry body-derived fields")
         if self.freshness == "current" and self.sync_required:
             raise ValueError("current hits cannot require synchronization")
+        if self.freshness == "current" and (
+            self.hit_id is None or self.score is None or self.location is None
+        ):
+            raise ValueError("current hits require a score, location, and hit identity")
         return self
 
 
@@ -511,7 +539,7 @@ class FilesOutlineRequest(StrictFileModel):
     file_id: StableId
     expected_digest: Sha256
     max_nodes: Annotated[int, Field(ge=1, le=CONTRACT_LIMITS["outline_nodes"])]
-    cursor: str | None
+    cursor: Annotated[str, Field(min_length=1, max_length=CONTRACT_LIMITS["cursor_bytes"])] | None
 
 
 class OutlineNode(StrictFileModel):
@@ -527,7 +555,9 @@ class FilesOutlineResult(StrictFileModel):
     root_id: StableId
     generation_id: StableId
     file_id: StableId
+    indexed_digest: Sha256
     current_digest: Sha256 | None
+    extraction_registration_sha256: Sha256 | None
     parser_version: str | None
     nodes: list[OutlineNode]
     next_cursor: str | None
@@ -545,7 +575,7 @@ class FilesContextRequest(StrictFileModel):
     generation_id: StableId
     file_id: StableId
     expected_digest: Sha256
-    hit_id: StableId | None
+    hit_id: Annotated[str, Field(min_length=1, max_length=CONTRACT_LIMITS["cursor_bytes"])] | None
     location: SourceLocation | None
     before_lines: Annotated[int, Field(ge=0, le=CONTRACT_LIMITS["context_lines"])]
     after_lines: Annotated[int, Field(ge=0, le=CONTRACT_LIMITS["context_lines"])]
@@ -554,6 +584,8 @@ class FilesContextRequest(StrictFileModel):
     def exactly_one_anchor(self) -> Self:
         if (self.hit_id is None) == (self.location is None):
             raise ValueError("exactly one same-file hit or location anchor is required")
+        if self.before_lines + self.after_lines > CONTRACT_LIMITS["context_lines"]:
+            raise ValueError("combined context lines exceed the server ceiling")
         return self
 
 
@@ -563,7 +595,9 @@ class FilesContextResult(StrictFileModel):
     root_id: StableId
     generation_id: StableId
     file_id: StableId
+    indexed_digest: Sha256
     current_digest: Sha256 | None
+    extraction_registration_sha256: Sha256 | None
     location: SourceLocation | None
     context: str | None
     truncated: bool

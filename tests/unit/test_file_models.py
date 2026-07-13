@@ -303,10 +303,13 @@ def test_stale_conflict_and_stale_search_metadata_cannot_carry_body_text() -> No
         models.FilesReadResult.model_validate({**stale_read, "content": "old body"})
 
     stale_hit = {
+        "hit_id": None,
         "file_id": "file_fixture_001",
         "relative_path": "documents/paper.md",
+        "file_type": "markdown",
         "indexed_digest": _digest("a"),
         "current_digest": _digest("b"),
+        "extraction_registration_sha256": None,
         "freshness": "stale_metadata",
         "sync_required": True,
         "score": None,
@@ -410,4 +413,3 @@ def test_read_cursor_binds_file_digest_and_range_mode() -> None:
         with pytest.raises(contracts.CursorError) as captured:
             codec.decode(token, **arguments)
         assert captured.value.code == code
-

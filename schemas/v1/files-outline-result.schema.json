@@ -115,6 +115,11 @@
       "title": "File Id",
       "type": "string"
     },
+    "indexed_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Indexed Digest",
+      "type": "string"
+    },
     "current_digest": {
       "anyOf": [
         {
@@ -126,6 +131,18 @@
         }
       ],
       "title": "Current Digest"
+    },
+    "extraction_registration_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Extraction Registration Sha256"
     },
     "parser_version": {
       "anyOf": [
@@ -163,7 +180,9 @@
     "root_id",
     "generation_id",
     "file_id",
+    "indexed_digest",
     "current_digest",
+    "extraction_registration_sha256",
     "parser_version",
     "nodes",
     "next_cursor"
