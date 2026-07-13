@@ -152,9 +152,9 @@ def test_later_phase_modules_collect_under_explicit_plan_ownership() -> None:
     active = {
         "tests/integration/test_files_admin.py": "Plan 03-02",
         "tests/integration/test_file_generations.py": "Plan 03-02",
+        "tests/integration/test_files_mcp.py": "Plan 03-03",
     }
     pending = {
-        "tests/integration/test_files_mcp.py": "Plan 03-03",
         "tests/integration/test_files_formats.py": "Plan 03-04",
         "tests/integration/test_files_security.py": "Plan 03-05",
     }
