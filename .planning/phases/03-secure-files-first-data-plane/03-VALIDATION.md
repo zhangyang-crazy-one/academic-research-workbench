@@ -1,8 +1,8 @@
 ---
 phase: 03
 slug: secure-files-first-data-plane
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-14
 ---
@@ -119,6 +119,6 @@ unverified rather than being accepted manually.
 - [ ] Wave 0 creates every currently missing test/verifier artifact.
 - [ ] No watch-mode flags, implicit network access, or unretained manual checks.
 - [ ] Task-local feedback latency remains below 60 seconds.
-- [ ] `nyquist_compliant: true` and `wave_0_complete: true` set after plan reconciliation.
+- [x] `nyquist_compliant: true` set after plan reconciliation; `wave_0_complete` remains false until Plan 03-01 creates and runs every Wave 0 artifact.
 
-**Approval:** pending plan reconciliation
+**Approval:** plan-reconciled on 2026-07-14; Wave 0 execution pending
