@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-07-13T12:43:25.866Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-07-13T12:56:19.495Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 02 (Durable Provenance Runtime) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [███████░░░] 67%
 | Phase 01 P06 | 188m | 3 tasks | 26 files |
 | Phase 01 P07 | 10m | 3 tasks | 15 files |
 | Phase 02 P01 | 12 min | 3 tasks | 19 files |
+| Phase 02 P02 | 9 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Technical qualification requires all retained evidence gates, while release remains BLOCKED until SUP-04 human legal evidence is supplied. — Private repository status and technical provenance do not establish intended use, authorization, or CC BY-NC compatibility.
 - [Phase 02]: New manifests bind a registered workflow ID and digest; legacy manifests select one frozen compatibility identity. — This prevents mutable workflow definitions from rewriting historical transition legality while preserving Phase 1 bytes.
 - [Phase 02]: Status is a pure projection and opens only an existing read-only lock. — Every status path must remain side-effect-free, including damaged runs without a lock file.
+- [Phase 02]: Phase 2 runtime commands require segmented-v1 and legacy events.jsonl remains read-only. — This preserves frozen Phase 1 semantics and prevents append-then-reject partial mutation.
 
 ### Pending Todos
 
@@ -110,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T12:43:15.052Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-07-13T12:56:19.038Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
