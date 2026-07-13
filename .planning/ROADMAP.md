@@ -73,7 +73,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md - Registered workflow, authority, pure reducer, rejection, and shared status contracts
+- [x] 02-01-PLAN.md - Registered workflow, authority, pure reducer, rejection, and shared status contracts
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -173,7 +173,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
-| 2. Durable Provenance Runtime | 0/5 | Planned | - |
+| 2. Durable Provenance Runtime | 1/5 | In Progress|  |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |

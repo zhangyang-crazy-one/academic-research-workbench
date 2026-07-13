@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-07-13T12:25:03.374Z"
-last_activity: 2026-07-13 -- Phase 02 planning complete
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-07-13T12:43:25.866Z"
+last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 7
+  completed_plans: 8
   percent: 14
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Phase 2 — durable provenance runtime
+**Current focus:** Phase 02 — Durable Provenance Runtime
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (Durable Provenance Runtime) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-13 -- Phase 02 planning complete
+Last activity: 2026-07-13
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██████████] 100%
 *Updated after each plan completion*
 | Phase 01 P06 | 188m | 3 tasks | 26 files |
 | Phase 01 P07 | 10m | 3 tasks | 15 files |
+| Phase 02 P01 | 12 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,8 @@ Recent decisions affecting current work:
 - [Phase 01]: The installed MCP launcher requires explicit allowed-root, capability identifier, and cache configuration and resolves only a plugin-root-relative libexec binary. — Installed qualification must not inherit source paths, PYTHONPATH, an implicit root, or an operator-specific cache.
 - [Phase 01]: Phase 1 build identity is a stage payload, not a source constant; installed version rejects absent, outside-root, symlinked, or schema-invalid identity bytes. — Installed claims must bind exact staged bytes and cannot fall back to source checkouts or hard-coded versions.
 - [Phase 01]: Technical qualification requires all retained evidence gates, while release remains BLOCKED until SUP-04 human legal evidence is supplied. — Private repository status and technical provenance do not establish intended use, authorization, or CC BY-NC compatibility.
+- [Phase 02]: New manifests bind a registered workflow ID and digest; legacy manifests select one frozen compatibility identity. — This prevents mutable workflow definitions from rewriting historical transition legality while preserving Phase 1 bytes.
+- [Phase 02]: Status is a pure projection and opens only an existing read-only lock. — Every status path must remain side-effect-free, including damaged runs without a lock file.
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T11:28:05.205Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-durable-provenance-runtime/02-CONTEXT.md
+Last session: 2026-07-13T12:43:15.052Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
