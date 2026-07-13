@@ -11,6 +11,7 @@ import jsonschema
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PATCH_SHA256 = "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+PHASE3_PATCH_SHA256 = "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
 EXPECTED_REVISIONS = {
     "academic-research-skills": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
     "experiment-agent": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
@@ -85,6 +86,9 @@ def test_exact_snapshots_patch_and_canonical_license_paths_are_materialized() ->
     assert patches[0]["path"] == "vendor/patches/file-base/0001-file-base-server-name.patch"
     assert patches[0]["sha256"] == PATCH_SHA256
     assert _sha256(REPOSITORY_ROOT / patches[0]["path"]) == PATCH_SHA256
+    assert patches[2]["path"] == "vendor/patches/file-base/0003-phase3-generation-builder.patch"
+    assert patches[2]["sha256"] == PHASE3_PATCH_SHA256
+    assert _sha256(REPOSITORY_ROOT / patches[2]["path"]) == PHASE3_PATCH_SHA256
 
 
 def test_network_denied_verification_retains_namespace_and_syscall_evidence(tmp_path: Path) -> None:

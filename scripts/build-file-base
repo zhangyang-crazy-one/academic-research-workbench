@@ -433,6 +433,10 @@ PY
   fi
 fi
 
+mkdir -p "$BUILD_SOURCE/src/generated"
+install -m 0644 -- "$PROJECT_ROOT/generated/file-contracts.h" \
+  "$BUILD_SOURCE/src/generated/file-contracts.h"
+
 make -C "$BUILD_SOURCE" -f Makefile.cbm clean-c
 make -C "$BUILD_SOURCE" -f Makefile.cbm cbm SANITIZE=""
 BUILT_BINARY="$BUILD_SOURCE/build/c/codebase-memory-mcp"
