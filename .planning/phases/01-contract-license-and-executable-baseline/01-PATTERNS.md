@@ -1,8 +1,8 @@
 # Phase 1: Contract, License, and Executable Baseline - Pattern Map
 
 **Mapped:** 2026-07-13
-**Files analyzed:** 52 proposed paths or file families
-**Analogs found:** 11 / 52
+**Files analyzed:** 54 proposed paths or file families
+**Analogs found:** 11 / 54
 **Concrete analog files used:** 5
 
 This is a greenfield runtime repository. The only close local implementation analogs are the Codex `plugin-creator` scaffold/validator and the supplied Paper4Master file-base build, launcher, and MCP configuration. Runtime authority, schema, confinement, licensing, evidence, and test behavior must follow `01-CONTEXT.md` and `01-RESEARCH.md`; they do not have trustworthy local code analogs.
@@ -21,6 +21,7 @@ This is a greenfield runtime repository. The only close local implementation ana
 | `hooks/hooks.json` | config | event-driven | None; `plugin-creator` creates only the directory | none; host probe required |
 | `skills/academic-research-workbench/SKILL.md` | route | request-response | `plugin-creator/scripts/validate_plugin.py` skill validation | contract-only |
 | `src/arw/cli.py` | controller | request-response | `plugin-creator/scripts/validate_plugin.py` CLI | role-match |
+| `bin/arw` | service launcher | request-response / batch | None | none; stage-relative offline wheelhouse/cache-venv contract |
 | `src/arw/canonical.py` | utility | transform | None | none |
 | `src/arw/models.py` | model | transform / validation | None | none |
 | `src/arw/journal.py` | service | event-driven + file-I/O | None | none |
@@ -31,15 +32,20 @@ This is a greenfield runtime repository. The only close local implementation ana
 | `schemas/v1/mcp-read-request.schema.json` | config/model | request-response / validation | None | none |
 | `schemas/v1/mcp-read-result.schema.json` | config/model | request-response / validation | None | none |
 | `schemas/v1/source-manifest.schema.json` | config/model | batch / validation | None | none |
+| `schemas/v1/build-identity.schema.json` | config/model | batch / validation | None | none |
 | `schemas/v1/version-report.schema.json` | config/model | request-response / validation | None | none |
 
 ### Supply chain, licensing, and executable scripts
 
 | New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
 |---|---|---|---|---|
-| `vendor/sources/ars/**` | config/vendor input | batch + file-I/O | None | none; materialized input |
+| `vendor/sources/academic-research-skills/**` | config/vendor input | batch + file-I/O | None | none; materialized input |
+| `vendor/sources/experiment-agent/**` | config/vendor input | batch + file-I/O | None | none; materialized input |
 | `vendor/sources/file-base/**` | config/vendor input | batch + file-I/O | None | none; materialized input |
 | `vendor/patches/file-base/0001-file-base-server-name.patch` | config/migration input | batch / transform | Supplied Paper4Master patch named by its build wrapper | exact bytes to copy, not an implementation pattern |
+| `vendor/patches/file-base/0002-phase1-confined-read.patch` | config/migration input | batch / transform | None | red confinement tests must precede implementation |
+| `vendor/python/wheelhouse/**` | config/vendor input | batch | None | audited checked-in wheels for offline installed runtime |
+| `vendor/python/wheelhouse.lock.json` | config/model | batch / validation | None | hash inventory and lock relationship |
 | `vendor/source-manifest.json` | config/model | batch / validation | None | none |
 | `vendor/LICENSES/**` | config/legal input | batch | None | none |
 | `LICENSES/**` | config/legal output | batch | None | none |
@@ -47,6 +53,7 @@ This is a greenfield runtime repository. The only close local implementation ana
 | `MODIFICATIONS.md` | config/legal output | batch | None | none |
 | `supply-chain/use-distribution.json` | config/model | batch / validation | None | none |
 | `scripts/verify-sources` | utility | batch + file-I/O | `Paper4Master/scripts/build-file-base-mcp` | partial role-match |
+| `scripts/pre-vendor-license-gate` | utility | batch + legal verification | Pinned file-base native license scripts | exact tools; ordering/evidence wrapper is new |
 | `scripts/build-file-base` | utility | batch + file-I/O | `Paper4Master/scripts/build-file-base-mcp` | exact role; provenance logic must change |
 | `scripts/file-base-mcp` | service launcher | streaming / stdio | `Paper4Master/scripts/file-base-mcp` | exact role; defaults must change |
 | `scripts/stage-plugin` | utility | batch + file-I/O | `Paper4Master/scripts/build-file-base-mcp` | partial role-match |
@@ -62,6 +69,7 @@ This is a greenfield runtime repository. The only close local implementation ana
 | `tests/schema/test_cross_language.py` | test | request-response / validation | None | none |
 | `tests/integration/test_version_report.py` | test | request-response | None | none |
 | `tests/integration/test_source_materialization.py` | test | batch + file-I/O | None | none |
+| `tests/integration/test_pre_vendor_license_gate.py` | test | batch + legal verification | None | none |
 | `tests/integration/test_digest_drift.py` | test | batch / transform | None | none |
 | `tests/integration/test_license_gate.py` | test | batch / validation | None | none |
 | `tests/integration/test_run_init.py` | test | event-driven + file-I/O | None | none |
@@ -239,7 +247,7 @@ No authentication pattern applies in Phase 1. Local process access and explicit 
 
 **Analog:** none.
 
-All seven schemas are generated from strict models, checked in, and independently validated as Draft 2020-12. Preserve the research split rather than combining unrelated contracts:
+All eight schemas are generated from strict models, checked in, and independently validated as Draft 2020-12. Preserve the research split rather than combining unrelated contracts:
 
 - `run-manifest.schema.json`
 - `event.schema.json`
@@ -247,6 +255,7 @@ All seven schemas are generated from strict models, checked in, and independentl
 - `mcp-read-request.schema.json`
 - `mcp-read-result.schema.json`
 - `source-manifest.schema.json`
+- `build-identity.schema.json`
 - `version-report.schema.json`
 
 The MCP request/result union must remain fixture-sized: relative path, allowed-root capability identifier, `max_bytes`, and either success content or a typed denial with no content. The independent validator signature from research is:
@@ -315,15 +324,16 @@ exec "$CBM_BIN" "$@"
 
 ---
 
-### `scripts/verify-sources`, `stage-plugin`, and `verify-phase-1`
+### `scripts/pre-vendor-license-gate`, `verify-sources`, `stage-plugin`, and `verify-phase-1`
 
 **Analog:** Paper4Master build wrapper for shell mechanics only.
 
 Use `#!/usr/bin/env bash`, `set -euo pipefail`, script-relative root resolution, explicit paths, and nonzero failures. Do not copy its mutable checkout, marker grep, or network-clone behavior.
 
-- `verify-sources`: verify revision, pre/post-patch tree, patch order/hash, license hashes, lock hash, and expected artifacts.
+- `pre-vendor-license-gate`: fail if `vendor/sources/**` exists; reconstruct exact clean pinned trees temporarily; execute the unmodified file-base gate, policy, checkers, and notice generator; retain raw digest-bound evidence before any source copy.
+- `verify-sources`: require the passing pre-vendor receipt, then verify revision, pre/post-patch tree, patch order/hash, license hashes, lock hash, and expected artifacts.
 - `stage-plugin`: assemble from a positive allowlist. Never copy the repository wholesale and delete forbidden files afterward.
-- `verify-phase-1`: orchestrate clean materialize/build/stage, tests, install canaries, runtime/MCP probes, and evidence summary while preserving each command's raw output.
+- `verify-phase-1`: orchestrate clean pre-vendor gate/materialize/build/stage, unchanged upstream C tests, ASan+UBSan, separate TSan, install canaries, runtime/MCP probes, and evidence summary while preserving each command's raw output.
 
 `scripts/smoke-staged-plugin` has no local code analog. It must use an isolated repo-owned marketplace and isolated `HOME`/`CODEX_HOME`, install the exact stage, start a fresh Codex execution, and fail on any source-checkout/home path in captured commands.
 
@@ -361,7 +371,7 @@ Use the exact responsibilities below rather than deriving tests from implementat
 | `test_license_gate.py` | Unknown or unsatisfied classification yields release `BLOCKED` while technical checks can pass. |
 | `test_run_init.py` | Init writes strict run manifest plus first `run.initialized` event. |
 | `test_journal_replay.py` | Test lock contention, sequence/hash/revision chain, SIGKILL after journal `fsync`, replay, and no duplicate append. |
-| `test_mcp_confinement.py` | Exercise traversal, absolute path, symlink escape, unconfigured root, sensitive path, over-budget, and one bounded valid read; assert no denied secret bytes anywhere. |
+| `test_mcp_confinement.py` | Exercise traversal, absolute path, symlink escape, unconfigured root, sensitive path, over-budget, and one bounded valid read; assert no denied secret bytes and require unchanged upstream/ASan+UBSan/separate TSan evidence. |
 | `test_manifest_install.py` | Validate the staged tree with plugin-creator, then install from isolated marketplace. |
 | `test_skill_route.py` | Fresh installed Codex invocation returns a declared ARS workflow family/mode. |
 | `test_mcp_launcher.py` | Preserve raw result of staged-relative launch canary; reject source absolute paths. |
@@ -405,7 +415,7 @@ Only the short-lived Python CLI may append accepted state. Hooks, workers, SQLit
 
 ### Supply-chain and legal verdicts
 
-Clean materialization and digest verification precede staging. Staging is allowlist-based. Technical qualification and release qualification are separate fields: unresolved CC BY-NC use/distribution is evidence-producing `BLOCKED`, not an omitted or falsified gate.
+The exact pinned clean native license gate precedes every `vendor/sources/**` copy. Clean materialization and digest verification then precede staging. The extended gate reruns after patches and dependency changes. Staging is allowlist-based. Technical qualification and release qualification are separate fields: unresolved CC BY-NC use/distribution is evidence-producing `BLOCKED`, not an omitted or falsified gate.
 
 ## No Analog Found
 

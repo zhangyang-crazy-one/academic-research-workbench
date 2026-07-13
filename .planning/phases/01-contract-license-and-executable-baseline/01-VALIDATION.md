@@ -5,111 +5,131 @@ status: draft
 nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-13
+revised: 2026-07-13
 ---
 
 # Phase 1 - Validation Strategy
 
-> Per-phase validation contract for the installed plugin walking skeleton, source and license gates, canonical event baseline, and confined MCP probe.
+> Validation contract for the installed plugin, license-before-vendoring chain, canonical writer, confined/sanitized native MCP, final build identity, and clean evidence run.
 
 ## Test Infrastructure
 
 | Property | Value |
-|----------|-------|
-| **Framework** | pytest 9.x with independent `jsonschema` validation |
-| **Config file** | `pyproject.toml` - Wave 0 creates it |
-| **Quick run command** | `uv run pytest -q tests/unit tests/schema` |
-| **Full suite command** | `uv run pytest -q tests/unit tests/schema tests/integration tests/staged` |
-| **Phase gate** | `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` |
-| **Estimated runtime** | Quick <30 seconds; full local <180 seconds; authenticated Codex host canary excluded from quick runs |
+|---|---|
+| **Framework** | pytest 9.x plus independent `jsonschema` Draft 2020-12 validation |
+| **Config file** | `pyproject.toml` — Plan 01 creates it |
+| **Quick command (<30s target)** | `uv run pytest -q tests/unit/test_canonical.py tests/schema/test_schema_drift.py` |
+| **Local suite** | `uv run pytest -q tests/unit tests/schema tests/integration tests/staged -m 'not codex_host'` |
+| **Host canaries** | `uv run pytest -q -m codex_host tests/staged/test_skill_route.py tests/staged/test_compatibility_probes.py tests/staged/test_mcp_launcher.py` |
+| **Clean completion gate** | `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` |
+
+The quick command alone targets 30 seconds. The clean gate executes pre-vendor legal preflight, network-denied reconstruction, unchanged upstream C tests, ASan+UBSan, separate TSan, legal/SBOM generation, installed canaries, forced-stop replay, confinement, and evidence aggregation.
 
 ## Sampling Rate
 
-- **After every task commit:** Run the narrow affected test file plus `uv run pytest -q tests/schema`.
-- **After every plan wave:** Run `uv run pytest -q tests/unit tests/schema tests/integration`; add `tests/staged` whenever plugin, launcher, vendor, build, or stage files changed.
-- **Before `$gsd-verify-work`:** Run `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01`, including the authenticated fresh-thread Codex route canary.
-- **Max feedback latency:** 30 seconds for unit/schema tasks, 180 seconds for local integration/staged tasks.
+- After each implementation task: run its narrow command and, once present, schema drift.
+- After Wave 1: run Plan 01 package/install/CLI tests.
+- After Wave 2: run Plan 02 installed route/compatibility and Plan 03 pre-vendor/source/drift tests; same-wave plans have no overlapping files.
+- After Wave 3: run Plan 04 legal/private-stage and Plan 05 canonical/replay tests; same-wave plans have no overlapping files.
+- After Wave 4: run direct-native confinement, unchanged upstream C, ASan+UBSan, separate TSan, extended legal, and installed MCP tests.
+- After Wave 5: run schema/version tests and the clean completion gate including authenticated host canaries and all native evidence domains.
 
-## Per-Task Verification Map
+## Requirement Verification Map
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-01-01 | 01 | 0 | PKG-01 | T-01 | Stage validates and installs from an allowlisted tree | staged | `uv run pytest -q tests/staged/test_manifest_install.py` | No - W0 | pending |
-| 01-01-02 | 01 | 0 | PKG-02 | T-02 | Fresh installed skill returns a declared ARS family and mode | staged host | `uv run pytest -q -m codex_host tests/staged/test_skill_route.py` | No - W0 | pending |
-| 01-01-03 | 01 | 0 | PKG-03 | T-03 | Installed-cache MCP launches without source-checkout paths | staged host | `uv run pytest -q tests/staged/test_mcp_launcher.py` | No - W0 | pending |
-| 01-01-04 | 01 | 0 | PKG-04 | T-04 | Version JSON reports plugin, runtime, source, schema, and patch identities | integration | `uv run pytest -q tests/integration/test_version_report.py` | No - W0 | pending |
-| 01-02-01 | 02 | 1 | SUP-01 | T-05 | Clean materialization reproduces pinned trees and ordered patches | integration/build | `uv run pytest -q tests/integration/test_source_materialization.py` | No - W0 | pending |
-| 01-02-02 | 02 | 1 | SUP-02 | T-05 | Mutated source, patch, lock, or artifact digest blocks the build | integration/build | `uv run pytest -q tests/integration/test_digest_drift.py` | No - W0 | pending |
-| 01-02-03 | 02 | 1 | SUP-03 | T-06 | Stage contains component licenses, notices, SBOM, and source manifest | staged | `uv run pytest -q tests/staged/test_supply_chain_inventory.py` | No - W0 | pending |
-| 01-02-04 | 02 | 1 | SUP-04 | T-06 | Unknown or incompatible use classification returns release BLOCKED | integration | `uv run pytest -q tests/integration/test_license_gate.py` | No - W0 | pending |
-| 01-02-05 | 02 | 1 | SUP-05 | T-07 | Private canaries and denylisted classes never enter the stage | staged/security | `uv run pytest -q tests/staged/test_private_exclusions.py` | No - W0 | pending |
-| 01-03-01 | 03 | 1 | RUN-01 | T-08 | Init writes a strict run manifest and `run.initialized` event | integration | `uv run pytest -q tests/integration/test_run_init.py` | No - W0 | pending |
-| 01-03-02 | 03 | 1 | RUN-02 | T-08 | One locked writer emits deterministic sequence and hash-chain bytes | unit/integration | `uv run pytest -q tests/unit/test_canonical.py tests/integration/test_journal_replay.py` | No - W0 | pending |
-| 01-03-03 | 03 | 1 | FILE-05 | T-09 | Traversal, root, symlink, sensitive-path, and budget denials return no content | security integration | `uv run pytest -q tests/integration/test_mcp_confinement.py` | No - W0 | pending |
-| 01-04-01 | 04 | 2 | VER-01 | T-10 | Checked-in schemas match generated models and independently validate MCP fixtures | schema | `uv run pytest -q tests/schema/test_schema_drift.py tests/schema/test_cross_language.py` | No - W0 | pending |
+| Task ID | Plan | Wave | Requirement | Automated command | Status |
+|---|---:|---:|---|---|---|
+| 01-01-03 | 01 | 1 | PKG-01 | `uv run pytest -q tests/staged/test_manifest_install.py tests/staged/test_cli_launcher.py` | pending |
+| 01-02-03 | 02 | 2 | PKG-02 | `./scripts/smoke-staged-plugin --route --fresh-home build/isolated/route-home --evidence-root build/evidence/phase-01/route && uv run pytest -q -m codex_host tests/staged/test_skill_route.py tests/staged/test_compatibility_probes.py` | pending |
+| 01-03-03 | 03 | 2 | SUP-01 | `./scripts/offline-exec --evidence-root build/evidence/phase-01/source ./scripts/verify-sources && uv run pytest -q tests/integration/test_pre_vendor_license_gate.py tests/integration/test_source_materialization.py` | pending |
+| 01-03-03 | 03 | 2 | SUP-02 | `uv run pytest -q tests/integration/test_digest_drift.py` | pending |
+| 01-04-02 | 04 | 3 | SUP-03 | `./scripts/license-gate --source-manifest vendor/source-manifest.json --pre-vendor-evidence build/evidence/phase-01/pre-vendor-license --evidence-root build/evidence/phase-01/license && uv run pytest -q tests/staged/test_supply_chain_inventory.py` | pending |
+| 01-04-03 | 04 | 3 | SUP-04 | `uv run pytest -q tests/integration/test_license_gate.py` | pending |
+| 01-04-03 | 04 | 3 | SUP-05 | `uv run pytest -q tests/staged/test_private_exclusions.py` | pending |
+| 01-05-02 | 05 | 3 | RUN-01 | `uv run pytest -q tests/integration/test_run_init.py` | pending |
+| 01-05-03 | 05 | 3 | RUN-02 | `uv run pytest -q tests/unit/test_canonical.py tests/integration/test_journal_replay.py` | pending |
+| 01-06-03 | 06 | 4 | PKG-03 | `./scripts/smoke-staged-plugin --mcp --fresh-home build/isolated/mcp-home --evidence-root build/evidence/phase-01/mcp-launcher && uv run pytest -q tests/staged/test_mcp_launcher.py` | pending |
+| 01-06-02 | 06 | 4 | FILE-05 | `uv run pytest -q tests/integration/test_mcp_confinement.py` | pending |
+| 01-07-02 | 07 | 5 | PKG-04 | `uv run pytest -q tests/integration/test_version_report.py` | pending |
+| 01-07-01 | 07 | 5 | VER-01 | `uv run pytest -q tests/schema/test_schema_drift.py tests/schema/test_cross_language.py` | pending |
 
-*Status: pending -> green / red / flaky. Planner may rename plan/task IDs, but every requirement row must remain represented.*
+Every Phase 1 requirement appears exactly once in this map and exactly once across PLAN frontmatter.
 
-## Threat References
+## Wave 0 / Executed RED Order
 
-| Ref | Threat | Required Control |
-|-----|--------|------------------|
-| T-01 | Source-only validator pass is mistaken for installed plugin success | Isolated staged marketplace install and fresh host process |
-| T-02 | Static skill text is mistaken for executable routing | Authenticated Codex host canary with declared route result |
-| T-03 | Launcher depends on developer absolute paths | Installed-cache probe and forbidden-prefix scan |
-| T-04 | Version drift is hidden | One machine-readable version report backed by checked-in manifests |
-| T-05 | Source, patch, lock, or artifact substitution | Exact digests, clean materialization, ordered patches, negative mutation fixtures |
-| T-06 | Mixed licenses are collapsed into an inaccurate project license | Component-specific licenses and explicit PASS/BLOCKED release classifier |
-| T-07 | Private research material enters the package | Allowlist staging and forbidden-canary scan |
-| T-08 | Concurrent or non-deterministic canonical mutation | Inter-process lock, expected revision, canonical JSON, hash chain, fsync |
-| T-09 | MCP leaks files or exhausts output budget | Root-relative safe open, sensitive policy, hard caps, no-content denials |
-| T-10 | Python and MCP contracts drift | Checked-in Draft 2020-12 schemas plus independent validators |
+- Plan 01 collects and executes package/install/CLI behavior tests, explicitly expecting nonzero before plugin/launcher/stage implementation.
+- Plan 02 collects and executes route/compatibility behavior tests before route/host implementation.
+- Plan 03 collects and executes pre-vendor/source/drift tests before the preflight script or any `vendor/sources/**` copy.
+- Plan 04 collects and executes legal/inventory/private tests before post-materialization legal/stage changes.
+- Plan 05 collects and executes run/event/canonical tests before writer implementation; replay is red before failpoint wiring.
+- Plan 06 collects and executes direct-native confinement tests against the 0001-only binary before patch 0002.
+- Plan 07 writes schema/version tests before schema registry and build-identity wiring.
 
-## Wave 0 Requirements
+Collection-only never proves RED. Each RED task runs the behavior tests and explicitly expects failure for the named absent behavior; import, collection, syntax, or unrelated environment failure is rejected.
 
-- [ ] `pyproject.toml`, `.python-version`, `uv.lock`, and pytest configuration.
-- [ ] `tests/unit/test_canonical.py` for deterministic canonical bytes and event hashes.
-- [ ] `tests/schema/test_schema_drift.py` and `tests/schema/test_cross_language.py`.
-- [ ] `tests/integration/test_run_init.py` and `tests/integration/test_journal_replay.py`.
-- [ ] `tests/integration/test_mcp_confinement.py` and repository-owned confinement fixtures.
-- [ ] `tests/staged/test_manifest_install.py`, `test_skill_route.py`, `test_mcp_launcher.py`, `test_supply_chain_inventory.py`, and `test_private_exclusions.py`.
-- [ ] `scripts/verify-phase-1` evidence orchestrator.
+## Pre-Vendoring License Gate
+
+`scripts/pre-vendor-license-gate` fails if `vendor/sources/**` exists, reconstructs exact clean upstream pins in temporary storage, verifies URL/revision/tree identities, and executes unmodified file-base `license-gate.sh`, policy, both checkers, and notice generator before source copy. It validates canonical ARS/experiment licenses and retains all input/output digests, commands, streams, statuses, generated notices, and the absent-vendor assertion under `build/evidence/phase-01/pre-vendor-license/`. Plan 03 may populate `vendor/sources/**` only after verifying this receipt.
+
+## Offline Source Reproduction Gate
+
+`scripts/offline-exec` activates Linux network denial using `bwrap --unshare-net` or `unshare --user --map-root-user --net`, audits with `strace -f -e trace=network`, and fails when denial is unavailable or AF_INET/AF_INET6 activity is attempted. SUP-01 evidence retains mechanism, syscall audit, argv, streams, and status.
+
+## Native Safety Gate
+
+Plan 06 and `scripts/verify-phase-1` must execute the byte-identical pinned upstream C test suite after patch 0002 in three network-denied clean builds:
+
+1. normal build and unchanged upstream suite at `native/upstream/`;
+2. combined ASan+UBSan build/run at `native/asan-ubsan/` with sanitizer findings fatal;
+3. separate TSan build/run at `native/tsan/` with race findings fatal and no ASan combination.
+
+Each domain retains compiler/linker flags, compiler identity, source/patch/binary digests, unchanged test-tree hash/inventory, argv, streams, status, sanitizer report, and network syscall audit. Missing, skipped, modified-test, unsupported-without-explicit-fail, or failing native evidence blocks technical PASS. The post-0002 legal gate reruns policy/checkers/notice generation over every patch and C/Python/new dependency.
+
+## Installed Runtime Isolation Gate
+
+Installed CLI/MCP tests use unrelated cwd, isolated HOME/CODEX_HOME, cleared PYTHONPATH, `PYTHONNOUSERSITE=1`, inaccessible repository source, and disabled network. Python uses only `$CODEX_HOME/arw/runtime/<identity>/venv` from the installed wheelhouse. Tests reject source, Paper4Master, Examination, or developer-home prefixes.
 
 ## Recovery Fixture
 
-`tests/fixtures/recovery/seed/` contains fixed run, command and event IDs, fixed UTC timestamps, an immutable input file, declared workflow family/mode, and capability list. The test initializes the run, appends `baseline.probe_recorded`, triggers `SIGKILL` after journal `fsync` and before derived output, then starts a fresh process that replays only the run manifest and JSONL. It must report the last valid revision/hash and prove no duplicate event was appended.
-
-Evidence is preserved under `build/evidence/phase-01/<build-manifest-sha256>/runtime/{init,append,forced-stop,replay}/` with command metadata, stdout, stderr, exit/signal status, journal bytes, replay result, and verdict.
+`tests/fixtures/recovery/seed/` contains fixed run/command/event IDs, timestamps, immutable input, workflow family/mode, and capabilities. The test initializes, appends `baseline.probe_recorded`, sends SIGKILL after journal fsync and before derived output, then replays only manifest+JSONL in a fresh process. Evidence records signal/status, exact bytes/hashes, last revision/hash, and no duplicate.
 
 ## Confinement Fixture
 
-`tests/fixtures/confinement/` contains an allowed CJK/LaTeX file, an oversized file, a sensitive `.env` canary, a symlink to an outside secret, an unconfigured second root, and a unique outside secret. Parameterized cases cover traversal, absolute outside path, symlink escape, root denial, sensitive path, over-budget request, and valid bounded read.
+`tests/fixtures/confinement/` contains bounded CJK/LaTeX content, oversized content, `.env`, escaping symlink, unconfigured root, and unique outside secret. Cases cover traversal, absolute outside path, symlink escape, root denial, sensitive path, over-budget, and bounded success. Every denial is typed/no-content with no canary leak. A direct-native test proves enforcement is in file-base. Windows junction behavior remains unclaimed in the Linux Phase 1 baseline.
 
-Every denial must return a typed error, contain no content, omit the outside canary from all captured streams, and write evidence under `build/evidence/phase-01/<build-manifest-sha256>/confinement/<case-id>/`.
+## Legal and Supply-Chain Evidence
+
+- Preserve and execute the pre-vendor native gate before source copy.
+- After materialization and after patch 0002, execute the extended gate over policy, checkers, notice generator, every patch, all C/Python/new dependencies, first-party wheel, schemas, native binary, and exact stage.
+- `technical_qualification` may be PASS while `release_qualification` is BLOCKED. Missing use/distribution or permission evidence must produce BLOCKED with evidence-needed fields.
 
 ## Evidence Contract
 
-- `environment.json` records allowlisted tool and OS versions without dumping secrets.
-- `stage/` records inventory, digests, and forbidden-file scan.
-- `source/` records materialization, digest checks, license verdict, and SBOM check.
-- `plugin/` records validation, install, route, version, and launcher commands and verdicts.
-- `schema/` records generated-schema diff and independent Python/MCP validation.
-- `runtime/` records init, append, forced-stop, and replay.
-- `confinement/` records each request, response, and no-content verdict.
-- `summary.json` and `SUMMARY.md` report technical qualification separately from release qualification.
+- `environment/`: allowlisted OS/tool/host identities, no secrets.
+- `pre-vendor-license/`: exact clean pins, absent-vendor assertion, native policy/checkers/generator, notices, raw streams/status.
+- `source/`: network denial, syscall audit, materialization, patch/build, drift.
+- `license/`: raw post-materialization/post-0002 gate, notices, SBOM, use/distribution, verdict.
+- `native/{upstream,asan-ubsan,tsan}/`: unchanged suite hashes, flags, raw runs, sanitizer/network audits.
+- `stage/`: exact inventory, hashes, validation/install, private scans.
+- `plugin/`: route, CLI/MCP launchers, installed version; all convergence attempts.
+- `schema/`: generation diff and independent Python/native validation.
+- `runtime/`: init, append, forced-stop, replay.
+- `confinement/`: every request/result/no-content verdict.
+- `summary.json` and `SUMMARY.md`: independent technical and release qualification.
 
-## Manual-Only Verifications
+## Manual External Evidence
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Intended use/distribution classification and any owner permission are substantively valid | SUP-04 | Legal intent and permission authenticity cannot be inferred by an automated test | Review `supply-chain/use-distribution.json`, component licenses, and attached permission evidence; record accountable approval. Automated tests still require missing/unknown data to return BLOCKED. |
+| Behavior | Requirement | Why external | Expected state without evidence |
+|---|---|---|---|
+| Intended use/distribution and permission authenticity | SUP-04 | Automation cannot determine legal intent or authenticate permission | technical PASS / release BLOCKED |
+| Codex host authentication | PKG-02, PKG-03 | The CLI may require user authentication | dynamic authentication gate, then retry same probe |
 
 ## Validation Sign-Off
 
-- [x] All planned requirement rows have automated commands or Wave 0 dependencies.
-- [x] Sampling continuity permits no three consecutive tasks without automated verification.
-- [x] Wave 0 names every missing test and fixture.
-- [x] No watch-mode flags are used.
-- [x] Quick feedback target is below 30 seconds; local full-suite target is below 180 seconds.
-- [x] `nyquist_compliant: true` is set in frontmatter.
-
-**Approval:** strategy approved for planning on 2026-07-13; implementation evidence pending.
+- [x] Seven plan waves and validation waves match.
+- [x] Every requirement has exactly one owner and an automated command.
+- [x] Every RED contract executes behavior tests and expects failure before implementation.
+- [x] Pre-vendor native legal tooling executes before `vendor/sources/**` copy.
+- [x] Post-patch gate covers patches, policy/checkers/notices, and all C/Python/new dependencies.
+- [x] Unchanged upstream, ASan+UBSan, and separate TSan runs are network-denied and required by the clean gate.
+- [x] Installed tests remove repository/PYTHONPATH/network access.
+- [x] Raw evidence and release BLOCKED semantics are explicit.

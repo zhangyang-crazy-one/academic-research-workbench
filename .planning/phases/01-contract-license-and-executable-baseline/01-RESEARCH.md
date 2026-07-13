@@ -221,12 +221,14 @@ academic-research-workbench/
 ├── skills/academic-research-workbench/SKILL.md
 ├── pyproject.toml
 ├── uv.lock
+├── bin/arw                               # stage-relative offline wheelhouse/cache-venv launcher
 ├── src/arw/
 │   ├── cli.py                           # route, init, append, replay, version, doctor
 │   ├── canonical.py                     # canonical JSON bytes + SHA-256
 │   ├── models.py                        # strict Pydantic models
 │   ├── journal.py                       # lock, append, fsync, replay
-│   └── evidence.py                      # command/verdict artifact writer
+│   ├── evidence.py                      # command/verdict artifact writer
+│   └── schema_registry.py               # deterministic schema generation/identity
 ├── schemas/v1/
 │   ├── run-manifest.schema.json
 │   ├── event.schema.json
@@ -234,11 +236,16 @@ academic-research-workbench/
 │   ├── mcp-read-request.schema.json
 │   ├── mcp-read-result.schema.json
 │   ├── source-manifest.schema.json
+│   ├── build-identity.schema.json
 │   └── version-report.schema.json
 ├── vendor/
-│   ├── sources/ars/
+│   ├── sources/academic-research-skills/
+│   ├── sources/experiment-agent/
 │   ├── sources/file-base/
 │   ├── patches/file-base/0001-file-base-server-name.patch
+│   ├── patches/file-base/0002-phase1-confined-read.patch
+│   ├── python/wheelhouse/
+│   ├── python/wheelhouse.lock.json
 │   ├── source-manifest.json
 │   └── LICENSES/
 ├── LICENSES/                            # staged collective license inventory
@@ -246,8 +253,11 @@ academic-research-workbench/
 ├── MODIFICATIONS.md
 ├── supply-chain/use-distribution.json
 ├── scripts/
+│   ├── pre-vendor-license-gate
 │   ├── verify-sources
+│   ├── offline-exec
 │   ├── build-file-base
+│   ├── license-gate
 │   ├── file-base-mcp
 │   ├── stage-plugin
 │   ├── smoke-staged-plugin
@@ -394,10 +404,11 @@ build/evidence/phase-01/<build-manifest-sha256>/
 1. **Wave 0 — contracts and test/evidence harness:** add `pyproject.toml`, lock, strict schemas, fixtures, stage/evidence helpers, and failing tests for all 13 requirements. [CITED: `.planning/config.json` Nyquist validation]
 2. **Plugin canary:** create the minimal manifest, one routable skill, no-op supported hook companion, `.mcp.json`, stage allowlist, and validator test. [CITED: CONTEXT D-01]
 3. **Installed launcher probe:** install the canary from an isolated temporary marketplace and prove or reject staged-relative MCP launch; freeze only the behavior shown by evidence. [CITED: CONTEXT D-08]
-4. **Supply-chain baseline:** materialize ARS/file-base, copy/hash the ordered patch, establish component licenses/notices/use decision, lock dependencies, and make all digest mutation tests pass. [CITED: CONTEXT D-04/D-05]
-5. **Minimal runtime:** implement route/version, run manifest, two event types, canonical bytes/hash chain, lock/append/fsync/replay, and forced-stop fixture. [CITED: CONTEXT D-02/D-03/D-09]
-6. **Fixture MCP boundary:** implement the one bounded read request/result schema and internal root/symlink/sensitive/budget denials; do not add indexing or general search. [CITED: CONTEXT D-06 and deferred Phase 3]
-7. **Integrated staged smoke:** rebuild from clean inputs, install exact stage, run route/version/runtime/MCP flows, export SBOM, scan exclusions, and emit technical plus release verdicts. [CITED: ROADMAP Phase 1 success criteria]
+4. **Pre-vendoring legal gate:** reconstruct exact clean upstream pins temporarily and execute the native file-base gate, policy, checkers, and notice generator with raw evidence while `vendor/sources/**` is absent. [CITED: `AGENTS.md` mandatory-before-vendoring gate]
+5. **Supply-chain baseline:** only after that receipt passes, materialize ARS/file-base, copy/hash the ordered patch, establish component licenses/notices/use decision, lock dependencies, and make all digest mutation tests pass. [CITED: CONTEXT D-04/D-05]
+6. **Minimal runtime:** implement route/version, run manifest, two event types, canonical bytes/hash chain, lock/append/fsync/replay, and forced-stop fixture. [CITED: CONTEXT D-02/D-03/D-09]
+7. **Fixture MCP boundary:** implement the bounded read contract and internal denials, then run the unchanged upstream C suite, ASan+UBSan, and a separate TSan build/run under network denial. [CITED: CONTEXT D-06; `AGENTS.md` file-base tests]
+8. **Integrated staged smoke:** rebuild from clean inputs, rerun the extended post-patch legal gate, require all native safety evidence, install exact stage, run route/version/runtime/MCP flows, scan exclusions, and emit technical plus release verdicts. [CITED: ROADMAP Phase 1 success criteria]
 
 This order front-loads host and legal invalidators while keeping enough skeleton available to probe them. [CITED: `.planning/research/SUMMARY.md`]
 
@@ -444,17 +455,24 @@ jsonschema.Draft202012Validator(schema).validate(payload)
 ```json
 {
   "schema_version": "1.0.0",
+  "build_identity_sha256": "...",
   "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
   "runtime": {"version": "0.1.0", "python": "3.14.6"},
   "ars": {"adapter_version": "0.1.19", "revision": "c22c17e...", "tree_sha256": "..."},
+  "experiment_agent": {"revision": "9b063fa...", "tree_sha256": "..."},
   "file_base": {"revision": "ee68144...", "binary_sha256": "..."},
-  "patch_set": [{"order": 1, "sha256": "dd6022c..."}],
+  "patch_set": [
+    {"order": 1, "sha256": "dd6022c..."},
+    {"order": 2, "sha256": "..."}
+  ],
+  "python_wheelhouse": {"lock_sha256": "..."},
   "schemas": {"registry_version": "1.0.0", "aggregate_sha256": "..."},
+  "stage_payload_inventory_sha256": "...",
   "platform_claim": "linux-x86_64-phase1"
 }
 ```
 
-The command reads generated build metadata rather than querying mutable source checkouts at runtime. [CITED: CONTEXT D-07 and D-02]
+The stage generates `share/arw/build-identity.json` only after source/native build and deterministic generation of all eight schemas. It hashes every staged payload entry except itself; a final stage inventory then records the identity digest, avoiding self-reference. `bin/arw` supplies the installed stage-relative identity path to the CLI. The installed command reads that packaged resource and emits the independently validated version-report shape; it never queries mutable source checkouts or falls back to constants. [CITED: CONTEXT D-07 and D-02]
 
 ## Environment Availability
 
@@ -483,7 +501,7 @@ The command reads generated build metadata rather than querying mutable source c
 | Schema | Generated-schema drift and independent fixture validation | `uv run pytest -q tests/schema` |
 | Integration | Init/append/replay/forced-stop and direct MCP confinement | `uv run pytest -q tests/integration` |
 | Staged package | Manifest, stage inventory, isolated install, skill route, launcher/version smoke | `uv run pytest -q tests/staged` |
-| Phase gate | Clean materialize/build/stage plus every test and evidence summary | `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` |
+| Phase gate | Clean pre-vendor/materialize/build/stage plus upstream C, ASan+UBSan, separate TSan, every test, and evidence summary | `./scripts/verify-phase-1 --clean --evidence-root build/evidence/phase-01` |
 
 The authenticated/model-backed route smoke may be marked with `@pytest.mark.codex_host` for fast local runs, but it is mandatory at phase completion and cannot be replaced by static skill inspection. [CITED: PKG-02 and CONTEXT D-01]
 
@@ -536,7 +554,7 @@ Parameterize relative traversal, absolute outside path, symlink escape, unconfig
 
 - **Per implementation task:** run the narrow affected test file plus `uv run pytest -q tests/schema`; preserve raw evidence only for integration/staged tasks. [CITED: `.planning/config.json` Nyquist validation]
 - **Per wave merge:** run `uv run pytest -q tests/unit tests/schema tests/integration`; if plugin/stage files changed, also run `tests/staged` without the authenticated marker. [CITED: implementation recommendation]
-- **Phase completion:** run `./scripts/verify-phase-1 --clean`, including the authenticated fresh-thread route smoke, installed launcher/MCP probe, forced-stop/replay, all confinement cases, digest mutation tests, staged exclusion scan, SBOM/license gate, and summary generation. [CITED: ROADMAP Phase 1 success criteria]
+- **Phase completion:** run `./scripts/verify-phase-1 --clean`, including the pre-vendor legal receipt, authenticated route smoke, installed launcher/MCP probe, forced-stop/replay, confinement, unchanged upstream C suite, ASan+UBSan, separate TSan, digest mutation, staged exclusion, extended SBOM/license gate, and summary generation. [CITED: ROADMAP Phase 1 success criteria; `AGENTS.md`]
 - **Release verdict:** technical PASS is insufficient when `license-verdict.json` is BLOCKED; preserve both statuses. [CITED: CONTEXT D-05]
 
 ### Wave 0 Gaps
@@ -545,6 +563,7 @@ Parameterize relative traversal, absolute outside path, symlink escape, unconfig
 - [ ] `tests/unit/test_canonical.py` and `tests/integration/test_journal_replay.py` — RUN-01/RUN-02. [CITED: requirements map]
 - [ ] `tests/schema/test_schema_drift.py` and `tests/schema/test_cross_language.py` — VER-01. [CITED: requirements map]
 - [ ] `tests/integration/test_mcp_confinement.py` plus fixtures — FILE-05. [CITED: requirements map]
+- [ ] `tests/integration/test_pre_vendor_license_gate.py` — exact-pin native legal gate must pass before any source-tree copy. [CITED: `AGENTS.md`]
 - [ ] `tests/staged/` install/route/launcher/inventory/exclusion tests — PKG-01..04 and SUP-03/SUP-05. [CITED: requirements map]
 - [ ] `scripts/verify-phase-1` evidence orchestrator. [CITED: CONTEXT D-09]
 
@@ -581,20 +600,20 @@ Parameterize relative traversal, absolute outside path, symlink escape, unconfig
 |---|---|---|---|
 | — | No unverified host behavior is adopted as a design fact; launcher resolution and routed-skill behavior are executable Phase 1 probes. | Staged Plugin Smoke Path | The probe may select a different cache-local launcher mechanism without changing phase architecture. [CITED: CONTEXT D-08] |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What is the intended use and distribution class?**
-   - What is known: ARS inputs carry CC BY-NC 4.0, and private repository status is not accepted as proof of noncommercial use. [CITED: ARS license; CONTEXT D-05]
-   - What is unclear: whether the staged plugin supports internal business/commercial advantage or will be distributed.
-   - Recommendation: create `use-distribution.json` in Phase 1; default release verdict to BLOCKED until classification and any permission are attached. [CITED: CONTEXT D-05]
-2. **How does `codex-cli 0.144.1` resolve a staged plugin's relative MCP command after install?**
-   - What is known: the CLI supports configured marketplaces and plugin install, and the project forbids source-checkout absolute paths. [VERIFIED: local CLI help; CITED: CONTEXT D-02]
-   - What is unclear: the exact cache working directory/environment available to `.mcp.json` launchers.
-   - Recommendation: execute the canary in implementation step 3, preserve raw evidence, then freeze the proven staged/cache-local launcher.
-3. **Which ARS license path is canonical for materialization?**
-   - What is known: the supplied root path does not exist; two identical CC BY-NC files exist under `ars/` with SHA-256 `b3848009...`. [VERIFIED: local shallow search and digest]
-   - What is unclear: whether the source snapshot should expose one or both staged license names.
-   - Recommendation: preserve the snapshot's original path(s), choose one component-specific staged license copy, and record both source path and staged path in the manifest.
+1. **SUP-04 intended-use/distribution evidence** — RESOLVED as a two-axis qualification contract.
+   - The automated technical result is allowed to be `PASS` when source, package, schema, runtime, and confinement gates pass.
+   - The release result is `BLOCKED` until `supply-chain/use-distribution.json` records intended use, distribution class, accountable approval, and any permission required by the ARS/experiment-agent CC BY-NC 4.0 inputs. Private repository status is not evidence of noncommercial use.
+   - Phase 1 completion therefore expects technical `PASS` plus release `BLOCKED` when external evidence is absent; no plan waits for or fabricates legal approval. [CITED: CONTEXT D-05]
+2. **Installed CLI and MCP launcher strategy** — RESOLVED as stage-relative launchers plus an offline cache-local Python environment.
+   - `bin/arw` resolves the installed plugin root from its own path, selects only `ARW_PYTHON` or a PATH-resolved Python 3.14/3.13 inside the declared range, clears `PYTHONPATH`, disables user site packages, verifies a checked-in wheelhouse manifest, and creates `$CODEX_HOME/arw/runtime/<identity-sha256>/venv` under a lock with pip `--no-index --require-hashes --find-links`. The stage includes a freshly built first-party wheel and all audited dependency/build wheels. It never imports repository source or depends on repository cwd/network.
+   - `scripts/file-base-mcp` resolves its own installed plugin root and execs the staged `libexec/file-base-mcp`; `.mcp.json` uses only the plugin-root-relative command shape accepted by the installed-host probe and grants no implicit plugin/HOME root.
+   - Both host probes are convergence gates: probe, classify, adapt owned source/config, clean restage, cachebuster/reinstall, and retry in a fresh process until successful. A documented authentication failure is the only external pause; path/cwd/cache/config/binary/schema/framing failures remain executor-owned. Tests run outside the repository with isolated HOME/CODEX_HOME, cleared PYTHONPATH, source access denied, and network disabled. [CITED: CONTEXT D-01/D-02/D-08/D-09]
+3. **Canonical ARS and experiment-agent license paths** — RESOLVED with component-specific source and stage paths.
+   - Academic Research Skills import evidence: `/home/zhangyangrui/.codex/skills/academic-research-suite/ars/LICENSE.academic-research-skills` (SHA-256 `b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c`); canonical materialized path `vendor/sources/academic-research-skills/LICENSE`; staged path `LICENSES/academic-research-skills-CC-BY-NC-4.0.txt`.
+   - Experiment Agent import evidence: `/home/zhangyangrui/.codex/skills/academic-research-suite/ars/experiment-agent/LICENSE` (SHA-256 `f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25`); canonical materialized path `vendor/sources/experiment-agent/LICENSE`; staged path `LICENSES/experiment-agent-CC-BY-NC-4.0.txt`.
+   - The duplicate adapter file `ars/LICENSE` is retained in provenance as an alias with SHA-256 `b3848009...`; it does not replace either component-specific manifest entry. File-base uses `vendor/sources/file-base/LICENSE` and staged `LICENSES/file-base-MIT.txt`. [VERIFIED: local files and digests]
 
 ## Sources
 
