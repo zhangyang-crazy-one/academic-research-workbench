@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -94,6 +93,8 @@ def test_only_terminal_unverifiable_suffix_is_recoverable(
         if fixture.endswith(".hex")
         else (FIXTURES / fixture).read_bytes()
     )
+    if fixture == "partial-json.tail":
+        tail = tail.rstrip(b"\n")
     path.write_bytes(valid + tail)
     before = path.read_bytes()
 
@@ -186,4 +187,3 @@ def test_unbound_next_segment_after_damaged_tail_is_blocked(tmp_path: Path) -> N
 
     assert state.recovery_health == "blocked"
     assert state.revision == 1
-

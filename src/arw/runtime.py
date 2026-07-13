@@ -87,8 +87,12 @@ class RuntimeCommandService:
 
     def read_state(self, *, now: datetime | None = None) -> RuntimeState:
         replayed = replay_run(self.run_root, lock_timeout=self.lock_timeout)
-        validate_accepted_event_manifests(self.run_root, replayed.events)
-        return reduce_events(replayed.workflow_definition_id, replayed.events, now=now)
+        return reduce_events(
+            replayed.workflow_definition_id,
+            replayed.events,
+            now=now,
+            recovery_health=replayed.recovery_health,
+        )
 
     @staticmethod
     def _rejection(state: RuntimeState, code: str, message: str) -> CommandOutcome:
@@ -121,9 +125,11 @@ class RuntimeCommandService:
             request.occurred_at, "%Y-%m-%dT%H:%M:%SZ"
         ).replace(tzinfo=UTC)
         with locked_replay(self.run_root, lock_timeout=self.lock_timeout) as (root, replayed):
-            validate_accepted_event_manifests(root, replayed.events)
             state = reduce_events(
-                replayed.workflow_definition_id, replayed.events, now=effective_now
+                replayed.workflow_definition_id,
+                replayed.events,
+                now=effective_now,
+                recovery_health=replayed.recovery_health,
             )
             if request.run_id != replayed.run_id:
                 return self._rejection(state, "run-id-mismatch", "request run identity differs")
@@ -133,6 +139,18 @@ class RuntimeCommandService:
                     "legacy-run-read-only",
                     "Phase 2 mutation requires a segmented journal",
                 )
+            if replayed.recovery_health != "healthy":
+                code = (
+                    "recovery-required"
+                    if replayed.recovery_health == "recoverable_tail"
+                    else "recovery-blocked"
+                )
+                return self._rejection(
+                    state,
+                    code,
+                    replayed.recovery_message or "journal recovery health is not healthy",
+                )
+            validate_accepted_event_manifests(root, replayed.events)
             if request.event_id in replayed.event_ids:
                 return self._rejection(state, "duplicate-event-id", "event ID was already accepted")
             if request.command_id in replayed.command_ids:

@@ -15,7 +15,7 @@ from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
-from arw.manifests import ManifestError, validate_accepted_event_manifests
+from arw.manifests import ManifestError
 from arw.models import (
     AppendProbeRequest,
     ArtifactAcceptanceRequest,
@@ -203,16 +203,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "replay":
             state = replay_run(args.run_root, lock_timeout=args.lock_timeout)
-            validate_accepted_event_manifests(args.run_root, state.events)
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
             replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
-            validate_accepted_event_manifests(args.run_root, replayed.events)
             state = reduce_events(
                 replayed.workflow_definition_id,
                 replayed.events,
                 now=_parse_utc(args.at),
+                recovery_health=replayed.recovery_health,
             )
             report = build_status_report(state)
             if args.json_output:

@@ -25,10 +25,13 @@ from arw.models import (
     BaselineProbePayload,
     CanonicalEvent,
     InitRunRequest,
+    RecoveryHealth,
     RunInitializedPayload,
     RunManifest,
     ZERO_HASH,
 )
+from arw.manifests import ManifestError, validate_accepted_event_manifests
+from arw.recovery import RecoveryError, validate_recovery_boundary
 from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 
@@ -54,6 +57,9 @@ class SegmentScan:
     sha256: str
     accepted_byte_end: int
     events: tuple[CanonicalEvent, ...]
+    fault_offset: int | None = None
+    fault_class: str | None = None
+    raw_tail: bytes = b""
 
 
 @dataclass(frozen=True)
@@ -68,6 +74,8 @@ class ReplayState:
     events: tuple[CanonicalEvent, ...] = ()
     segments: tuple[SegmentScan, ...] = ()
     journal_layout: str | None = None
+    recovery_health: RecoveryHealth = "healthy"
+    recovery_message: str | None = None
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -349,60 +357,168 @@ def _replay_unlocked(root: Path) -> ReplayState:
     events: list[CanonicalEvent] = []
     segments: list[SegmentScan] = []
     manifest_hash = sha256_hex(manifest_bytes)
+    recovery_health: RecoveryHealth = "healthy"
+    recovery_message: str | None = None
+    pending_damaged: SegmentScan | None = None
+
+    def validate_event(payload: object, line: bytes, event_number: int) -> CanonicalEvent:
+        nonlocal revision, previous_hash
+        event: CanonicalEvent = _strict_model(
+            CanonicalEvent, payload, f"event {event_number}"
+        )
+        wire_event = _event_wire_mapping(event)
+        if canonical_json_bytes(wire_event) != line:
+            raise JournalError(f"journal event {event_number} bytes are not canonical")
+        actual_hash = sha256_hex(canonical_event_bytes(wire_event))
+        if event.event_sha256 != actual_hash:
+            raise JournalError(f"journal event {event_number} hash does not cover its bytes")
+        if event.run_id != manifest.run_id:
+            raise JournalError(f"journal event {event_number} run identity differs from manifest")
+        if event.sequence != event_number:
+            raise JournalError(f"journal event {event_number} sequence is not contiguous")
+        if event.expected_revision != revision or event.resulting_revision != revision + 1:
+            raise JournalError(f"journal event {event_number} revision is not contiguous")
+        if event.prev_event_sha256 != previous_hash:
+            raise JournalError(f"journal event {event_number} previous hash does not match")
+        if event.event_id in event_ids or event.command_id in command_ids:
+            raise JournalError(f"journal event {event_number} repeats an accepted identity")
+        if event_number == 1:
+            if event.event_type != "run.initialized":
+                raise JournalError("first journal event must initialize the run")
+            if not isinstance(event.payload, RunInitializedPayload):
+                raise JournalError("first journal event has the wrong payload")
+            if event.payload.manifest_sha256 != manifest_hash:
+                raise JournalError("first journal event does not bind the manifest bytes")
+        elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
+            raise JournalError("Phase 1 journal contains an unsupported later event")
+        if event.event_type in {"artifact.accepted", "passport.accepted"}:
+            try:
+                validate_accepted_event_manifests(root, (event,))
+            except ManifestError as error:
+                raise JournalError(str(error)) from error
+        return event
+
+    def accept_event(event: CanonicalEvent, segment_events: list[CanonicalEvent]) -> None:
+        nonlocal revision, previous_hash
+        revision = event.resulting_revision
+        previous_hash = event.event_sha256
+        event_ids.add(event.event_id)
+        command_ids.add(event.command_id)
+        events.append(event)
+        segment_events.append(event)
+
     for segment_index, segment_path in enumerate(segment_paths, start=1):
         try:
             segment_bytes = segment_path.read_bytes()
         except OSError as error:
             raise JournalError(f"segment {segment_path.name} is unreadable: {error}") from error
-        if not segment_bytes or not segment_bytes.endswith(b"\n"):
-            raise JournalError(f"segment {segment_path.name} has an empty or incomplete tail")
         segment_events: list[CanonicalEvent] = []
         accepted_byte_end = 0
-        for line in segment_bytes.splitlines(keepends=True):
+        offset = 0
+        if not segment_bytes:
+            if not events:
+                raise JournalError("journal has no trustworthy prefix: first segment is empty")
+            segments.append(
+                SegmentScan(
+                    index=segment_index,
+                    name=segment_path.name,
+                    relative_path=segment_path.relative_to(root).as_posix(),
+                    byte_count=0,
+                    sha256=sha256_hex(segment_bytes),
+                    accepted_byte_end=0,
+                    events=(),
+                    fault_offset=0,
+                    fault_class="empty-segment",
+                )
+            )
+            recovery_health = "blocked"
+            recovery_message = "empty segment cannot establish a recovery boundary"
+            break
+
+        while offset < len(segment_bytes):
+            newline = segment_bytes.find(b"\n", offset)
+            has_newline = newline >= 0
+            line_end = newline + 1 if has_newline else len(segment_bytes)
+            line = segment_bytes[offset:line_end]
+            is_terminal_record = line_end == len(segment_bytes)
             event_number = len(events) + 1
             try:
                 payload = strict_json_loads(line)
-            except (UnicodeError, ValueError) as error:
+            except UnicodeError as error:
+                fault_class = "truncated-utf8" if not has_newline else "malformed-record"
+                fault_message = str(error)
+            except ValueError as error:
+                fault_class = "incomplete-record" if not has_newline else "malformed-record"
+                fault_message = str(error)
+            else:
+                try:
+                    event = validate_event(payload, line, event_number)
+                    if pending_damaged is not None:
+                        if offset != 0 or event.event_type != "recovery.completed":
+                            raise RecoveryError(
+                                "segment after damaged tail must begin with recovery.completed"
+                            )
+                        validate_recovery_boundary(root, event, pending_damaged)
+                        pending_damaged = None
+                    elif event.event_type == "recovery.completed":
+                        raise RecoveryError(
+                            "recovery.completed is legal only as the first event after a damaged tail"
+                        )
+                except (JournalError, RecoveryError) as error:
+                    if not events:
+                        raise JournalError(
+                            f"journal has no trustworthy prefix: {error}"
+                        ) from error
+                    segments.append(
+                        SegmentScan(
+                            index=segment_index,
+                            name=segment_path.name,
+                            relative_path=segment_path.relative_to(root).as_posix(),
+                            byte_count=len(segment_bytes),
+                            sha256=sha256_hex(segment_bytes),
+                            accepted_byte_end=accepted_byte_end,
+                            events=tuple(segment_events),
+                            fault_offset=offset,
+                            fault_class=(
+                                "recovery-binding"
+                                if isinstance(error, RecoveryError)
+                                else "event-integrity"
+                            ),
+                            raw_tail=segment_bytes[offset:],
+                        )
+                    )
+                    recovery_health = "blocked"
+                    recovery_message = str(error)
+                    break
+                accept_event(event, segment_events)
+                offset = line_end
+                accepted_byte_end = offset
+                continue
+
+            if not events:
                 raise JournalError(
-                    f"journal event {event_number} in {segment_path.name} is malformed: {error}"
-                ) from error
-            event: CanonicalEvent = _strict_model(
-                CanonicalEvent, payload, f"event {event_number}"
-            )
-            wire_event = _event_wire_mapping(event)
-            if canonical_json_bytes(wire_event) != line:
-                raise JournalError(f"journal event {event_number} bytes are not canonical")
-            actual_hash = sha256_hex(canonical_event_bytes(wire_event))
-            if event.event_sha256 != actual_hash:
-                raise JournalError(f"journal event {event_number} hash does not cover its bytes")
-            if event.run_id != manifest.run_id:
-                raise JournalError(f"journal event {event_number} run identity differs from manifest")
-            if event.sequence != event_number:
-                raise JournalError(f"journal event {event_number} sequence is not contiguous")
-            if event.expected_revision != revision or event.resulting_revision != revision + 1:
-                raise JournalError(f"journal event {event_number} revision is not contiguous")
-            if event.prev_event_sha256 != previous_hash:
-                raise JournalError(f"journal event {event_number} previous hash does not match")
-            if event.event_id in event_ids or event.command_id in command_ids:
-                raise JournalError(f"journal event {event_number} repeats an accepted identity")
-            if event_number == 1:
-                if event.event_type != "run.initialized":
-                    raise JournalError("first journal event must initialize the run")
-                if not isinstance(event.payload, RunInitializedPayload):
-                    raise JournalError("first journal event has the wrong payload")
-                if event.payload.manifest_sha256 != manifest_hash:
-                    raise JournalError("first journal event does not bind the manifest bytes")
-            elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
-                raise JournalError("Phase 1 journal contains an unsupported later event")
-            revision = event.resulting_revision
-            previous_hash = event.event_sha256
-            event_ids.add(event.event_id)
-            command_ids.add(event.command_id)
-            events.append(event)
-            segment_events.append(event)
-            accepted_byte_end += len(line)
-        segments.append(
-            SegmentScan(
+                    f"journal has no trustworthy prefix: malformed first event: {fault_message}"
+                )
+            if pending_damaged is not None:
+                segments.append(
+                    SegmentScan(
+                        index=segment_index,
+                        name=segment_path.name,
+                        relative_path=segment_path.relative_to(root).as_posix(),
+                        byte_count=len(segment_bytes),
+                        sha256=sha256_hex(segment_bytes),
+                        accepted_byte_end=accepted_byte_end,
+                        events=tuple(segment_events),
+                        fault_offset=offset,
+                        fault_class="recovery-binding",
+                        raw_tail=segment_bytes[offset:],
+                    )
+                )
+                recovery_health = "blocked"
+                recovery_message = "recovery boundary first record is malformed"
+                break
+            recoverable = is_terminal_record and manifest.journal_layout == "segmented-v1"
+            scan = SegmentScan(
                 index=segment_index,
                 name=segment_path.name,
                 relative_path=segment_path.relative_to(root).as_posix(),
@@ -410,8 +526,42 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 sha256=sha256_hex(segment_bytes),
                 accepted_byte_end=accepted_byte_end,
                 events=tuple(segment_events),
+                fault_offset=offset,
+                fault_class=fault_class,
+                raw_tail=segment_bytes[offset:],
             )
-        )
+            segments.append(scan)
+            if not recoverable:
+                recovery_health = "blocked"
+                recovery_message = "malformed record is not the final segment suffix"
+            elif segment_index < len(segment_paths):
+                pending_damaged = scan
+            else:
+                recovery_health = "recoverable_tail"
+                recovery_message = fault_message
+            break
+        else:
+            segments.append(
+                SegmentScan(
+                    index=segment_index,
+                    name=segment_path.name,
+                    relative_path=segment_path.relative_to(root).as_posix(),
+                    byte_count=len(segment_bytes),
+                    sha256=sha256_hex(segment_bytes),
+                    accepted_byte_end=accepted_byte_end,
+                    events=tuple(segment_events),
+                )
+            )
+
+        if recovery_health == "blocked":
+            break
+        if pending_damaged is not None and segment_index == len(segment_paths):
+            recovery_health = "recoverable_tail"
+            recovery_message = "damaged terminal suffix requires explicit recovery"
+
+    if pending_damaged is not None and recovery_health == "healthy":
+        recovery_health = "blocked"
+        recovery_message = "damaged segment is not followed by a valid recovery boundary"
 
     return ReplayState(
         run_id=manifest.run_id,
@@ -424,6 +574,8 @@ def _replay_unlocked(root: Path) -> ReplayState:
         events=tuple(events),
         segments=tuple(segments),
         journal_layout=manifest.journal_layout,
+        recovery_health=recovery_health,
+        recovery_message=recovery_message,
     )
 
 
@@ -500,6 +652,8 @@ def append_runtime_event_unlocked(
         raise JournalError("accepted replay has no active segment")
     if state.journal_layout != "segmented-v1":
         raise JournalError("Phase 2 runtime events require a segmented journal")
+    if state.recovery_health != "healthy":
+        raise JournalError("runtime append requires a healthy journal")
     if (
         event.run_id != state.run_id
         or event.sequence != state.event_count + 1

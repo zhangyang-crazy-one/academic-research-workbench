@@ -41,6 +41,7 @@ UtcTimestamp = Annotated[
 Capability = Literal["canonical-journal", "forced-stop-replay"]
 ActorRole = Literal["parent_control_plane", "operator", "worker", "hook"]
 RecoveryHealth = Literal["healthy", "recoverable_tail", "blocked"]
+RecoveryFaultClass = Literal["incomplete-record", "malformed-record", "truncated-utf8"]
 CheckpointKind = Literal["stage_handoff", "human_decision", "explicit", "recovery"]
 JournalLayout = Literal["segmented-v1"]
 StableRuntimeId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{2,95}$")]
@@ -182,9 +183,56 @@ class RecoveryCompletedPayload(StrictModel):
     prior_valid_revision: Annotated[int, Field(ge=0)]
     prior_valid_head_sha256: Sha256
     original_segment_sha256: Sha256
+    original_segment_byte_count: Annotated[int, Field(ge=1)]
     quarantine_sha256: Sha256
+    quarantine_receipt_sha256: Sha256
     fault_offset: Annotated[int, Field(ge=0)]
+    fault_class: RecoveryFaultClass
     reason_code: StableRuntimeId
+
+
+class RecoveryReceipt(StrictModel):
+    schema_version: Literal["1.0.0"]
+    run_id: RunId
+    recovery_id: StableRuntimeId
+    segment_relative_path: str
+    original_segment_sha256: Sha256
+    original_segment_byte_count: Annotated[int, Field(ge=1)]
+    accepted_byte_end: Annotated[int, Field(ge=1)]
+    fault_offset: Annotated[int, Field(ge=1)]
+    fault_class: RecoveryFaultClass
+    quarantine_raw_path: str
+    quarantine_raw_sha256: Sha256
+    prior_valid_revision: Annotated[int, Field(ge=1)]
+    prior_valid_head_sha256: Sha256
+    operator_id: ActorId
+    reason_code: StableRuntimeId
+    reason_text: Annotated[str, Field(min_length=1, max_length=2048)]
+    command_id: CommandId
+    event_id: EventId
+    occurred_at: UtcTimestamp
+
+    @field_validator("segment_relative_path", "quarantine_raw_path")
+    @classmethod
+    def recovery_paths_are_normalized(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if (
+            not value
+            or "\x00" in value
+            or "\\" in value
+            or path.is_absolute()
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            raise ValueError("recovery paths must be normalized relative POSIX paths")
+        return value
+
+    @model_validator(mode="after")
+    def offsets_fit_original_segment(self) -> Self:
+        if self.accepted_byte_end != self.fault_offset:
+            raise ValueError("accepted byte end must equal the fault offset")
+        if self.fault_offset >= self.original_segment_byte_count:
+            raise ValueError("fault offset must precede the end of the damaged segment")
+        return self
 
 
 EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {

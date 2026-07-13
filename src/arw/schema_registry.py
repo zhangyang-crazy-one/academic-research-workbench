@@ -31,6 +31,7 @@ SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "material-passport.schema.json",
     "passport-pointer.schema.json",
     "rejection.schema.json",
+    "recovery-receipt.schema.json",
     "resume-request.schema.json",
     "status.schema.json",
     "transition-request.schema.json",
