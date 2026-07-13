@@ -9,16 +9,18 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_checked_in_phase1_schemas_regenerate_byte_stably(tmp_path: Path) -> None:
+def test_checked_in_schemas_regenerate_byte_stably(tmp_path: Path) -> None:
     from arw.schema_registry import (
         PHASE1_SCHEMA_NAMES,
+        SCHEMA_NAMES,
         aggregate_schema_sha256,
         regenerate_schemas,
         validate_checked_in_schemas,
     )
 
     assert len(PHASE1_SCHEMA_NAMES) == 8
-    assert validate_checked_in_schemas() == PHASE1_SCHEMA_NAMES
+    assert {"rejection.schema.json", "status.schema.json"} <= set(SCHEMA_NAMES)
+    assert validate_checked_in_schemas() == SCHEMA_NAMES
     first = regenerate_schemas(tmp_path / "first")
     second = regenerate_schemas(tmp_path / "second")
     assert first == second
