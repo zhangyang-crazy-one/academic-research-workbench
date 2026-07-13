@@ -165,6 +165,16 @@ copy_file "schemas/v1/route-result.schema.json"
 copy_file "schemas/v1/source-manifest.schema.json"
 copy_file "schemas/v1/mcp-read-request.schema.json"
 copy_file "schemas/v1/mcp-read-result.schema.json"
+copy_file "schemas/v1/build-identity.schema.json"
+copy_file "schemas/v1/version-report.schema.json"
+copy_as "schemas/v1/build-identity.schema.json" "share/arw/schemas/build-identity.schema.json"
+copy_as "schemas/v1/event.schema.json" "share/arw/schemas/event.schema.json"
+copy_as "schemas/v1/mcp-read-request.schema.json" "share/arw/schemas/mcp-read-request.schema.json"
+copy_as "schemas/v1/mcp-read-result.schema.json" "share/arw/schemas/mcp-read-result.schema.json"
+copy_as "schemas/v1/route-result.schema.json" "share/arw/schemas/route-result.schema.json"
+copy_as "schemas/v1/run-manifest.schema.json" "share/arw/schemas/run-manifest.schema.json"
+copy_as "schemas/v1/source-manifest.schema.json" "share/arw/schemas/source-manifest.schema.json"
+copy_as "schemas/v1/version-report.schema.json" "share/arw/schemas/version-report.schema.json"
 copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
@@ -260,6 +270,101 @@ temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encod
 os.replace(temporary, lock_path)
 PY
 
+"$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import platform
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+stage_root = Path(sys.argv[2]).resolve()
+sys.path.insert(0, str(project_root / "src"))
+
+from arw.schema_registry import (  # noqa: E402
+    aggregate_schema_sha256,
+    regenerate_schemas,
+    validate_phase1_instance,
+)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def evidence(relative: str) -> dict[str, str]:
+    path = project_root / relative
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("technical_qualification") != "PASS":
+        raise SystemExit(f"required technical PASS evidence missing: {relative}")
+    return {"path": relative, "sha256": digest(path)}
+
+
+manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
+plugin = json.loads((stage_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+lock_path = stage_root / "vendor/python/wheelhouse.lock.json"
+lock = json.loads(lock_path.read_text(encoding="utf-8"))
+schema_dir = stage_root / "share/arw/schemas"
+schema_entries = regenerate_schemas(schema_dir)
+schema_entries = tuple(
+    (f"share/arw/schemas/{Path(path).name}", digest(schema_dir / Path(path).name))
+    for path, _ in schema_entries
+)
+
+payloads = [
+    {"path": path.relative_to(stage_root).as_posix(), "sha256": digest(path)}
+    for path in sorted(stage_root.rglob("*"))
+    if path.is_file() and path.relative_to(stage_root).as_posix() != "share/arw/build-identity.json"
+]
+identity = {
+    "schema_version": "1.0.0",
+    "platform_claim": "linux",
+    "plugin": {"name": plugin["name"], "version": plugin["version"]},
+    "runtime": {
+        "python_requires": ">=3.13,<3.15",
+        "build_interpreter": platform.python_version(),
+    },
+    "components": [
+        {key: component[key] for key in ("id", "version", "revision", "tree_sha256")}
+        for component in manifest["components"]
+    ],
+    "patches": [
+        {key: patch[key] for key in ("order", "path", "sha256")}
+        for patch in manifest["patches"]
+    ],
+    "native": {
+        "binary": {"path": "libexec/file-base-mcp", "sha256": digest(stage_root / "libexec/file-base-mcp")},
+        "upstream_test_tree_sha256": manifest["native_test_suites"][0]["tree_sha256"],
+    },
+    "wheelhouse": {
+        "lock": {"path": "vendor/python/wheelhouse.lock.json", "sha256": digest(lock_path)},
+        "requirements": {
+            "path": "vendor/python/wheelhouse/requirements-runtime.txt",
+            "sha256": digest(stage_root / "vendor/python/wheelhouse/requirements-runtime.txt"),
+        },
+    },
+    "schemas": {
+        "aggregate_sha256": aggregate_schema_sha256(schema_entries),
+        "files": [{"path": path, "sha256": value} for path, value in schema_entries],
+    },
+    "evidence": {
+        "pre_vendor": evidence("build/evidence/phase-01/pre-vendor-license/receipt.json"),
+        "legal": evidence("build/evidence/phase-01/license-0002/verdict.json"),
+        "upstream": evidence("build/evidence/phase-01/native/upstream/verdict.json"),
+        "asan_ubsan": evidence("build/evidence/phase-01/native/asan-ubsan/verdict.json"),
+        "tsan": evidence("build/evidence/phase-01/native/tsan/verdict.json"),
+    },
+    "staged_payloads": payloads,
+}
+validate_phase1_instance("build-identity.schema.json", identity)
+(stage_root / "share/arw/build-identity.json").write_text(
+    json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+PY
+
 "$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$FIRST_PARTY_NAME" <<'PY'
 from __future__ import annotations
 
@@ -310,9 +415,20 @@ static_files = {
     "pyproject.toml",
     "schemas/v1/mcp-read-request.schema.json",
     "schemas/v1/mcp-read-result.schema.json",
+    "schemas/v1/build-identity.schema.json",
+    "schemas/v1/version-report.schema.json",
     "schemas/v1/route-result.schema.json",
     "schemas/v1/source-manifest.schema.json",
     "scripts/file-base-mcp",
+    "share/arw/build-identity.json",
+    "share/arw/schemas/build-identity.schema.json",
+    "share/arw/schemas/event.schema.json",
+    "share/arw/schemas/mcp-read-request.schema.json",
+    "share/arw/schemas/mcp-read-result.schema.json",
+    "share/arw/schemas/route-result.schema.json",
+    "share/arw/schemas/run-manifest.schema.json",
+    "share/arw/schemas/source-manifest.schema.json",
+    "share/arw/schemas/version-report.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
@@ -367,6 +483,7 @@ def inventory_source(relative: str) -> str:
         relative.startswith("schemas/")
         or relative.startswith(".file-base/")
         or relative.startswith("libexec/")
+        or relative.startswith("share/arw/")
     ):
         return "build"
     return "runtime"
