@@ -110,19 +110,34 @@ for name, source in required.items():
     destination = target / name
     shutil.copytree(source, destination, symlinks=False)
 
-def load_verdict(relative: str) -> dict[str, object]:
-    payload = json.loads((project_root / relative).read_text(encoding="utf-8"))
+def load_pass(path: Path, label: str) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("technical_qualification") != "PASS":
-        raise SystemExit(f"technical qualification failed: {relative}")
+        raise SystemExit(f"technical qualification failed: {label}")
     return payload
 
-for relative in (
-    "build/evidence/phase-01/native/upstream/verdict.json",
-    "build/evidence/phase-01/native/asan-ubsan/verdict.json",
-    "build/evidence/phase-01/native/tsan/verdict.json",
-    "build/evidence/phase-01/license-0002/verdict.json",
-):
-    load_verdict(relative)
+for label, path in {
+    "pre-vendor receipt": source_evidence_root / "pre-vendor-license/receipt.json",
+    "source": source_evidence_root / "source/verdict.json",
+    "normal native": source_evidence_root / "native/upstream/verdict.json",
+    "ASan+UBSan native": source_evidence_root / "native/asan-ubsan/verdict.json",
+    "TSan native": source_evidence_root / "native/tsan/verdict.json",
+    "post-patch legal": source_evidence_root / "license-0002/verdict.json",
+    "fresh stage": evidence_root / "stage-final/verdict.json",
+    "installed route": source_evidence_root / "route/summary.json",
+    "installed MCP": source_evidence_root / "mcp-launcher/summary.json",
+    "runtime replay": source_evidence_root / "runtime/seed/verdict.json",
+}.items():
+    load_pass(path, label)
+
+version_report = json.loads((evidence_root / "version/plugin/version/report.json").read_text(encoding="utf-8"))
+if version_report.get("command") != "version" or version_report.get("build_identity_sha256") != identity_sha256:
+    raise SystemExit("installed version evidence does not match the current build identity")
+confinement_verdicts = sorted((source_evidence_root / "confinement").glob("*/verdict.json"))
+if len(confinement_verdicts) != 8:
+    raise SystemExit("confinement evidence does not contain every required case")
+for verdict in confinement_verdicts:
+    load_pass(verdict, f"confinement {verdict.parent.name}")
 
 summary = {
     "schema_version": "1.0.0",

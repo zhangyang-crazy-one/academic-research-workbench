@@ -8,7 +8,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from arw.schema_registry import SchemaRegistryError, validate_phase1_instance
+from arw.schema_registry import (
+    SchemaRegistryError,
+    aggregate_schema_sha256,
+    validate_phase1_instance,
+)
 
 
 class BuildIdentityError(ValueError):
@@ -43,4 +47,22 @@ def load_packaged_build_identity() -> tuple[dict[str, Any], str]:
         validate_phase1_instance("build-identity.schema.json", identity)
     except SchemaRegistryError as error:
         raise BuildIdentityError(f"build identity is invalid: {error}") from error
+    schema_entries: list[tuple[str, str]] = []
+    schema_root = Path(os.environ.get("ARW_SCHEMA_ROOT", "")).resolve()
+    if not schema_root.is_dir() or not schema_root.is_relative_to(root):
+        raise BuildIdentityError("packaged schema root must be inside the plugin root")
+    for entry in identity["schemas"]["files"]:
+        relative = entry["path"]
+        expected = entry["sha256"]
+        candidate = (root / relative).resolve()
+        if (
+            not relative.startswith("share/arw/schemas/")
+            or not candidate.is_relative_to(schema_root)
+            or not candidate.is_file()
+            or hashlib.sha256(candidate.read_bytes()).hexdigest() != expected
+        ):
+            raise BuildIdentityError(f"packaged schema digest mismatch: {relative}")
+        schema_entries.append((relative, expected))
+    if aggregate_schema_sha256(schema_entries) != identity["schemas"]["aggregate_sha256"]:
+        raise BuildIdentityError("packaged schema aggregate digest mismatch")
     return identity, hashlib.sha256(raw).hexdigest()
