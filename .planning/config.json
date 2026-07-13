@@ -27,7 +27,8 @@
     "discuss_mode": "discuss",
     "skip_discuss": false,
     "code_review": true,
-    "code_review_depth": "standard"
+    "code_review_depth": "standard",
+    "use_worktrees": false
   },
   "ship": {
     "pr_body_sections": [
@@ -65,5 +66,6 @@
   "features": {},
   "resolve_model_ids": "omit",
   "mode": "yolo",
-  "granularity": "standard"
+  "granularity": "standard",
+  "runtime": "codex"
 }
