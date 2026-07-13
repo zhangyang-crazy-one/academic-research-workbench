@@ -7,7 +7,7 @@
 
 ### Plugin And Workflow Integration
 
-- [ ] **PKG-01**: An operator can install the repository as a Codex plugin from a clean checkout and pass manifest validation.
+- [x] **PKG-01**: An operator can install the repository as a Codex plugin from a clean checkout and pass manifest validation.
 - [ ] **PKG-02**: An operator can invoke the workbench skill and route a request to a declared ARS workflow family and execution mode.
 - [ ] **PKG-03**: An installed plugin can start its bundled files-first MCP without relying on the source checkout's absolute path.
 - [ ] **PKG-04**: An operator can inspect plugin, runtime, ARS snapshot, file-base snapshot, schema, and patch-set versions from one command.
@@ -137,7 +137,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | Phase 1 | Pending |
+| PKG-01 | Phase 1 | Complete |
 | PKG-02 | Phase 1 | Pending |
 | PKG-03 | Phase 1 | Pending |
 | PKG-04 | Phase 1 | Pending |

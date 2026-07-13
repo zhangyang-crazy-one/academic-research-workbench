@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: v1.0 roadmap artifacts created; Phase 1 is ready for planning.
-last_updated: "2026-07-13T01:30:56.424Z"
-last_activity: 2026-07-13 -- Phase 1 execution started
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-07-13T02:01:36.545Z"
+last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 14
 ---
 
 # Project State
@@ -26,30 +26,30 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 1
-Last activity: 2026-07-13 -- Phase 1 execution started
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-07-13
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 14%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 24 min
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 1 | 24 min | 24 min |
 
 **Recent Trend:**
 
-- Last 5 plans: -
-- Trend: -
+- Last 5 plans: 24 min
+- Trend: Baseline established
 
 *Updated after each plan completion*
 
@@ -63,6 +63,9 @@ Recent decisions affecting current work:
 - [Roadmap]: v1.0 uses seven sequential MVP phases derived from the researched dependency chain, with verification evidence growing from Phase 1 through installed-package qualification.
 - [Architecture]: Canonical authority remains the sole-writer append-only ledger and immutable manifests; file and research graphs are disposable projections only.
 - [Scope]: Desktop UI, Chinese-military-specific assumptions, canonical graph writes, worker or hook canonical writes, and hook-only enforcement remain outside v1.
+- [Phase 01]: Runtime identity is the SHA-256 of the staged wheelhouse lock; cache-local environments live only under CODEX_HOME. — This makes dependency drift create a new environment and prevents mutable source or user-site fallback.
+- [Phase 01]: Installed qualification uses an isolated repo-owned marketplace with the source checkout hidden and networking disabled. — PKG-01 must be demonstrated from exact installed bytes rather than from repository imports.
+- [Phase 01]: The plugin manifest uses LicenseRef-Academic-Research-Workbench-Mixed. — The collective plugin must not collapse CC BY-NC and MIT component identities into a blanket MIT label.
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-12 22:19 CST
-Stopped at: v1.0 roadmap artifacts created; Phase 1 is ready for planning.
+Last session: 2026-07-13T02:00:33.843Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None

@@ -35,7 +35,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Python/package/test bootstrap and clean installed-plugin contract
+- [x] 01-01-PLAN.md — Python/package/test bootstrap and clean installed-plugin contract
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract, License, and Executable Baseline | 0/7 | Not started | - |
+| 1. Contract, License, and Executable Baseline | 1/7 | In Progress |  |
 | 2. Durable Provenance Runtime | 0/TBD | Not started | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
