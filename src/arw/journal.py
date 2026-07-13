@@ -31,7 +31,11 @@ from arw.models import (
     ZERO_HASH,
 )
 from arw.manifests import ManifestError, validate_accepted_event_manifests
-from arw.recovery import RecoveryError, validate_recovery_boundary
+from arw.recovery import (
+    RecoveryError,
+    publish_recovery_segment,
+    validate_recovery_boundary,
+)
 from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 
@@ -42,6 +46,7 @@ SEGMENT_PATTERN = re.compile(r"^(?P<index>[0-9]{8})\.jsonl$")
 LOCK_NAME = ".journal.lock"
 FAILPOINT_ENV = "ARW_TEST_FAILPOINT"
 POST_FSYNC_SIGKILL = "post-journal-fsync-sigkill"
+PARTIAL_RUNTIME_APPEND_SIGKILL = "partial-runtime-append-sigkill"
 
 
 class JournalError(RuntimeError):
@@ -668,10 +673,46 @@ def append_runtime_event_unlocked(
     if segment_path.stat().st_size != before_size:
         raise JournalError("journal changed during locked replay")
     with segment_path.open("ab") as handle:
+        if os.environ.get(FAILPOINT_ENV) == PARTIAL_RUNTIME_APPEND_SIGKILL:
+            handle.write(event_bytes[: max(1, len(event_bytes) // 2)])
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.kill(os.getpid(), signal.SIGKILL)
         handle.write(event_bytes)
         handle.flush()
         os.fsync(handle.fileno())
     return event, _replay_unlocked(root)
+
+
+def publish_recovery_event_unlocked(
+    root: Path,
+    state: ReplayState,
+    event: CanonicalEvent,
+) -> tuple[CanonicalEvent, ReplayState]:
+    """Publish one recovery-first next segment; caller holds the writer lock."""
+
+    if state.journal_layout != "segmented-v1" or not state.segments:
+        raise JournalError("recovery requires a segmented journal")
+    if state.recovery_health != "recoverable_tail":
+        raise JournalError("recovery publication requires a recoverable terminal tail")
+    if (
+        event.event_type != "recovery.completed"
+        or event.run_id != state.run_id
+        or event.sequence != state.event_count + 1
+        or event.expected_revision != state.revision
+        or event.resulting_revision != state.revision + 1
+        or event.prev_event_sha256 != state.last_event_sha256
+    ):
+        raise JournalError("recovery event does not extend the trustworthy prefix")
+    publish_recovery_segment(
+        root,
+        segment_index=state.segments[-1].index + 1,
+        event=event,
+    )
+    replayed = _replay_unlocked(root)
+    if replayed.recovery_health != "healthy":
+        raise JournalError("published recovery segment did not restore healthy replay")
+    return event, replayed
 
 
 def append_probe(

@@ -434,6 +434,8 @@ static_files = {
     "share/arw/schemas/route-result.schema.json",
     "share/arw/schemas/run-manifest.schema.json",
     "share/arw/schemas/rejection.schema.json",
+    "share/arw/schemas/recovery-receipt.schema.json",
+    "share/arw/schemas/recovery-request.schema.json",
     "share/arw/schemas/resume-request.schema.json",
     "share/arw/schemas/source-manifest.schema.json",
     "share/arw/schemas/status.schema.json",

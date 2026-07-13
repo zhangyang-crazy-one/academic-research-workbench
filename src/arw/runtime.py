@@ -14,6 +14,7 @@ from arw.journal import (
     append_runtime_event_unlocked,
     build_runtime_event,
     locked_replay,
+    publish_recovery_event_unlocked,
     replay_run,
 )
 from arw.manifests import (
@@ -48,10 +49,16 @@ from arw.models import (
     CheckpointRequest,
     Rejection,
     RecoveryCompletedPayload,
+    RecoveryRequest,
     ResumeAcceptedPayload,
     ResumeRequest,
     RuntimeCommandRequest,
     StrictModel,
+)
+from arw.recovery import (
+    RecoveryError,
+    load_recovery_receipt,
+    prepare_recovery_evidence,
 )
 from arw.reducer import ReducerError, RuntimeState, reduce_events
 from arw.workflows import (
@@ -541,3 +548,139 @@ class RuntimeCommandService:
             )
             write_passport_pointer(root, pointer)
             return pointer
+
+    def recover(self, request: RecoveryRequest) -> CommandOutcome:
+        """Quarantine one terminal tail and continue in a recovery-first segment."""
+
+        with locked_replay(self.run_root, lock_timeout=self.lock_timeout) as (root, replayed):
+            state = reduce_events(
+                replayed.workflow_definition_id,
+                replayed.events,
+                recovery_health=replayed.recovery_health,
+            )
+            existing = [
+                event
+                for event in replayed.events
+                if event.event_id == request.event_id
+                or event.command_id == request.command_id
+                or (
+                    event.event_type == "recovery.completed"
+                    and isinstance(event.payload, RecoveryCompletedPayload)
+                    and event.payload.recovery_id == request.recovery_id
+                )
+            ]
+            if existing:
+                event = existing[-1]
+                if event.event_type == "recovery.completed" and isinstance(
+                    event.payload, RecoveryCompletedPayload
+                ):
+                    try:
+                        receipt = load_recovery_receipt(root, request.recovery_id)
+                    except RecoveryError as error:
+                        return self._rejection(state, "recovery-blocked", str(error))
+                    exact = (
+                        event.event_id == request.event_id
+                        and event.command_id == request.command_id
+                        and event.run_id == request.run_id
+                        and event.expected_revision == request.expected_revision
+                        and event.prev_event_sha256 == request.expected_head_sha256
+                        and event.occurred_at == request.occurred_at
+                        and event.actor_id == request.actor_id
+                        and event.actor_role == request.actor_role
+                        and event.payload.recovery_id == request.recovery_id
+                        and event.payload.original_segment_sha256
+                        == request.original_segment_sha256
+                        and event.payload.reason_code == request.reason_code
+                        and receipt.reason_text == request.reason_text
+                    )
+                    if exact and replayed.recovery_health == "healthy":
+                        return CommandOutcome(accepted=True, state=state, event=event)
+                return self._rejection(
+                    state,
+                    "conflicting-recovery",
+                    "recovery identity already exists with different evidence",
+                )
+            if request.run_id != replayed.run_id:
+                return self._rejection(state, "run-id-mismatch", "request run identity differs")
+            if replayed.journal_layout != "segmented-v1":
+                return self._rejection(
+                    state, "legacy-run-read-only", "recovery requires a segmented journal"
+                )
+            if not actor_can_commit(request.actor_role, "recovery"):
+                return self._rejection(
+                    state,
+                    "unauthorized-actor",
+                    "only an operator can commit recovery",
+                )
+            if replayed.recovery_health == "blocked":
+                return self._rejection(
+                    state,
+                    "recovery-blocked",
+                    replayed.recovery_message or "journal corruption is not recoverable",
+                )
+            if replayed.recovery_health != "recoverable_tail":
+                return self._rejection(
+                    state, "recovery-not-required", "journal has no recoverable terminal tail"
+                )
+            if request.expected_revision != replayed.revision:
+                return self._rejection(
+                    state,
+                    "stale-revision",
+                    f"expected revision {request.expected_revision}, accepted {replayed.revision}",
+                )
+            if request.expected_head_sha256 != replayed.last_event_sha256:
+                return self._rejection(
+                    state, "stale-ledger-head", "request head differs from the trustworthy prefix"
+                )
+            damaged = replayed.segments[-1]
+            if request.original_segment_sha256 != damaged.sha256:
+                return self._rejection(
+                    state,
+                    "stale-segment",
+                    "request segment digest differs from the classified damaged segment",
+                )
+            try:
+                prepared = prepare_recovery_evidence(root, request, replayed)
+                event = build_runtime_event(
+                    replayed,
+                    event_type="recovery.completed",
+                    event_id=request.event_id,
+                    command_id=request.command_id,
+                    occurred_at=request.occurred_at,
+                    actor_id=request.actor_id,
+                    actor_role=request.actor_role,
+                    payload=RecoveryCompletedPayload(
+                        recovery_id=request.recovery_id,
+                        prior_valid_revision=replayed.revision,
+                        prior_valid_head_sha256=replayed.last_event_sha256,
+                        original_segment_sha256=damaged.sha256,
+                        original_segment_byte_count=damaged.byte_count,
+                        quarantine_sha256=prepared.raw_sha256,
+                        quarantine_receipt_sha256=prepared.receipt_sha256,
+                        fault_offset=damaged.fault_offset,
+                        fault_class=damaged.fault_class,
+                        reason_code=request.reason_code,
+                    ),
+                )
+                reduced = reduce_events(
+                    replayed.workflow_definition_id,
+                    (*replayed.events, event),
+                    recovery_health="healthy",
+                )
+                accepted_event, appended = publish_recovery_event_unlocked(
+                    root, replayed, event
+                )
+            except (JournalError, RecoveryError, ReducerError) as error:
+                return self._rejection(state, "recovery-failed", str(error))
+            accepted_state = reduce_events(
+                appended.workflow_definition_id,
+                appended.events,
+                recovery_health=appended.recovery_health,
+            )
+            if accepted_state != reduced:
+                raise JournalError("post-recovery state differs from validated candidate")
+            return CommandOutcome(
+                accepted=True,
+                state=accepted_state,
+                event=accepted_event,
+            )

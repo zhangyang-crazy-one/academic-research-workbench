@@ -27,6 +27,7 @@ from arw.models import (
     InitRunRequest,
     LifecycleTransitionRequest,
     Rejection,
+    RecoveryRequest,
     ResumeRequest,
     StrictModel,
 )
@@ -98,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("artifact-accept", "Accept one immutable content-addressed artifact."),
         ("checkpoint", "Create one coherent immutable Material Passport."),
         ("resume", "Resume once from the exact current Material Passport."),
+        ("recover", "Quarantine one terminal tail and continue explicitly."),
     ):
         command = subparsers.add_parser(name, help=help_text)
         _add_run_request_arguments(command)
@@ -228,6 +230,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "artifact-accept": (ArtifactAcceptanceRequest, "accept_artifact"),
             "checkpoint": (CheckpointRequest, "create_checkpoint"),
             "resume": (ResumeRequest, "resume"),
+            "recover": (RecoveryRequest, "recover"),
         }
         if args.command in runtime_commands:
             model, method_name = runtime_commands[args.command]

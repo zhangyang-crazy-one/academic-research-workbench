@@ -121,6 +121,7 @@ def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> Non
     assert receipt.fault_offset == degraded.segments[-1].fault_offset
     second = root / "journal/segments/00000002.jsonl"
     event = strict_json_loads(second.read_bytes())
+    validate_instance("event.schema.json", event)
     assert event["event_type"] == "recovery.completed"
     assert event["prev_event_sha256"] == initialized.last_event_sha256
     assert event["payload"]["quarantine_receipt_sha256"] == sha256_hex(
@@ -134,6 +135,76 @@ def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> Non
     duplicate = RuntimeCommandService(root).recover(request)
     assert duplicate.accepted
     assert _tree(root) == before_retry
+
+
+def test_conflicting_orphan_evidence_rejects_without_writing_raw_copy(
+    tmp_path: Path,
+) -> None:
+    from arw.runtime import RuntimeCommandService
+
+    root = tmp_path / "orphan-conflict"
+    _initialize(root)
+    _, degraded = _damage(root)
+    bundle = root / "quarantine/recovery.tail-001"
+    bundle.mkdir(parents=True)
+    (bundle / "receipt.json").write_bytes(b"conflicting receipt\n")
+    before = _tree(root)
+
+    rejected = RuntimeCommandService(root).recover(_request(degraded))
+
+    assert not rejected.accepted
+    assert rejected.rejection.code == "recovery-failed"
+    assert _tree(root) == before
+
+
+def test_recovery_boundary_supports_standard_checkpoint_and_continuation(
+    tmp_path: Path,
+) -> None:
+    from arw.models import CheckpointRequest, LifecycleTransitionRequest
+    from arw.runtime import RuntimeCommandService
+
+    root = tmp_path / "checkpoint"
+    _initialize(root)
+    _, degraded = _damage(root)
+    service = RuntimeCommandService(root)
+    recovered = service.recover(_request(degraded))
+    assert recovered.accepted
+    checkpoint = service.create_checkpoint(
+        CheckpointRequest.model_validate(
+            {
+                "schema_version": "1.0.0",
+                "run_id": RUN_ID,
+                "event_id": "evt-00000000-0000-4000-8000-000000000083",
+                "command_id": "cmd-00000000-0000-4000-8000-000000000083",
+                "expected_revision": 2,
+                "occurred_at": "2026-07-13T07:11:00Z",
+                "actor_id": "parent.runtime",
+                "actor_role": "parent_control_plane",
+                "checkpoint_kind": "recovery",
+                "fresh_until": None,
+            }
+        )
+    )
+    assert checkpoint.accepted
+    transitioned = service.execute_transition(
+        LifecycleTransitionRequest.model_validate(
+            {
+                "schema_version": "1.0.0",
+                "run_id": RUN_ID,
+                "event_id": "evt-00000000-0000-4000-8000-000000000084",
+                "command_id": "cmd-00000000-0000-4000-8000-000000000084",
+                "expected_revision": 3,
+                "occurred_at": "2026-07-13T07:12:00Z",
+                "actor_id": "parent.runtime",
+                "actor_role": "parent_control_plane",
+                "transition_id": "start",
+                "from_stage": "initialized",
+            }
+        )
+    )
+    assert transitioned.accepted
+    assert transitioned.state.accepted_revision == 4
+    assert transitioned.state.stage == "intake"
 
 
 @pytest.mark.parametrize("tamper", ["original", "raw", "receipt", "event"])
@@ -198,4 +269,3 @@ def test_recoverable_and_blocked_status_are_read_only_and_exit_zero(tmp_path: Pa
     assert blocked.returncode == 0, blocked.stderr
     assert json.loads(blocked.stdout)["recovery_health"] == "blocked"
     assert _tree(root) == blocked_before
-
