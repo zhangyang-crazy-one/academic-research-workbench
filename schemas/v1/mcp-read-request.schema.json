@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Phase 1 confined native file-read request.",
+  "properties": {
+    "allowed_root": {
+      "description": "Configured capability identifier, never a filesystem path.",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,63})$",
+      "type": "string"
+    },
+    "max_bytes": {
+      "maximum": 4096,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_lines": {
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "relative_path": {
+      "description": "UTF-8 path interpreted only beneath the selected allowed root.",
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "allowed_root",
+    "relative_path",
+    "max_bytes",
+    "max_lines"
+  ],
+  "title": "McpReadRequest",
+  "type": "object"
+}

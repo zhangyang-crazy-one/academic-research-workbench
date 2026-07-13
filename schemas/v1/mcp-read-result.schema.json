@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "denied": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_root": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "error_type": {
+          "const": "access_denied",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "platform_claim": {
+          "const": "linux",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "absolute_path",
+            "budget_exceeded",
+            "invalid_request",
+            "not_found",
+            "not_regular_file",
+            "path_traversal",
+            "root_denied",
+            "sensitive_path",
+            "symlink_escape",
+            "unsupported_platform"
+          ],
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "status": {
+          "const": "denied",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "error_type",
+        "reason",
+        "message",
+        "allowed_root",
+        "relative_path",
+        "platform_claim"
+      ],
+      "type": "object"
+    },
+    "success": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_root": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "bytes_read": {
+          "maximum": 4096,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content": {
+          "type": "string"
+        },
+        "lines_read": {
+          "maximum": 200,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "platform_claim": {
+          "const": "linux",
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "status": {
+          "const": "ok",
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "allowed_root",
+        "relative_path",
+        "content",
+        "bytes_read",
+        "lines_read",
+        "truncated",
+        "platform_claim"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Bounded UTF-8 content or a typed no-content denial from the native MCP.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "$ref": "#/$defs/denied"
+    }
+  ],
+  "title": "McpReadResult"
+}
