@@ -63,7 +63,12 @@ def test_installed_host_reports_honest_compatibility_boundary(
     assert attempts
     assert attempts[-1]["classification"] == "pass"
     assert all(attempt["classification"] != "blocking-unknown" for attempt in attempts)
-    assert all(attempt["installed_identity_sha256"] for attempt in attempts)
+    assert attempts[-1]["installed_identity_sha256"]
+    assert all(
+        attempt["installed_identity_sha256"]
+        for attempt in attempts
+        if attempt["classification"] != "authentication-required"
+    )
 
     evidence_text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")

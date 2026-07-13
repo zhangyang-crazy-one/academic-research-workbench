@@ -5,10 +5,11 @@ PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_NAME="academic-research-workbench"
 STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
 CLEAN=0
+CACHEBUSTER=""
 
 usage() {
   cat <<'EOF'
-Usage: stage-plugin [--clean] [--stage-root PATH]
+Usage: stage-plugin [--clean] [--stage-root PATH] [--cachebuster TOKEN]
 
 Build the first-party wheel and assemble the exact positive-allowlist plugin stage.
 EOF
@@ -28,6 +29,11 @@ while [[ $# -gt 0 ]]; do
     --stage-root)
       [[ $# -ge 2 ]] || fail "--stage-root requires a path" 64
       STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --cachebuster)
+      [[ $# -ge 2 ]] || fail "--cachebuster requires a token" 64
+      CACHEBUSTER="$2"
       shift 2
       ;;
     --help|-h)
@@ -73,9 +79,33 @@ copy_file "pyproject.toml"
 copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
+copy_file "hooks/hooks.json"
+copy_file "schemas/v1/route-result.schema.json"
 copy_file "bin/arw" 0755
 copy_file "vendor/python/wheelhouse.lock.json"
 copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
+
+if [[ -n "$CACHEBUSTER" ]]; then
+  "$PYTHON" - "$TEMP_STAGE/.codex-plugin/plugin.json" "$CACHEBUSTER" <<'PY'
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+
+manifest_path = Path(sys.argv[1])
+cachebuster = re.sub(r"[^a-z0-9-]+", "-", sys.argv[2].strip().lower())
+cachebuster = re.sub(r"-{2,}", "-", cachebuster).strip("-")
+if not cachebuster:
+    raise SystemExit("cachebuster must contain at least one letter or digit")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+base_version = manifest["version"].split("+", 1)[0]
+manifest["version"] = f"{base_version}+codex.{cachebuster}"
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+PY
+fi
 
 while IFS= read -r -d '' wheel; do
   relative="${wheel#"$PROJECT_ROOT/"}"
@@ -171,7 +201,9 @@ static_files = {
     ".python-version",
     ".codex-plugin/plugin.json",
     "bin/arw",
+    "hooks/hooks.json",
     "pyproject.toml",
+    "schemas/v1/route-result.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "uv.lock",
     "vendor/python/wheelhouse.lock.json",
