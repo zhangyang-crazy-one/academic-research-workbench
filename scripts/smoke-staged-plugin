@@ -2,371 +2,870 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_NAME="academic-research-workbench"
-MARKETPLACE_NAME="arw-isolated"
-STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
-FRESH_ROOT=""
-EVIDENCE_ROOT=""
-INSTALL_CLI=0
+PYTHON="$(command -v python3.14 || command -v python3.13 || true)"
+if [[ -z "$PYTHON" ]]; then
+  printf 'smoke-staged-plugin: Python >=3.13,<3.15 is required\n' >&2
+  exit 78
+fi
 
-usage() {
-  cat <<'EOF'
-Usage: smoke-staged-plugin --install-cli --fresh-home PATH --evidence-root PATH [STAGE_ROOT]
-
-Install the exact stage into an isolated marketplace and run its cached CLI offline.
-EOF
-}
-
-fail() {
-  printf 'smoke-staged-plugin: %s\n' "$1" >&2
-  exit "${2:-1}"
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --install-cli)
-      INSTALL_CLI=1
-      shift
-      ;;
-    --fresh-home)
-      [[ $# -ge 2 ]] || fail "--fresh-home requires a path" 64
-      FRESH_ROOT="$2"
-      shift 2
-      ;;
-    --evidence-root)
-      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
-      EVIDENCE_ROOT="$2"
-      shift 2
-      ;;
-    --help|-h)
-      usage
-      exit 0
-      ;;
-    --*)
-      fail "unknown argument: $1" 64
-      ;;
-    *)
-      STAGE_ROOT="$1"
-      shift
-      ;;
-  esac
-done
-
-[[ "$INSTALL_CLI" -eq 1 ]] || fail "--install-cli is required" 64
-[[ -n "$FRESH_ROOT" ]] || fail "--fresh-home is required" 64
-[[ -n "$EVIDENCE_ROOT" ]] || fail "--evidence-root is required" 64
-[[ -d "$STAGE_ROOT" ]] || fail "stage root is missing" 66
-[[ ! -d "$STAGE_ROOT/vendor/sources" ]] || fail "vendor/sources must remain absent in Plan 01" 65
-
-PYTHON="$(command -v python3.14 || command -v python3.13 || command -v python3 || true)"
-[[ -n "$PYTHON" ]] || fail "Python >=3.13,<3.15 is required" 78
-"$PYTHON" -c 'import sys; raise SystemExit(0 if (3, 13) <= sys.version_info[:2] < (3, 15) else 1)' \
-  || fail "Python >=3.13,<3.15 is required" 78
-
-FRESH_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$FRESH_ROOT")"
-EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
-STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
-[[ "$FRESH_ROOT" != "/" && "$EVIDENCE_ROOT" != "/" ]] || fail "refusing unsafe output root" 64
-
-rm -rf -- "$FRESH_ROOT" "$EVIDENCE_ROOT"
-mkdir -p "$FRESH_ROOT" "$EVIDENCE_ROOT/stage" \
-  "$EVIDENCE_ROOT/plugin/validate" "$EVIDENCE_ROOT/plugin/install" \
-  "$EVIDENCE_ROOT/plugin/launcher"
-
-ISO_HOME="$FRESH_ROOT/home"
-ISO_CODEX_HOME="$FRESH_ROOT/codex-home"
-MARKETPLACE_ROOT="$FRESH_ROOT/marketplace"
-MARKETPLACE_PLUGIN="$MARKETPLACE_ROOT/plugins/$PLUGIN_NAME"
-UNRELATED_CWD="$FRESH_ROOT/unrelated-working-directory"
-mkdir -p "$ISO_HOME" "$ISO_CODEX_HOME" "$MARKETPLACE_PLUGIN" "$UNRELATED_CWD"
-cp -a -- "$STAGE_ROOT/." "$MARKETPLACE_PLUGIN/"
-
-"$PYTHON" - "$MARKETPLACE_ROOT/.agents/plugins/marketplace.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-payload = {
-    "name": "arw-isolated",
-    "interface": {"displayName": "ARW Isolated Qualification"},
-    "plugins": [
-        {
-            "name": "academic-research-workbench",
-            "source": {
-                "source": "local",
-                "path": "./plugins/academic-research-workbench",
-            },
-            "policy": {
-                "installation": "AVAILABLE",
-                "authentication": "ON_INSTALL",
-            },
-            "category": "Productivity",
-        }
-    ],
-}
-path = Path(sys.argv[1])
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-PY
-
-"$PYTHON" - "$STAGE_ROOT" "$MARKETPLACE_PLUGIN" "$EVIDENCE_ROOT" <<'PY'
+exec "$PYTHON" - "$PROJECT_ROOT" "$@" <<'PY'
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
-stage = Path(sys.argv[1])
-marketplace = Path(sys.argv[2])
-evidence = Path(sys.argv[3])
-private_path = re.compile(
+PROJECT_ROOT = Path(sys.argv[1]).resolve()
+PLUGIN_NAME = "academic-research-workbench"
+MARKETPLACE_NAME = "arw-isolated"
+AUTH_PATTERN = re.compile(
+    r"not authenticated|not logged in|unauthorized|\b401\b|\b403\b|please run[^\n]*login",
+    re.IGNORECASE,
+)
+PRIVATE_PATH = re.compile(
     r"(^|/)(?:\.env|\.git|papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
     r"\.(?:db|sqlite|pem|key)$",
     re.IGNORECASE,
 )
 
 
-def inventory(root: Path) -> tuple[list[str], dict[str, str], str]:
+class CanaryDefect(RuntimeError):
+    pass
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="smoke-staged-plugin",
+        description="Qualify exact installed plugin bytes in an isolated Codex host.",
+    )
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument(
+        "--install-cli",
+        action="store_true",
+        help="Run the Plan 01 installed CLI health canary.",
+    )
+    modes.add_argument(
+        "--route",
+        action="store_true",
+        help="Converge the installed skill route and compatibility canary.",
+    )
+    parser.add_argument("--fresh-home", required=True, type=Path)
+    parser.add_argument("--evidence-root", required=True, type=Path)
+    parser.add_argument("--max-attempts", type=int, default=1)
+    parser.add_argument(
+        "stage_root",
+        nargs="?",
+        type=Path,
+        default=PROJECT_ROOT / "build/stage" / PLUGIN_NAME,
+    )
+    args = parser.parse_args(sys.argv[2:])
+    if args.max_attempts < 1 or args.max_attempts > 9:
+        parser.error("--max-attempts must be between 1 and 9")
+    return args
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def file_inventory(root: Path) -> tuple[list[str], dict[str, str], str]:
     entries: list[tuple[str, str]] = []
-    digests: dict[str, str] = {}
     aggregate = hashlib.sha256()
     for path in root.rglob("*"):
         relative = path.relative_to(root).as_posix()
         if path.is_symlink():
-            raise SystemExit(f"stage symlink rejected: {relative}")
+            raise CanaryDefect(f"stage symlink rejected: {relative}")
         if path.is_file():
-            if private_path.search(relative):
-                raise SystemExit(f"private path class rejected: {relative}")
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            entries.append((relative, digest))
-    for relative, digest in sorted(entries):
-        digests[relative] = digest
-        aggregate.update(relative.encode("utf-8") + b"\0" + digest.encode("ascii") + b"\n")
-    files = [relative for relative, _ in sorted(entries)]
-    return files, digests, aggregate.hexdigest()
-
-
-stage_files, stage_digests, stage_sha256 = inventory(stage)
-market_files, market_digests, market_sha256 = inventory(marketplace)
-if (stage_files, stage_digests, stage_sha256) != (
-    market_files,
-    market_digests,
-    market_sha256,
-):
-    raise SystemExit("marketplace copy differs from exact stage")
-
-(evidence / "stage" / "inventory.json").write_text(
-    json.dumps({"files": stage_files, "symlinks": []}, indent=2) + "\n",
-    encoding="utf-8",
-)
-(evidence / "stage" / "digests.json").write_text(
-    json.dumps(
-        {"files": stage_digests, "stage_sha256": stage_sha256},
-        indent=2,
-        sort_keys=True,
+            if PRIVATE_PATH.search(relative):
+                raise CanaryDefect(f"private path class rejected: {relative}")
+            entries.append((relative, hashlib.sha256(path.read_bytes()).hexdigest()))
+    entries.sort()
+    for relative, digest in entries:
+        aggregate.update(relative.encode() + b"\0" + digest.encode() + b"\n")
+    return (
+        [relative for relative, _ in entries],
+        dict(entries),
+        aggregate.hexdigest(),
     )
-    + "\n",
-    encoding="utf-8",
-)
-PY
 
-write_command_metadata() {
-  local directory="$1"
-  local operation="$2"
-  "$PYTHON" - "$directory/command.json" "$operation" <<'PY'
-import json
-import sys
-from pathlib import Path
 
-operation = sys.argv[2]
-argv = {
-    "validate": ["codex", "plugin", "marketplace", "add", "./<isolated-marketplace>", "--json"],
-    "install": ["codex", "plugin", "add", "academic-research-workbench@arw-isolated", "--json"],
-    "launcher": ["<installed-plugin>/bin/arw", "health", "--json"],
-}[operation]
-payload = {
-    "argv": argv,
-    "cwd": "<isolated-working-directory>",
-    "environment": {
+def command_environment(home: Path, codex_home: Path) -> dict[str, str]:
+    environment = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "CODEX_HOME": str(codex_home),
+        "PYTHONNOUSERSITE": "1",
+        "PIP_NO_INDEX": "1",
+    }
+    for name in (
+        "ALL_PROXY",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    ):
+        if value := os.environ.get(name):
+            environment[name] = value
+    return environment
+
+
+def run_recorded(
+    command: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    evidence: Path,
+    stdout_name: str = "stdout.log",
+) -> subprocess.CompletedProcess[str]:
+    evidence.mkdir(parents=True, exist_ok=True)
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    (evidence / stdout_name).write_text(completed.stdout, encoding="utf-8")
+    (evidence / "stderr.log").write_text(completed.stderr, encoding="utf-8")
+    write_json(evidence / "exit.json", {"status": completed.returncode})
+    return completed
+
+
+def write_command(
+    path: Path,
+    argv: list[str],
+    *,
+    tool_network_access: str | None = None,
+) -> None:
+    environment = {
         "CODEX_HOME": "<isolated-codex-home>",
         "HOME": "<isolated-home>",
+        "PIP_NO_INDEX": "1",
+        "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": "unset",
-    },
-}
-Path(sys.argv[1]).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-PY
-}
-
-write_exit() {
-  local directory="$1"
-  local status="$2"
-  "$PYTHON" - "$directory/exit.json" "$status" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(
-    json.dumps({"status": int(sys.argv[2])}, indent=2) + "\n",
-    encoding="utf-8",
-)
-PY
-}
-
-run_codex() {
-  env -i \
-    PATH="$PATH" \
-    HOME="$ISO_HOME" \
-    CODEX_HOME="$ISO_CODEX_HOME" \
-    PYTHONNOUSERSITE=1 \
-    "$@"
-}
-
-write_command_metadata "$EVIDENCE_ROOT/plugin/validate" validate
-set +e
-(
-  cd "$FRESH_ROOT"
-  run_codex codex plugin marketplace add ./marketplace --json
-) >"$EVIDENCE_ROOT/plugin/validate/stdout.log" 2>"$EVIDENCE_ROOT/plugin/validate/stderr.log"
-VALIDATE_STATUS=$?
-set -e
-write_exit "$EVIDENCE_ROOT/plugin/validate" "$VALIDATE_STATUS"
-[[ "$VALIDATE_STATUS" -eq 0 ]] || fail "isolated marketplace validation failed" 70
-
-write_command_metadata "$EVIDENCE_ROOT/plugin/install" install
-set +e
-(
-  cd "$FRESH_ROOT"
-  run_codex codex plugin add "$PLUGIN_NAME@$MARKETPLACE_NAME" --json
-) >"$EVIDENCE_ROOT/plugin/install/stdout.log" 2>"$EVIDENCE_ROOT/plugin/install/stderr.log"
-INSTALL_STATUS=$?
-set -e
-write_exit "$EVIDENCE_ROOT/plugin/install" "$INSTALL_STATUS"
-[[ "$INSTALL_STATUS" -eq 0 ]] || fail "isolated plugin install failed" 70
-
-mapfile -t installed_manifests < <(
-  find "$ISO_CODEX_HOME" -type f -path '*/.codex-plugin/plugin.json' -print | sort
-)
-[[ "${#installed_manifests[@]}" -eq 1 ]] \
-  || fail "expected exactly one installed plugin manifest, found ${#installed_manifests[@]}" 70
-INSTALLED_ROOT="$(cd -P -- "$(dirname -- "${installed_manifests[0]}")/.." && pwd)"
-[[ -x "$INSTALLED_ROOT/bin/arw" ]] || fail "installed launcher is missing" 70
-
-"$PYTHON" - "$STAGE_ROOT" "$INSTALLED_ROOT" <<'PY'
-from __future__ import annotations
-
-import hashlib
-import sys
-from pathlib import Path
-
-
-def inventory(root: Path) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            raise SystemExit(f"installed symlink rejected: {path.relative_to(root)}")
-        if path.is_file():
-            result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return result
-
-
-if inventory(Path(sys.argv[1])) != inventory(Path(sys.argv[2])):
-    raise SystemExit("installed plugin differs from exact stage")
-PY
-
-write_command_metadata "$EVIDENCE_ROOT/plugin/launcher" launcher
-set +e
-bwrap \
-  --unshare-net \
-  --die-with-parent \
-  --ro-bind / / \
-  --dev /dev \
-  --proc /proc \
-  --tmpfs "$PROJECT_ROOT" \
-  --bind "$FRESH_ROOT" "$FRESH_ROOT" \
-  --chdir "$UNRELATED_CWD" \
-  --clearenv \
-  --setenv PATH "$PATH" \
-  --setenv HOME "$ISO_HOME" \
-  --setenv CODEX_HOME "$ISO_CODEX_HOME" \
-  --setenv PYTHONNOUSERSITE 1 \
-  --setenv PIP_NO_INDEX 1 \
-  "$INSTALLED_ROOT/bin/arw" health --json \
-  >"$EVIDENCE_ROOT/plugin/launcher/stdout.log" \
-  2>"$EVIDENCE_ROOT/plugin/launcher/stderr.log"
-LAUNCHER_STATUS=$?
-set -e
-write_exit "$EVIDENCE_ROOT/plugin/launcher" "$LAUNCHER_STATUS"
-[[ "$LAUNCHER_STATUS" -eq 0 ]] || fail "installed offline launcher failed" 70
-
-"$PYTHON" - \
-  "$EVIDENCE_ROOT" \
-  "$PROJECT_ROOT" \
-  "$HOME" \
-  "$FRESH_ROOT" \
-  "$STAGE_ROOT" \
-  "$INSTALLED_ROOT" <<'PY'
-from __future__ import annotations
-
-import json
-import sys
-from pathlib import Path
-
-
-root = Path(sys.argv[1])
-replacements = {
-    sys.argv[2]: "<repository-root>",
-    sys.argv[3]: "<operator-home>",
-    sys.argv[4]: "<isolated-root>",
-    sys.argv[5]: "<stage-root>",
-    sys.argv[6]: "<installed-plugin>",
-}
-for log in root.rglob("*.log"):
-    contents = log.read_text(encoding="utf-8", errors="replace")
-    for original, replacement in sorted(
-        replacements.items(), key=lambda item: len(item[0]), reverse=True
-    ):
-        if original:
-            contents = contents.replace(original, replacement)
-    log.write_text(contents, encoding="utf-8")
-
-(root / "redactions.json").write_text(
-    json.dumps(
+    }
+    if tool_network_access is not None:
+        environment["tool_network_access"] = tool_network_access
+    write_json(
+        path,
         {
-            "policy": "replace source, operator-home, stage, and isolated absolute prefixes",
+            "argv": argv,
+            "cwd": "<isolated-working-directory>",
+            "environment": environment,
+        },
+    )
+
+
+def marketplace_payload(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "name": MARKETPLACE_NAME,
+            "interface": {"displayName": "ARW Isolated Qualification"},
+            "plugins": [
+                {
+                    "name": PLUGIN_NAME,
+                    "source": {
+                        "source": "local",
+                        "path": f"./plugins/{PLUGIN_NAME}",
+                    },
+                    "policy": {
+                        "installation": "AVAILABLE",
+                        "authentication": "ON_INSTALL",
+                    },
+                    "category": "Productivity",
+                }
+            ],
+        },
+    )
+
+
+def bwrap_prefix(fresh_root: Path, unrelated_cwd: Path, *, offline: bool) -> list[str]:
+    command = [
+        "bwrap",
+        "--die-with-parent",
+        "--ro-bind",
+        "/",
+        "/",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        str(PROJECT_ROOT),
+        "--tmpfs",
+        "/tmp",
+        "--bind",
+        str(fresh_root),
+        str(fresh_root),
+        "--chdir",
+        str(unrelated_cwd),
+    ]
+    if offline:
+        command.insert(1, "--unshare-net")
+    return command
+
+
+def install_exact_stage(
+    stage_root: Path,
+    fresh_root: Path,
+    evidence: Path,
+    *,
+    copy_auth: bool,
+) -> dict[str, Any]:
+    shutil.rmtree(fresh_root, ignore_errors=True)
+    home = fresh_root / "home"
+    codex_home = fresh_root / "codex-home"
+    marketplace_root = fresh_root / "marketplace"
+    marketplace_plugin = marketplace_root / "plugins" / PLUGIN_NAME
+    unrelated_cwd = fresh_root / "unrelated-working-directory"
+    for directory in (home, codex_home, marketplace_plugin.parent, unrelated_cwd):
+        directory.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(stage_root, marketplace_plugin)
+    marketplace_payload(marketplace_root / ".agents/plugins/marketplace.json")
+
+    if copy_auth:
+        caller_codex_home = Path(
+            os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
+        )
+        auth_file = Path(
+            os.environ.get("ARW_CODEX_AUTH_FILE", str(caller_codex_home / "auth.json"))
+        )
+        if not auth_file.is_file():
+            raise PermissionError(
+                "Codex authentication is unavailable; set ARW_CODEX_AUTH_FILE to an existing auth.json"
+            )
+        shutil.copyfile(auth_file, codex_home / "auth.json")
+        (codex_home / "auth.json").chmod(0o600)
+
+    stage_files, stage_digests, stage_sha = file_inventory(stage_root)
+    market_files, market_digests, market_sha = file_inventory(marketplace_plugin)
+    if (stage_files, stage_digests, stage_sha) != (
+        market_files,
+        market_digests,
+        market_sha,
+    ):
+        raise CanaryDefect("marketplace copy differs from exact stage")
+    write_json(evidence / "stage/inventory.json", {"files": stage_files, "symlinks": []})
+    write_json(
+        evidence / "stage/digests.json",
+        {"files": stage_digests, "stage_sha256": stage_sha},
+    )
+
+    environment = command_environment(home, codex_home)
+    validate_dir = evidence / "plugin/validate"
+    write_command(
+        validate_dir / "command.json",
+        ["codex", "plugin", "marketplace", "add", "./<isolated-marketplace>", "--json"],
+    )
+    validate = run_recorded(
+        ["codex", "plugin", "marketplace", "add", "./marketplace", "--json"],
+        cwd=fresh_root,
+        environment=environment,
+        evidence=validate_dir,
+    )
+    write_json(
+        validate_dir / "verdict.json",
+        {"status": "PASS" if validate.returncode == 0 else "FAIL"},
+    )
+    if validate.returncode != 0:
+        raise CanaryDefect("isolated marketplace validation failed")
+
+    install_dir = evidence / "plugin/install"
+    write_command(
+        install_dir / "command.json",
+        ["codex", "plugin", "add", f"{PLUGIN_NAME}@{MARKETPLACE_NAME}", "--json"],
+    )
+    install = run_recorded(
+        ["codex", "plugin", "add", f"{PLUGIN_NAME}@{MARKETPLACE_NAME}", "--json"],
+        cwd=fresh_root,
+        environment=environment,
+        evidence=install_dir,
+    )
+    write_json(
+        install_dir / "verdict.json",
+        {"status": "PASS" if install.returncode == 0 else "FAIL"},
+    )
+    if install.returncode != 0:
+        raise CanaryDefect("isolated plugin install failed")
+
+    manifests = sorted(codex_home.glob("plugins/cache/**/.codex-plugin/plugin.json"))
+    if len(manifests) != 1:
+        raise CanaryDefect(
+            f"expected exactly one installed plugin manifest, found {len(manifests)}"
+        )
+    installed_root = manifests[0].parent.parent
+    if not os.access(installed_root / "bin/arw", os.X_OK):
+        raise CanaryDefect("installed launcher is missing")
+    installed_files, installed_digests, installed_sha = file_inventory(installed_root)
+    if (stage_files, stage_digests, stage_sha) != (
+        installed_files,
+        installed_digests,
+        installed_sha,
+    ):
+        raise CanaryDefect("installed plugin differs from exact stage")
+    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
+    identity = {
+        "installed_manifest_version": manifest["version"],
+        "installed_sha256": installed_sha,
+        "stage_sha256": stage_sha,
+    }
+    write_json(evidence / "plugin/installed-identity.json", identity)
+    return {
+        "home": home,
+        "codex_home": codex_home,
+        "environment": environment,
+        "fresh_root": fresh_root,
+        "identity": identity,
+        "installed_root": installed_root,
+        "unrelated_cwd": unrelated_cwd,
+    }
+
+
+def offline_installed_command(
+    installed: dict[str, Any],
+    arguments: list[str],
+    evidence: Path,
+) -> subprocess.CompletedProcess[str]:
+    installed_root: Path = installed["installed_root"]
+    write_command(
+        evidence / "command.json",
+        ["<installed-plugin>/bin/arw", *arguments],
+        tool_network_access="disabled",
+    )
+    command = [
+        *bwrap_prefix(installed["fresh_root"], installed["unrelated_cwd"], offline=True),
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        os.environ["PATH"],
+        "--setenv",
+        "HOME",
+        str(installed["home"]),
+        "--setenv",
+        "CODEX_HOME",
+        str(installed["codex_home"]),
+        "--setenv",
+        "PYTHONNOUSERSITE",
+        "1",
+        "--setenv",
+        "PIP_NO_INDEX",
+        "1",
+        str(installed_root / "bin/arw"),
+        *arguments,
+    ]
+    return run_recorded(
+        command,
+        cwd=installed["unrelated_cwd"],
+        environment=os.environ.copy(),
+        evidence=evidence,
+    )
+
+
+def redact_evidence(root: Path, replacements: dict[str, str]) -> None:
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix not in {".log", ".jsonl"}:
+            continue
+        contents = path.read_text(encoding="utf-8", errors="replace")
+        for original, replacement in sorted(
+            replacements.items(), key=lambda item: len(item[0]), reverse=True
+        ):
+            if original:
+                contents = contents.replace(original, replacement)
+        path.write_text(contents, encoding="utf-8")
+    write_json(
+        root / "redactions.json",
+        {
+            "policy": "replace repository, operator-home, stage, installed, and isolated absolute prefixes",
             "tokens": sorted(set(replacements.values())),
         },
-        indent=2,
-    )
-    + "\n",
-    encoding="utf-8",
-)
-
-for operation in ("validate", "install", "launcher"):
-    status = json.loads((root / "plugin" / operation / "exit.json").read_text())["status"]
-    (root / "plugin" / operation / "verdict.json").write_text(
-        json.dumps({"status": "PASS" if status == 0 else "FAIL"}, indent=2) + "\n",
-        encoding="utf-8",
     )
 
-(root / "summary.json").write_text(
-    json.dumps(
+
+def run_install_cli(args: argparse.Namespace) -> int:
+    stage_root = args.stage_root.resolve()
+    fresh_root = args.fresh_home.resolve()
+    evidence_root = args.evidence_root.resolve()
+    if not stage_root.is_dir():
+        raise CanaryDefect("stage root is missing")
+    if (stage_root / "vendor/sources").exists():
+        raise CanaryDefect("vendor/sources must remain absent in Plan 01")
+    shutil.rmtree(evidence_root, ignore_errors=True)
+    installed = install_exact_stage(
+        stage_root,
+        fresh_root,
+        evidence_root,
+        copy_auth=False,
+    )
+    launcher_dir = evidence_root / "plugin/launcher"
+    health = offline_installed_command(installed, ["health", "--json"], launcher_dir)
+    write_json(
+        launcher_dir / "verdict.json",
+        {"status": "PASS" if health.returncode == 0 else "FAIL"},
+    )
+    if health.returncode != 0:
+        raise CanaryDefect("installed offline launcher failed")
+    write_json(
+        evidence_root / "summary.json",
         {
             "inherited_pythonpath": False,
             "installed_from_exact_stage": True,
             "network_isolation": "linux-user-network-namespace",
             "source_imported": False,
-            "stage_name": "academic-research-workbench",
+            "stage_name": PLUGIN_NAME,
             "technical_qualification": "PASS",
         },
-        indent=2,
-        sort_keys=True,
     )
-    + "\n",
-    encoding="utf-8",
-)
-PY
+    redact_evidence(
+        evidence_root,
+        {
+            str(PROJECT_ROOT): "<repository-root>",
+            str(Path.home()): "<operator-home>",
+            str(fresh_root): "<isolated-root>",
+            str(stage_root): "<stage-root>",
+            str(installed["installed_root"]): "<installed-plugin>",
+        },
+    )
+    print("installed stage smoke passed")
+    return 0
 
-printf 'installed stage smoke passed\n'
+
+def command_events_invoked_route(stdout: str) -> bool:
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
+            continue
+        command = str(item.get("command", ""))
+        if "bin/arw" in command and re.search(r"route\s+--json", command):
+            return True
+    return False
+
+
+def next_attempt_number(evidence_root: Path) -> int:
+    attempts = evidence_root / "plugin/route/attempts"
+    existing = [
+        int(path.name)
+        for path in attempts.glob("[0-9][0-9][0-9]")
+        if path.name.isdigit()
+    ]
+    return max(existing, default=0) + 1
+
+
+def classify_attempt(
+    attempt: str,
+    installed: dict[str, Any],
+    host: subprocess.CompletedProcess[str],
+    direct_result: dict[str, object],
+    host_result_path: Path,
+) -> dict[str, object]:
+    streams = f"{host.stdout}\n{host.stderr}"
+    hook_status = (
+        "executed"
+        if "ARW_OBSERVATIONAL_HOOK" in streams
+        else "discovered-untrusted-skipped"
+    )
+    if AUTH_PATTERN.search(streams):
+        classification = "authentication-required"
+        reason = "Codex host reported an explicit authentication failure"
+        route_result = None
+        invoked = False
+    else:
+        try:
+            route_result = json.loads(host_result_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            route_result = None
+        invoked = command_events_invoked_route(host.stdout)
+        if host.returncode == 0 and route_result == direct_result and invoked:
+            classification = "pass"
+            reason = "fresh installed host invoked the installed skill route"
+        else:
+            classification = "non-authentication-defect"
+            reason = (
+                "host route did not return the direct installed route or lacked installed command evidence"
+            )
+    return {
+        "attempt": attempt,
+        "classification": classification,
+        "hook_status": hook_status,
+        "host_status": host.returncode,
+        "installed_identity_sha256": installed["identity"]["installed_sha256"],
+        "installed_skill_invoked": invoked,
+        "reason": reason,
+        "route_result": route_result,
+    }
+
+
+def run_host_route(
+    installed: dict[str, Any],
+    attempt_dir: Path,
+) -> subprocess.CompletedProcess[str]:
+    host_result = installed["fresh_root"] / "host-result.json"
+    command = [
+        *bwrap_prefix(installed["fresh_root"], installed["unrelated_cwd"], offline=False),
+        "--clearenv",
+    ]
+    for name, value in installed["environment"].items():
+        command.extend(["--setenv", name, value])
+    command.extend(
+        [
+            "codex",
+            "exec",
+            "--ephemeral",
+            "--ignore-rules",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "read-only",
+            "-c",
+            'approval_policy="never"',
+            "--json",
+            "--output-last-message",
+            str(host_result),
+            "-C",
+            str(installed["unrelated_cwd"]),
+            (
+                "This is an execution canary. Use the shell tool: locate the installed "
+                "academic-research-workbench SKILL.md under $CODEX_HOME/plugins/cache, read it, "
+                "derive that installed plugin root, and execute its bin/arw route --json "
+                "command exactly once. Return the command's raw JSON unchanged. A response "
+                "without a command_execution event is invalid; do not answer from memory, "
+                "schema constants, or repository source."
+            ),
+        ]
+    )
+    write_command(
+        attempt_dir / "command.json",
+        [
+            "codex",
+            "exec",
+            "--ephemeral",
+            "--sandbox",
+            "read-only",
+            "<installed-skill-route-prompt>",
+        ],
+        tool_network_access="disabled",
+    )
+    completed = run_recorded(
+        command,
+        cwd=installed["unrelated_cwd"],
+        environment=os.environ.copy(),
+        evidence=attempt_dir,
+        stdout_name="stdout.jsonl",
+    )
+    if host_result.is_file():
+        shutil.copyfile(host_result, attempt_dir / "host-result.json")
+    return completed
+
+
+def finalize_route(
+    evidence_root: Path,
+    attempt_dir: Path,
+    installed: dict[str, Any],
+    classification: dict[str, object],
+) -> None:
+    route_root = evidence_root / "plugin/route"
+    direct_target = route_root / "direct"
+    shutil.rmtree(direct_target, ignore_errors=True)
+    shutil.copytree(attempt_dir / "direct", direct_target)
+    shutil.copyfile(
+        installed["installed_root"] / "schemas/v1/route-result.schema.json",
+        route_root / "route-result.schema.json",
+    )
+    write_json(
+        route_root / "final.json",
+        {
+            "attempt": classification["attempt"],
+            "route_result": classification["route_result"],
+        },
+    )
+    shutil.copyfile(
+        attempt_dir / "installed/plugin/installed-identity.json",
+        evidence_root / "plugin/installed-identity.json",
+    )
+
+    attempt_records = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((route_root / "attempts").glob("*/classification.json"))
+    ]
+    compatibility = {
+        "schema_version": "1.0.0",
+        "technical_qualification": "PASS",
+        "host": {
+            "codex_version": subprocess.run(
+                ["codex", "--version"],
+                text=True,
+                capture_output=True,
+                check=False,
+            ).stdout.strip(),
+            "fresh_process": True,
+            "installed_skill_invoked": True,
+        },
+        "hooks": {
+            "canonical_write": False,
+            "contract": "default-plugin-hooks-file",
+            "mode": "observational-read-only",
+            "status": classification["hook_status"],
+        },
+        "custom_agents": {
+            "plugin_distribution": "unproven",
+            "fallback": [
+                "native-codex-subagents",
+                "immutable-assignment-injected-roles",
+            ],
+        },
+        "experiments": {"execution": "disabled", "ownership": "deferred"},
+        "attempts": [
+            {
+                "attempt": record["attempt"],
+                "classification": record["classification"],
+                "installed_identity_sha256": record["installed_identity_sha256"],
+                "reason": record["reason"],
+            }
+            for record in attempt_records
+        ],
+        "unresolved_non_authentication_results": [],
+    }
+    write_json(evidence_root / "plugin/compatibility/result.json", compatibility)
+    write_json(
+        evidence_root / "summary.json",
+        {
+            "inherited_pythonpath": False,
+            "installed_from_exact_stage": True,
+            "network_isolation": "installed-command-linux-user-network-namespace",
+            "route_final_attempt": classification["attempt"],
+            "source_imported": False,
+            "stage_name": PLUGIN_NAME,
+            "technical_qualification": "PASS",
+        },
+    )
+
+
+def run_route(args: argparse.Namespace) -> int:
+    stage_root = args.stage_root.resolve()
+    fresh_root = args.fresh_home.resolve()
+    evidence_root = args.evidence_root.resolve()
+    if stage_root in {Path("/"), PROJECT_ROOT} or fresh_root == Path("/"):
+        raise CanaryDefect("refusing unsafe stage or fresh-home root")
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(fresh_root, ignore_errors=True)
+    start = next_attempt_number(evidence_root)
+    last_reason = "no attempts executed"
+
+    for number in range(start, start + args.max_attempts):
+        attempt = f"{number:03d}"
+        attempt_dir = evidence_root / "plugin/route/attempts" / attempt
+        attempt_fresh = fresh_root / f"attempt-{attempt}"
+        cachebuster = (
+            f"route-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{attempt}-{os.getpid()}"
+        )
+        stage_build = attempt_dir / "stage-build"
+        write_command(
+            stage_build / "command.json",
+            [
+                "<repository-root>/scripts/stage-plugin",
+                "--clean",
+                "--stage-root",
+                "<stage-root>",
+                "--cachebuster",
+                cachebuster,
+            ],
+        )
+        staged = run_recorded(
+            [
+                str(PROJECT_ROOT / "scripts/stage-plugin"),
+                "--clean",
+                "--stage-root",
+                str(stage_root),
+                "--cachebuster",
+                cachebuster,
+            ],
+            cwd=PROJECT_ROOT,
+            environment=os.environ.copy(),
+            evidence=stage_build,
+        )
+        if staged.returncode != 0:
+            classification = {
+                "attempt": attempt,
+                "classification": "non-authentication-defect",
+                "hook_status": "not-probed",
+                "host_status": None,
+                "installed_identity_sha256": None,
+                "installed_skill_invoked": False,
+                "reason": "clean restage failed",
+                "route_result": None,
+            }
+            write_json(attempt_dir / "classification.json", classification)
+            last_reason = str(classification["reason"])
+            continue
+
+        try:
+            installed = install_exact_stage(
+                stage_root,
+                attempt_fresh,
+                attempt_dir / "installed",
+                copy_auth=True,
+            )
+        except PermissionError as error:
+            classification = {
+                "attempt": attempt,
+                "classification": "authentication-required",
+                "hook_status": "not-probed",
+                "host_status": None,
+                "installed_identity_sha256": None,
+                "installed_skill_invoked": False,
+                "reason": str(error),
+                "route_result": None,
+            }
+            write_json(attempt_dir / "classification.json", classification)
+            redact_evidence(
+                evidence_root,
+                {
+                    str(PROJECT_ROOT): "<repository-root>",
+                    str(Path.home()): "<operator-home>",
+                    str(fresh_root): "<isolated-root>",
+                    str(stage_root): "<stage-root>",
+                },
+            )
+            print(
+                "smoke-staged-plugin: authentication required; run `codex login`, then retry the same route command",
+                file=sys.stderr,
+            )
+            return 77
+        except CanaryDefect as error:
+            classification = {
+                "attempt": attempt,
+                "classification": "non-authentication-defect",
+                "hook_status": "not-probed",
+                "host_status": None,
+                "installed_identity_sha256": None,
+                "installed_skill_invoked": False,
+                "reason": str(error),
+                "route_result": None,
+            }
+            write_json(attempt_dir / "classification.json", classification)
+            last_reason = str(error)
+            continue
+
+        health = offline_installed_command(
+            installed,
+            ["health", "--json"],
+            attempt_dir / "health",
+        )
+        direct = offline_installed_command(
+            installed,
+            ["route", "--json"],
+            attempt_dir / "direct",
+        )
+        if health.returncode != 0 or direct.returncode != 0:
+            classification = {
+                "attempt": attempt,
+                "classification": "non-authentication-defect",
+                "hook_status": "not-probed",
+                "host_status": None,
+                "installed_identity_sha256": installed["identity"]["installed_sha256"],
+                "installed_skill_invoked": False,
+                "reason": "offline installed health or route failed",
+                "route_result": None,
+            }
+            write_json(attempt_dir / "classification.json", classification)
+            last_reason = str(classification["reason"])
+            continue
+        try:
+            direct_result = json.loads(direct.stdout)
+        except json.JSONDecodeError:
+            direct_result = {}
+        write_json(attempt_dir / "direct/result.json", direct_result)
+        shutil.copyfile(
+            installed["installed_root"] / "schemas/v1/route-result.schema.json",
+            attempt_dir / "direct/route-result.schema.json",
+        )
+        host = run_host_route(installed, attempt_dir)
+        classification = classify_attempt(
+            attempt,
+            installed,
+            host,
+            direct_result,
+            attempt_dir / "host-result.json",
+        )
+        write_json(attempt_dir / "classification.json", classification)
+        last_reason = str(classification["reason"])
+        if classification["classification"] == "authentication-required":
+            redact_evidence(
+                evidence_root,
+                {
+                    str(PROJECT_ROOT): "<repository-root>",
+                    str(Path.home()): "<operator-home>",
+                    str(fresh_root): "<isolated-root>",
+                    str(stage_root): "<stage-root>",
+                    str(installed["installed_root"]): "<installed-plugin>",
+                },
+            )
+            print(
+                "smoke-staged-plugin: authentication required; run `codex login`, then retry the same route command",
+                file=sys.stderr,
+            )
+            return 77
+        if classification["classification"] != "pass":
+            continue
+
+        finalize_route(evidence_root, attempt_dir, installed, classification)
+        redact_evidence(
+            evidence_root,
+            {
+                str(PROJECT_ROOT): "<repository-root>",
+                str(Path.home()): "<operator-home>",
+                str(fresh_root): "<isolated-root>",
+                str(stage_root): "<stage-root>",
+                str(installed["installed_root"]): "<installed-plugin>",
+            },
+        )
+        print(f"installed route smoke passed on attempt {attempt}")
+        return 0
+
+    redact_evidence(
+        evidence_root,
+        {
+            str(PROJECT_ROOT): "<repository-root>",
+            str(Path.home()): "<operator-home>",
+            str(fresh_root): "<isolated-root>",
+            str(stage_root): "<stage-root>",
+        },
+    )
+    print(
+        f"smoke-staged-plugin: route convergence exhausted: {last_reason}",
+        file=sys.stderr,
+    )
+    return 70
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        if args.route:
+            return run_route(args)
+        return run_install_cli(args)
+    except CanaryDefect as error:
+        print(f"smoke-staged-plugin: {error}", file=sys.stderr)
+        return 70
+
+
+raise SystemExit(main())
+PY

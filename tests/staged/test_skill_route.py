@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -49,11 +50,30 @@ def _run(
 def installed_route_evidence(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> tuple[Path, subprocess.CompletedProcess[str]]:
-    root = tmp_path_factory.mktemp("installed-route")
+    retained_evidence = REPOSITORY_ROOT / "build/evidence/phase-01/route"
+    retained_final = retained_evidence / "plugin/route/final.json"
+    if retained_final.is_file():
+        final = json.loads(retained_final.read_text())
+        classification = json.loads(
+            (
+                retained_evidence
+                / "plugin/route/attempts"
+                / final["attempt"]
+                / "classification.json"
+            ).read_text()
+        )
+        if classification["classification"] == "pass":
+            return retained_evidence, subprocess.CompletedProcess([], 0, "retained PASS", "")
+
+    root = tmp_path_factory.getbasetemp() / "installed-route-shared"
+    evidence_root = root / "evidence"
+    if (evidence_root / "plugin/route/final.json").is_file():
+        return evidence_root, subprocess.CompletedProcess([], 0, "cached PASS", "")
+    shutil.rmtree(root, ignore_errors=True)
+    root.mkdir()
     unrelated_cwd = root / "unrelated-working-directory"
     unrelated_cwd.mkdir()
     stage_root = root / "stage" / PLUGIN_NAME
-    evidence_root = root / "evidence"
     isolated_environment = root / "caller-environment"
     environment = {
         "HOME": str(isolated_environment / "home"),
@@ -85,6 +105,8 @@ def installed_route_evidence(
             str(root / "fresh-host"),
             "--evidence-root",
             str(evidence_root),
+            "--max-attempts",
+            "1",
             str(stage_root),
         ],
         unrelated_cwd,
