@@ -144,16 +144,30 @@ copy_file() {
   install -D -m "$mode" -- "$source" "$TEMP_STAGE/$relative"
 }
 
+copy_as() {
+  local source_relative="$1"
+  local destination_relative="$2"
+  local mode="${3:-0644}"
+  local source="$PROJECT_ROOT/$source_relative"
+  [[ -f "$source" && ! -L "$source" ]] \
+    || fail "allowlisted source is unsafe or missing: $source_relative" 66
+  install -D -m "$mode" -- "$source" "$TEMP_STAGE/$destination_relative"
+}
+
 copy_file ".python-version"
 copy_file "pyproject.toml"
 copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
+copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
 copy_file "hooks/hooks.json"
 copy_file "schemas/v1/route-result.schema.json"
 copy_file "schemas/v1/source-manifest.schema.json"
+copy_file "schemas/v1/mcp-read-request.schema.json"
+copy_file "schemas/v1/mcp-read-result.schema.json"
 copy_file "bin/arw" 0755
-copy_file ".file-base/bin/file-base" 0755
+copy_file "scripts/file-base-mcp" 0755
+copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
@@ -282,7 +296,7 @@ for wheel in source_lock["wheels"]:
 static_files = {
     ".python-version",
     ".codex-plugin/plugin.json",
-    ".file-base/bin/file-base",
+    ".mcp.json",
     ".file-base/build-evidence.json",
     "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
     "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
@@ -292,9 +306,13 @@ static_files = {
     "THIRD_PARTY_NOTICES.md",
     "bin/arw",
     "hooks/hooks.json",
+    "libexec/file-base-mcp",
     "pyproject.toml",
+    "schemas/v1/mcp-read-request.schema.json",
+    "schemas/v1/mcp-read-result.schema.json",
     "schemas/v1/route-result.schema.json",
     "schemas/v1/source-manifest.schema.json",
+    "scripts/file-base-mcp",
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
@@ -345,7 +363,11 @@ def inventory_source(relative: str) -> str:
         "THIRD_PARTY_NOTICES.md",
     }:
         return "legal"
-    if relative.startswith("schemas/") or relative.startswith(".file-base/"):
+    if (
+        relative.startswith("schemas/")
+        or relative.startswith(".file-base/")
+        or relative.startswith("libexec/")
+    ):
         return "build"
     return "runtime"
 

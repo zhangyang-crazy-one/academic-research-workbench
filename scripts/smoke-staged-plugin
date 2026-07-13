@@ -58,6 +58,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Converge the installed skill route and compatibility canary.",
     )
+    modes.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Qualify the installed file-base MCP with one bounded read.",
+    )
     parser.add_argument("--fresh-home", required=True, type=Path)
     parser.add_argument("--evidence-root", required=True, type=Path)
     parser.add_argument("--max-attempts", type=int, default=1)
@@ -130,6 +135,8 @@ def run_recorded(
     environment: dict[str, str],
     evidence: Path,
     stdout_name: str = "stdout.log",
+    input_text: str | None = None,
+    timeout: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     evidence.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(
@@ -139,6 +146,8 @@ def run_recorded(
         text=True,
         capture_output=True,
         check=False,
+        input=input_text,
+        timeout=timeout,
     )
     (evidence / stdout_name).write_text(completed.stdout, encoding="utf-8")
     (evidence / "stderr.log").write_text(completed.stderr, encoding="utf-8")
@@ -442,6 +451,230 @@ def run_install_cli(args: argparse.Namespace) -> int:
         },
     )
     print("installed stage smoke passed")
+    return 0
+
+
+def rpc_request(identifier: int, method: str, params: dict[str, object]) -> str:
+    return json.dumps(
+        {"jsonrpc": "2.0", "id": identifier, "method": method, "params": params},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def nested_text_contains(value: object, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, list):
+        return any(nested_text_contains(item, needle) for item in value)
+    if isinstance(value, dict):
+        return any(
+            nested_text_contains(key, needle) or nested_text_contains(item, needle)
+            for key, item in value.items()
+        )
+    return False
+
+
+def run_mcp(args: argparse.Namespace) -> int:
+    stage_root = args.stage_root.resolve()
+    fresh_root = args.fresh_home.resolve()
+    evidence_root = args.evidence_root.resolve()
+    if stage_root in {Path("/"), PROJECT_ROOT} or fresh_root == Path("/"):
+        raise CanaryDefect("refusing unsafe stage or fresh-home root")
+
+    shutil.rmtree(evidence_root, ignore_errors=True)
+    shutil.rmtree(fresh_root, ignore_errors=True)
+    evidence_root.mkdir(parents=True)
+    cachebuster = f"mcp-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{os.getpid()}"
+    stage_build = evidence_root / "stage-build"
+    stage_evidence = stage_build / "stage-evidence"
+    write_command(
+        stage_build / "command.json",
+        [
+            "<repository-root>/scripts/stage-plugin",
+            "--clean",
+            "--stage-root",
+            "<stage-root>",
+            "--cachebuster",
+            cachebuster,
+        ],
+    )
+    staged = run_recorded(
+        [
+            str(PROJECT_ROOT / "scripts/stage-plugin"),
+            "--clean",
+            "--stage-root",
+            str(stage_root),
+            "--cachebuster",
+            cachebuster,
+            "--evidence-root",
+            str(stage_evidence),
+        ],
+        cwd=PROJECT_ROOT,
+        environment=os.environ.copy(),
+        evidence=stage_build,
+    )
+    if staged.returncode != 0:
+        raise CanaryDefect("clean MCP restage failed")
+
+    installed = install_exact_stage(
+        stage_root,
+        fresh_root,
+        evidence_root,
+        copy_auth=False,
+    )
+    installed_root: Path = installed["installed_root"]
+    config_path = installed_root / ".mcp.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        server = config["mcpServers"]["file-base"]
+        configured_command = server["command"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+        raise CanaryDefect(f"installed MCP config is invalid: {error}") from error
+    if configured_command != "./scripts/file-base-mcp":
+        raise CanaryDefect("installed MCP command is not plugin-root-relative")
+    launcher = (installed_root / configured_command).resolve()
+    if not launcher.is_relative_to(installed_root) or not os.access(launcher, os.X_OK):
+        raise CanaryDefect("installed MCP launcher does not resolve inside the plugin")
+
+    list_dir = evidence_root / "plugin/mcp/list"
+    write_command(
+        list_dir / "command.json",
+        ["codex", "mcp", "list", "--json"],
+        tool_network_access="disabled",
+    )
+    listed = run_recorded(
+        ["codex", "mcp", "list", "--json"],
+        cwd=installed["unrelated_cwd"],
+        environment=installed["environment"],
+        evidence=list_dir,
+        timeout=30,
+    )
+    try:
+        listed_payload: object = json.loads(listed.stdout)
+    except json.JSONDecodeError:
+        listed_payload = None
+    host_listed = (
+        listed.returncode == 0
+        and nested_text_contains(listed_payload, "file-base")
+        and nested_text_contains(listed_payload, configured_command)
+    )
+    if not host_listed:
+        raise CanaryDefect("installed Codex host did not list the plugin MCP server")
+
+    fixture_root = fresh_root / "mcp-fixture"
+    cache_dir = fresh_root / "mcp-cache"
+    shutil.copytree(
+        PROJECT_ROOT / "tests/fixtures/confinement/allowed",
+        fixture_root,
+    )
+    cache_dir.mkdir()
+    read_request = {
+        "schema_version": "1.0.0",
+        "allowed_root": "phase1-fixture",
+        "relative_path": "paper.tex",
+        "max_bytes": 4096,
+        "max_lines": 200,
+    }
+    requests = [
+        rpc_request(1, "tools/list", {}),
+        rpc_request(
+            2,
+            "tools/call",
+            {"name": "read_file", "arguments": read_request},
+        ),
+    ]
+    mcp_dir = evidence_root / "plugin/mcp"
+    write_json(mcp_dir / "request.json", read_request)
+    write_command(
+        mcp_dir / "command.json",
+        ["<installed-plugin>/scripts/file-base-mcp"],
+        tool_network_access="disabled",
+    )
+    command = [
+        *bwrap_prefix(fresh_root, installed["unrelated_cwd"], offline=True),
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        os.environ["PATH"],
+        "--setenv",
+        "HOME",
+        str(installed["home"]),
+        "--setenv",
+        "CODEX_HOME",
+        str(installed["codex_home"]),
+        "--setenv",
+        "CBM_ALLOWED_ROOT",
+        str(fixture_root),
+        "--setenv",
+        "CBM_ALLOWED_ROOT_ID",
+        "phase1-fixture",
+        "--setenv",
+        "CBM_CACHE_DIR",
+        str(cache_dir),
+        "--setenv",
+        "CBM_DISABLE_UPDATE_CHECK",
+        "1",
+        "--setenv",
+        "CBM_LOG_LEVEL",
+        "warn",
+        str(launcher),
+    ]
+    invoked = run_recorded(
+        command,
+        cwd=installed["unrelated_cwd"],
+        environment=os.environ.copy(),
+        evidence=mcp_dir,
+        input_text="\n".join(requests) + "\n",
+        timeout=15,
+    )
+    try:
+        responses = [
+            json.loads(line) for line in invoked.stdout.splitlines() if line.strip()
+        ]
+        result = json.loads(responses[1]["result"]["content"][0]["text"])
+    except (json.JSONDecodeError, IndexError, KeyError, TypeError) as error:
+        raise CanaryDefect(f"installed MCP returned invalid JSON-RPC: {error}") from error
+    if invoked.returncode != 0 or len(responses) != 2 or result.get("status") != "ok":
+        raise CanaryDefect("installed MCP bounded read failed")
+
+    write_json(mcp_dir / "responses.json", responses)
+    write_json(mcp_dir / "result.json", result)
+    write_json(
+        mcp_dir / "config-probe.json",
+        {
+            "configured_command": configured_command,
+            "host_listed": True,
+            "resolved_inside_installed_plugin": True,
+            "server_name": "file-base",
+            "technical_qualification": "PASS",
+        },
+    )
+    write_json(
+        evidence_root / "summary.json",
+        {
+            "explicit_allowed_root": True,
+            "explicit_cache": True,
+            "inherited_pythonpath": False,
+            "installed_from_exact_stage": True,
+            "mcp_transport": "json-rpc-2.0-line-delimited-stdio",
+            "network_isolation": "linux-user-network-namespace",
+            "source_imported": False,
+            "stage_name": PLUGIN_NAME,
+            "technical_qualification": "PASS",
+        },
+    )
+    redact_evidence(
+        evidence_root,
+        {
+            str(PROJECT_ROOT): "<repository-root>",
+            str(Path.home()): "<operator-home>",
+            str(fresh_root): "<isolated-root>",
+            str(stage_root): "<stage-root>",
+            str(installed_root): "<installed-plugin>",
+        },
+    )
+    print("installed MCP smoke passed")
     return 0
 
 
@@ -865,6 +1098,8 @@ def run_route(args: argparse.Namespace) -> int:
 def main() -> int:
     args = parse_args()
     try:
+        if args.mcp:
+            return run_mcp(args)
         if args.route:
             return run_route(args)
         return run_install_cli(args)
