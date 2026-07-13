@@ -7,7 +7,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 ## Phases
 
 - [x] **Phase 1: Contract, License, and Executable Baseline** - Prove the staged plugin, source and license chain, authority schemas, filesystem boundary, and seed verification fixture before deeper implementation. (completed 2026-07-13)
-- [ ] **Phase 2: Durable Provenance Runtime** - Make canonical research runs deterministic, immutable, replayable, and recoverable through the sole writer.
+- [x] **Phase 2: Durable Provenance Runtime** - Make canonical research runs deterministic, immutable, replayable, and recoverable through the sole writer. (completed 2026-07-13)
 - [ ] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge.
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
 - [ ] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries.
@@ -89,7 +89,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-05-PLAN.md - Staged end-to-end qualification, schema identity, and full regression
+- [x] 02-05-PLAN.md - Staged end-to-end qualification, schema identity, and full regression
 
 ### Phase 3: Secure Files-First Data Plane
 
@@ -173,7 +173,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
-| 2. Durable Provenance Runtime | 4/5 | In Progress|  |
+| 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
