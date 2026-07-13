@@ -67,6 +67,7 @@ class ReplayState:
     workflow_definition_id: str = LEGACY_WORKFLOW_ID
     events: tuple[CanonicalEvent, ...] = ()
     segments: tuple[SegmentScan, ...] = ()
+    journal_layout: str | None = None
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -416,6 +417,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
         workflow_definition_id=manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
         events=tuple(events),
         segments=tuple(segments),
+        journal_layout=manifest.journal_layout,
     )
 
 
@@ -444,8 +446,7 @@ def locked_replay(
         raise JournalError("canonical writer lock is held") from error
 
 
-def append_runtime_event_unlocked(
-    root: Path,
+def build_runtime_event(
     state: ReplayState,
     *,
     event_type: str,
@@ -455,19 +456,15 @@ def append_runtime_event_unlocked(
     actor_id: str,
     actor_role: str,
     payload: object,
-) -> tuple[CanonicalEvent, ReplayState]:
-    """Append one writer-derived event; callers must hold ``locked_replay``."""
+) -> CanonicalEvent:
+    """Construct one canonical event using only writer-owned chain fields."""
 
-    if not state.segments:
-        raise JournalError("accepted replay has no active segment")
-    segment_path = root / state.segments[-1].relative_path
-    before_size = segment_path.stat().st_size
     payload_value = (
         payload.model_dump(mode="json", exclude_none=True)
         if hasattr(payload, "model_dump")
         else payload
     )
-    event = _event_from_unsigned(
+    return _event_from_unsigned(
         {
             "schema_version": "1.0.0",
             "event_type": event_type,
@@ -484,6 +481,29 @@ def append_runtime_event_unlocked(
             "payload": payload_value,
         }
     )
+
+
+def append_runtime_event_unlocked(
+    root: Path,
+    state: ReplayState,
+    event: CanonicalEvent,
+) -> tuple[CanonicalEvent, ReplayState]:
+    """Append one prevalidated event; callers must hold ``locked_replay``."""
+
+    if not state.segments:
+        raise JournalError("accepted replay has no active segment")
+    if state.journal_layout != "segmented-v1":
+        raise JournalError("Phase 2 runtime events require a segmented journal")
+    if (
+        event.run_id != state.run_id
+        or event.sequence != state.event_count + 1
+        or event.expected_revision != state.revision
+        or event.resulting_revision != state.revision + 1
+        or event.prev_event_sha256 != state.last_event_sha256
+    ):
+        raise JournalError("runtime event does not extend the accepted tip")
+    segment_path = root / state.segments[-1].relative_path
+    before_size = segment_path.stat().st_size
     event_bytes = canonical_json_bytes(event.model_dump(mode="json", exclude_none=True))
     if segment_path.stat().st_size != before_size:
         raise JournalError("journal changed during locked replay")

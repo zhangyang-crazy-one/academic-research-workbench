@@ -24,8 +24,10 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "version-report.schema.json",
 )
 SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
+    "attempt-request.schema.json",
     "rejection.schema.json",
     "status.schema.json",
+    "transition-request.schema.json",
 )
 
 

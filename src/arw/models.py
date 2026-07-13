@@ -268,6 +268,56 @@ class Rejection(StrictModel):
     recovery_health: RecoveryHealth | None = None
 
 
+class RuntimeCommandRequest(StrictModel):
+    schema_version: Literal["1.0.0"]
+    run_id: RunId
+    event_id: EventId
+    command_id: CommandId
+    expected_revision: Annotated[int, Field(ge=0)]
+    occurred_at: UtcTimestamp
+    actor_id: ActorId
+    actor_role: ActorRole
+
+
+class LifecycleTransitionRequest(RuntimeCommandRequest):
+    transition_id: StableRuntimeId
+    from_stage: StableRuntimeId
+
+
+class HumanDecisionRequest(RuntimeCommandRequest):
+    decision_id: StableRuntimeId
+    blocker_code: StableRuntimeId
+    allowed_choices: list[StableRuntimeId] = Field(min_length=1)
+    rationale_required: bool
+    source_event_ids: list[EventId]
+    unlock_transitions: list[StableRuntimeId]
+
+    @field_validator("allowed_choices", "source_event_ids", "unlock_transitions")
+    @classmethod
+    def decision_values_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("decision request values must be unique")
+        return value
+
+
+class HumanDecisionResolveRequest(RuntimeCommandRequest):
+    decision_id: StableRuntimeId
+    choice: StableRuntimeId
+    rationale: Annotated[str, Field(min_length=1, max_length=2048)] | None = None
+
+
+class AttemptStartRequest(RuntimeCommandRequest):
+    attempt_id: StableRuntimeId
+    base_revision: Annotated[int, Field(ge=0)]
+    consumed_sha256: list[Sha256]
+
+
+class AttemptCloseRequest(RuntimeCommandRequest):
+    attempt_id: StableRuntimeId
+    outcome: Literal["completed", "failed", "cancelled", "superseded"]
+    proposal_sha256: Sha256 | None = None
+
+
 class InitRunRequest(StrictModel):
     """Strict operator request used to construct manifest and initial event."""
 

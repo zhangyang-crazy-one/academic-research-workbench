@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -138,3 +141,66 @@ def test_duplicate_identity_rejects_without_second_append(tmp_path: Path, identi
     assert rejected.rejection is not None
     assert rejected.rejection.code == f"duplicate-{identity}-id"
     assert _tree(root) == before
+
+
+def test_phase2_transaction_rejects_legacy_journal_before_append(tmp_path: Path) -> None:
+    from arw.journal import initialize_run
+    from arw.models import InitRunRequest
+    from arw.runtime import RuntimeCommandService
+
+    root = tmp_path / "legacy"
+    source = root / "input" / "source.txt"
+    source.parent.mkdir(parents=True)
+    source.write_text("legacy run\n", encoding="utf-8")
+    initialize_run(
+        root,
+        InitRunRequest.model_validate(
+            {
+                "schema_version": "1.0.0",
+                "run_id": RUN_ID,
+                "occurred_at": "2026-07-13T02:00:00Z",
+                "immutable_input": {
+                    "path": "input/source.txt",
+                    "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                },
+                "workflow_family": "academic-pipeline",
+                "workflow_mode": "inline-role-prompts",
+                "capabilities": ["canonical-journal"],
+                "event_id": "evt-00000000-0000-4000-8000-000000000031",
+                "command_id": "cmd-00000000-0000-4000-8000-000000000031",
+                "actor_id": "parent.runtime",
+            }
+        ),
+    )
+    before = _tree(root)
+    rejected = RuntimeCommandService(root).execute_transition(_transition())
+    assert rejected.rejection is not None
+    assert rejected.rejection.code == "legacy-run-read-only"
+    assert _tree(root) == before
+
+
+def test_transition_cli_routes_only_through_runtime_service(tmp_path: Path) -> None:
+    root, _service_instance = _service(tmp_path)
+    request_path = tmp_path / "transition.json"
+    request_path.write_text(
+        json.dumps(_transition().model_dump(mode="json")), encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "arw.cli",
+            "transition",
+            "--run-root",
+            str(root),
+            "--request",
+            str(request_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["accepted"] is True
+    assert payload["state"]["stage"] == "intake"
