@@ -6,19 +6,54 @@
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
     "reducer_version": {"const": "1.0.0", "type": "string"},
-    "run_id": {"pattern": "^run-", "type": "string"},
-    "workflow_definition_id": {"type": "string"},
-    "current_stage": {"type": "string"},
+    "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
+    "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+    "current_stage": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "accepted_revision": {"minimum": 0, "type": "integer"},
     "ledger_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "current_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
     "recovery_health": {"enum": ["healthy", "recoverable_tail", "blocked"], "type": "string"},
-    "blockers": {"items": {"type": "object"}, "type": "array"},
-    "pending_human_decisions": {"items": {"type": "object"}, "type": "array"},
-    "active_attempts": {"items": {"type": "object"}, "type": "array"},
-    "legal_next_transitions": {"items": {"type": "string"}, "type": "array"}
+    "blockers": {"items": {"$ref": "#/$defs/blocker"}, "type": "array"},
+    "pending_human_decisions": {"items": {"$ref": "#/$defs/pending_decision"}, "type": "array"},
+    "active_attempts": {"items": {"$ref": "#/$defs/active_attempt"}, "type": "array"},
+    "legal_next_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"}
   },
   "required": ["schema_version", "reducer_version", "run_id", "workflow_definition_id", "current_stage", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "recovery_health", "blockers", "pending_human_decisions", "active_attempts", "legal_next_transitions"],
   "title": "StatusReport",
-  "type": "object"
+  "type": "object",
+  "$defs": {
+    "blocker": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "source_event_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      },
+      "required": ["code", "source_event_id"],
+      "type": "object"
+    },
+    "pending_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "blocker_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "source_event_ids": {"items": {"type": "string"}, "type": "array"},
+        "starting_revision": {"minimum": 0, "type": "integer"},
+        "allowed_choices": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"},
+        "rationale_required": {"type": "boolean"},
+        "unlock_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"}
+      },
+      "required": ["decision_id", "blocker_code", "source_event_ids", "starting_revision", "allowed_choices", "rationale_required", "unlock_transitions"],
+      "type": "object"
+    },
+    "active_attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "base_revision": {"minimum": 0, "type": "integer"},
+        "consumed_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"}
+      },
+      "required": ["attempt_id", "base_revision", "consumed_sha256"],
+      "type": "object"
+    }
+  }
 }
