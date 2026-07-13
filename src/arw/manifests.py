@@ -16,9 +16,12 @@ from arw.models import (
     CanonicalEvent,
     MaterialPassport,
     PassportAcceptedPayload,
+    PassportAttemptSnapshot,
+    PassportDecisionSnapshot,
     PassportPointer,
     StrictModel,
 )
+from arw.reducer import RuntimeState
 
 
 class ManifestError(RuntimeError):
@@ -183,3 +186,76 @@ def validate_accepted_event_manifests(
                 or passport.fresh_until != event.payload.fresh_until
             ):
                 raise ManifestError("Passport acceptance event differs from its manifest")
+
+
+def validate_event_manifest_semantics(
+    root: Path,
+    event: CanonicalEvent,
+    state_before: RuntimeState,
+) -> None:
+    """Bind one selected manifest to the complete accepted state before its event."""
+
+    from arw.workflows import require_workflow
+
+    if event.event_type == "artifact.accepted":
+        assert isinstance(event.payload, ArtifactAcceptedPayload)
+        manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
+        if manifest.created_at != event.occurred_at or manifest.producer_id != event.actor_id:
+            raise ManifestError("artifact manifest producer or timestamp differs from its event")
+        if manifest.attempt_id is None:
+            if manifest.base_revision != state_before.accepted_revision:
+                raise ManifestError("artifact manifest base revision is not current")
+            known_hashes = {
+                state_before.ledger_head_sha256,
+                *state_before.accepted_artifact_manifest_sha256,
+                *state_before.accepted_passport_sha256,
+            }
+            if any(value not in known_hashes for value in manifest.consumed_sha256):
+                raise ManifestError("artifact manifest consumes an unknown hash")
+        else:
+            attempt = next(
+                (
+                    item
+                    for item in state_before.active_attempts
+                    if item.attempt_id == manifest.attempt_id
+                ),
+                None,
+            )
+            if (
+                attempt is None
+                or manifest.base_revision != attempt.base_revision
+                or manifest.consumed_sha256 != attempt.consumed_sha256
+            ):
+                raise ManifestError("artifact manifest does not match its active attempt")
+        return
+
+    if event.event_type != "passport.accepted":
+        return
+    assert isinstance(event.payload, PassportAcceptedPayload)
+    passport = load_material_passport(root, event.payload.passport_sha256)
+    workflow = require_workflow(state_before.workflow_definition_id)
+    expected_decisions = [
+        PassportDecisionSnapshot.model_validate(item.model_dump(mode="json"))
+        for item in state_before.pending_human_decisions
+    ]
+    expected_attempts = [
+        PassportAttemptSnapshot.model_validate(item.model_dump(mode="json"))
+        for item in state_before.active_attempts
+    ]
+    checks = (
+        passport.workflow_definition_id == state_before.workflow_definition_id,
+        passport.workflow_definition_sha256 == workflow.sha256,
+        passport.based_on_revision == state_before.accepted_revision,
+        passport.ledger_head_sha256 == state_before.ledger_head_sha256,
+        passport.stage == state_before.stage,
+        passport.parent_passport_sha256 == state_before.current_passport_sha256,
+        passport.supersedes_passport_sha256 == state_before.current_passport_sha256,
+        passport.accepted_artifact_manifest_sha256
+        == state_before.accepted_artifact_manifest_sha256,
+        passport.pending_human_decisions == expected_decisions,
+        passport.active_attempts == expected_attempts,
+        passport.created_at == event.occurred_at,
+        passport.created_by == event.actor_id,
+    )
+    if not all(checks):
+        raise ManifestError("Passport manifest does not bind the accepted checkpoint state")

@@ -30,7 +30,11 @@ from arw.models import (
     RunManifest,
     ZERO_HASH,
 )
-from arw.manifests import ManifestError, validate_accepted_event_manifests
+from arw.manifests import (
+    ManifestError,
+    validate_accepted_event_manifests,
+    validate_event_manifest_semantics,
+)
 from arw.recovery import (
     RecoveryError,
     publish_recovery_segment,
@@ -119,8 +123,11 @@ _existing_root = require_existing_run_root
 def _lock(run_root: Path, timeout: float) -> portalocker.Lock:
     if timeout < 0:
         raise JournalError("lock timeout must be non-negative")
+    lock_path = run_root / LOCK_NAME
+    if lock_path.is_symlink() or (lock_path.exists() and not lock_path.is_file()):
+        raise JournalError("canonical writer lock file is unsafe")
     return portalocker.Lock(
-        run_root / LOCK_NAME,
+        lock_path,
         mode="a+b",
         timeout=timeout,
         check_interval=0.01,
@@ -365,9 +372,11 @@ def _replay_unlocked(root: Path) -> ReplayState:
     recovery_health: RecoveryHealth = "healthy"
     recovery_message: str | None = None
     pending_damaged: SegmentScan | None = None
+    reduced_state = None
+    candidate_reduced_state = None
 
     def validate_event(payload: object, line: bytes, event_number: int) -> CanonicalEvent:
-        nonlocal revision, previous_hash
+        nonlocal candidate_reduced_state, revision, previous_hash
         event: CanonicalEvent = _strict_model(
             CanonicalEvent, payload, f"event {event_number}"
         )
@@ -401,16 +410,31 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:
                 raise JournalError(str(error)) from error
+        try:
+            from arw.reducer import ReducerError, reduce_events
+
+            candidate_reduced_state = reduce_events(
+                manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
+                (*events, event),
+            )
+            if event.event_type in {"artifact.accepted", "passport.accepted"}:
+                if reduced_state is None:
+                    raise ManifestError("accepted manifest has no prior runtime state")
+                validate_event_manifest_semantics(root, event, reduced_state)
+        except (ManifestError, ReducerError, WorkflowDefinitionError) as error:
+            raise JournalError(f"runtime event {event_number} is invalid: {error}") from error
         return event
 
     def accept_event(event: CanonicalEvent, segment_events: list[CanonicalEvent]) -> None:
-        nonlocal revision, previous_hash
+        nonlocal candidate_reduced_state, reduced_state, revision, previous_hash
         revision = event.resulting_revision
         previous_hash = event.event_sha256
         event_ids.add(event.event_id)
         command_ids.add(event.command_id)
         events.append(event)
         segment_events.append(event)
+        reduced_state = candidate_reduced_state
+        candidate_reduced_state = None
 
     for segment_index, segment_path in enumerate(segment_paths, start=1):
         try:
@@ -730,6 +754,8 @@ def append_probe(
             state = _replay_unlocked(root)
             if state.recovery_health != "healthy":
                 raise JournalError("baseline append requires a healthy journal")
+            if state.journal_layout is not None:
+                raise JournalError("baseline append only supports legacy journals")
             journal_path = root / state.segments[-1].relative_path
             before_size = journal_path.stat().st_size
             if request.run_id != state.run_id:

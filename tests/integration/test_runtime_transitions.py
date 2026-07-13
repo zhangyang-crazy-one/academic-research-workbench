@@ -204,3 +204,41 @@ def test_transition_cli_routes_only_through_runtime_service(tmp_path: Path) -> N
     payload = json.loads(result.stdout)
     assert payload["accepted"] is True
     assert payload["state"]["stage"] == "intake"
+
+
+def test_replay_cli_rejects_resealed_event_that_violates_runtime_authority(
+    tmp_path: Path,
+) -> None:
+    from arw.canonical import canonical_json_bytes, seal_event
+
+    root, service = _service(tmp_path)
+    accepted = service.execute_transition(_transition())
+    assert accepted.accepted is True
+
+    journal = root / "journal/segments/00000001.jsonl"
+    records = [json.loads(line) for line in journal.read_bytes().splitlines()]
+    records[-1]["actor_id"] = "worker.agent"
+    records[-1]["actor_role"] = "worker"
+    records[-1] = seal_event(records[-1])
+    journal.write_bytes(b"".join(canonical_json_bytes(record) for record in records))
+    before = _tree(root)
+
+    for command in ("replay", "status"):
+        arguments = [command, "--run-root", str(root)]
+        if command == "status":
+            arguments.append("--json")
+        result = subprocess.run(
+            [sys.executable, "-m", "arw.cli", *arguments],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        if command == "replay":
+            assert payload["revision"] == 1
+        else:
+            assert payload["accepted_revision"] == 1
+            assert payload["recovery_health"] == "blocked"
+            assert payload["legal_next_transitions"] == []
+        assert _tree(root) == before

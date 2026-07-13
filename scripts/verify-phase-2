@@ -44,8 +44,11 @@ done
 PYTHON="$PROJECT_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || fail "project environment is missing" 66
 EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
-[[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
-  || fail "refusing unsafe evidence root" 64
+EVIDENCE_BASE="$PROJECT_ROOT/build/evidence"
+case "$EVIDENCE_ROOT" in
+  "$EVIDENCE_BASE"/*) ;;
+  *) fail "evidence root must be below $EVIDENCE_BASE" 64 ;;
+esac
 if [[ -e "$EVIDENCE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "evidence root exists; pass --clean" 73
   rm -rf -- "$EVIDENCE_ROOT"
