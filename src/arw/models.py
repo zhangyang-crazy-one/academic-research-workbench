@@ -42,6 +42,7 @@ Capability = Literal["canonical-journal", "forced-stop-replay"]
 ActorRole = Literal["parent_control_plane", "operator", "worker", "hook"]
 RecoveryHealth = Literal["healthy", "recoverable_tail", "blocked"]
 CheckpointKind = Literal["stage_handoff", "human_decision", "explicit", "recovery"]
+JournalLayout = Literal["segmented-v1"]
 StableRuntimeId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{2,95}$")]
 
 
@@ -85,6 +86,7 @@ class RunManifest(StrictModel):
     workflow_mode: Literal["inline-role-prompts"]
     workflow_definition_id: StableRuntimeId | None = None
     workflow_definition_sha256: Sha256 | None = None
+    journal_layout: JournalLayout | None = None
     capabilities: list[Capability] = Field(min_length=1)
 
     @field_validator("capabilities")
@@ -98,6 +100,8 @@ class RunManifest(StrictModel):
     def workflow_identity_is_complete(self) -> Self:
         if (self.workflow_definition_id is None) != (self.workflow_definition_sha256 is None):
             raise ValueError("workflow definition ID and digest must be provided together")
+        if self.journal_layout is not None and self.workflow_definition_id is None:
+            raise ValueError("segmented journals require a bound workflow definition")
         return self
 
 
@@ -275,6 +279,7 @@ class InitRunRequest(StrictModel):
     workflow_mode: Literal["inline-role-prompts"]
     workflow_definition_id: StableRuntimeId | None = None
     workflow_definition_sha256: Sha256 | None = None
+    journal_layout: JournalLayout | None = None
     capabilities: list[Capability] = Field(min_length=1)
     event_id: EventId
     command_id: CommandId
@@ -291,6 +296,8 @@ class InitRunRequest(StrictModel):
     def workflow_identity_is_complete(self) -> Self:
         if (self.workflow_definition_id is None) != (self.workflow_definition_sha256 is None):
             raise ValueError("workflow definition ID and digest must be provided together")
+        if self.journal_layout is not None and self.workflow_definition_id is None:
+            raise ValueError("segmented journals require a bound workflow definition")
         return self
 
 
