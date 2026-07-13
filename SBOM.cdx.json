@@ -1,0 +1,3054 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "annotated-types-2@0.7.0",
+      "name": "annotated-types",
+      "purl": "pkg:pypi/annotated-types@0.7.0",
+      "type": "library",
+      "version": "0.7.0"
+    },
+    {
+      "bom-ref": "artifact:.file-base/bin/file-base",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7cf325817f9f3520e6942dd929e2d18679655edd18b15af321c9fcf8c2dff2a3"
+        }
+      ],
+      "name": ".file-base/bin/file-base",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:.file-base/build-evidence.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4966d21903e8a81c3960a6955ae971964449879cc1c6ef38b16b03b95e24cad6"
+        }
+      ],
+      "name": ".file-base/build-evidence.json",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+        }
+      ],
+      "name": "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:schemas/v1/source-manifest.schema.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b475b6b47b992493002419ae60b046809930eb490d52bdaa8d6c31e8f9ff188a"
+        }
+      ],
+      "name": "schemas/v1/source-manifest.schema.json",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "attrs-3@26.1.0",
+      "name": "attrs",
+      "purl": "pkg:pypi/attrs@26.1.0",
+      "type": "library",
+      "version": "26.1.0"
+    },
+    {
+      "bom-ref": "colorama-4@0.4.6",
+      "name": "colorama",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "sys_platform == 'win32'"
+        }
+      ],
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "type": "library",
+      "version": "0.4.6"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/graph-ui/package-lock.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "123eafae09498a3a807916963549011a21b561889f8108215c1083618951e19a"
+        }
+      ],
+      "name": "vendor/sources/file-base/graph-ui/package-lock.json",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/common/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/common/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/common/tree_sitter/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/common/tree_sitter/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ada/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ad8425038de519f8c4e3e9339feebf99dfad8a6002dcf79227d91402780a32cc"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ada/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/agda/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ef120ea13e3e543234f3d9a193c99ea512872979802dc0cebaea404c1a47047c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/agda/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/apex/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/apex/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/assembly/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0e9f43573925c2e4b49f328a45c4df22c882191d77d876b0d18ecd60bd21e17c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/assembly/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/astro/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9ec95a90150fa19e2cee78faf49138fc480f6f7a2354006a0ab150c44239447e"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/astro/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/awk/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "512d5f9072b6227e356c765b40a4194fda964f75095b0816f24ce75aa8df03fa"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/awk/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bash/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bash/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/beancount/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8976806a7d187d8e152d49146fae44d8a98bb15be05099e63843756c116efcf0"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/beancount/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bibtex/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e4bfcc87169fdab12e351211541723132f58648a5ffad8f0f45b534349dbed45"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bibtex/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bicep/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bicep/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bitbake/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bitbake/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/blade/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "96e0c1803ffb831c7287b1fb7f88567d05e58d37da553e6bb9a9c4a765434ecb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/blade/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/c/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/c/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/c_sharp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "778fb7d63b8c1844da315648c02f325c4713a6f4a5d19644fd413421422776d3"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/c_sharp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cairo/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "108bfb047e0d45962dcadedfce730c86c278bc2a67f6939df405a706bec27e20"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cairo/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/capnp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/capnp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cfml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cfml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cfscript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cfscript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/clojure/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/clojure/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cmake/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "97334c0f9c0962b33cbe03223f584b8ed64c2d14419ce80cc2e945eb8d367d28"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cmake/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cobol/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cobol/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/commonlisp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "00bb7f417416e8233ae465209e72eaa6162d53b061add7d9bed0238552a6fa0c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/commonlisp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cpp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cpp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/crystal/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d1e5e5f807a9e842c16a0b392d7dcc5542f9ed9163533fa7d9798f7289fa8547"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/crystal/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/css/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/css/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/csv/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/csv/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cuda/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f44d7107a33801260dc82624c91a71ebf5918b4038a0fb0e3ef60e2dd9ba1999"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cuda/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/d/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ecf206b1a27e8e4ea07f1e1529cb111b4be5ce8420bd27b8269981d9c0c389f8"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/d/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dart/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d270cb3a4985d75033bd77d875ccebff1d66e32788a3f727891e28d76132dd46"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dart/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/devicetree/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b539c1b4ccd868c8d4fc89651c8133a1678823f5057e2e1a81455a3df4f4c0b8"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/devicetree/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/diff/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "bb98faf5a86e9458536a6c745e02b53775d01066f1e51dda4ae220a3c0b050f4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/diff/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dockerfile/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "806b8fcd19c1cdf23e178eb25942acc844a38669e36b2c896c7baf5f8bcecbb4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dockerfile/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dotenv/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "117a35332cc959aea7d16cfa7427f097f7fcfff6b4ef16b14a91a7296f3897dc"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dotenv/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elisp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f7d440114acea14bf9f510bb2e4b93f2aac6a51baf271acc112009b9b2ebe55e"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elisp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elixir/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elixir/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elm/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "26f7bf09693dd895ea64777316bad0133b131a8478a660b4785d4b9d1322f9a1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elm/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/erlang/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/erlang/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fennel/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fennel/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fish/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fish/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/form/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/form/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fortran/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c0fc02a86ae2b179c4729694c523bbf42da674e5136ed8e12e3cb2f26556ea9f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fortran/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fsharp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f9352b63e87252b282b252bf27530027c8ca69829e0023f8b8b682a736f271fd"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fsharp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/func/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8193651e765c9c23b0259b508320925dfbd99418aa424105b622b7787c2f01c5"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/func/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gdscript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gdscript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gitattributes/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "413ec4c3842f95bcaf662aba7d646b22baf044aa6ac5efa6531b94d4ee00248b"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gitattributes/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gitignore/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "239b228dfcf83043b3be6afe8c7508bbbecff75e8fe1e66db020ed21e213e721"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gitignore/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gleam/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gleam/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/glsl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f44d7107a33801260dc82624c91a71ebf5918b4038a0fb0e3ef60e2dd9ba1999"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/glsl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gn/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gn/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/go/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/go/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gomod/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "806b8fcd19c1cdf23e178eb25942acc844a38669e36b2c896c7baf5f8bcecbb4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gomod/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gotemplate/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "44ee910db99318d5d0b74b0d187ab2c8cbc411ca0be632ad9300e54036a9d822"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gotemplate/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/graphql/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7bd2788c7154b102cf03eeb335faba32d897fb82f252b28663c16c76738aaba5"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/graphql/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/groovy/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5f10fff4ea3c4892af1e2f1af0b9ba7fa79843598808a1dbbbbc8231ca81d1ad"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/groovy/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hare/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hare/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/haskell/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/haskell/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hcl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hcl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hlsl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dec735ccc031754dd05e6556dd9e959915eb367cf01cf009c77a1a38786932b1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hlsl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/html/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/html/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hyprlang/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4ea4f76b4942edcbac34ea41d6cb988ef8dcccd18117a179430cc7b2e3624807"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hyprlang/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ini/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ini/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ispc/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a1f7bdd70d68ab4e4adeb135b11cfa1696abf573c14495fb883a54f5d7968d0a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ispc/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/janet/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/janet/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/java/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/java/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/javascript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/javascript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jinja2/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9a204f0ddf288ec72bc40d593faee33c8ac1f4aed518dc80f9b77e03b0f6cbf3"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jinja2/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jsdoc/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ffaefecad68467134f8c701120a2410a2384ffff7a605b63638cf0b51e7d16cc"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jsdoc/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/json/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/json/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/json5/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c91845be8393ab50c602041e1b1e96994ad40a1d28fec9b9ee3ffe0933e4e641"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/json5/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jsonnet/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9255998527012c182050a5bdb9ce619176f96bbeb2a056c3ba939011f85da611"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jsonnet/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/julia/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "74f800107f200f4e28da33e9c3f86230d37d8f4c0a4916f7111e800c395ee3a2"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/julia/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/just/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/just/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kconfig/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kconfig/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kdl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b193808d3a13d34ec589a2c0bc2959f52a57f8fb1fc234d04ff8d87ac075864a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kdl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kotlin/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "948495f61768f7de26bcc61113d8cd95f50bbc15adb678c28c941c6c8fcd5903"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kotlin/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/lean/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "30dcd1c85faa36ad0917120a4d67a859e99f2dd8ff544cfc74c17f8b0b3ad06f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/lean/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/linkerscript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/linkerscript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/liquid/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3b3e4e4252d5d7d1c18e1257005f23242bf0580ad619204fd093c99b8c56748d"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/liquid/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/llvm/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a292ff39c53d0d2af3a0804ec291737508f1c888efb148f8f2bd3030e7cfdc48"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/llvm/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/lua/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/lua/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/luau/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/luau/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/magma/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/magma/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/make/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "28eecdb75b6de2d9020603531461444bf54db827ee2fb345a8fcf4dbee7c2ad1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/make/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/markdown/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "52ec8a1bf8256511e2a92613e0bb41ffefba3897f16fa958d7bb28c466dd4804"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/markdown/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/matlab/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8673f5acd59bfb3bd129760a57f72092d5e3c01e05837532eac9497cf8006a46"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/matlab/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/mermaid/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "40e46efcec726e70cc95c553ac377674f0a5d2eec6089483ba237af7dae4c54c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/mermaid/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/meson/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "62bca3ac5aaf95fdebc7f3d22f061dfa2fabd069c21b89cf18f704ef428f92b9"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/meson/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/mojo/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/mojo/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/move/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9d65ce763fc8041bf860b52fe8e2e91bad4034deb1d93fe8a303f31b3217ecc0"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/move/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nasm/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d6e36f2e5d337e6f72ea697a9675ed97fc53daf04522682d6f8db316b0e5b472"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nasm/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nickel/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "39313c75af91e581acd59f2c43a94d6216ce52e76f65125a1bd8e900f6f548a5"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nickel/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nix/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c1b72e50266464ec5118d26200e17bf1f472d142e62ab637e1ffc23986657a78"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nix/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objc/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objc/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_routine/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "85b458dc150c4d17873dd5e73d01cfa23c797997a09d841884e08378242e929c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_routine/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_udl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "85b458dc150c4d17873dd5e73d01cfa23c797997a09d841884e08378242e929c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_udl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ocaml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f977a20805dd6e275f14bc090a5f8e638401dad4df366841c1060f12c75b74ae"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ocaml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/odin/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/odin/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pascal/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e2fcc500eacb15b76c11fd2229aebf0a5b4c8ed476f068447c6dce778a17ac9"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pascal/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/perl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "68a9a526ae357ed5a2f8ca5dabb14131b283554b69639bb04816088d4b1f2fa0"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/perl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/php/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "664764fabf40c0b318e06324a5a12379092a2df25b8cbf2415f71bc0bb352346"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/php/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pine/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "01aa3f7bf8fe0c7d06a983422d5ea7e1a71b1363501eaabfdbc6f2bac95aa5f0"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pine/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pkl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pkl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/po/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "109ed1ed2db40c798111e05757f5b8576fe14bdb17aa24c7f2515b300c78572c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/po/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pony/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e8d649c1f03766310c675dc46e9733748ca1a9eedbc5196f3247196eddcbc31f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pony/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/powershell/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1fca8454c0d77a73f9922a52d39e1f7c339f5da5d03f2766eff66b859fa19477"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/powershell/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/prisma/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fbce36bb615a015ea545373da62c178fe9e7e3a7b7de656455738e6f671aa652"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/prisma/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/properties/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/properties/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/protobuf/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/protobuf/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/puppet/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/puppet/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/purescript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3ae7f9f8e25ac9a5466114a8593c138c8cab8d34898b57db4fc3f0c3f22eca98"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/purescript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/python/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/python/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/qml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a8fb3a7df5ba9ef3b6511a1d65ad69869de66828fe2d690b7b65913678739738"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/qml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/r/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "de2e49529f03d573bc3fa229dc83acfe22c63a5ad1766b289563edfd45b72dea"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/r/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/racket/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cc35bd4a973bf6067558e88b56d9a369e02c36e240b2b537aef8f751b7808fd7"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/racket/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/regex/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/regex/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/requirements/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "413ec4c3842f95bcaf662aba7d646b22baf044aa6ac5efa6531b94d4ee00248b"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/requirements/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rescript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "21da9b4e463af4b4501cbd4e0c5886a1f321a740b584002a9c9a5fe7b2d46a8a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rescript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ron/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c6137844f3f63aa4522dfc1cde8dff4f3314ed594ea954a73e3073dcc9d33b11"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ron/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rst/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5b337e5d1fedbb6275550101f7a1e7b00465409d32a29b308812fca394348500"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rst/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ruby/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ee006f02a3d856df282e409be2a86e24a65bb573a98b9c28343771141351bb6b"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ruby/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rust/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "31d5b6f4243d5c7c6e1c4ebbbb9f6407bd1457a08bcc4f706521710341acba36"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rust/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scala/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f95ed26e1f4074074c9c7083e61c0a9e4c3b9f435745044995f3beb4ed28575"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scala/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scheme/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cc35bd4a973bf6067558e88b56d9a369e02c36e240b2b537aef8f751b7808fd7"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scheme/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scss/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ad64f38da1571e9042cef6bea8f4232c2761c2f52ae93cbada9ae7aeaeeafa74"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scss/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/slang/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "188fdcca13247f567cddb0d5155c622de1a6cf3f0245e52f0986907b6c2819f5"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/slang/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/smali/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1337ef2684df318a38036aeecfcdd4a041368de0b73c300c709da259bf994246"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/smali/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/smithy/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c51b88530abf05268b117585ac199b590d160de1d49e763fee745c07518b7c54"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/smithy/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/solidity/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8844f0cc9b76b9c8a9d0251904eb7536b6bb9976e0ec577e8f27ab96d42523ef"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/solidity/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/soql/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/soql/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sosl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sosl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sql/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3b3e4e4252d5d7d1c18e1257005f23242bf0580ad619204fd093c99b8c56748d"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sql/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/squirrel/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/squirrel/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sshconfig/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sshconfig/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/starlark/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/starlark/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/svelte/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0eea8dc45e89deeb03c7799bbbc7b4688f365fb274562f4540ecfebdea82e727"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/svelte/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sway/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sway/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/swift/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3533cec129bb4bba015c0d61d86dd7c3b7e82110e4d2ff7837a01eff5bad5ccc"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/swift/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/systemverilog/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f4ceaa91e73e623d6b30895a3b644e0e277754a81c8b28655b75d7a9113f1ac4"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/systemverilog/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tablegen/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4d6033889c2f0e054589c67aa638e59e609b029c62b993c9659ebba19abfde5c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tablegen/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tcl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e3578fe6a7e9592bd4d39fb52d2be62c07e5f8bdca2ca66b3e22f553ec8351fb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tcl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/teal/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b2ddc8d974b4a74abebd8a4ac19b8fbfa3f4d37ec5b88f748cdfda3c76a22797"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/teal/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/templ/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fb8a4a7edd1e655b1ecf15dd5324fd9c073bbbf07e50c064566c693d854a0f76"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/templ/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/thrift/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f0a0f84bedde3f160f9db0337715a534ca8f1fb5f19726d743dadfde44bb08c8"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/thrift/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tlaplus/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "bb9ed59c3ddf6631a6138e4656fbcf7fb225b1a3260760e729d6e58a52c6b15a"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tlaplus/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/toml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b727eee929bee836e8102cecf749a795b199f291b58c885bcd81cae727ac5a46"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/toml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tsx/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tsx/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/typescript/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/typescript/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/typst/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0d129fe54977b282fa928da9bcf1f609d3388b54862361c9292d83605f71bd4b"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/typst/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/verilog/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8d2ff8d1e308828099436c43dc8bfbb8b6f368ad2a012ab9802a80ca22b03b53"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/verilog/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vhdl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a9323218abe9aabd3429b76634470b40c3be012600e1f96bd16ca254724fa954"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vhdl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vim/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "14eaaaa5c0cdb0eb86e85c55643c4cfa04593dbfbaef6a20f35337667b7278d7"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vim/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vue/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "91ebb180e4e2e34628c45e405584d0faac6863660b69e8139da96290e58c14dd"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vue/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wgsl/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d1b7f7ca8ec73d915cec4aa64d9e8b7f2d89b874225d4532e00d9c36c98528fe"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wgsl/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wit/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3b26cd02b9d9bf324bce59edd88c02cb93fa9a908528b805264db8cde53295e6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wit/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wolfram/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wolfram/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/xml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/xml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/yaml/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2d181298822a124f6d106118dcc69c8d4d26ac668559be29682c452e712b0947"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/yaml/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/zig/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0eea8dc45e89deeb03c7799bbbc7b4688f365fb274562f4540ecfebdea82e727"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/zig/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/zsh/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/zsh/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/lz4/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/lz4/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/simplecpp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e10e0877c3b49180e55eaef544b796570841b3265544ab069f7bc5687b7ec584"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/simplecpp/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/ts_runtime/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/ts_runtime/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/verstable/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2ef609c58a83269273396bd1176fc47eeb3fa5bd705b7c7fc2abe2d672740f65"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/verstable/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/wyhash/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6a90b88421a0d9b090e121daa11b3c6d55eed5eeb3281a2fcc454d6a28b5547c"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/wyhash/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/zstd/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/zstd/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/gen-third-party-notices.sh",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+        }
+      ],
+      "name": "vendor/sources/file-base/scripts/gen-third-party-notices.sh",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate-check-npm.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a0456bf6f6f40b562417fffefa53657586193fbc240c8fede1ffbbb18b050417"
+        }
+      ],
+      "name": "vendor/sources/file-base/scripts/license-gate-check-npm.py",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate-check.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9f4fc12b961565779dc2d2320099915ae444bce68e6e9e8da92b7a71d99b175d"
+        }
+      ],
+      "name": "vendor/sources/file-base/scripts/license-gate-check.py",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate.sh",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+        }
+      ],
+      "name": "vendor/sources/file-base/scripts/license-gate.sh",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-policy.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+        }
+      ],
+      "name": "vendor/sources/file-base/scripts/license-policy.json",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/mimalloc/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "82ade5d7d9b029044b5fbbc326207fc47c2d44ee4dd71e8a559c36d728217de9"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/mimalloc/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/nomic/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/nomic/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/nomic/NOTICE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "893a74d9e3f0a74358344edc999e165739df343b36297967f3fd9cd462022f39"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/nomic/NOTICE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/sqlite3/LICENSE.md",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49e5417011e9720fc8a5fa2a400c1541535195788c59ab33888ade39b2a3f9f0"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/sqlite3/LICENSE.md",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/tre/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6a50ab50d856b30c965cf2dd899e577ec108c938242fd3a2e7a7a25eed996200"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/tre/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/xxhash/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/xxhash/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/yyjson/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "45e384d3d52c73cba3a64d6e6c25d47cd738cd8a55c30629e3201046eda62947"
+        }
+      ],
+      "name": "vendor/sources/file-base/vendored/yyjson/LICENSE",
+      "type": "file",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "first-party-wheel:academic_research_workbench-0.1.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a597f34b3f563e377e888666804b2c3bb91623046f47fc0f3fbea221b1636e92"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "LicenseRef-Academic-Research-Workbench-Mixed"
+        }
+      ],
+      "name": "academic-research-workbench",
+      "type": "library",
+      "version": "0.1.0"
+    },
+    {
+      "bom-ref": "hatchling-5@1.31.0",
+      "name": "hatchling",
+      "purl": "pkg:pypi/hatchling@1.31.0",
+      "type": "library",
+      "version": "1.31.0"
+    },
+    {
+      "bom-ref": "iniconfig-6@2.3.0",
+      "name": "iniconfig",
+      "purl": "pkg:pypi/iniconfig@2.3.0",
+      "type": "library",
+      "version": "2.3.0"
+    },
+    {
+      "bom-ref": "jsonschema-7@4.26.0",
+      "name": "jsonschema",
+      "purl": "pkg:pypi/jsonschema@4.26.0",
+      "type": "library",
+      "version": "4.26.0"
+    },
+    {
+      "bom-ref": "jsonschema-specifications-8@2025.9.1",
+      "name": "jsonschema-specifications",
+      "purl": "pkg:pypi/jsonschema-specifications@2025.9.1",
+      "type": "library",
+      "version": "2025.9.1"
+    },
+    {
+      "bom-ref": "packaging-9@26.2",
+      "name": "packaging",
+      "purl": "pkg:pypi/packaging@26.2",
+      "type": "library",
+      "version": "26.2"
+    },
+    {
+      "bom-ref": "patch:dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+        }
+      ],
+      "name": "vendor/patches/file-base/0001-file-base-server-name.patch",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "pathspec-10@1.1.1",
+      "name": "pathspec",
+      "purl": "pkg:pypi/pathspec@1.1.1",
+      "type": "library",
+      "version": "1.1.1"
+    },
+    {
+      "bom-ref": "pluggy-11@1.6.0",
+      "name": "pluggy",
+      "purl": "pkg:pypi/pluggy@1.6.0",
+      "type": "library",
+      "version": "1.6.0"
+    },
+    {
+      "bom-ref": "portalocker-12@3.2.0",
+      "name": "portalocker",
+      "purl": "pkg:pypi/portalocker@3.2.0",
+      "type": "library",
+      "version": "3.2.0"
+    },
+    {
+      "bom-ref": "pydantic-13@2.13.4",
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@2.13.4",
+      "type": "library",
+      "version": "2.13.4"
+    },
+    {
+      "bom-ref": "pydantic-core-14@2.46.4",
+      "name": "pydantic-core",
+      "purl": "pkg:pypi/pydantic-core@2.46.4",
+      "type": "library",
+      "version": "2.46.4"
+    },
+    {
+      "bom-ref": "pygments-15@2.20.0",
+      "name": "pygments",
+      "purl": "pkg:pypi/pygments@2.20.0",
+      "type": "library",
+      "version": "2.20.0"
+    },
+    {
+      "bom-ref": "pytest-16@9.1.1",
+      "name": "pytest",
+      "purl": "pkg:pypi/pytest@9.1.1",
+      "type": "library",
+      "version": "9.1.1"
+    },
+    {
+      "bom-ref": "python-wheel:annotated_types-0.7.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT License"
+        }
+      ],
+      "name": "annotated-types",
+      "purl": "pkg:pypi/annotated-types@0.7.0",
+      "type": "library",
+      "version": "0.7.0"
+    },
+    {
+      "bom-ref": "python-wheel:attrs-26.1.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "attrs",
+      "purl": "pkg:pypi/attrs@26.1.0",
+      "type": "library",
+      "version": "26.1.0"
+    },
+    {
+      "bom-ref": "python-wheel:hatchling-1.31.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "aac80bec8b6fe35e8480f1c335be8910fa210a0e6f735a139be205dadcacb544"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "hatchling",
+      "purl": "pkg:pypi/hatchling@1.31.0",
+      "type": "library",
+      "version": "1.31.0"
+    },
+    {
+      "bom-ref": "python-wheel:iniconfig-2.3.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "iniconfig",
+      "purl": "pkg:pypi/iniconfig@2.3.0",
+      "type": "library",
+      "version": "2.3.0"
+    },
+    {
+      "bom-ref": "python-wheel:jsonschema-4.26.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "jsonschema",
+      "purl": "pkg:pypi/jsonschema@4.26.0",
+      "type": "library",
+      "version": "4.26.0"
+    },
+    {
+      "bom-ref": "python-wheel:jsonschema_specifications-2025.9.1-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "jsonschema-specifications",
+      "purl": "pkg:pypi/jsonschema-specifications@2025.9.1",
+      "type": "library",
+      "version": "2025.9.1"
+    },
+    {
+      "bom-ref": "python-wheel:packaging-26.2-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR BSD-2-Clause"
+        }
+      ],
+      "name": "packaging",
+      "purl": "pkg:pypi/packaging@26.2",
+      "type": "library",
+      "version": "26.2"
+    },
+    {
+      "bom-ref": "python-wheel:pathspec-1.1.1-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Mozilla Public License 2.0 (MPL 2.0)"
+        }
+      ],
+      "name": "pathspec",
+      "purl": "pkg:pypi/pathspec@1.1.1",
+      "type": "library",
+      "version": "1.1.1"
+    },
+    {
+      "bom-ref": "python-wheel:pluggy-1.6.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT License"
+        }
+      ],
+      "name": "pluggy",
+      "purl": "pkg:pypi/pluggy@1.6.0",
+      "type": "library",
+      "version": "1.6.0"
+    },
+    {
+      "bom-ref": "python-wheel:portalocker-3.2.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3cdc5f565312224bc570c49337bd21428bba0ef363bbcf58b9ef4a9f11779968"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause"
+        }
+      ],
+      "name": "portalocker",
+      "purl": "pkg:pypi/portalocker@3.2.0",
+      "type": "library",
+      "version": "3.2.0"
+    },
+    {
+      "bom-ref": "python-wheel:pydantic-2.13.4-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@2.13.4",
+      "type": "library",
+      "version": "2.13.4"
+    },
+    {
+      "bom-ref": "python-wheel:pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9551187363ffc0de2a00b2e47c25aeaeb1020b69b668762966df15fc5659dd5a"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "pydantic_core",
+      "purl": "pkg:pypi/pydantic_core@2.46.4",
+      "type": "library",
+      "version": "2.46.4"
+    },
+    {
+      "bom-ref": "python-wheel:pydantic_core-2.46.4-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7a5f930472650a82629163023e630d160863fce524c616f4e5186e5de9d9a49b"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "pydantic_core",
+      "purl": "pkg:pypi/pydantic_core@2.46.4",
+      "type": "library",
+      "version": "2.46.4"
+    },
+    {
+      "bom-ref": "python-wheel:pygments-2.20.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause"
+        }
+      ],
+      "name": "Pygments",
+      "purl": "pkg:pypi/Pygments@2.20.0",
+      "type": "library",
+      "version": "2.20.0"
+    },
+    {
+      "bom-ref": "python-wheel:pytest-9.1.1-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "pytest",
+      "purl": "pkg:pypi/pytest@9.1.1",
+      "type": "library",
+      "version": "9.1.1"
+    },
+    {
+      "bom-ref": "python-wheel:pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT License"
+        }
+      ],
+      "name": "PyYAML",
+      "purl": "pkg:pypi/PyYAML@6.0.3",
+      "type": "library",
+      "version": "6.0.3"
+    },
+    {
+      "bom-ref": "python-wheel:pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT License"
+        }
+      ],
+      "name": "PyYAML",
+      "purl": "pkg:pypi/PyYAML@6.0.3",
+      "type": "library",
+      "version": "6.0.3"
+    },
+    {
+      "bom-ref": "python-wheel:referencing-0.37.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "referencing",
+      "purl": "pkg:pypi/referencing@0.37.0",
+      "type": "library",
+      "version": "0.37.0"
+    },
+    {
+      "bom-ref": "python-wheel:rpds_py-2026.6.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "acac386b453c2516111b50985d60ce46e7fadb5ea71ae7b25f4c946935bf27cf"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "rpds-py",
+      "purl": "pkg:pypi/rpds-py@2026.6.3",
+      "type": "library",
+      "version": "2026.6.3"
+    },
+    {
+      "bom-ref": "python-wheel:rpds_py-2026.6.3-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dc319e5a1de4b6913aac94bf6a2f9e847371e0a140a43dd4991db1a09bc2d504"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "rpds-py",
+      "purl": "pkg:pypi/rpds-py@2026.6.3",
+      "type": "library",
+      "version": "2026.6.3"
+    },
+    {
+      "bom-ref": "python-wheel:trove_classifiers-2026.6.1.19-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache Software License"
+        }
+      ],
+      "name": "trove-classifiers",
+      "purl": "pkg:pypi/trove-classifiers@2026.6.1.19",
+      "type": "library",
+      "version": "2026.6.1.19"
+    },
+    {
+      "bom-ref": "python-wheel:typing_extensions-4.16.0-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "PSF-2.0"
+        }
+      ],
+      "name": "typing_extensions",
+      "purl": "pkg:pypi/typing_extensions@4.16.0",
+      "type": "library",
+      "version": "4.16.0"
+    },
+    {
+      "bom-ref": "python-wheel:typing_inspection-0.4.2-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "typing-inspection",
+      "purl": "pkg:pypi/typing-inspection@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
+    },
+    {
+      "bom-ref": "pywin32-17@312",
+      "name": "pywin32",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "sys_platform == 'win32'"
+        }
+      ],
+      "purl": "pkg:pypi/pywin32@312",
+      "type": "library",
+      "version": "312"
+    },
+    {
+      "bom-ref": "pyyaml-18@6.0.3",
+      "name": "pyyaml",
+      "purl": "pkg:pypi/pyyaml@6.0.3",
+      "type": "library",
+      "version": "6.0.3"
+    },
+    {
+      "bom-ref": "referencing-19@0.37.0",
+      "name": "referencing",
+      "purl": "pkg:pypi/referencing@0.37.0",
+      "type": "library",
+      "version": "0.37.0"
+    },
+    {
+      "bom-ref": "rpds-py-20@2026.6.3",
+      "name": "rpds-py",
+      "purl": "pkg:pypi/rpds-py@2026.6.3",
+      "type": "library",
+      "version": "2026.6.3"
+    },
+    {
+      "bom-ref": "source:academic-research-skills",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Imbad0202/academic-research-skills.git"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "CC-BY-NC-4.0"
+          }
+        }
+      ],
+      "name": "academic-research-skills",
+      "type": "library",
+      "version": "0.1.19"
+    },
+    {
+      "bom-ref": "source:experiment-agent",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Imbad0202/experiment-agent.git"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "CC-BY-NC-4.0"
+          }
+        }
+      ],
+      "name": "experiment-agent",
+      "type": "library",
+      "version": "pinned"
+    },
+    {
+      "bom-ref": "source:file-base",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/DeusData/codebase-memory-mcp.git"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "file-base",
+      "type": "library",
+      "version": "v0.9.0-2-gee68144"
+    },
+    {
+      "bom-ref": "trove-classifiers-21@2026.6.1.19",
+      "name": "trove-classifiers",
+      "purl": "pkg:pypi/trove-classifiers@2026.6.1.19",
+      "type": "library",
+      "version": "2026.6.1.19"
+    },
+    {
+      "bom-ref": "typing-extensions-22@4.16.0",
+      "name": "typing-extensions",
+      "purl": "pkg:pypi/typing-extensions@4.16.0",
+      "type": "library",
+      "version": "4.16.0"
+    },
+    {
+      "bom-ref": "typing-inspection-23@0.4.2",
+      "name": "typing-inspection",
+      "purl": "pkg:pypi/typing-inspection@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
+    }
+  ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "hatchling-5@1.31.0",
+        "jsonschema-7@4.26.0",
+        "portalocker-12@3.2.0",
+        "pydantic-13@2.13.4",
+        "pytest-16@9.1.1",
+        "pyyaml-18@6.0.3"
+      ],
+      "ref": "academic-research-workbench-1@0.1.0"
+    },
+    {
+      "ref": "annotated-types-2@0.7.0"
+    },
+    {
+      "ref": "attrs-3@26.1.0"
+    },
+    {
+      "ref": "colorama-4@0.4.6"
+    },
+    {
+      "dependsOn": [
+        "packaging-9@26.2",
+        "pathspec-10@1.1.1",
+        "pluggy-11@1.6.0",
+        "trove-classifiers-21@2026.6.1.19"
+      ],
+      "ref": "hatchling-5@1.31.0"
+    },
+    {
+      "ref": "iniconfig-6@2.3.0"
+    },
+    {
+      "dependsOn": [
+        "attrs-3@26.1.0",
+        "jsonschema-specifications-8@2025.9.1",
+        "referencing-19@0.37.0",
+        "rpds-py-20@2026.6.3"
+      ],
+      "ref": "jsonschema-7@4.26.0"
+    },
+    {
+      "dependsOn": [
+        "referencing-19@0.37.0"
+      ],
+      "ref": "jsonschema-specifications-8@2025.9.1"
+    },
+    {
+      "ref": "packaging-9@26.2"
+    },
+    {
+      "ref": "pathspec-10@1.1.1"
+    },
+    {
+      "ref": "pluggy-11@1.6.0"
+    },
+    {
+      "dependsOn": [
+        "pywin32-17@312"
+      ],
+      "ref": "portalocker-12@3.2.0"
+    },
+    {
+      "dependsOn": [
+        "annotated-types-2@0.7.0",
+        "pydantic-core-14@2.46.4",
+        "typing-extensions-22@4.16.0",
+        "typing-inspection-23@0.4.2"
+      ],
+      "ref": "pydantic-13@2.13.4"
+    },
+    {
+      "dependsOn": [
+        "typing-extensions-22@4.16.0"
+      ],
+      "ref": "pydantic-core-14@2.46.4"
+    },
+    {
+      "ref": "pygments-15@2.20.0"
+    },
+    {
+      "dependsOn": [
+        "colorama-4@0.4.6",
+        "iniconfig-6@2.3.0",
+        "packaging-9@26.2",
+        "pluggy-11@1.6.0",
+        "pygments-15@2.20.0"
+      ],
+      "ref": "pytest-16@9.1.1"
+    },
+    {
+      "ref": "pywin32-17@312"
+    },
+    {
+      "ref": "pyyaml-18@6.0.3"
+    },
+    {
+      "dependsOn": [
+        "attrs-3@26.1.0",
+        "rpds-py-20@2026.6.3"
+      ],
+      "ref": "referencing-19@0.37.0"
+    },
+    {
+      "ref": "rpds-py-20@2026.6.3"
+    },
+    {
+      "ref": "trove-classifiers-21@2026.6.1.19"
+    },
+    {
+      "ref": "typing-extensions-22@4.16.0"
+    },
+    {
+      "dependsOn": [
+        "typing-extensions-22@4.16.0"
+      ],
+      "ref": "typing-inspection-23@0.4.2"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "bom-ref": "academic-research-workbench-1@0.1.0",
+      "name": "academic-research-workbench",
+      "properties": [
+        {
+          "name": "uv:package:is_project_root",
+          "value": "true"
+        }
+      ],
+      "type": "library",
+      "version": "0.1.0"
+    },
+    "timestamp": "2026-07-13T03:09:21Z",
+    "tools": [
+      {
+        "name": "uv",
+        "vendor": "Astral Software Inc.",
+        "version": "0.11.28"
+      }
+    ]
+  },
+  "serialNumber": "urn:uuid:6c107e43-0000-4000-8000-de558dd09f09",
+  "specVersion": "1.5",
+  "version": 1
+}

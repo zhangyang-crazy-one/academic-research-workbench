@@ -1,0 +1,47 @@
+{
+  "components": [
+    {
+      "component_id": "academic-research-skills",
+      "license": "CC-BY-NC-4.0",
+      "release_status": "BLOCKED",
+      "source_path": "vendor/sources/academic-research-skills/LICENSE",
+      "source_sha256": "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c",
+      "staged_path": "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+      "staged_sha256": "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c"
+    },
+    {
+      "component_id": "experiment-agent",
+      "license": "CC-BY-NC-4.0",
+      "release_status": "BLOCKED",
+      "source_path": "vendor/sources/experiment-agent/LICENSE",
+      "source_sha256": "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25",
+      "staged_path": "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
+      "staged_sha256": "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25"
+    },
+    {
+      "component_id": "file-base",
+      "license": "MIT",
+      "release_status": "SATISFIED",
+      "source_path": "vendor/sources/file-base/LICENSE",
+      "source_sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb",
+      "staged_path": "LICENSES/file-base-MIT.txt",
+      "staged_sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    }
+  ],
+  "evidence_needed": [
+    "Declare intended use and distribution class.",
+    "Record accountable approval with evidence hashes.",
+    "Record authentic owner permission or establish compatible CC BY-NC use."
+  ],
+  "private_repository_is_noncommercial_evidence": false,
+  "reason_codes": [
+    "INTENDED_USE_UNKNOWN",
+    "DISTRIBUTION_CLASS_UNKNOWN",
+    "ACCOUNTABLE_APPROVAL_MISSING",
+    "CC_BY_NC_PERMISSION_UNRESOLVED"
+  ],
+  "release_qualification": "BLOCKED",
+  "schema_version": "1.0.0",
+  "technical_qualification": "PASS",
+  "use_distribution_path": "supply-chain/use-distribution.json"
+}

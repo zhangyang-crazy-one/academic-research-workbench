@@ -81,7 +81,19 @@ copy_file ".codex-plugin/plugin.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
 copy_file "hooks/hooks.json"
 copy_file "schemas/v1/route-result.schema.json"
+copy_file "schemas/v1/source-manifest.schema.json"
 copy_file "bin/arw" 0755
+copy_file ".file-base/bin/file-base" 0755
+copy_file ".file-base/build-evidence.json"
+copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
+copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
+copy_file "LICENSES/file-base-MIT.txt"
+copy_file "THIRD_PARTY_NOTICES.md"
+copy_file "MODIFICATIONS.md"
+copy_file "SBOM.cdx.json"
+copy_file "supply-chain/use-distribution.json"
+copy_file "supply-chain/license-verdict.json"
+copy_file "vendor/source-manifest.json"
 copy_file "vendor/python/wheelhouse.lock.json"
 copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
 
@@ -200,15 +212,27 @@ for wheel in source_lock["wheels"]:
 static_files = {
     ".python-version",
     ".codex-plugin/plugin.json",
+    ".file-base/bin/file-base",
+    ".file-base/build-evidence.json",
+    "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+    "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
+    "LICENSES/file-base-MIT.txt",
+    "MODIFICATIONS.md",
+    "SBOM.cdx.json",
+    "THIRD_PARTY_NOTICES.md",
     "bin/arw",
     "hooks/hooks.json",
     "pyproject.toml",
     "schemas/v1/route-result.schema.json",
+    "schemas/v1/source-manifest.schema.json",
     "skills/academic-research-workbench/SKILL.md",
+    "supply-chain/license-verdict.json",
+    "supply-chain/use-distribution.json",
     "uv.lock",
     "vendor/python/wheelhouse.lock.json",
     "vendor/python/wheelhouse/requirements-installed.txt",
     "vendor/python/wheelhouse/requirements-runtime.txt",
+    "vendor/source-manifest.json",
 }
 expected = static_files | {
     f"vendor/python/wheelhouse/{wheel['file']}" for wheel in source_lock["wheels"]
@@ -238,6 +262,42 @@ for relative in actual:
 first_party = stage_root / "vendor/python/wheelhouse" / stage_lock["first_party_wheel"]["file"]
 if digest(first_party) != stage_lock["first_party_wheel"]["sha256"]:
     raise SystemExit("first-party wheel hash mismatch")
+
+
+def inventory_source(relative: str) -> str:
+    if relative == "vendor/source-manifest.json":
+        return "source-manifest"
+    if relative.startswith("vendor/python/wheelhouse/") or relative in {"uv.lock", ".python-version"}:
+        return "wheelhouse"
+    if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {
+        "MODIFICATIONS.md",
+        "SBOM.cdx.json",
+        "THIRD_PARTY_NOTICES.md",
+    }:
+        return "legal"
+    if relative.startswith("schemas/") or relative.startswith(".file-base/"):
+        return "build"
+    return "runtime"
+
+
+inventory_path = stage_root / "supply-chain/stage-inventory.json"
+inventory_relative = inventory_path.relative_to(stage_root).as_posix()
+covered_files = [
+    {
+        "inventory_source": inventory_source(relative),
+        "path": relative,
+        "sha256": digest(stage_root / relative),
+    }
+    for relative in sorted(actual)
+]
+inventory = {
+    "schema_version": "1.0.0",
+    "files": sorted(actual | {inventory_relative}),
+    "symlinks": [],
+    "covered_files": covered_files,
+}
+inventory_path.parent.mkdir(parents=True, exist_ok=True)
+inventory_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
 mv "$TEMP_STAGE" "$STAGE_ROOT"
