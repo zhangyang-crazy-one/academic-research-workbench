@@ -1,4 +1,4 @@
-"""Strict Phase 1 canonical run and event models."""
+"""Strict canonical run, event, and operator boundary models."""
 
 from __future__ import annotations
 
@@ -39,6 +39,10 @@ UtcTimestamp = Annotated[
     ),
 ]
 Capability = Literal["canonical-journal", "forced-stop-replay"]
+ActorRole = Literal["parent_control_plane", "operator", "worker", "hook"]
+RecoveryHealth = Literal["healthy", "recoverable_tail", "blocked"]
+CheckpointKind = Literal["stage_handoff", "human_decision", "explicit", "recovery"]
+StableRuntimeId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{2,95}$")]
 
 
 class StrictModel(BaseModel):
@@ -79,6 +83,8 @@ class RunManifest(StrictModel):
     immutable_input: ImmutableInput
     workflow_family: Literal["academic-pipeline"]
     workflow_mode: Literal["inline-role-prompts"]
+    workflow_definition_id: StableRuntimeId | None = None
+    workflow_definition_sha256: Sha256 | None = None
     capabilities: list[Capability] = Field(min_length=1)
 
     @field_validator("capabilities")
@@ -87,6 +93,12 @@ class RunManifest(StrictModel):
         if len(value) != len(set(value)):
             raise ValueError("capabilities must be unique")
         return value
+
+    @model_validator(mode="after")
+    def workflow_identity_is_complete(self) -> Self:
+        if (self.workflow_definition_id is None) != (self.workflow_definition_sha256 is None):
+            raise ValueError("workflow definition ID and digest must be provided together")
+        return self
 
 
 class RunInitializedPayload(StrictModel):
@@ -99,11 +111,110 @@ class BaselineProbePayload(StrictModel):
     summary: Annotated[str, Field(min_length=1, max_length=256)]
 
 
+class LifecycleTransitionedPayload(StrictModel):
+    transition_id: StableRuntimeId
+    from_stage: StableRuntimeId
+    to_stage: StableRuntimeId
+
+
+class HumanDecisionRequestedPayload(StrictModel):
+    decision_id: StableRuntimeId
+    blocker_code: StableRuntimeId
+    starting_revision: Annotated[int, Field(ge=0)]
+    allowed_choices: list[StableRuntimeId] = Field(min_length=1)
+    rationale_required: bool
+    source_event_ids: list[EventId]
+    unlock_transitions: list[StableRuntimeId]
+
+    @field_validator("allowed_choices", "source_event_ids", "unlock_transitions")
+    @classmethod
+    def values_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("decision values must be unique")
+        return value
+
+
+class HumanDecisionResolvedPayload(StrictModel):
+    decision_id: StableRuntimeId
+    choice: StableRuntimeId
+    rationale: Annotated[str, Field(min_length=1, max_length=2048)] | None = None
+
+
+class AttemptStartedPayload(StrictModel):
+    attempt_id: StableRuntimeId
+    base_revision: Annotated[int, Field(ge=0)]
+    consumed_sha256: list[Sha256]
+
+
+class AttemptClosedPayload(StrictModel):
+    attempt_id: StableRuntimeId
+    outcome: Literal["completed", "failed", "cancelled", "superseded"]
+    proposal_sha256: Sha256 | None = None
+
+
+class ArtifactAcceptedPayload(StrictModel):
+    artifact_id: StableRuntimeId
+    manifest_sha256: Sha256
+    artifact_sha256: Sha256
+    attempt_id: StableRuntimeId | None = None
+
+
+class PassportAcceptedPayload(StrictModel):
+    passport_sha256: Sha256
+    parent_passport_sha256: Sha256 | None
+    supersedes_passport_sha256: Sha256 | None
+    checkpoint_kind: CheckpointKind
+    based_on_revision: Annotated[int, Field(ge=0)]
+    stage: StableRuntimeId
+    fresh_until: UtcTimestamp | None = None
+
+
+class ResumeAcceptedPayload(StrictModel):
+    passport_sha256: Sha256
+
+
+class RecoveryCompletedPayload(StrictModel):
+    recovery_id: StableRuntimeId
+    prior_valid_revision: Annotated[int, Field(ge=0)]
+    prior_valid_head_sha256: Sha256
+    original_segment_sha256: Sha256
+    quarantine_sha256: Sha256
+    fault_offset: Annotated[int, Field(ge=0)]
+    reason_code: StableRuntimeId
+
+
+EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
+    "run.initialized": RunInitializedPayload,
+    "baseline.probe_recorded": BaselineProbePayload,
+    "lifecycle.transitioned": LifecycleTransitionedPayload,
+    "human_decision.requested": HumanDecisionRequestedPayload,
+    "human_decision.resolved": HumanDecisionResolvedPayload,
+    "attempt.started": AttemptStartedPayload,
+    "attempt.closed": AttemptClosedPayload,
+    "artifact.accepted": ArtifactAcceptedPayload,
+    "passport.accepted": PassportAcceptedPayload,
+    "resume.accepted": ResumeAcceptedPayload,
+    "recovery.completed": RecoveryCompletedPayload,
+}
+
+
 class CanonicalEvent(StrictModel):
-    """One of the only two event envelopes admitted in Phase 1."""
+    """One hash-chained event accepted by the canonical writer."""
 
     schema_version: Literal["1.0.0"]
-    event_type: Literal["run.initialized", "baseline.probe_recorded"]
+    event_type: Literal[
+        "run.initialized",
+        "baseline.probe_recorded",
+        "lifecycle.transitioned",
+        "human_decision.requested",
+        "human_decision.resolved",
+        "attempt.started",
+        "attempt.closed",
+        "artifact.accepted",
+        "passport.accepted",
+        "resume.accepted",
+        "recovery.completed",
+    ]
     event_id: EventId
     command_id: CommandId
     run_id: RunId
@@ -112,22 +223,45 @@ class CanonicalEvent(StrictModel):
     expected_revision: Annotated[int, Field(ge=0)]
     resulting_revision: Annotated[int, Field(ge=1)]
     actor_id: ActorId
+    actor_role: ActorRole | None = None
     prev_event_sha256: Sha256
-    payload: RunInitializedPayload | BaselineProbePayload
+    payload: (
+        RunInitializedPayload
+        | BaselineProbePayload
+        | LifecycleTransitionedPayload
+        | HumanDecisionRequestedPayload
+        | HumanDecisionResolvedPayload
+        | AttemptStartedPayload
+        | AttemptClosedPayload
+        | ArtifactAcceptedPayload
+        | PassportAcceptedPayload
+        | ResumeAcceptedPayload
+        | RecoveryCompletedPayload
+    )
     event_sha256: Sha256
 
     @model_validator(mode="after")
     def valid_variant_and_revision(self) -> Self:
-        expected_payload = (
-            RunInitializedPayload
-            if self.event_type == "run.initialized"
-            else BaselineProbePayload
-        )
+        expected_payload = EVENT_PAYLOAD_TYPES[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("event_type and payload variant do not match")
+        if self.event_type not in {"run.initialized", "baseline.probe_recorded"} and self.actor_role is None:
+            raise ValueError("Phase 2 events require actor_role")
         if self.resulting_revision != self.expected_revision + 1:
             raise ValueError("resulting_revision must increment expected_revision once")
         return self
+
+
+class Rejection(StrictModel):
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    code: StableRuntimeId
+    message: Annotated[str, Field(min_length=1, max_length=2048)]
+    run_id: RunId | None = None
+    accepted_revision: Annotated[int, Field(ge=0)] | None = None
+    ledger_head_sha256: Sha256 | None = None
+    current_passport_sha256: Sha256 | None = None
+    legal_next_transitions: list[StableRuntimeId] = Field(default_factory=list)
+    recovery_health: RecoveryHealth | None = None
 
 
 class InitRunRequest(StrictModel):
@@ -139,6 +273,8 @@ class InitRunRequest(StrictModel):
     immutable_input: ImmutableInput
     workflow_family: Literal["academic-pipeline"]
     workflow_mode: Literal["inline-role-prompts"]
+    workflow_definition_id: StableRuntimeId | None = None
+    workflow_definition_sha256: Sha256 | None = None
     capabilities: list[Capability] = Field(min_length=1)
     event_id: EventId
     command_id: CommandId
@@ -150,6 +286,12 @@ class InitRunRequest(StrictModel):
         if len(value) != len(set(value)):
             raise ValueError("capabilities must be unique")
         return value
+
+    @model_validator(mode="after")
+    def workflow_identity_is_complete(self) -> Self:
+        if (self.workflow_definition_id is None) != (self.workflow_definition_sha256 is None):
+            raise ValueError("workflow definition ID and digest must be provided together")
+        return self
 
 
 class AppendProbeRequest(StrictModel):

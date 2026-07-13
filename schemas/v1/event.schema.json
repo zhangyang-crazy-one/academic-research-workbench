@@ -10,12 +10,48 @@
     {
       "if": {"properties": {"event_type": {"const": "baseline.probe_recorded"}}, "required": ["event_type"]},
       "then": {"properties": {"payload": {"$ref": "#/$defs/baseline_probe_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "lifecycle.transitioned"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/lifecycle_transitioned_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "human_decision.requested"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/human_decision_requested_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "human_decision.resolved"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/human_decision_resolved_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "attempt.started"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/attempt_started_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "attempt.closed"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/attempt_closed_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "artifact.accepted"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/artifact_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "passport.accepted"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/passport_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "resume.accepted"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/resume_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "recovery.completed"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/recovery_completed_payload"}}}
     }
   ],
   "description": "Strict hash-chained Phase 1 canonical event envelope.",
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded"], "type": "string"},
+    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded", "lifecycle.transitioned", "human_decision.requested", "human_decision.resolved", "attempt.started", "attempt.closed", "artifact.accepted", "passport.accepted", "resume.accepted", "recovery.completed"], "type": "string"},
     "event_id": {"pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "command_id": {"pattern": "^cmd-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
@@ -24,6 +60,7 @@
     "expected_revision": {"minimum": 0, "type": "integer"},
     "resulting_revision": {"minimum": 1, "type": "integer"},
     "actor_id": {"pattern": "^[a-z][a-z0-9.-]{2,63}$", "type": "string"},
+    "actor_role": {"enum": ["parent_control_plane", "operator", "worker", "hook"], "type": "string"},
     "prev_event_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "payload": {"type": "object"},
     "event_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
@@ -46,6 +83,105 @@
         "summary": {"maxLength": 256, "minLength": 1, "type": "string"}
       },
       "required": ["probe_id", "status", "summary"],
+      "type": "object"
+    },
+    "lifecycle_transitioned_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "transition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "from_stage": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "to_stage": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}
+      },
+      "required": ["transition_id", "from_stage", "to_stage"],
+      "type": "object"
+    },
+    "human_decision_requested_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "blocker_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "starting_revision": {"minimum": 0, "type": "integer"},
+        "allowed_choices": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+        "rationale_required": {"type": "boolean"},
+        "source_event_ids": {"items": {"pattern": "^evt-", "type": "string"}, "type": "array", "uniqueItems": true},
+        "unlock_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array", "uniqueItems": true}
+      },
+      "required": ["decision_id", "blocker_code", "starting_revision", "allowed_choices", "rationale_required", "source_event_ids", "unlock_transitions"],
+      "type": "object"
+    },
+    "human_decision_resolved_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "choice": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "rationale": {"anyOf": [{"minLength": 1, "maxLength": 2048, "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["decision_id", "choice"],
+      "type": "object"
+    },
+    "attempt_started_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "base_revision": {"minimum": 0, "type": "integer"},
+        "consumed_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"}
+      },
+      "required": ["attempt_id", "base_revision", "consumed_sha256"],
+      "type": "object"
+    },
+    "attempt_closed_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "outcome": {"enum": ["completed", "failed", "cancelled", "superseded"], "type": "string"},
+        "proposal_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["attempt_id", "outcome"],
+      "type": "object"
+    },
+    "artifact_accepted_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "artifact_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "attempt_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["artifact_id", "manifest_sha256", "artifact_sha256"],
+      "type": "object"
+    },
+    "passport_accepted_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "passport_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "parent_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "supersedes_passport_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "checkpoint_kind": {"enum": ["stage_handoff", "human_decision", "explicit", "recovery"], "type": "string"},
+        "based_on_revision": {"minimum": 0, "type": "integer"},
+        "stage": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "fresh_until": {"anyOf": [{"format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["passport_sha256", "parent_passport_sha256", "supersedes_passport_sha256", "checkpoint_kind", "based_on_revision", "stage"],
+      "type": "object"
+    },
+    "resume_accepted_payload": {
+      "additionalProperties": false,
+      "properties": {"passport_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["passport_sha256"],
+      "type": "object"
+    },
+    "recovery_completed_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "recovery_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "prior_valid_revision": {"minimum": 0, "type": "integer"},
+        "prior_valid_head_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "original_segment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "quarantine_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "fault_offset": {"minimum": 0, "type": "integer"},
+        "reason_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}
+      },
+      "required": ["recovery_id", "prior_valid_revision", "prior_valid_head_sha256", "original_segment_sha256", "quarantine_sha256", "fault_offset", "reason_code"],
       "type": "object"
     }
   }

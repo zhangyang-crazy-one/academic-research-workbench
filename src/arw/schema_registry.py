@@ -23,6 +23,10 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "source-manifest.schema.json",
     "version-report.schema.json",
 )
+SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
+    "rejection.schema.json",
+    "status.schema.json",
+)
 
 
 def _schema_root() -> Path:
@@ -37,8 +41,8 @@ class SchemaRegistryError(ValueError):
 
 
 def _schema_path(name: str) -> Path:
-    if name not in PHASE1_SCHEMA_NAMES:
-        raise SchemaRegistryError(f"unknown Phase 1 schema: {name}")
+    if name not in SCHEMA_NAMES:
+        raise SchemaRegistryError(f"unknown schema: {name}")
     return _schema_root() / name
 
 
@@ -101,11 +105,11 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
-    documents = {name: _load_document(name) for name in PHASE1_SCHEMA_NAMES}
+    documents = {name: _load_document(name) for name in SCHEMA_NAMES}
     for name, document in documents.items():
         validate_schema_document(name, document)
     _resource_registry(documents)
-    return PHASE1_SCHEMA_NAMES
+    return SCHEMA_NAMES
 
 
 def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
@@ -114,7 +118,7 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
     validate_checked_in_schemas()
     destination.mkdir(parents=True, exist_ok=True)
     generated: list[tuple[str, str]] = []
-    for name in PHASE1_SCHEMA_NAMES:
+    for name in SCHEMA_NAMES:
         rendered = _canonical_schema_bytes(_load_document(name))
         path = destination / name
         path.write_bytes(rendered)
@@ -133,7 +137,11 @@ def aggregate_schema_sha256(entries: Sequence[tuple[str, str]]) -> str:
 
 
 def validate_phase1_instance(name: str, instance: object) -> None:
-    documents = {schema_name: _load_document(schema_name) for schema_name in PHASE1_SCHEMA_NAMES}
+    validate_instance(name, instance)
+
+
+def validate_instance(name: str, instance: object) -> None:
+    documents = {schema_name: _load_document(schema_name) for schema_name in SCHEMA_NAMES}
     validate_checked_in_schemas()
     try:
         validator = jsonschema.Draft202012Validator(
