@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from arw.files import FilesAdminService
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -14,6 +17,27 @@ FIXTURE_ROOT = REPOSITORY_ROOT / "tests/fixtures/confinement"
 ALLOWED_ROOT = FIXTURE_ROOT / "allowed"
 OUTSIDE_SECRET = FIXTURE_ROOT / "outside/secret.txt"
 ROOT_CAPABILITY = "phase1-fixture"
+
+
+def _request(identifier: int, method: str, params: dict[str, object]) -> str:
+    return json.dumps(
+        {"jsonrpc": "2.0", "id": identifier, "method": method, "params": params},
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _snapshot(root: Path) -> tuple[tuple[str, str, str], ...]:
+    records = []
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            records.append((relative, "symlink", os.readlink(path)))
+        elif path.is_dir():
+            records.append((relative, "directory", ""))
+        else:
+            records.append((relative, "file", hashlib.sha256(path.read_bytes()).hexdigest()))
+    return tuple(records)
 
 
 def _required_executable(relative_path: str) -> Path:
@@ -67,6 +91,78 @@ def test_launcher_rejects_partial_files_profile_capability(tmp_path: Path) -> No
     )
     assert result.returncode == 64
     assert "control root and root ID" in result.stderr
+
+
+def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "evidence.txt").write_text("installed files profile\n", encoding="utf-8")
+    control = tmp_path / "control"
+    identifiers = iter(
+        [
+            "rootinst_stage_001",
+            "generation_stage_001",
+            "attempt_stage_001",
+            "file_stage_001",
+            "receipt_stage_001",
+        ]
+    )
+    service = FilesAdminService(
+        control,
+        id_factory=lambda _kind: next(identifiers),
+        clock=lambda: "2026-07-14T00:00:00Z",
+    )
+    service.register_root(root_id="research-root", root_path=root, policy_id="research-files-v1")
+    service.sync("research-root", extractor_version="1.0.0")
+    root_before = _snapshot(root)
+    control_before = _snapshot(control)
+
+    stage_root = tmp_path / "stage" / PLUGIN_NAME
+    staged = subprocess.run(
+        [
+            str(_required_executable("scripts/stage-plugin")),
+            "--clean",
+            "--stage-root",
+            str(stage_root),
+            "--evidence-root",
+            str(tmp_path / "stage-evidence"),
+        ],
+        cwd=REPOSITORY_ROOT,
+        env={**os.environ, "PIP_NO_INDEX": "1", "UV_OFFLINE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert staged.returncode == 0, staged.stderr
+
+    environment = _isolated_environment(tmp_path / "installed-isolation")
+    environment.update(
+        {
+            "ARW_FILES_CONTROL_ROOT": str(control),
+            "ARW_FILES_ROOT_ID": "research-root",
+        }
+    )
+    launched = subprocess.run(
+        [str(stage_root / "scripts/file-base-mcp")],
+        cwd=tmp_path,
+        env=environment,
+        input=_request(1, "tools/list", {}) + "\n",
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert launched.returncode == 0, launched.stderr
+    response = json.loads(launched.stdout)
+    assert {item["name"] for item in response["result"]["tools"]} == {
+        "list_files",
+        "read_file",
+        "search_files",
+        "get_outline",
+        "get_context",
+    }
+    assert _snapshot(root) == root_before
+    assert _snapshot(control) == control_before
 
 
 def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> None:
