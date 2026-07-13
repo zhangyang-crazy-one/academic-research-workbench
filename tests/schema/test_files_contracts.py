@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import os
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -230,3 +232,77 @@ def test_file_schema_regeneration_is_byte_stable(tmp_path: Path) -> None:
             tmp_path / "second" / name
         ).read_bytes()
 
+
+def test_native_contract_header_is_deterministic_and_checked(tmp_path: Path) -> None:
+    script = REPOSITORY_ROOT / "scripts/generate-file-contract-header"
+    first = tmp_path / "first.h"
+    second = tmp_path / "second.h"
+    environment = {**os.environ, "UV_OFFLINE": "1"}
+    for destination in (first, second):
+        completed = subprocess.run(
+            [str(script), "--output", str(destination)],
+            cwd=REPOSITORY_ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+    assert first.read_bytes() == second.read_bytes()
+
+    check = subprocess.run(
+        [str(script), "--check", "--output", str(first)],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert check.returncode == 0, check.stderr
+    first.write_text(first.read_text(encoding="utf-8") + "/* drift */\n", encoding="utf-8")
+    drift = subprocess.run(
+        [str(script), "--check", "--output", str(first)],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert drift.returncode != 0
+    assert "drift" in drift.stderr.lower()
+
+
+def test_native_header_binds_tools_limits_modes_and_schema_digests() -> None:
+    from arw.file_contracts import FILE_SCHEMA_NAMES
+    from arw.file_models import CONTRACT_LIMITS, RANKING_VERSION, TOKENIZER_ID
+
+    header = (REPOSITORY_ROOT / "generated/file-contracts.h").read_text(encoding="utf-8")
+    for index, tool in enumerate(
+        ("list_files", "read_file", "search_files", "get_outline", "get_context"),
+        start=1,
+    ):
+        assert f'#define ARW_FILES_TOOL_{index} "{tool}"' in header
+    assert '#define ARW_FILES_SEARCH_MODE_EXACT "exact"' in header
+    assert '#define ARW_FILES_SEARCH_MODE_FULL_TEXT "full_text"' in header
+    assert f'#define ARW_FILES_RANKING_VERSION "{RANKING_VERSION}"' in header
+    assert f'#define ARW_FILES_TOKENIZER_ID "{TOKENIZER_ID}"' in header
+    for key, value in CONTRACT_LIMITS.items():
+        macro = key.upper()
+        assert f"#define ARW_FILES_LIMIT_{macro} {value}" in header
+    for name in FILE_SCHEMA_NAMES:
+        digest = _sha256(REPOSITORY_ROOT / "schemas/v1" / name)
+        macro = name.removesuffix(".schema.json").replace("-", "_").upper()
+        assert f'#define ARW_FILES_SCHEMA_{macro}_SHA256 "{digest}"' in header
+
+
+def test_native_header_generation_rejects_checked_schema_drift(tmp_path: Path) -> None:
+    contracts = _production_module("arw.file_contracts")
+    schema_root = tmp_path / "schemas"
+    contracts.write_file_schema_documents(schema_root)
+    changed = schema_root / "files-list-request.schema.json"
+    document = json.loads(changed.read_text(encoding="utf-8"))
+    document["title"] = "tampered contract"
+    changed.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(contracts.FileContractError) as captured:
+        contracts.render_native_contract_header(schema_root)
+    assert captured.value.code == "file_schema_drift"
