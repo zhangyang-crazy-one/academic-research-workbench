@@ -7,7 +7,7 @@ Usage: arw <command> [options]
 
 Commands:
   health --json  Verify the installed offline Python package and runtime.
-  route --json   Route a research request (implemented by PKG-02).
+  route --json   Emit the installed read-only ARS workflow route.
   help           Show this help text.
 EOF
 }
@@ -208,6 +208,6 @@ sys.stdout.write("\n")
 PY
     ;;
   route)
-    fail "route-not-implemented" "PKG-02 owns route execution" 69
+    exec "$RUNTIME_PYTHON" -m arw.cli route "$@"
     ;;
 esac

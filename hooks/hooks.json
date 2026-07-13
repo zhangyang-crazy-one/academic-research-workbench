@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s\\n' 'ARW_OBSERVATIONAL_HOOK: invoke the installed academic-research-workbench skill; hooks do not authorize actions or write canonical state.'",
+            "statusMessage": "Loading observational workbench routing context"
+          }
+        ]
+      }
+    ]
+  }
+}
+
