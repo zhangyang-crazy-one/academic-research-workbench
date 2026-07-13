@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "canaries": [
+    {
+      "class": "ignored",
+      "path": "root/ignored/ignored.txt",
+      "token": "ARW-TEST-IGNORED-CANARY-6E6101",
+      "must_not_appear_in": ["search", "outline", "context"]
+    },
+    {
+      "class": "private",
+      "path": "root/private/credentials.txt",
+      "token": "ARW-TEST-PRIVATE-CANARY-51D8A2",
+      "must_not_appear_in": ["list", "read", "search", "outline", "context"]
+    },
+    {
+      "class": "raw-pdf",
+      "path": "root/pdf/registered-paper.pdf",
+      "token": "ARW-TEST-RAW-PDF-CANARY-98C403",
+      "must_not_appear_in": ["search", "outline", "context"]
+    }
+  ]
+}

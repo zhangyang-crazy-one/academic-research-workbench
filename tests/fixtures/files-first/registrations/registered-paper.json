@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "registration_id": "extraction_fixture_pdf_001",
+  "source_file_id": "file_fixture_pdf_001",
+  "source_relative_path": "pdf/registered-paper.pdf",
+  "source_digest": "eeb0e5697f5330cc2493a8672ce9330ea9820bc1257e495a14a032df98a71b76",
+  "extracted_text_relative_path": "registrations/registered-paper.txt",
+  "extracted_text_digest": "f8793379a5699d51a23454a44cd8c24adb0a4cdba54bdf37f70159aa21e65bf3",
+  "extractor_name": "fixture-extractor",
+  "extractor_version": "1.0.0",
+  "extracted_at": "2026-07-14T00:00:00Z",
+  "quality_state": "complete",
+  "access_state": "accessible"
+}
