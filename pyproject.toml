@@ -26,6 +26,9 @@ bypass-selection = true
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
 testpaths = ["tests"]
+markers = [
+  "codex_host: exercises an authenticated fresh Codex host against installed plugin bytes",
+]
 
 [tool.uv]
 package = true
