@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import signal
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,8 @@ from arw.models import (
 MANIFEST_NAME = "run-manifest.json"
 JOURNAL_NAME = "events.jsonl"
 LOCK_NAME = ".journal.lock"
+FAILPOINT_ENV = "ARW_TEST_FAILPOINT"
+POST_FSYNC_SIGKILL = "post-journal-fsync-sigkill"
 
 
 class JournalError(RuntimeError):
@@ -114,6 +117,17 @@ def _event_from_unsigned(unsigned: dict[str, object]) -> CanonicalEvent:
         return CanonicalEvent.model_validate(sealed)
     except ValidationError as error:
         raise JournalError(f"writer constructed an invalid event: {error}") from error
+
+
+def _requested_failpoint() -> str | None:
+    value = os.environ.get(FAILPOINT_ENV)
+    if value in {None, ""}:
+        return None
+    if value != POST_FSYNC_SIGKILL:
+        raise JournalError(f"unsupported test failpoint: {value}")
+    if not hasattr(signal, "SIGKILL"):
+        raise JournalError("post-fsync SIGKILL failpoint is unsupported on this OS")
+    return value
 
 
 def initialize_run(
@@ -276,6 +290,7 @@ def append_probe(
 ) -> ReplayState:
     """Replay under lock and append exactly one fsynced baseline event."""
 
+    failpoint = _requested_failpoint()
     root = _validated_root(run_root)
     journal_path = root / JOURNAL_NAME
     try:
@@ -315,6 +330,8 @@ def append_probe(
                 handle.write(event_bytes)
                 handle.flush()
                 os.fsync(handle.fileno())
+            if failpoint == POST_FSYNC_SIGKILL:
+                os.kill(os.getpid(), signal.SIGKILL)
             return ReplayState(
                 run_id=state.run_id,
                 revision=event.resulting_revision,
