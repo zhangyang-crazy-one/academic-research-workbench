@@ -27,7 +27,7 @@ from arw.models import (
     RunManifest,
     ZERO_HASH,
 )
-from arw.workflows import WorkflowDefinitionError, require_workflow
+from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 
 MANIFEST_NAME = "run-manifest.json"
@@ -49,6 +49,8 @@ class ReplayState:
     event_count: int
     event_ids: frozenset[str]
     command_ids: frozenset[str]
+    workflow_definition_id: str = LEGACY_WORKFLOW_ID
+    events: tuple[CanonicalEvent, ...] = ()
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -68,12 +70,36 @@ def _validated_root(run_root: Path) -> Path:
     return run_root.resolve()
 
 
+def _existing_root(run_root: Path) -> Path:
+    if run_root.is_symlink():
+        raise JournalError("run root must not be a symlink")
+    if not run_root.exists():
+        raise JournalError("run root does not exist")
+    if not run_root.is_dir():
+        raise JournalError("run root is not a directory")
+    return run_root.resolve()
+
+
 def _lock(run_root: Path, timeout: float) -> portalocker.Lock:
     if timeout < 0:
         raise JournalError("lock timeout must be non-negative")
     return portalocker.Lock(
         run_root / LOCK_NAME,
         mode="a+b",
+        timeout=timeout,
+        check_interval=0.01,
+    )
+
+
+def _read_lock(run_root: Path, timeout: float) -> portalocker.Lock:
+    if timeout < 0:
+        raise JournalError("lock timeout must be non-negative")
+    lock_path = run_root / LOCK_NAME
+    if lock_path.is_symlink() or not lock_path.is_file():
+        raise JournalError("canonical writer lock file is missing or unsafe")
+    return portalocker.Lock(
+        lock_path,
+        mode="rb",
         timeout=timeout,
         check_interval=0.01,
     )
@@ -241,6 +267,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
     previous_hash = ZERO_HASH
     event_ids: set[str] = set()
     command_ids: set[str] = set()
+    events: list[CanonicalEvent] = []
     lines = journal_bytes.splitlines(keepends=True)
     manifest_hash = sha256_hex(manifest_bytes)
     for index, line in enumerate(lines, start=1):
@@ -279,6 +306,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
         previous_hash = event.event_sha256
         event_ids.add(event.event_id)
         command_ids.add(event.command_id)
+        events.append(event)
 
     return ReplayState(
         run_id=manifest.run_id,
@@ -287,15 +315,17 @@ def _replay_unlocked(root: Path) -> ReplayState:
         event_count=len(lines),
         event_ids=frozenset(event_ids),
         command_ids=frozenset(command_ids),
+        workflow_definition_id=manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
+        events=tuple(events),
     )
 
 
 def replay_run(run_root: Path, *, lock_timeout: float = 0.2) -> ReplayState:
     """Validate and replay solely from immutable manifest and canonical JSONL."""
 
-    root = _validated_root(run_root)
+    root = _existing_root(run_root)
     try:
-        with _lock(root, lock_timeout):
+        with _read_lock(root, lock_timeout):
             return _replay_unlocked(root)
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error

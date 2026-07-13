@@ -27,6 +27,16 @@ def test_status_missing_root_is_read_only(tmp_path: Path) -> None:
     assert not missing.exists()
 
 
+def test_status_does_not_create_a_missing_lock_in_damaged_run(tmp_path: Path) -> None:
+    run_root = tmp_path / "damaged"
+    run_root.mkdir()
+    (run_root / "run-manifest.json").write_text("{}\n", encoding="utf-8")
+    before = {p.name: p.read_bytes() for p in run_root.iterdir()}
+    result = _run("status", "--json", "--run-root", str(run_root))
+    assert result.returncode != 0
+    assert {p.name: p.read_bytes() for p in run_root.iterdir()} == before
+
+
 def test_status_json_for_phase1_fixture_uses_versioned_contract(tmp_path: Path) -> None:
     run_root = tmp_path / "run"
     (run_root / "input").mkdir(parents=True)
@@ -43,6 +53,9 @@ def test_status_json_for_phase1_fixture_uses_versioned_contract(tmp_path: Path) 
     result = _run("status", "--json", "--run-root", str(run_root))
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
+    from arw.schema_registry import validate_instance
+
+    validate_instance("status.schema.json", payload)
     assert payload["run_id"].startswith("run-")
     assert payload["current_stage"] == "initialized"
     assert payload["accepted_revision"] == 1

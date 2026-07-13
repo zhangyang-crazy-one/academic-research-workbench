@@ -125,7 +125,7 @@
         "files": {
           "type": "array",
           "minItems": 8,
-          "maxItems": 8,
+          "maxItems": 10,
           "items": {"$ref": "#/$defs/digestPath"}
         }
       }

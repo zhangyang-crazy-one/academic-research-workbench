@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -14,7 +15,9 @@ from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.contracts import installed_route
 from arw.journal import JournalError, append_probe, initialize_run, replay_run
-from arw.models import AppendProbeRequest, InitRunRequest
+from arw.models import AppendProbeRequest, InitRunRequest, Rejection
+from arw.reducer import ReducerError, reduce_events
+from arw.status import build_status_report, render_status_text
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +62,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument("--run-root", required=True, type=Path)
     replay.add_argument("--lock-timeout", type=float, default=0.2)
+    status = subparsers.add_parser(
+        "status",
+        help="Render the canonical runtime state without modifying the run.",
+    )
+    status.add_argument("--run-root", required=True, type=Path)
+    status.add_argument("--lock-timeout", type=float, default=0.2)
+    status.add_argument("--json", action="store_true", dest="json_output")
+    status.add_argument(
+        "--at",
+        metavar="UTC_TIMESTAMP",
+        help="Evaluate dynamic freshness at an explicit YYYY-MM-DDTHH:MM:SSZ instant.",
+    )
     return parser
 
 
@@ -79,6 +94,20 @@ def _load_request(path: Path, model: type[InitRunRequest] | type[AppendProbeRequ
 
 def _write_json(payload: object) -> None:
     sys.stdout.buffer.write(canonical_json_bytes(payload))
+
+
+def _parse_utc(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError as error:
+        raise JournalError("--at must be an exact UTC YYYY-MM-DDTHH:MM:SSZ timestamp") from error
+
+
+def _write_rejection(error: Exception) -> None:
+    rejection = Rejection(code="canonical-error", message=str(error))
+    sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -143,8 +172,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             state = replay_run(args.run_root, lock_timeout=args.lock_timeout)
             _write_json(state.public_dict())
             return 0
-    except JournalError as error:
-        print(f"arw: canonical-error: {error}", file=sys.stderr)
+        if args.command == "status":
+            replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            state = reduce_events(
+                replayed.workflow_definition_id,
+                replayed.events,
+                now=_parse_utc(args.at),
+            )
+            report = build_status_report(state)
+            if args.json_output:
+                _write_json(report.model_dump(mode="json"))
+            else:
+                sys.stdout.write(render_status_text(report))
+            return 0
+    except (JournalError, ReducerError) as error:
+        if args.command == "status" and args.json_output:
+            _write_rejection(error)
+        else:
+            print(f"arw: canonical-error: {error}", file=sys.stderr)
         return 65
 
     parser.error(f"unsupported command: {args.command}")
