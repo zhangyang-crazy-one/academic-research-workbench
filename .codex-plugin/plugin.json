@@ -1,0 +1,27 @@
+{
+  "name": "academic-research-workbench",
+  "version": "0.1.0",
+  "description": "Headless, reproducible, and auditable academic research workflows for Codex.",
+  "author": {
+    "name": "Academic Research Workbench contributors"
+  },
+  "license": "LicenseRef-Academic-Research-Workbench-Mixed",
+  "keywords": [
+    "academic-research",
+    "audit",
+    "reproducibility"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Academic Research Workbench",
+    "shortDescription": "Run auditable academic research workflows.",
+    "longDescription": "Route domain-general academic research work through a headless, reproducible, evidence-preserving control plane.",
+    "developerName": "Academic Research Workbench contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Headless research routing",
+      "Auditable local execution"
+    ],
+    "defaultPrompt": "Route this academic research task through the workbench."
+  }
+}

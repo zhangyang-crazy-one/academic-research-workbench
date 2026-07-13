@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: arw <command> [options]
+
+Commands:
+  health --json  Verify the installed offline Python package and runtime.
+  route --json   Route a research request (implemented by PKG-02).
+  help           Show this help text.
+EOF
+}
+
+fail() {
+  local error_type="$1"
+  local message="$2"
+  local status="${3:-70}"
+  printf 'arw: %s: %s\n' "$error_type" "$message" >&2
+  exit "$status"
+}
+
+if [[ $# -eq 0 || "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+  health|route) ;;
+  *)
+    fail "unknown-command" "unsupported command: $COMMAND" 64
+    ;;
+esac
+
+SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
+LOCK_PATH="$PLUGIN_ROOT/vendor/python/wheelhouse.lock.json"
+WHEELHOUSE_DIR="$PLUGIN_ROOT/vendor/python/wheelhouse"
+
+select_python() {
+  local candidate
+  if [[ -n "${ARW_PYTHON:-}" ]]; then
+    candidate="$(command -v -- "$ARW_PYTHON" 2>/dev/null || true)"
+    [[ -n "$candidate" ]] || fail "interpreter-not-found" "ARW_PYTHON is not executable" 78
+    printf '%s\n' "$candidate"
+    return
+  fi
+
+  for candidate in python3.14 python3.13 python3; do
+    if command -v -- "$candidate" >/dev/null 2>&1; then
+      command -v -- "$candidate"
+      return
+    fi
+  done
+  fail "interpreter-not-found" "Python >=3.13,<3.15 is required" 78
+}
+
+PYTHON="$(select_python)"
+PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
+  || fail "interpreter-failed" "selected Python could not report its version" 78
+
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if (3, 13) <= sys.version_info[:2] < (3, 15) else 1)'; then
+  fail "incompatible-interpreter" "requires Python >=3.13,<3.15; got $PYTHON_VERSION" 78
+fi
+
+unset PYTHONPATH PYTHONHOME
+export PYTHONNOUSERSITE=1
+export PIP_NO_INDEX=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+
+[[ -n "${CODEX_HOME:-}" ]] || fail "bootstrap-config" "CODEX_HOME is required" 78
+[[ -f "$LOCK_PATH" ]] || fail "wheelhouse-lock-missing" "installed wheelhouse lock is missing" 66
+[[ -d "$WHEELHOUSE_DIR" ]] || fail "wheelhouse-missing" "installed wheelhouse is missing" 66
+
+RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$LOCK_PATH" "$WHEELHOUSE_DIR" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+plugin_root = Path(sys.argv[1]).resolve()
+lock_path = Path(sys.argv[2])
+wheelhouse = Path(sys.argv[3]).resolve()
+lock_bytes = lock_path.read_bytes()
+lock = json.loads(lock_bytes)
+
+
+def checked_file(relative: str, expected: str, base: Path = plugin_root) -> Path:
+    raw_candidate = base / relative
+    candidate = raw_candidate.resolve()
+    if (
+        raw_candidate.is_symlink()
+        or not candidate.is_relative_to(base)
+        or not candidate.is_file()
+    ):
+        raise SystemExit(f"unsafe or missing locked file: {relative}")
+    actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    if actual != expected:
+        raise SystemExit(f"hash mismatch for locked file: {relative}")
+    return candidate
+
+
+checked_file(lock["uv_lock"]["path"], lock["uv_lock"]["sha256"])
+checked_file(
+    lock["runtime_requirements"]["path"],
+    lock["runtime_requirements"]["sha256"],
+)
+install_requirements = checked_file(
+    lock["install_requirements"]["path"],
+    lock["install_requirements"]["sha256"],
+)
+
+for wheel in lock["wheels"]:
+    checked_file(wheel["file"], wheel["sha256"], wheelhouse)
+
+first_party = lock["first_party_wheel"]
+checked_file(first_party["file"], first_party["sha256"], wheelhouse)
+
+print(hashlib.sha256(lock_bytes).hexdigest())
+PY
+)" || fail "wheelhouse-verification-failed" "installed wheelhouse did not match its lock" 65
+
+INSTALL_REQUIREMENTS="$PLUGIN_ROOT/$(
+  "$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["install_requirements"]["path"])' "$LOCK_PATH"
+)"
+RUNTIME_PARENT="$CODEX_HOME/arw/runtime"
+RUNTIME_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY"
+RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python"
+COMPLETE_MARKER="$RUNTIME_ROOT/completed"
+LOCK_DIR="$RUNTIME_ROOT.lock"
+
+mkdir -p "$RUNTIME_PARENT"
+
+runtime_ready() {
+  [[ -x "$RUNTIME_PYTHON" && -f "$COMPLETE_MARKER" ]] \
+    && [[ "$(tr -d '\n' < "$COMPLETE_MARKER")" == "$RUNTIME_IDENTITY" ]]
+}
+
+if ! runtime_ready; then
+  acquired=0
+  for _ in $(seq 1 120); do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      acquired=1
+      break
+    fi
+    sleep 0.25
+  done
+  [[ "$acquired" -eq 1 ]] || fail "bootstrap-lock-timeout" "timed out waiting for runtime lock" 75
+
+  TEMP_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY.tmp.$$"
+  cleanup() {
+    rm -rf -- "$TEMP_ROOT"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  }
+  trap cleanup EXIT INT TERM
+
+  if ! runtime_ready; then
+    rm -rf -- "$RUNTIME_ROOT" "$TEMP_ROOT"
+    "$PYTHON" -m venv "$TEMP_ROOT/venv" \
+      || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
+    "$TEMP_ROOT/venv/bin/python" -m pip install \
+      --no-index \
+      --only-binary=:all: \
+      --require-hashes \
+      --find-links "$WHEELHOUSE_DIR" \
+      --requirement "$INSTALL_REQUIREMENTS" \
+      || fail "bootstrap-install-failed" "offline hash-locked installation failed" 70
+    printf '%s\n' "$RUNTIME_IDENTITY" > "$TEMP_ROOT/completed.tmp"
+    mv "$TEMP_ROOT/completed.tmp" "$TEMP_ROOT/completed"
+    mv "$TEMP_ROOT" "$RUNTIME_ROOT"
+  fi
+
+  trap - EXIT INT TERM
+  rmdir "$LOCK_DIR"
+fi
+
+case "$COMMAND" in
+  health)
+    [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
+    exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" <<'PY'
+import importlib.metadata
+import json
+import platform
+import sys
+
+if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+    raise SystemExit("installed package version mismatch")
+
+json.dump(
+    {
+        "command": "health",
+        "python": platform.python_version(),
+        "runtime_identity": sys.argv[1],
+        "status": "ok",
+    },
+    sys.stdout,
+    sort_keys=True,
+    separators=(",", ":"),
+)
+sys.stdout.write("\n")
+PY
+    ;;
+  route)
+    fail "route-not-implemented" "PKG-02 owns route execution" 69
+    ;;
+esac

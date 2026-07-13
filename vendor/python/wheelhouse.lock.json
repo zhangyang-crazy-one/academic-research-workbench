@@ -5,7 +5,7 @@
   "registry": "https://pypi.org/simple",
   "uv_lock": {
     "path": "uv.lock",
-    "sha256": "e5121568ea278899d03fdf8f6885922726cc67a5ee41e78fd9b4e4f52d64431c"
+    "sha256": "69314b27ce227b2e747ebbf5f4a6f67629ad628342a3f1060e8a2384e1cf34b5"
   },
   "runtime_requirements": {
     "path": "vendor/python/wheelhouse/requirements-runtime.txt",
@@ -134,6 +134,22 @@
       "version": "9.1.1",
       "registry": "https://pypi.org/simple",
       "sha256": "37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c",
+      "uv_lock_relationship": "registry-package"
+    },
+    {
+      "file": "pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "package": "PyYAML",
+      "version": "6.0.3",
+      "registry": "https://pypi.org/simple",
+      "sha256": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6",
+      "uv_lock_relationship": "registry-package"
+    },
+    {
+      "file": "pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "package": "PyYAML",
+      "version": "6.0.3",
+      "registry": "https://pypi.org/simple",
+      "sha256": "c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5",
       "uv_lock_relationship": "registry-package"
     },
     {
