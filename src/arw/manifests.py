@@ -10,7 +10,15 @@ from typing import TypeVar
 from pydantic import ValidationError
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.models import ArtifactManifest, StrictModel
+from arw.models import (
+    ArtifactAcceptedPayload,
+    ArtifactManifest,
+    CanonicalEvent,
+    MaterialPassport,
+    PassportAcceptedPayload,
+    PassportPointer,
+    StrictModel,
+)
 
 
 class ManifestError(RuntimeError):
@@ -63,8 +71,17 @@ def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Pa
 
 def _install(root: Path, relative_store: Path, manifest: StrictModel) -> Path:
     value, digest = manifest_bytes_and_sha256(manifest)
-    store = root / relative_store
-    store.mkdir(parents=True, exist_ok=True)
+    root = root.resolve()
+    store = root
+    for part in relative_store.parts:
+        store = store / part
+        if store.is_symlink():
+            raise ManifestError("manifest store path must not contain symlinks")
+        if store.exists() and not store.is_dir():
+            raise ManifestError("manifest store path contains a non-directory")
+        if not store.exists():
+            store.mkdir()
+            _fsync_directory(store.parent)
     target = store / f"{digest}.json"
     if target.exists() or target.is_symlink():
         if target.is_symlink() or not target.is_file() or target.read_bytes() != value:
@@ -108,3 +125,61 @@ def _load(path: Path, model: type[ManifestModel]) -> ManifestModel:
 
 def load_artifact_manifest(root: Path, digest: str) -> ArtifactManifest:
     return _load(root / "manifests/artifacts/sha256" / f"{digest}.json", ArtifactManifest)
+
+
+def install_material_passport(root: Path, passport: MaterialPassport) -> Path:
+    return _install(root, Path("passports/sha256"), passport)
+
+
+def load_material_passport(root: Path, digest: str) -> MaterialPassport:
+    return _load(root / "passports/sha256" / f"{digest}.json", MaterialPassport)
+
+
+def write_passport_pointer(root: Path, pointer: PassportPointer) -> Path:
+    root = root.resolve()
+    target = root / "passport.json"
+    value = canonical_json_bytes(pointer.model_dump(mode="json"))
+    temporary = root / f".passport.{os.getpid()}.tmp"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        _fsync_directory(root)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def validate_accepted_event_manifests(
+    root: Path, events: tuple[CanonicalEvent, ...] | list[CanonicalEvent]
+) -> None:
+    """Verify every immutable manifest selected by an accepted event."""
+
+    for event in events:
+        if event.event_type == "artifact.accepted":
+            assert isinstance(event.payload, ArtifactAcceptedPayload)
+            manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
+            if (
+                manifest.run_id != event.run_id
+                or manifest.artifact_id != event.payload.artifact_id
+                or manifest.content_sha256 != event.payload.artifact_sha256
+                or manifest.attempt_id != event.payload.attempt_id
+            ):
+                raise ManifestError("artifact acceptance event differs from its manifest")
+        elif event.event_type == "passport.accepted":
+            assert isinstance(event.payload, PassportAcceptedPayload)
+            passport = load_material_passport(root, event.payload.passport_sha256)
+            if (
+                passport.run_id != event.run_id
+                or passport.based_on_revision != event.payload.based_on_revision
+                or passport.stage != event.payload.stage
+                or passport.checkpoint_kind != event.payload.checkpoint_kind
+                or passport.parent_passport_sha256
+                != event.payload.parent_passport_sha256
+                or passport.supersedes_passport_sha256
+                != event.payload.supersedes_passport_sha256
+                or passport.fresh_until != event.payload.fresh_until
+            ):
+                raise ManifestError("Passport acceptance event differs from its manifest")

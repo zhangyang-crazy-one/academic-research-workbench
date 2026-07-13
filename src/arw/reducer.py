@@ -193,12 +193,14 @@ def reduce_events(
             artifacts.append(payload.manifest_sha256)
         elif event.event_type == "passport.accepted":
             assert isinstance(payload, PassportAcceptedPayload)
-            if payload.stage != stage or payload.based_on_revision > revision:
+            if payload.stage != stage or payload.based_on_revision != revision:
                 raise ReducerError("Passport does not bind the accepted stage/revision")
             if payload.parent_passport_sha256 != current_passport:
                 raise ReducerError("Passport parent is not current")
-            if current_passport is not None and payload.supersedes_passport_sha256 != current_passport:
+            if payload.supersedes_passport_sha256 != current_passport:
                 raise ReducerError("Passport supersession is not linear")
+            if payload.passport_sha256 in passports:
+                raise ReducerError("Passport was already accepted")
             passports.append(payload.passport_sha256)
             current_passport = payload.passport_sha256
             fresh_until = payload.fresh_until
