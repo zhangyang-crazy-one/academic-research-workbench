@@ -728,6 +728,8 @@ def append_probe(
     try:
         with _lock(root, lock_timeout):
             state = _replay_unlocked(root)
+            if state.recovery_health != "healthy":
+                raise JournalError("baseline append requires a healthy journal")
             journal_path = root / state.segments[-1].relative_path
             before_size = journal_path.stat().st_size
             if request.run_id != state.run_id:
