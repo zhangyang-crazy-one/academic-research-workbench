@@ -68,7 +68,28 @@ Plans:
   3. After injected process termination, an operator can checkpoint and resume without repeating accepted work or accepting stale results; the recovery fixture preserves the fault point, raw tail bytes, quarantine output, and last fully committed revision as evidence.
   4. Status output reports the current stage, accepted revision, blockers, pending human decisions, active attempts, and next legal transition after both normal replay and recovery.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md - Registered workflow, authority, pure reducer, rejection, and shared status contracts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md - Segmented journal, sole-writer transitions, decisions, and attempts
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md - Content-addressed artifacts, Material Passports, freshness, and exact resume
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-04-PLAN.md - Explicit quarantine recovery, corruption blocking, and crash evidence
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02-05-PLAN.md - Staged end-to-end qualification, schema identity, and full regression
 
 ### Phase 3: Secure Files-First Data Plane
 
@@ -152,7 +173,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
-| 2. Durable Provenance Runtime | 0/TBD | Not started | - |
+| 2. Durable Provenance Runtime | 0/5 | Planned | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
