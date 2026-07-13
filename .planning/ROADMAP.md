@@ -44,7 +44,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-04-PLAN.md — Extended legal inventory, release BLOCKED classifier, and private-safe stage
+- [x] 01-04-PLAN.md — Extended legal inventory, release BLOCKED classifier, and private-safe stage
 - [ ] 01-05-PLAN.md — Sole-writer canonical run and forced-stop replay
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -151,7 +151,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract, License, and Executable Baseline | 3/7 | In Progress|  |
+| 1. Contract, License, and Executable Baseline | 4/7 | In Progress|  |
 | 2. Durable Provenance Runtime | 0/TBD | Not started | - |
 | 3. Secure Files-First Data Plane | 0/TBD | Not started | - |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |

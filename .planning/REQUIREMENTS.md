@@ -17,9 +17,9 @@
 
 - [x] **SUP-01**: A maintainer can reproduce the selected ARS and file-base source trees from recorded upstream revisions and ordered local patches.
 - [x] **SUP-02**: A build fails when a source tree, patch, dependency lock, or expected artifact differs from its recorded digest.
-- [ ] **SUP-03**: A staged plugin contains license texts, modification notices, third-party notices, an SBOM, and a machine-readable source manifest for every bundled component.
-- [ ] **SUP-04**: A release cannot be qualified until the intended use and distribution class satisfies every bundled component's license or records separate permission.
-- [ ] **SUP-05**: Default packaging excludes papers, extracted full text, run data, credentials, indexes, and other workspace-private material.
+- [x] **SUP-03**: A staged plugin contains license texts, modification notices, third-party notices, an SBOM, and a machine-readable source manifest for every bundled component.
+- [x] **SUP-04**: A release cannot be qualified until the intended use and distribution class satisfies every bundled component's license or records separate permission.
+- [x] **SUP-05**: Default packaging excludes papers, extracted full text, run data, credentials, indexes, and other workspace-private material.
 
 ### Runtime And Provenance
 
@@ -144,9 +144,9 @@
 | PKG-05 | Phase 4 | Pending |
 | SUP-01 | Phase 1 | Complete |
 | SUP-02 | Phase 1 | Complete |
-| SUP-03 | Phase 1 | Pending |
-| SUP-04 | Phase 1 | Pending |
-| SUP-05 | Phase 1 | Pending |
+| SUP-03 | Phase 1 | Complete |
+| SUP-04 | Phase 1 | Complete |
+| SUP-05 | Phase 1 | Complete |
 | RUN-01 | Phase 1 | Pending |
 | RUN-02 | Phase 1 | Pending |
 | RUN-03 | Phase 2 | Pending |

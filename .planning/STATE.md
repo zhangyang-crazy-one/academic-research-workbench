@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-07-13T03:26:16.964Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-07-13T04:02:14.970Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 1 (Contract, License, and Executable Baseline) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-07-13
 
-Progress: [████░░░░░░] 43%
+Progress: [██████░░░░] 57%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 31 min
-- Total execution time: 1.6 hours
+- Total execution time: 2.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | 94 min | 31 min |
+| 01 | 4 | 124 min | 31 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 24 min, 31 min, 39 min
+- Last 5 plans: 24 min, 31 min, 39 min, 30 min
 - Trend: Installed baseline converging
 
 *Updated after each plan completion*
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Receipt-bound source archives are the only permitted input to materialization before vendor/sources exists.
 - [Phase 01]: Offline execution requires a changed network namespace plus syscall tracing and rejects every AF_INET or AF_INET6 attempt.
 - [Phase 01]: The generated file-base binary remains ignored while its exact digest and build-evidence digest are bound into the source manifest.
+- [Phase 01]: Post-materialization qualification executes the preserved file-base gate, policy, both checkers, and notice generator before extending their inventory. — This preserves upstream legal semantics while adding manifest and dependency closure.
+- [Phase 01]: Technical provenance hashes do not satisfy intended-use, distribution, approval, or permission evidence; release remains BLOCKED. — Private repository status and technical evidence cannot establish CC BY-NC compatibility or owner permission.
+- [Phase 01]: The distributable stage is built and revalidated from an exact positive allowlist whose files are individually digest-covered. — This prevents undeclared or private material and symlinks from crossing the release boundary.
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-13T03:26:16.956Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-07-13T04:01:54.177Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
