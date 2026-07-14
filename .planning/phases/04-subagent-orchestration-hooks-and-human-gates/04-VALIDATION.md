@@ -38,7 +38,16 @@ created: 2026-07-14
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| Planned task IDs | Assigned by planner | Wave 0+ | PKG-05, AGT-01..07, SCI-02..03 | T-04-01..08 | Every rejection leaves the authoritative tree unchanged; host-only behavior stays unqualified until staged evidence passes | unit, schema, integration, replay, staged | Commands above plus exact host tuple canaries | ❌ W0 | ⬜ pending |
+| 04-01-01 | 01 | 1 | PKG-05, AGT-01, AGT-02, AGT-04, AGT-06, SCI-02, SCI-03 | T-04-01 | Strict immutable contracts, role conflicts, and execution provenance reject malformed/inline-independent claims | unit + schema | `uv run pytest -q tests/unit/test_orchestration_models.py tests/schema/test_phase4_contracts.py` | ❌ W0 | ⬜ pending |
+| 04-01-02 | 01 | 1 | AGT-01..07, SCI-02, SCI-03 | T-04-02 | 48 immutable cases and sealed labels remain parent-only | eval | `uv run pytest -q tests/evals/test_phase4_corpus.py` | ❌ W0 | ⬜ pending |
+| 04-02-01 | 02 | 2 | AGT-01, AGT-02, AGT-03, SCI-02 | T-04-03 | Sole-writer lifecycle commands journal valid changes and leave rejected trees byte-identical | integration | `uv run pytest -q tests/integration/test_orchestration_lifecycle.py` | ❌ | ⬜ pending |
+| 04-02-02 | 02 | 2 | AGT-03, AGT-05 | T-04-04 | Frozen ordering, retry cap, stale result, cancellation and orphan recovery are deterministic | unit + replay | `uv run pytest -q tests/unit/test_scheduler.py tests/integration/test_orchestration_replay.py` | ❌ | ⬜ pending |
+| 04-03-01 | 03 | 3 | PKG-05, AGT-04 | T-04-05 | Four blind reviewer identities, separate synthesis, and dissent preservation are enforced | unit + integration | `uv run pytest -q tests/unit/test_review.py tests/integration/test_orchestration_panels.py` | ❌ | ⬜ pending |
+| 04-03-02 | 03 | 3 | SCI-02, SCI-03 | T-04-06 | Scoped human decisions preserve original verdict bytes and one legal transition | integration | `uv run pytest -q tests/integration/test_human_gates.py` | ❌ | ⬜ pending |
+| 04-04-01 | 04 | 4 | PKG-05, AGT-05 | T-04-07 | Adapter observations remain untrusted and unqualified host behavior blocks formal claims | integration | `uv run pytest -q tests/integration/test_orchestration_lifecycle.py tests/integration/test_orchestration_replay.py` | ❌ | ⬜ pending |
+| 04-04-02 | 04 | 4 | AGT-06, AGT-07 | T-04-08 | Five hook modes preserve authority and one-continuation limit | unit + integration | `uv run pytest -q tests/unit/test_hook_contracts.py tests/integration/test_orchestration_hook_parity.py` | ❌ | ⬜ pending |
+| 04-05-01 | 05 | 5 | AGT-01..07, SCI-02, SCI-03 | T-04-09 | Full corpus/replay/panel/hook/gate evidence has zero Critical invariant violations | full deterministic | `uv run pytest -q -m "not codex_host" tests/unit tests/schema tests/integration tests/staged tests/evals` | ❌ | ⬜ pending |
+| 04-05-02 | 05 | 5 | PKG-05, AGT-01..07 | T-04-10 | Exact host tuple is PASS only after three fresh-home canary runs; absent credentials are unqualified | staged host | `ARW_EXPECT_CODEX_VERSION=<exact> uv run pytest -q -m codex_host tests/staged/test_phase4_host_qualification.py` | ❌ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
