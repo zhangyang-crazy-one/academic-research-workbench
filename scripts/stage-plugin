@@ -103,8 +103,9 @@ if actual != expected:
     raise SystemExit(f"stage allowlist mismatch; missing={missing}; extra={extra}")
 
 private_path = re.compile(
-    r"(^|/)(?:\.cache|\.git|extracted-text|papers?|runs?|indexes?|credentials?|private|undeclared)(?:/|$)|"
-    r"\.(?:db|sqlite|pem|key)$",
+    r"(^|/)(?:\.cache|\.git|\.building[^/]*|barriers?|extractions?|generations?|receipts?|"
+    r"extracted-text|papers?|runs?|indexes?|credentials?|private|undeclared)(?:/|$)|"
+    r"\.(?:db|sqlite3?|pem|key)$",
     re.IGNORECASE,
 )
 for relative in actual:
@@ -536,8 +537,9 @@ if actual != expected:
     raise SystemExit(f"stage allowlist mismatch; missing={missing}; extra={extra}")
 
 private_path = re.compile(
-    r"(^|/)(?:\.env|\.git|papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
-    r"\.(?:db|sqlite|pem|key)$",
+    r"(^|/)(?:\.env|\.git|\.building[^/]*|barriers?|extractions?|generations?|receipts?|"
+    r"papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
+    r"\.(?:db|sqlite3?|pem|key)$",
     re.IGNORECASE,
 )
 for relative in actual:

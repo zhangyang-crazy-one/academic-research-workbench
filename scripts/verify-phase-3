@@ -1,0 +1,268 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-03"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/phase 03 academic-research-workbench"
+CLEAN=0
+
+usage() {
+  cat <<'EOF'
+Usage: verify-phase-3 [--clean] [--evidence-root PATH]
+
+Stage and qualify the exact files-first implementation. The verifier retains
+commands, streams, JSON-RPC transcripts, tree manifests, rebuild comparisons,
+version identity, and independently hashed requirement/decision verdicts.
+EOF
+}
+
+fail() {
+  printf 'verify-phase-3: %s\n' "$1" >&2
+  exit "${2:-70}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PYTHON" ]] || fail "project environment is missing" 66
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+EVIDENCE_BASE="$PROJECT_ROOT/build/evidence"
+case "$EVIDENCE_ROOT" in
+  "$EVIDENCE_BASE"/*) ;;
+  *) fail "evidence root must be below $EVIDENCE_BASE" 64 ;;
+esac
+if [[ -e "$EVIDENCE_ROOT" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "evidence root exists; pass --clean" 73
+  [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
+    || fail "evidence root is unsafe" 64
+  [[ -f "$EVIDENCE_ROOT/.arw-phase3-evidence" ]] \
+    || fail "refusing to clean evidence without the Phase 3 ownership marker" 64
+  rm -rf -- "$EVIDENCE_ROOT"
+fi
+mkdir -p "$EVIDENCE_ROOT/commands"
+printf 'academic-research-workbench phase 3 evidence v1\n' \
+  > "$EVIDENCE_ROOT/.arw-phase3-evidence"
+TEMP_ROOT="$PROJECT_ROOT/build/tmp/phase-03-verifier"
+rm -rf -- "$TEMP_ROOT"
+mkdir -p "$TEMP_ROOT"
+export TMPDIR="$TEMP_ROOT"
+cleanup() {
+  rm -rf -- "$TEMP_ROOT"
+}
+trap cleanup EXIT INT TERM
+
+write_command() {
+  local destination="$1"
+  shift
+  "$PYTHON" - "$destination" "$PROJECT_ROOT" "$@" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+destination = Path(sys.argv[1])
+project_root = Path(sys.argv[2])
+destination.parent.mkdir(parents=True, exist_ok=True)
+destination.write_text(
+    json.dumps(
+        {
+            "argv": sys.argv[3:],
+            "cwd": str(project_root),
+            "environment": {
+                "PIP_NO_INDEX": "1",
+                "PYTHONNOUSERSITE": "1",
+                "UV_OFFLINE": "1",
+            },
+        },
+        indent=2,
+        sort_keys=True,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+run_step() {
+  local name="$1"
+  shift
+  local root="$EVIDENCE_ROOT/commands/$name"
+  mkdir -p "$root"
+  write_command "$root/command.json" "$@"
+  set +e
+  UV_OFFLINE=1 PIP_NO_INDEX=1 PYTHONNOUSERSITE=1 \
+    "$@" >"$root/stdout.log" 2>"$root/stderr.log"
+  local status=$?
+  set -e
+  printf '{"returncode":%d}\n' "$status" > "$root/exit.json"
+  [[ "$status" -eq 0 ]] || fail "step $name failed; inspect $root" "$status"
+}
+
+run_step source-verification "$PROJECT_ROOT/scripts/verify-sources"
+run_step stage \
+  "$PROJECT_ROOT/scripts/stage-plugin" \
+  --clean \
+  --stage-root "$STAGE_ROOT" \
+  --evidence-root "$EVIDENCE_ROOT/stage"
+run_step phase-tests \
+  "$PYTHON" -m pytest -q \
+  tests/unit/test_file_models.py \
+  tests/unit/test_file_generations.py \
+  tests/schema/test_files_contracts.py \
+  tests/integration/test_files_admin.py \
+  tests/integration/test_file_generations.py \
+  tests/integration/test_files_mcp.py \
+  tests/integration/test_files_formats.py \
+  tests/integration/test_files_security.py \
+  tests/integration/test_mcp_confinement.py \
+  tests/staged/test_mcp_launcher.py \
+  tests/staged/test_manifest_install.py \
+  tests/staged/test_private_exclusions.py \
+  tests/staged/test_supply_chain_inventory.py
+run_step staged-runtime \
+  "$PYTHON" "$PROJECT_ROOT/scripts/phase3-runtime-evidence" \
+  "$STAGE_ROOT" "$EVIDENCE_ROOT/runtime"
+run_step full-pytest "$PYTHON" -m pytest -q
+run_step phase-1-regression \
+  "$PROJECT_ROOT/scripts/verify-phase-1" \
+  --clean \
+  --evidence-root "$EVIDENCE_ROOT/regressions/phase-01"
+run_step phase-2-regression \
+  "$PROJECT_ROOT/scripts/verify-phase-2" \
+  --clean \
+  --evidence-root "$EVIDENCE_ROOT/regressions/phase-02"
+
+"$PYTHON" - "$PROJECT_ROOT" "$EVIDENCE_ROOT" "$STAGE_ROOT" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+evidence_root = Path(sys.argv[2]).resolve()
+stage_root = Path(sys.argv[3]).resolve()
+
+
+def load(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+for name in (
+    "source-verification",
+    "stage",
+    "phase-tests",
+    "staged-runtime",
+    "full-pytest",
+    "phase-1-regression",
+    "phase-2-regression",
+):
+    status = load(evidence_root / f"commands/{name}/exit.json")["returncode"]
+    if status != 0:
+        raise SystemExit(f"required command did not pass: {name}")
+
+runtime_path = evidence_root / "runtime/verdict.json"
+runtime = load(runtime_path)
+requirements = runtime.get("requirements", {})
+decisions = runtime.get("decisions", {})
+roadmap = runtime.get("roadmap_success_criteria", {})
+expected_requirements = {
+    "FILE-01",
+    "FILE-02",
+    "FILE-03",
+    "FILE-04",
+    "FILE-06",
+    "FILE-07",
+    "FILE-08",
+    "VER-03",
+}
+expected_decisions = {f"D-{number:02d}" for number in range(1, 17)}
+expected_roadmap = {f"SC-{number}" for number in range(1, 5)}
+if (
+    runtime.get("technical_qualification") != "PASS"
+    or set(requirements) != expected_requirements
+    or not all(requirements.values())
+    or set(decisions) != expected_decisions
+    or not all(decisions.values())
+    or set(roadmap) != expected_roadmap
+    or not all(roadmap.values())
+):
+    raise SystemExit("staged runtime did not prove every Phase 3 contract")
+
+stage_verdict = load(evidence_root / "stage/verdict.json")
+if stage_verdict.get("technical_qualification") != "PASS":
+    raise SystemExit("exact staged package did not pass its private-data gate")
+license_verdict = load(project_root / "supply-chain/license-verdict.json")
+if license_verdict.get("release_qualification") != "BLOCKED":
+    raise SystemExit("Phase 3 must not weaken unresolved SUP-04 release blocking")
+
+identity_path = stage_root / "share/arw/build-identity.json"
+identity = load(identity_path)
+manifest = load(project_root / "vendor/source-manifest.json")
+if identity["patches"] != [
+    {key: patch[key] for key in ("order", "path", "sha256")}
+    for patch in manifest["patches"]
+]:
+    raise SystemExit("staged ordered patch identity differs from source manifest")
+if identity["native"]["patched_source_tree_sha256"] != sorted(
+    manifest["patches"], key=lambda item: item["order"]
+)[-1]["post_tree_sha256"]:
+    raise SystemExit("staged patched source tree identity differs from source manifest")
+if identity["file_contract"]["header"]["sha256"] != digest(
+    stage_root / "share/arw/file-contracts.h"
+):
+    raise SystemExit("staged generated contract header digest differs")
+
+raw_files = []
+for path in sorted(evidence_root.rglob("*")):
+    if path.is_file() and path != evidence_root / "verdict.json":
+        raw_files.append(
+            {
+                "path": path.relative_to(evidence_root).as_posix(),
+                "sha256": digest(path),
+                "size": path.stat().st_size,
+            }
+        )
+verdict = {
+    "schema_version": "1.0.0",
+    "technical_qualification": "PASS",
+    "release_qualification": "BLOCKED",
+    "requirements": requirements,
+    "decisions": decisions,
+    "roadmap_success_criteria": roadmap,
+    "runtime_verdict_sha256": digest(runtime_path),
+    "build_identity_sha256": digest(identity_path),
+    "file_contract_header_sha256": digest(stage_root / "share/arw/file-contracts.h"),
+    "raw_evidence_files": raw_files,
+}
+(evidence_root / "verdict.json").write_text(
+    json.dumps(verdict, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+
+printf 'phase 3 technical PASS; release BLOCKED; evidence %s\n' "$EVIDENCE_ROOT"
