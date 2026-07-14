@@ -11,7 +11,7 @@
 - [x] **PKG-02**: An operator can invoke the workbench skill and route a request to a declared ARS workflow family and execution mode.
 - [x] **PKG-03**: An installed plugin can start its bundled files-first MCP without relying on the source checkout's absolute path.
 - [x] **PKG-04**: An operator can inspect plugin, runtime, ARS snapshot, file-base snapshot, schema, and patch-set versions from one command.
-- [ ] **PKG-05**: A run records whether each requested role used a native subagent, an assignment-injected role, or an explicitly degraded inline mode.
+- [x] **PKG-05**: A run records whether each requested role used a native subagent, an assignment-injected role, or an explicitly degraded inline mode.
 
 ### Supply Chain And Licensing
 
@@ -45,13 +45,13 @@
 
 ### Subagents, Hooks, And Handoffs
 
-- [ ] **AGT-01**: The parent orchestrator can dispatch a specialized worker from an immutable assignment containing scoped inputs, capabilities, attempt identity, and output schema.
-- [ ] **AGT-02**: A worker can only return a schema-valid immutable proposal and cannot directly mutate canonical run state.
-- [ ] **AGT-03**: The parent accepts, rejects, retries, cancels, or supersedes worker proposals in deterministic order and records each lifecycle event.
-- [ ] **AGT-04**: Independent-review workflows use distinct worker identities and isolated assignments, preserve individual reports and dissent, and record synthesis separately.
-- [ ] **AGT-05**: Bounded concurrency, timeout, cancellation, and retry policies prevent orphaned attempts from blocking run recovery.
-- [ ] **AGT-06**: Hooks can hydrate context, validate envelopes, surface policy warnings, and request continuation without becoming canonical writers or the sole security boundary.
-- [ ] **AGT-07**: Disabling or bypassing hooks cannot bypass runtime state rules, MCP filesystem confinement, integrity gates, or provenance recording.
+- [x] **AGT-01**: The parent orchestrator can dispatch a specialized worker from an immutable assignment containing scoped inputs, capabilities, attempt identity, and output schema.
+- [x] **AGT-02**: A worker can only return a schema-valid immutable proposal and cannot directly mutate canonical run state.
+- [x] **AGT-03**: The parent accepts, rejects, retries, cancels, or supersedes worker proposals in deterministic order and records each lifecycle event.
+- [x] **AGT-04**: Independent-review workflows use distinct worker identities and isolated assignments, preserve individual reports and dissent, and record synthesis separately.
+- [x] **AGT-05**: Bounded concurrency, timeout, cancellation, and retry policies prevent orphaned attempts from blocking run recovery.
+- [x] **AGT-06**: Hooks can hydrate context, validate envelopes, surface policy warnings, and request continuation without becoming canonical writers or the sole security boundary.
+- [x] **AGT-07**: Disabling or bypassing hooks cannot bypass runtime state rules, MCP filesystem confinement, integrity gates, or provenance recording.
 
 ### Rebuildable Research Graph
 
@@ -65,8 +65,8 @@
 ### Scientific Integrity And Human Gates
 
 - [ ] **SCI-01**: Each integrity check emits a versioned immutable evidence receipt with inputs, method, tool version, verdict, reasons, and freshness metadata.
-- [ ] **SCI-02**: Gate outcomes distinguish PASS, FAIL, and BLOCKED and prevent finalization when required fresh evidence is absent or unresolved.
-- [ ] **SCI-03**: A human can record an explicit waiver, correction, access decision, or approval with rationale and scope without rewriting prior evidence.
+- [x] **SCI-02**: Gate outcomes distinguish PASS, FAIL, and BLOCKED and prevent finalization when required fresh evidence is absent or unresolved.
+- [x] **SCI-03**: A human can record an explicit waiver, correction, access decision, or approval with rationale and scope without rewriting prior evidence.
 - [ ] **SCI-04**: An operator can ingest externally executed experiment provenance, datasets, model/configuration identity, metrics, and artifacts through a strict common schema.
 - [ ] **SCI-05**: Controlled experiment execution remains disabled unless its sandbox, approval, environment-capture, and provenance-equivalence probe passes.
 - [ ] **SCI-06**: Evidence access states distinguish publicly verified, locally supplied, restricted, unavailable, and human-review-required material.
@@ -141,7 +141,7 @@
 | PKG-02 | Phase 1 | Complete |
 | PKG-03 | Phase 1 | Complete |
 | PKG-04 | Phase 1 | Complete |
-| PKG-05 | Phase 4 | Pending |
+| PKG-05 | Phase 4 | Complete |
 | SUP-01 | Phase 1 | Complete |
 | SUP-02 | Phase 1 | Complete |
 | SUP-03 | Phase 1 | Complete |
@@ -163,13 +163,13 @@
 | FILE-06 | Phase 3 | Complete |
 | FILE-07 | Phase 3 | Complete |
 | FILE-08 | Phase 3 | Complete |
-| AGT-01 | Phase 4 | Pending |
-| AGT-02 | Phase 4 | Pending |
-| AGT-03 | Phase 4 | Pending |
-| AGT-04 | Phase 4 | Pending |
-| AGT-05 | Phase 4 | Pending |
-| AGT-06 | Phase 4 | Pending |
-| AGT-07 | Phase 4 | Pending |
+| AGT-01 | Phase 4 | Complete |
+| AGT-02 | Phase 4 | Complete |
+| AGT-03 | Phase 4 | Complete |
+| AGT-04 | Phase 4 | Complete |
+| AGT-05 | Phase 4 | Complete |
+| AGT-06 | Phase 4 | Complete |
+| AGT-07 | Phase 4 | Complete |
 | GRAPH-01 | Phase 5 | Pending |
 | GRAPH-02 | Phase 5 | Pending |
 | GRAPH-03 | Phase 5 | Pending |
@@ -177,8 +177,8 @@
 | GRAPH-05 | Phase 5 | Pending |
 | GRAPH-06 | Phase 5 | Pending |
 | SCI-01 | Phase 6 | Pending |
-| SCI-02 | Phase 4 | Pending |
-| SCI-03 | Phase 4 | Pending |
+| SCI-02 | Phase 4 | Complete |
+| SCI-03 | Phase 4 | Complete |
 | SCI-04 | Phase 6 | Pending |
 | SCI-05 | Phase 6 | Pending |
 | SCI-06 | Phase 6 | Pending |

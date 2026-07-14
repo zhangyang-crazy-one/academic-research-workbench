@@ -141,11 +141,13 @@ Plans:
   4. Hooks can hydrate context, validate envelopes, warn on policy, and request continuation, while paired hook-enabled and hook-disabled evidence shows that runtime rules, filesystem confinement, integrity gates, and provenance cannot be bypassed.
   5. Gate records distinguish PASS, FAIL, and BLOCKED, prevent finalization without required fresh evidence, and let a human append a scoped waiver, correction, access decision, or approval with rationale without rewriting prior evidence.
 
-**Plans**: 9 plans
+**Plans**: 11 plans
 
 **Wave 1 (Wave 0 contract gate)**
 
-- [ ] 04-01-PLAN.md - Strict contracts, generated schemas, deterministic corpus, and test matrix
+- [x] 04-01-PLAN.md - Strict contracts and generated schemas
+- [ ] 04-10-PLAN.md - Digest-bound sealed evaluation corpus and leakage checks
+- [ ] 04-11-PLAN.md - Deterministic owner-mapped behavior-test matrix
 
 **Wave 2**
 
@@ -226,7 +228,7 @@ Plans:
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
 | 3. Secure Files-First Data Plane | 5/5 | Complete   | 2026-07-14 |
-| 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
+| 4. Subagent Orchestration, Hooks, and Human Gates | 1/11 | In Progress|  |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
 | 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |
 | 7. Installed E2E Recovery and Release Qualification | 0/TBD | Not started | - |
