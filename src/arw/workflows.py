@@ -81,11 +81,90 @@ _DRAFT = WorkflowDefinition(
 )
 CORE_WORKFLOW = _DRAFT.model_copy(update={"sha256": workflow_definition_sha256(_DRAFT)})
 
+
+_PHASE4_DRAFT = WorkflowDefinition(
+    definition_id="orchestration.phase4.v1",
+    definition_version="v1.0.0",
+    stages=[
+        "initialized",
+        "preparing",
+        "prepared",
+        "dispatching",
+        "proposal_admission",
+        "formal_review",
+        "gate_resolution",
+        "completed",
+        "blocked",
+        "aborted",
+    ],
+    terminal_stages=["completed", "blocked", "aborted"],
+    transitions=[
+        TransitionDefinition(transition_id="prepare", from_stages=["initialized"], to_stage="preparing"),
+        TransitionDefinition(transition_id="freeze", from_stages=["preparing"], to_stage="prepared"),
+        TransitionDefinition(
+            transition_id="dispatch",
+            from_stages=["prepared"],
+            to_stage="dispatching",
+        ),
+        TransitionDefinition(
+            transition_id="collect_proposals",
+            from_stages=["dispatching"],
+            to_stage="proposal_admission",
+        ),
+        TransitionDefinition(
+            transition_id="begin_review",
+            from_stages=["proposal_admission"],
+            to_stage="formal_review",
+            coherent_checkpoint=True,
+        ),
+        TransitionDefinition(
+            transition_id="resolve_gate",
+            from_stages=["formal_review"],
+            to_stage="gate_resolution",
+            coherent_checkpoint=True,
+        ),
+        TransitionDefinition(
+            transition_id="complete",
+            from_stages=["gate_resolution"],
+            to_stage="completed",
+            coherent_checkpoint=True,
+        ),
+        TransitionDefinition(
+            transition_id="block",
+            from_stages=["preparing", "prepared", "dispatching", "proposal_admission", "formal_review", "gate_resolution"],
+            to_stage="blocked",
+        ),
+        TransitionDefinition(
+            transition_id="revise",
+            from_stages=["gate_resolution", "blocked"],
+            to_stage="preparing",
+        ),
+        TransitionDefinition(
+            transition_id="abort",
+            from_stages=[
+                "initialized",
+                "preparing",
+                "prepared",
+                "dispatching",
+                "proposal_admission",
+                "formal_review",
+                "gate_resolution",
+                "blocked",
+            ],
+            to_stage="aborted",
+        ),
+    ],
+    sha256="0" * 64,
+)
+PHASE4_WORKFLOW = _PHASE4_DRAFT.model_copy(update={"sha256": workflow_definition_sha256(_PHASE4_DRAFT)})
+PHASE4_WORKFLOW_ID = PHASE4_WORKFLOW.definition_id
+
 # Phase 1 manifests bind this identity through their frozen family/mode/schema tuple.
 LEGACY_WORKFLOW_ID = "academic-pipeline.legacy-v1"
 WORKFLOW_REGISTRY: dict[str, WorkflowDefinition] = {
     CORE_WORKFLOW.definition_id: CORE_WORKFLOW,
     LEGACY_WORKFLOW_ID: CORE_WORKFLOW,
+    PHASE4_WORKFLOW.definition_id: PHASE4_WORKFLOW,
 }
 
 EventCategory = Literal[
@@ -98,6 +177,7 @@ EventCategory = Literal[
     "passport",
     "resume",
     "recovery",
+    "orchestration",
 ]
 
 _AUTHORITY: dict[EventCategory, frozenset[ActorRole]] = {
@@ -110,6 +190,7 @@ _AUTHORITY: dict[EventCategory, frozenset[ActorRole]] = {
     "passport": frozenset({"parent_control_plane"}),
     "resume": frozenset({"operator"}),
     "recovery": frozenset({"operator"}),
+    "orchestration": frozenset({"parent_control_plane"}),
 }
 
 
@@ -148,6 +229,21 @@ def event_category(event_type: str) -> EventCategory:
         return "initialization"
     if event_type == "baseline.probe_recorded":
         return "baseline"
+    if event_type in {
+        "execution.mode_selected",
+        "assignment.prepared",
+        "assignment.superseded",
+        "attempt.prepared",
+        "attempt.lifecycle",
+        "proposal.accepted",
+        "proposal.rejected",
+        "review.report_accepted",
+        "review.synthesis_accepted",
+        "hook.observed",
+        "gate.evaluated",
+        "human_decision.recorded",
+    }:
+        return "orchestration"
     prefix = event_type.split(".", 1)[0]
     mapping: dict[str, EventCategory] = {
         "lifecycle": "lifecycle",
@@ -162,3 +258,26 @@ def event_category(event_type: str) -> EventCategory:
         return mapping[prefix]
     except KeyError as error:
         raise WorkflowDefinitionError(f"unknown event category: {event_type}") from error
+
+
+def authorize_phase4_transition(
+    definition_id: str,
+    stage: str,
+    transition_id: str,
+    *,
+    actor_role: ActorRole,
+    blockers: tuple[str, ...] | list[str] = (),
+    execution_mode: str | None = None,
+) -> TransitionDefinition:
+    """Authorize one Phase 4 transition without changing canonical state."""
+
+    if definition_id != PHASE4_WORKFLOW.definition_id:
+        raise WorkflowDefinitionError("Phase 4 transitions require the Phase 4 workflow definition")
+    if actor_role != "parent_control_plane":
+        raise WorkflowDefinitionError("Phase 4 transitions require the parent control plane")
+    transition = require_transition(definition_id, stage, transition_id)
+    if transition.to_stage == "completed" and blockers:
+        raise WorkflowDefinitionError("terminal completion is blocked by pending blocker(s)")
+    if transition.to_stage == "completed" and execution_mode in {"degraded_inline", "blocked"}:
+        raise WorkflowDefinitionError("formal completion is not legal in degraded or blocked mode")
+    return transition
