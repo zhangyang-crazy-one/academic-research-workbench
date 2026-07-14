@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/review-finding-matrix.schema.json",
+  "$defs": {
+    "ReviewFinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "source_report_sha256": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxLength": 16,
+          "minLength": 1,
+          "title": "Source Report Sha256",
+          "type": "array"
+        },
+        "evidence_sha256": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Evidence Sha256",
+          "type": "array"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "moderate",
+            "high",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "classification": {
+          "enum": [
+            "consensus",
+            "majority",
+            "split",
+            "DA-critical"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "resolution": {
+          "enum": [
+            "resolved",
+            "unresolved"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "source_report_sha256",
+        "evidence_sha256",
+        "severity",
+        "confidence",
+        "classification",
+        "resolution",
+        "rationale"
+      ],
+      "title": "ReviewFinding",
+      "type": "object"
+    },
+    "ReviewReport": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "report_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Report Id",
+          "type": "string"
+        },
+        "role_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Role Id",
+          "type": "string"
+        },
+        "worker_identity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Worker Identity Id",
+          "type": "string"
+        },
+        "host_agent_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Host Agent Id",
+          "type": "string"
+        },
+        "subject_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Subject Sha256",
+          "type": "string"
+        },
+        "rubric_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Rubric Sha256",
+          "type": "string"
+        },
+        "report_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Report Sha256",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/ReviewFinding"
+          },
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Findings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "report_id",
+        "role_id",
+        "worker_identity_id",
+        "host_agent_id",
+        "subject_sha256",
+        "rubric_sha256",
+        "report_sha256",
+        "findings"
+      ],
+      "title": "ReviewReport",
+      "type": "object"
+    },
+    "ReviewSynthesis": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "synthesis_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Synthesis Id",
+          "type": "string"
+        },
+        "worker_identity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Worker Identity Id",
+          "type": "string"
+        },
+        "host_agent_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Host Agent Id",
+          "type": "string"
+        },
+        "source_report_sha256": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxLength": 64,
+          "minLength": 4,
+          "title": "Source Report Sha256",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/ReviewFinding"
+          },
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Findings",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxLength": 64,
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "synthesis_id",
+        "worker_identity_id",
+        "host_agent_id",
+        "source_report_sha256",
+        "findings",
+        "limitations"
+      ],
+      "title": "ReviewSynthesis",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.review-finding-matrix.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "panel_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Panel Id",
+      "type": "string"
+    },
+    "subject_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Subject Sha256",
+      "type": "string"
+    },
+    "rubric_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Rubric Sha256",
+      "type": "string"
+    },
+    "reports": {
+      "items": {
+        "$ref": "#/$defs/ReviewReport"
+      },
+      "maxLength": 64,
+      "minLength": 4,
+      "title": "Reports",
+      "type": "array"
+    },
+    "synthesis": {
+      "$ref": "#/$defs/ReviewSynthesis"
+    },
+    "gate_verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED"
+      ],
+      "title": "Gate Verdict",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "panel_id",
+    "subject_sha256",
+    "rubric_sha256",
+    "reports",
+    "synthesis",
+    "gate_verdict"
+  ],
+  "title": "ReviewFindingMatrix",
+  "type": "object"
+}

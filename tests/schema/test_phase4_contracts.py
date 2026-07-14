@@ -25,7 +25,7 @@ def _schema(name: str) -> dict[str, object]:
     return json.loads((REPOSITORY_ROOT / "schemas/v1" / name).read_text(encoding="utf-8"))
 
 
-def _registry() -> jsonschema.Draft202012Validator:
+def _registry() -> object:
     from referencing import Registry, Resource
 
     resources = []
@@ -33,7 +33,7 @@ def _registry() -> jsonschema.Draft202012Validator:
         document = json.loads(path.read_text(encoding="utf-8"))
         if "$id" in document:
             resources.append((document["$id"], Resource.from_contents(document)))
-    return jsonschema.Draft202012Validator({}, registry=Registry().with_resources(resources))
+    return Registry().with_resources(resources)
 
 
 def test_phase4_schema_documents_are_generated_registered_and_byte_stable(tmp_path: Path) -> None:
@@ -100,9 +100,9 @@ def test_phase4_models_and_schemas_reject_unknown_and_invalid_contract_values() 
         "unresolved": [],
     }
     model = WorkerProposal.model_validate(proposal)
-    _registry().evolve(schema=_schema("worker-proposal.schema.json")).validate(
-        model.model_dump(mode="json")
-    )
+    jsonschema.Draft202012Validator(
+        _schema("worker-proposal.schema.json"), registry=_registry()
+    ).validate(model.model_dump(mode="json"))
     validate_instance("worker-proposal.schema.json", model.model_dump(mode="json"))
     invalid = {**proposal, "unknown": True}
     with pytest.raises(ValidationError):

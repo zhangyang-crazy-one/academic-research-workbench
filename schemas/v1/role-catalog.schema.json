@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/role-catalog.schema.json",
+  "$defs": {
+    "RoleConflict": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "An unordered identity-separation rule encoded canonically once.",
+      "properties": {
+        "first_role_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "First Role Id",
+          "type": "string"
+        },
+        "second_role_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Second Role Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "first_role_id",
+        "second_role_id",
+        "reason"
+      ],
+      "title": "RoleConflict",
+      "type": "object"
+    },
+    "RoleDefinition": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "One versioned role that can produce only a bounded proposal.",
+      "properties": {
+        "role_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Role Id",
+          "type": "string"
+        },
+        "role_version": {
+          "const": "1.0.0",
+          "title": "Role Version",
+          "type": "string"
+        },
+        "execution_capability": {
+          "enum": [
+            "proposal_only",
+            "no_execution"
+          ],
+          "title": "Execution Capability",
+          "type": "string"
+        },
+        "independence_eligible": {
+          "title": "Independence Eligible",
+          "type": "boolean"
+        },
+        "capability_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxLength": 32,
+          "title": "Capability Ids",
+          "type": "array"
+        },
+        "allowed_execution_modes": {
+          "items": {
+            "enum": [
+              "native_formal",
+              "degraded_inline",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "maxLength": 3,
+          "minLength": 1,
+          "title": "Allowed Execution Modes",
+          "type": "array"
+        },
+        "developer_instructions_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Developer Instructions Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role_id",
+        "role_version",
+        "execution_capability",
+        "independence_eligible",
+        "capability_ids",
+        "allowed_execution_modes",
+        "developer_instructions_sha256"
+      ],
+      "title": "RoleDefinition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The frozen role and identity-conflict vocabulary for one workflow.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.role-catalog.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "catalog_version": {
+      "const": "1.0.0",
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/RoleDefinition"
+      },
+      "maxLength": 64,
+      "minLength": 7,
+      "title": "Roles",
+      "type": "array"
+    },
+    "conflict_pairs": {
+      "items": {
+        "$ref": "#/$defs/RoleConflict"
+      },
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Conflict Pairs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "catalog_version",
+    "roles",
+    "conflict_pairs"
+  ],
+  "title": "RoleCatalog",
+  "type": "object"
+}

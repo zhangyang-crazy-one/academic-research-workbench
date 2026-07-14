@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/phase4-evaluation-verdict.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.phase4-evaluation-verdict.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "corpus_version": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Corpus Version",
+      "type": "string"
+    },
+    "case_id": {
+      "pattern": "^P4-(DEV|SEALED)-[0-9]{3}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "authority_normalized_replay_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authority Normalized Replay Sha256",
+      "type": "string"
+    },
+    "terminal_status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED"
+      ],
+      "title": "Terminal Status",
+      "type": "string"
+    },
+    "execution_mode": {
+      "enum": [
+        "native_formal",
+        "degraded_inline",
+        "blocked"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Evidence Sha256",
+      "type": "array"
+    },
+    "sealed_parent_only": {
+      "title": "Sealed Parent Only",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "corpus_version",
+    "case_id",
+    "manifest_sha256",
+    "authority_normalized_replay_sha256",
+    "terminal_status",
+    "execution_mode",
+    "evidence_sha256",
+    "sealed_parent_only"
+  ],
+  "title": "Phase4EvaluationVerdict",
+  "type": "object"
+}

@@ -217,7 +217,9 @@ def test_assignment_is_frozen_and_content_changes_require_explicit_supersession(
 def test_worker_proposal_rejects_noncanonical_bytes_and_wrong_assignment_echoes() -> None:
     assignment = ImmutableAssignment.model_validate(_assignment_payload())
     attempt = AttemptDescriptor.model_validate(_attempt_payload())
-    proposal = WorkerProposal.model_validate(_proposal_payload())
+    payload = _proposal_payload()
+    payload["assignment_sha256"] = assignment.canonical_sha256()
+    proposal = WorkerProposal.model_validate(payload)
     assert isinstance(proposal.artifacts, tuple)
     raw = canonical_json_bytes(proposal.model_dump(mode="json"))
     validated, digest = validate_worker_proposal_bytes(
@@ -230,7 +232,7 @@ def test_worker_proposal_rejects_noncanonical_bytes_and_wrong_assignment_echoes(
     with pytest.raises(ProposalValidationError, match="canonical"):
         validate_worker_proposal_bytes(pretty, assignment=assignment, attempt=attempt)
 
-    wrong_echo = {**_proposal_payload(), "assignment_id": "assignment.other-001"}
+    wrong_echo = {**proposal.model_dump(mode="json"), "assignment_id": "assignment.other-001"}
     with pytest.raises(ProposalValidationError, match="assignment_id"):
         validate_worker_proposal_bytes(
             canonical_json_bytes(wrong_echo), assignment=assignment, attempt=attempt
