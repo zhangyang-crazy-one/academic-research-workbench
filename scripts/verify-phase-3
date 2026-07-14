@@ -61,7 +61,10 @@ fi
 mkdir -p "$EVIDENCE_ROOT/commands"
 printf 'academic-research-workbench phase 3 evidence v1\n' \
   > "$EVIDENCE_ROOT/.arw-phase3-evidence"
-TEMP_ROOT="$PROJECT_ROOT/build/tmp/phase-03-verifier"
+TEMP_ROOT="${ARW_PHASE3_TMP_ROOT:-$HOME/.cache/arw-phase3-verifier-tmp}"
+TEMP_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$TEMP_ROOT")"
+[[ "$TEMP_ROOT" != "$PROJECT_ROOT" && "$TEMP_ROOT" != "$PROJECT_ROOT"/* ]] \
+  || fail "temporary root must be outside the Git worktree" 64
 rm -rf -- "$TEMP_ROOT"
 mkdir -p "$TEMP_ROOT"
 export TMPDIR="$TEMP_ROOT"
