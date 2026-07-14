@@ -69,3 +69,45 @@ def test_manifest_workflow_identity_is_pairwise_and_registry_bound(tmp_path) -> 
     with pytest.raises(JournalError, match="does not match"):
         initialize_run(root, request)
     assert not (root / "run-manifest.json").exists()
+
+
+def test_phase4_workflow_is_frozen_parent_only_and_blocks_pending_completion() -> None:
+    from arw.workflows import (
+        PHASE4_WORKFLOW,
+        WorkflowDefinitionError,
+        actor_can_commit,
+        authorize_phase4_transition,
+        legal_transitions,
+    )
+
+    assert PHASE4_WORKFLOW.definition_id in {
+        "orchestration.phase4.v1",
+        "academic-pipeline.phase4.v1",
+    }
+    assert "dispatch" in legal_transitions(PHASE4_WORKFLOW.definition_id, "prepared")
+    assert actor_can_commit("parent_control_plane", "orchestration")
+    assert not actor_can_commit("worker", "orchestration")
+    assert not actor_can_commit("hook", "orchestration")
+    assert authorize_phase4_transition(
+        PHASE4_WORKFLOW.definition_id,
+        "prepared",
+        "dispatch",
+        actor_role="parent_control_plane",
+        blockers=(),
+    ).to_stage == "dispatching"
+    with pytest.raises(WorkflowDefinitionError, match="blocker"):
+        authorize_phase4_transition(
+            PHASE4_WORKFLOW.definition_id,
+            "gate_resolution",
+            "complete",
+            actor_role="parent_control_plane",
+            blockers=("pending-human-decision",),
+        )
+    with pytest.raises(WorkflowDefinitionError, match="parent"):
+        authorize_phase4_transition(
+            PHASE4_WORKFLOW.definition_id,
+            "prepared",
+            "dispatch",
+            actor_role="worker",
+            blockers=(),
+        )
