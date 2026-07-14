@@ -8,16 +8,28 @@ from typing import Literal
 from pydantic import Field
 
 from arw.models import (
+    AssignmentPreparedPayload,
+    AssignmentSupersededPayload,
     AttemptClosedPayload,
+    AttemptLifecyclePayload,
+    AttemptPreparedPayload,
     AttemptStartedPayload,
     ArtifactAcceptedPayload,
     CanonicalEvent,
+    ExecutionModeSelectedPayload,
+    GateEvaluatedPayload,
+    HookObservedPayload,
     HumanDecisionRequestedPayload,
+    HumanDecisionRecordedPayload,
     HumanDecisionResolvedPayload,
     LifecycleTransitionedPayload,
     PassportAcceptedPayload,
+    ProposalAcceptedPayload,
+    ProposalRejectedPayload,
     RecoveryHealth,
     RecoveryCompletedPayload,
+    ReviewReportAcceptedPayload,
+    ReviewSynthesisAcceptedPayload,
     ResumeAcceptedPayload,
     Sha256,
     StableRuntimeId,
@@ -61,6 +73,76 @@ class AttemptState(StrictModel):
     attempt_id: StableRuntimeId
     base_revision: int
     consumed_sha256: list[Sha256]
+    assignment_id: StableRuntimeId | None = None
+    assignment_sha256: Sha256 | None = None
+    attempt_number: int = 1
+    status: str = "active"
+    proposal_nonce: StableRuntimeId | None = None
+    host_agent_id: str | None = None
+    proposal_sha256: Sha256 | None = None
+
+
+class AssignmentState(StrictModel):
+    assignment_id: StableRuntimeId
+    assignment_sha256: Sha256
+    supersedes_assignment_id: StableRuntimeId | None = None
+    acceptance_key: tuple[int, int, StableRuntimeId]
+    role_id: StableRuntimeId
+    worker_identity_id: StableRuntimeId
+    execution_mode: str
+    execution_provenance: str
+    status: Literal["prepared", "active", "superseded"] = "prepared"
+    assignment: object
+
+
+class AttemptLifecycleState(StrictModel):
+    assignment_id: StableRuntimeId
+    assignment_sha256: Sha256
+    attempt_id: StableRuntimeId
+    attempt_number: int
+    status: str
+    retry_reason: str | None = None
+    retry_eligible: bool = False
+    proposal_sha256: Sha256 | None = None
+    source_event_id: str
+
+
+class ProposalState(StrictModel):
+    assignment_id: StableRuntimeId
+    assignment_sha256: Sha256
+    attempt_id: StableRuntimeId
+    proposal_sha256: Sha256
+    acceptance_key: tuple[int, int, StableRuntimeId]
+    outcome: Literal[
+        "accepted", "rejected", "rejected_invalid", "rejected_stale", "rejected_cancelled", "rejected_superseded"
+    ]
+    effective_status: Literal["pending_order", "accepted", "rejected"]
+    reason_code: StableRuntimeId | None = None
+    proposal: object | None = None
+    raw_bytes_retained: bool = True
+    source_event_id: str
+
+
+class GateState(StrictModel):
+    gate_id: StableRuntimeId
+    verdict: Literal["PASS", "FAIL", "BLOCKED"]
+    required: bool
+    subject_sha256: Sha256
+    evidence_sha256: tuple[Sha256, ...]
+    decision: object
+    source_event_id: str
+
+
+class HumanDecisionState(StrictModel):
+    decision_id: StableRuntimeId
+    decision_kind: str
+    gate_id: StableRuntimeId
+    subject_sha256: Sha256
+    applicable_transition: StableRuntimeId
+    scope: str
+    rationale: str
+    source_event_id: str
+    decision: object
 
 
 class RuntimeState(StrictModel):
@@ -78,6 +160,24 @@ class RuntimeState(StrictModel):
     accepted_artifact_manifest_sha256: list[str] = Field(default_factory=list)
     accepted_passport_sha256: list[str] = Field(default_factory=list)
     consumed_passport_sha256: list[str] = Field(default_factory=list)
+    execution_mode: Literal["native_formal", "degraded_inline", "blocked"] | None = None
+    execution_provenance: str | None = None
+    role_catalog_sha256: Sha256 | None = None
+    policy_sha256: Sha256 | None = None
+    dag_sha256: Sha256 | None = None
+    assignments: tuple[AssignmentState, ...] = Field(default_factory=tuple)
+    assignment_revisions: tuple[AssignmentState, ...] = Field(default_factory=tuple)
+    attempts: tuple[AttemptLifecycleState, ...] = Field(default_factory=tuple)
+    proposals: tuple[ProposalState, ...] = Field(default_factory=tuple)
+    accepted_proposal_sha256: tuple[Sha256, ...] = Field(default_factory=tuple)
+    rejected_proposal_sha256: tuple[Sha256, ...] = Field(default_factory=tuple)
+    deterministic_commit_cursor: tuple[int, int, StableRuntimeId] | None = None
+    panel_reports: tuple[object, ...] = Field(default_factory=tuple)
+    panel_syntheses: tuple[object, ...] = Field(default_factory=tuple)
+    hook_observations: tuple[object, ...] = Field(default_factory=tuple)
+    gates: tuple[GateState, ...] = Field(default_factory=tuple)
+    human_decision_history: tuple[HumanDecisionState, ...] = Field(default_factory=tuple)
+    status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"] = "RUNNING"
     reducer_version: Literal["1.0.0"] = REDUCER_VERSION
     schema_version: Literal["1.0.0"] = "1.0.0"
 
@@ -92,9 +192,89 @@ class RuntimeState(StrictModel):
             legal_next_transitions=list(legal_transitions(workflow_definition_id, "initialized")),
         )
 
+    @property
+    def accepted_proposals(self) -> tuple[ProposalState, ...]:
+        return tuple(item for item in self.proposals if item.effective_status == "accepted")
+
+    @property
+    def rejected_proposals(self) -> tuple[ProposalState, ...]:
+        return tuple(item for item in self.proposals if item.effective_status == "rejected")
+
+    @property
+    def human_decisions(self) -> tuple[HumanDecisionState, ...]:
+        return self.human_decision_history
+
 
 def _parse_utc(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+
+
+def _assignment_state(record: object, digest: str, *, status: str = "prepared") -> AssignmentState:
+    return AssignmentState(
+        assignment_id=record.assignment_id,  # type: ignore[attr-defined]
+        assignment_sha256=digest,
+        supersedes_assignment_id=record.supersedes_assignment_id,  # type: ignore[attr-defined]
+        acceptance_key=record.acceptance_key.value,  # type: ignore[attr-defined]
+        role_id=record.role_id,  # type: ignore[attr-defined]
+        worker_identity_id=record.worker_identity_id,  # type: ignore[attr-defined]
+        execution_mode=record.execution_mode,  # type: ignore[attr-defined]
+        execution_provenance=record.execution_provenance,  # type: ignore[attr-defined]
+        status=status,
+        assignment=record,
+    )
+
+
+def _phase4_attempt_status(attempt_id: str, history: list[AttemptLifecycleState]) -> str | None:
+    for item in reversed(history):
+        if item.attempt_id == attempt_id:
+            return item.status
+    return None
+
+
+def _recompute_proposal_order(
+    assignments: dict[str, AssignmentState], proposals: list[ProposalState]
+) -> tuple[tuple[ProposalState, ...], tuple[str, ...], tuple[str, ...], tuple[int, int, str] | None, bool]:
+    """Return the frozen-key projection, independent of event arrival order."""
+
+    by_assignment: dict[str, ProposalState] = {}
+    for proposal in proposals:
+        if proposal.assignment_id in by_assignment:
+            continue
+        by_assignment[proposal.assignment_id] = proposal
+    ordered_assignments = sorted(assignments.values(), key=lambda item: item.acceptance_key)
+    accepted: list[str] = []
+    rejected: list[str] = []
+    projected: list[ProposalState] = []
+    cursor: tuple[int, int, str] | None = None
+    gap = False
+    for assignment in ordered_assignments:
+        proposal = by_assignment.get(assignment.assignment_id)
+        if proposal is None:
+            gap = True
+            continue
+        terminal = proposal.outcome != "accepted" or not gap
+        if not terminal:
+            projected.append(proposal.model_copy(update={"effective_status": "pending_order"}))
+            continue
+        if proposal.outcome == "accepted":
+            accepted.append(proposal.proposal_sha256)
+            projected.append(proposal.model_copy(update={"effective_status": "accepted"}))
+        else:
+            rejected.append(proposal.proposal_sha256)
+            projected.append(proposal.model_copy(update={"effective_status": "rejected"}))
+        cursor = assignment.acceptance_key
+    # If a missing earlier assignment precedes a completed later proposal, the
+    # later proposal remains raw/admissible evidence but cannot advance state.
+    if gap and any(item.effective_status == "accepted" for item in projected):
+        projected = [
+            item.model_copy(update={"effective_status": "pending_order"})
+            if item.effective_status == "accepted"
+            else item
+            for item in projected
+        ]
+        accepted = []
+        cursor = None
+    return tuple(projected), tuple(accepted), tuple(rejected), cursor, gap
 
 
 def reduce_events(
@@ -126,6 +306,21 @@ def reduce_events(
     current_passport: str | None = None
     current_passport_stage: str | None = None
     fresh_until: str | None = None
+    execution_mode: str | None = None
+    execution_provenance: str | None = None
+    role_catalog_sha256: str | None = None
+    policy_sha256: str | None = None
+    dag_sha256: str | None = None
+    phase4_assignments: dict[str, AssignmentState] = {}
+    assignment_history: list[AssignmentState] = []
+    phase4_attempt_history: list[AttemptLifecycleState] = []
+    phase4_proposals: list[ProposalState] = []
+    panel_reports: list[object] = []
+    panel_syntheses: list[object] = []
+    hook_observations: list[object] = []
+    gates: dict[str, GateState] = {}
+    human_decision_history: list[HumanDecisionState] = []
+    phase4_event_seen = False
 
     for event_index, event in enumerate(events):
         if event.run_id != run_id:
@@ -145,6 +340,282 @@ def reduce_events(
         if event.event_type == "run.initialized":
             if revision != 0:
                 raise ReducerError("run.initialized must be first")
+        elif event.event_type == "execution.mode_selected":
+            assert isinstance(payload, ExecutionModeSelectedPayload)
+            phase4_event_seen = True
+            if execution_mode is not None and (
+                execution_mode != payload.execution_mode
+                or execution_provenance != payload.execution_provenance
+            ):
+                raise ReducerError("execution mode is immutable after selection")
+            execution_mode = payload.execution_mode
+            execution_provenance = payload.execution_provenance
+            role_catalog_sha256 = payload.role_catalog_sha256
+            policy_sha256 = payload.policy_sha256
+            dag_sha256 = payload.dag_sha256
+            if execution_mode == "blocked":
+                blockers["execution-mode-blocked"] = BlockerState(
+                    code="execution-mode-blocked", source_event_id=event.event_id
+                )
+        elif event.event_type in {"assignment.prepared", "assignment.superseded"}:
+            assert isinstance(payload, (AssignmentPreparedPayload, AssignmentSupersededPayload))
+            phase4_event_seen = True
+            assignment = payload.assignment
+            assignment_id = assignment.assignment_id  # type: ignore[attr-defined]
+            if assignment_id in phase4_assignments:
+                raise ReducerError("assignment ID was already used")
+            if execution_mode is not None and assignment.execution_mode != execution_mode:  # type: ignore[attr-defined]
+                raise ReducerError("assignment execution mode differs from frozen run mode")
+            predecessor_id = assignment.supersedes_assignment_id  # type: ignore[attr-defined]
+            status = "prepared"
+            if predecessor_id is not None:
+                predecessor = phase4_assignments.get(predecessor_id)
+                if predecessor is None:
+                    raise ReducerError("superseding assignment references an unknown predecessor")
+                try:
+                    assignment.validate_supersedes(predecessor.assignment)  # type: ignore[attr-defined]
+                except ValueError as error:
+                    raise ReducerError(str(error)) from error
+                phase4_assignments[predecessor_id] = predecessor.model_copy(
+                    update={"status": "superseded"}
+                )
+                status = "active"
+            current = _assignment_state(assignment, payload.assignment_sha256, status=status)
+            phase4_assignments[assignment_id] = current
+            assignment_history.append(current)
+        elif event.event_type == "attempt.prepared":
+            assert isinstance(payload, AttemptPreparedPayload)
+            phase4_event_seen = True
+            assignment = phase4_assignments.get(payload.assignment_id)
+            if assignment is None:
+                raise ReducerError("attempt result cannot precede its assignment")
+            if assignment.assignment_sha256 != payload.assignment_sha256:
+                raise ReducerError("attempt assignment digest is stale")
+            attempt = payload.attempt
+            if attempt.attempt_id in attempt_ids:  # type: ignore[attr-defined]
+                raise ReducerError("attempt ID was already used")
+            if attempt.assignment_id != payload.assignment_id:  # type: ignore[attr-defined]
+                raise ReducerError("attempt assignment identity differs")
+            previous_attempts = [
+                item
+                for item in phase4_attempt_history
+                if item.assignment_id == payload.assignment_id
+            ]
+            if attempt.attempt_number > 1:  # type: ignore[attr-defined]
+                if not previous_attempts or max(item.attempt_number for item in previous_attempts) != attempt.attempt_number - 1:  # type: ignore[attr-defined]
+                    raise ReducerError("retry must follow the immediately preceding attempt")
+                if any(item.status not in {"failed", "interrupted", "force_terminated"} for item in previous_attempts if item.attempt_number == attempt.attempt_number - 1):
+                    raise ReducerError("retry requires a terminal repairable attempt")
+            attempt_ids.add(attempt.attempt_id)  # type: ignore[attr-defined]
+            attempts[attempt.attempt_id] = AttemptState(  # type: ignore[attr-defined]
+                attempt_id=attempt.attempt_id,  # type: ignore[attr-defined]
+                base_revision=assignment.assignment.base_revision,  # type: ignore[attr-defined]
+                consumed_sha256=list(assignment.assignment.input_sha256),  # type: ignore[attr-defined]
+                assignment_id=payload.assignment_id,
+                assignment_sha256=payload.assignment_sha256,
+                attempt_number=attempt.attempt_number,  # type: ignore[attr-defined]
+                status=attempt.status,  # type: ignore[attr-defined]
+                proposal_nonce=attempt.proposal_nonce,  # type: ignore[attr-defined]
+                host_agent_id=attempt.host_agent_id,  # type: ignore[attr-defined]
+            )
+            phase4_attempt_history.append(
+                AttemptLifecycleState(
+                    assignment_id=payload.assignment_id,
+                    assignment_sha256=payload.assignment_sha256,
+                    attempt_id=attempt.attempt_id,  # type: ignore[attr-defined]
+                    attempt_number=attempt.attempt_number,  # type: ignore[attr-defined]
+                    status=attempt.status,  # type: ignore[attr-defined]
+                    retry_reason=attempt.retry_reason,  # type: ignore[attr-defined]
+                    retry_eligible=attempt.retry_eligible,  # type: ignore[attr-defined]
+                    source_event_id=event.event_id,
+                )
+            )
+        elif event.event_type == "attempt.lifecycle":
+            assert isinstance(payload, AttemptLifecyclePayload)
+            phase4_event_seen = True
+            assignment = phase4_assignments.get(payload.assignment_id)
+            if assignment is None:
+                raise ReducerError("attempt lifecycle references an unknown assignment")
+            if assignment.assignment_sha256 != payload.assignment_sha256:
+                raise ReducerError("attempt lifecycle assignment digest is stale")
+            known = attempts.get(payload.attempt_id)
+            if known is None and _phase4_attempt_status(payload.attempt_id, phase4_attempt_history) is None:
+                raise ReducerError("attempt lifecycle references an unknown attempt")
+            if payload.attempt_number > 1 and not any(
+                item.assignment_id == payload.assignment_id
+                and item.attempt_number == payload.attempt_number - 1
+                and item.status in {"failed", "interrupted", "force_terminated"}
+                for item in phase4_attempt_history
+            ):
+                raise ReducerError("retry lifecycle is outside the repairable attempt budget")
+            phase4_attempt_history.append(
+                AttemptLifecycleState(
+                    assignment_id=payload.assignment_id,
+                    assignment_sha256=payload.assignment_sha256,
+                    attempt_id=payload.attempt_id,
+                    attempt_number=payload.attempt_number,
+                    status=payload.status,
+                    retry_reason=payload.retry_reason,
+                    retry_eligible=payload.retry_eligible,
+                    proposal_sha256=payload.proposal_sha256,
+                    source_event_id=event.event_id,
+                )
+            )
+            if known is not None:
+                updated = known.model_copy(
+                    update={
+                        "status": payload.status,
+                        "proposal_sha256": payload.proposal_sha256,
+                    }
+                )
+                if payload.status in {
+                    "completed",
+                    "failed",
+                    "cancelled",
+                    "force_terminated",
+                    "interrupted",
+                    "rejected_stale",
+                    "superseded",
+                    "blocked",
+                }:
+                    attempts.pop(payload.attempt_id, None)
+                else:
+                    attempts[payload.attempt_id] = updated
+        elif event.event_type == "proposal.accepted":
+            assert isinstance(payload, ProposalAcceptedPayload)
+            phase4_event_seen = True
+            assignment = phase4_assignments.get(payload.assignment_id)
+            if assignment is None:
+                raise ReducerError("proposal cannot precede its assignment")
+            if assignment.assignment_sha256 != payload.assignment_sha256:
+                raise ReducerError("proposal assignment digest is stale")
+            attempt_status = _phase4_attempt_status(payload.attempt_id, phase4_attempt_history)
+            if attempt_status in {
+                "cancelled",
+                "force_terminated",
+                "interrupted",
+                "rejected_stale",
+                "superseded",
+            } or assignment.status == "superseded":
+                raise ReducerError("stale proposal cannot be accepted")
+            if assignment.execution_mode != "native_formal" and assignment.independence_eligible:
+                raise ReducerError("formal proposal cannot be accepted from degraded or blocked mode")
+            if any(item.proposal_sha256 == payload.proposal_sha256 for item in phase4_proposals):
+                raise ReducerError("proposal digest was already recorded")
+            phase4_proposals.append(
+                ProposalState(
+                    assignment_id=payload.assignment_id,
+                    assignment_sha256=payload.assignment_sha256,
+                    attempt_id=payload.attempt_id,
+                    proposal_sha256=payload.proposal_sha256,
+                    acceptance_key=payload.acceptance_key,
+                    outcome="accepted",
+                    effective_status="pending_order",
+                    proposal=payload.proposal,
+                    source_event_id=event.event_id,
+                )
+            )
+        elif event.event_type == "proposal.rejected":
+            assert isinstance(payload, ProposalRejectedPayload)
+            phase4_event_seen = True
+            assignment = phase4_assignments.get(payload.assignment_id)
+            if assignment is None:
+                raise ReducerError("proposal rejection cannot precede its assignment")
+            if assignment.assignment_sha256 != payload.assignment_sha256:
+                raise ReducerError("proposal rejection assignment digest is stale")
+            if any(item.proposal_sha256 == payload.proposal_sha256 for item in phase4_proposals):
+                raise ReducerError("proposal digest was already recorded")
+            phase4_proposals.append(
+                ProposalState(
+                    assignment_id=payload.assignment_id,
+                    assignment_sha256=payload.assignment_sha256,
+                    attempt_id=payload.attempt_id,
+                    proposal_sha256=payload.proposal_sha256,
+                    acceptance_key=payload.acceptance_key,
+                    outcome=payload.outcome,
+                    effective_status="rejected",
+                    reason_code=payload.reason_code,
+                    raw_bytes_retained=payload.raw_bytes_retained,
+                    source_event_id=event.event_id,
+                )
+            )
+        elif event.event_type == "review.report_accepted":
+            assert isinstance(payload, ReviewReportAcceptedPayload)
+            phase4_event_seen = True
+            report_id = payload.report.report_id  # type: ignore[attr-defined]
+            if any(item.report_id == report_id for item in panel_reports):  # type: ignore[attr-defined]
+                raise ReducerError("review report ID was already recorded")
+            panel_reports.append(payload.report)
+        elif event.event_type == "review.synthesis_accepted":
+            assert isinstance(payload, ReviewSynthesisAcceptedPayload)
+            phase4_event_seen = True
+            matrix = payload.finding_matrix
+            report_hashes = {item.report_sha256 for item in panel_reports}  # type: ignore[attr-defined]
+            if not set(matrix.synthesis.source_report_sha256) <= report_hashes:  # type: ignore[attr-defined]
+                raise ReducerError("synthesis references an unaccepted review report")
+            panel_syntheses.append(matrix)
+            if matrix.gate_verdict == "BLOCKED":  # type: ignore[attr-defined]
+                blockers["formal-review-blocked"] = BlockerState(
+                    code="formal-review-blocked", source_event_id=event.event_id
+                )
+        elif event.event_type == "hook.observed":
+            assert isinstance(payload, HookObservedPayload)
+            phase4_event_seen = True
+            if any(item.idempotency_key == payload.observation.idempotency_key for item in hook_observations):  # type: ignore[attr-defined]
+                raise ReducerError("hook observation idempotency key was already recorded")
+            hook_observations.append(payload.observation)
+        elif event.event_type == "gate.evaluated":
+            assert isinstance(payload, GateEvaluatedPayload)
+            phase4_event_seen = True
+            decision = payload.decision
+            gate_id = decision.gate_id  # type: ignore[attr-defined]
+            if gate_id in gates:
+                raise ReducerError("gate verdicts are append-only and cannot be overwritten")
+            gate = GateState(
+                gate_id=gate_id,
+                verdict=decision.verdict,  # type: ignore[attr-defined]
+                required=decision.required,  # type: ignore[attr-defined]
+                subject_sha256=decision.subject_sha256,  # type: ignore[attr-defined]
+                evidence_sha256=decision.evidence_sha256,  # type: ignore[attr-defined]
+                decision=decision,
+                source_event_id=event.event_id,
+            )
+            gates[gate_id] = gate
+            if decision.verdict in {"FAIL", "BLOCKED"}:  # type: ignore[attr-defined]
+                blockers[gate_id] = BlockerState(
+                    code=gate_id, source_event_id=event.event_id
+                )
+            elif decision.required and decision.fresh_until and event.occurred_at > decision.fresh_until:  # type: ignore[attr-defined]
+                blockers[f"stale-gate.{gate_id}"] = BlockerState(
+                    code=f"stale-gate.{gate_id}", source_event_id=event.event_id
+                )
+        elif event.event_type == "human_decision.recorded":
+            assert isinstance(payload, HumanDecisionRecordedPayload)
+            phase4_event_seen = True
+            decision = payload.decision
+            decision_id = decision.decision_id  # type: ignore[attr-defined]
+            if any(item.decision_id == decision_id for item in human_decision_history):
+                raise ReducerError("human decision ID was already recorded")
+            predecessor = decision.supersedes_decision_id  # type: ignore[attr-defined]
+            if decision.decision_kind == "correction" and not any(item.decision_id == predecessor for item in human_decision_history):  # type: ignore[attr-defined]
+                raise ReducerError("correction must supersede an accepted human decision")
+            human_decision_history.append(
+                HumanDecisionState(
+                    decision_id=decision_id,
+                    decision_kind=decision.decision_kind,  # type: ignore[attr-defined]
+                    gate_id=decision.gate_id,  # type: ignore[attr-defined]
+                    subject_sha256=decision.subject_sha256,  # type: ignore[attr-defined]
+                    applicable_transition=decision.applicable_transition,  # type: ignore[attr-defined]
+                    scope=decision.scope,  # type: ignore[attr-defined]
+                    rationale=decision.rationale,  # type: ignore[attr-defined]
+                    source_event_id=event.event_id,
+                    decision=decision,
+                )
+            )
+            if decision.decision_kind in {"waiver", "replacement", "approval"}:  # type: ignore[attr-defined]
+                for blocker_code in tuple(blockers):
+                    if blocker_code == decision.gate_id or decision.scope == blocker_code:  # type: ignore[attr-defined]
+                        blockers.pop(blocker_code, None)
         elif event.event_type == "lifecycle.transitioned":
             assert isinstance(payload, LifecycleTransitionedPayload)
             if blockers:
@@ -159,6 +630,14 @@ def reduce_events(
                 raise ReducerError(f"transition is not legal: {error}") from error
             if transition.to_stage != payload.to_stage:
                 raise ReducerError("transition to_stage differs from registered definition")
+            if transition.to_stage == "completed" and phase4_event_seen:
+                if execution_mode in {"degraded_inline", "blocked"}:
+                    raise ReducerError("formal completion is not legal in degraded or blocked mode")
+                if not any(
+                    item.decision_kind == "approval" and item.applicable_transition == payload.transition_id
+                    for item in human_decision_history
+                ):
+                    raise ReducerError("final completion requires an authorized human decision")
             stage = payload.to_stage
         elif event.event_type == "human_decision.requested":
             assert isinstance(payload, HumanDecisionRequestedPayload)
@@ -292,6 +771,12 @@ def reduce_events(
     if fresh_until and effective_now and effective_now > _parse_utc(fresh_until):
         blockers["evidence-expired"] = BlockerState(code="evidence-expired")
 
+    projected_proposals, accepted_proposals, rejected_proposals, commit_cursor, order_gap = (
+        _recompute_proposal_order(phase4_assignments, phase4_proposals)
+    )
+    if order_gap and phase4_proposals:
+        blockers["proposal-order-gap"] = BlockerState(code="proposal-order-gap")
+
     if recovery_health == "recoverable_tail":
         blockers["tail-recovery-required"] = BlockerState(
             code="tail-recovery-required"
@@ -304,6 +789,22 @@ def reduce_events(
         next_transitions = []
     else:
         next_transitions = list(legal_transitions(workflow_definition_id, stage))
+    current_assignments = [
+        item for item in phase4_assignments.values() if item.status != "superseded"
+    ]
+    terminal_assignment_ids = {
+        item.assignment_id for item in projected_proposals if item.effective_status in {"accepted", "rejected"}
+    }
+    if blockers:
+        status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"] = "BLOCKED"
+    elif stage == "completed":
+        status = "PASS"
+    elif phase4_event_seen and current_assignments and all(
+        item.assignment_id in terminal_assignment_ids for item in current_assignments
+    ):
+        status = "PASS"
+    else:
+        status = "RUNNING"
     return RuntimeState(
         run_id=run_id,
         workflow_definition_id=workflow_definition_id,
@@ -319,4 +820,22 @@ def reduce_events(
         accepted_artifact_manifest_sha256=artifacts,
         accepted_passport_sha256=passports,
         consumed_passport_sha256=consumed_passports,
+        execution_mode=execution_mode,  # type: ignore[arg-type]
+        execution_provenance=execution_provenance,
+        role_catalog_sha256=role_catalog_sha256,
+        policy_sha256=policy_sha256,
+        dag_sha256=dag_sha256,
+        assignments=tuple(phase4_assignments.values()),
+        assignment_revisions=tuple(assignment_history),
+        attempts=tuple(phase4_attempt_history),
+        proposals=projected_proposals,
+        accepted_proposal_sha256=accepted_proposals,
+        rejected_proposal_sha256=rejected_proposals,
+        deterministic_commit_cursor=commit_cursor,  # type: ignore[arg-type]
+        panel_reports=tuple(panel_reports),
+        panel_syntheses=tuple(panel_syntheses),
+        hook_observations=tuple(hook_observations),
+        gates=tuple(gates.values()),
+        human_decision_history=tuple(human_decision_history),
+        status=status,
     )
