@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/worker-proposal.schema.json",
+  "$defs": {
+    "ProposedArtifact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 127,
+          "minLength": 3,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "schema_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Schema Id"
+        },
+        "byte_count": {
+          "maximum": 8388608,
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "sha256",
+        "media_type",
+        "schema_id",
+        "byte_count"
+      ],
+      "title": "ProposedArtifact",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Untrusted, canonical-byte-bound worker result envelope.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.worker-proposal.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "protocol_version": {
+      "const": "1.0.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "assignment_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Assignment Id",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "role_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Role Id",
+      "type": "string"
+    },
+    "worker_identity_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Worker Identity Id",
+      "type": "string"
+    },
+    "host_agent_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Host Agent Id",
+      "type": "string"
+    },
+    "execution_mode": {
+      "enum": [
+        "native_formal",
+        "degraded_inline",
+        "blocked"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "execution_provenance": {
+      "enum": [
+        "native_profile",
+        "assignment_injected_subagent",
+        "degraded_inline",
+        "unavailable"
+      ],
+      "title": "Execution Provenance",
+      "type": "string"
+    },
+    "independence_eligible": {
+      "title": "Independence Eligible",
+      "type": "boolean"
+    },
+    "assignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Assignment Sha256",
+      "type": "string"
+    },
+    "context_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Context Manifest Sha256",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "base_revision": {
+      "minimum": 0,
+      "title": "Base Revision",
+      "type": "integer"
+    },
+    "input_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Input Sha256",
+      "type": "array"
+    },
+    "proposal_nonce": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Proposal Nonce",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "partial",
+        "blocked",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "result_provenance_mode": {
+      "enum": [
+        "executed",
+        "reported",
+        "simulated"
+      ],
+      "title": "Result Provenance Mode",
+      "type": "string"
+    },
+    "requested_next_action": {
+      "enum": [
+        "accept",
+        "retry",
+        "human_decision",
+        "none"
+      ],
+      "title": "Requested Next Action",
+      "type": "string"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ProposedArtifact"
+      },
+      "maxLength": 32,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "evidence_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 128,
+      "title": "Evidence Sha256",
+      "type": "array"
+    },
+    "summary": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "unresolved": {
+      "items": {
+        "maxLength": 1024,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxLength": 64,
+      "title": "Unresolved",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "run_id",
+    "assignment_id",
+    "attempt_id",
+    "role_id",
+    "worker_identity_id",
+    "host_agent_id",
+    "execution_mode",
+    "execution_provenance",
+    "independence_eligible",
+    "assignment_sha256",
+    "context_manifest_sha256",
+    "policy_sha256",
+    "base_revision",
+    "input_sha256",
+    "proposal_nonce",
+    "status",
+    "result_provenance_mode",
+    "requested_next_action",
+    "artifacts",
+    "evidence_sha256",
+    "summary",
+    "unresolved"
+  ],
+  "title": "WorkerProposal",
+  "type": "object"
+}

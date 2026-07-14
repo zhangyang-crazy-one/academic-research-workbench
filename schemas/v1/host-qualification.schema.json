@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/host-qualification.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.host-qualification.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "qualification_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Qualification Id",
+      "type": "string"
+    },
+    "codex_version": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Codex Version",
+      "type": "string"
+    },
+    "stage_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Stage Sha256",
+      "type": "string"
+    },
+    "adapter_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Adapter Sha256",
+      "type": "string"
+    },
+    "plugin_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plugin Sha256",
+      "type": "string"
+    },
+    "execution_mode": {
+      "enum": [
+        "native_formal",
+        "degraded_inline",
+        "blocked"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "worker_identity_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Worker Identity Id"
+    },
+    "host_agent_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Host Agent Id"
+    },
+    "evidence_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Evidence Sha256",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "qualification_id",
+    "codex_version",
+    "stage_sha256",
+    "adapter_sha256",
+    "plugin_sha256",
+    "execution_mode",
+    "status",
+    "worker_identity_id",
+    "host_agent_id",
+    "evidence_sha256"
+  ],
+  "title": "HostQualification",
+  "type": "object"
+}

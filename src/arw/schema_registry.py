@@ -13,6 +13,7 @@ import jsonschema
 from referencing import Registry, Resource
 
 from arw.file_contracts import FILE_SCHEMA_NAMES
+from arw.orchestration_models import PHASE4_SCHEMA_NAMES, generate_phase4_schema_documents
 
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
@@ -40,7 +41,7 @@ SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "resume-request.schema.json",
     "status.schema.json",
     "transition-request.schema.json",
-) + FILE_SCHEMA_NAMES
+) + FILE_SCHEMA_NAMES + PHASE4_SCHEMA_NAMES
 
 
 def _schema_root() -> Path:
@@ -116,6 +117,10 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         command = candidate.get("properties", {}).get("command")
         if command != {"const": "version"}:
             raise SchemaRegistryError("version-report.schema.json has incompatible command")
+    if name in PHASE4_SCHEMA_NAMES:
+        generated = generate_phase4_schema_documents()[name]
+        if candidate != generated:
+            raise SchemaRegistryError(f"{name} differs from its Phase 4 model projection")
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
@@ -132,8 +137,10 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
     validate_checked_in_schemas()
     destination.mkdir(parents=True, exist_ok=True)
     generated: list[tuple[str, str]] = []
+    phase4_documents = generate_phase4_schema_documents()
     for name in SCHEMA_NAMES:
-        rendered = _canonical_schema_bytes(_load_document(name))
+        document = phase4_documents[name] if name in PHASE4_SCHEMA_NAMES else _load_document(name)
+        rendered = _canonical_schema_bytes(document)
         path = destination / name
         path.write_bytes(rendered)
         generated.append((f"schemas/v1/{name}", hashlib.sha256(rendered).hexdigest()))

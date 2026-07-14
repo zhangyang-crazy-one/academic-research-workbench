@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/hook-observation.schema.json",
+  "additionalProperties": false,
+  "description": "A bounded non-authoritative hook outcome suitable only for observation.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.hook-observation.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "hook_name": {
+      "enum": [
+        "SessionStart",
+        "SubagentStart",
+        "SubagentStop",
+        "PreToolUse",
+        "PostToolUse",
+        "Stop"
+      ],
+      "title": "Hook Name",
+      "type": "string"
+    },
+    "hook_definition_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hook Definition Sha256",
+      "type": "string"
+    },
+    "target_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Target Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "trusted_enabled",
+        "disabled",
+        "untrusted",
+        "timeout",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "observation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Observation Sha256",
+      "type": "string"
+    },
+    "redacted_error_code": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Redacted Error Code"
+    },
+    "idempotency_key": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Idempotency Key",
+      "type": "string"
+    },
+    "continuation_requested": {
+      "title": "Continuation Requested",
+      "type": "boolean"
+    },
+    "continuation_count": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Continuation Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "hook_name",
+    "hook_definition_sha256",
+    "target_id",
+    "status",
+    "observation_sha256",
+    "redacted_error_code",
+    "idempotency_key",
+    "continuation_requested",
+    "continuation_count"
+  ],
+  "title": "HookObservation",
+  "type": "object"
+}
