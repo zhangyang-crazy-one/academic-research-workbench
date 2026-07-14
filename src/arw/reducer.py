@@ -73,6 +73,14 @@ class AttemptState(StrictModel):
     attempt_id: StableRuntimeId
     base_revision: int
     consumed_sha256: list[Sha256]
+
+
+class Phase4ActiveAttemptState(StrictModel):
+    """Internal Phase 4 attempt detail kept out of legacy passport snapshots."""
+
+    attempt_id: StableRuntimeId
+    base_revision: int
+    consumed_sha256: list[Sha256]
     assignment_id: StableRuntimeId | None = None
     assignment_sha256: Sha256 | None = None
     attempt_number: int = 1
@@ -241,7 +249,10 @@ def _recompute_proposal_order(
         if proposal.assignment_id in by_assignment:
             continue
         by_assignment[proposal.assignment_id] = proposal
-    ordered_assignments = sorted(assignments.values(), key=lambda item: item.acceptance_key)
+    ordered_assignments = sorted(
+        (item for item in assignments.values() if item.status != "superseded"),
+        key=lambda item: item.acceptance_key,
+    )
     accepted: list[str] = []
     rejected: list[str] = []
     projected: list[ProposalState] = []
@@ -252,8 +263,7 @@ def _recompute_proposal_order(
         if proposal is None:
             gap = True
             continue
-        terminal = proposal.outcome != "accepted" or not gap
-        if not terminal:
+        if gap:
             projected.append(proposal.model_copy(update={"effective_status": "pending_order"}))
             continue
         if proposal.outcome == "accepted":
@@ -263,17 +273,6 @@ def _recompute_proposal_order(
             rejected.append(proposal.proposal_sha256)
             projected.append(proposal.model_copy(update={"effective_status": "rejected"}))
         cursor = assignment.acceptance_key
-    # If a missing earlier assignment precedes a completed later proposal, the
-    # later proposal remains raw/admissible evidence but cannot advance state.
-    if gap and any(item.effective_status == "accepted" for item in projected):
-        projected = [
-            item.model_copy(update={"effective_status": "pending_order"})
-            if item.effective_status == "accepted"
-            else item
-            for item in projected
-        ]
-        accepted = []
-        cursor = None
     return tuple(projected), tuple(accepted), tuple(rejected), cursor, gap
 
 
@@ -296,7 +295,7 @@ def reduce_events(
     decisions: dict[str, PendingDecisionState] = {}
     decision_ids: set[str] = set()
     accepted_event_ids: set[str] = set()
-    attempts: dict[str, AttemptState] = {}
+    attempts: dict[str, AttemptState | Phase4ActiveAttemptState] = {}
     attempt_ids: set[str] = set()
     blockers: dict[str, BlockerState] = {}
     artifacts: list[str] = []
@@ -319,6 +318,7 @@ def reduce_events(
     panel_syntheses: list[object] = []
     hook_observations: list[object] = []
     gates: dict[str, GateState] = {}
+    failed_gate_ids: set[str] = set()
     human_decision_history: list[HumanDecisionState] = []
     phase4_event_seen = False
 
@@ -407,7 +407,7 @@ def reduce_events(
                 if any(item.status not in {"failed", "interrupted", "force_terminated"} for item in previous_attempts if item.attempt_number == attempt.attempt_number - 1):
                     raise ReducerError("retry requires a terminal repairable attempt")
             attempt_ids.add(attempt.attempt_id)  # type: ignore[attr-defined]
-            attempts[attempt.attempt_id] = AttemptState(  # type: ignore[attr-defined]
+            attempts[attempt.attempt_id] = Phase4ActiveAttemptState(  # type: ignore[attr-defined]
                 attempt_id=attempt.attempt_id,  # type: ignore[attr-defined]
                 base_revision=assignment.assignment.base_revision,  # type: ignore[attr-defined]
                 consumed_sha256=list(assignment.assignment.input_sha256),  # type: ignore[attr-defined]
@@ -515,6 +515,20 @@ def reduce_events(
                     source_event_id=event.event_id,
                 )
             )
+            known = attempts.pop(payload.attempt_id, None)
+            if known is not None:
+                phase4_attempt_history.append(
+                    AttemptLifecycleState(
+                        assignment_id=payload.assignment_id,
+                        assignment_sha256=payload.assignment_sha256,
+                        attempt_id=payload.attempt_id,
+                        attempt_number=known.attempt_number,
+                        status="completed",
+                        retry_eligible=False,
+                        proposal_sha256=payload.proposal_sha256,
+                        source_event_id=event.event_id,
+                    )
+                )
         elif event.event_type == "proposal.rejected":
             assert isinstance(payload, ProposalRejectedPayload)
             phase4_event_seen = True
@@ -582,6 +596,8 @@ def reduce_events(
             )
             gates[gate_id] = gate
             if decision.verdict in {"FAIL", "BLOCKED"}:  # type: ignore[attr-defined]
+                if decision.verdict == "FAIL":  # type: ignore[attr-defined]
+                    failed_gate_ids.add(gate_id)
                 blockers[gate_id] = BlockerState(
                     code=gate_id, source_event_id=event.event_id
                 )
@@ -684,7 +700,7 @@ def reduce_events(
             if any(value not in known_hashes for value in payload.consumed_sha256):
                 raise ReducerError("attempt consumes an unknown or stale hash")
             attempt_ids.add(payload.attempt_id)
-            attempts[payload.attempt_id] = AttemptState(
+            attempts[payload.attempt_id] = Phase4ActiveAttemptState(
                 attempt_id=payload.attempt_id,
                 base_revision=payload.base_revision,
                 consumed_sha256=list(payload.consumed_sha256),
@@ -797,6 +813,8 @@ def reduce_events(
     }
     if blockers:
         status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"] = "BLOCKED"
+    elif failed_gate_ids:
+        status = "FAIL"
     elif stage == "completed":
         status = "PASS"
     elif phase4_event_seen and current_assignments and all(
@@ -815,7 +833,16 @@ def reduce_events(
         recovery_health=recovery_health,
         blockers=list(blockers.values()),
         pending_human_decisions=list(decisions.values()),
-        active_attempts=list(attempts.values()),
+        # Keep the Phase 2 passport/status compatibility projection narrow;
+        # Phase 4 assignment-bound lifecycle detail lives in ``attempts``.
+        active_attempts=[
+            AttemptState(
+                attempt_id=item.attempt_id,
+                base_revision=item.base_revision,
+                consumed_sha256=list(item.consumed_sha256),
+            )
+            for item in attempts.values()
+        ],
         legal_next_transitions=next_transitions,
         accepted_artifact_manifest_sha256=artifacts,
         accepted_passport_sha256=passports,
