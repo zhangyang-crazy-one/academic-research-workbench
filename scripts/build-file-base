@@ -485,6 +485,7 @@ evidence = {
         ),
     },
     "make": subprocess.check_output(["make", "--version"], text=True).splitlines()[0],
+    "file_contract_sha256": digest(root / "generated/file-contracts.h"),
     "native_test_suite": manifest["native_test_suites"][0],
     "network_denial_mechanism": mechanism,
     "patches": patch_identity,
@@ -509,6 +510,7 @@ if existing_evidence_path.is_file():
 build_input_rebaseline = (
     existing_evidence.get("patches") != patch_identity
     or existing_evidence.get("source_date_epoch") != evidence["source_date_epoch"]
+    or existing_evidence.get("file_contract_sha256") != evidence["file_contract_sha256"]
 )
 expected = {item["path"]: item for item in manifest["declared_artifacts"]}
 if (
