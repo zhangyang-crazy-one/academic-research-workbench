@@ -328,3 +328,65 @@ def test_gate_human_hook_and_host_contracts_are_strict_and_append_only() -> None
         }
     )
     assert canonical_json_bytes(verdict.model_dump(mode="json")).endswith(b"\n")
+
+
+def test_phase4_events_are_parent_authored_and_preserve_source_provenance() -> None:
+    from arw.models import CanonicalEvent
+
+    assignment = ImmutableAssignment.model_validate(_assignment_payload())
+    payload = {
+        "assignment": assignment.model_dump(mode="json"),
+        "assignment_sha256": assignment.canonical_sha256(),
+    }
+    event = CanonicalEvent.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "event_type": "assignment.prepared",
+            "event_id": "evt-00000000-0000-4000-8000-000000000402",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000402",
+            "run_id": RUN_ID,
+            "sequence": 1,
+            "occurred_at": "2026-07-15T00:00:00Z",
+            "expected_revision": 0,
+            "resulting_revision": 1,
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "prev_event_sha256": "0" * 64,
+            "payload": payload,
+            "event_sha256": "1" * 64,
+        }
+    )
+    assert event.payload.assignment.assignment_id == assignment.assignment_id
+    assert event.payload.assignment.worker_identity_id == "worker.methodology-001"
+
+    with pytest.raises(ValidationError, match="parent_control_plane"):
+        CanonicalEvent.model_validate(
+            {
+                **event.model_dump(mode="json"),
+                "event_id": "evt-00000000-0000-4000-8000-000000000403",
+                "command_id": "cmd-00000000-0000-4000-8000-000000000403",
+                "actor_id": "worker.agent",
+                "actor_role": "worker",
+            }
+        )
+
+
+def test_phase4_event_union_covers_lifecycle_evidence_and_human_authority() -> None:
+    from arw.models import EVENT_PAYLOAD_TYPES, PHASE4_EVENT_TYPES
+
+    expected = {
+        "execution.mode_selected",
+        "assignment.prepared",
+        "assignment.superseded",
+        "attempt.prepared",
+        "attempt.lifecycle",
+        "proposal.accepted",
+        "proposal.rejected",
+        "review.report_accepted",
+        "review.synthesis_accepted",
+        "hook.observed",
+        "gate.evaluated",
+        "human_decision.recorded",
+    }
+    assert expected <= PHASE4_EVENT_TYPES
+    assert expected <= set(EVENT_PAYLOAD_TYPES)
