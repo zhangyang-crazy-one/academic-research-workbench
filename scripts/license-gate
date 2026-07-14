@@ -360,6 +360,25 @@ def create_notices(
     (PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").write_text("".join(sections), encoding="utf-8")
 
 
+def refresh_technical_evidence_hashes() -> None:
+    path = PROJECT_ROOT / "supply-chain/use-distribution.json"
+    use_distribution = read_json(path)
+    entries = use_distribution.get("evidence_hashes")
+    if not isinstance(entries, list) or not entries:
+        fail("use-distribution technical evidence hashes are absent")
+    refreshed = []
+    for entry in entries:
+        relative = entry.get("path") if isinstance(entry, dict) else None
+        if not isinstance(relative, str) or entry.get("purpose") != "technical-provenance-only":
+            fail("use-distribution technical evidence entry is invalid")
+        source = PROJECT_ROOT / relative
+        if source.is_symlink() or not source.is_file():
+            fail(f"use-distribution technical evidence is absent or unsafe: {relative}")
+        refreshed.append({**entry, "sha256": digest(source)})
+    use_distribution["evidence_hashes"] = refreshed
+    write_json(path, use_distribution)
+
+
 def classify_release(component_licenses: list[dict[str, Any]]) -> dict[str, Any]:
     use_distribution = read_json(PROJECT_ROOT / "supply-chain/use-distribution.json")
     unresolved = (
@@ -476,6 +495,7 @@ def main() -> None:
         fail("native legal tooling changed a manifest-bound source")
 
     create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, wheelhouse)
+    refresh_technical_evidence_hashes()
     verdict = classify_release(component_licenses)
     inventory = {
         "schema_version": "1.0.0",
