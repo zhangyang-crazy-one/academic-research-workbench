@@ -141,7 +141,37 @@ Plans:
   4. Hooks can hydrate context, validate envelopes, warn on policy, and request continuation, while paired hook-enabled and hook-disabled evidence shows that runtime rules, filesystem confinement, integrity gates, and provenance cannot be bypassed.
   5. Gate records distinguish PASS, FAIL, and BLOCKED, prevent finalization without required fresh evidence, and let a human append a scoped waiver, correction, access decision, or approval with rationale without rewriting prior evidence.
 
-**Plans**: TBD
+**Plans**: 9 plans
+
+**Wave 1 (Wave 0 contract gate)**
+
+- [ ] 04-01-PLAN.md - Strict contracts, generated schemas, deterministic corpus, and test matrix
+
+**Wave 2**
+
+- [ ] 04-02-PLAN.md - Parent-only canonical events, reducer state, workflow authority, and immutable manifests
+- [ ] 04-03-PLAN.md - Deterministic scheduler/execution seam, formal-panel policy, and hook contracts
+
+**Wave 3**
+
+- [ ] 04-04-PLAN.md - Sole-writer orchestration lifecycle, ordered proposal admission, recovery, and replay
+
+**Wave 4**
+
+- [ ] 04-05-PLAN.md - Formal blind panel, dissent preservation, fresh gates, and scoped human decisions
+- [ ] 04-06-PLAN.md - Native hook observations, bounded continuations, and no-bypass parity
+
+**Wave 5**
+
+- [ ] 04-07-PLAN.md - Thin Codex host adapter and exact staged three-home qualification
+
+**Wave 6**
+
+- [ ] 04-08-PLAN.md - Full corpus, staged/evidence/regression verifier, and validation reconciliation
+
+**Wave 7**
+
+- [ ] 04-09-PLAN.md - Independent sealed-case human assessment and adjudication gate
 
 ### Phase 5: Rebuildable Research Graph and Evidence Queries
 
