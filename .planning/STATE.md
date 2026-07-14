@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 Plan 03 complete
-last_updated: "2026-07-14T07:30:00Z"
+stopped_at: Phase 3 Plan 04 complete
+last_updated: "2026-07-14T00:05:00Z"
 last_activity: 2026-07-14
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 17
-  completed_plans: 15
-  percent: 29
+  completed_plans: 16
+  percent: 31
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 03 (secure-files-first-data-plane) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-14
 
-Progress: [███░░░░░░░] 29%
+Progress: [███░░░░░░░] 31%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 15
-- Average duration: 38 min
-- Total execution time: 9.4 hours
+- Total plans completed: 16
+- Average duration: 36 min
+- Total execution time: 9.7 hours
 
 **By Phase:**
 
@@ -46,12 +46,12 @@ Progress: [███░░░░░░░] 29%
 |-------|-------|-------|----------|
 | 01 | 7 | 347 min | 50 min |
 | 02 | 5 | 107 min | 21 min |
-| 03 | 3 | 115 min | 38 min |
+| 03 | 4 | 133 min | 33 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 16 min, 56 min, 23 min, 67 min, 25 min
-- Trend: The one-root MCP plan closed quickly after the native generation boundary was established
+- Last 5 plans: 56 min, 23 min, 67 min, 25 min, 18 min
+- Trend: Retrieval reused the one-root boundary; native time was limited to contract rebinding
 
 *Updated after each plan completion*
 | Phase 01 P06 | 188m | 3 tasks | 26 files |
@@ -64,6 +64,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 03 P01 | 23 min | 3 tasks | 35 files |
 | Phase 03 P02 | 67 min | 3 tasks | 14 files |
 | Phase 03 P03 | 25 min | 3 tasks | 7 files |
+| Phase 03 P04 | 18 min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Recovery eligibility is limited to a final malformed, incomplete, or truncated-UTF-8 record after at least one fully validated event. — Accepted-event, middle-chain, manifest, and recovery-binding damage must remain blocked for forensics.
 - [Phase 02]: A recovered chain is healthy only when the next segment begins with recovery.completed and its event, original segment, raw copy, and canonical receipt all cross-validate. — Recovery authority must be independently reconstructible from unchanged canonical and forensic bytes.
 - [Phase 02]: Status and replay return the last trustworthy prefix for recoverable or blocked damage; only explicit operator recovery writes quarantine or continuation bytes. — Observation and repair remain separate authority boundaries.
+- [Phase 03]: The dedicated five-tool files MCP is shipped in the locked first-party Python wheel; the pinned native binary remains the Phase 1 compatibility server and Phase 3 generation publication gate. — This avoids exposing the upstream generic MCP's broad write-capable dispatch surface.
+- [Phase 03]: Current search hits carry signed generation/file/digest/location anchors, while stale hits remove every body-derived field including the anchor. — Search-to-context composition remains restart-safe without server-side query state.
+- [Phase 03]: Raw PDF bytes are freshness inputs only; query text must come from a complete, accessible, digest/version-matched parent extraction registration. — Raw PDF parsing and OCR remain outside v1.
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T07:30:00Z
-Stopped at: Phase 3 Plan 03 complete
-Resume file: .planning/phases/03-secure-files-first-data-plane/03-04-PLAN.md
+Last session: 2026-07-14T00:05:00Z
+Stopped at: Phase 3 Plan 04 complete
+Resume file: .planning/phases/03-secure-files-first-data-plane/03-05-PLAN.md

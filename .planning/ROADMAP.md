@@ -174,7 +174,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
-| 3. Secure Files-First Data Plane | 3/5 | In Progress|  |
+| 3. Secure Files-First Data Plane | 4/5 | In Progress|  |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
 | 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |
