@@ -12,6 +12,7 @@
     "components",
     "patches",
     "native",
+    "file_contract",
     "wheelhouse",
     "schemas",
     "evidence",
@@ -34,6 +35,7 @@
       "items": {"$ref": "#/$defs/patch"}
     },
     "native": {"$ref": "#/$defs/native"},
+    "file_contract": {"$ref": "#/$defs/fileContract"},
     "wheelhouse": {"$ref": "#/$defs/wheelhouse"},
     "schemas": {"$ref": "#/$defs/schemaSet"},
     "evidence": {"$ref": "#/$defs/evidence"},
@@ -101,19 +103,60 @@
     "native": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["binary", "upstream_test_tree_sha256"],
+      "required": [
+        "binary",
+        "build_evidence",
+        "compile_profile",
+        "patched_source_tree_sha256",
+        "upstream_test_tree_sha256"
+      ],
       "properties": {
         "binary": {"$ref": "#/$defs/digestPath"},
+        "build_evidence": {"$ref": "#/$defs/digestPath"},
+        "compile_profile": {"const": "release-o2"},
+        "patched_source_tree_sha256": {"$ref": "#/$defs/sha256"},
         "upstream_test_tree_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "fileContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "header",
+        "contract_sha256",
+        "tokenizer_id",
+        "ranking_version",
+        "outline_versions"
+      ],
+      "properties": {
+        "header": {"$ref": "#/$defs/digestPath"},
+        "contract_sha256": {"$ref": "#/$defs/sha256"},
+        "tokenizer_id": {"const": "unicode61-cjk-v1"},
+        "ranking_version": {"const": "files-rank-v1"},
+        "outline_versions": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "bibtex-outline-v1",
+              "latex-outline-v1",
+              "markdown-outline-v1",
+              "source-outline-v1"
+            ]
+          }
+        }
       }
     },
     "wheelhouse": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lock", "requirements"],
+      "required": ["lock", "requirements", "first_party"],
       "properties": {
         "lock": {"$ref": "#/$defs/digestPath"},
-        "requirements": {"$ref": "#/$defs/digestPath"}
+        "requirements": {"$ref": "#/$defs/digestPath"},
+        "first_party": {"$ref": "#/$defs/digestPath"}
       }
     },
     "schemaSet": {

@@ -22,3 +22,9 @@ with immutable assignment-injected ARS role instructions. The companion hook is
 observational only, may be skipped until trusted, and is never an authorization or
 canonical-state boundary. Only future explicit control-plane mutation commands may write
 accepted state; `route` is read-only.
+
+For local research files, the installed MCP receives one parent-supplied root
+capability and exposes only `list_files`, `read_file`, `search_files`,
+`get_outline`, and `get_context`. Treat stale metadata as a request for an
+explicit parent sync; never infer permission to crawl, extract, rebuild, repair,
+or broaden the configured root from an agent query.

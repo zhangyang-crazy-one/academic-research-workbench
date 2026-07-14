@@ -91,6 +91,20 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
     }
     assert len(identity["schemas"]["files"]) == 37
     assert identity["staged_payloads"]
+    assert identity["native"]["compile_profile"] == "release-o2"
+    assert identity["native"]["patched_source_tree_sha256"]
+    assert identity["file_contract"]["tokenizer_id"] == "unicode61-cjk-v1"
+    assert identity["file_contract"]["ranking_version"] == "files-rank-v1"
+    assert set(identity["file_contract"]["outline_versions"]) == {
+        "bibtex-outline-v1",
+        "latex-outline-v1",
+        "markdown-outline-v1",
+        "source-outline-v1",
+    }
+    first_party = identity["wheelhouse"]["first_party"]
+    assert hashlib.sha256(
+        (stage_root / first_party["path"]).read_bytes()
+    ).hexdigest() == first_party["sha256"]
 
     inventory = json.loads(
         (stage_root / "supply-chain/stage-inventory.json").read_text(encoding="utf-8")

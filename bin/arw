@@ -222,6 +222,12 @@ PY
   _files-mcp)
     exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
     ;;
+  files)
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    export ARW_FILES_CONTRACT_HEADER="$PLUGIN_ROOT/share/arw/file-contracts.h"
+    exec "$RUNTIME_PYTHON" -m arw.cli files "$@"
+    ;;
   *)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
