@@ -145,7 +145,7 @@ def _read_live(root: Path, relative_path: str, *, deadline: float) -> _LiveFile:
             file_fd = os.open(parts[-1], os.O_RDONLY | nofollow, dir_fd=directory_fd)
         except FileNotFoundError as error:
             raise LiveReadError("deleted", "file no longer exists") from error
-        except OSError as error:
+        except (OSError, sqlite3.Error) as error:
             raise LiveReadError("symlink_escape", "file cannot be opened without following links") from error
         before = os.fstat(file_fd)
         if not stat.S_ISREG(before.st_mode):
@@ -425,8 +425,57 @@ class FilesMcpServer:
     ) -> list[sqlite3.Row]:
         if time.monotonic() > deadline:
             raise ToolError("timeout", "query exceeded the server deadline")
-        uri = f"file:{self.generation.database_path}?mode=ro&immutable=1"
-        connection = sqlite3.connect(uri, uri=True)
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(
+                self.generation.database_path,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            )
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode):
+                raise ToolError(
+                    "generation_integrity_changed",
+                    "selected generation database is no longer a regular file",
+                )
+            hasher = hashlib.sha256()
+            while True:
+                if time.monotonic() > deadline:
+                    raise ToolError("timeout", "database verification exceeded the deadline")
+                chunk = os.read(descriptor, 1 << 20)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+            after = os.fstat(descriptor)
+            path_now = os.stat(self.generation.database_path, follow_symlinks=False)
+            stable = (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+            ) == (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            ) and (after.st_dev, after.st_ino) == (path_now.st_dev, path_now.st_ino)
+            if not stable or hasher.hexdigest() != self.generation.manifest.database_sha256:
+                raise ToolError(
+                    "generation_integrity_changed",
+                    "selected generation database changed after server startup",
+                )
+            uri = f"file:/proc/self/fd/{descriptor}?mode=ro&immutable=1"
+            connection = sqlite3.connect(uri, uri=True)
+        except ToolError:
+            if descriptor is not None:
+                os.close(descriptor)
+            raise
+        except OSError as error:
+            if descriptor is not None:
+                os.close(descriptor)
+            raise ToolError(
+                "generation_integrity_changed",
+                "selected generation database is unavailable or unsafe",
+            ) from error
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
         denied = {
@@ -472,6 +521,8 @@ class FilesMcpServer:
             raise ToolError("query_failed", "immutable generation query failed") from error
         finally:
             connection.close()
+            assert descriptor is not None
+            os.close(descriptor)
 
     @staticmethod
     def _indexed_from_row(row: sqlite3.Row) -> _IndexedFile:
