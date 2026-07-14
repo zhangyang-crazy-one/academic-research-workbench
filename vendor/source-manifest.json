@@ -980,13 +980,13 @@
       "class": "binary",
       "path": ".file-base/bin/file-base",
       "required_before_staging": true,
-      "sha256": "422ae752fad8c2ea1804bb6dac2326cc94becd5107c8a22116719ac444aa47ff"
+      "sha256": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
     },
     {
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "9810cf691658df3b9e5e759884716adc4bb3e8563e087af5821db30bcc724c48"
+      "sha256": "1f55aa5c52bff7258bb9d9ea3c45b3b40d3a2337a341f718abfe6d73ca6d7c90"
     },
     {
       "class": "build-evidence",
