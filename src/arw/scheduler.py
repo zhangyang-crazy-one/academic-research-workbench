@@ -259,13 +259,17 @@ class DeterministicScheduler:
             )
         except asyncio.TimeoutError:
             force_error: str | None = None
+            late_result: HostResult | None = None
             try:
                 await self.adapter.force_terminate(spec)
             except Exception as error:
                 force_error = _error_text(error)
             finally:
-                host_task.cancel()
-                await asyncio.gather(host_task, return_exceptions=True)
+                if not host_task.done():
+                    host_task.cancel()
+                forced_result = await asyncio.gather(host_task, return_exceptions=True)
+                if forced_result and isinstance(forced_result[0], HostResult):
+                    late_result = forced_result[0]
             details = [f"initial timeout: {_error_text(first_timeout)}"]
             if cancel_error:
                 details.append(f"cooperative cancellation failed: {cancel_error}")
@@ -276,13 +280,14 @@ class DeterministicScheduler:
                 attempt_id=spec.attempt_id,
                 attempt_number=spec.attempt_number,
                 status="force_terminated",
-                result=None,
+                result=late_result,
                 failure_reason="cancelled",
                 error="; ".join(details),
                 retry_eligible=False,
                 cancellation_requested=True,
                 force_termination_requested=True,
                 classification="rejected_stale",
+                late_result=late_result is not None,
             )
         except Exception as error:
             return AttemptOutcome(
@@ -314,4 +319,3 @@ class DeterministicScheduler:
 
 
 BoundedScheduler = DeterministicScheduler
-

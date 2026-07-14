@@ -11,10 +11,16 @@ import hashlib
 import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Self
 
-from arw.orchestration_models import FORMAL_REVIEW_ROLE_IDS
+from arw.orchestration_models import (
+    FORMAL_REVIEW_ROLE_IDS,
+    ReviewFinding as OrchestrationReviewFinding,
+    ReviewFindingMatrix as OrchestrationReviewFindingMatrix,
+    ReviewReport as OrchestrationReviewReport,
+    ReviewSynthesis as OrchestrationReviewSynthesis,
+)
 
 
 FORMAL_REVIEW_ROLES: tuple[str, ...] = tuple(sorted(FORMAL_REVIEW_ROLE_IDS))
@@ -319,6 +325,7 @@ class PanelPlan:
     blockers: tuple[str, ...]
     limitations: tuple[str, ...]
     policy_sha256: str
+    accepted_report_sha256: tuple[str, ...] = ()
 
     @property
     def formal_success(self) -> bool:
@@ -326,7 +333,44 @@ class PanelPlan:
 
     @property
     def synthesis_ready(self) -> bool:
-        return self.status == "ready" and self.synthesizer_assignment is not None
+        return (
+            self.status == "ready"
+            and self.synthesizer_assignment is not None
+            and len(self.accepted_report_sha256) == len(self.required_roles_for_synthesis)
+        )
+
+    @property
+    def required_roles_for_synthesis(self) -> tuple[str, ...]:
+        return FORMAL_REVIEW_ROLES
+
+    def with_accepted_reports(
+        self, reports: Iterable[ReviewerReport]
+    ) -> Self:
+        if self.status != "ready" or self.synthesizer_assignment is None:
+            raise ValueError("blocked panels cannot admit synthesis reports")
+        report_values = tuple(reports)
+        roles = tuple(report.role_id for report in report_values)
+        if set(roles) != set(self.required_roles_for_synthesis) or len(roles) != len(set(roles)):
+            raise ValueError("synthesis requires one accepted report for each required role")
+        hashes = tuple(report.report_sha256 or "" for report in report_values)
+        if len(hashes) != len(set(hashes)):
+            raise ValueError("synthesis report hashes must be unique")
+        assignment = self.synthesizer_assignment
+        envelope = BlindReviewEnvelope(
+            panel_id=self.panel_id,
+            assignment_id=assignment.assignment_id,
+            role_id=SYNTHESIS_ROLE,
+            subject_sha256=self.subject_sha256,
+            rubric_sha256=self.rubric_sha256,
+            policy_sha256=self.policy_sha256,
+            synthesizer=True,
+            accepted_report_sha256=hashes,
+        )
+        return replace(
+            self,
+            synthesizer_assignment=replace(assignment, blind_envelope=envelope),
+            accepted_report_sha256=hashes,
+        )
 
     def cross_review_assignment(
         self,
@@ -656,6 +700,8 @@ class FormalPanelPolicy:
                 limitations=tuple(dict.fromkeys(limitations)),
             )
 
+        panel = panel.with_accepted_reports(report_values)
+
         groups: dict[str, list[tuple[ReviewerReport, FindingObservation]]] = defaultdict(list)
         for report in report_values:
             for finding in report.findings:
@@ -810,3 +856,15 @@ def synthesize_formal_panel(
     return (policy or FormalPanelPolicy()).synthesize(
         panel, reports, covered_dimensions=covered_dimensions
     )
+
+
+# Plan 04-01 owns the canonical Pydantic report/finding records.  These aliases
+# keep the pure policy's richer observation records separate while making the
+# downstream bridge explicit and discoverable to lifecycle plans.
+ReviewFinding = OrchestrationReviewFinding
+ReviewFindingMatrix = OrchestrationReviewFindingMatrix
+ReviewReport = OrchestrationReviewReport
+ReviewSynthesis = OrchestrationReviewSynthesis
+ReviewFindingContract = OrchestrationReviewFinding
+ReviewReportContract = OrchestrationReviewReport
+ReviewSynthesisContract = OrchestrationReviewSynthesis

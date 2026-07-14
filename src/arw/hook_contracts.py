@@ -15,6 +15,7 @@ from pydantic import BeforeValidator, Field, ValidationError, model_validator
 
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.models import Sha256, StableRuntimeId, StrictModel
+from arw.orchestration_models import HookObservation as CanonicalHookObservation
 
 
 HookName = Literal[
@@ -246,6 +247,28 @@ class HookObservation(StrictModel):
     def to_wire(self) -> bytes:
         return canonical_json_bytes(self.model_dump(mode="json"))
 
+    def to_orchestration_observation(self) -> CanonicalHookObservation:
+        """Project only the allowed observation fields into the Phase 4 record."""
+
+        request = self.continuation_request
+        idempotency_key = (
+            request.idempotency_key
+            if request is not None
+            else f"{self.command_id}.{self.target_id}.observation"
+        )
+        return CanonicalHookObservation(
+            schema_version="arw.hook-observation.v1",
+            hook_name=self.hook_name,
+            hook_definition_sha256=self.hook_definition_sha256,
+            target_id=self.target_id,
+            status=self.status,
+            observation_sha256=self.observation_sha256,
+            redacted_error_code=self.redacted_error_code,
+            idempotency_key=idempotency_key,
+            continuation_requested=request is not None,
+            continuation_count=self.continuation_count,
+        )
+
     @classmethod
     def create(
         cls,
@@ -325,4 +348,3 @@ class ContinuationBudget(StrictModel):
 ObservationContract = HookObservation
 HookParity = HookParityMatrix
 ContinuationCounter = ContinuationBudget
-
