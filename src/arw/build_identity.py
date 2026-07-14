@@ -65,4 +65,15 @@ def load_packaged_build_identity() -> tuple[dict[str, Any], str]:
         schema_entries.append((relative, expected))
     if aggregate_schema_sha256(schema_entries) != identity["schemas"]["aggregate_sha256"]:
         raise BuildIdentityError("packaged schema aggregate digest mismatch")
+    for entry in identity["staged_payloads"]:
+        relative = entry["path"]
+        raw_candidate = root / relative
+        candidate = raw_candidate.resolve()
+        if (
+            not candidate.is_relative_to(root)
+            or raw_candidate.is_symlink()
+            or not candidate.is_file()
+            or hashlib.sha256(candidate.read_bytes()).hexdigest() != entry["sha256"]
+        ):
+            raise BuildIdentityError(f"packaged payload digest mismatch: {relative}")
     return identity, hashlib.sha256(raw).hexdigest()

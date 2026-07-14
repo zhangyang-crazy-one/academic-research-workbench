@@ -167,6 +167,7 @@ copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
 copy_file "hooks/hooks.json"
 copy_file "docs/runtime/durable-provenance.md"
+copy_file "docs/runtime/files-first-data-plane.md"
 copy_file "scripts/verify-phase-2" 0755
 copy_file "tests/integration/test_phase2_durable_runtime.py"
 copy_file "schemas/v1/route-result.schema.json"
@@ -187,6 +188,7 @@ copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
+copy_as "generated/file-contracts.h" "share/arw/file-contracts.h"
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/file-base-MIT.txt"
@@ -284,6 +286,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 import sys
 from pathlib import Path
 
@@ -315,6 +318,8 @@ manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(e
 plugin = json.loads((stage_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
 lock_path = stage_root / "vendor/python/wheelhouse.lock.json"
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
+contract_header_path = stage_root / "share/arw/file-contracts.h"
+contract_header = contract_header_path.read_text(encoding="ascii")
 schema_dir = stage_root / "share/arw/schemas"
 schema_entries = regenerate_schemas(schema_dir)
 schema_entries = tuple(
@@ -345,13 +350,42 @@ identity = {
     ],
     "native": {
         "binary": {"path": "libexec/file-base-mcp", "sha256": digest(stage_root / "libexec/file-base-mcp")},
+        "build_evidence": {
+            "path": ".file-base/build-evidence.json",
+            "sha256": digest(stage_root / ".file-base/build-evidence.json"),
+        },
+        "compile_profile": "release-o2",
+        "patched_source_tree_sha256": sorted(
+            manifest["patches"], key=lambda item: item["order"]
+        )[-1]["post_tree_sha256"],
         "upstream_test_tree_sha256": manifest["native_test_suites"][0]["tree_sha256"],
+    },
+    "file_contract": {
+        "header": {
+            "path": "share/arw/file-contracts.h",
+            "sha256": digest(contract_header_path),
+        },
+        "contract_sha256": re.search(
+            r'ARW_FILES_CONTRACT_SHA256 "([0-9a-f]{64})"', contract_header
+        ).group(1),
+        "tokenizer_id": "unicode61-cjk-v1",
+        "ranking_version": "files-rank-v1",
+        "outline_versions": [
+            "bibtex-outline-v1",
+            "latex-outline-v1",
+            "markdown-outline-v1",
+            "source-outline-v1",
+        ],
     },
     "wheelhouse": {
         "lock": {"path": "vendor/python/wheelhouse.lock.json", "sha256": digest(lock_path)},
         "requirements": {
             "path": "vendor/python/wheelhouse/requirements-runtime.txt",
             "sha256": digest(stage_root / "vendor/python/wheelhouse/requirements-runtime.txt"),
+        },
+        "first_party": {
+            "path": f"vendor/python/wheelhouse/{lock['first_party_wheel']['file']}",
+            "sha256": lock["first_party_wheel"]["sha256"],
         },
     },
     "schemas": {
@@ -419,6 +453,7 @@ static_files = {
     "THIRD_PARTY_NOTICES.md",
     "bin/arw",
     "docs/runtime/durable-provenance.md",
+    "docs/runtime/files-first-data-plane.md",
     "hooks/hooks.json",
     "libexec/file-base-mcp",
     "pyproject.toml",
@@ -430,6 +465,7 @@ static_files = {
     "schemas/v1/source-manifest.schema.json",
     "scripts/file-base-mcp",
     "scripts/verify-phase-2",
+    "share/arw/file-contracts.h",
     "share/arw/build-identity.json",
     "share/arw/schemas/artifact-manifest.schema.json",
     "share/arw/schemas/artifact-request.schema.json",

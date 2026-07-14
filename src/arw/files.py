@@ -297,7 +297,17 @@ class FilesAdminService:
             failpoint("index_complete")
             self._verify_database(candidate / "files.sqlite3")
             database_sha = hashlib.sha256((candidate / "files.sqlite3").read_bytes()).hexdigest()
-            contract_header = Path(__file__).resolve().parents[2] / "generated/file-contracts.h"
+            contract_value = os.environ.get("ARW_FILES_CONTRACT_HEADER")
+            contract_header = (
+                Path(contract_value)
+                if contract_value is not None
+                else Path(__file__).resolve().parents[2] / "generated/file-contracts.h"
+            )
+            if contract_header.is_symlink() or not contract_header.is_file():
+                raise FilesAdminError(
+                    "file_contract_unsafe",
+                    "generated file contract header is absent or unsafe",
+                )
             contract_sha = hashlib.sha256(contract_header.read_bytes()).hexdigest()
             degraded_count = sum(item.index_state == "degraded" for item in files)
             manifest = FileGenerationManifest(

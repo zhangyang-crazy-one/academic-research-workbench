@@ -13,7 +13,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0298722bb49453b2879946c6715184971d46ed52acb9de92d18b26c6cf7aade4"
+          "content": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
         }
       ],
       "name": ".file-base/bin/file-base",
@@ -25,7 +25,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "328c3a5b46d3176a2bed8db103e0c046c721f29307a1626437c8f2c99c1b6823"
+          "content": "1f55aa5c52bff7258bb9d9ea3c45b3b40d3a2337a341f718abfe6d73ca6d7c90"
         }
       ],
       "name": ".file-base/build-evidence.json",
@@ -2277,7 +2277,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "df08128882640a1e45b87efbfed2612d6e7b2cbe61990be5db989f5ce3b81d1e"
+          "content": "4dec1ec6aaaf5ca483c285e8bf5081781de4cea99f1fcc86de03c899986b293a"
         }
       ],
       "licenses": [
@@ -2335,6 +2335,18 @@
       "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",
       "type": "file",
       "version": "2"
+    },
+    {
+      "bom-ref": "patch:12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+        }
+      ],
+      "name": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
+      "type": "file",
+      "version": "3"
     },
     {
       "bom-ref": "patch:dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a",
