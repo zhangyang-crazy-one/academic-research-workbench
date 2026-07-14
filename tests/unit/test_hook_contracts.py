@@ -36,7 +36,7 @@ def _observation(
         observation_kind="proposal_incomplete",
         observation_sha256=OBSERVATION_DIGEST,
         redacted_error_code=None,
-        failure_reason=None,
+        failure_reason=("hook execution did not complete" if status in {"timeout", "failed"} else None),
         continuation_request=continuation,
         continuation_count=continuation_count,
         parity=HookParityMatrix.for_status(status, authority_digest=AUTHORITY_DIGEST),
