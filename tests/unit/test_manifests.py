@@ -218,6 +218,16 @@ def test_assignment_attempt_tree_is_write_once_and_rejects_replacement_or_symlin
         install_assignment_manifest(root, assignment)
 
 
+@pytest.mark.parametrize("assignment_id", ["../outside", "nested/assignment", "/absolute"])
+def test_assignment_loader_rejects_path_traversal_ids(tmp_path: Path, assignment_id: str) -> None:
+    from arw.manifests import ManifestError, load_assignment_manifest
+
+    root = tmp_path / "run"
+    root.mkdir()
+    with pytest.raises(ManifestError, match="safe runtime identifier"):
+        load_assignment_manifest(root, assignment_id)
+
+
 def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(tmp_path: Path) -> None:
     from arw.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
 

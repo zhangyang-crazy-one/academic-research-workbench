@@ -7,7 +7,7 @@ import stat
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, TypeVar
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.models import (
@@ -20,6 +20,7 @@ from arw.models import (
     PassportDecisionSnapshot,
     PassportPointer,
     Sha256,
+    StableRuntimeId,
     StrictModel,
 )
 from arw.reducer import RuntimeState
@@ -41,6 +42,8 @@ class ManifestError(RuntimeError):
 ManifestModel = TypeVar("ManifestModel", bound=StrictModel)
 
 MAX_PROPOSAL_BYTES = 1_048_576
+
+_STABLE_RUNTIME_ID = TypeAdapter(StableRuntimeId)
 
 
 class RawProposalEvidence(StrictModel):
@@ -131,17 +134,26 @@ def _write_once(path: Path, value: bytes) -> Path:
         temporary.unlink(missing_ok=True)
 
 
+def _safe_identifier(value: str, *, label: str) -> str:
+    try:
+        return _STABLE_RUNTIME_ID.validate_python(value)
+    except ValidationError as error:
+        raise ManifestError(f"{label} is not a safe runtime identifier") from error
+
+
 def install_assignment_manifest(root: Path, assignment: ImmutableAssignment) -> Path:
     """Publish one canonical assignment exactly once as a direct parent file."""
 
     value = canonical_orchestration_model_bytes(assignment)
     directory = _safe_directory(root, ("assignments",), create=True)
-    return _write_once(directory / f"{assignment.assignment_id}.json", value)
+    assignment_id = _safe_identifier(assignment.assignment_id, label="assignment ID")
+    return _write_once(directory / f"{assignment_id}.json", value)
 
 
 def load_assignment_manifest(root: Path, assignment_id: str) -> ImmutableAssignment:
+    safe_assignment_id = _safe_identifier(assignment_id, label="assignment ID")
     directory = _safe_directory(root, ("assignments",), create=False)
-    path = directory / f"{assignment_id}.json"
+    path = directory / f"{safe_assignment_id}.json"
     if path.is_symlink() or not path.is_file():
         raise ManifestError("assignment manifest is missing or unsafe")
     try:

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+import jsonschema
 import pytest
 from pydantic import ValidationError
 
@@ -358,6 +360,13 @@ def test_phase4_events_are_parent_authored_and_preserve_source_provenance() -> N
     )
     assert event.payload.assignment.assignment_id == assignment.assignment_id
     assert event.payload.assignment.worker_identity_id == "worker.methodology-001"
+
+    event_schema = json.loads(
+        (Path(__file__).resolve().parents[2] / "schemas/v1/event.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    jsonschema.Draft202012Validator(event_schema).validate(event.model_dump(mode="json"))
 
     with pytest.raises(ValidationError, match="parent_control_plane"):
         CanonicalEvent.model_validate(

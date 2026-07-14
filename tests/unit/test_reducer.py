@@ -505,6 +505,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
     report = build_status_report(first)
     assert report.status == "PASS"
     assert report.accepted_proposal_sha256 == (proposal_sha256,)
+    assert first.active_attempts == []
 
 
 def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_results() -> None:

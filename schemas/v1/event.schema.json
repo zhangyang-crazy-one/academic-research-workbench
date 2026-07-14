@@ -46,12 +46,64 @@
     {
       "if": {"properties": {"event_type": {"const": "recovery.completed"}}, "required": ["event_type"]},
       "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/recovery_completed_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["execution.mode_selected", "assignment.prepared", "assignment.superseded", "attempt.prepared", "attempt.lifecycle", "proposal.accepted", "proposal.rejected", "review.report_accepted", "review.synthesis_accepted", "hook.observed", "gate.evaluated", "human_decision.recorded"]}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"actor_role": {"const": "parent_control_plane"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "execution.mode_selected"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/execution_mode_selected_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "assignment.prepared"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/assignment_prepared_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "assignment.superseded"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/assignment_superseded_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "attempt.prepared"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/attempt_prepared_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "attempt.lifecycle"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/attempt_lifecycle_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "proposal.accepted"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/proposal_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "proposal.rejected"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/proposal_rejected_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "review.report_accepted"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/review_report_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "review.synthesis_accepted"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/review_synthesis_accepted_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "hook.observed"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/hook_observed_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "gate.evaluated"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/gate_evaluated_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "human_decision.recorded"}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/human_decision_recorded_payload"}}}
     }
   ],
   "description": "Strict hash-chained Phase 1 canonical event envelope.",
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded", "lifecycle.transitioned", "human_decision.requested", "human_decision.resolved", "attempt.started", "attempt.closed", "artifact.accepted", "passport.accepted", "resume.accepted", "recovery.completed"], "type": "string"},
+    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded", "lifecycle.transitioned", "human_decision.requested", "human_decision.resolved", "attempt.started", "attempt.closed", "artifact.accepted", "passport.accepted", "resume.accepted", "recovery.completed", "execution.mode_selected", "assignment.prepared", "assignment.superseded", "attempt.prepared", "attempt.lifecycle", "proposal.accepted", "proposal.rejected", "review.report_accepted", "review.synthesis_accepted", "hook.observed", "gate.evaluated", "human_decision.recorded"], "type": "string"},
     "event_id": {"pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "command_id": {"pattern": "^cmd-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
@@ -185,6 +237,114 @@
         "reason_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}
       },
       "required": ["recovery_id", "prior_valid_revision", "prior_valid_head_sha256", "original_segment_sha256", "original_segment_byte_count", "quarantine_sha256", "quarantine_receipt_sha256", "fault_offset", "fault_class", "reason_code"],
+      "type": "object"
+    },
+    "execution_mode_selected_payload": {
+      "properties": {
+        "execution_mode": {"enum": ["native_formal", "degraded_inline", "blocked"], "type": "string"},
+        "execution_provenance": {"enum": ["native_profile", "assignment_injected_subagent", "degraded_inline", "unavailable"], "type": "string"},
+        "role_modes": {"items": {"type": "object"}, "type": "array"},
+        "role_catalog_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "policy_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "dag_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "rationale": {"anyOf": [{"minLength": 1, "maxLength": 2048, "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["execution_mode", "execution_provenance"],
+      "type": "object"
+    },
+    "assignment_prepared_payload": {
+      "properties": {"assignment": {"type": "object"}, "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["assignment", "assignment_sha256"],
+      "type": "object"
+    },
+    "assignment_superseded_payload": {
+      "properties": {
+        "assignment": {"type": "object"},
+        "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "predecessor_assignment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "predecessor_assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["assignment", "assignment_sha256", "predecessor_assignment_id", "predecessor_assignment_sha256"],
+      "type": "object"
+    },
+    "attempt_prepared_payload": {
+      "properties": {
+        "assignment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "attempt": {"type": "object"},
+        "attempt_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["assignment_id", "assignment_sha256", "attempt"],
+      "type": "object"
+    },
+    "attempt_lifecycle_payload": {
+      "properties": {
+        "assignment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "attempt_number": {"minimum": 1, "maximum": 2, "type": "integer"},
+        "status": {"enum": ["prepared", "active", "cancel_requested", "force_terminated", "interrupted", "completed", "failed", "cancelled", "rejected_stale", "superseded", "blocked"], "type": "string"},
+        "proposal_nonce": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]},
+        "retry_reason": {"anyOf": [{"enum": ["timeout", "process_failure", "repairable_envelope", "permission_denied", "stale_inputs", "superseded", "cancelled", "scientific_disagreement", "identity_mismatch", "policy_violation", "digest_mismatch"], "type": "string"}, {"type": "null"}]},
+        "retry_eligible": {"type": "boolean"},
+        "host_agent_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "cancellation_deadline_at": {"anyOf": [{"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "type": "string"}, {"type": "null"}]},
+        "proposal_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "reason_code": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]}
+      },
+      "required": ["assignment_id", "assignment_sha256", "attempt_id", "attempt_number", "status"],
+      "type": "object"
+    },
+    "proposal_accepted_payload": {
+      "properties": {
+        "assignment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "proposal": {"type": "object"},
+        "proposal_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "acceptance_key": {"items": {}, "minItems": 3, "maxItems": 3, "type": "array"},
+        "accepted_status": {"const": "accepted", "type": "string"}
+      },
+      "required": ["assignment_id", "assignment_sha256", "attempt_id", "proposal", "proposal_sha256", "acceptance_key"],
+      "type": "object"
+    },
+    "proposal_rejected_payload": {
+      "properties": {
+        "assignment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "assignment_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "proposal_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "outcome": {"enum": ["rejected", "rejected_invalid", "rejected_stale", "rejected_cancelled", "rejected_superseded"], "type": "string"},
+        "reason_code": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "acceptance_key": {"items": {}, "minItems": 3, "maxItems": 3, "type": "array"},
+        "raw_bytes_retained": {"type": "boolean"}
+      },
+      "required": ["assignment_id", "assignment_sha256", "attempt_id", "proposal_sha256", "outcome", "reason_code", "acceptance_key"],
+      "type": "object"
+    },
+    "review_report_accepted_payload": {
+      "properties": {"report": {"type": "object"}, "report_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["report", "report_sha256"],
+      "type": "object"
+    },
+    "review_synthesis_accepted_payload": {
+      "properties": {"finding_matrix": {"type": "object"}, "finding_matrix_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["finding_matrix", "finding_matrix_sha256"],
+      "type": "object"
+    },
+    "hook_observed_payload": {
+      "properties": {"observation": {"type": "object"}, "observation_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["observation", "observation_sha256"],
+      "type": "object"
+    },
+    "gate_evaluated_payload": {
+      "properties": {"decision": {"type": "object"}, "decision_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["decision", "decision_sha256"],
+      "type": "object"
+    },
+    "human_decision_recorded_payload": {
+      "properties": {"decision": {"type": "object"}, "decision_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
+      "required": ["decision", "decision_sha256"],
       "type": "object"
     }
   }
