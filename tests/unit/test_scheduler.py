@@ -74,11 +74,11 @@ def test_p04_03_t01_retry_taxonomy_is_bounded() -> None:
         {
             retry_spec.assignment_id: (
                 FakeDispatchPlan(error=ProcessFailure("child exited unexpectedly")),
-                FakeDispatchPlan(result=_result(retry_spec)),
+                FakeDispatchPlan(),
             ),
             denied_spec.assignment_id: (
                 FakeDispatchPlan(error=PermissionDenied("root denied")),
-                FakeDispatchPlan(result=_result(denied_spec)),
+                FakeDispatchPlan(),
             ),
         }
     )
