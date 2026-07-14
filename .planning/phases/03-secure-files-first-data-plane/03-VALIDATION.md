@@ -1,9 +1,9 @@
 ---
 phase: 03
 slug: secure-files-first-data-plane
-status: approved
+status: complete
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-07-14
 ---
 
@@ -41,7 +41,7 @@ created: 2026-07-14
 
 | Ref | Threat | Required secure behavior |
 |-----|--------|--------------------------|
-| T03-01 | Root traversal, symlink/junction claim, mount or sensitive-path escape | Native descriptor-safe root confinement rejects before content and preserves canaries. |
+| T03-01 | Root traversal, symlink/junction claim, mount or sensitive-path escape | Descriptor-safe root confinement rejects before content and preserves canaries. |
 | T03-02 | Agent invokes administration or query path mutates root/cache/index | MCP advertises exactly five read-only tools; query trees remain byte-identical. |
 | T03-03 | Crash or failure publishes partial/corrupt generation | Only a closed, checked, hashed generation is atomically selected; prior pointer remains on failure. |
 | T03-04 | Stale/replaced bytes leak through read, snippet, outline or context | Live digest/descriptor gate precedes all body output; conflicts return metadata/error with no body. |
@@ -58,31 +58,31 @@ its automated oracle. Final plan IDs are reconciled before execution.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 03-01-01 | 01 | 1 | FILE-01, FILE-02 | T03-04, T03-05, T03-07 | Strict identity/generation/read/cursor contracts reject drift | schema/unit | `UV_OFFLINE=1 uv run --frozen pytest -q tests/schema/test_files_contracts.py tests/unit/test_file_models.py` | No - W0 | pending |
-| 03-01-02 | 01 | 1 | FILE-06, FILE-07 | T03-03, T03-06 | Canonical generation/extraction manifests and receipts distinguish degraded/blocking | unit | `UV_OFFLINE=1 uv run --frozen pytest -q tests/unit/test_file_generations.py` | No - W0 | pending |
-| 03-02-01 | 02 | 2 | FILE-06, FILE-08 | T03-02, T03-03 | Parent-only sync builds a sibling generation and atomically promotes after validation | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_admin.py` | No - W0 | pending |
-| 03-02-02 | 02 | 2 | FILE-01, FILE-06 | T03-03, T03-04 | Create/modify/rename/delete/ignore/version matrix preserves identity and removes stale searchability | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_file_generations.py` | No - W0 | pending |
-| 03-03-01 | 03 | 3 | FILE-08, VER-03 | T03-01, T03-02, T03-07 | Installed files profile advertises only five tools and performs no query-side writes | native integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_mcp.py -k 'profile or read_only or tools'` | No - W0 | pending |
-| 03-03-02 | 03 | 3 | FILE-01, FILE-02 | T03-01, T03-04, T03-05 | Live list/read is bounded, resumable and no-body on replacement conflict | native integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_mcp.py -k 'list or read or continuation'` | No - W0 | pending |
-| 03-04-01 | 04 | 4 | FILE-03 | T03-04, T03-05 | Exact/FTS pagination is deterministic, CJK-capable and stale-body-free | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_formats.py -k 'search or cjk or stale'` | No - W0 | pending |
-| 03-04-02 | 04 | 4 | FILE-04, FILE-07 | T03-04, T03-06 | Deterministic outlines/context and registered extraction provenance match all formats | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_formats.py -k 'outline or context or pdf'` | No - W0 | pending |
-| 03-05-01 | 05 | 5 | VER-03 | T03-01 through T03-07 | Deterministic barrier races, malformed cases, sensitive paths and budgets fail closed | adversarial | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_security.py` | No - W0 | pending |
-| 03-05-02 | 05 | 5 | FILE-01 through FILE-08, VER-03 | T03-01 through T03-07 | Exact staged package emits raw-evidence-bound requirement/D-01..D-16 verdict | staged E2E | `UV_OFFLINE=1 ./scripts/verify-phase-3 --clean --evidence-root build/evidence/phase-03` | No - W0 | pending |
+| 03-01-01 | 01 | 1 | FILE-01, FILE-02 | T03-04, T03-05, T03-07 | Strict identity/generation/read/cursor contracts reject drift | schema/unit | `UV_OFFLINE=1 uv run --frozen pytest -q tests/schema/test_files_contracts.py tests/unit/test_file_models.py` | Yes | passed |
+| 03-01-02 | 01 | 1 | FILE-06, FILE-07 | T03-03, T03-06 | Canonical generation/extraction manifests and receipts distinguish degraded/blocking | unit | `UV_OFFLINE=1 uv run --frozen pytest -q tests/unit/test_file_generations.py` | Yes | passed |
+| 03-02-01 | 02 | 2 | FILE-06, FILE-08 | T03-02, T03-03 | Parent-only sync builds a sibling generation and atomically promotes after validation | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_admin.py` | Yes | passed |
+| 03-02-02 | 02 | 2 | FILE-01, FILE-06 | T03-03, T03-04 | Create/modify/rename/delete/ignore/version matrix preserves identity and removes stale searchability | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_file_generations.py` | Yes | passed |
+| 03-03-01 | 03 | 3 | FILE-08, VER-03 | T03-01, T03-02, T03-07 | Installed files profile advertises only five tools and performs no query-side writes | installed MCP integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_mcp.py -k 'profile or read_only or tools'` | Yes | passed |
+| 03-03-02 | 03 | 3 | FILE-01, FILE-02 | T03-01, T03-04, T03-05 | Live list/read is bounded, resumable and no-body on replacement conflict | installed MCP integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_mcp.py -k 'list or read or continuation'` | Yes | passed |
+| 03-04-01 | 04 | 4 | FILE-03 | T03-04, T03-05 | Exact/FTS pagination is deterministic, CJK-capable and stale-body-free | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_formats.py -k 'search or cjk or stale'` | Yes | passed |
+| 03-04-02 | 04 | 4 | FILE-04, FILE-07 | T03-04, T03-06 | Deterministic outlines/context and registered extraction provenance match all formats | integration | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_formats.py -k 'outline or context or pdf'` | Yes | passed |
+| 03-05-01 | 05 | 5 | VER-03 | T03-01 through T03-07 | Deterministic barrier races, malformed cases, sensitive paths and budgets fail closed | adversarial | `UV_OFFLINE=1 uv run --frozen pytest -q tests/integration/test_files_security.py` | Yes | passed |
+| 03-05-02 | 05 | 5 | FILE-01 through FILE-08, VER-03 | T03-01 through T03-07 | Exact staged package emits raw-evidence-bound requirement/D-01..D-16 verdict | staged E2E | `UV_OFFLINE=1 ./scripts/verify-phase-3 --clean --evidence-root build/evidence/phase-03` | Yes | passed |
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/schema/test_files_contracts.py` - cross-language request/result/manifest instance and drift tests.
-- [ ] `tests/unit/test_file_models.py` - identity, cursor, limit and freshness contracts.
-- [ ] `tests/unit/test_file_generations.py` - canonical manifests, receipts, degradation and promotion validation.
-- [ ] `tests/integration/test_files_admin.py` - parent-only administration and atomic publication fixtures.
-- [ ] `tests/integration/test_file_generations.py` - create/modify/rename/delete/ignore/extractor-version matrix.
-- [ ] `tests/integration/test_files_mcp.py` - direct native JSON-RPC five-tool and no-write fixtures.
-- [ ] `tests/integration/test_files_formats.py` - CJK and research-format search/outline/context fixtures.
-- [ ] `tests/integration/test_files_security.py` - deterministic barrier race and malformed/budget matrix.
-- [ ] `tests/fixtures/files-first/` - multilingual, duplicate, stale-canary, sensitive and PDF registration corpus.
-- [ ] `scripts/verify-phase-3` - owned-root staged qualification and raw evidence verdict.
+- [x] `tests/schema/test_files_contracts.py` - cross-language request/result/manifest instance and drift tests.
+- [x] `tests/unit/test_file_models.py` - identity, cursor, limit and freshness contracts.
+- [x] `tests/unit/test_file_generations.py` - canonical manifests, receipts, degradation and promotion validation.
+- [x] `tests/integration/test_files_admin.py` - parent-only administration and atomic publication fixtures.
+- [x] `tests/integration/test_file_generations.py` - create/modify/rename/delete/ignore/extractor-version matrix.
+- [x] `tests/integration/test_files_mcp.py` - installed JSON-RPC five-tool and no-write fixtures.
+- [x] `tests/integration/test_files_formats.py` - CJK and research-format search/outline/context fixtures.
+- [x] `tests/integration/test_files_security.py` - deterministic barrier race and malformed/budget matrix.
+- [x] `tests/fixtures/files-first/` - multilingual, duplicate, stale-canary, sensitive and PDF registration corpus.
+- [x] `scripts/verify-phase-3` - owned-root staged qualification and raw evidence verdict.
 
 Existing `pytest`, subprocess, schema registry, source materialization, staging,
 offline execution, and evidence infrastructure require no new test framework.
@@ -99,26 +99,26 @@ unverified rather than being accepted manually.
 
 ## Full-Phase Sign-Off Gates
 
-- [ ] FILE-01 through FILE-08 mapped requirements are true in the top verdict.
-- [ ] VER-03 traversal/symlink/race/sensitive/malformed/budget matrix is true.
-- [ ] D-01 through D-16 are independently true and raw-evidence-bound.
-- [ ] Four ROADMAP success criteria pass from exact staged bytes.
-- [ ] Projection deletion and rebuild reproduce normalized query results.
-- [ ] MCP root, cache, pointer and database trees remain unchanged by every query tool.
-- [ ] Stale and private canary scans report zero body leakage.
-- [ ] Frozen full pytest suite passes offline.
-- [ ] `scripts/verify-sources`, Phase 1, Phase 2 and Phase 3 technical gates pass.
-- [ ] Release remains separately BLOCKED if SUP-04 evidence remains absent.
+- [x] FILE-01 through FILE-08 mapped requirements are true in the top verdict.
+- [x] VER-03 traversal/symlink/race/sensitive/malformed/budget matrix is true.
+- [x] D-01 through D-16 are independently true and raw-evidence-bound.
+- [x] Four ROADMAP success criteria pass from exact staged bytes.
+- [x] Projection deletion and rebuild reproduce normalized query results.
+- [x] MCP root, cache, pointer and database trees remain unchanged by every query tool.
+- [x] Stale and private canary scans report zero body leakage.
+- [x] Frozen full pytest suite passes offline.
+- [x] `scripts/verify-sources`, Phase 1, Phase 2 and Phase 3 technical gates pass.
+- [x] Release remains separately BLOCKED because SUP-04 evidence is absent.
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have an automated verify command or explicit Wave 0 dependency.
-- [ ] Sampling continuity: no three consecutive tasks without automated verification.
-- [ ] Wave 0 creates every currently missing test/verifier artifact.
-- [ ] No watch-mode flags, implicit network access, or unretained manual checks.
-- [ ] Task-local feedback latency remains below 60 seconds.
-- [x] `nyquist_compliant: true` set after plan reconciliation; `wave_0_complete` remains false until Plan 03-01 creates and runs every Wave 0 artifact.
+- [x] All tasks have an automated verify command or explicit Wave 0 dependency.
+- [x] Sampling continuity: no three consecutive tasks without automated verification.
+- [x] Wave 0 created every planned test/verifier artifact.
+- [x] No watch-mode flags, implicit network access, or unretained manual checks.
+- [x] Task-local feedback latency remained below 60 seconds.
+- [x] `nyquist_compliant: true` and `wave_0_complete: true` after final staged qualification.
 
-**Approval:** plan-reconciled on 2026-07-14; Wave 0 execution pending
+**Approval:** technical PASS on 2026-07-14; release remains BLOCKED by SUP-04 legal evidence

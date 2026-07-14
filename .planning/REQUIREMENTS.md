@@ -34,14 +34,14 @@
 
 ### Files-First MCP
 
-- [ ] **FILE-01**: An authorized client can list files under configured roots with stable file identity, type, size, digest, extraction state, and index freshness.
-- [ ] **FILE-02**: An authorized client can read bounded byte or line ranges and receives explicit truncation, encoding, and continuation metadata.
-- [ ] **FILE-03**: An authorized client can run bounded exact and full-text searches with pagination, source locations, snippets, and freshness metadata.
-- [ ] **FILE-04**: An authorized client can request bounded document outlines and context windows for supported research formats.
+- [x] **FILE-01**: An authorized client can list files under configured roots with stable file identity, type, size, digest, extraction state, and index freshness.
+- [x] **FILE-02**: An authorized client can read bounded byte or line ranges and receives explicit truncation, encoding, and continuation metadata.
+- [x] **FILE-03**: An authorized client can run bounded exact and full-text searches with pagination, source locations, snippets, and freshness metadata.
+- [x] **FILE-04**: An authorized client can request bounded document outlines and context windows for supported research formats.
 - [x] **FILE-05**: The MCP rejects path traversal, symlink or junction escape, disallowed roots, sensitive-path access, and over-budget requests before returning content.
-- [ ] **FILE-06**: Index updates correctly represent create, modify, rename, delete, ignore-rule, and extraction-version changes without retaining stale searchable content.
-- [ ] **FILE-07**: CJK text, Markdown, LaTeX, BibTeX, source code, and declared direct-text or extracted-PDF cases have explicit coverage and extraction provenance.
-- [ ] **FILE-08**: Agent-facing MCP tools are read-only and bounded, while crawl, extraction, rebuild, and repair operations require parent-controlled administrative commands.
+- [x] **FILE-06**: Index updates correctly represent create, modify, rename, delete, ignore-rule, and extraction-version changes without retaining stale searchable content.
+- [x] **FILE-07**: CJK text, Markdown, LaTeX, BibTeX, source code, and declared direct-text or extracted-PDF cases have explicit coverage and extraction provenance.
+- [x] **FILE-08**: Agent-facing MCP tools are read-only and bounded, while crawl, extraction, rebuild, and repair operations require parent-controlled administrative commands.
 
 ### Subagents, Hooks, And Handoffs
 
@@ -76,7 +76,7 @@
 
 - [x] **VER-01**: Continuous integration validates schemas independently across Python and MCP boundaries and blocks incompatible schema drift.
 - [ ] **VER-02**: Installed-plugin tests exercise manifest discovery, skill routing, launcher resolution, MCP negotiation, hooks, and version reporting from a staged package.
-- [ ] **VER-03**: Security tests cover traversal, symlink or junction escape, race-sensitive file replacement, sensitive files, malformed input, and output-budget exhaustion.
+- [x] **VER-03**: Security tests cover traversal, symlink or junction escape, race-sensitive file replacement, sensitive files, malformed input, and output-budget exhaustion.
 - [ ] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
 - [ ] **VER-05**: Projection tests compare clean, full-rebuild, incremental, delete, rename, migration, and supersession query results under a declared normalization oracle.
 - [ ] **VER-06**: One representative end-to-end fixture covers sources, claims, an experiment record, a figure or result, independent review, a failed gate, human resolution, crash/resume, and final audit output.
@@ -155,14 +155,14 @@
 | RUN-06 | Phase 2 | Complete |
 | RUN-07 | Phase 2 | Complete |
 | RUN-08 | Phase 2 | Complete |
-| FILE-01 | Phase 3 | Pending |
-| FILE-02 | Phase 3 | Pending |
-| FILE-03 | Phase 3 | Pending |
-| FILE-04 | Phase 3 | Pending |
+| FILE-01 | Phase 3 | Complete |
+| FILE-02 | Phase 3 | Complete |
+| FILE-03 | Phase 3 | Complete |
+| FILE-04 | Phase 3 | Complete |
 | FILE-05 | Phase 1 | Complete |
-| FILE-06 | Phase 3 | Pending |
-| FILE-07 | Phase 3 | Pending |
-| FILE-08 | Phase 3 | Pending |
+| FILE-06 | Phase 3 | Complete |
+| FILE-07 | Phase 3 | Complete |
+| FILE-08 | Phase 3 | Complete |
 | AGT-01 | Phase 4 | Pending |
 | AGT-02 | Phase 4 | Pending |
 | AGT-03 | Phase 4 | Pending |
@@ -185,7 +185,7 @@
 | SCI-07 | Phase 6 | Pending |
 | VER-01 | Phase 1 | Complete |
 | VER-02 | Phase 7 | Pending |
-| VER-03 | Phase 3 | Pending |
+| VER-03 | Phase 3 | Complete |
 | VER-04 | Phase 7 | Pending |
 | VER-05 | Phase 5 | Pending |
 | VER-06 | Phase 7 | Pending |
@@ -199,4 +199,4 @@
 
 ---
 *Requirements defined: 2026-07-12*
-*Last updated: 2026-07-12 after project research synthesis*
+*Last updated: 2026-07-14 after Phase 3 technical qualification*

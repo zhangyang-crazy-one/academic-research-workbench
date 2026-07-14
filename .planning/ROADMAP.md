@@ -8,7 +8,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 
 - [x] **Phase 1: Contract, License, and Executable Baseline** - Prove the staged plugin, source and license chain, authority schemas, filesystem boundary, and seed verification fixture before deeper implementation. (completed 2026-07-13)
 - [x] **Phase 2: Durable Provenance Runtime** - Make canonical research runs deterministic, immutable, replayable, and recoverable through the sole writer. (completed 2026-07-13)
-- [ ] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge.
+- [x] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge. (completed 2026-07-14)
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
 - [ ] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries.
 - [ ] **Phase 6: Scientific Integrity and Audit Dossier** - Turn scientific checks, experiment provenance, evidence access, and unresolved claims into immutable receipts and an inspectable dossier.
@@ -104,7 +104,28 @@ Plans:
   3. Create, modify, rename, delete, ignore-rule, and extractor-version changes update searchable results without stale content across CJK, Markdown, LaTeX, BibTeX, source-code, direct-text, and declared extracted-PDF fixtures.
   4. Agent-facing tools remain read-only and bounded while crawl, extraction, rebuild, and repair require parent-controlled administrative commands; the security evidence suite covers replacement races, malformed input, sensitive files, and output-budget exhaustion in addition to the Phase 1 confinement cases.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md - Cross-language files contracts, stable identity, generations, cursors, and generated native header
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 03-02-PLAN.md - Parent-only administration, immutable SQLite generations, and atomic publication
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 03-03-PLAN.md - Installed one-root five-tool MCP, live reads, freshness, and continuations
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 03-04-PLAN.md - Multilingual search, outlines, anchored context, and registered PDF extraction
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 03-05-PLAN.md - Adversarial security, staged identity, raw evidence, and full qualification
 
 ### Phase 4: Subagent Orchestration, Hooks, and Human Gates
 
@@ -174,7 +195,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
-| 3. Secure Files-First Data Plane | 4/5 | In Progress|  |
+| 3. Secure Files-First Data Plane | 5/5 | Complete   | 2026-07-14 |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 0/TBD | Not started | - |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
 | 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |

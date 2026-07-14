@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 3 Plan 04 complete
-last_updated: "2026-07-14T00:05:00Z"
+status: ready_to_plan
+stopped_at: Phase 3 complete (5/5) — ready to plan Phase 4
+last_updated: 2026-07-14T08:44:00+08:00
 last_activity: 2026-07-14
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 17
-  completed_plans: 16
-  percent: 31
+  completed_plans: 17
+  percent: 33
 ---
 
 # Project State
@@ -21,24 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Phase 03 — secure-files-first-data-plane
+**Current focus:** Phase 04 — subagent orchestration, hooks, and human gates
 
 ## Current Position
 
-Phase: 03 (secure-files-first-data-plane) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
+Phase: 4 of 7 (Subagent Orchestration, Hooks, and Human Gates)
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-07-14
 
-Progress: [███░░░░░░░] 31%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 36 min
-- Total execution time: 9.7 hours
+- Total execution time: 10.3 hours
 
 **By Phase:**
 
@@ -46,12 +46,12 @@ Progress: [███░░░░░░░] 31%
 |-------|-------|-------|----------|
 | 01 | 7 | 347 min | 50 min |
 | 02 | 5 | 107 min | 21 min |
-| 03 | 4 | 133 min | 33 min |
+| 03 | 5 | 168 min | 34 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 56 min, 23 min, 67 min, 25 min, 18 min
-- Trend: Retrieval reused the one-root boundary; native time was limited to contract rebinding
+- Last 5 plans: 23 min, 67 min, 25 min, 18 min, 35 min
+- Trend: Files-plane work closed with staged adversarial qualification and full regression evidence
 
 *Updated after each plan completion*
 | Phase 01 P06 | 188m | 3 tasks | 26 files |
@@ -65,6 +65,7 @@ Progress: [███░░░░░░░] 31%
 | Phase 03 P02 | 67 min | 3 tasks | 14 files |
 | Phase 03 P03 | 25 min | 3 tasks | 7 files |
 | Phase 03 P04 | 18 min | 3 tasks | 13 files |
+| Phase 03 P05 | 35 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,9 @@ Recent decisions affecting current work:
 - [Phase 03]: The dedicated five-tool files MCP is shipped in the locked first-party Python wheel; the pinned native binary remains the Phase 1 compatibility server and Phase 3 generation publication gate. — This avoids exposing the upstream generic MCP's broad write-capable dispatch surface.
 - [Phase 03]: Current search hits carry signed generation/file/digest/location anchors, while stale hits remove every body-derived field including the anchor. — Search-to-context composition remains restart-safe without server-side query state.
 - [Phase 03]: Raw PDF bytes are freshness inputs only; query text must come from a complete, accessible, digest/version-matched parent extraction registration. — Raw PDF parsing and OCR remain outside v1.
+- [Phase 03]: Generation databases are hash-verified on an `O_NOFOLLOW` descriptor and queried through that same descriptor. — Path or inode replacement cannot substitute query bytes after integrity validation.
+- [Phase 03]: Files-plane staged identity binds the active first-party wheel, native provenance, generated contract, and retrieval algorithm versions. — Installed claims cover both the active query server and native publication gate.
+- [Phase 03]: Technical qualification and SUP-04 release qualification remain separate verdicts. — Phase 3 is technically complete while release authorization remains explicitly BLOCKED.
 
 ### Pending Todos
 
@@ -118,7 +122,6 @@ None yet.
 ### Blockers/Concerns
 
 - [Release]: SUP-04 remains blocked until intended-use, distribution, accountable approval, and compatible permission evidence exists.
-- [Phase 3]: VER-03 must cover race-sensitive file replacement beyond Phase 2 deterministic symlink rejection.
 - [Trust]: Unkeyed hashes prove byte consistency, not authenticity if an attacker can rewrite every root of trust.
 
 ## Deferred Items
@@ -130,6 +133,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T00:05:00Z
-Stopped at: Phase 3 Plan 04 complete
-Resume file: .planning/phases/03-secure-files-first-data-plane/03-05-PLAN.md
+Last session: 2026-07-14T08:44:00+08:00
+Stopped at: Phase 3 complete (5/5) — ready to plan Phase 4
+Resume file: None
