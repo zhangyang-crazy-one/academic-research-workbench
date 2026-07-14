@@ -647,22 +647,13 @@ for key in frozen_schedule.keys_in_order():
 | A3 | [ASSUMED] The exact host's <code>SubagentStop</code>/<code>Stop</code> behavior can support the desired one-continuation convenience path. | Host-Qualified-Only Behavior | Continuation is disabled or recorded as unsupported; parent lifecycle correctness remains unaffected. |
 | A4 | [ASSUMED] A safe authenticated, fresh-home staged test environment will be supplied before native-host admission. | Environment Availability / Validation Architecture | Host canaries cannot run; do not infer a PASS from unit/fake-adapter tests. |
 
-## Open Questions
+## Resolved Design Decisions
 
-1. **Which exact native dispatch/cancellation interface will the adapter use for Codex CLI 0.144.3?**
-   - What we know: Codex documents subagents, configuration limits, custom-agent locations, and hook behavior, but the Phase 4 AI contract explicitly says plugin-callable spawn/cancel/force-kill mappings are not locally proven. [CITED: https://learn.chatgpt.com/docs/agent-configuration/subagents.md; .planning/phases/04-subagent-orchestration-hooks-and-human-gates/04-AI-SPEC.md]
-   - What is unclear: The exact implementation path, force termination behavior, and observed identity/result isolation under this installed host.
-   - Recommendation: Isolate it in <code>CodexNativeExecutionAdapter</code>, ship deterministic fakes first, and make the exact tuple a staged <code>codex_host</code> admission gate.
+1. **RESOLVED — Native dispatch/cancellation interface.** Use only `CodexNativeExecutionAdapter`; deterministic fakes cover its host-neutral contract, while P04-07-T02/T03 require authenticated three-home exact-stage evidence for identity, mapping, isolation and cancellation. Any unavailable mapping remains an explicit `BLOCKED` qualification.
 
-2. **How is a human gate actor authenticated and conflict declaration supplied at the CLI boundary?**
-   - What we know: Existing Phase 2 decisions already carry actor/choice/rationale, while D-15/D-16 require richer accountable actor/role/scope/conflict/evidence bindings. [CITED: src/arw/models.py; .planning/phases/04-subagent-orchestration-hooks-and-human-gates/04-CONTEXT.md]
-   - What is unclear: Whether Phase 4’s local single-user CLI needs a configured operator identity file or an explicit request field plus a visible “unverified identity” classification.
-   - Recommendation: Plan a strict local operator identity configuration/validation checkpoint before final-approval commands; do not claim stronger authentication than the host actually provides. [ASSUMED]
+2. **RESOLVED — Human actor and conflicts.** `HumanDecisionRecord` binds a declared local actor, role, conflict declaration, evidence digest, scope, rationale, subject and legal transition. It is accountable local evidence, not an invented authentication claim; P04-09-T01 requires two independent assessors and an adjudicator only on disagreement.
 
-3. **Which pinned ARS role assets map to optional support roles beyond the locked five-role minimum?**
-   - What we know: The mandatory four reviewers, separate synthesizer, and experiment designer are fixed; role combinations are a discretion area. [CITED: .planning/phases/04-subagent-orchestration-hooks-and-human-gates/04-CONTEXT.md]
-   - What is unclear: The initial catalog’s optional specialist set.
-   - Recommendation: Begin with only required roles plus <code>experiment_designer</code>; add optional roles only with a catalog/matrix version and corpus cases. [CITED: .planning/phases/04-subagent-orchestration-hooks-and-human-gates/04-CONTEXT.md]
+3. **RESOLVED — Optional roles.** V1 has only the mandatory four reviewers, separate synthesizer, methodology role, and proposal-only `experiment_designer`. An optional specialist requires a frozen catalog/policy version, recorded absence and uncovered dimensions, and corpus coverage; host discovery cannot add a role implicitly.
 
 ## Environment Availability
 
