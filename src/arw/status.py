@@ -6,7 +6,17 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from arw.reducer import AttemptState, BlockerState, PendingDecisionState, RuntimeState
+from arw.reducer import (
+    AssignmentState,
+    AttemptLifecycleState,
+    AttemptState,
+    BlockerState,
+    GateState,
+    HumanDecisionState,
+    PendingDecisionState,
+    ProposalState,
+    RuntimeState,
+)
 from arw.models import RecoveryHealth, RunId, Sha256, StableRuntimeId, StrictModel
 
 
@@ -24,6 +34,24 @@ class StatusReport(StrictModel):
     pending_human_decisions: list[PendingDecisionState]
     active_attempts: list[AttemptState]
     legal_next_transitions: list[StableRuntimeId]
+    status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"]
+    execution_mode: Literal["native_formal", "degraded_inline", "blocked"] | None
+    execution_provenance: str | None
+    role_catalog_sha256: Sha256 | None
+    policy_sha256: Sha256 | None
+    dag_sha256: Sha256 | None
+    assignments: tuple[AssignmentState, ...]
+    assignment_revisions: tuple[AssignmentState, ...]
+    attempts: tuple[AttemptLifecycleState, ...]
+    proposals: tuple[ProposalState, ...]
+    accepted_proposal_sha256: tuple[Sha256, ...]
+    rejected_proposal_sha256: tuple[Sha256, ...]
+    deterministic_commit_cursor: tuple[int, int, StableRuntimeId] | None
+    panel_reports: tuple[object, ...]
+    panel_syntheses: tuple[object, ...]
+    hook_observations: tuple[object, ...]
+    gates: tuple[GateState, ...]
+    human_decision_history: tuple[HumanDecisionState, ...]
 
 
 def build_status_report(state: RuntimeState) -> StatusReport:
@@ -43,6 +71,24 @@ def build_status_report(state: RuntimeState) -> StatusReport:
         pending_human_decisions=list(state.pending_human_decisions),
         active_attempts=list(state.active_attempts),
         legal_next_transitions=list(state.legal_next_transitions),
+        status=state.status,
+        execution_mode=state.execution_mode,
+        execution_provenance=state.execution_provenance,
+        role_catalog_sha256=state.role_catalog_sha256,
+        policy_sha256=state.policy_sha256,
+        dag_sha256=state.dag_sha256,
+        assignments=state.assignments,
+        assignment_revisions=state.assignment_revisions,
+        attempts=state.attempts,
+        proposals=state.proposals,
+        accepted_proposal_sha256=state.accepted_proposal_sha256,
+        rejected_proposal_sha256=state.rejected_proposal_sha256,
+        deterministic_commit_cursor=state.deterministic_commit_cursor,
+        panel_reports=state.panel_reports,
+        panel_syntheses=state.panel_syntheses,
+        hook_observations=state.hook_observations,
+        gates=state.gates,
+        human_decision_history=state.human_decision_history,
     )
 
 
@@ -63,6 +109,8 @@ def render_status_text(report: StatusReport) -> str:
             f"ledger head: {report.ledger_head_sha256}",
             f"passport: {passport}",
             f"recovery: {report.recovery_health}",
+            f"status: {report.status}",
+            f"execution mode: {report.execution_mode or 'unset'}",
             f"blockers: {blockers}",
             f"pending decisions: {decisions}",
             f"active attempts: {attempts}",
