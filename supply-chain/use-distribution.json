@@ -1,32 +1,32 @@
 {
-  "schema_version": "1.0.0",
-  "repository_visibility": "private",
-  "private_repository_is_noncommercial_evidence": false,
-  "intended_use": {
-    "status": "unknown"
+  "accountable_approval": {
+    "status": "missing"
   },
   "distribution_class": {
     "status": "unknown"
-  },
-  "permission_references": [],
-  "accountable_approval": {
-    "status": "missing"
   },
   "evidence_hashes": [
     {
       "path": "vendor/source-manifest.json",
       "purpose": "technical-provenance-only",
-      "sha256": "08619babe3587b64a3feda80bfa3e7a204c7b9444535115e209ef507ba16535f"
+      "sha256": "ff13a18db13c13f17a9b24bab1805f76c953e3232fa57f52ac0d0eb8c0590e8a"
     },
     {
       "path": "SBOM.cdx.json",
       "purpose": "technical-provenance-only",
-      "sha256": "43d09853d9a4cfd5b7f541033e2ec1f4ae0a736c4d7dbc9acabed5f67f22af6e"
+      "sha256": "f6340e28b8b4c37f9f4c1a5b49d8fec0b5d71dbaad978f55ed012ef670aa61d7"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
       "purpose": "technical-provenance-only",
-      "sha256": "21280b8bbea41a2cb021790455cae63d6f36c8541636d87308fa630f6fbbe440"
+      "sha256": "8d0d42b11b02deeb986743719ed885abf3af865fb8eeae6be44ebb5f220f3bfb"
     }
-  ]
+  ],
+  "intended_use": {
+    "status": "unknown"
+  },
+  "permission_references": [],
+  "private_repository_is_noncommercial_evidence": false,
+  "repository_visibility": "private",
+  "schema_version": "1.0.0"
 }
