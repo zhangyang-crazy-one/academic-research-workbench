@@ -14,6 +14,8 @@ import pytest
 import arw.files_mcp as files_mcp
 from arw.files import FilesAdminService, load_query_generation
 from arw.files_mcp import FilesMcpServer
+from arw.file_models import FilesSearchRequest
+from arw.files_mcp import ToolError
 from tests.file_plane_helpers import canonical_request, invoke_jsonrpc_process, snapshot_tree
 
 
@@ -240,6 +242,20 @@ def test_malformed_json_contract_cursor_query_and_budgets_are_rejected(tmp_path:
     assert process.responses[0]["error"]["code"] == -32700
     assert len(process.responses[1]["result"]["tools"]) == 5
     assert PROTECTED not in process.completed.stderr
+
+    timeout_request = FilesSearchRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "root_id": "research-root",
+            "mode": "exact",
+            "query": "evidence",
+            "max_hits": 10,
+            "max_snippet_bytes": 64,
+            "cursor": None,
+        }
+    )
+    with pytest.raises(ToolError, match="deadline"):
+        server.search_files(timeout_request, deadline=0.0)
 
 
 def test_all_query_tools_leave_root_and_control_byte_identical(tmp_path: Path) -> None:

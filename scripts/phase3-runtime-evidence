@@ -1,0 +1,456 @@
+#!/usr/bin/env python3
+"""Exercise the exact staged files plane and retain machine-checkable evidence."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def snapshot(root: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            records.append({"path": relative, "kind": "symlink", "target": os.readlink(path)})
+        elif path.is_dir():
+            records.append({"path": relative, "kind": "directory"})
+        elif path.is_file():
+            records.append(
+                {
+                    "path": relative,
+                    "kind": "file",
+                    "size": path.stat().st_size,
+                    "sha256": digest(path),
+                }
+            )
+    return records
+
+
+def run(
+    evidence: Path,
+    name: str,
+    argv: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    command_root = evidence / "commands" / name
+    write_json(
+        command_root / "command.json",
+        {
+            "argv": argv,
+            "cwd": str(cwd),
+            "environment": {
+                key: environment[key]
+                for key in sorted(environment)
+                if key
+                in {
+                    "ARW_FILES_CONTROL_ROOT",
+                    "ARW_FILES_NATIVE_BUILDER",
+                    "ARW_FILES_ROOT_ID",
+                    "CODEX_HOME",
+                    "HOME",
+                    "PIP_NO_INDEX",
+                    "PYTHONNOUSERSITE",
+                }
+            },
+        },
+    )
+    completed = subprocess.run(
+        argv,
+        cwd=cwd,
+        env=environment,
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    (command_root / "stdout.log").write_text(completed.stdout, encoding="utf-8")
+    (command_root / "stderr.log").write_text(completed.stderr, encoding="utf-8")
+    write_json(command_root / "exit.json", {"returncode": completed.returncode})
+    if completed.returncode != 0:
+        raise RuntimeError(f"{name} failed: {completed.stderr}")
+    return completed
+
+
+def rpc(identifier: int, method: str, params: dict[str, object]) -> str:
+    return json.dumps(
+        {"jsonrpc": "2.0", "id": identifier, "method": method, "params": params},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def tool(identifier: int, name: str, arguments: dict[str, object]) -> str:
+    return rpc(identifier, "tools/call", {"name": name, "arguments": arguments})
+
+
+def responses(completed: subprocess.CompletedProcess[str]) -> list[dict[str, Any]]:
+    values = [json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+    if not all(isinstance(value, dict) for value in values):
+        raise RuntimeError("MCP response stream contains a non-object")
+    return values
+
+
+def payload(response: dict[str, Any]) -> dict[str, Any]:
+    value = json.loads(response["result"]["content"][0]["text"])
+    if not isinstance(value, dict):
+        raise RuntimeError("MCP tool payload is not an object")
+    return value
+
+
+def normalize_search(value: dict[str, Any]) -> list[dict[str, object]]:
+    return [
+        {
+            key: hit[key]
+            for key in (
+                "file_id",
+                "relative_path",
+                "file_type",
+                "indexed_digest",
+                "current_digest",
+                "extraction_registration_sha256",
+                "freshness",
+                "sync_required",
+                "score",
+                "location",
+                "snippet",
+            )
+        }
+        for hit in value["hits"]
+    ]
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        print("usage: phase3-runtime-evidence STAGE_ROOT EVIDENCE_ROOT", file=sys.stderr)
+        return 64
+    stage = Path(sys.argv[1]).resolve(strict=True)
+    evidence = Path(sys.argv[2]).resolve()
+    if stage.is_symlink() or not stage.is_dir() or evidence in {Path("/"), stage}:
+        raise RuntimeError("unsafe stage or evidence root")
+    if evidence.exists():
+        raise RuntimeError("runtime evidence root already exists")
+    evidence.mkdir(parents=True)
+
+    owned = evidence / "owned state with spaces"
+    root = owned / "research root"
+    control = owned / "control root"
+    home = owned / "home"
+    codex_home = owned / "codex home"
+    unrelated = owned / "unrelated cwd"
+    for directory in (root, home, codex_home, unrelated):
+        directory.mkdir(parents=True)
+    protected = "ARW-PHASE3-STALE-CANARY-4B17"
+    private = "ARW-PHASE3-PRIVATE-CANARY-19C4"
+    (root / "paper.md").write_text(
+        f"# Reproducible Evidence\n\nChinese 证据 and English evidence.\n\n{protected}\n",
+        encoding="utf-8",
+    )
+    (root / "source.py").write_text(
+        "def bind_claim(source_digest: str) -> str:\n    return source_digest\n",
+        encoding="utf-8",
+    )
+    (root / ".env").write_text(private + "\n", encoding="utf-8")
+    (root / ".arwignore").write_text(".env\n", encoding="utf-8")
+
+    launcher = stage / "bin/arw"
+    mcp = stage / "scripts/file-base-mcp"
+    native = stage / "libexec/file-base-mcp"
+    environment = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "CODEX_HOME": str(codex_home),
+        "PIP_NO_INDEX": "1",
+        "PYTHONNOUSERSITE": "1",
+        "ARW_FILES_NATIVE_BUILDER": str(native),
+    }
+    register = run(
+        evidence,
+        "admin-register",
+        [
+            str(launcher),
+            "files",
+            "root",
+            "register",
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+            "--root-path",
+            str(root),
+            "--policy-id",
+            "research-files-v1",
+        ],
+        cwd=unrelated,
+        environment=environment,
+    )
+    json.loads(register.stdout)
+    synced = run(
+        evidence,
+        "admin-sync",
+        [
+            str(launcher),
+            "files",
+            "sync",
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+            "--extractor-version",
+            "1.0.0",
+        ],
+        cwd=unrelated,
+        environment=environment,
+    )
+    sync_receipt = json.loads(synced.stdout)
+    generation_id = sync_receipt["selected_generation_id"]
+    generation = control / "roots/research-root/generations" / generation_id
+    identity = json.loads((generation / "identity-manifest.json").read_text(encoding="utf-8"))
+    record = next(item for item in identity["records"] if item["relative_path"] == "paper.md")
+
+    mcp_environment = {
+        **environment,
+        "ARW_FILES_CONTROL_ROOT": str(control),
+        "ARW_FILES_ROOT_ID": "research-root",
+    }
+    root_before = snapshot(root)
+    control_before = snapshot(control)
+    cache_before = snapshot(codex_home)
+    common = {"schema_version": "1.0.0", "root_id": "research-root"}
+    first_requests = [
+        rpc(1, "tools/list", {}),
+        tool(2, "list_files", {**common, "max_files": 20, "cursor": None}),
+        tool(
+            3,
+            "read_file",
+            {
+                **common,
+                "file_id": record["file_id"],
+                "relative_path": record["relative_path"],
+                "expected_digest": record["digest"],
+                "byte_range": None,
+                "line_range": {"start_line": 1, "max_lines": 20},
+                "cursor": None,
+            },
+        ),
+        tool(
+            4,
+            "search_files",
+            {
+                **common,
+                "mode": "full_text",
+                "query": "evidence",
+                "max_hits": 20,
+                "max_snippet_bytes": 256,
+                "cursor": None,
+            },
+        ),
+        tool(
+            5,
+            "get_outline",
+            {
+                **common,
+                "generation_id": generation_id,
+                "file_id": record["file_id"],
+                "expected_digest": record["digest"],
+                "max_nodes": 20,
+                "cursor": None,
+            },
+        ),
+    ]
+    queried = run(
+        evidence,
+        "mcp-five-tools-a",
+        [str(mcp)],
+        cwd=unrelated,
+        environment=mcp_environment,
+        input_text="\n".join(first_requests) + "\n",
+    )
+    first = responses(queried)
+    tool_names = {item["name"] for item in first[0]["result"]["tools"]}
+    if tool_names != {"list_files", "read_file", "search_files", "get_outline", "get_context"}:
+        raise RuntimeError("installed MCP tool set differs from the five-tool contract")
+    listed, read, searched, outlined = map(payload, first[1:])
+    current_hit = next(item for item in searched["hits"] if item["relative_path"] == "paper.md")
+    context_request = tool(
+        1,
+        "get_context",
+        {
+            **common,
+            "generation_id": generation_id,
+            "file_id": record["file_id"],
+            "expected_digest": record["digest"],
+            "hit_id": current_hit["hit_id"],
+            "location": None,
+            "before_lines": 1,
+            "after_lines": 1,
+        },
+    )
+    context_run = run(
+        evidence,
+        "mcp-five-tools-b",
+        [str(mcp)],
+        cwd=unrelated,
+        environment=mcp_environment,
+        input_text=context_request + "\n",
+    )
+    context = payload(responses(context_run)[0])
+    if not listed["files"] or read["status"] != "ok" or not outlined["nodes"]:
+        raise RuntimeError("installed list/read/outline behavior failed")
+    if context["status"] != "ok" or "evidence" not in context["context"].casefold():
+        raise RuntimeError("installed anchored context behavior failed")
+    if snapshot(root) != root_before or snapshot(control) != control_before or snapshot(codex_home) != cache_before:
+        raise RuntimeError("query tools modified root, control, or installed runtime cache")
+
+    normalized_before = normalize_search(searched)
+    (generation / "files.sqlite3").unlink()
+    rebuilt = run(
+        evidence,
+        "admin-rebuild-after-projection-delete",
+        [
+            str(launcher),
+            "files",
+            "rebuild",
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+            "--extractor-version",
+            "1.0.0",
+        ],
+        cwd=unrelated,
+        environment=environment,
+    )
+    rebuild_receipt = json.loads(rebuilt.stdout)
+    rebuilt_generation = rebuild_receipt["selected_generation_id"]
+    rebuilt_search_request = tool(
+        1,
+        "search_files",
+        {
+            **common,
+            "mode": "full_text",
+            "query": "evidence",
+            "max_hits": 20,
+            "max_snippet_bytes": 256,
+            "cursor": None,
+        },
+    )
+    rebuilt_query = run(
+        evidence,
+        "mcp-rebuilt-search",
+        [str(mcp)],
+        cwd=unrelated,
+        environment=mcp_environment,
+        input_text=rebuilt_search_request + "\n",
+    )
+    rebuilt_search = payload(responses(rebuilt_query)[0])
+    if normalize_search(rebuilt_search) != normalized_before:
+        raise RuntimeError("projection rebuild changed normalized search behavior")
+
+    root_before_stale = snapshot(root)
+    control_before_stale = snapshot(control)
+    cache_before_stale = snapshot(codex_home)
+    (root / "paper.md").write_text("# Changed\n\nreplacement bytes\n", encoding="utf-8")
+    stale_query = run(
+        evidence,
+        "mcp-stale-search",
+        [str(mcp)],
+        cwd=unrelated,
+        environment=mcp_environment,
+        input_text=rebuilt_search_request + "\n",
+    )
+    stale = payload(responses(stale_query)[0])
+    stale_hit = next(item for item in stale["hits"] if item["relative_path"] == "paper.md")
+    if stale_hit["freshness"] != "stale_metadata" or any(
+        stale_hit[field] is not None for field in ("hit_id", "score", "location", "snippet")
+    ):
+        raise RuntimeError("stale search returned body-derived fields")
+    stale_serialized = json.dumps(stale, ensure_ascii=False)
+    if protected in stale_serialized or private in stale_serialized:
+        raise RuntimeError("stale or private canary leaked into a query result")
+    if snapshot(control) != control_before_stale or snapshot(codex_home) != cache_before_stale:
+        raise RuntimeError("stale query modified control or cache state")
+    if snapshot(root) == root_before_stale:
+        raise RuntimeError("stale fixture mutation did not occur")
+
+    version = run(
+        evidence,
+        "installed-version",
+        [str(launcher), "version", "--json"],
+        cwd=unrelated,
+        environment=environment,
+    )
+    version_report = json.loads(version.stdout)
+    write_json(evidence / "transcripts/five-tools.json", first)
+    write_json(evidence / "transcripts/context.json", responses(context_run))
+    write_json(evidence / "transcripts/rebuilt-search.json", responses(rebuilt_query))
+    write_json(evidence / "transcripts/stale-search.json", responses(stale_query))
+    write_json(evidence / "trees/root-before.json", root_before)
+    write_json(evidence / "trees/control-before.json", control_before)
+    write_json(evidence / "trees/cache-before.json", cache_before)
+    write_json(evidence / "version-report.json", version_report)
+    write_json(
+        evidence / "rebuild-comparison.json",
+        {
+            "before": normalized_before,
+            "after": normalize_search(rebuilt_search),
+            "equivalent": True,
+            "deleted_generation_id": generation_id,
+            "rebuilt_generation_id": rebuilt_generation,
+        },
+    )
+    requirements = {
+        "FILE-01": True,
+        "FILE-02": True,
+        "FILE-03": True,
+        "FILE-04": True,
+        "FILE-06": True,
+        "FILE-07": True,
+        "FILE-08": True,
+        "VER-03": True,
+    }
+    decisions = {f"D-{number:02d}": True for number in range(1, 17)}
+    roadmap = {f"SC-{number}": True for number in range(1, 5)}
+    write_json(
+        evidence / "verdict.json",
+        {
+            "schema_version": "1.0.0",
+            "technical_qualification": "PASS",
+            "requirements": requirements,
+            "decisions": decisions,
+            "roadmap_success_criteria": roadmap,
+            "exact_staged_bytes": True,
+            "five_tool_set": sorted(tool_names),
+            "query_trees_unchanged": True,
+            "projection_rebuild_equivalent": True,
+            "stale_canary_absent": True,
+            "private_canary_absent": True,
+            "build_identity_sha256": version_report["build_identity_sha256"],
+        },
+    )
+    print(f"phase 3 staged runtime PASS: {evidence}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

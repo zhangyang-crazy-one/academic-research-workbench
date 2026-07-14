@@ -80,11 +80,15 @@ def test_positive_allowlist_excludes_every_private_class_and_canary(tmp_path: Pa
         ".git",
         "credentials",
         "extracted-text",
+        "extractions",
+        "generations",
         "indexes",
         "papers",
+        "receipts",
         "runs",
     }
     assert not any(forbidden_segments & set(Path(path).parts) for path in staged_paths)
+    assert not any(Path(path).suffix in {".db", ".sqlite", ".sqlite3"} for path in staged_paths)
     assert not any(path.is_symlink() for path in stage_root.rglob("*"))
 
     evidence_root = stage_root.parents[1] / "evidence"

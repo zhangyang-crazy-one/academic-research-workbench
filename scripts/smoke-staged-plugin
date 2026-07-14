@@ -32,8 +32,9 @@ AUTH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 PRIVATE_PATH = re.compile(
-    r"(^|/)(?:\.env|\.git|papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
-    r"\.(?:db|sqlite|pem|key)$",
+    r"(^|/)(?:\.env|\.git|\.building[^/]*|barriers?|extractions?|generations?|receipts?|"
+    r"papers?|runs?|indexes?|credentials?|private)(?:/|$)|"
+    r"\.(?:db|sqlite3?|pem|key)$",
     re.IGNORECASE,
 )
 
