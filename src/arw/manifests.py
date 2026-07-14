@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import stat
 from pathlib import Path, PurePosixPath
-from typing import TypeVar
+from typing import Annotated, Literal, TypeVar
 
 from pydantic import ValidationError
 
@@ -19,9 +19,19 @@ from arw.models import (
     PassportAttemptSnapshot,
     PassportDecisionSnapshot,
     PassportPointer,
+    Sha256,
     StrictModel,
 )
 from arw.reducer import RuntimeState
+from arw.orchestration_models import (
+    AttemptDescriptor,
+    ImmutableAssignment,
+    MAX_OUTPUT_BYTES,
+    ProposalValidationError,
+    WorkerProposal,
+    canonical_orchestration_model_bytes,
+    validate_worker_proposal_bytes,
+)
 
 
 class ManifestError(RuntimeError):
@@ -29,6 +39,229 @@ class ManifestError(RuntimeError):
 
 
 ManifestModel = TypeVar("ManifestModel", bound=StrictModel)
+
+MAX_PROPOSAL_BYTES = 1_048_576
+
+
+class RawProposalEvidence(StrictModel):
+    """A retained raw proposal plus its parent-validation result."""
+
+    schema_version: Literal["arw.raw-proposal-evidence.v1"] = "arw.raw-proposal-evidence.v1"
+    attempt_id: str
+    assignment_id: str
+    relative_path: str
+    sha256: Sha256
+    byte_count: int
+    evidence_path: Path
+    raw_bytes: bytes
+    proposal: WorkerProposal
+
+
+def _safe_root(root: Path) -> Path:
+    if root.is_symlink() or not root.is_dir():
+        raise ManifestError("run root must be a real directory")
+    try:
+        resolved = root.resolve(strict=True)
+    except OSError as error:
+        raise ManifestError(f"run root is unavailable: {error}") from error
+    if resolved.is_symlink():
+        raise ManifestError("run root must not resolve through a symlink")
+    return resolved
+
+
+def _safe_directory(root: Path, parts: tuple[str, ...], *, create: bool) -> Path:
+    cursor = _safe_root(root)
+    for part in parts:
+        if not part or part in {".", ".."} or "/" in part or "\\" in part:
+            raise ManifestError("manifest path component is not normalized")
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ManifestError("manifest path must not contain symlinks")
+        if cursor.exists():
+            if not cursor.is_dir():
+                raise ManifestError("manifest path contains a non-directory")
+        elif create:
+            try:
+                cursor.mkdir()
+                _fsync_directory(cursor.parent)
+            except OSError as error:
+                raise ManifestError(f"cannot create manifest directory: {error}") from error
+        else:
+            raise ManifestError("manifest directory is missing")
+    return cursor
+
+
+def _write_once(path: Path, value: bytes) -> Path:
+    if path.is_symlink():
+        raise ManifestError("immutable manifest path must not be a symlink")
+    if path.exists():
+        if not path.is_file() or path.read_bytes() != value:
+            raise ManifestError("immutable manifest replacement or content collision")
+        return path
+    temporary = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(value)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except Exception:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            raise
+        try:
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError:
+            if path.is_symlink() or not path.is_file() or path.read_bytes() != value:
+                raise ManifestError("immutable manifest replacement or content collision")
+        _fsync_directory(path.parent)
+        return path
+    except ManifestError:
+        raise
+    except OSError as error:
+        raise ManifestError(f"cannot publish immutable manifest: {error}") from error
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def install_assignment_manifest(root: Path, assignment: ImmutableAssignment) -> Path:
+    """Publish one canonical assignment exactly once as a direct parent file."""
+
+    value = canonical_orchestration_model_bytes(assignment)
+    directory = _safe_directory(root, ("assignments",), create=True)
+    return _write_once(directory / f"{assignment.assignment_id}.json", value)
+
+
+def load_assignment_manifest(root: Path, assignment_id: str) -> ImmutableAssignment:
+    directory = _safe_directory(root, ("assignments",), create=False)
+    path = directory / f"{assignment_id}.json"
+    if path.is_symlink() or not path.is_file():
+        raise ManifestError("assignment manifest is missing or unsafe")
+    try:
+        assignment = ImmutableAssignment.model_validate(strict_json_loads(path.read_bytes()))
+    except (OSError, UnicodeError, ValueError, ValidationError) as error:
+        raise ManifestError(f"assignment manifest is invalid: {error}") from error
+    canonical = canonical_orchestration_model_bytes(assignment)
+    if path.read_bytes() != canonical:
+        raise ManifestError("assignment manifest is not canonical")
+    return assignment
+
+
+def materialize_attempt_tree(
+    root: Path, assignment: ImmutableAssignment, attempt: AttemptDescriptor
+) -> Path:
+    """Create the immutable assignment snapshot and bounded attempt directories."""
+
+    if attempt.assignment_id != assignment.assignment_id:
+        raise ManifestError("attempt does not belong to assignment")
+    installed = install_assignment_manifest(root, assignment)
+    attempt_root = _safe_directory(root, ("attempts", attempt.attempt_id), create=True)
+    _safe_directory(root, ("attempts", attempt.attempt_id, "scratch"), create=True)
+    _safe_directory(root, ("attempts", attempt.attempt_id, "result"), create=True)
+    _safe_directory(root, ("attempts", attempt.attempt_id, "observations"), create=True)
+    assignment_snapshot = _write_once(
+        attempt_root / "assignment.json", installed.read_bytes()
+    )
+    _write_once(
+        attempt_root / "attempt.json",
+        canonical_orchestration_model_bytes(attempt),
+    )
+    return assignment_snapshot
+
+
+def _read_direct_file(path: Path, *, max_bytes: int) -> bytes:
+    if max_bytes < 1 or max_bytes > MAX_OUTPUT_BYTES:
+        raise ManifestError("proposal byte limit is outside the frozen bounds")
+    if path.is_symlink() or not path.exists():
+        raise ManifestError("proposal path must be a direct regular file")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as error:
+        raise ManifestError(f"proposal path cannot be opened safely: {error}") from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise ManifestError("proposal path must be a direct regular file")
+        if before.st_size > max_bytes:
+            raise ManifestError("proposal exceeds the frozen byte limit")
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor)
+        if len(raw) > max_bytes or after.st_size != before.st_size:
+            raise ManifestError("proposal changed or exceeds the frozen byte limit")
+        try:
+            live = os.stat(path, follow_symlinks=False)
+        except OSError as error:
+            raise ManifestError(f"proposal path was replaced: {error}") from error
+        if live.st_ino != before.st_ino or live.st_dev != before.st_dev:
+            raise ManifestError("proposal path was replaced during intake")
+        return raw
+    finally:
+        os.close(descriptor)
+
+
+def admit_raw_proposal(
+    root: Path,
+    *,
+    assignment: ImmutableAssignment,
+    attempt: AttemptDescriptor,
+    max_bytes: int = MAX_PROPOSAL_BYTES,
+    expected_sha256: str | None = None,
+) -> RawProposalEvidence:
+    """Read and retain one direct proposal file before parent admission."""
+
+    if attempt.assignment_id != assignment.assignment_id:
+        raise ManifestError("proposal attempt does not match assignment")
+    _safe_directory(root, ("attempts", attempt.attempt_id), create=False)
+    result_root = _safe_directory(root, ("attempts", attempt.attempt_id, "result"), create=False)
+    proposal_path = result_root / "proposal.json"
+    raw = _read_direct_file(proposal_path, max_bytes=max_bytes)
+    digest = sha256_hex(raw)
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ManifestError("proposal bytes were replaced or digest does not match")
+    evidence_root = _safe_directory(
+        root, ("evidence", "raw-proposals", attempt.attempt_id), create=True
+    )
+    evidence_path = _write_once(evidence_root / f"{digest}.json", raw)
+    try:
+        proposal, validated_digest = validate_worker_proposal_bytes(
+            raw, assignment=assignment, attempt=attempt
+        )
+    except (ProposalValidationError, OSError, UnicodeError, ValueError) as error:
+        raise ManifestError(f"proposal evidence is not admissible: {error}") from error
+    if validated_digest != digest:
+        raise ManifestError("proposal digest changed during validation")
+    return RawProposalEvidence(
+        attempt_id=attempt.attempt_id,
+        assignment_id=assignment.assignment_id,
+        relative_path=f"attempts/{attempt.attempt_id}/result/proposal.json",
+        sha256=digest,
+        byte_count=len(raw),
+        evidence_path=evidence_path,
+        raw_bytes=raw,
+        proposal=proposal,
+    )
+
+
+# Explicit aliases make the parent-facing vocabulary discoverable while
+# retaining the install/load naming used by the earlier artifact helpers.
+write_assignment_manifest = install_assignment_manifest
+write_attempt_tree = materialize_attempt_tree
+validate_raw_proposal = admit_raw_proposal
 
 
 def _fsync_directory(path: Path) -> None:
