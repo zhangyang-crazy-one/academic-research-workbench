@@ -146,12 +146,12 @@ Plans:
 **Wave 1 (Wave 0 contract gate)**
 
 - [x] 04-01-PLAN.md - Strict contracts and generated schemas
-- [ ] 04-10-PLAN.md - Digest-bound sealed evaluation corpus and leakage checks
-- [ ] 04-11-PLAN.md - Deterministic owner-mapped behavior-test matrix
+- [x] 04-10-PLAN.md - Digest-bound sealed evaluation corpus and leakage checks
+- [x] 04-11-PLAN.md - Deterministic owner-mapped behavior-test matrix
 
 **Wave 2**
 
-- [ ] 04-02-PLAN.md - Parent-only canonical events, reducer state, workflow authority, and immutable manifests
+- [x] 04-02-PLAN.md - Parent-only canonical events, reducer state, workflow authority, and immutable manifests
 - [ ] 04-03-PLAN.md - Deterministic scheduler/execution seam, formal-panel policy, and hook contracts
 
 **Wave 3**
@@ -228,7 +228,7 @@ Plans:
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
 | 3. Secure Files-First Data Plane | 5/5 | Complete   | 2026-07-14 |
-| 4. Subagent Orchestration, Hooks, and Human Gates | 1/11 | In Progress|  |
+| 4. Subagent Orchestration, Hooks, and Human Gates | 4/11 | In Progress|  |
 | 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
 | 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |
 | 7. Installed E2E Recovery and Release Qualification | 0/TBD | Not started | - |

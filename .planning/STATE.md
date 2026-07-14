@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-07-14T20:22:08.200Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-07-14T15:02:10.412Z"
 last_activity: 2026-07-14
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 28
-  completed_plans: 18
+  completed_plans: 21
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 ## Current Position
 
 Phase: 4 (Subagent Orchestration, Hooks, and Human Gates) — EXECUTING
-Plan: 2 of 11
+Plan: 3 of 11
 Status: Ready to execute
 Last activity: 2026-07-14
 
-Progress: [██████░░░░] 64%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████░░░░] 64%
 | Phase 03 P04 | 18 min | 3 tasks | 13 files |
 | Phase 03 P05 | 35 min | 3 tasks | 19 files |
 | Phase 04 P01 | 17m 51s | 1 tasks | 12 files |
+| Phase 04 P02 | 31m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,10 @@ Recent decisions affecting current work:
 - [Phase 03]: Technical qualification and SUP-04 release qualification remain separate verdicts. — Phase 3 is technically complete while release authorization remains explicitly BLOCKED.
 - [Phase 04]: Phase 4 wire-format arrays normalize to tuples so strict orchestration records stay immutable in memory.
 - [Phase 04]: Formal Phase 4 provenance requires retained host identity, assignment mapping, and isolation evidence; degraded inline work never claims independence.
+- [Phase 04]: Phase 4 canonical events are parent-only; source provenance never grants writer authority.
+- [Phase 04]: Phase 4 proposal acceptance uses frozen assignment keys and excludes superseded assignments from the active cursor.
+- [Phase 04]: Raw proposals are retained as bounded content-addressed evidence before parent admission.
+- [Phase 04]: Legacy Phase 2 active-attempt snapshots remain narrow while Phase 4 lifecycle detail stays in replay state.
 
 ### Pending Todos
 
@@ -136,6 +141,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T20:20:58.624Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-07-14T15:02:10.397Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
