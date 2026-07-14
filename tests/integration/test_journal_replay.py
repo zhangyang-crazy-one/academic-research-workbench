@@ -184,3 +184,60 @@ def test_post_fsync_sigkill_replays_once_without_changing_journal() -> None:
         "UV_OFFLINE": "1",
     }
     assert set(command_record) == {"argv", "cwd", "environment"}
+
+
+def test_phase4_canonical_event_bytes_replay_to_identical_parent_state() -> None:
+    from arw.canonical import canonical_json_bytes, strict_json_loads
+    from arw.models import CanonicalEvent
+    from arw.reducer import reduce_events
+
+    event = CanonicalEvent.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "event_type": "execution.mode_selected",
+            "event_id": "evt-00000000-0000-4000-8000-000000000601",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000601",
+            "run_id": "run-00000000-0000-4000-8000-000000000001",
+            "sequence": 2,
+            "occurred_at": "2026-07-15T00:00:01Z",
+            "expected_revision": 1,
+            "resulting_revision": 2,
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "prev_event_sha256": "0" * 64,
+            "payload": {
+                "execution_mode": "native_formal",
+                "execution_provenance": "assignment_injected_subagent",
+                "role_catalog_sha256": "a" * 64,
+                "policy_sha256": "b" * 64,
+                "dag_sha256": "c" * 64,
+            },
+            "event_sha256": "2" * 64,
+        }
+    )
+    raw = canonical_json_bytes(event.model_dump(mode="json"))
+    replayed = CanonicalEvent.model_validate(strict_json_loads(raw))
+    # A synthetic initialized prefix makes the reducer's phase-independent
+    # state shape explicit while the event bytes remain the only input.
+    initialized = CanonicalEvent.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "event_type": "run.initialized",
+            "event_id": "evt-00000000-0000-4000-8000-000000000600",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000600",
+            "run_id": event.run_id,
+            "sequence": 1,
+            "occurred_at": "2026-07-15T00:00:00Z",
+            "expected_revision": 0,
+            "resulting_revision": 1,
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "prev_event_sha256": "0" * 64,
+            "payload": {"manifest_sha256": "d" * 64},
+            "event_sha256": "1" * 64,
+        }
+    )
+    first = reduce_events("core-research.v1", [initialized, event])
+    second = reduce_events("core-research.v1", [initialized, replayed])
+    assert first == second
+    assert first.execution_mode == "native_formal"
