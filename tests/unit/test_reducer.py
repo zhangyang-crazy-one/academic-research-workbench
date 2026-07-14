@@ -5,6 +5,127 @@ from datetime import UTC, datetime
 import pytest
 
 
+RUN_ID = "run-00000000-0000-4000-8000-000000000001"
+HASH_A = "a" * 64
+HASH_B = "b" * 64
+HASH_C = "c" * 64
+HASH_D = "d" * 64
+HASH_E = "e" * 64
+
+
+def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
+    from arw.orchestration_models import ImmutableAssignment
+
+    return ImmutableAssignment.model_validate(
+        {
+            "schema_version": "arw.assignment.v1",
+            "protocol_version": "1.0.0",
+            "assignment_id": assignment_id,
+            "supersedes_assignment_id": None,
+            "run_id": RUN_ID,
+            "stage_id": "proposal-stage",
+            "task_id": f"task-{task_ordinal:03d}",
+            "role_id": "research_architect",
+            "worker_identity_id": f"worker.architect-{task_ordinal:03d}",
+            "execution_mode": "native_formal",
+            "execution_provenance": "assignment_injected_subagent",
+            "independence_eligible": False,
+            "base_revision": 1,
+            "input_sha256": [HASH_A],
+            "capability_ids": ["files.read"],
+            "allowed_read_root_ids": ["research-root"],
+            "scratch_path_template": "attempts/{attempt_id}/scratch",
+            "result_path_template": "attempts/{attempt_id}/result",
+            "output_policy": {
+                "schema_id": "arw.worker-proposal.v1",
+                "schema_sha256": HASH_B,
+                "max_bytes": 4096,
+                "max_artifacts": 1,
+            },
+            "policy_sha256": HASH_C,
+            "context_manifest_sha256": HASH_D,
+            "blind_review": {
+                "required": False,
+                "subject_sha256": None,
+                "rubric_sha256": None,
+                "forbidden_peer_role_ids": [],
+            },
+            "deadline_at": "2026-07-15T12:00:00Z",
+            "completion_contract": {
+                "requires_completed_proposal": True,
+                "required_artifact_kinds": ["proposal"],
+                "requires_human_gate": False,
+            },
+            "acceptance_key": {
+                "topological_layer": 0,
+                "task_ordinal": task_ordinal,
+                "assignment_id": assignment_id,
+            },
+        }
+    )
+
+
+def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, status: str = "active"):
+    from arw.orchestration_models import AttemptDescriptor
+
+    return AttemptDescriptor.model_validate(
+        {
+            "schema_version": "arw.attempt-descriptor.v1",
+            "assignment_id": assignment.assignment_id,
+            "attempt_id": attempt_id,
+            "attempt_number": attempt_number,
+            "proposal_nonce": f"nonce-{attempt_id}",
+            "status": status,
+            "retry_reason": None,
+            "retry_eligible": False,
+            "continuation_count": 0,
+            "host_agent_id": "host-agent-001",
+            "cancellation_deadline_at": None,
+        }
+    )
+
+
+def _phase4_proposal(assignment, attempt):
+    from arw.orchestration_models import ProposedArtifact, WorkerProposal
+
+    return WorkerProposal.model_validate(
+        {
+            "schema_version": "arw.worker-proposal.v1",
+            "protocol_version": "1.0.0",
+            "run_id": RUN_ID,
+            "assignment_id": assignment.assignment_id,
+            "attempt_id": attempt.attempt_id,
+            "role_id": assignment.role_id,
+            "worker_identity_id": assignment.worker_identity_id,
+            "host_agent_id": attempt.host_agent_id,
+            "execution_mode": assignment.execution_mode,
+            "execution_provenance": assignment.execution_provenance,
+            "independence_eligible": assignment.independence_eligible,
+            "assignment_sha256": assignment.canonical_sha256(),
+            "context_manifest_sha256": assignment.context_manifest_sha256,
+            "policy_sha256": assignment.policy_sha256,
+            "base_revision": assignment.base_revision,
+            "input_sha256": assignment.input_sha256,
+            "proposal_nonce": attempt.proposal_nonce,
+            "status": "completed",
+            "result_provenance_mode": "executed",
+            "requested_next_action": "accept",
+            "artifacts": [
+                {
+                    "relative_path": "proposal.json",
+                    "sha256": HASH_E,
+                    "media_type": "application/json",
+                    "schema_id": "arw.worker-proposal.v1",
+                    "byte_count": 128,
+                }
+            ],
+            "evidence_sha256": [HASH_E],
+            "summary": "A deterministic Phase 4 proposal.",
+            "unresolved": [],
+        }
+    )
+
+
 def _event(event_type: str, payload: object, *, revision: int, role: str = "parent_control_plane"):
     from arw.models import CanonicalEvent
 
@@ -309,3 +430,191 @@ def test_reducer_rejects_non_exact_or_branching_passport(
 
     with pytest.raises(ReducerError, match=message):
         reduce_events("core-research.v1", events)
+
+
+def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files() -> None:
+    from arw.canonical import sha256_hex
+    from arw.models import (
+        AssignmentPreparedPayload,
+        CanonicalEvent,
+        ExecutionModeSelectedPayload,
+        ProposalAcceptedPayload,
+    )
+    from arw.reducer import reduce_events
+    from arw.status import build_status_report
+
+    assignment = _phase4_assignment(assignment_id="assignment.phase4-001", task_ordinal=0)
+    attempt = _phase4_attempt(assignment, attempt_id="attempt.phase4-001")
+    proposal = _phase4_proposal(assignment, attempt)
+    proposal_sha256 = sha256_hex(
+        __import__("arw.orchestration_models", fromlist=["canonical_orchestration_model_bytes"])
+        .canonical_orchestration_model_bytes(proposal)
+    )
+    events = [
+        _event("run.initialized", {"manifest_sha256": HASH_A}, revision=1),
+        _event(
+            "execution.mode_selected",
+            ExecutionModeSelectedPayload(
+                execution_mode="native_formal",
+                execution_provenance="assignment_injected_subagent",
+                role_catalog_sha256=HASH_B,
+                policy_sha256=HASH_C,
+                dag_sha256=HASH_D,
+            ),
+            revision=2,
+        ),
+        _event(
+            "assignment.prepared",
+            AssignmentPreparedPayload(
+                assignment=assignment,
+                assignment_sha256=assignment.canonical_sha256(),
+            ),
+            revision=3,
+        ),
+        _event(
+            "attempt.prepared",
+            {
+                "assignment_id": assignment.assignment_id,
+                "assignment_sha256": assignment.canonical_sha256(),
+                "attempt": attempt,
+            },
+            revision=4,
+        ),
+        _event(
+            "proposal.accepted",
+            ProposalAcceptedPayload(
+                assignment_id=assignment.assignment_id,
+                assignment_sha256=assignment.canonical_sha256(),
+                attempt_id=attempt.attempt_id,
+                proposal=proposal,
+                proposal_sha256=proposal_sha256,
+                acceptance_key=assignment.acceptance_key.value,
+            ),
+            revision=5,
+        ),
+    ]
+    first = reduce_events("core-research.v1", events)
+    second = reduce_events("core-research.v1", tuple(events))
+
+    assert first == second
+    assert first.execution_mode == "native_formal"
+    assert first.role_catalog_sha256 == HASH_B
+    assert [item.assignment_id for item in first.assignments] == [assignment.assignment_id]
+    assert first.accepted_proposal_sha256 == (proposal_sha256,)
+    assert first.deterministic_commit_cursor == assignment.acceptance_key.value
+    report = build_status_report(first)
+    assert report.status == "PASS"
+    assert report.accepted_proposal_sha256 == (proposal_sha256,)
+
+
+def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_results() -> None:
+    from arw.canonical import sha256_hex
+    from arw.models import (
+        AssignmentPreparedPayload,
+        AttemptLifecyclePayload,
+        GateEvaluatedPayload,
+        ProposalAcceptedPayload,
+    )
+    from arw.orchestration_models import GateDecision, canonical_orchestration_model_bytes
+    from arw.reducer import reduce_events
+
+    first_assignment = _phase4_assignment(assignment_id="assignment.phase4-002", task_ordinal=0)
+    second_assignment = _phase4_assignment(assignment_id="assignment.phase4-003", task_ordinal=1)
+    first_attempt = _phase4_attempt(first_assignment, attempt_id="attempt.phase4-002")
+    second_attempt = _phase4_attempt(second_assignment, attempt_id="attempt.phase4-003")
+    first_proposal = _phase4_proposal(first_assignment, first_attempt)
+    second_proposal = _phase4_proposal(second_assignment, second_attempt)
+
+    def proposal_event(assignment, attempt, proposal, revision: int):
+        return _event(
+            "proposal.accepted",
+            ProposalAcceptedPayload(
+                assignment_id=assignment.assignment_id,
+                assignment_sha256=assignment.canonical_sha256(),
+                attempt_id=attempt.attempt_id,
+                proposal=proposal,
+                proposal_sha256=sha256_hex(canonical_orchestration_model_bytes(proposal)),
+                acceptance_key=assignment.acceptance_key.value,
+            ),
+            revision=revision,
+        )
+
+    events = [
+        _event("run.initialized", {"manifest_sha256": HASH_A}, revision=1),
+        _event(
+            "assignment.prepared",
+            AssignmentPreparedPayload(
+                assignment=first_assignment,
+                assignment_sha256=first_assignment.canonical_sha256(),
+            ),
+            revision=2,
+        ),
+        _event(
+            "assignment.prepared",
+            AssignmentPreparedPayload(
+                assignment=second_assignment,
+                assignment_sha256=second_assignment.canonical_sha256(),
+            ),
+            revision=3,
+        ),
+        _event(
+            "attempt.prepared",
+            {
+                "assignment_id": first_assignment.assignment_id,
+                "assignment_sha256": first_assignment.canonical_sha256(),
+                "attempt": first_attempt,
+            },
+            revision=4,
+        ),
+        _event(
+            "attempt.prepared",
+            {
+                "assignment_id": second_assignment.assignment_id,
+                "assignment_sha256": second_assignment.canonical_sha256(),
+                "attempt": second_attempt,
+            },
+            revision=5,
+        ),
+        proposal_event(second_assignment, second_attempt, second_proposal, 6),
+        proposal_event(first_assignment, first_attempt, first_proposal, 7),
+        _event(
+            "attempt.lifecycle",
+            AttemptLifecyclePayload(
+                assignment_id=first_assignment.assignment_id,
+                assignment_sha256=first_assignment.canonical_sha256(),
+                attempt_id=first_attempt.attempt_id,
+                attempt_number=1,
+                status="rejected_stale",
+                proposal_sha256=sha256_hex(canonical_orchestration_model_bytes(first_proposal)),
+                reason_code="late-result",
+            ),
+            revision=8,
+        ),
+        _event(
+            "gate.evaluated",
+            GateEvaluatedPayload(
+                decision=(gate := GateDecision.model_validate(
+                    {
+                        "schema_version": "arw.gate-decision.v1",
+                        "gate_id": "gate.phase4-001",
+                        "subject_sha256": HASH_A,
+                        "evidence_sha256": [HASH_B],
+                        "verdict": "BLOCKED",
+                        "rationale": "A required report is missing.",
+                        "fresh_until": None,
+                        "required": True,
+                        "human_decision": None,
+                    }
+                )),
+                decision_sha256=sha256_hex(canonical_orchestration_model_bytes(gate)),
+            ),
+            revision=9,
+        ),
+    ]
+    state = reduce_events("core-research.v1", events)
+    assert state.accepted_proposal_sha256 == (
+        sha256_hex(canonical_orchestration_model_bytes(first_proposal)),
+        sha256_hex(canonical_orchestration_model_bytes(second_proposal)),
+    )
+    assert "gate.phase4-001" in [item.code for item in state.blockers]
+    assert state.status == "BLOCKED"
