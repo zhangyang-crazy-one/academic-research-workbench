@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-oracle.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "oracle_version": {
+      "const": "research-graph-normalization-v1",
+      "title": "Oracle Version",
+      "type": "string"
+    },
+    "left_label": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Left Label",
+      "type": "string"
+    },
+    "right_label": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Right Label",
+      "type": "string"
+    },
+    "left_normalized_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Left Normalized Sha256",
+      "type": "string"
+    },
+    "right_normalized_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Right Normalized Sha256",
+      "type": "string"
+    },
+    "equal": {
+      "title": "Equal",
+      "type": "boolean"
+    },
+    "diff_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Diff Sha256"
+    },
+    "normalized_bytes_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Normalized Bytes Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "oracle_version",
+    "left_label",
+    "right_label",
+    "left_normalized_sha256",
+    "right_normalized_sha256",
+    "equal",
+    "diff_sha256",
+    "normalized_bytes_sha256"
+  ],
+  "title": "GraphOracleComparison",
+  "type": "object"
+}

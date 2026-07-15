@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-node.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "entity_type": {
+      "enum": [
+        "Run",
+        "Stage",
+        "Artifact",
+        "Claim",
+        "Source",
+        "Dataset",
+        "Experiment",
+        "Figure",
+        "Review",
+        "Gate"
+      ],
+      "title": "Entity Type",
+      "type": "string"
+    },
+    "entity_id": {
+      "pattern": "^[a-z][a-z0-9._:-]{2,191}$",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "source_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "supersession_state": {
+      "enum": [
+        "active",
+        "superseded",
+        "corrected",
+        "deleted",
+        "unavailable"
+      ],
+      "title": "Supersession State",
+      "type": "string"
+    },
+    "ledger_watermark": {
+      "minimum": 0,
+      "title": "Ledger Watermark",
+      "type": "integer"
+    },
+    "attributes": {
+      "additionalProperties": true,
+      "title": "Attributes",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "entity_type",
+    "entity_id",
+    "source_digest",
+    "payload_digest",
+    "supersession_state",
+    "ledger_watermark",
+    "attributes"
+  ],
+  "title": "GraphNode",
+  "type": "object"
+}

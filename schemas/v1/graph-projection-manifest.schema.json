@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-projection-manifest.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "generation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Generation Id",
+      "type": "string"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "ledger_watermark": {
+      "minimum": 0,
+      "title": "Ledger Watermark",
+      "type": "integer"
+    },
+    "ledger_head_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ledger Head Sha256",
+      "type": "string"
+    },
+    "node_count": {
+      "minimum": 0,
+      "title": "Node Count",
+      "type": "integer"
+    },
+    "edge_count": {
+      "minimum": 0,
+      "title": "Edge Count",
+      "type": "integer"
+    },
+    "projection_algorithm": {
+      "const": "research-graph-projection-v1",
+      "title": "Projection Algorithm",
+      "type": "string"
+    },
+    "database_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Database Sha256"
+    },
+    "status": {
+      "enum": [
+        "building",
+        "closed",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "generation_id",
+    "input_sha256",
+    "ledger_watermark",
+    "ledger_head_sha256",
+    "node_count",
+    "edge_count",
+    "projection_algorithm",
+    "database_sha256",
+    "status"
+  ],
+  "title": "GraphProjectionManifest",
+  "type": "object"
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-query-result.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "operation": {
+      "enum": [
+        "trace_claim",
+        "trace_source",
+        "trace_experiment",
+        "trace_review",
+        "trace_gate_evidence",
+        "graph_health"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "projection_stale",
+        "projection_corrupt",
+        "projection_unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "projection_generation_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Projection Generation Id"
+    },
+    "projection_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Projection Manifest Sha256"
+    },
+    "ledger_watermark": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ledger Watermark"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Cursor"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason Code"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "status",
+    "projection_generation_id",
+    "projection_manifest_sha256",
+    "ledger_watermark"
+  ],
+  "title": "GraphQueryResult",
+  "type": "object"
+}

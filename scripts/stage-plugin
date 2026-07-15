@@ -8,11 +8,13 @@ CLEAN=0
 CACHEBUSTER=""
 VALIDATE_ONLY=0
 EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/stage"
+INTEGRATION_LOCK=""
 
 usage() {
   cat <<'EOF'
 Usage: stage-plugin [--clean] [--stage-root PATH] [--cachebuster TOKEN]
-                    [--evidence-root PATH] [--validate-only]
+                    [--evidence-root PATH] [--integration-lock PATH]
+                    [--validate-only]
 
 Build the first-party wheel and assemble the exact positive-allowlist plugin stage.
 EOF
@@ -44,6 +46,11 @@ while [[ $# -gt 0 ]]; do
       EVIDENCE_ROOT="$2"
       shift 2
       ;;
+    --integration-lock)
+      [[ $# -ge 2 ]] || fail "--integration-lock requires a path" 64
+      INTEGRATION_LOCK="$2"
+      shift 2
+      ;;
     --validate-only)
       VALIDATE_ONLY=1
       shift
@@ -68,20 +75,98 @@ EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
 [[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe evidence root" 64
 
+if [[ -n "$INTEGRATION_LOCK" ]]; then
+  [[ -f "$INTEGRATION_LOCK" && ! -L "$INTEGRATION_LOCK" ]] \
+    || fail "integration lock must be a direct regular file" 66
+  INTEGRATION_LOCK="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).absolute())' "$INTEGRATION_LOCK")"
+  case "$INTEGRATION_LOCK" in
+    "$STAGE_ROOT"|"$STAGE_ROOT"/*)
+      fail "integration lock input must be outside the stage root" 64
+      ;;
+  esac
+fi
+
 if [[ "$VALIDATE_ONLY" -eq 1 ]]; then
   [[ "$CLEAN" -eq 0 ]] || fail "--clean and --validate-only are mutually exclusive" 64
   [[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] || fail "stage root is unsafe or missing" 66
-  "$PYTHON" - "$STAGE_ROOT" <<'PY'
+  "$PYTHON" - "$PROJECT_ROOT" "$STAGE_ROOT" "$INTEGRATION_LOCK" <<'PY'
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 
 
-stage_root = Path(sys.argv[1]).resolve()
+project_root = Path(sys.argv[1]).resolve()
+stage_root = Path(sys.argv[2]).resolve()
+provided_lock = Path(sys.argv[3]) if sys.argv[3] else None
+sys.path.insert(0, str(project_root / "src"))
+
+from arw.integration_lock import (  # noqa: E402
+    IntegrationLock,
+    _validate_arw_runtime,
+    _validate_file_base,
+    _validate_license,
+    integration_lock_bytes,
+    observe_hook_definition,
+    observe_stage_identity,
+)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_lock(path: Path) -> tuple[bytes, IntegrationLock]:
+    try:
+        flags = os.O_RDONLY | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            mode = os.fstat(descriptor).st_mode
+            if not stat.S_ISREG(mode):
+                raise OSError("input is not a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                raw = handle.read(2 * 1024 * 1024 + 1)
+        finally:
+            os.close(descriptor)
+        if len(raw) > 2 * 1024 * 1024:
+            raise OSError("input exceeds the 2 MiB stage bound")
+        lock = IntegrationLock.model_validate_json(raw, strict=True)
+    except (OSError, UnicodeError, ValueError) as error:
+        raise SystemExit(f"integration lock is invalid: {error}") from error
+    if raw != integration_lock_bytes(lock):
+        raise SystemExit("integration lock bytes are not canonical JSON")
+    return raw, lock
+
+
+def verify_local_lock(lock: IntegrationLock) -> None:
+    observed_arw = _validate_arw_runtime(stage_root)
+    if lock.arw_runtime != observed_arw:
+        raise SystemExit("integration lock does not bind the staged ARW runtime")
+    source_manifest = json.loads(
+        (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
+    )
+    if lock.file_base != _validate_file_base(stage_root, source_manifest):
+        raise SystemExit("integration lock does not bind the staged file-base runtime")
+    if lock.license != _validate_license(stage_root):
+        raise SystemExit("integration lock does not bind the staged legal blocker state")
+    hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
+    if lock.hook.config != hook_config or lock.hook.handler != hook_handler:
+        raise SystemExit("integration lock does not bind the staged hook files")
+    if lock.hook.definition_sha256 != hook_definition:
+        raise SystemExit("integration lock does not bind the staged hook definition")
+    if lock.hook.arw_runtime_sha256 != observed_arw.wheel.sha256:
+        raise SystemExit("integration lock does not bind the staged hook runtime")
+    if lock.hook.stage_sha256 != observe_stage_identity(stage_root):
+        raise SystemExit("integration lock does not bind the staged content-tree identity")
+
+
 inventory_path = stage_root / "supply-chain/stage-inventory.json"
 try:
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
@@ -96,8 +181,9 @@ for path in stage_root.rglob("*"):
     if path.is_file():
         actual.add(relative)
 
-expected = set(inventory.get("files", []))
-if actual != expected:
+inventory_files = inventory.get("files", [])
+expected = set(inventory_files)
+if inventory_files != sorted(actual) or actual != expected:
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
     raise SystemExit(f"stage allowlist mismatch; missing={missing}; extra={extra}")
@@ -112,13 +198,75 @@ for relative in actual:
     if private_path.search(relative):
         raise SystemExit(f"private path class rejected from stage: {relative}")
 
-covered = {item["path"]: item for item in inventory.get("covered_files", [])}
+covered_rows = inventory.get("covered_files", [])
+covered_paths = [item["path"] for item in covered_rows]
+if len(covered_paths) != len(set(covered_paths)):
+    raise SystemExit("stage coverage inventory contains duplicate paths")
+covered = {item["path"]: item for item in covered_rows}
 if set(covered) != actual - {"supply-chain/stage-inventory.json"}:
     raise SystemExit("stage coverage inventory does not cover the exact allowlist")
 for relative, record in covered.items():
-    actual_digest = hashlib.sha256((stage_root / relative).read_bytes()).hexdigest()
+    actual_digest = digest(stage_root / relative)
     if actual_digest != record["sha256"]:
         raise SystemExit(f"stage coverage digest mismatch: {relative}")
+
+lock_relative = "supply-chain/integration-lock.json"
+sbom_relative = "SBOM.cdx.json"
+identity_relative = "share/arw/build-identity.json"
+has_lock = lock_relative in actual
+if provided_lock is not None:
+    provided_bytes, _ = canonical_lock(provided_lock)
+    if not has_lock or (stage_root / lock_relative).read_bytes() != provided_bytes:
+        raise SystemExit("provided integration lock differs from the staged lock")
+if has_lock:
+    _, staged_lock = canonical_lock(stage_root / lock_relative)
+    verify_local_lock(staged_lock)
+
+try:
+    sbom = json.loads((stage_root / sbom_relative).read_text(encoding="utf-8"))
+    identity = json.loads((stage_root / identity_relative).read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"stage binding metadata is invalid: {error}") from error
+component_rows = sbom.get("components", [])
+if not isinstance(component_rows, list) or not all(
+    isinstance(item, dict) and isinstance(item.get("bom-ref"), str)
+    for item in component_rows
+):
+    raise SystemExit("staged SBOM components are malformed")
+component_refs = [item["bom-ref"] for item in component_rows]
+if len(component_refs) != len(set(component_refs)):
+    raise SystemExit("staged SBOM contains duplicate component references")
+components = {item["bom-ref"]: item for item in component_rows}
+lock_ref = f"artifact:{lock_relative}"
+if has_lock:
+    lock_sha256 = digest(stage_root / lock_relative)
+    if components.get(lock_ref) != {
+        "bom-ref": lock_ref,
+        "hashes": [{"alg": "SHA-256", "content": lock_sha256}],
+        "name": lock_relative,
+        "type": "file",
+        "version": "1",
+    }:
+        raise SystemExit("staged SBOM does not bind the exact integration lock")
+elif lock_ref in components:
+    raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+
+payload_rows = identity.get("staged_payloads", [])
+if not isinstance(payload_rows, list) or not all(
+    isinstance(item, dict) and isinstance(item.get("path"), str)
+    for item in payload_rows
+):
+    raise SystemExit("build identity staged payloads are malformed")
+payload_paths = [item["path"] for item in payload_rows]
+if len(payload_paths) != len(set(payload_paths)):
+    raise SystemExit("build identity contains duplicate staged payload paths")
+payloads = {item["path"]: item for item in payload_rows}
+payload_expected = actual - {identity_relative, "supply-chain/stage-inventory.json"}
+if set(payloads) != payload_expected:
+    raise SystemExit("build identity does not bind the exact staged payload set")
+for relative, record in payloads.items():
+    if record.get("sha256") != digest(stage_root / relative):
+        raise SystemExit(f"build identity payload digest mismatch: {relative}")
 PY
   printf 'stage valid: %s\n' "$STAGE_ROOT"
   exit 0
@@ -167,6 +315,7 @@ copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
 copy_file "hooks/hooks.json"
+copy_file "hooks/arw_hook.py" 0755
 copy_file "docs/runtime/durable-provenance.md"
 copy_file "docs/runtime/files-first-data-plane.md"
 copy_file "scripts/verify-phase-2" 0755
@@ -177,6 +326,18 @@ copy_file "schemas/v1/mcp-read-request.schema.json"
 copy_file "schemas/v1/mcp-read-result.schema.json"
 copy_file "schemas/v1/build-identity.schema.json"
 copy_file "schemas/v1/version-report.schema.json"
+copy_file "schemas/v1/assignment.schema.json"
+copy_file "schemas/v1/gate-decision.schema.json"
+copy_file "schemas/v1/hook-observation.schema.json"
+copy_file "schemas/v1/host-qualification.schema.json"
+copy_file "schemas/v1/integration-lock.schema.json"
+copy_file "schemas/v1/phase4-evaluation-verdict.schema.json"
+copy_file "schemas/v1/review-finding-matrix.schema.json"
+copy_file "schemas/v1/panel-manifest.schema.json"
+copy_file "schemas/v1/role-catalog.schema.json"
+copy_file "schemas/v1/worker-proposal.schema.json"
+copy_file "schemas/v1/host-identity-receipt.schema.json"
+copy_file "schemas/v1/human-authority.schema.json"
 copy_as "schemas/v1/build-identity.schema.json" "share/arw/schemas/build-identity.schema.json"
 copy_as "schemas/v1/event.schema.json" "share/arw/schemas/event.schema.json"
 copy_as "schemas/v1/mcp-read-request.schema.json" "share/arw/schemas/mcp-read-request.schema.json"
@@ -199,8 +360,102 @@ copy_file "SBOM.cdx.json"
 copy_file "supply-chain/use-distribution.json"
 copy_file "supply-chain/license-verdict.json"
 copy_file "vendor/source-manifest.json"
+copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
+copy_file "vendor/patches/file-base/0002-phase1-confined-read.patch"
+copy_file "vendor/patches/file-base/0003-phase3-generation-builder.patch"
 copy_file "vendor/python/wheelhouse.lock.json"
 copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
+
+if [[ -n "$INTEGRATION_LOCK" ]]; then
+  "$PYTHON" - "$PROJECT_ROOT" "$INTEGRATION_LOCK" "$TEMP_STAGE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+source = Path(sys.argv[2])
+stage_root = Path(sys.argv[3]).resolve()
+sys.path.insert(0, str(project_root / "src"))
+
+from arw.canonical import strict_json_loads  # noqa: E402
+from arw.integration_lock import (  # noqa: E402
+    IntegrationLock,
+    integration_lock_bytes,
+)
+
+
+try:
+    flags = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(source, flags)
+    try:
+        mode = os.fstat(descriptor).st_mode
+        if not stat.S_ISREG(mode):
+            raise OSError("input is not a regular file")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            raw = handle.read(2 * 1024 * 1024 + 1)
+    finally:
+        os.close(descriptor)
+except OSError as error:
+    raise SystemExit(f"integration lock is unreadable or unsafe: {error}") from error
+if len(raw) > 2 * 1024 * 1024:
+    raise SystemExit("integration lock exceeds the 2 MiB stage bound")
+try:
+    lock = IntegrationLock.model_validate_json(raw, strict=True)
+except (UnicodeError, ValueError) as error:
+    raise SystemExit(f"integration lock is invalid: {error}") from error
+if raw != integration_lock_bytes(lock):
+    raise SystemExit("integration lock bytes are not canonical JSON")
+
+lock_relative = "supply-chain/integration-lock.json"
+lock_sha256 = hashlib.sha256(raw).hexdigest()
+lock_destination = stage_root / lock_relative
+lock_destination.parent.mkdir(parents=True, exist_ok=True)
+lock_destination.write_bytes(raw)
+lock_destination.chmod(0o644)
+
+sbom_path = stage_root / "SBOM.cdx.json"
+try:
+    sbom = strict_json_loads(sbom_path.read_bytes())
+except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+    raise SystemExit(f"staged SBOM is not strict JSON: {error}") from error
+if not isinstance(sbom, dict) or not isinstance(sbom.get("components"), list):
+    raise SystemExit("staged SBOM components are malformed")
+lock_ref = f"artifact:{lock_relative}"
+component_refs = []
+for component in sbom["components"]:
+    if not isinstance(component, dict) or not isinstance(
+        component.get("bom-ref"), str
+    ):
+        raise SystemExit("staged SBOM components are malformed")
+    component_refs.append(component["bom-ref"])
+if len(component_refs) != len(set(component_refs)):
+    raise SystemExit("source SBOM contains duplicate component references")
+if lock_ref in component_refs:
+    raise SystemExit("source SBOM already contains the qualification lock component")
+sbom["components"].append(
+    {
+        "bom-ref": lock_ref,
+        "hashes": [{"alg": "SHA-256", "content": lock_sha256}],
+        "name": lock_relative,
+        "type": "file",
+        "version": "1",
+    }
+)
+sbom["components"].sort(key=lambda component: str(component.get("bom-ref", "")))
+sbom_path.write_text(
+    json.dumps(sbom, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+fi
 
 if [[ -n "$CACHEBUSTER" ]]; then
   "$PYTHON" - "$TEMP_STAGE/.codex-plugin/plugin.json" "$CACHEBUSTER" <<'PY'
@@ -408,6 +663,63 @@ validate_phase1_instance("build-identity.schema.json", identity)
 )
 PY
 
+if [[ -n "$INTEGRATION_LOCK" ]]; then
+  "$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+project_root = Path(sys.argv[1]).resolve()
+stage_root = Path(sys.argv[2]).resolve()
+sys.path.insert(0, str(project_root / "src"))
+
+from arw.integration_lock import (  # noqa: E402
+    IntegrationLock,
+    _validate_arw_runtime,
+    _validate_file_base,
+    _validate_license,
+    integration_lock_bytes,
+    observe_hook_definition,
+    observe_stage_identity,
+)
+
+
+lock_path = stage_root / "supply-chain/integration-lock.json"
+raw = lock_path.read_bytes()
+try:
+    lock = IntegrationLock.model_validate_json(raw, strict=True)
+except (UnicodeError, ValueError) as error:
+    raise SystemExit(f"staged integration lock is invalid: {error}") from error
+if raw != integration_lock_bytes(lock):
+    raise SystemExit("staged integration lock bytes are not canonical JSON")
+
+observed_arw = _validate_arw_runtime(stage_root)
+if lock.arw_runtime != observed_arw:
+    raise SystemExit("integration lock does not bind the staged ARW runtime")
+source_manifest = json.loads(
+    (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
+)
+observed_file_base = _validate_file_base(stage_root, source_manifest)
+if lock.file_base != observed_file_base:
+    raise SystemExit("integration lock does not bind the staged file-base runtime")
+observed_license = _validate_license(stage_root)
+if lock.license != observed_license:
+    raise SystemExit("integration lock does not bind the staged legal blocker state")
+hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
+if lock.hook.config != hook_config or lock.hook.handler != hook_handler:
+    raise SystemExit("integration lock does not bind the staged hook files")
+if lock.hook.definition_sha256 != hook_definition:
+    raise SystemExit("integration lock does not bind the staged hook definition")
+if lock.hook.arw_runtime_sha256 != observed_arw.wheel.sha256:
+    raise SystemExit("integration lock does not bind the staged hook runtime")
+if lock.hook.stage_sha256 != observe_stage_identity(stage_root):
+    raise SystemExit("integration lock does not bind the staged content-tree identity")
+PY
+fi
+
 "$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$FIRST_PARTY_NAME" <<'PY'
 from __future__ import annotations
 
@@ -456,6 +768,7 @@ static_files = {
     "docs/runtime/durable-provenance.md",
     "docs/runtime/files-first-data-plane.md",
     "hooks/hooks.json",
+    "hooks/arw_hook.py",
     "libexec/file-base-mcp",
     "pyproject.toml",
     "schemas/v1/mcp-read-request.schema.json",
@@ -464,6 +777,18 @@ static_files = {
     "schemas/v1/version-report.schema.json",
     "schemas/v1/route-result.schema.json",
     "schemas/v1/source-manifest.schema.json",
+    "schemas/v1/assignment.schema.json",
+    "schemas/v1/gate-decision.schema.json",
+    "schemas/v1/hook-observation.schema.json",
+    "schemas/v1/host-qualification.schema.json",
+    "schemas/v1/integration-lock.schema.json",
+    "schemas/v1/phase4-evaluation-verdict.schema.json",
+    "schemas/v1/review-finding-matrix.schema.json",
+    "schemas/v1/panel-manifest.schema.json",
+    "schemas/v1/role-catalog.schema.json",
+    "schemas/v1/worker-proposal.schema.json",
+    "schemas/v1/host-identity-receipt.schema.json",
+    "schemas/v1/human-authority.schema.json",
     "scripts/file-base-mcp",
     "scripts/verify-phase-2",
     "share/arw/file-contracts.h",
@@ -495,10 +820,14 @@ static_files = {
     "share/arw/schemas/gate-decision.schema.json",
     "share/arw/schemas/hook-observation.schema.json",
     "share/arw/schemas/host-qualification.schema.json",
+    "share/arw/schemas/integration-lock.schema.json",
     "share/arw/schemas/phase4-evaluation-verdict.schema.json",
     "share/arw/schemas/review-finding-matrix.schema.json",
+    "share/arw/schemas/panel-manifest.schema.json",
     "share/arw/schemas/role-catalog.schema.json",
     "share/arw/schemas/worker-proposal.schema.json",
+    "share/arw/schemas/host-identity-receipt.schema.json",
+    "share/arw/schemas/human-authority.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
@@ -508,6 +837,9 @@ static_files = {
     "vendor/python/wheelhouse/requirements-installed.txt",
     "vendor/python/wheelhouse/requirements-runtime.txt",
     "vendor/source-manifest.json",
+    "vendor/patches/file-base/0001-file-base-server-name.patch",
+    "vendor/patches/file-base/0002-phase1-confined-read.patch",
+    "vendor/patches/file-base/0003-phase3-generation-builder.patch",
 }
 phase3_schema_names = {
     "extraction-registration.schema.json",
@@ -529,6 +861,19 @@ phase3_schema_names = {
 static_files.update(
     f"share/arw/schemas/{name}" for name in phase3_schema_names
 )
+phase5_schema_names = {
+    "graph-edge.schema.json",
+    "graph-node.schema.json",
+    "graph-oracle.schema.json",
+    "graph-projection-manifest.schema.json",
+    "graph-projection-receipt.schema.json",
+    "graph-query-request.schema.json",
+    "graph-query-result.schema.json",
+}
+static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
+lock_relative = "supply-chain/integration-lock.json"
+if (stage_root / lock_relative).is_file():
+    static_files.add(lock_relative)
 expected = static_files | {
     f"vendor/python/wheelhouse/{wheel['file']}" for wheel in source_lock["wheels"]
 } | {f"vendor/python/wheelhouse/{first_party_name}"}
@@ -558,6 +903,54 @@ for relative in actual:
 first_party = stage_root / "vendor/python/wheelhouse" / stage_lock["first_party_wheel"]["file"]
 if digest(first_party) != stage_lock["first_party_wheel"]["sha256"]:
     raise SystemExit("first-party wheel hash mismatch")
+
+try:
+    sbom = json.loads((stage_root / "SBOM.cdx.json").read_text(encoding="utf-8"))
+    identity = json.loads(
+        (stage_root / "share/arw/build-identity.json").read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"stage binding metadata is invalid: {error}") from error
+component_rows = sbom.get("components", [])
+if not isinstance(component_rows, list) or not all(
+    isinstance(item, dict) and isinstance(item.get("bom-ref"), str)
+    for item in component_rows
+):
+    raise SystemExit("staged SBOM components are malformed")
+component_refs = [item["bom-ref"] for item in component_rows]
+if len(component_refs) != len(set(component_refs)):
+    raise SystemExit("staged SBOM contains duplicate component references")
+components = {item["bom-ref"]: item for item in component_rows}
+lock_ref = f"artifact:{lock_relative}"
+has_lock = lock_relative in actual
+if has_lock:
+    lock_sha256 = digest(stage_root / lock_relative)
+    if components.get(lock_ref) != {
+        "bom-ref": lock_ref,
+        "hashes": [{"alg": "SHA-256", "content": lock_sha256}],
+        "name": lock_relative,
+        "type": "file",
+        "version": "1",
+    }:
+        raise SystemExit("staged SBOM does not bind the exact integration lock")
+elif lock_ref in components:
+    raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+payload_rows = identity.get("staged_payloads", [])
+if not isinstance(payload_rows, list) or not all(
+    isinstance(item, dict) and isinstance(item.get("path"), str)
+    for item in payload_rows
+):
+    raise SystemExit("build identity staged payloads are malformed")
+payload_paths = [item["path"] for item in payload_rows]
+if len(payload_paths) != len(set(payload_paths)):
+    raise SystemExit("build identity contains duplicate staged payload paths")
+payloads = {item["path"]: item for item in payload_rows}
+payload_expected = actual - {"share/arw/build-identity.json"}
+if set(payloads) != payload_expected:
+    raise SystemExit("build identity does not bind the exact pre-inventory payload set")
+for relative, record in payloads.items():
+    if record.get("sha256") != digest(stage_root / relative):
+        raise SystemExit(f"build identity payload digest mismatch: {relative}")
 
 
 def inventory_source(relative: str) -> str:
