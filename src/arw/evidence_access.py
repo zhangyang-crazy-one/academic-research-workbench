@@ -57,7 +57,7 @@ LicenseStatus = Literal["clear", "ambiguous", "restricted", "unavailable", "unkn
 DecisionKind = Literal["initial", "verification", "correction", "waiver", "replacement"]
 _ID = Annotated[str, StringConstraints(min_length=3, max_length=128, pattern=r"^[a-z][a-z0-9._:-]*$")]
 _SECRET_PATTERN = re.compile(
-    r"(?i)(api[_-]?key|access[_-]?token|password|passwd|secret|authorization|bearer|private[_-]?key|begin [^-\n]*private key|sk-[a-z0-9]|ghp_[a-z0-9])"
+    r"(?i)(api[_-]?key|access[_-]?token|(?:^|[?&])token(?:=|[&_])|password|passwd|secret|authorization|bearer|private[_-]?key|begin [^-\n]*private key|sk-[a-z0-9]|ghp_[a-z0-9]|://[^/\s:@]+:[^/@\s]+@)"
 )
 _PRIVATE_PATH_PATTERN = re.compile(r"(?:^|[/\\])(?:home|users|private|secrets?)(?:[/\\]|$)", re.I)
 
@@ -177,6 +177,7 @@ class EvidenceAccessDecision(StrictModel):
         if value is not None and (
             "\x00" in value
             or "\\" in value
+            or value.lower().startswith("file://")
             or _SECRET_PATTERN.search(value)
             or _PRIVATE_PATH_PATTERN.search(value)
         ):
