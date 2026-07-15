@@ -70,6 +70,7 @@ requirements-completed: [SCI-04, SCI-05]
 5. **06-02-T02 forged-object correction** — `49a5c24` (revalidate model-copied qualification receipts before policy)
 6. **06-02-T02 authority correction** — `cacc7b7` (enforce parent role and runtime-root binding for typed envelopes)
 7. **06-02-T02 local-source correction** — `ea8fc16` (defer local byte digest comparison to allowed-root intake)
+8. **06-02-T02 event-schema correction** — `d287b97` (keep the parent acceptance payload schema-tight and validate the emitted event)
 
 ## Verification
 
@@ -78,6 +79,7 @@ requirements-completed: [SCI-04, SCI-05]
 - Existing schema/runtime/canonical/manifests/recovery/cross-language subset — **71 passed**.
 - `python -m compileall` for modified runtime/provenance modules — **passed**.
 - `git diff --check` on all Phase 6 plan files and direct dependencies — **passed**.
+- Emitted `experiment.provenance.accepted` event validated with the checked-in `event.schema.json` — **passed**.
 
 ## Deviations from Plan
 
