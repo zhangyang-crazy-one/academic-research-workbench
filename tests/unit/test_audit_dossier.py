@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from arw.audit_dossier import (
     AuditDossierError,
     AuditDossierManifest,
     assemble_audit_dossier,
+    load_audit_dossier,
     publish_audit_dossier,
     render_audit_dossier_json,
     render_audit_dossier_markdown,
@@ -131,3 +134,64 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
         seal_audit_dossier(forged)
     with pytest.raises(AuditDossierError, match="technical PASS"):
         publish_audit_dossier(tmp_path, forged)
+
+
+def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
+    from arw.audit_dossier import _seal_audit_dossier
+    from arw.journal import initialize_run
+    from arw.models import InitRunRequest
+    from arw.workflows import CORE_WORKFLOW
+
+    root = tmp_path / "run"
+    source = root / "input/source.txt"
+    source.parent.mkdir(parents=True)
+    source.write_text("qualification receipt\n", encoding="utf-8")
+    request = InitRunRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN_ID,
+            "occurred_at": "2026-07-16T00:00:00Z",
+            "immutable_input": {
+                "path": "input/source.txt",
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            },
+            "workflow_family": "academic-pipeline",
+            "workflow_mode": "inline-role-prompts",
+            "workflow_definition_id": CORE_WORKFLOW.definition_id,
+            "workflow_definition_sha256": CORE_WORKFLOW.sha256,
+            "journal_layout": "segmented-v1",
+            "capabilities": ["canonical-journal", "forced-stop-replay"],
+            "event_id": "evt-00000000-0000-4000-8000-000000000031",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000031",
+            "actor_id": "parent.runtime",
+        }
+    )
+    replayed = initialize_run(root, request)
+    manifest_sha256 = hashlib.sha256((root / "run-manifest.json").read_bytes()).hexdigest()
+    body = {
+        "schema_version": "arw.audit-dossier.v1",
+        "dossier_id": "audit-dossier.current",
+        "run_id": RUN_ID,
+        "generated_at": "2026-07-16T00:00:00Z",
+        "ledger_head_sha256": replayed.last_event_sha256,
+        "run_manifest_sha256": manifest_sha256,
+        "technical_qualification": {
+            "verdict": "PASS",
+            "reason_codes": [],
+            "evidence_sha256": [replayed.last_event_sha256],
+            "rationale": "parent-derived qualification",
+        },
+        "release_qualification": {
+            "verdict": "BLOCKED",
+            "reason_codes": ["SUP-04"],
+            "evidence_sha256": [],
+            "rationale": "legal release evidence remains unresolved",
+        },
+        "claim_capabilities": [],
+        "blockers": [],
+    }
+    dossier = _seal_audit_dossier(body, allow_derived_pass=True)
+    published = publish_audit_dossier(root, dossier)
+    loaded = load_audit_dossier(root, dossier.dossier_sha256)
+    assert published.read_bytes() == loaded.canonical_bytes()
+    assert loaded.technical_qualification.verdict == "PASS"

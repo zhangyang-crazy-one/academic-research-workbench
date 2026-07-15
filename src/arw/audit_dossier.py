@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
+from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, field_validator, model_validator
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.manifests import ManifestError, _safe_directory, _write_once
@@ -68,30 +68,6 @@ def _safe_text(value: str, *, label: str) -> str:
 
 def _digest(value: object) -> str:
     return sha256_hex(canonical_json_bytes(value))
-
-
-def _qualification_proof(value: Any) -> str:
-    """Digest the complete dossier subject, excluding only its own verdict/hash.
-
-    A technical PASS is therefore replayable from canonical bytes: callers
-    cannot substitute an arbitrary evidence digest while preserving a valid
-    manifest.  The assembler derives this proof after canonical replay.
-    """
-
-    if isinstance(value, AuditDossierManifest):
-        subject = value.model_dump(
-            mode="json",
-            exclude={"dossier_sha256", "technical_qualification"},
-        )
-    elif isinstance(value, Mapping):
-        subject = {
-            key: item
-            for key, item in value.items()
-            if key not in {"dossier_sha256", "technical_qualification"}
-        }
-    else:
-        raise TypeError("qualification proof requires a dossier mapping")
-    return _digest(subject)
 
 
 class DossierRunHistory(StrictModel):
@@ -180,6 +156,40 @@ class DossierQualification(StrictModel):
         return self
 
 
+class DossierQualificationReceipt(StrictModel):
+    """Parent-bound receipt required to cold-load a technical PASS dossier."""
+
+    schema_version: Literal["arw.dossier-qualification-receipt.v1"]
+    dossier_sha256: Sha256
+    run_id: RunId
+    ledger_head_sha256: Sha256
+    run_manifest_sha256: Sha256
+    receipt_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_or_verify_digest(cls, value: Any) -> Any:
+        if isinstance(value, cls) or not isinstance(value, Mapping):
+            return value
+        body = dict(value)
+        supplied = body.pop("receipt_sha256", None)
+        expected = _digest(body)
+        if supplied is not None and supplied != expected:
+            raise ValueError("qualification receipt digest does not match canonical bytes")
+        body["receipt_sha256"] = expected
+        return body
+
+    @model_validator(mode="after")
+    def canonical_digest(self) -> Self:
+        unsigned = self.model_dump(mode="json", exclude={"receipt_sha256"})
+        if self.receipt_sha256 != _digest(unsigned):
+            raise ValueError("qualification receipt digest does not match canonical bytes")
+        return self
+
+    def canonical_bytes(self) -> bytes:
+        return canonical_json_bytes(self.model_dump(mode="json"))
+
+
 class DossierBlocker(StrictModel):
     code: _CODE
     severity: Literal["low", "moderate", "high", "critical"] = "high"
@@ -201,6 +211,11 @@ class DossierBlocker(StrictModel):
 
 class AuditDossierManifest(StrictModel):
     """The sole canonical source for both dossier renderings."""
+
+    # Technical PASS is only created by replay-first assembly or a loader that
+    # verifies its parent-bound qualification receipt.  It is intentionally
+    # not serialized into the dossier bytes.
+    _derived_qualification: bool = PrivateAttr(default=False)
 
     schema_version: Literal[AUDIT_DOSSIER_SCHEMA_VERSION]
     dossier_id: StableRuntimeId
@@ -352,10 +367,7 @@ class AuditDossierManifest(StrictModel):
         if self.dossier_sha256 != _digest(unsigned):
             raise ValueError("dossier_sha256 does not match canonical dossier bytes")
         if self.technical_qualification.verdict == "PASS":
-            if self.technical_qualification.evidence_sha256 != (
-                _qualification_proof(self),
-            ):
-                raise ValueError("technical PASS proof is not bound to canonical dossier bytes")
+            raise ValueError("technical PASS must be derived from validated canonical replay")
         if self.release_qualification.verdict == "PASS":
             legal = {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"}
             if any(blocker.code in legal for blocker in self.blockers):
@@ -377,6 +389,10 @@ def _seal_audit_dossier(
     allow_derived_pass: bool = False,
 ) -> AuditDossierManifest:
     if isinstance(value, AuditDossierManifest):
+        if value.technical_qualification.verdict == "PASS" and not value._derived_qualification:
+            raise AuditDossierError(
+                "technical PASS must be derived from validated canonical replay"
+            )
         return value
     try:
         body = dict(value)
@@ -403,14 +419,12 @@ def _seal_audit_dossier(
         if is_pass:
             qualified = DossierQualification.model_validate(technical, strict=True)
             object.__setattr__(dossier, "technical_qualification", qualified)
-            proof = _qualification_proof(dossier)
-            qualified = qualified.model_copy(update={"evidence_sha256": (proof,)})
-            object.__setattr__(dossier, "technical_qualification", qualified)
             object.__setattr__(
                 dossier,
                 "dossier_sha256",
                 _digest(dossier.model_dump(mode="json", exclude={"dossier_sha256"})),
             )
+            object.__setattr__(dossier, "_derived_qualification", True)
         return dossier
     except Exception as error:
         raise AuditDossierError(f"invalid audit dossier: {error}") from error
@@ -433,10 +447,54 @@ def _dossier_directory(root: Path, *, create: bool) -> Path:
         raise AuditDossierError(str(error)) from error
 
 
+def _qualification_receipt_directory(root: Path, *, create: bool) -> Path:
+    try:
+        return _safe_directory(
+            root,
+            ("evidence", "audit-dossiers", "qualification", "sha256"),
+            create=create,
+        )
+    except ManifestError as error:
+        raise AuditDossierError(str(error)) from error
+
+
+def _qualification_receipt(dossier: AuditDossierManifest) -> DossierQualificationReceipt:
+    if dossier.technical_qualification.verdict != "PASS" or not dossier._derived_qualification:
+        raise AuditDossierError(
+            "technical PASS requires a parent-derived qualification receipt"
+        )
+    return DossierQualificationReceipt(
+        schema_version="arw.dossier-qualification-receipt.v1",
+        dossier_sha256=dossier.dossier_sha256,
+        run_id=dossier.run_id,
+        ledger_head_sha256=dossier.ledger_head_sha256,
+        run_manifest_sha256=dossier.run_manifest_sha256,
+        receipt_sha256=_digest(
+            {
+                "schema_version": "arw.dossier-qualification-receipt.v1",
+                "dossier_sha256": dossier.dossier_sha256,
+                "run_id": dossier.run_id,
+                "ledger_head_sha256": dossier.ledger_head_sha256,
+                "run_manifest_sha256": dossier.run_manifest_sha256,
+            }
+        ),
+    )
+
+
 def publish_audit_dossier(root: Path, value: Mapping[str, Any] | AuditDossierManifest) -> Path:
     dossier = seal_audit_dossier(value)
     try:
-        return _write_once(_dossier_directory(root, create=True) / f"{dossier.dossier_sha256}.json", dossier.canonical_bytes())
+        if dossier.technical_qualification.verdict == "PASS":
+            receipt = _qualification_receipt(dossier)
+            _write_once(
+                _qualification_receipt_directory(root, create=True)
+                / f"{receipt.dossier_sha256}.json",
+                receipt.canonical_bytes(),
+            )
+        return _write_once(
+            _dossier_directory(root, create=True) / f"{dossier.dossier_sha256}.json",
+            dossier.canonical_bytes(),
+        )
     except ManifestError as error:
         raise AuditDossierError(str(error)) from error
 
@@ -448,8 +506,47 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
     path = directory / f"{dossier_sha256}.json"
     if path.is_symlink() or not path.is_file():
         raise AuditDossierError("audit dossier is missing or unsafe")
+    raw = strict_json_loads(path.read_bytes())
     try:
-        dossier = seal_audit_dossier(strict_json_loads(path.read_bytes()))
+        is_pass = (
+            isinstance(raw, Mapping)
+            and isinstance(raw.get("technical_qualification"), Mapping)
+            and raw["technical_qualification"].get("verdict") == "PASS"
+        )
+        if is_pass:
+            receipt_path = (
+                _qualification_receipt_directory(root, create=False)
+                / f"{dossier_sha256}.json"
+            )
+            if receipt_path.is_symlink() or not receipt_path.is_file():
+                raise AuditDossierError(
+                    "technical PASS dossier lacks its parent qualification receipt"
+                )
+            receipt = DossierQualificationReceipt.model_validate(
+                strict_json_loads(receipt_path.read_bytes()), strict=True
+            )
+            if receipt.dossier_sha256 != dossier_sha256:
+                raise AuditDossierError("qualification receipt is bound to another dossier")
+            from arw.journal import replay_run
+
+            replayed = replay_run(root)
+            if (
+                replayed.run_id != receipt.run_id
+                or replayed.last_event_sha256 != receipt.ledger_head_sha256
+                or run_manifest_sha256_from_root(root) != receipt.run_manifest_sha256
+            ):
+                raise AuditDossierError(
+                    "qualification receipt is not bound to the canonical replay"
+                )
+            dossier = _seal_audit_dossier(raw, allow_derived_pass=True)
+            if (
+                dossier.run_id != replayed.run_id
+                or dossier.ledger_head_sha256 != replayed.last_event_sha256
+                or dossier.run_manifest_sha256 != receipt.run_manifest_sha256
+            ):
+                raise AuditDossierError("technical PASS dossier replay identity drifted")
+        else:
+            dossier = seal_audit_dossier(raw)
     except (OSError, UnicodeError, ValueError) as error:
         raise AuditDossierError(f"audit dossier is invalid: {error}") from error
     if dossier.dossier_sha256 != dossier_sha256 or path.read_bytes() != dossier.canonical_bytes():
