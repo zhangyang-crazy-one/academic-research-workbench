@@ -67,6 +67,7 @@ requirements-completed: [SCI-04, SCI-05]
 2. **06-02-T01 implementation** — `c1615e8` (provenance model, registry schema, parent acceptance event)
 3. **06-02-T02 tests** — `68fe07b` (parent ingest and controlled-execution truth table)
 4. **06-02-T02 implementation correction** — `46e5161` (component digest binding and qualification receipt canonicalization)
+5. **06-02-T02 forged-object correction** — `49a5c24` (revalidate model-copied qualification receipts before policy)
 
 ## Verification
 
