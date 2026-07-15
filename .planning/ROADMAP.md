@@ -288,8 +288,8 @@ Plans:
 | 3. Secure Files-First Data Plane | 5/5 | Complete   | 2026-07-14 |
 | 4. Subagent Orchestration, Hooks, and Human Gates | 10/11 | Technical pass; P04-09 pending |  |
 | 04.1. Phase 4 Qualification Closure and Installed Host Verification | 3/3 | Technical pass; release blocked | 2026-07-15 |
-| 5. Rebuildable Research Graph and Evidence Queries | 0/4 | Planned | - |
-| 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |
+| 5. Rebuildable Research Graph and Evidence Queries | 4/4 | Technical complete; release blocked by P04-09/SUP-04 | 2026-07-15 |
+| 6. Scientific Integrity and Audit Dossier | 0/5 | Planned; ready to execute | - |
 | 7. Installed E2E Recovery and Release Qualification | 0/TBD | Not started | - |
 
 ---
