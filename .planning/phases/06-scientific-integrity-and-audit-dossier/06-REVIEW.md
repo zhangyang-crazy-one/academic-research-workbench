@@ -192,16 +192,17 @@ fails closed rather than laundering a stale lock into technical PASS. Release
 remains independently BLOCKED by SUP-04/P04-09 and unresolved CC BY-NC
 intended-use/permission evidence.
 
-A broad non-host invocation under the deliberately relative
-`TMPDIR=build/tmp/phase-06` produced **455 passed, 3 failed**. The failures
+A broad non-host invocation initially used the deliberately relative
+`TMPDIR=build/tmp/phase-06` and produced **455 passed, 3 failed**. The failures
 were `test_post_materialization_gate_preserves_native_toolchain_and_receipt`
 (native gate `mktemp` could not resolve that relative directory),
 `test_component_identity_and_release_classifier_do_not_collapse_licenses`
 (the pre-existing dirty `supply-chain/use-distribution.json` carries stale
 technical-provenance hashes), and
 `test_phase1_clean_evidence_gate_retains_every_required_domain` (the broad
-run's shared staged/evidence state yielded an identity mismatch). The latter
-two files are outside the Phase 6 commit scope; rerunning the two affected test
-modules with an absolute repo-local TMPDIR passes **3/3** in 71.44s. These are
+run's shared staged/evidence state yielded an identity mismatch). With the
+controlled absolute repo-local TMPDIR required by the Phase 6 verifier, the
+complete non-host regression rerun is **458 passed in 373.35s**; the two
+affected modules also pass **3/3** in 71.44s. These are
 environment/dirty-worktree qualification notes, not residual Phase 6 source
 findings.
