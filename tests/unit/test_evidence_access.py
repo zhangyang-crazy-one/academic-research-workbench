@@ -22,7 +22,7 @@ def _decision(**updates: object) -> dict[str, object]:
         "decision_id": "decision.access-001",
         "evidence_id": "source.paper-001",
         "subject_sha256": "a" * 64,
-        "evidence_sha256": "b" * 64,
+        "evidence_sha256": ["b" * 64],
         "source_manifest_sha256": ["c" * 64],
         "access_state": "locally_supplied",
         "license_status": "clear",

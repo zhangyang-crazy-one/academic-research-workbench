@@ -14,7 +14,7 @@ def _decision(state: str, *, license_status: str = "clear", public: bool = False
         "decision_id": f"decision.access-{state}",
         "evidence_id": "source.paper-001",
         "subject_sha256": "a" * 64,
-        "evidence_sha256": "b" * 64,
+            "evidence_sha256": ["b" * 64],
         "source_manifest_sha256": ["c" * 64],
         "access_state": state,
         "license_status": license_status,
@@ -46,7 +46,11 @@ def test_every_access_state_is_visible_and_inaccessible_states_block_claims() ->
         )
         result = evaluate_claim_capability("citation_verified", decision)
         assert result.status == "BLOCKED"
-        assert result.human_review_required or "missing_fresh_integrity_receipt" in result.reason_codes
+        assert (
+            result.human_review_required
+            or "missing_fresh_integrity_receipt" in result.reason_codes
+            or "missing_citation_lifecycle_receipt" in result.reason_codes
+        )
         assert result.scope == decision.scope
         assert decision.access_state in EvidenceAccessState
 

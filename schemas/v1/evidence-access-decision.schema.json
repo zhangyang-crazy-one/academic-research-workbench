@@ -41,9 +41,14 @@
       "type": "string"
     },
     "evidence_sha256": {
-      "pattern": "^[0-9a-f]{64}$",
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "minItems": 1,
       "title": "Evidence Sha256",
-      "type": "string"
+      "type": "array"
     },
     "source_manifest_sha256": {
       "items": {

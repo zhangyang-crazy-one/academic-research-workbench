@@ -17,7 +17,7 @@ def _public_decision() -> EvidenceAccessDecision:
             "decision_id": "decision.access-public",
             "evidence_id": "source.paper-001",
             "subject_sha256": "a" * 64,
-            "evidence_sha256": "b" * 64,
+            "evidence_sha256": ["b" * 64],
             "source_manifest_sha256": ["c" * 64],
             "access_state": "publicly_verified",
             "license_status": "clear",
@@ -40,7 +40,7 @@ def _integrity(decision: EvidenceAccessDecision, *, valid_until: str = "2026-07-
             "subject_kind": "source",
             "subject_id": decision.evidence_id,
             "subject_sha256": decision.subject_sha256,
-            "input_sha256": [decision.evidence_sha256],
+            "input_sha256": list(decision.evidence_sha256),
             "method_id": "integrity.sha256",
             "method_version": "1.0.0",
             "tool_identity": {
@@ -65,6 +65,7 @@ def test_citation_requires_fresh_digest_bound_lifecycle_receipt() -> None:
         "citation_verified",
         decision,
         integrity_receipt=_integrity(decision),
+        citation_lifecycle_receipt={"receipt_sha256": "1" * 64},
         now="2026-07-15T10:30:00Z",
     )
     assert result.status == "PASS"
@@ -73,6 +74,7 @@ def test_citation_requires_fresh_digest_bound_lifecycle_receipt() -> None:
         "citation_verified",
         decision,
         integrity_receipt=_integrity(decision, valid_until="2026-07-15T10:01:00Z"),
+        citation_lifecycle_receipt={"receipt_sha256": "1" * 64},
         now="2026-07-15T10:30:00Z",
     )
     assert stale.status == "BLOCKED"
@@ -109,4 +111,3 @@ def test_audit_requires_all_receipts_and_no_technical_blockers() -> None:
         build_receipt={"receipt_sha256": "6" * 64},
     )
     assert valid.status == "PASS"
-
