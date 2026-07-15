@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 6 technical verification
-last_updated: "2026-07-16T03:00:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 6 complete (5/5) — ready to discuss Phase 7
+last_updated: 2026-07-15T18:25:07.940Z
 last_activity: 2026-07-16 -- Phase 6 technical verifier PASS; release remains BLOCKED
 progress:
   total_phases: 8
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Phase 6 — Scientific Integrity and Audit Dossier (technical closeout; release blocked)
+**Current focus:** Phase 7 — installed e2e recovery and release qualification
 
 ## Current Position
 
-Phase: 6 (Scientific Integrity and Audit Dossier) — EXECUTING
-Plan: 5 of 5
-Status: Technical qualification complete; release remains blocked by SUP-04/P04-09/permission evidence
-Last activity: 2026-07-16 -- Phase 6 technical verifier PASS; final serial evidence retained
+Phase: 7
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-15
 
 Progress: [██████████] 100% (Phase 6 technical scope)
 
@@ -36,7 +36,7 @@ Progress: [██████████] 100% (Phase 6 technical scope)
 
 **Velocity:**
 
-- Total plans completed: 17
+- Total plans completed: 22
 - Average duration: 36 min
 - Total execution time: 10.3 hours
 
@@ -47,6 +47,7 @@ Progress: [██████████] 100% (Phase 6 technical scope)
 | 01 | 7 | 347 min | 50 min |
 | 02 | 5 | 107 min | 21 min |
 | 03 | 5 | 168 min | 34 min |
+| 6 | 5 | - | - |
 
 **Recent Trend:**
 
