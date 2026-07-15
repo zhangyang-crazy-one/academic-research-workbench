@@ -61,7 +61,7 @@ def _ordered_unique(value: Sequence[str], *, label: str, max_length: int = MAX_D
 def _safe_text(value: str, *, label: str) -> str:
     if "\x00" in value or "\r" in value or len(value.encode("utf-8")) > 16_384:
         raise ValueError(f"{label} contains unsafe or oversized text")
-    if _SECRET.search(value) or _PRIVATE.search(value):
+    if _SECRET.search(value) or _PRIVATE.search(value) or "private full text" in value.lower():
         raise ValueError(f"{label} contains a secret or private path")
     return value
 
@@ -241,6 +241,21 @@ class AuditDossierManifest(StrictModel):
             body["claim_capabilities"] = [
                 ({**value, "capability": key} if isinstance(value, Mapping) else {"capability": key, "verdict": value})
                 for key, value in body["claim_capabilities"].items()
+            ]
+        if isinstance(body.get("claim_capabilities"), (list, tuple)):
+            body["claim_capabilities"] = [
+                {**item, "reason_codes": item.get("reason_codes", []), "replacement_evidence": item.get("replacement_evidence", []), "scope": item.get("scope", "")}
+                if isinstance(item, Mapping) else item
+                for item in body["claim_capabilities"]
+            ]
+        for key in ("technical_qualification", "release_qualification"):
+            if isinstance(body.get(key), Mapping):
+                body[key] = {"reason_codes": [], "evidence_sha256": [], "rationale": "qualification evidence is retained by exact digest", **body[key]}
+        if isinstance(body.get("blockers"), (list, tuple)):
+            body["blockers"] = [
+                {"severity": "high", "evidence_sha256": [], "replacement_evidence": [], "legal": False, **item}
+                if isinstance(item, Mapping) else item
+                for item in body["blockers"]
             ]
         for key, default in defaults.items():
             body.setdefault(key, default)
@@ -431,6 +446,8 @@ def render_audit_dossier_markdown(value: Mapping[str, Any] | AuditDossierManifes
 
 def _coerce_sha_refs(values: Sequence[Any] | None) -> tuple[str, ...]:
     result: list[str] = []
+    if isinstance(values, str) or isinstance(values, Mapping) or hasattr(values, "model_dump"):
+        values = (values,)
     for value in values or ():
         if isinstance(value, str):
             result.append(value)
@@ -450,6 +467,45 @@ def _coerce_sha_refs(values: Sequence[Any] | None) -> tuple[str, ...]:
             else:
                 raise AuditDossierError("evidence reference lacks an exact digest")
     return tuple(sorted(set(result)))
+
+
+def _validated_refs(kind: str, values: Sequence[Any] | None) -> tuple[str, ...]:
+    """Validate typed evidence before reducing it to exact digest references."""
+
+    if not values:
+        return ()
+    if isinstance(values, Mapping) or hasattr(values, "model_dump"):
+        values = (values,)
+    checked: list[Any] = []
+    for value in values:
+        raw = value.model_dump(mode="json") if hasattr(value, "model_dump") else value
+        if isinstance(raw, Mapping) and raw.get("schema_version"):
+            try:
+                if kind == "integrity":
+                    from arw.integrity import seal_integrity_receipt
+
+                    checked.append(seal_integrity_receipt(raw))
+                    continue
+                if kind == "provenance":
+                    from arw.experiment_provenance import seal_experiment_provenance
+
+                    checked.append(seal_experiment_provenance(raw))
+                    continue
+                if kind == "access":
+                    from arw.evidence_access import seal_evidence_access_decision
+
+                    checked.append(seal_evidence_access_decision(raw))
+                    continue
+                if kind == "graph":
+                    from arw.graph_models import GraphProjectionReceipt
+
+                    receipt = GraphProjectionReceipt.model_validate(raw, strict=True)
+                    checked.append(sha256_hex(canonical_json_bytes(receipt.model_dump(mode="json"))))
+                    continue
+            except Exception as error:
+                raise AuditDossierError(f"{kind} evidence is malformed or tampered") from error
+        checked.append(value)
+    return _coerce_sha_refs(checked)
 
 
 def assemble_audit_dossier(
@@ -508,9 +564,32 @@ def assemble_audit_dossier(
     rev = review or {}
     graph = graph or {}
     local_blockers = list(blockers or ())
+    if getattr(replay_state, "recovery_health", "healthy") != "healthy":
+        local_blockers.append({
+            "code": "canonical_replay_not_healthy",
+            "severity": "critical",
+            "message": "canonical journal replay is not healthy; dossier is evidence-only until recovery",
+            "replacement_evidence": ("canonical-replay-recovery",),
+        })
+    sequences = tuple(item.sequence for item in history)
+    if sequences and sequences != tuple(range(1, len(sequences) + 1)):
+        local_blockers.append({
+            "code": "canonical_replay_noncontiguous",
+            "severity": "critical",
+            "message": "canonical replay history is not contiguous",
+            "replacement_evidence": ("canonical-replay-recovery",),
+        })
+    graph_items = graph.get("receipts") or graph.get("receipt")
+    if graph_items is not None and not isinstance(graph_items, (tuple, list)):
+        graph_items = (graph_items,)
+    if graph_items:
+        # Validate a graph receipt before retaining its digest.  A graph row or
+        # SQLite database without this receipt is never enough for authority.
+        _validated_refs("graph", graph_items)
     if projection_available is False or graph.get("status") in {"BLOCKED", "projection_unavailable", "projection_corrupt"}:
         local_blockers.append({"code": "projection_unavailable", "severity": "high", "message": "disposable graph projection is unavailable; canonical replay remains authoritative", "replacement_evidence": ("graph-projection-rebuild",)})
-    technical = technical_qualification or {"verdict": "PASS", "reason_codes": (), "evidence_sha256": (), "rationale": "canonical replay and typed evidence were assembled"}
+    technical_codes = sorted({item.get("code") for item in local_blockers if isinstance(item, Mapping) and item.get("code") not in {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"}})
+    technical = technical_qualification or ({"verdict": "BLOCKED", "reason_codes": technical_codes, "evidence_sha256": (), "rationale": "one or more replay or projection technical blockers remain"} if technical_codes else {"verdict": "PASS", "reason_codes": (), "evidence_sha256": (), "rationale": "canonical replay and typed evidence were assembled"})
     release = release_qualification or {"verdict": "BLOCKED", "reason_codes": ("CC_BY_NC_PERMISSION_UNRESOLVED", "P04-09", "SUP-04"), "evidence_sha256": (), "rationale": "intended use, distribution, accountable approval, and permission evidence remain unresolved"}
     manifest = {
         "schema_version": AUDIT_DOSSIER_SCHEMA_VERSION,
@@ -523,17 +602,20 @@ def assemble_audit_dossier(
         "run_manifest_sha256": run_manifest_sha256,
         "passport_sha256": _coerce_sha_refs(ev.get("passports", ev.get("passport_sha256"))),
         "artifact_manifest_sha256": _coerce_sha_refs(ev.get("artifacts", ev.get("artifact_manifest_sha256"))),
-        "integrity_receipt_sha256": _coerce_sha_refs(ev.get("integrity", ev.get("integrity_receipt_sha256"))),
-        "experiment_provenance_sha256": _coerce_sha_refs(ev.get("provenance", ev.get("experiment_provenance_sha256"))),
-        "access_decisions": _coerce_sha_refs(ev.get("access", ev.get("access_decisions"))),
-        "claim_capabilities": tuple(claim_capabilities or ()),
+        "integrity_receipt_sha256": _validated_refs("integrity", ev.get("integrity", ev.get("integrity_receipt_sha256"))),
+        "experiment_provenance_sha256": _validated_refs("provenance", ev.get("provenance", ev.get("experiment_provenance_sha256"))),
+        "access_decisions": _validated_refs("access", ev.get("access", ev.get("access_decisions"))),
+        "claim_capabilities": tuple(claim_capabilities or (
+            {"capability": capability, "verdict": "BLOCKED", "reason_codes": ("missing_claim_lifecycle_evidence",), "replacement_evidence": ("claim-lifecycle-evidence",)}
+            for capability in ("audit_complete", "citation_verified", "experiment_reproduced", "independent_review_complete")
+        )),
         "panel_manifest_sha256": rev.get("panel_manifest_sha256"),
         "review_matrix_sha256": rev.get("review_matrix_sha256"),
         "review_report_sha256": _coerce_sha_refs(rev.get("review_report_sha256", rev.get("reports"))),
         "synthesis_sha256": rev.get("synthesis_sha256"),
         "dissent_refs": _coerce_sha_refs(rev.get("dissent_refs", rev.get("dissent"))),
         "human_decision_sha256": _coerce_sha_refs(rev.get("human_decision_sha256", rev.get("human_decisions"))),
-        "graph_projection_receipt_sha256": _coerce_sha_refs(graph.get("receipt_sha256", graph.get("receipts"))),
+        "graph_projection_receipt_sha256": _validated_refs("graph", graph_items) if graph_items else _coerce_sha_refs(graph.get("receipt_sha256")),
         "graph_watermark": graph.get("watermark"),
         "test_logs": tuple(test_logs or ()),
         "benchmark_versions": tuple(benchmark_versions or ()),
