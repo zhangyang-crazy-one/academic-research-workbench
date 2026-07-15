@@ -241,7 +241,28 @@ Plans:
   3. Evidence is classified as publicly verified, locally supplied, restricted, unavailable, or human-review-required, and a run cannot claim citation verification, experiment reproduction, independent review, or audit completion when the required lifecycle evidence is absent.
   4. A release candidate produces an inspectable machine-readable and Markdown audit dossier containing run history, immutable manifests and Passports, evidence receipts, review matrix and dissent, waivers, projection receipts, test logs, benchmark versions, build provenance, and actionable blockers.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md - Immutable integrity receipts and freshness invalidation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-02-PLAN.md - External experiment provenance and controlled-execution block policy
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 06-03-PLAN.md - Five-state evidence access and scientific claim gates
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 06-04-PLAN.md - Canonical audit dossier, deterministic rendering, and cold replay
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 06-05-PLAN.md - Serial staged verifier, package inventory, and qualification reconciliation
 
 ### Phase 7: Installed E2E Recovery and Release Qualification
 
