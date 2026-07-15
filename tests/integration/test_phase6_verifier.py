@@ -50,3 +50,14 @@ def test_tree_digest_is_bound_to_worktree_state() -> None:
     first = VERIFY.tree_digest()
     assert len(first) == 64
     assert first == VERIFY.tree_digest()
+
+
+def test_command_scans_untruncated_status_markers(tmp_path: Path) -> None:
+    root = VERIFY.EVIDENCE_BASE / "phase6-status-scan"
+    if root.exists():
+        import shutil
+        shutil.rmtree(root)
+    owned = VERIFY.owned_root(root, clean=False)
+    script = "import sys; sys.stdout.write('x' * 600000 + '\\nSKIPPED\\n')"
+    with pytest.raises(VERIFY.VerificationError, match="skipped"):
+        VERIFY.command(owned, "long-status", [str(VERIFY.PYTHON), "-c", script])

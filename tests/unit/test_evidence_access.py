@@ -14,6 +14,8 @@ from arw.evidence_access import (
     publish_evidence_access_decision,
     validate_access_transition,
 )
+from arw.integrity import IntegrityReceipt, publish_integrity_receipt
+from arw.orchestration_models import HumanAuthority
 
 
 def _decision(**updates: object) -> dict[str, object]:
@@ -71,6 +73,12 @@ def test_unresolved_license_cannot_be_public() -> None:
         )
 
 
+@pytest.mark.parametrize("field,value", [("source_uri", "https://example.invalid?api_key=secret"), ("rationale", "private /home/user/paper"), ("scope", "/private/research")])
+def test_access_decision_redacts_secret_and_private_text(field: str, value: str) -> None:
+    with pytest.raises((ValidationError, ValueError)):
+        EvidenceAccessDecision.model_validate(_decision(**{field: value}))
+
+
 def test_predecessor_and_supersession_are_append_only(tmp_path: Path) -> None:
     first = EvidenceAccessDecision.model_validate(_decision())
     publish_evidence_access_decision(tmp_path, first)
@@ -108,3 +116,59 @@ def test_local_evidence_cannot_promote_without_fresh_receipt() -> None:
     promoted = EvidenceAccessDecision.model_validate(promoted_payload)
     with pytest.raises(EvidenceAccessError):
         validate_access_transition(first, promoted, public_verification_receipt_sha256="f" * 64)
+
+
+def test_public_promotion_loads_fresh_bound_receipt_and_parent_authority(tmp_path: Path) -> None:
+    first = EvidenceAccessDecision.model_validate(_decision(access_state="human_review_required", license_status="ambiguous"))
+    authority = HumanAuthority(
+        schema_version="arw.human-authority.v1",
+        authority_id="authority.access-001",
+        authenticated_actor_id="operator.user",
+        accountable_role="access_authority",
+        validated_by_actor_id="parent.runtime",
+        allowed_decision_kinds=("verification",),
+        allowed_gate_ids=("gate.access-001",),
+        allowed_scopes=(first.scope,),
+        authenticated_at="2026-07-15T10:00:00Z",
+        expires_at="2026-07-15T12:00:00Z",
+        evidence_sha256=(first.decision_sha256,),
+    )
+    receipt = IntegrityReceipt.model_validate(
+        {
+            "schema_version": "arw.integrity-receipt.v1",
+            "receipt_id": "receipt.access-001",
+            "subject_kind": "source",
+            "subject_id": first.evidence_id,
+            "subject_sha256": first.subject_sha256,
+            "input_sha256": list(first.evidence_sha256),
+            "method_id": "integrity.sha256",
+            "method_version": "1.0.0",
+            "tool_identity": {"name": "arw-integrity", "version": "0.1.0", "build_sha256": "f" * 64},
+            "observed_at": "2026-07-15T10:00:00Z",
+            "freshness_policy": {"valid_until": "2026-07-15T11:00:00Z", "clock_skew_seconds": 30},
+            "verdict": "PASS",
+            "reason_codes": ["verified"],
+            "reason_text": "subject and input digests matched",
+            "source_manifest_sha256": list(first.source_manifest_sha256),
+            "created_by": "parent.runtime",
+        }
+    )
+    publish_integrity_receipt(tmp_path, receipt)
+    promoted = EvidenceAccessDecision.model_validate(
+        _decision(
+            decision_id="decision.access-003",
+            access_state="publicly_verified",
+            public_verification_receipt_sha256=receipt.receipt_sha256,
+            decision_kind="verification",
+            predecessor_sha256=first.decision_sha256,
+            supersedes_decision_id=first.decision_id,
+            authority_sha256=authority.authority_sha256,
+            created_at="2026-07-15T10:01:00Z",
+            accountable_actor_id=authority.authenticated_actor_id,
+        )
+    )
+    validate_access_transition(first, promoted, root=tmp_path, parent_authority=authority, now="2026-07-15T10:30:00Z")
+
+    forged = promoted.model_copy(update={"public_verification_receipt_sha256": "e" * 64})
+    with pytest.raises(EvidenceAccessError):
+        validate_access_transition(first, forged, root=tmp_path, parent_authority=authority, now="2026-07-15T10:30:00Z")

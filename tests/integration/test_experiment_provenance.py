@@ -17,6 +17,23 @@ def _provenance():
     return seal_experiment_provenance(json.loads(FIXTURE.read_text(encoding="utf-8")))
 
 
+def _ingestable_provenance():
+    from arw.experiment_provenance import seal_experiment_provenance
+    from arw.canonical import canonical_json_bytes, sha256_hex
+
+    value = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    value["artifacts"][0]["content_path"] = None
+    artifact = value["artifacts"][0]
+    artifact["content_sha256"] = sha256_hex(canonical_json_bytes({
+        "artifact_id": artifact["artifact_id"],
+        "media_type": artifact["media_type"],
+        "manifest_sha256": artifact["manifest_sha256"],
+        "content_path": None,
+    }))
+    value.pop("provenance_sha256", None)
+    return seal_experiment_provenance(value)
+
+
 def _receipt(provenance, kind: str, *, valid_until: str = "2026-07-15T12:00:00Z", **changes):
     from arw.experiment_provenance import QualificationReceipt
 
@@ -86,8 +103,10 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
         }
     )
     service = RuntimeCommandService(root)
+    from arw.experiment_provenance import ProvenanceAuthorityEnvelope
+
     result = ingest_experiment_provenance(
-        _provenance(), root, {"runtime": service, "request": request}
+        _ingestable_provenance(), root, ProvenanceAuthorityEnvelope(service, request)
     )
     assert result.outcome.accepted
     assert result.path.is_file()
@@ -150,5 +169,22 @@ def test_ingest_rejects_non_parent_authority_before_publication(tmp_path: Path) 
     )
     envelope = ProvenanceAuthorityEnvelope(RuntimeCommandService(tmp_path), request)
     with pytest.raises(ProvenanceError, match="parent_control_plane"):
-        ingest_experiment_provenance(_provenance(), tmp_path, envelope)
+        ingest_experiment_provenance(_ingestable_provenance(), tmp_path, envelope)
     assert not (tmp_path / "experiment").exists()
+
+
+def test_missing_local_reference_and_loader_are_fail_closed_and_read_only(tmp_path: Path) -> None:
+    from arw.experiment_provenance import ProvenanceError, load_experiment_provenance, _verify_local_references
+
+    with pytest.raises(ProvenanceError):
+        _verify_local_references(tmp_path, _provenance())
+    with pytest.raises(ProvenanceError):
+        load_experiment_provenance(tmp_path, "a" * 64)
+    assert not (tmp_path / "experiment").exists()
+
+
+def test_raw_mapping_authority_is_rejected(tmp_path: Path) -> None:
+    from arw.experiment_provenance import ProvenanceError, ingest_experiment_provenance
+
+    with pytest.raises(ProvenanceError, match="existing ProvenanceAuthorityEnvelope"):
+        ingest_experiment_provenance(_ingestable_provenance(), tmp_path, {"actor_role": "parent_control_plane"})

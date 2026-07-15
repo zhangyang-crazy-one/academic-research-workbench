@@ -5,6 +5,7 @@ from pathlib import Path
 
 from arw.evidence_access import EVIDENCE_ACCESS_SCHEMA_VERSION, EvidenceAccessDecision, evaluate_claim_capability
 from arw.integrity import IntegrityReceipt
+from arw.canonical import canonical_json_bytes, sha256_hex
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-run/experiment/provenance.json"
@@ -59,13 +60,28 @@ def _integrity(decision: EvidenceAccessDecision, *, valid_until: str = "2026-07-
     )
 
 
+def _lifecycle(decision: EvidenceAccessDecision, *, kind: str = "citation", fresh_until: str = "2026-07-15T11:00:00Z") -> dict[str, object]:
+    body = {
+        "schema_version": "arw.lifecycle-evidence.v1",
+        "record_kind": kind,
+        "receipt_id": f"receipt.{kind}-001",
+        "subject_sha256": decision.subject_sha256,
+        "input_sha256": list(decision.evidence_sha256),
+        "observed_at": "2026-07-15T10:00:00Z",
+        "fresh_until": fresh_until,
+        "verdict": "PASS",
+    }
+    body["receipt_sha256"] = sha256_hex(canonical_json_bytes(body))
+    return body
+
+
 def test_citation_requires_fresh_digest_bound_lifecycle_receipt() -> None:
     decision = _public_decision()
     result = evaluate_claim_capability(
         "citation_verified",
         decision,
         integrity_receipt=_integrity(decision),
-        citation_lifecycle_receipt={"receipt_sha256": "1" * 64},
+        citation_lifecycle_receipt=_lifecycle(decision),
         now="2026-07-15T10:30:00Z",
     )
     assert result.status == "PASS"
@@ -74,7 +90,7 @@ def test_citation_requires_fresh_digest_bound_lifecycle_receipt() -> None:
         "citation_verified",
         decision,
         integrity_receipt=_integrity(decision, valid_until="2026-07-15T10:01:00Z"),
-        citation_lifecycle_receipt={"receipt_sha256": "1" * 64},
+        citation_lifecycle_receipt=_lifecycle(decision, fresh_until="2026-07-15T10:01:00Z"),
         now="2026-07-15T10:30:00Z",
     )
     assert stale.status == "BLOCKED"
@@ -103,11 +119,12 @@ def test_audit_requires_all_receipts_and_no_technical_blockers() -> None:
     valid = evaluate_claim_capability(
         "audit_complete",
         decision,
-        run_replay_receipt={"receipt_sha256": "1" * 64},
-        passport_receipts=({"passport_sha256": "2" * 64},),
-        graph_projection_receipt={"receipt_sha256": "3" * 64},
-        test_receipts=({"receipt_sha256": "4" * 64},),
-        benchmark_receipts=({"receipt_sha256": "5" * 64},),
-        build_receipt={"receipt_sha256": "6" * 64},
+        run_replay_receipt=_lifecycle(decision, kind="run_replay"),
+        passport_receipts=(_lifecycle(decision, kind="passport"),),
+        graph_projection_receipt=_lifecycle(decision, kind="graph_projection"),
+        test_receipts=(_lifecycle(decision, kind="test"),),
+        benchmark_receipts=(_lifecycle(decision, kind="benchmark"),),
+        build_receipt=_lifecycle(decision, kind="build"),
+        now="2026-07-15T10:30:00Z",
     )
     assert valid.status == "PASS"

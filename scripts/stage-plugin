@@ -349,6 +349,7 @@ copy_file "schemas/v1/human-authority.schema.json"
 copy_file "schemas/v1/integrity-receipt.schema.json"
 copy_file "schemas/v1/experiment-provenance.schema.json"
 copy_file "schemas/v1/evidence-access-decision.schema.json"
+copy_file "schemas/v1/lifecycle-evidence.schema.json"
 copy_file "schemas/v1/audit-dossier.schema.json"
 copy_as "schemas/v1/build-identity.schema.json" "share/arw/schemas/build-identity.schema.json"
 copy_as "schemas/v1/event.schema.json" "share/arw/schemas/event.schema.json"
@@ -359,6 +360,7 @@ copy_as "schemas/v1/run-manifest.schema.json" "share/arw/schemas/run-manifest.sc
 copy_as "schemas/v1/source-manifest.schema.json" "share/arw/schemas/source-manifest.schema.json"
 copy_as "schemas/v1/version-report.schema.json" "share/arw/schemas/version-report.schema.json"
 copy_as "schemas/v1/audit-dossier.schema.json" "share/arw/schemas/audit-dossier.schema.json"
+copy_as "schemas/v1/lifecycle-evidence.schema.json" "share/arw/schemas/lifecycle-evidence.schema.json"
 copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
 copy_file "scripts/file-base-graph-mcp" 0755
@@ -829,6 +831,7 @@ static_files = {
     "schemas/v1/integrity-receipt.schema.json",
     "schemas/v1/experiment-provenance.schema.json",
     "schemas/v1/evidence-access-decision.schema.json",
+    "schemas/v1/lifecycle-evidence.schema.json",
     "schemas/v1/audit-dossier.schema.json",
     "scripts/file-base-mcp",
     "scripts/file-base-graph-mcp",
@@ -875,6 +878,7 @@ static_files = {
     "share/arw/schemas/integrity-receipt.schema.json",
     "share/arw/schemas/experiment-provenance.schema.json",
     "share/arw/schemas/evidence-access-decision.schema.json",
+    "share/arw/schemas/lifecycle-evidence.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
