@@ -28,7 +28,7 @@ def _assignment_and_attempt():
             "task_id": "proposal-task-001",
             "role_id": "research_architect",
             "worker_identity_id": "worker.architect-001",
-            "execution_mode": "native_formal",
+            "execution_mode": "assignment_injected_subagent",
             "execution_provenance": "assignment_injected_subagent",
             "independence_eligible": False,
             "base_revision": 1,

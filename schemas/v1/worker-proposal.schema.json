@@ -97,7 +97,8 @@
     },
     "execution_mode": {
       "enum": [
-        "native_formal",
+        "native_profile",
+        "assignment_injected_subagent",
         "degraded_inline",
         "blocked"
       ],

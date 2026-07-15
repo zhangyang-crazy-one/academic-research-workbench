@@ -35,7 +35,12 @@ class StatusReport(StrictModel):
     active_attempts: list[AttemptState]
     legal_next_transitions: list[StableRuntimeId]
     status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"]
-    execution_mode: Literal["native_formal", "degraded_inline", "blocked"] | None
+    execution_mode: Literal[
+        "native_profile",
+        "assignment_injected_subagent",
+        "degraded_inline",
+        "blocked",
+    ] | None
     execution_provenance: str | None
     role_catalog_sha256: Sha256 | None
     policy_sha256: Sha256 | None

@@ -206,7 +206,7 @@ def test_phase4_canonical_event_bytes_replay_to_identical_parent_state() -> None
             "actor_role": "parent_control_plane",
             "prev_event_sha256": "0" * 64,
             "payload": {
-                "execution_mode": "native_formal",
+                "execution_mode": "assignment_injected_subagent",
                 "execution_provenance": "assignment_injected_subagent",
                 "role_catalog_sha256": "a" * 64,
                 "policy_sha256": "b" * 64,
@@ -240,4 +240,4 @@ def test_phase4_canonical_event_bytes_replay_to_identical_parent_state() -> None
     first = reduce_events("core-research.v1", [initialized, event])
     second = reduce_events("core-research.v1", [initialized, replayed])
     assert first == second
-    assert first.execution_mode == "native_formal"
+    assert first.execution_mode == "assignment_injected_subagent"

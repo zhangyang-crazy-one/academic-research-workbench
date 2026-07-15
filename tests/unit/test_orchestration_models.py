@@ -45,7 +45,7 @@ def _assignment_payload() -> dict[str, object]:
         "task_id": "review-task-001",
         "role_id": "methodology_reviewer",
         "worker_identity_id": "worker.methodology-001",
-        "execution_mode": "native_formal",
+        "execution_mode": "assignment_injected_subagent",
         "execution_provenance": "assignment_injected_subagent",
         "independence_eligible": True,
         "base_revision": 3,
@@ -112,7 +112,7 @@ def _proposal_payload() -> dict[str, object]:
         "role_id": "methodology_reviewer",
         "worker_identity_id": "worker.methodology-001",
         "host_agent_id": "host-agent-001",
-        "execution_mode": "native_formal",
+        "execution_mode": "assignment_injected_subagent",
         "execution_provenance": "assignment_injected_subagent",
         "independence_eligible": True,
         "assignment_sha256": HASH_A,
@@ -216,6 +216,26 @@ def test_assignment_is_frozen_and_content_changes_require_explicit_supersession(
         assignment.validate_supersedes(assignment)
 
 
+def test_execution_modes_are_distinct_and_provenance_bound() -> None:
+    native_profile = ImmutableAssignment.model_validate(
+        {
+            **_assignment_payload(),
+            "execution_mode": "native_profile",
+            "execution_provenance": "native_profile",
+        }
+    )
+    assert native_profile.execution_mode == "native_profile"
+
+    with pytest.raises(ValidationError, match="native_profile"):
+        ImmutableAssignment.model_validate(
+            {
+                **_assignment_payload(),
+                "execution_mode": "native_profile",
+                "execution_provenance": "assignment_injected_subagent",
+            }
+        )
+
+
 def test_worker_proposal_rejects_noncanonical_bytes_and_wrong_assignment_echoes() -> None:
     assignment = ImmutableAssignment.model_validate(_assignment_payload())
     attempt = AttemptDescriptor.model_validate(_attempt_payload())
@@ -305,7 +325,7 @@ def test_gate_human_hook_and_host_contracts_are_strict_and_append_only() -> None
             "stage_sha256": HASH_A,
             "adapter_sha256": HASH_B,
             "plugin_sha256": HASH_C,
-            "execution_mode": "native_formal",
+            "execution_mode": "assignment_injected_subagent",
             "status": "PASS",
             "worker_identity_id": "worker.methodology-001",
             "host_agent_id": "host-agent-001",

@@ -71,13 +71,14 @@
         "allowed_execution_modes": {
           "items": {
             "enum": [
-              "native_formal",
+              "native_profile",
+              "assignment_injected_subagent",
               "degraded_inline",
               "blocked"
             ],
             "type": "string"
           },
-          "maxLength": 3,
+          "maxLength": 4,
           "minLength": 1,
           "title": "Allowed Execution Modes",
           "type": "array"

@@ -18,7 +18,7 @@
     "active_attempts": {"items": {"$ref": "#/$defs/active_attempt"}, "type": "array"},
     "legal_next_transitions": {"items": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "type": "array"},
     "status": {"enum": ["RUNNING", "PASS", "FAIL", "BLOCKED"], "type": "string"},
-    "execution_mode": {"anyOf": [{"enum": ["native_formal", "degraded_inline", "blocked"], "type": "string"}, {"type": "null"}]},
+    "execution_mode": {"anyOf": [{"enum": ["native_profile", "assignment_injected_subagent", "degraded_inline", "blocked"], "type": "string"}, {"type": "null"}]},
     "execution_provenance": {"anyOf": [{"type": "string"}, {"type": "null"}]},
     "role_catalog_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
     "policy_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},

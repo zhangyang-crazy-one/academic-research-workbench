@@ -247,7 +247,12 @@ class RecoveryReceipt(StrictModel):
 # boundary is intentional: ``orchestration_models`` imports the Phase 2
 # primitives from this module, while canonical event construction needs to
 # retain the richer immutable assignment/proposal records from Plan 01.
-Phase4ExecutionMode = Literal["native_formal", "degraded_inline", "blocked"]
+Phase4ExecutionMode = Literal[
+    "native_profile",
+    "assignment_injected_subagent",
+    "degraded_inline",
+    "blocked",
+]
 Phase4ExecutionProvenance = Literal[
     "native_profile",
     "assignment_injected_subagent",
@@ -358,6 +363,15 @@ class ExecutionModeSelectedPayload(Phase4Payload):
                 raise ValueError("degraded_inline cannot record an independent role")
         if self.execution_mode == "blocked" and self.execution_provenance != "unavailable":
             raise ValueError("blocked execution requires unavailable provenance")
+        if self.execution_mode == "native_profile" and self.execution_provenance != "native_profile":
+            raise ValueError("native_profile requires native_profile provenance")
+        if (
+            self.execution_mode == "assignment_injected_subagent"
+            and self.execution_provenance != "assignment_injected_subagent"
+        ):
+            raise ValueError(
+                "assignment_injected_subagent requires assignment_injected_subagent provenance"
+            )
         return self
 
 
