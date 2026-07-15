@@ -160,6 +160,7 @@ def observed_identities(root: Path) -> dict[str, Any]:
         "schema_tree_sha256": digest_bytes(b"".join(digest_file(p).encode() for p in sorted((PROJECT_ROOT / "schemas/v1").glob("*.json")))),
         "source_manifest": optional(PROJECT_ROOT / "vendor/source-manifest.json"),
         "sbom": optional(PROJECT_ROOT / "SBOM.cdx.json"),
+        "license_verdict": optional(PROJECT_ROOT / "supply-chain/license-verdict.json"),
         "wheelhouse_lock": optional(PROJECT_ROOT / "vendor/python/wheelhouse.lock.json"),
         "integration_lock": optional(lock) if lock else {"missing": True},
         "codex_cli": "unavailable",
@@ -212,6 +213,16 @@ def main() -> int:
         write_json(root / "preflight.json", {"schema_version": "1.0.0", "phase": "06", "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "evidence_root": str(root)})
         identities = observed_identities(root)
         command(root, "source-verification", ["./scripts/verify-sources", "--inputs-only"])
+        license_path = PROJECT_ROOT / "supply-chain/license-verdict.json"
+        try:
+            license_verdict = json.loads(license_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise VerificationError(f"license verdict is missing or invalid: {error}") from error
+        if license_verdict.get("technical_qualification") != "PASS":
+            raise VerificationError("license technical qualification is not PASS")
+        if license_verdict.get("release_qualification") != "BLOCKED":
+            raise VerificationError("license release blocker was cleared without permission evidence")
+        write_json(root / "license-verdict.json", {"sha256": digest_file(license_path), "technical_qualification": "PASS", "release_qualification": "BLOCKED", "blockers": list(RELEASE_BLOCKERS)})
         command(root, "phase6-tests", [str(PYTHON), "-m", "pytest", "-q", "-ra", *PHASE6_TESTS])
         command(root, "prior-phase-regressions", [str(PYTHON), "-m", "pytest", "-q", "-ra", *PRIOR_TESTS])
         stage = PROJECT_ROOT / "build/stage/academic-research-workbench"
