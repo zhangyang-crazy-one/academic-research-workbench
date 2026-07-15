@@ -183,6 +183,7 @@ class EvidenceAccessDecision(StrictModel):
         if self.license_status in {"ambiguous", "unknown", "unavailable"} and self.access_state not in {
             EvidenceAccessState.HUMAN_REVIEW_REQUIRED,
             EvidenceAccessState.UNAVAILABLE,
+            EvidenceAccessState.RESTRICTED,
         }:
             raise ValueError("ambiguous or unresolved license requires human review or unavailable state")
         if self.access_state == EvidenceAccessState.HUMAN_REVIEW_REQUIRED and self.decision_kind == "initial":
