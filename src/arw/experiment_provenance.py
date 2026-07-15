@@ -602,12 +602,15 @@ def evaluate_controlled_execution_policy(
     if qualification_receipts is not None:
         values = qualification_receipts.values() if isinstance(qualification_receipts, Mapping) else qualification_receipts
         for item in values:
-            if not isinstance(item, QualificationReceipt):
-                try:
-                    item = QualificationReceipt.model_validate(item)
-                except Exception:
-                    reasons.append("qualification_receipt_invalid")
-                    continue
+            try:
+                # Revalidate even already-typed objects: ``model_copy(update=…)``
+                # intentionally skips Pydantic validators and must not create
+                # an authority bypass for a forged receipt.
+                raw_item = item.model_dump(mode="json") if isinstance(item, QualificationReceipt) else item
+                item = QualificationReceipt.model_validate(raw_item)
+            except Exception:
+                reasons.append("qualification_receipt_invalid")
+                continue
             receipts[item.kind] = item
     for kind in QUALIFICATION_KINDS:
         receipt = receipts.get(kind)

@@ -80,3 +80,17 @@ def test_all_four_fresh_receipts_still_do_not_enable_controlled_execution() -> N
     assert decision.status == "BLOCKED"
     assert decision.reason_codes == ("controlled_execution_adapter_disabled",)
     assert decision.replacement_evidence == ("future-qualified-execution-adapter",)
+
+
+def test_model_copy_forged_receipt_is_revalidated_before_policy() -> None:
+    from arw.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
+
+    provenance = _provenance()
+    valid = _receipt(provenance, "sandbox_approval")
+    forged = valid.model_copy(update={"subject_sha256": "9" * 64})
+    decision = evaluate_controlled_execution_policy(
+        provenance,
+        {"sandbox_approval": forged},
+    )
+    assert "qualification_receipt_invalid" in decision.reason_codes
+    assert all(f"missing_{kind}" in decision.reason_codes for kind in QUALIFICATION_KINDS if kind != "sandbox_approval")
