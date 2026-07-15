@@ -68,6 +68,7 @@ requirements-completed: [SCI-04, SCI-05]
 3. **06-02-T02 tests** — `68fe07b` (parent ingest and controlled-execution truth table)
 4. **06-02-T02 implementation correction** — `46e5161` (component digest binding and qualification receipt canonicalization)
 5. **06-02-T02 forged-object correction** — `49a5c24` (revalidate model-copied qualification receipts before policy)
+6. **06-02-T02 authority correction** — `cacc7b7` (enforce parent role and runtime-root binding for typed envelopes)
 
 ## Verification
 
