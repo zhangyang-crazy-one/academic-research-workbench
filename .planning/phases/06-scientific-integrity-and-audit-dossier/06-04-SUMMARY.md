@@ -89,6 +89,7 @@ legal/release qualification.**
 
 1. **06-04-T01** — `537eb95` (`feat(06-04): add canonical audit dossier contract`)
 2. **06-04-T02** — `a118bf9` (`feat(06-04): harden dossier replay and projection loss`)
+3. **06-04-T02 hardening** — `8e62401` (`fix(06-04): accept identity digest references`)
 
 ## Verification
 
@@ -96,6 +97,7 @@ legal/release qualification.**
 - `UV_OFFLINE=1 PYTHONNOUSITE=1 .venv/bin/python -m pytest -q tests/integration/test_audit_dossier_replay.py tests/property/test_audit_dossier_replay.py tests/integration/test_graph_rebuild.py tests/integration/test_graph_authority.py tests/integration/test_orchestration_replay.py` — **24 passed**.
 - `UV_OFFLINE=1 PYTHONNOUSITE=1 .venv/bin/python -m compileall -q src/arw tests/unit/test_audit_dossier.py tests/integration/test_audit_dossier_replay.py tests/property/test_audit_dossier_replay.py` — **passed**.
 - `git diff --check` — **passed**.
+- Post-summary identity-reference hardening — **14 focused tests passed**.
 
 ## Deviations from Plan
 
@@ -129,7 +131,7 @@ for serial verifier, staged-package, and full-regression qualification.
 ## Self-Check: PASSED
 
 - All key files listed above exist.
-- Commits `537eb95` and `a118bf9` are present in history.
+- Commits `537eb95`, `a118bf9`, and `8e62401` are present in history.
 - Plan-level focused, replay, graph, schema, and claim-gate checks pass.
 
 ---
