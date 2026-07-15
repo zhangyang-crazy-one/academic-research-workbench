@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import jsonschema
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-run/experiment/provenance.json"
@@ -95,6 +96,14 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
     assert result.provenance.provenance_sha256 in replayed.accepted_evidence_sha256
     assert result.outcome.event is not None
     assert result.outcome.event.event_type == "experiment.provenance.accepted"
+    event_schema = json.loads(
+        (Path(__file__).resolve().parents[2] / "schemas/v1/event.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    jsonschema.Draft202012Validator(event_schema).validate(
+        result.outcome.event.model_dump(mode="json")
+    )
 
 
 def test_policy_rejects_forged_flags_and_stays_blocked_after_projection_loss(monkeypatch) -> None:
