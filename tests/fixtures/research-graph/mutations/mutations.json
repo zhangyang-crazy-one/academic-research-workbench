@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "oracle": "research-graph-normalization-v1",
+  "mutations": [
+    {"id": "modify", "description": "same claim identity, changed canonical payload and source digest"},
+    {"id": "rename", "description": "same source identity, changed non-authoritative path metadata"},
+    {"id": "delete", "description": "explicit deleted source tombstone with no stale body"},
+    {"id": "correction", "description": "new claim correction with append-only supersedes edge"},
+    {"id": "migration", "description": "compatible projection schema migration"},
+    {"id": "supersession", "description": "old artifact retained as superseded beside replacement"}
+  ]
+}

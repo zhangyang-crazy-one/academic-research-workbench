@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
 import time
 import uuid
@@ -87,12 +88,30 @@ class GraphStore:
     def _generation_id(self) -> str:
         return f"graph-generation-{uuid.uuid4().hex[:16]}"
 
+    def _receipt_for(self, generation_id: str) -> GraphProjectionReceipt | None:
+        path = self.receipts / f"{generation_id}.json"
+        if path.is_symlink() or not path.is_file():
+            return None
+        try:
+            raw = path.read_bytes()
+            value = strict_json_loads(raw)
+            receipt = GraphProjectionReceipt.model_validate(value, strict=True)
+            if canonical_json_bytes(receipt.model_dump(mode="json")) != raw:
+                return None
+            return receipt
+        except (OSError, UnicodeError, ValueError, ValidationError):
+            return None
+
     def build(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
         """Build a sibling SQLite generation and atomically select it."""
 
         self.generations.mkdir(parents=True, exist_ok=True)
         self.receipts.mkdir(parents=True, exist_ok=True)
         previous = self.selected_generation()
+        if previous is not None and previous.manifest.input_sha256 == projection.input_sha256:
+            receipt = self._receipt_for(previous.generation_id)
+            if receipt is not None and receipt.status == "PASS":
+                return receipt
         generation_id = self._generation_id()
         candidate = self.generations / f".building-{generation_id}"
         final = self.generations / generation_id
@@ -222,6 +241,43 @@ class GraphStore:
                 candidate.rmdir()
             raise
 
+    def build_full(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
+        """Build a complete projection from the canonical input bundle."""
+
+        return self.build(projection)
+
+    def build_incremental(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
+        """Build from a newer canonical watermark without mutating the prior generation."""
+
+        previous = self.selected_generation()
+        if previous is not None and projection.ledger_watermark < previous.manifest.ledger_watermark:
+            raise GraphStoreError(
+                "projection_stale",
+                "incremental input watermark is older than the selected generation",
+            )
+        return self.build(projection)
+
+    def delete_and_rebuild(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
+        """Publish a replacement, then remove the old disposable generation."""
+
+        previous = self.selected_generation()
+        receipt = self.build(projection)
+        if previous is not None and previous.generation_id != receipt.selected_generation_id:
+            shutil.rmtree(previous.generation_root, ignore_errors=False)
+            _fsync_directory(self.generations)
+        return receipt
+
+    def delete_selected_generation(self) -> None:
+        """Explicitly remove the selected disposable index; never used by queries."""
+
+        selected = self.selected_generation()
+        if selected is None:
+            return
+        if self.selected_path.exists():
+            self.selected_path.unlink()
+        shutil.rmtree(selected.generation_root, ignore_errors=False)
+        _fsync_directory(self.generations)
+
     def selected_generation(self) -> SelectedGraphGeneration | None:
         if not self.selected_path.exists():
             return None
@@ -339,6 +395,37 @@ class GraphStore:
             ).fetchone()
             if node is None:
                 raise GraphStoreError("entity_not_found", "requested graph entity is not present")
+            relationships: list[dict[str, Any]] = []
+            outgoing = connection.execute(
+                "SELECT edge_type, to_entity_id, evidence_digest, supersession_state, ledger_watermark "
+                "FROM edges WHERE from_entity_id = ? ORDER BY edge_type, to_entity_id LIMIT ?",
+                (entity_id, request.max_fanout + 1),
+            ).fetchall()
+            incoming = connection.execute(
+                "SELECT edge_type, from_entity_id, evidence_digest, supersession_state, ledger_watermark "
+                "FROM edges WHERE to_entity_id = ? ORDER BY edge_type, from_entity_id LIMIT ?",
+                (entity_id, request.max_fanout + 1),
+            ).fetchall()
+            if len(outgoing) > request.max_fanout or len(incoming) > request.max_fanout:
+                raise GraphStoreError("query_budget_exceeded", "edge fanout exceeds the server ceiling")
+            for edge_type, target, evidence_digest, state, watermark in outgoing:
+                relationships.append({
+                    "direction": "outgoing",
+                    "edge_type": edge_type,
+                    "entity_id": target,
+                    "evidence_digest": evidence_digest,
+                    "supersession_state": state,
+                    "ledger_watermark": watermark,
+                })
+            for edge_type, source, evidence_digest, state, watermark in incoming:
+                relationships.append({
+                    "direction": "incoming",
+                    "edge_type": edge_type,
+                    "entity_id": source,
+                    "evidence_digest": evidence_digest,
+                    "supersession_state": state,
+                    "ledger_watermark": watermark,
+                })
             rows.append({
                 "entity_type": node[0],
                 "entity_id": node[1],
@@ -347,17 +434,13 @@ class GraphStore:
                 "supersession_state": node[4],
                 "ledger_watermark": node[5],
                 "attributes": strict_json_loads(node[6]),
+                "relationships": sorted(relationships, key=lambda item: (item["direction"], item["edge_type"], item["entity_id"])),
             })
             if depth >= request.max_depth:
                 continue
-            edges = connection.execute(
-                "SELECT edge_type, to_entity_id, evidence_digest, supersession_state, ledger_watermark FROM edges WHERE from_entity_id = ? ORDER BY edge_type, to_entity_id LIMIT ?",
-                (entity_id, request.max_fanout + 1),
-            ).fetchall()
-            if len(edges) > request.max_fanout:
-                raise GraphStoreError("query_budget_exceeded", "edge fanout exceeds the server ceiling")
-            for edge_type, target, evidence_digest, state, watermark in edges:
-                if edge_type not in allowed[request.operation] or target in visited:
+            for relationship in relationships:
+                target = relationship["entity_id"]
+                if relationship["edge_type"] not in allowed[request.operation] or target in visited:
                     continue
                 visited.add(target)
                 pending.append((target, depth + 1))

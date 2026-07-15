@@ -15,7 +15,18 @@ class GraphEquivalenceError(ValueError):
 
 
 _NON_SEMANTIC_KEYS = frozenset(
-    {"backend_row_id", "planner_time_ms", "elapsed_ms", "process_id", "temporary_path"}
+    {
+        "backend_row_id",
+        "planner_time_ms",
+        "elapsed_ms",
+        "process_id",
+        "temporary_path",
+        # Generation identity is a disposable backend coordinate.  The
+        # canonical watermark, source/payload/evidence digests remain in the
+        # normalized record and are the semantic equivalence boundary.
+        "projection_generation_id",
+        "projection_manifest_sha256",
+    }
 )
 
 
@@ -86,4 +97,3 @@ def normalize_query_page(operation: str, rows: Sequence[Mapping[str, Any]], *, c
     normalized_rows = [normalize_for_oracle(row) for row in rows]
     normalized_rows.sort(key=lambda row: canonical_json_bytes(row))
     return {"operation": operation, "rows": normalized_rows, "cursor": cursor}
-
