@@ -70,6 +70,18 @@ def _digest(value: object) -> str:
     return sha256_hex(canonical_json_bytes(value))
 
 
+def _json_ready(value: Any) -> Any:
+    """Normalize nested strict models before deriving a canonical digest."""
+
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, Mapping):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
 class DossierRunHistory(StrictModel):
     sequence: int = Field(ge=1)
     event_sha256: Sha256
@@ -305,7 +317,7 @@ class AuditDossierManifest(StrictModel):
         for key, default in defaults.items():
             body.setdefault(key, default)
         try:
-            expected = _digest(body)
+            expected = _digest(_json_ready(body))
         except (TypeError, ValueError):
             return value
         if supplied is not None and supplied != expected:
@@ -481,6 +493,57 @@ def _qualification_receipt(dossier: AuditDossierManifest) -> DossierQualificatio
     )
 
 
+def _validate_persisted_pass_inputs(
+    root: Path,
+    dossier: AuditDossierManifest,
+    replayed: Any,
+) -> None:
+    """Recheck the typed evidence required before a persisted PASS is trusted."""
+
+    expected_capabilities = {
+        "audit_complete",
+        "citation_verified",
+        "experiment_reproduced",
+        "independent_review_complete",
+    }
+    capabilities = {item.capability: item for item in dossier.claim_capabilities}
+    if set(capabilities) != expected_capabilities or any(
+        item.verdict != "PASS" for item in capabilities.values()
+    ):
+        raise AuditDossierError(
+            "technical PASS dossier lacks four typed PASS claim capabilities"
+        )
+    if not dossier.integrity_receipt_sha256:
+        raise AuditDossierError("technical PASS dossier lacks integrity evidence")
+    if not dossier.experiment_provenance_sha256:
+        raise AuditDossierError("technical PASS dossier lacks provenance evidence")
+    if not dossier.access_decisions:
+        raise AuditDossierError("technical PASS dossier lacks access evidence")
+    from arw.evidence_access import load_evidence_access_decision
+    from arw.experiment_provenance import load_experiment_provenance
+    from arw.integrity import load_integrity_receipt
+
+    for digest in dossier.integrity_receipt_sha256:
+        if load_integrity_receipt(root, digest).receipt_sha256 != digest:
+            raise AuditDossierError("integrity evidence digest drifted")
+    for digest in dossier.experiment_provenance_sha256:
+        if load_experiment_provenance(root, digest).provenance_sha256 != digest:
+            raise AuditDossierError("provenance evidence digest drifted")
+    for digest in dossier.access_decisions:
+        if load_evidence_access_decision(root, digest).decision_sha256 != digest:
+            raise AuditDossierError("access evidence digest drifted")
+    history = tuple(
+        (item.sequence, item.event_sha256, item.event_type, item.resulting_revision)
+        for item in dossier.run_history
+    )
+    expected_history = tuple(
+        (event.sequence, event.event_sha256, event.event_type, event.resulting_revision)
+        for event in getattr(replayed, "events", ())
+    )
+    if history != expected_history:
+        raise AuditDossierError("technical PASS dossier run history is not replay-bound")
+
+
 def publish_audit_dossier(root: Path, value: Mapping[str, Any] | AuditDossierManifest) -> Path:
     dossier = seal_audit_dossier(value)
     try:
@@ -545,6 +608,7 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
                 or dossier.run_manifest_sha256 != receipt.run_manifest_sha256
             ):
                 raise AuditDossierError("technical PASS dossier replay identity drifted")
+            _validate_persisted_pass_inputs(root, dossier, replayed)
         else:
             dossier = seal_audit_dossier(raw)
     except (OSError, UnicodeError, ValueError) as error:

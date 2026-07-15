@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from pathlib import Path
 
 import pytest
 
@@ -138,6 +140,9 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
 
 def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
     from arw.audit_dossier import _seal_audit_dossier
+    from arw.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
+    from arw.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
+    from arw.integrity import publish_integrity_receipt, seal_integrity_receipt
     from arw.journal import initialize_run
     from arw.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
@@ -168,13 +173,63 @@ def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
     )
     replayed = initialize_run(root, request)
     manifest_sha256 = hashlib.sha256((root / "run-manifest.json").read_bytes()).hexdigest()
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-run"
+    integrity = seal_integrity_receipt(
+        json.loads((fixture_root / "integrity/receipt.json").read_text(encoding="utf-8"))
+    )
+    provenance = seal_experiment_provenance(
+        json.loads((fixture_root / "experiment/provenance.json").read_text(encoding="utf-8"))
+    )
+    access = seal_evidence_access_decision(
+        {
+            "schema_version": "arw.evidence-access-decision.v1",
+            "decision_id": "decision.receipt-test",
+            "evidence_id": "evidence.receipt-test",
+            "subject_sha256": "a" * 64,
+            "evidence_sha256": ["b" * 64],
+            "source_manifest_sha256": ["c" * 64],
+            "access_state": "human_review_required",
+            "license_status": "unknown",
+            "accountable_actor_id": "operator.user",
+            "accountable_role": "operator",
+            "authority_sha256": "d" * 64,
+            "rationale": "receipt test requires human review",
+            "scope": "receipt test",
+            "created_at": "2026-07-16T00:00:00Z",
+        }
+    )
+    publish_integrity_receipt(root, integrity)
+    publish_experiment_provenance(root, provenance)
+    publish_evidence_access_decision(root, access)
+    claims = [
+        {"capability": capability, "verdict": "PASS"}
+        for capability in (
+            "audit_complete",
+            "citation_verified",
+            "experiment_reproduced",
+            "independent_review_complete",
+        )
+    ]
     body = {
         "schema_version": "arw.audit-dossier.v1",
         "dossier_id": "audit-dossier.current",
         "run_id": RUN_ID,
         "generated_at": "2026-07-16T00:00:00Z",
         "ledger_head_sha256": replayed.last_event_sha256,
+        "run_history": [
+            {
+                "sequence": event.sequence,
+                "event_sha256": event.event_sha256,
+                "event_type": event.event_type,
+                "resulting_revision": event.resulting_revision,
+            }
+            for event in replayed.events
+        ],
         "run_manifest_sha256": manifest_sha256,
+        "integrity_receipt_sha256": [integrity.receipt_sha256],
+        "experiment_provenance_sha256": [provenance.provenance_sha256],
+        "access_decisions": [access.decision_sha256],
+        "claim_capabilities": claims,
         "technical_qualification": {
             "verdict": "PASS",
             "reason_codes": [],
@@ -187,7 +242,6 @@ def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
             "evidence_sha256": [],
             "rationale": "legal release evidence remains unresolved",
         },
-        "claim_capabilities": [],
         "blockers": [],
     }
     dossier = _seal_audit_dossier(body, allow_derived_pass=True)
