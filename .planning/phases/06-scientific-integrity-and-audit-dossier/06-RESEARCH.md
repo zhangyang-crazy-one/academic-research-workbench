@@ -266,7 +266,18 @@ No worker, hook, SQLite projection, or Markdown renderer may append canonical
    state. Human corrections/waivers are additional accepted records and are
    included by exact predecessor/supersession hashes.
 
-## Validation architecture
+## Security Domain
+
+Phase 6 uses ASVS L1 as a hard planning gate. V1/V4 protect parent-owned
+authority and accountable approval; V5 covers strict schemas, canonical bytes,
+path/size validation; V6 covers SHA-256 integrity binding (not authentication);
+V7 covers redacted bounded logs; V8 protects private data and license
+boundaries; V12 covers safe files/resources and process limits; V14 binds pinned
+source, lock, build, and configuration identity. High or critical findings,
+unexpected skips/xfails, or identity drift block technical qualification and
+must be represented as typed evidence rather than waived by a caller.
+
+## Validation Architecture
 
 Validation should follow the existing quick → phase → staged → full pattern and
 retain raw command output under a repo-local, owned evidence root. Do not run a
