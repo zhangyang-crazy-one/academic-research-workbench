@@ -5,7 +5,7 @@ Academic Research Workbench preserves each upstream source identity and records 
 ## academic-research-skills
 
 - Upstream revision: `c22c17eed8a5753aa60681be9734919f2e2f5b42`
-- Adapter version: `0.1.19`
+- Adapter version: `0.1.20`
 - Materialized source: `vendor/sources/academic-research-skills`
 - Local source modifications: none; the snapshot is bundled unchanged.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
