@@ -55,12 +55,12 @@
 
 ### Rebuildable Research Graph
 
-- [ ] **GRAPH-01**: An operator can project validated manifests into stable nodes and edges for Run, Stage, Artifact, Claim, Source, Dataset, Experiment, Figure, Review, and Gate.
-- [ ] **GRAPH-02**: Every projected entity records stable identity, source digest, schema version, supersession state, and canonical ledger watermark.
-- [ ] **GRAPH-03**: An operator can delete and rebuild graph and file indexes and obtain equivalent normalized query results from unchanged canonical inputs.
-- [ ] **GRAPH-04**: Incremental projection produces results equivalent to a full rebuild after modifications, renames, deletes, corrections, and supersessions.
-- [ ] **GRAPH-05**: An authorized client can issue bounded allowlisted queries that trace claims to sources, datasets, experiments, figures, reviews, and gate evidence.
-- [ ] **GRAPH-06**: Graph or index corruption, staleness, or unavailability cannot alter provenance, gate verdicts, accepted state, or the next legal transition.
+- [x] **GRAPH-01**: An operator can project validated manifests into stable nodes and edges for Run, Stage, Artifact, Claim, Source, Dataset, Experiment, Figure, Review, and Gate.
+- [x] **GRAPH-02**: Every projected entity records stable identity, source digest, schema version, supersession state, and canonical ledger watermark.
+- [x] **GRAPH-03**: An operator can delete and rebuild graph and file indexes and obtain equivalent normalized query results from unchanged canonical inputs.
+- [x] **GRAPH-04**: Incremental projection produces results equivalent to a full rebuild after modifications, renames, deletes, corrections, and supersessions.
+- [x] **GRAPH-05**: An authorized client can issue bounded allowlisted queries that trace claims to sources, datasets, experiments, figures, reviews, and gate evidence.
+- [x] **GRAPH-06**: Graph or index corruption, staleness, or unavailability cannot alter provenance, gate verdicts, accepted state, or the next legal transition.
 
 ### Scientific Integrity And Human Gates
 
@@ -78,7 +78,7 @@
 - [ ] **VER-02**: Installed-plugin tests exercise manifest discovery, skill routing, launcher resolution, MCP negotiation, hooks, and version reporting from a staged package.
 - [x] **VER-03**: Security tests cover traversal, symlink or junction escape, race-sensitive file replacement, sensitive files, malformed input, and output-budget exhaustion.
 - [ ] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
-- [ ] **VER-05**: Projection tests compare clean, full-rebuild, incremental, delete, rename, migration, and supersession query results under a declared normalization oracle.
+- [x] **VER-05**: Projection tests compare clean, full-rebuild, incremental, delete, rename, migration, and supersession query results under a declared normalization oracle.
 - [ ] **VER-06**: One representative end-to-end fixture covers sources, claims, an experiment record, a figure or result, independent review, a failed gate, human resolution, crash/resume, and final audit output.
 - [ ] **VER-07**: A release candidate produces an inspectable audit dossier containing run history, manifests, Passports, evidence receipts, review matrix, waivers, projection receipts, test logs, benchmark versions, and build provenance.
 - [ ] **VER-08**: Release qualification fails on unresolved licensing, integrity, recovery, security, compatibility, or staged-package evidence gates.
@@ -170,12 +170,12 @@
 | AGT-05 | Phase 4 | Complete |
 | AGT-06 | Phase 4 | Complete |
 | AGT-07 | Phase 4 | Complete |
-| GRAPH-01 | Phase 5 | Pending |
-| GRAPH-02 | Phase 5 | Pending |
-| GRAPH-03 | Phase 5 | Pending |
-| GRAPH-04 | Phase 5 | Pending |
-| GRAPH-05 | Phase 5 | Pending |
-| GRAPH-06 | Phase 5 | Pending |
+| GRAPH-01 | Phase 5 | Complete |
+| GRAPH-02 | Phase 5 | Complete |
+| GRAPH-03 | Phase 5 | Complete |
+| GRAPH-04 | Phase 5 | Complete |
+| GRAPH-05 | Phase 5 | Complete |
+| GRAPH-06 | Phase 5 | Complete |
 | SCI-01 | Phase 6 | Pending |
 | SCI-02 | Phase 4 | Complete |
 | SCI-03 | Phase 4 | Complete |
@@ -187,7 +187,7 @@
 | VER-02 | Phase 7 | Pending |
 | VER-03 | Phase 3 | Complete |
 | VER-04 | Phase 7 | Pending |
-| VER-05 | Phase 5 | Pending |
+| VER-05 | Phase 5 | Complete |
 | VER-06 | Phase 7 | Pending |
 | VER-07 | Phase 6 | Pending |
 | VER-08 | Phase 7 | Pending |

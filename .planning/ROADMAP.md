@@ -10,7 +10,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 - [x] **Phase 2: Durable Provenance Runtime** - Make canonical research runs deterministic, immutable, replayable, and recoverable through the sole writer. (completed 2026-07-13)
 - [x] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge. (completed 2026-07-14)
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
-- [ ] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries.
+- [x] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries. (technical complete 2026-07-15; release remains blocked by SUP-04/P04-09)
 - [ ] **Phase 6: Scientific Integrity and Audit Dossier** - Turn scientific checks, experiment provenance, evidence access, and unresolved claims into immutable receipts and an inspectable dossier.
 - [ ] **Phase 7: Installed E2E Recovery and Release Qualification** - Qualify the staged package through compatibility, adversarial recovery, representative research, and release-blocking evidence gates.
 
@@ -218,15 +218,15 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md - Pinned native projection generation and bounded allowlisted MCP queries
+- [x] 05-02-PLAN.md - Pinned native projection generation and bounded allowlisted MCP queries
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-03-PLAN.md - Full/incremental equivalence, mutation matrix, and authority isolation
+- [x] 05-03-PLAN.md - Full/incremental equivalence, mutation matrix, and authority isolation
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-04-PLAN.md - Staged qualification, evidence-bound verifier, and planning reconciliation
+- [x] 05-04-PLAN.md - Staged qualification, evidence-bound verifier, and planning reconciliation
 
 ### Phase 6: Scientific Integrity and Audit Dossier
 

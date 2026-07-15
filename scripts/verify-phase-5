@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Serial, evidence-bound technical verifier for the Phase 5 graph profile."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE_BASE = (PROJECT_ROOT / "build/evidence").resolve()
+DEFAULT_EVIDENCE_ROOT = EVIDENCE_BASE / "phase-05"
+MARKER = ".arw-phase5-evidence"
+PYTHON = PROJECT_ROOT / ".venv/bin/python"
+MAX_CAPTURE = 512 * 1024
+
+if (
+    __name__ == "__main__"
+    and PYTHON.is_file()
+    and (
+        Path(sys.executable).resolve() != PYTHON.resolve()
+        or Path(sys.prefix).resolve() != PYTHON.parent.parent.resolve()
+    )
+):
+    os.execv(str(PYTHON), [str(PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
+class VerificationError(RuntimeError):
+    pass
+
+
+def digest_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def digest_file(path: Path) -> str:
+    return digest_bytes(path.read_bytes())
+
+
+def canonical(value: object) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(canonical(value))
+
+
+def owned_root(raw: Path, *, clean: bool) -> Path:
+    candidate = raw.expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    candidate = candidate.absolute()
+    if candidate == EVIDENCE_BASE or not candidate.is_relative_to(EVIDENCE_BASE):
+        raise VerificationError(f"evidence root must be below {EVIDENCE_BASE}")
+    current = EVIDENCE_BASE
+    for component in candidate.relative_to(EVIDENCE_BASE).parts:
+        current /= component
+        if current.is_symlink():
+            raise VerificationError("evidence root cannot contain symlink components")
+    root = candidate.resolve(strict=False)
+    if root == EVIDENCE_BASE or not root.is_relative_to(EVIDENCE_BASE):
+        raise VerificationError(f"evidence root must resolve below {EVIDENCE_BASE}")
+    if root.exists():
+        if root.is_symlink() or not root.is_dir():
+            raise VerificationError("evidence root is unsafe")
+        marker = root / MARKER
+        if not clean or not marker.is_file() or marker.is_symlink():
+            raise VerificationError("existing evidence root is not an owned cleanable root")
+        shutil.rmtree(root)
+    root.mkdir(parents=True)
+    (root / MARKER).write_text("phase-5\n", encoding="ascii")
+    return root
+
+
+def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, object]:
+    command_root = root / "commands" / name
+    command_root.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1"})
+    if env:
+        environment.update(env)
+    result = subprocess.run(
+        argv,
+        cwd=PROJECT_ROOT,
+        env=environment,
+        text=False,
+        capture_output=True,
+        check=False,
+    )
+    stdout = result.stdout[:MAX_CAPTURE]
+    stderr = result.stderr[:MAX_CAPTURE]
+    (command_root / "stdout.log").write_bytes(stdout)
+    (command_root / "stderr.log").write_bytes(stderr)
+    payload = {
+        "argv": argv,
+        "cwd": str(PROJECT_ROOT),
+        "returncode": result.returncode,
+        "stdout_sha256": digest_bytes(stdout),
+        "stderr_sha256": digest_bytes(stderr),
+        "stdout_truncated": len(result.stdout) > len(stdout),
+        "stderr_truncated": len(result.stderr) > len(stderr),
+    }
+    write_json(command_root / "result.json", payload)
+    if result.returncode != 0:
+        raise VerificationError(f"{name} failed with exit {result.returncode}")
+    return payload
+
+
+def tree_inventory(root: Path) -> list[dict[str, str]]:
+    rows = []
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        if path.is_symlink():
+            raise VerificationError(f"symlink in staged tree: {path.relative_to(root)}")
+        if path.is_file():
+            rows.append({"path": path.relative_to(root).as_posix(), "sha256": digest_file(path)})
+    return rows
+
+
+def graph_transcript(root: Path) -> dict[str, object]:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+    from arw.graph_mcp import GraphMcpServer
+    from arw.graph_projection import project_canonical_records
+    from arw.graph_store import GraphStore
+    def fixture_records() -> list[dict[str, object]]:
+        types = ["Run", "Stage", "Artifact", "Claim", "Source", "Dataset", "Experiment", "Figure", "Review", "Gate"]
+        records = [
+            {
+                "entity_type": entity_type,
+                "entity_id": f"{entity_type.lower()}-{index:03d}",
+                "source_digest": "a" * 64,
+                "payload": {"entity_type": entity_type, "title": f"{entity_type.lower()}-{index:03d}"},
+            }
+            for index, entity_type in enumerate(types, start=1)
+        ]
+        records[3]["edges"] = [{"edge_type": "supported_by", "to_entity_id": "source-005"}]
+        records[9]["edges"] = [{"edge_type": "evidenced_by", "to_entity_id": "review-009"}]
+        return records
+
+    control = root / "graph-control"
+    store = GraphStore(control, "research-root")
+    store.build_full(project_canonical_records(fixture_records(), ledger_watermark=10, ledger_head_sha256="a" * 64))
+    server = GraphMcpServer(store)
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "trace_claim", "arguments": {"entity_id": "claim-004", "max_rows": 20}}},
+        {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "trace_claim", "arguments": {"entity_id": "claim-004", "cypher": "CREATE (n)"}}},
+    ]
+    responses = [server.handle(message) for message in messages]
+    names = [tool["name"] for tool in responses[1]["result"]["tools"]]
+    expected = ["trace_claim", "trace_source", "trace_experiment", "trace_review", "trace_gate_evidence", "graph_health"]
+    if names != expected:
+        raise VerificationError(f"graph tool profile drift: {names}")
+    if responses[2]["result"]["isError"] or not responses[3]["result"]["isError"]:
+        raise VerificationError("MCP accepted a write/raw query or rejected the named trace")
+    transcript = {"protocol": "2025-11-25", "messages": messages, "responses": responses}
+    write_json(root / "mcp-transcript.json", transcript)
+    return {"tools": names, "message_count": len(messages), "transcript_sha256": digest_file(root / "mcp-transcript.json")}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--evidence-root", type=Path, default=DEFAULT_EVIDENCE_ROOT)
+    args = parser.parse_args()
+    try:
+        root = owned_root(args.evidence_root, clean=args.clean)
+        write_json(root / "preflight.json", {
+            "schema_version": "1.0.0",
+            "phase": "05",
+            "python": sys.version,
+            "git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True).strip(),
+            "technical_scope": "rebuildable-research-graph-and-bounded-evidence-queries",
+        })
+        run_command(root, "source-verification", ["./scripts/verify-sources", "--inputs-only"])
+        run_command(root, "graph-tests", [str(PYTHON), "-m", "pytest", "-q", "tests/schema/test_graph_contracts.py", "tests/schema/test_schema_drift.py", "tests/unit/test_graph_projection.py", "tests/integration/test_graph_projection.py", "tests/integration/test_graph_queries.py", "tests/integration/test_graph_mcp_profile.py", "tests/integration/test_graph_rebuild.py", "tests/integration/test_graph_authority.py", "tests/property/test_graph_replay.py"])
+        native = root / "native"
+        native.mkdir()
+        run_command(root, "native-profile-compile", ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "tests/native/test_phase5_graph_profile.c", "-o", str(native / "test_phase5_graph_profile")])
+        run_command(root, "native-profile-run", [str(native / "test_phase5_graph_profile")])
+        stage = PROJECT_ROOT / "build/stage/phase-05"
+        stage_evidence = root / "stage-plugin"
+        run_command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence)])
+        run_command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only"])
+        staged_rows = tree_inventory(stage)
+        if any(row["path"].endswith((".db", ".sqlite", ".sqlite3")) for row in staged_rows):
+            raise VerificationError("graph database leaked into stage")
+        required = {"scripts/file-base-graph-mcp", "docs/runtime/research-graph.md", "share/arw/schemas/graph-query-request.schema.json", "share/arw/schemas/graph-query-result.schema.json"}
+        staged_paths = {row["path"] for row in staged_rows}
+        if not required.issubset(staged_paths):
+            raise VerificationError(f"staged graph artifacts missing: {sorted(required - staged_paths)}")
+        write_json(root / "stage-tree.json", {"files": staged_rows, "sha256": digest_file(stage / "share/arw/build-identity.json")})
+        transcript = graph_transcript(root)
+        identity = json.loads((stage / "share/arw/build-identity.json").read_text(encoding="utf-8"))
+        if identity.get("projection", {}).get("algorithm") != "research-graph-projection-v1":
+            raise VerificationError("staged build identity lacks graph projection binding")
+        requirements = {
+            requirement: {"status": "PASS", "evidence": ["source-verification", "graph-tests", "stage-validate", "mcp-transcript"]}
+            for requirement in ("GRAPH-01", "GRAPH-02", "GRAPH-03", "GRAPH-04", "GRAPH-05", "GRAPH-06", "VER-05")
+        }
+        verdict = {
+            "schema_version": "1.0.0",
+            "phase": "05",
+            "technical_qualification": "PASS",
+            "release_qualification": "BLOCKED",
+            "release_blockers": ["SUP-04", "P04-09"],
+            "requirements": requirements,
+            "mcp": transcript,
+            "stage_identity_sha256": digest_file(stage / "share/arw/build-identity.json"),
+            "evidence_root": str(root),
+        }
+        write_json(root / "requirements.json", requirements)
+        write_json(root / "verdict.json", verdict)
+        write_json(root / "summary.json", {"technical_qualification": "PASS", "release_qualification": "BLOCKED", "requirements": list(requirements), "stage": str(stage), "mcp_transcript_sha256": transcript["transcript_sha256"]})
+        return 0
+    except (OSError, subprocess.SubprocessError, VerificationError) as error:
+        if "root" in locals():
+            write_json(root / "verdict.json", {"schema_version": "1.0.0", "phase": "05", "technical_qualification": "FAIL", "release_qualification": "BLOCKED", "error": str(error)})
+        print(f"verify-phase-5: {error}", file=sys.stderr)
+        return 70
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

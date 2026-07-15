@@ -1,7 +1,7 @@
 ---
 phase: 05-rebuildable-research-graph-and-evidence-queries
 slug: rebuildable-research-graph-and-evidence-queries
-status: planned
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-07-15
@@ -51,11 +51,12 @@ created: 2026-07-15
 |---|---:|---:|---|---|---|---|---|
 | 05-01-T01 | 01 | 1 | GRAPH-01, GRAPH-02 | T05-05, T05-06 | schema/unit | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/schema/test_graph_contracts.py tests/unit/test_graph_projection.py` | passed |
 | 05-01-T02 | 01 | 1 | GRAPH-01, GRAPH-02 | T05-01, T05-06 | unit/integration | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/unit/test_graph_projection.py tests/integration/test_graph_projection.py` | passed |
-| 05-02-T01 | 02 | 2 | GRAPH-03, GRAPH-05 | T05-01, T05-03, T05-04 | native/integration | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_queries.py tests/integration/test_graph_mcp_profile.py` | pending |
-| 05-02-T02 | 02 | 2 | GRAPH-05, VER-05 | T05-04 | adversarial | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_queries.py -k 'allowlist or bound or timeout or readonly'` | pending |
-| 05-03-T01 | 03 | 3 | GRAPH-03, GRAPH-04, VER-05 | T05-05, T05-06 | mutation/oracle | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_rebuild.py -k 'full or incremental or rename or delete or correction or migration or supersession'` | pending |
-| 05-03-T02 | 03 | 3 | GRAPH-06 | T05-01, T05-02, T05-03 | crash/tamper | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_authority.py` | pending |
-| 05-04-T01 | 04 | 4 | GRAPH-01..06, VER-05 | T05-01..T05-07 | staged E2E | `UV_OFFLINE=1 ./scripts/verify-phase-5 --clean --evidence-root build/evidence/phase-05` | pending |
+| 05-02-T01 | 02 | 2 | GRAPH-03, GRAPH-05 | T05-01, T05-03, T05-04 | native/integration | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_queries.py tests/integration/test_graph_mcp_profile.py` | passed |
+| 05-02-T02 | 02 | 2 | GRAPH-05, VER-05 | T05-04 | adversarial | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_queries.py -k 'allowlist or bound or timeout or readonly'` | passed |
+| 05-03-T01 | 03 | 3 | GRAPH-03, GRAPH-04, VER-05 | T05-05, T05-06 | mutation/oracle | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_rebuild.py -k 'full or incremental or rename or delete or correction or migration or supersession'` | passed |
+| 05-03-T02 | 03 | 3 | GRAPH-06 | T05-01, T05-02, T05-03 | crash/tamper | `UV_OFFLINE=1 .venv/bin/python -m pytest -q tests/integration/test_graph_authority.py` | passed |
+| 05-04-T01 | 04 | 4 | GRAPH-01..06, VER-05 | T05-01..T05-07 | staged E2E | `UV_OFFLINE=1 ./scripts/verify-phase-5 --clean --evidence-root build/evidence/phase-05` | passed |
+| 05-04-T02 | 04 | 4 | GRAPH-01..06, VER-05 | T05-01..T05-07 | serial verifier/regression | `UV_OFFLINE=1 ./scripts/verify-phase-5 --clean --evidence-root build/evidence/phase-05`; non-host regression `371 passed, 1 deselected` | passed |
 
 ## Wave 0 Requirements
 
@@ -79,6 +80,13 @@ behavior is not accepted on an unrecorded manual assertion.
 - [ ] Exact staged package contains no private graph/index/run data and all stage identity/SBOM checks pass.
 - [ ] Frozen full pytest, source verifier, prior Phase 1–4.1 technical verifiers, and Phase 5 verifier pass.
 - [ ] SUP-04/P04-09 release blockers remain separately truthful.
+
+The Phase 5 verifier, source verification, and all non-host regression tests pass.
+The frozen host-inclusive run recorded 370 passed and five failures: three were
+temporary `/tmp` quota exhaustion (the repo-local staging root now prevents
+this), while the two Codex-host route checks are blocked by the installed host's
+external usage-limit response. This is retained as an environment qualification
+blocker, not converted into an xfail or a technical pass.
 
 ## Validation Sign-Off
 

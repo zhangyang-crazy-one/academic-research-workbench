@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md; Wave 2 native graph profile next
-last_updated: "2026-07-15T12:35:00.000Z"
-last_activity: 2026-07-15 -- Phase 5 Plan 01 contracts/projector/oracle verified
+stopped_at: Completed 05-04-PLAN.md; Phase 5 technical qualification PASS, release blockers retained
+last_updated: "2026-07-15T23:20:00.000Z"
+last_activity: 2026-07-15 -- Phase 5 serial verifier passed GRAPH-01..06 and VER-05
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 35
-  completed_plans: 31
-  percent: 89
+completed_plans: 34
+percent: 97
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Phase 5 rebuildable research-graph planning is complete; execute its four waves while preserving the P04-09 accountable-human and SUP-04 legal blockers.
+**Current focus:** Phase 5 rebuildable research graph and bounded evidence queries are technically complete; preserve the P04-09 accountable-human and SUP-04 legal blockers while continuing later phases.
 
 ## Current Position
 
 Phase: 5 (Rebuildable Research Graph and Evidence Queries)
-Plan: 1 of 4
-Status: Executing; Plan 01 complete
-Last activity: 2026-07-15 -- graph contracts/projector/oracle pass; P04-09/SUP-04 remain explicit gates
+Plan: 4 of 4
+Status: Technical complete; release blocked by P04-09/SUP-04
+Last activity: 2026-07-15 -- serial Phase 5 verifier PASS; exact stage and evidence retained
 
 Progress: [████████▉░] 89%
 

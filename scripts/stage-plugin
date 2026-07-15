@@ -282,7 +282,12 @@ if [[ -e "$STAGE_ROOT" ]]; then
   rm -rf -- "$STAGE_ROOT"
 fi
 
-WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/arw-stage.XXXXXX")"
+STAGE_TMP_ROOT="${ARW_STAGE_TMP_ROOT:-$PROJECT_ROOT/build/tmp}"
+STAGE_TMP_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_TMP_ROOT")"
+[[ "$STAGE_TMP_ROOT" != "/" && "$STAGE_TMP_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe stage temporary root" 64
+mkdir -p "$STAGE_TMP_ROOT"
+WORK_ROOT="$(mktemp -d "$STAGE_TMP_ROOT/arw-stage.XXXXXX")"
 TEMP_STAGE="$STAGE_ROOT.tmp.$$"
 cleanup() {
   rm -rf -- "$WORK_ROOT" "$TEMP_STAGE"
@@ -318,6 +323,7 @@ copy_file "hooks/hooks.json"
 copy_file "hooks/arw_hook.py" 0755
 copy_file "docs/runtime/durable-provenance.md"
 copy_file "docs/runtime/files-first-data-plane.md"
+copy_file "docs/runtime/research-graph.md"
 copy_file "scripts/verify-phase-2" 0755
 copy_file "tests/integration/test_phase2_durable_runtime.py"
 copy_file "schemas/v1/route-result.schema.json"
@@ -348,6 +354,7 @@ copy_as "schemas/v1/source-manifest.schema.json" "share/arw/schemas/source-manif
 copy_as "schemas/v1/version-report.schema.json" "share/arw/schemas/version-report.schema.json"
 copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
+copy_file "scripts/file-base-graph-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
 copy_as "generated/file-contracts.h" "share/arw/file-contracts.h"
@@ -617,6 +624,26 @@ identity = {
         )[-1]["post_tree_sha256"],
         "upstream_test_tree_sha256": manifest["native_test_suites"][0]["tree_sha256"],
     },
+    "projection": {
+        "algorithm": "research-graph-projection-v1",
+        "oracle": "research-graph-normalization-v1",
+        "native_profile": "research-graph-builder-v1",
+        "patch_set_sha256": hashlib.sha256(
+            json.dumps(
+                [{key: patch[key] for key in ("order", "path", "sha256")} for patch in manifest["patches"]],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
+        "profile_patch_sha256": next(
+            patch["sha256"] for patch in manifest["patches"] if patch["order"] == 4
+        ),
+        "query_profile": "arw-graph-mcp-v1",
+        "query_launcher": {
+            "path": "scripts/file-base-graph-mcp",
+            "sha256": digest(stage_root / "scripts/file-base-graph-mcp"),
+        },
+    },
     "file_contract": {
         "header": {
             "path": "share/arw/file-contracts.h",
@@ -768,6 +795,7 @@ static_files = {
     "bin/arw",
     "docs/runtime/durable-provenance.md",
     "docs/runtime/files-first-data-plane.md",
+    "docs/runtime/research-graph.md",
     "hooks/hooks.json",
     "hooks/arw_hook.py",
     "libexec/file-base-mcp",
@@ -791,6 +819,7 @@ static_files = {
     "schemas/v1/host-identity-receipt.schema.json",
     "schemas/v1/human-authority.schema.json",
     "scripts/file-base-mcp",
+    "scripts/file-base-graph-mcp",
     "scripts/verify-phase-2",
     "share/arw/file-contracts.h",
     "share/arw/build-identity.json",

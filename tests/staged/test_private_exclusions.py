@@ -126,3 +126,15 @@ def test_stage_validation_rejects_post_build_extras_and_symlinks(
     validated = _run_stage(stage_root, validate_only=True)
     assert validated.returncode != 0
     assert kind.split("-", 1)[-1] in validated.stderr.lower() or "allowlist" in validated.stderr.lower()
+
+
+def test_graph_database_and_fixture_payloads_are_not_staged(tmp_path: Path) -> None:
+    stage_root = tmp_path / "stage" / PLUGIN_NAME
+    result = _run_stage(stage_root)
+    assert result.returncode == 0, result.stderr
+    paths = {path.relative_to(stage_root).as_posix() for path in stage_root.rglob("*") if path.is_file()}
+    assert not any(path.endswith((".sqlite", ".sqlite3", ".db")) for path in paths)
+    assert not any("generations/" in path or "graph.sqlite" in path for path in paths)
+    assert not any("tests/fixtures/research-graph" in path for path in paths)
+    validated = _run_stage(stage_root, validate_only=True)
+    assert validated.returncode == 0, validated.stderr

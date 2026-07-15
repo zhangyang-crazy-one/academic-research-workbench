@@ -12,6 +12,7 @@
     "components",
     "patches",
     "native",
+    "projection",
     "file_contract",
     "wheelhouse",
     "schemas",
@@ -35,6 +36,7 @@
       "items": {"$ref": "#/$defs/patch"}
     },
     "native": {"$ref": "#/$defs/native"},
+    "projection": {"$ref": "#/$defs/projection"},
     "file_contract": {"$ref": "#/$defs/fileContract"},
     "wheelhouse": {"$ref": "#/$defs/wheelhouse"},
     "schemas": {"$ref": "#/$defs/schemaSet"},
@@ -116,6 +118,28 @@
         "compile_profile": {"const": "release-o2"},
         "patched_source_tree_sha256": {"$ref": "#/$defs/sha256"},
         "upstream_test_tree_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "oracle",
+        "native_profile",
+        "patch_set_sha256",
+        "profile_patch_sha256",
+        "query_profile",
+        "query_launcher"
+      ],
+      "properties": {
+        "algorithm": {"const": "research-graph-projection-v1"},
+        "oracle": {"const": "research-graph-normalization-v1"},
+        "native_profile": {"const": "research-graph-builder-v1"},
+        "patch_set_sha256": {"$ref": "#/$defs/sha256"},
+        "profile_patch_sha256": {"$ref": "#/$defs/sha256"},
+        "query_profile": {"const": "arw-graph-mcp-v1"},
+        "query_launcher": {"$ref": "#/$defs/digestPath"}
       }
     },
     "fileContract": {

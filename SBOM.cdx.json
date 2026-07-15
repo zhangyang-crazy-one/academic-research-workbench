@@ -25,7 +25,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1f55aa5c52bff7258bb9d9ea3c45b3b40d3a2337a341f718abfe6d73ca6d7c90"
+          "content": "92bba6fe4799bcf3bc1ef5bd0f0f1c7830b060d9f7409d367605c760b92a3e10"
         }
       ],
       "name": ".file-base/build-evidence.json",
@@ -41,6 +41,42 @@
         }
       ],
       "name": "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:hooks/arw_hook.py",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ab94f35ff2995fdc1106d9dfdae5e707a125414eb560c1ea8b99044d1c73b589"
+        }
+      ],
+      "name": "hooks/arw_hook.py",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:hooks/hooks.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4836bd8cce6ee1cd8418413bc953ce9336f6ba84ba5b89f73e68bae63f51b173"
+        }
+      ],
+      "name": "hooks/hooks.json",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:schemas/v1/integration-lock.schema.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c47ad15db702f592364152ad47ef9cbd7a6fb196d99a2ed3b36489111e1314a7"
+        }
+      ],
+      "name": "schemas/v1/integration-lock.schema.json",
       "type": "file",
       "version": "1"
     },
@@ -2277,7 +2313,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4dec1ec6aaaf5ca483c285e8bf5081781de4cea99f1fcc86de03c899986b293a"
+          "content": "9cd8355a2bf04a3ff91a3883bcb7dad6265859926c5e5b6988c6bbdd35ef528c"
         }
       ],
       "licenses": [
@@ -2323,6 +2359,18 @@
       "purl": "pkg:pypi/packaging@26.2",
       "type": "library",
       "version": "26.2"
+    },
+    {
+      "bom-ref": "patch:11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
+        }
+      ],
+      "name": "vendor/patches/file-base/0004-phase5-research-graph.patch",
+      "type": "file",
+      "version": "4"
     },
     {
       "bom-ref": "patch:1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029",
