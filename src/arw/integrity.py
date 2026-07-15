@@ -338,6 +338,13 @@ def generate_phase6_schema_documents() -> dict[str, dict[str, object]]:
     from arw.experiment_provenance import generate_phase6_schema_documents as generate_provenance_schemas
 
     generated.update(generate_provenance_schemas())
+    # Evidence access and claim-capability contracts are kept in their own
+    # module to avoid making integrity receipts an authority store.  Import
+    # lazily here so the two modules can compose their pure evaluators without
+    # creating an import cycle during normal runtime use.
+    from arw.evidence_access import generate_phase6_schema_documents as generate_access_schemas
+
+    generated.update(generate_access_schemas())
     return generated
 
 
@@ -348,6 +355,7 @@ PHASE6_SCHEMA_MODELS: tuple[type[StrictModel], ...] = (IntegrityReceipt, Experim
 PHASE6_SCHEMA_NAMES: tuple[str, ...] = (
     INTEGRITY_SCHEMA_NAME,
     "experiment-provenance.schema.json",
+    "evidence-access-decision.schema.json",
 )
 
 

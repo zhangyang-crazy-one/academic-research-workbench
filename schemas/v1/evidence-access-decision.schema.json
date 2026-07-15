@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/evidence-access-decision.schema.json",
+  "$defs": {
+    "EvidenceAccessState": {
+      "description": "The only access states accepted at a canonical boundary.",
+      "enum": [
+        "publicly_verified",
+        "locally_supplied",
+        "restricted",
+        "unavailable",
+        "human_review_required"
+      ],
+      "title": "EvidenceAccessState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One immutable, digest-bound access decision.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.evidence-access-decision.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "decision_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "evidence_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9._:-]*$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "subject_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Subject Sha256",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Sha256",
+      "type": "string"
+    },
+    "source_manifest_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Source Manifest Sha256",
+      "type": "array"
+    },
+    "access_state": {
+      "$ref": "#/$defs/EvidenceAccessState"
+    },
+    "source_kind": {
+      "default": "evidence",
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9._:-]*$",
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "source_uri": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Uri"
+    },
+    "license_status": {
+      "enum": [
+        "clear",
+        "ambiguous",
+        "restricted",
+        "unavailable",
+        "unknown"
+      ],
+      "title": "License Status",
+      "type": "string"
+    },
+    "license_name": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Name"
+    },
+    "accountable_actor_id": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Accountable Actor Id",
+      "type": "string"
+    },
+    "accountable_role": {
+      "enum": [
+        "operator",
+        "review_authority",
+        "access_authority",
+        "parent_control_plane"
+      ],
+      "title": "Accountable Role",
+      "type": "string"
+    },
+    "authority_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authority Sha256",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "scope": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Scope",
+      "type": "string"
+    },
+    "created_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision_kind": {
+      "default": "initial",
+      "enum": [
+        "initial",
+        "verification",
+        "correction",
+        "waiver",
+        "replacement"
+      ],
+      "title": "Decision Kind",
+      "type": "string"
+    },
+    "predecessor_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Predecessor Sha256"
+    },
+    "supersedes_decision_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Decision Id"
+    },
+    "superseded_at": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Superseded At"
+    },
+    "public_verification_receipt_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Public Verification Receipt Sha256"
+    },
+    "decision_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Decision Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "decision_id",
+    "evidence_id",
+    "subject_sha256",
+    "evidence_sha256",
+    "source_manifest_sha256",
+    "access_state",
+    "license_status",
+    "accountable_actor_id",
+    "accountable_role",
+    "authority_sha256",
+    "rationale",
+    "scope",
+    "created_at",
+    "decision_sha256"
+  ],
+  "title": "EvidenceAccessDecision",
+  "type": "object"
+}
