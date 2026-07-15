@@ -64,13 +64,13 @@
 
 ### Scientific Integrity And Human Gates
 
-- [ ] **SCI-01**: Each integrity check emits a versioned immutable evidence receipt with inputs, method, tool version, verdict, reasons, and freshness metadata.
+- [x] **SCI-01**: Each integrity check emits a versioned immutable evidence receipt with inputs, method, tool version, verdict, reasons, and freshness metadata.
 - [x] **SCI-02**: Gate outcomes distinguish PASS, FAIL, and BLOCKED and prevent finalization when required fresh evidence is absent or unresolved.
 - [x] **SCI-03**: A human can record an explicit waiver, correction, access decision, or approval with rationale and scope without rewriting prior evidence.
-- [ ] **SCI-04**: An operator can ingest externally executed experiment provenance, datasets, model/configuration identity, metrics, and artifacts through a strict common schema.
-- [ ] **SCI-05**: Controlled experiment execution remains disabled unless its sandbox, approval, environment-capture, and provenance-equivalence probe passes.
-- [ ] **SCI-06**: Evidence access states distinguish publicly verified, locally supplied, restricted, unavailable, and human-review-required material.
-- [ ] **SCI-07**: A run cannot claim independent review, citation verification, experiment reproduction, or audit completion when required lifecycle evidence is missing.
+- [x] **SCI-04**: An operator can ingest externally executed experiment provenance, datasets, model/configuration identity, metrics, and artifacts through a strict common schema.
+- [x] **SCI-05**: Controlled experiment execution remains disabled unless its sandbox, approval, environment-capture, and provenance-equivalence probe passes.
+- [x] **SCI-06**: Evidence access states distinguish publicly verified, locally supplied, restricted, unavailable, and human-review-required material.
+- [x] **SCI-07**: A run cannot claim independent review, citation verification, experiment reproduction, or audit completion when required lifecycle evidence is missing.
 
 ### Verification And Release Evidence
 
@@ -80,7 +80,7 @@
 - [ ] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
 - [x] **VER-05**: Projection tests compare clean, full-rebuild, incremental, delete, rename, migration, and supersession query results under a declared normalization oracle.
 - [ ] **VER-06**: One representative end-to-end fixture covers sources, claims, an experiment record, a figure or result, independent review, a failed gate, human resolution, crash/resume, and final audit output.
-- [ ] **VER-07**: A release candidate produces an inspectable audit dossier containing run history, manifests, Passports, evidence receipts, review matrix, waivers, projection receipts, test logs, benchmark versions, and build provenance.
+- [x] **VER-07**: A release candidate produces an inspectable audit dossier containing run history, manifests, Passports, evidence receipts, review matrix, waivers, projection receipts, test logs, benchmark versions, and build provenance.
 - [ ] **VER-08**: Release qualification fails on unresolved licensing, integrity, recovery, security, compatibility, or staged-package evidence gates.
 
 ## User Stories
@@ -176,20 +176,20 @@
 | GRAPH-04 | Phase 5 | Complete |
 | GRAPH-05 | Phase 5 | Complete |
 | GRAPH-06 | Phase 5 | Complete |
-| SCI-01 | Phase 6 | Pending |
+| SCI-01 | Phase 6 | Complete |
 | SCI-02 | Phase 4 | Complete |
 | SCI-03 | Phase 4 | Complete |
-| SCI-04 | Phase 6 | Pending |
-| SCI-05 | Phase 6 | Pending |
-| SCI-06 | Phase 6 | Pending |
-| SCI-07 | Phase 6 | Pending |
+| SCI-04 | Phase 6 | Complete |
+| SCI-05 | Phase 6 | Complete |
+| SCI-06 | Phase 6 | Complete |
+| SCI-07 | Phase 6 | Complete |
 | VER-01 | Phase 1 | Complete |
 | VER-02 | Phase 7 | Pending |
 | VER-03 | Phase 3 | Complete |
 | VER-04 | Phase 7 | Pending |
 | VER-05 | Phase 5 | Complete |
 | VER-06 | Phase 7 | Pending |
-| VER-07 | Phase 6 | Pending |
+| VER-07 | Phase 6 | Complete |
 | VER-08 | Phase 7 | Pending |
 
 **Coverage:**
@@ -199,4 +199,4 @@
 
 ---
 *Requirements defined: 2026-07-12*
-*Last updated: 2026-07-14 after Phase 3 technical qualification*
+*Last updated: 2026-07-16 after Phase 6 technical qualification; release remains blocked*

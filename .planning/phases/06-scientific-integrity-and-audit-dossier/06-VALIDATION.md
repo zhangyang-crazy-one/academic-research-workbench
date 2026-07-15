@@ -1,7 +1,7 @@
 ---
 phase: 06
 slug: scientific-integrity-and-audit-dossier
-status: passed-technical
+status: passed-technical-release-blocked
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-07-15
@@ -81,21 +81,31 @@ slice is considered complete.
 
 ## Phase 6 closeout evidence
 
-The serial verifier completed with `technical_qualification: PASS` and
-`release_qualification: BLOCKED` at `build/evidence/phase-06/verdict.json`.
-It retained source verification, Phase 6 tests, prior Phase 4/5 composition,
-staged build/validation, identities, stage inventory, and the separate retained
-license verdict. The verifier observed `codex-cli 0.144.4`, the current HEAD
-and dirty-worktree tree digest, the pinned source manifest/SBOM/wheelhouse, and
-the retained Phase 04.1 integration-lock digest.
+The final serial verifier completed with `technical_qualification: PASS` and
+`release_qualification: BLOCKED` at
+`build/evidence/phase-06-final-verifier/verdict.json`. It binds HEAD
+`92354292d8dd92e99650d81daf09e62aa6037ba3`, Codex CLI `0.144.4`, the exact
+Phase 04.1 integration lock
+`build/evidence/phase-04.1-host-canary-20260715i/integration-lock.json`
+(SHA-256
+`9d6ea3514e6abaed34e1223fbe3631e0e53a6d74b7f6945ebb29666aaf2be0c6`), stage
+tree `c4095eb25d5c3ed5d8d25a2c74f2af06a1995914d9a7b8ee26b39914b5411046`, and
+the source-manifest, schema-registry, SBOM, wheelhouse, and retained license
+identities. Locked stage build and validate both returned zero with no inventory
+drift.
 
-The bounded full regression ran serially with an absolute repository-owned
-`TMPDIR` and completed **448 passed** in 372.05 seconds. Output is retained at
-`build/evidence/phase-06/full/pytest.stdout.log` (SHA-256
+The verifier's Phase 6 focused command passed all selected tests and the prior
+Phase 4/5 composition command passed. The bounded full non-host regression ran
+serially with an absolute repository-owned temporary root and completed
+**448 passed** in 372.05 seconds. Output is retained at
+`build/evidence/phase-06-final-full/full/pytest.stdout.log` (SHA-256
 `f313c55b0e4eb4c137ad4d071e8b8da2cf519b99b88a4a7503ad67883c4ef5d6`) and
 `pytest.stderr.log` (SHA-256
-`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`). No
-tests were skipped, xfailed, or xpassed.
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`). The
+exact staged host/codex evidence is retained by the Phase 04.1 canary and
+reports three fresh HOME receipts, hook parity, controlled result channels,
+and no retained credentials or absolute-path material. No tests were skipped,
+xfailed, or xpassed.
 
 The native legal gate remains represented by the retained
 `supply-chain/license-verdict.json`: technical qualification is PASS, but
@@ -114,4 +124,6 @@ silently cleared.
 - [x] `nyquist_compliant: true` set in frontmatter after phase verification
 
 **Approval:** technical qualification complete; release approval remains blocked
-by the legal/intended-use gate above.
+by SUP-04/P04-09 and unresolved CC-BY-NC intended-use, distribution,
+accountable-approval, and permission evidence. This record does not authorize
+publication or distribution.

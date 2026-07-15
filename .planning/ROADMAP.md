@@ -11,7 +11,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 - [x] **Phase 3: Secure Files-First Data Plane** - Give authorized agents bounded multilingual research retrieval without exposing an unrestricted filesystem bridge. (completed 2026-07-14)
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
 - [x] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries. (technical complete 2026-07-15; release remains blocked by SUP-04/P04-09)
-- [ ] **Phase 6: Scientific Integrity and Audit Dossier** - Turn scientific checks, experiment provenance, evidence access, and unresolved claims into immutable receipts and an inspectable dossier.
+- [x] **Phase 6: Scientific Integrity and Audit Dossier** - Turn scientific checks, experiment provenance, evidence access, and unresolved claims into immutable receipts and an inspectable dossier. (technical complete 2026-07-16; release remains blocked by SUP-04/P04-09/permission)
 - [ ] **Phase 7: Installed E2E Recovery and Release Qualification** - Qualify the staged package through compatibility, adversarial recovery, representative research, and release-blocking evidence gates.
 
 ## Phase Details
@@ -246,23 +246,23 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md - Immutable integrity receipts and freshness invalidation
+- [x] 06-01-PLAN.md - Immutable integrity receipts and freshness invalidation
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md - External experiment provenance and controlled-execution block policy
+- [x] 06-02-PLAN.md - External experiment provenance and controlled-execution block policy
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-03-PLAN.md - Five-state evidence access and scientific claim gates
+- [x] 06-03-PLAN.md - Five-state evidence access and scientific claim gates
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-04-PLAN.md - Canonical audit dossier, deterministic rendering, and cold replay
+- [x] 06-04-PLAN.md - Canonical audit dossier, deterministic rendering, and cold replay
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-05-PLAN.md - Serial staged verifier, package inventory, and qualification reconciliation
+- [x] 06-05-PLAN.md - Serial staged verifier, package inventory, and qualification reconciliation
 
 ### Phase 7: Installed E2E Recovery and Release Qualification
 
@@ -289,7 +289,7 @@ Plans:
 | 4. Subagent Orchestration, Hooks, and Human Gates | 10/11 | Technical pass; P04-09 pending |  |
 | 04.1. Phase 4 Qualification Closure and Installed Host Verification | 3/3 | Technical pass; release blocked | 2026-07-15 |
 | 5. Rebuildable Research Graph and Evidence Queries | 4/4 | Technical complete; release blocked by P04-09/SUP-04 | 2026-07-15 |
-| 6. Scientific Integrity and Audit Dossier | 0/5 | Planned; ready to execute | - |
+| 6. Scientific Integrity and Audit Dossier | 5/5 | Technical complete; release blocked by SUP-04/P04-09/permission | 2026-07-16 |
 | 7. Installed E2E Recovery and Release Qualification | 0/TBD | Not started | - |
 
 ---
