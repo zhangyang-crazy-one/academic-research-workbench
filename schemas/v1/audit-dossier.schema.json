@@ -1,0 +1,581 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/audit-dossier.schema.json",
+  "$defs": {
+    "DossierBenchmarkVersion": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9._:-]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "source_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Sha256"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "DossierBenchmarkVersion",
+      "type": "object"
+    },
+    "DossierBlocker": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "default": "high",
+          "enum": [
+            "low",
+            "moderate",
+            "high",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "evidence_sha256": {
+          "default": [],
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Evidence Sha256",
+          "type": "array"
+        },
+        "replacement_evidence": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "title": "Replacement Evidence",
+          "type": "array"
+        },
+        "legal": {
+          "default": false,
+          "title": "Legal",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "DossierBlocker",
+      "type": "object"
+    },
+    "DossierClaimCapability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "enum": [
+            "citation_verified",
+            "experiment_reproduced",
+            "independent_review_complete",
+            "audit_complete"
+          ],
+          "title": "Capability",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "BLOCKED"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "replacement_evidence": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "title": "Replacement Evidence",
+          "type": "array"
+        },
+        "scope": {
+          "default": "",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability",
+        "verdict"
+      ],
+      "title": "DossierClaimCapability",
+      "type": "object"
+    },
+    "DossierQualification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "verdict": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "BLOCKED"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "evidence_sha256": {
+          "default": [],
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Evidence Sha256",
+          "type": "array"
+        },
+        "rationale": {
+          "default": "qualification evidence is retained by exact digest",
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict"
+      ],
+      "title": "DossierQualification",
+      "type": "object"
+    },
+    "DossierRunHistory": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "event_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9._:-]*$",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "resulting_revision": {
+          "minimum": 0,
+          "title": "Resulting Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sequence",
+        "event_sha256",
+        "event_type",
+        "resulting_revision"
+      ],
+      "title": "DossierRunHistory",
+      "type": "object"
+    },
+    "DossierTestLog": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9._:-]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "BLOCKED"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "stdout_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Stdout Sha256",
+          "type": "string"
+        },
+        "stderr_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Stderr Sha256",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 86400000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        }
+      },
+      "required": [
+        "name",
+        "command_digest",
+        "result",
+        "stdout_sha256",
+        "stderr_sha256"
+      ],
+      "title": "DossierTestLog",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The sole canonical source for both dossier renderings.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.audit-dossier.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "dossier_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Dossier Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "generated_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "ledger_head_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ledger Head Sha256",
+      "type": "string"
+    },
+    "ledger_history_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Ledger History Sha256",
+      "type": "array"
+    },
+    "run_history": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DossierRunHistory"
+      },
+      "title": "Run History",
+      "type": "array"
+    },
+    "run_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Run Manifest Sha256",
+      "type": "string"
+    },
+    "passport_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Passport Sha256",
+      "type": "array"
+    },
+    "artifact_manifest_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Artifact Manifest Sha256",
+      "type": "array"
+    },
+    "integrity_receipt_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Integrity Receipt Sha256",
+      "type": "array"
+    },
+    "experiment_provenance_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Experiment Provenance Sha256",
+      "type": "array"
+    },
+    "access_decisions": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Access Decisions",
+      "type": "array"
+    },
+    "claim_capabilities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DossierClaimCapability"
+      },
+      "title": "Claim Capabilities",
+      "type": "array"
+    },
+    "panel_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Panel Manifest Sha256"
+    },
+    "review_matrix_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Matrix Sha256"
+    },
+    "review_report_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Review Report Sha256",
+      "type": "array"
+    },
+    "synthesis_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Synthesis Sha256"
+    },
+    "dissent_refs": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Dissent Refs",
+      "type": "array"
+    },
+    "human_decision_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Human Decision Sha256",
+      "type": "array"
+    },
+    "graph_projection_receipt_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Graph Projection Receipt Sha256",
+      "type": "array"
+    },
+    "graph_watermark": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Graph Watermark"
+    },
+    "test_logs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DossierTestLog"
+      },
+      "title": "Test Logs",
+      "type": "array"
+    },
+    "benchmark_versions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DossierBenchmarkVersion"
+      },
+      "title": "Benchmark Versions",
+      "type": "array"
+    },
+    "build_identity_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Build Identity Sha256"
+    },
+    "source_identity_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Source Identity Sha256",
+      "type": "array"
+    },
+    "integration_lock_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Integration Lock Sha256"
+    },
+    "technical_qualification": {
+      "$ref": "#/$defs/DossierQualification"
+    },
+    "release_qualification": {
+      "$ref": "#/$defs/DossierQualification"
+    },
+    "blockers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DossierBlocker"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "dossier_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Dossier Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dossier_id",
+    "run_id",
+    "generated_at",
+    "ledger_head_sha256",
+    "run_manifest_sha256",
+    "technical_qualification",
+    "release_qualification",
+    "dossier_sha256"
+  ],
+  "title": "AuditDossierManifest",
+  "type": "object"
+}
