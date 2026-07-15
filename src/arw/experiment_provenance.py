@@ -121,6 +121,21 @@ class DatasetSource(StrictModel):
     def reference_is_safe(cls, value: str) -> str:
         return _safe_reference(value, label="dataset uri_or_path")
 
+    @model_validator(mode="after")
+    def content_digest_is_canonical(self) -> "DatasetSource":
+        expected = sha256_hex(
+            canonical_json_bytes(
+                {
+                    "uri_or_path": self.uri_or_path,
+                    "access_state": self.access_state,
+                    "manifest_sha256": self.manifest_sha256,
+                }
+            )
+        )
+        if self.content_sha256 != expected:
+            raise ValueError("dataset content_sha256 is not derived from canonical source identity")
+        return self
+
 
 class ModelIdentity(StrictModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=128)]
@@ -131,6 +146,13 @@ class ModelIdentity(StrictModel):
     @classmethod
     def identity_is_safe(cls, value: str) -> str:
         return _secret_safe(value, label="model identity")
+
+    @model_validator(mode="after")
+    def source_digest_is_canonical(self) -> "ModelIdentity":
+        expected = sha256_hex(canonical_json_bytes({"name": self.name, "revision": self.revision}))
+        if self.source_sha256 != expected:
+            raise ValueError("model source_sha256 is not derived from canonical identity")
+        return self
 
 
 class ConfigurationIdentity(StrictModel):
@@ -143,6 +165,15 @@ class ConfigurationIdentity(StrictModel):
     def configuration_value_is_safe(cls, value: str) -> str:
         return _secret_safe(value, label="configuration identity")
 
+    @model_validator(mode="after")
+    def configuration_digest_is_canonical(self) -> "ConfigurationIdentity":
+        expected = sha256_hex(
+            canonical_json_bytes({"name": self.name, "content_type": self.content_type})
+        )
+        if self.canonical_sha256 != expected:
+            raise ValueError("configuration canonical_sha256 is not derived from canonical identity")
+        return self
+
 
 class ExperimentMetric(StrictModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=128)]
@@ -154,6 +185,15 @@ class ExperimentMetric(StrictModel):
     @classmethod
     def metric_value_is_safe(cls, value: str) -> str:
         return _secret_safe(value, label="metric")
+
+    @model_validator(mode="after")
+    def metric_digest_is_canonical(self) -> "ExperimentMetric":
+        expected = sha256_hex(
+            canonical_json_bytes({"name": self.name, "unit": self.unit, "value": self.value})
+        )
+        if self.metric_sha256 != expected:
+            raise ValueError("metric_sha256 is not derived from canonical metric bytes")
+        return self
 
 
 class ExperimentArtifact(StrictModel):
@@ -174,6 +214,22 @@ class ExperimentArtifact(StrictModel):
         if value is None:
             return None
         return _safe_reference(value, label="artifact content_path", allow_uri=False)
+
+    @model_validator(mode="after")
+    def content_digest_is_canonical(self) -> "ExperimentArtifact":
+        expected = sha256_hex(
+            canonical_json_bytes(
+                {
+                    "artifact_id": self.artifact_id,
+                    "media_type": self.media_type,
+                    "manifest_sha256": self.manifest_sha256,
+                    "content_path": self.content_path,
+                }
+            )
+        )
+        if self.content_sha256 != expected:
+            raise ValueError("artifact content_sha256 is not derived from canonical artifact identity")
+        return self
 
 
 class EnvironmentIdentity(StrictModel):
@@ -262,6 +318,12 @@ class QualificationReceipt(StrictModel):
             return value
         body = dict(value)
         supplied = body.pop("receipt_sha256", None)
+        # Pydantic's canonical JSON includes optional fields as explicit nulls;
+        # include them before deriving the digest so model_validate and cold
+        # replay cover identical bytes.
+        body.setdefault("authority_sha256", None)
+        body.setdefault("accountable_actor_id", None)
+        body.setdefault("probe_result", None)
         expected = sha256_hex(canonical_json_bytes(body))
         if supplied is not None and supplied != expected:
             raise ValueError("qualification receipt digest does not match canonical bytes")
