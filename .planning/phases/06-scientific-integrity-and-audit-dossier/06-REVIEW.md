@@ -1,12 +1,12 @@
 ---
 phase: 06
-status: resolved_with_qualification_block
+status: residual_findings_with_qualification_block
 depth: standard
 files_reviewed: 30
-critical: 0
+critical: 1
 warning: 0
 info: 0
-total: 9
+total: 10
 ---
 
 # Phase 06 Code Review
@@ -24,7 +24,7 @@ negative probes for claim, provenance, and integration-lock boundaries.
 
 ### CR-01 — Public evidence promotion accepts an unverified hash
 
-**Severity:** Critical  
+**Severity:** Critical
 **Location:** `src/arw/evidence_access.py:188-205, 302-305`
 
 `EvidenceAccessDecision` only requires that a `public_verification_receipt_sha256`
@@ -46,7 +46,7 @@ and parent-authorized transition before accepting public promotion.
 
 ### CR-02 — Claim freshness is broken and stale lifecycle records are accepted
 
-**Severity:** Critical  
+**Severity:** Critical
 **Location:** `src/arw/evidence_access.py:387-420, 460-478, 509-552`
 
 `_fresh_until()` returns `False` only for `None` and has no executable body for
@@ -117,6 +117,32 @@ ingestion contract. Missing local references must produce a typed blocker (or
 reject ingestion); they must never be treated as verified merely because the
 digest field is syntactically valid.
 
+### CR-06 — Direct dossier sealing still accepts an un-derived technical PASS
+
+**Severity:** Critical
+**Location:** `src/arw/audit_dossier.py:151-157, 327-343, 365-377`
+
+`assemble_audit_dossier()` now rejects caller-supplied PASS values and derives
+claim/technical verdicts from validated replay and typed evidence. However,
+`AuditDossierManifest.model_validate()` / `seal_audit_dossier()` and the public
+`publish_audit_dossier()` path still accept a hand-built manifest whose
+`technical_qualification` is `PASS` with a self-computed canonical proof but
+without any run root, replay state, typed lifecycle receipts, or qualification
+receipt. Starting from an empty blocked dossier, a caller can compute
+`_qualification_proof(mapping)` and the outer dossier hash, and both the model
+and seal paths accept the forged PASS:
+
+```text
+AuditDossierManifest.model_validate({technical_qualification: PASS,
+  evidence_sha256: [_qualification_proof(mapping)], ...})  -> PASS
+```
+
+This leaves a second API path that can publish a correctly hashed but
+unsupported technical qualification, bypassing the replay-first assembler.
+The proof must bind to a parent replay/qualification receipt or publication
+must accept only an assembler-produced authority envelope; a self-computed
+subject digest is not evidence of replay.
+
 ## Warnings
 
 ### WR-01 — Read APIs create evidence directories
@@ -170,8 +196,8 @@ query-string secrets and private paths.
 
 ## Review conclusion
 
-The findings are resolved in `171db95`, `922cbc9`, `4ae96d3`, `72f38a9`, and
-`bb087f3`. Public evidence promotion now loads a
+CR-01 through CR-05 and WR-01 through WR-04 are resolved in `171db95`,
+`922cbc9`, `4ae96d3`, `72f38a9`, and `bb087f3`. Public evidence promotion now loads a
 canonical, digest-bound fresh integrity receipt from the approved run root and
 requires a validated parent authority envelope; lifecycle claims and dossier
 qualification are derived from typed replay evidence; local provenance and
@@ -205,4 +231,7 @@ controlled absolute repo-local TMPDIR required by the Phase 6 verifier, the
 complete non-host regression rerun is **458 passed in 373.35s**; the two
 affected modules also pass **3/3** in 71.44s. These are
 environment/dirty-worktree qualification notes, not residual Phase 6 source
-findings.
+findings. CR-06 remains open after `e3a9250`: the canonical proof makes
+persisted PASS round-trippable, but a caller can compute the same proof from a
+forged mapping without replay or typed evidence. This is not a clean
+code-review verdict until the qualification proof is parent-bound.
