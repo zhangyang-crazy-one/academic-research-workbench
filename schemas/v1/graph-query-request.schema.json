@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-query-request.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "operation": {
+      "enum": [
+        "trace_claim",
+        "trace_source",
+        "trace_experiment",
+        "trace_review",
+        "trace_gate_evidence",
+        "graph_health"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "entity_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._:-]{2,191}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Id"
+    },
+    "max_depth": {
+      "default": 2,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Max Depth",
+      "type": "integer"
+    },
+    "max_fanout": {
+      "default": 50,
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Fanout",
+      "type": "integer"
+    },
+    "max_rows": {
+      "default": 100,
+      "maximum": 500,
+      "minimum": 1,
+      "title": "Max Rows",
+      "type": "integer"
+    },
+    "max_bytes": {
+      "default": 65536,
+      "maximum": 262144,
+      "minimum": 256,
+      "title": "Max Bytes",
+      "type": "integer"
+    },
+    "timeout_ms": {
+      "default": 5000,
+      "maximum": 5000,
+      "minimum": 1,
+      "title": "Timeout Ms",
+      "type": "integer"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cursor"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation"
+  ],
+  "title": "GraphQueryRequest",
+  "type": "object"
+}

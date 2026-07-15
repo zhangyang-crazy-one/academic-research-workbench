@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-edge.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "edge_type": {
+      "enum": [
+        "contains",
+        "produces",
+        "supported_by",
+        "derived_from",
+        "uses_dataset",
+        "uses_experiment",
+        "uses_figure",
+        "reviews",
+        "dissent_for",
+        "synthesizes",
+        "evidenced_by",
+        "supersedes",
+        "corrects"
+      ],
+      "title": "Edge Type",
+      "type": "string"
+    },
+    "from_entity_id": {
+      "pattern": "^[a-z][a-z0-9._:-]{2,191}$",
+      "title": "From Entity Id",
+      "type": "string"
+    },
+    "to_entity_id": {
+      "pattern": "^[a-z][a-z0-9._:-]{2,191}$",
+      "title": "To Entity Id",
+      "type": "string"
+    },
+    "evidence_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Digest",
+      "type": "string"
+    },
+    "source_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "supersession_state": {
+      "enum": [
+        "active",
+        "superseded",
+        "corrected",
+        "deleted",
+        "unavailable"
+      ],
+      "title": "Supersession State",
+      "type": "string"
+    },
+    "ledger_watermark": {
+      "minimum": 0,
+      "title": "Ledger Watermark",
+      "type": "integer"
+    },
+    "attributes": {
+      "additionalProperties": true,
+      "title": "Attributes",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "edge_type",
+    "from_entity_id",
+    "to_entity_id",
+    "evidence_digest",
+    "source_digest",
+    "supersession_state",
+    "ledger_watermark"
+  ],
+  "title": "GraphEdge",
+  "type": "object"
+}

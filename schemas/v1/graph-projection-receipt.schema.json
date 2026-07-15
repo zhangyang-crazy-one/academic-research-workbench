@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arw.local/schemas/v1/graph-projection-receipt.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "root_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Root Id",
+      "type": "string"
+    },
+    "candidate_generation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Candidate Generation Id",
+      "type": "string"
+    },
+    "previous_generation_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Previous Generation Id"
+    },
+    "selected_generation_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Selected Generation Id"
+    },
+    "projection_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Projection Manifest Sha256"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "ledger_watermark": {
+      "minimum": 0,
+      "title": "Ledger Watermark",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "BLOCKED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "reason_codes": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "root_id",
+    "candidate_generation_id",
+    "previous_generation_id",
+    "selected_generation_id",
+    "projection_manifest_sha256",
+    "input_sha256",
+    "ledger_watermark",
+    "status"
+  ],
+  "title": "GraphProjectionReceipt",
+  "type": "object"
+}
