@@ -211,16 +211,17 @@ verifier scans complete status streams and enforces the retained Phase 04.1 lock
 Post-fix verification on the current `a8d8d10` checkout is **92 passed** for
 the focused Phase 6 suite (the expanded audit-dossier/replay qualification
 set run here is **102 passed**) and **34 passed** for the Phase 4/5 composition
-subset. The serial verifier was rerun with an owned repo-local temporary root;
-it exits 70 and writes technical/release `BLOCKED` to
-`build/evidence/phase-06-review/verdict.json`. Its exact retained-lock evidence
-is in `integration-lock-drift.json`: ARW wheel SHA drift, file-base
-`source-manifest.json` SHA drift, and ARS adapter `0.1.20 != 0.1.19`; the
-stage-build stderr additionally records that the retained lock's patch set is
-missing the qualified `0004-phase5-research-graph.patch`. The verifier therefore
-fails closed rather than laundering a stale lock into technical PASS. Release
-remains independently BLOCKED by SUP-04/P04-09 and unresolved CC BY-NC
-intended-use/permission evidence.
+subset. An earlier verifier invocation intentionally failed closed on the
+stale retained lock (ARW wheel/source-manifest drift, ARS `0.1.20 != 0.1.19`,
+and a missing qualified `0004-phase5-research-graph.patch`); that evidence is
+preserved under `build/evidence/phase-06-review/`. After refreshing the
+Phase 04.1 host canary lock, the final serial verifier completed with
+`technical_qualification: PASS` and `release_qualification: BLOCKED` in
+`build/evidence/phase-06-final-verifier/verdict.json`, binding ARS `0.1.20`,
+the ordered four-patch file-base set, current ARW wheel/source identities,
+Codex `0.144.4`, hook evidence, stage tree, and SBOM. Release remains
+independently BLOCKED by SUP-04/P04-09 and unresolved CC BY-NC intended-use/
+permission evidence.
 
 A broad non-host invocation initially used the deliberately relative
 `TMPDIR=build/tmp/phase-06` and produced **455 passed, 3 failed**. The failures
@@ -235,7 +236,6 @@ controlled absolute repo-local TMPDIR required by the Phase 6 verifier, the
 complete non-host regression rerun is **458 passed in 373.35s**; the two
 affected modules also pass **3/3** in 71.44s. These are
 environment/dirty-worktree qualification notes, not residual Phase 6 source
-findings. CR-06 is resolved by `7518bc0` and `a8d8d10`; technical qualification
-remains blocked only by the retained Phase 04.1 integration-lock drift, while
-release qualification remains independently blocked by the documented
+findings. CR-06 is resolved by `7518bc0` and `a8d8d10`; the final technical
+verdict is PASS, and the only remaining release blocker is the documented
 SUP-04/P04-09 and CC BY-NC intended-use/permission evidence.
