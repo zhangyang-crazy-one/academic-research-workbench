@@ -12,7 +12,7 @@ def test_reference_permutation_has_one_canonical_order() -> None:
 
 
 def _assert_permutation(permutation: tuple[str, ...]) -> None:
-    state = ReplayState(run_id="run-00000000-0000-4000-8000-000000000031", revision=0, last_event_sha256="a" * 64, event_count=0, event_ids=frozenset(), command_ids=frozenset(), events=())
+    state = ReplayState(run_id="run-00000000-0000-4000-8000-000000000031", revision=0, last_event_sha256="a" * 64, event_count=0, event_ids=frozenset(), command_ids=frozenset(), events=(), validated=True)
     dossier = assemble_audit_dossier(
         replay_state=state,
         run_manifest_sha256="d" * 64,

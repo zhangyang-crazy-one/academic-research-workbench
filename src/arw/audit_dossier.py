@@ -547,7 +547,9 @@ def assemble_audit_dossier(
             if not isinstance(replay_state, ReplayState) or replay_state.public_dict() != replayed.public_dict():
                 raise AuditDossierError("supplied replay_state is not the validated canonical replay")
         replay_state = replayed
-    elif replay_state is not None and not isinstance(replay_state, ReplayState):
+    elif replay_state is not None and (
+        not isinstance(replay_state, ReplayState) or not replay_state.validated
+    ):
         raise AuditDossierError("replay_state must be the validated canonical replay from replay_run over a canonical run root")
     if replay_state is None:
         raise AuditDossierError("replay_state or run_root is required")
@@ -604,10 +606,15 @@ def assemble_audit_dossier(
         technical_qualification = technical_qualification.model_dump(mode="json")
     if isinstance(technical_qualification, Mapping) and technical_qualification.get("verdict") == "PASS":
         raise AuditDossierError("caller-supplied technical PASS is not authoritative")
+    if isinstance(release_qualification, DossierQualification):
+        release_qualification = release_qualification.model_dump(mode="json")
+    if isinstance(release_qualification, Mapping) and release_qualification.get("verdict") == "PASS":
+        raise AuditDossierError("caller-supplied release PASS is not authoritative")
     if isinstance(claim_capabilities, Sequence):
         supplied_pass = [
             item for item in claim_capabilities
-            if isinstance(item, Mapping) and item.get("verdict") == "PASS"
+            if (isinstance(item, Mapping) and item.get("verdict") == "PASS")
+            or (hasattr(item, "verdict") and getattr(item, "verdict") == "PASS")
         ]
         if supplied_pass:
             raise AuditDossierError("caller-supplied claim PASS is not authoritative")

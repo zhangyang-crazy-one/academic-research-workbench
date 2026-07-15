@@ -85,6 +85,10 @@ class ReplayState:
     journal_layout: str | None = None
     recovery_health: RecoveryHealth = "healthy"
     recovery_message: str | None = None
+    # Set only by replay_run/_replay_unlocked after validating canonical
+    # manifest, journal segments, and accepted manifests.  Callers cannot
+    # launder an arbitrary state object into dossier authority.
+    validated: bool = False
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -605,6 +609,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
         journal_layout=manifest.journal_layout,
         recovery_health=recovery_health,
         recovery_message=recovery_message,
+        validated=True,
     )
 
 

@@ -17,7 +17,7 @@ RUN_ID = "run-00000000-0000-4000-8000-000000000031"
 
 
 def _state() -> ReplayState:
-    return ReplayState(run_id=RUN_ID, revision=0, last_event_sha256="a" * 64, event_count=0, event_ids=frozenset(), command_ids=frozenset(), events=())
+    return ReplayState(run_id=RUN_ID, revision=0, last_event_sha256="a" * 64, event_count=0, event_ids=frozenset(), command_ids=frozenset(), events=(), validated=True)
 
 
 def test_canonical_manifest_and_views_are_byte_identical() -> None:
@@ -75,6 +75,12 @@ def test_dossier_rejects_forged_pass_claims_and_unvalidated_replay() -> None:
     with pytest.raises(AuditDossierError, match="validated canonical replay"):
         assemble_audit_dossier(
             replay_state=object(),
+            run_manifest_sha256="b" * 64,
+            generated_at="2026-07-16T00:00:00Z",
+        )
+    with pytest.raises(AuditDossierError, match="validated canonical replay"):
+        assemble_audit_dossier(
+            replay_state=ReplayState(run_id=RUN_ID, revision=0, last_event_sha256="a" * 64, event_count=0, event_ids=frozenset(), command_ids=frozenset()),
             run_manifest_sha256="b" * 64,
             generated_at="2026-07-16T00:00:00Z",
         )
