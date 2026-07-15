@@ -345,6 +345,9 @@ def generate_phase6_schema_documents() -> dict[str, dict[str, object]]:
     from arw.evidence_access import generate_phase6_schema_documents as generate_access_schemas
 
     generated.update(generate_access_schemas())
+    from arw.audit_dossier import generate_phase6_audit_schema_documents
+
+    generated.update(generate_phase6_audit_schema_documents())
     return generated
 
 
