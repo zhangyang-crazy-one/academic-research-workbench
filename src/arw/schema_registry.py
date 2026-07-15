@@ -14,6 +14,7 @@ from referencing import Registry, Resource
 
 from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
+from arw.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
 from arw.integration_lock import integration_lock_schema_document
 from arw.orchestration_models import PHASE4_SCHEMA_NAMES, generate_phase4_schema_documents
 
@@ -44,7 +45,7 @@ SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "resume-request.schema.json",
     "status.schema.json",
     "transition-request.schema.json",
-) + FILE_SCHEMA_NAMES + PHASE4_SCHEMA_NAMES + PHASE5_SCHEMA_NAMES + QUALIFICATION_SCHEMA_NAMES
+) + FILE_SCHEMA_NAMES + PHASE4_SCHEMA_NAMES + PHASE5_SCHEMA_NAMES + PHASE6_SCHEMA_NAMES + QUALIFICATION_SCHEMA_NAMES
 
 
 def _schema_root() -> Path:
@@ -128,6 +129,10 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         generated = generate_phase5_schema_documents()[name]
         if candidate != generated:
             raise SchemaRegistryError(f"{name} differs from its Phase 5 model projection")
+    if name in PHASE6_SCHEMA_NAMES:
+        generated = generate_phase6_schema_documents()[name]
+        if candidate != generated:
+            raise SchemaRegistryError(f"{name} differs from its Phase 6 model projection")
     if name == "integration-lock.schema.json":
         generated = integration_lock_schema_document()
         if candidate != generated:
@@ -151,11 +156,14 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
     destination.mkdir(parents=True, exist_ok=True)
     generated: list[tuple[str, str]] = []
     phase4_documents = generate_phase4_schema_documents()
+    phase6_documents = generate_phase6_schema_documents()
     for name in SCHEMA_NAMES:
         if name in PHASE4_SCHEMA_NAMES:
             document = phase4_documents[name]
         elif name in PHASE5_SCHEMA_NAMES:
             document = generate_phase5_schema_documents()[name]
+        elif name in PHASE6_SCHEMA_NAMES:
+            document = phase6_documents[name]
         elif name == "integration-lock.schema.json":
             document = integration_lock_schema_document()
         else:
