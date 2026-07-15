@@ -21,18 +21,22 @@ def _payload() -> dict[str, object]:
         "source_datasets": [
             {
                 "uri_or_path": "https://example.invalid/datasets/iris.json",
-                "content_sha256": "a" * 64,
+                "content_sha256": "498b9c10429a6517400aafd3c2bbac55a4f8d5c16b607b4344493856c7b8e082",
                 "access_state": "publicly_verified",
                 "manifest_sha256": "b" * 64,
             }
         ],
         "model_identity": [
-            {"name": "example-model", "revision": "v1.2.3", "source_sha256": "c" * 64}
+            {
+                "name": "example-model",
+                "revision": "v1.2.3",
+                "source_sha256": "acfc18d91e43f67e646ca04de8580c83062e736985c420c16199f5606ff60bf1",
+            }
         ],
         "configuration": [
             {
                 "name": "default",
-                "canonical_sha256": "d" * 64,
+                "canonical_sha256": "1203d2d7b9daa167bef051bcc1b4f51ec83268b45d688624e83f23754878ad9f",
                 "content_type": "application/json",
             }
         ],
@@ -41,14 +45,14 @@ def _payload() -> dict[str, object]:
                 "name": "accuracy",
                 "value": 0.875,
                 "unit": "ratio",
-                "metric_sha256": "e" * 64,
+                "metric_sha256": "eaf20b70838e1c5392e7b6f3b5369d1766c90869471e60a182a95b86c0766d9a",
             }
         ],
         "artifacts": [
             {
                 "artifact_id": "artifact.metrics-001",
                 "media_type": "application/json",
-                "content_sha256": "f" * 64,
+                "content_sha256": "5ff8114c2609b219ae030441bf230e753c788f7fa49ce9f61a0e781200275cfc",
                 "manifest_sha256": "1" * 64,
                 "content_path": "results/metrics.json",
             }
@@ -144,4 +148,3 @@ def test_secret_environment_key_is_rejected() -> None:
     ]
     with pytest.raises((ValidationError, ValueError)):
         ExperimentProvenance.model_validate(value)
-
