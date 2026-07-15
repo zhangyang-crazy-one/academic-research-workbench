@@ -534,6 +534,10 @@ def _authority_parts(
     runtime: RuntimeCommandService | None = None
     request: RuntimeCommandRequest | None = None
     if isinstance(authority_envelope, ProvenanceAuthorityEnvelope):
+        if authority_envelope.request.actor_role != "parent_control_plane":
+            raise ProvenanceError("only parent_control_plane may publish provenance")
+        if authority_envelope.runtime.run_root.resolve() != allowed_root.resolve():
+            raise ProvenanceError("authority runtime root differs from allowed_root")
         return authority_envelope
     if isinstance(authority_envelope, Mapping):
         runtime_candidate = authority_envelope.get("runtime") or authority_envelope.get("service")

@@ -120,3 +120,26 @@ def test_policy_rejects_forged_flags_and_stays_blocked_after_projection_loss(mon
     decision_after_loss = evaluate_controlled_execution_policy(provenance, None)
     assert decision_after_loss.status == "BLOCKED"
     assert "missing_sandbox_approval" in decision_after_loss.reason_codes
+
+
+def test_ingest_rejects_non_parent_authority_before_publication(tmp_path: Path) -> None:
+    from arw.experiment_provenance import ProvenanceAuthorityEnvelope, ProvenanceError, ingest_experiment_provenance
+    from arw.models import RuntimeCommandRequest
+    from arw.runtime import RuntimeCommandService
+
+    request = RuntimeCommandRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": "run-00000000-0000-4000-8000-000000000031",
+            "event_id": "evt-00000000-0000-4000-8000-000000000034",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000034",
+            "expected_revision": 1,
+            "occurred_at": "2026-07-15T10:05:00Z",
+            "actor_id": "operator.user",
+            "actor_role": "operator",
+        }
+    )
+    envelope = ProvenanceAuthorityEnvelope(RuntimeCommandService(tmp_path), request)
+    with pytest.raises(ProvenanceError, match="parent_control_plane"):
+        ingest_experiment_provenance(_provenance(), tmp_path, envelope)
+    assert not (tmp_path / "experiment").exists()
