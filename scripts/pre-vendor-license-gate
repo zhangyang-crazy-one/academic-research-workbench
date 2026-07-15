@@ -266,7 +266,7 @@ def git_value(root: Path, *args: str) -> str:
 
 
 component_specs = [
-    ("academic-research-skills", "0.1.19", ars_url, ars_revision),
+    ("academic-research-skills", "0.1.20", ars_url, ars_revision),
     ("experiment-agent", "pinned", experiment_url, experiment_revision),
     ("file-base", "v0.9.0-2-gee68144", file_base_url, file_base_revision),
 ]
