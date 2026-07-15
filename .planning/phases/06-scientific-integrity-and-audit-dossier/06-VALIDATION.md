@@ -1,9 +1,9 @@
 ---
 phase: 06
 slug: scientific-integrity-and-audit-dossier
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: passed-technical
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-07-15
 ---
 
@@ -42,11 +42,11 @@ created: 2026-07-15
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 06-01 | 01 | 1 | SCI-01 | T-06-01 | Digest and freshness changes invalidate immutable receipts | unit/integration | `pytest -q tests/unit/test_integrity_receipts.py tests/integration/test_integrity_receipts.py` | ❌ W0 | ⬜ pending |
-| 06-02 | 02 | 2 | SCI-04, SCI-05 | T-06-04/T-06-05/T-06-06 | External provenance is strict; controlled execution is blocked without all four bound gates | unit/integration | `pytest -q tests/unit/test_experiment_provenance.py tests/integration/test_experiment_provenance.py tests/integration/test_controlled_execution_blocked.py` | ❌ W0 | ⬜ pending |
-| 06-03 | 03 | 3 | SCI-06, SCI-07 | T-06-07/T-06-08/T-06-09 | Five exact access states and claim capabilities cannot silently upgrade evidence | unit/integration | `pytest -q tests/unit/test_evidence_access.py tests/integration/test_evidence_access_states.py tests/integration/test_scientific_claim_gates.py` | ❌ W0 | ⬜ pending |
-| 06-04 | 04 | 4 | SCI-01, SCI-06, SCI-07, VER-07 | T-06-10/T-06-11/T-06-12/T-06-13 | Canonical dossier rerenders byte-identically and survives projection loss/cold replay | integration/property | `pytest -q tests/unit/test_audit_dossier.py tests/integration/test_audit_dossier_replay.py tests/property/test_audit_dossier_replay.py` | ❌ W0 | ⬜ pending |
-| 06-05 | 05 | 5 | VER-07 | T-06-14/T-06-15/T-06-16/T-06-17 | Staged package contains executable artifacts only and records separate technical/release verdicts | staged/full | `UV_OFFLINE=1 PYTHONNOUSERSITE=1 TMPDIR=build/tmp/phase-06 ./scripts/verify-phase-6 --clean --evidence-root build/evidence/phase-06` | ❌ W0 | ⬜ pending |
+| 06-01 | 01 | 1 | SCI-01 | T-06-01 | Digest and freshness changes invalidate immutable receipts | unit/integration | `pytest -q tests/unit/test_integrity_receipts.py tests/integration/test_integrity_receipts.py` | ✅ | verified in `06-01-SUMMARY.md` |
+| 06-02 | 02 | 2 | SCI-04, SCI-05 | T-06-04/T-06-05/T-06-06 | External provenance is strict; controlled execution is blocked without all four bound gates | unit/integration | `pytest -q tests/unit/test_experiment_provenance.py tests/integration/test_experiment_provenance.py tests/integration/test_controlled_execution_blocked.py` | ✅ | verified in `06-02-SUMMARY.md` |
+| 06-03 | 03 | 3 | SCI-06, SCI-07 | T-06-07/T-06-08/T-06-09 | Five exact access states and claim capabilities cannot silently upgrade evidence | unit/integration | `pytest -q tests/unit/test_evidence_access.py tests/integration/test_evidence_access_states.py tests/integration/test_scientific_claim_gates.py` | ✅ | verified in `06-03-SUMMARY.md` |
+| 06-04 | 04 | 4 | SCI-01, SCI-06, SCI-07, VER-07 | T-06-10/T-06-11/T-06-12/T-06-13 | Canonical dossier rerenders byte-identically and survives projection loss/cold replay | integration/property | `pytest -q tests/unit/test_audit_dossier.py tests/integration/test_audit_dossier_replay.py tests/property/test_audit_dossier_replay.py` | ✅ | verified in `06-04-SUMMARY.md` |
+| 06-05 | 05 | 5 | VER-07 | T-06-14/T-06-15/T-06-16/T-06-17 | Staged package contains executable artifacts only and records separate technical/release verdicts | staged/full | `UV_OFFLINE=1 PYTHONNOUSERSITE=1 TMPDIR=build/tmp/phase-06 ./scripts/verify-phase-6 --clean --evidence-root build/evidence/phase-06` | ✅ | verifier PASS; release remains BLOCKED |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -54,15 +54,15 @@ created: 2026-07-15
 
 ## Wave 0 Requirements
 
-- [ ] `tests/schema/test_phase6_contracts.py` — strict Phase 6 schema and
+- [x] `tests/schema/test_phase6_contracts.py` — strict Phase 6 schema and
   registry-derived count coverage
-- [ ] `tests/unit/test_integrity_receipts.py` — canonical receipt/hash/freshness
+- [x] `tests/unit/test_integrity_receipts.py` — canonical receipt/hash/freshness
   cases
-- [ ] `tests/unit/test_experiment_provenance.py` — strict external envelope
-- [ ] `tests/unit/test_evidence_access.py` — exact five-state and capability
+- [x] `tests/unit/test_experiment_provenance.py` — strict external envelope
+- [x] `tests/unit/test_evidence_access.py` — exact five-state and capability
   matrix
-- [ ] `tests/unit/test_audit_dossier.py` — canonical manifest/rendering checks
-- [ ] `tests/fixtures/phase6/representative-run/` — bounded canonical fixture
+- [x] `tests/unit/test_audit_dossier.py` — canonical manifest/rendering checks
+- [x] `tests/fixtures/phase6/representative-run/` — bounded canonical fixture
 
 Wave 0 is implementation work, not an excuse to delete or xfail a missing
 test. The plan must create these tests before the corresponding implementation
@@ -79,13 +79,39 @@ slice is considered complete.
 
 ---
 
+## Phase 6 closeout evidence
+
+The serial verifier completed with `technical_qualification: PASS` and
+`release_qualification: BLOCKED` at `build/evidence/phase-06/verdict.json`.
+It retained source verification, Phase 6 tests, prior Phase 4/5 composition,
+staged build/validation, identities, stage inventory, and the separate retained
+license verdict. The verifier observed `codex-cli 0.144.4`, the current HEAD
+and dirty-worktree tree digest, the pinned source manifest/SBOM/wheelhouse, and
+the retained Phase 04.1 integration-lock digest.
+
+The bounded full regression ran serially with an absolute repository-owned
+`TMPDIR` and completed **448 passed** in 372.05 seconds. Output is retained at
+`build/evidence/phase-06/full/pytest.stdout.log` (SHA-256
+`f313c55b0e4eb4c137ad4d071e8b8da2cf519b99b88a4a7503ad67883c4ef5d6`) and
+`pytest.stderr.log` (SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`). No
+tests were skipped, xfailed, or xpassed.
+
+The native legal gate remains represented by the retained
+`supply-chain/license-verdict.json`: technical qualification is PASS, but
+release qualification is BLOCKED for `SUP-04`, `P04-09`, and unresolved
+CC-BY-NC intended-use/permission evidence. A memory-heavy native ScanCode
+rerun is not part of the serial Phase 6 verifier; no legal blocker was
+silently cleared.
+
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s for focused checks
-- [ ] `nyquist_compliant: true` set in frontmatter after phase verification
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s for focused checks (full regression explicitly bounded)
+- [x] `nyquist_compliant: true` set in frontmatter after phase verification
 
-**Approval:** pending
+**Approval:** technical qualification complete; release approval remains blocked
+by the legal/intended-use gate above.
