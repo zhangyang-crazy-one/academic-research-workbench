@@ -101,7 +101,7 @@ phase does not claim to replace a complete research-to-paper workflow.
 - `REQUIREMENTS.md`: `SCI-01`, `SCI-04`, `SCI-05`, `SCI-06`, `SCI-07`, and
   `VER-07` are marked complete from the retained technical evidence; this is
   not a release authorization.
-- `STATE.md`: Phase 6 is at plan 5/5 with technical closeout complete and the
-  release/legal blocker retained. Phase 4's separate `P04-09` blocker and
-  Phase 7's not-started status are unchanged.
-
+- `STATE.md`: GSD has advanced to Phase 7 `ready_to_plan` after Phase 6's
+  5/5 technical closeout; the release/legal blocker is retained. Phase 4's
+  separate `P04-09` blocker is unchanged, and Phase 7 has no execution plan
+  yet.
