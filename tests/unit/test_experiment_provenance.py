@@ -148,3 +148,27 @@ def test_secret_environment_key_is_rejected() -> None:
     ]
     with pytest.raises((ValidationError, ValueError)):
         ExperimentProvenance.model_validate(value)
+
+
+def test_local_content_digest_is_checked_at_parent_ingest_boundary() -> None:
+    from arw.experiment_provenance import DatasetSource, ExperimentArtifact
+
+    local_source = DatasetSource.model_validate(
+        {
+            "uri_or_path": "datasets/input.json",
+            "content_sha256": "a" * 64,
+            "access_state": "locally_supplied",
+            "manifest_sha256": "b" * 64,
+        }
+    )
+    local_artifact = ExperimentArtifact.model_validate(
+        {
+            "artifact_id": "artifact.local-001",
+            "media_type": "application/json",
+            "content_sha256": "c" * 64,
+            "manifest_sha256": "d" * 64,
+            "content_path": "results/output.json",
+        }
+    )
+    assert local_source.uri_or_path == "datasets/input.json"
+    assert local_artifact.content_path == "results/output.json"

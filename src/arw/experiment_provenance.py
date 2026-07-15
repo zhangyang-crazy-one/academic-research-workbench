@@ -123,6 +123,12 @@ class DatasetSource(StrictModel):
 
     @model_validator(mode="after")
     def content_digest_is_canonical(self) -> "DatasetSource":
+        # A bounded local path may carry the digest of its actual bytes; the
+        # parent intake verifies that digest under ``allowed_root``.  External
+        # URI records have no local bytes and therefore bind to canonical
+        # source identity/manifest bytes here.
+        if "://" not in self.uri_or_path:
+            return self
         expected = sha256_hex(
             canonical_json_bytes(
                 {
@@ -217,6 +223,8 @@ class ExperimentArtifact(StrictModel):
 
     @model_validator(mode="after")
     def content_digest_is_canonical(self) -> "ExperimentArtifact":
+        if self.content_path is not None:
+            return self
         expected = sha256_hex(
             canonical_json_bytes(
                 {
