@@ -15,6 +15,7 @@ patch digest, and launcher digest. SBOM/notices were regenerated from the
 updated source manifest.
 
 `scripts/verify-phase-5 --clean --evidence-root build/evidence/phase-05`
-passed serially. The retained verdict is technical `PASS`, with release still
-`BLOCKED` only by `SUP-04` and `P04-09`. Commit pending for this plan's docs and
-verifier changes.
+passed serially, with source/patch temporary trees redirected to the controlled
+repo-local build area to avoid host `/tmp` quota exhaustion. The retained
+verdict is technical `PASS`, with release still `BLOCKED` only by `SUP-04` and
+`P04-09`. The staged implementation is committed as `338f0ce`.
