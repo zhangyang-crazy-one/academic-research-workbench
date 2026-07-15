@@ -152,28 +152,48 @@ Plans:
 **Wave 2**
 
 - [x] 04-02-PLAN.md - Parent-only canonical events, reducer state, workflow authority, and immutable manifests
-- [ ] 04-03-PLAN.md - Deterministic scheduler/execution seam, formal-panel policy, and hook contracts
+- [x] 04-03-PLAN.md - Deterministic scheduler/execution seam, formal-panel policy, and hook contracts
 
 **Wave 3**
 
-- [ ] 04-04-PLAN.md - Sole-writer orchestration lifecycle, ordered proposal admission, recovery, and replay
+- [x] 04-04-PLAN.md - Sole-writer orchestration lifecycle, ordered proposal admission, recovery, and replay
 
 **Wave 4**
 
-- [ ] 04-05-PLAN.md - Formal blind panel, dissent preservation, fresh gates, and scoped human decisions
-- [ ] 04-06-PLAN.md - Native hook observations, bounded continuations, and no-bypass parity
+- [x] 04-05-PLAN.md - Formal blind panel, dissent preservation, fresh gates, and scoped human decisions
+- [x] 04-06-PLAN.md - Native hook observations, bounded continuations, and no-bypass parity
 
 **Wave 5**
 
-- [ ] 04-07-PLAN.md - Thin Codex host adapter and exact staged three-home qualification
+- [x] 04-07-PLAN.md - Thin Codex host adapter and exact staged three-home qualification
 
 **Wave 6**
 
-- [ ] 04-08-PLAN.md - Full corpus, staged/evidence/regression verifier, and validation reconciliation
+- [x] 04-08-PLAN.md - Full corpus, staged/evidence/regression verifier, and validation reconciliation
 
 **Wave 7**
 
-- [ ] 04-09-PLAN.md - Independent sealed-case human assessment and adjudication gate
+- [ ] 04-09-PLAN.md - Independent sealed-case human assessment and adjudication gate (pending accountable human evidence)
+
+### Phase 04.1: Phase 4 Qualification Closure, ARS Integration Lock, and Installed Host Verification (INSERTED)
+
+**Goal:** Close Phase 4's technical qualification gaps with an exact ARS/ARW/file-base/Codex integration lock, real official hook and host evidence, parent-owned lifecycle/panel/gate replay, and a serial bounded installed verification. Technical PASS does not change the SUP-04 legal or P04-09 accountable-human gates.
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 3 plans
+
+Plans:
+**Wave 1**
+
+- [x] 04.1-01-PLAN.md - ARS integration lock and exact locked stage
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 04.1-02-PLAN.md - Codex host/hook, lifecycle, panel, and gate qualification
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 04.1-03-PLAN.md - Serial verifier, evidence reconciliation, and technical closeout
 
 ### Phase 5: Rebuildable Research Graph and Evidence Queries
 
@@ -189,7 +209,24 @@ Plans:
   4. An authorized client can issue bounded allowlisted queries tracing claims to sources, datasets, experiments, figures, reviews, and gate evidence without unbounded traversal.
   5. Corrupt, stale, deleted, or unavailable graph and file indexes cannot change accepted provenance, gate verdicts, canonical state, or the next legal transition, as shown by before/after canonical-state evidence.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [x] 05-01-PLAN.md - Canonical research-graph contracts, projector, and normalization oracle
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md - Pinned native projection generation and bounded allowlisted MCP queries
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-03-PLAN.md - Full/incremental equivalence, mutation matrix, and authority isolation
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-04-PLAN.md - Staged qualification, evidence-bound verifier, and planning reconciliation
 
 ### Phase 6: Scientific Integrity and Audit Dossier
 
@@ -228,8 +265,9 @@ Plans:
 | 1. Contract, License, and Executable Baseline | 7/7 | Complete   | 2026-07-13 |
 | 2. Durable Provenance Runtime | 5/5 | Complete    | 2026-07-13 |
 | 3. Secure Files-First Data Plane | 5/5 | Complete   | 2026-07-14 |
-| 4. Subagent Orchestration, Hooks, and Human Gates | 4/11 | In Progress|  |
-| 5. Rebuildable Research Graph and Evidence Queries | 0/TBD | Not started | - |
+| 4. Subagent Orchestration, Hooks, and Human Gates | 10/11 | Technical pass; P04-09 pending |  |
+| 04.1. Phase 4 Qualification Closure and Installed Host Verification | 3/3 | Technical pass; release blocked | 2026-07-15 |
+| 5. Rebuildable Research Graph and Evidence Queries | 0/4 | Planned | - |
 | 6. Scientific Integrity and Audit Dossier | 0/TBD | Not started | - |
 | 7. Installed E2E Recovery and Release Qualification | 0/TBD | Not started | - |
 

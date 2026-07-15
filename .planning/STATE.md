@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-07-14T15:02:10.412Z"
-last_activity: 2026-07-14
+stopped_at: Completed 05-01-PLAN.md; Wave 2 native graph profile next
+last_updated: "2026-07-15T12:35:00.000Z"
+last_activity: 2026-07-15 -- Phase 5 Plan 01 contracts/projector/oracle verified
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 3
-  total_plans: 28
-  completed_plans: 21
-  percent: 43
+  total_plans: 35
+  completed_plans: 31
+  percent: 89
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Phase 4 — Subagent Orchestration, Hooks, and Human Gates
+**Current focus:** Phase 5 rebuildable research-graph planning is complete; execute its four waves while preserving the P04-09 accountable-human and SUP-04 legal blockers.
 
 ## Current Position
 
-Phase: 4 (Subagent Orchestration, Hooks, and Human Gates) — EXECUTING
-Plan: 3 of 11
-Status: Ready to execute
-Last activity: 2026-07-14
+Phase: 5 (Rebuildable Research Graph and Evidence Queries)
+Plan: 1 of 4
+Status: Executing; Plan 01 complete
+Last activity: 2026-07-15 -- graph contracts/projector/oracle pass; P04-09/SUP-04 remain explicit gates
 
-Progress: [████████░░] 75%
+Progress: [████████▉░] 89%
 
 ## Performance Metrics
 
@@ -70,6 +70,10 @@ Progress: [████████░░] 75%
 | Phase 04 P02 | 31m | 3 tasks | 14 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 04.1 inserted after Phase 4: Phase 4 Qualification Closure, ARS Integration Lock, and Installed Host Verification (URGENT)
 
 ### Decisions
 
