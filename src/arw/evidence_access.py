@@ -387,6 +387,32 @@ def _fresh_integrity(
 def _fresh_until(value: str | None, now: datetime | str | None) -> bool:
     if value is None:
         return False
+
+
+def _lifecycle_record_present(value: Any) -> bool:
+    """Accept only a digest-bearing lifecycle record, never a display row."""
+
+    if value is None or isinstance(value, (bool, str, bytes)):
+        return False
+    if isinstance(value, Mapping):
+        if any(
+            isinstance(item, str)
+            and (item == "receipt_sha256" or item.endswith("_sha256"))
+            and isinstance(candidate, str)
+            and re.fullmatch(r"[0-9a-f]{64}", candidate)
+            for item, candidate in value.items()
+        ):
+            status = value.get("status")
+            return status not in {"BLOCKED", "FAIL", "stale", "unavailable"}
+        return False
+    fields = getattr(value, "model_fields", {})
+    for name in fields or dir(value):
+        if not (name == "receipt_sha256" or name.endswith("_sha256")):
+            continue
+        candidate = getattr(value, name, None)
+        if isinstance(candidate, str) and re.fullmatch(r"[0-9a-f]{64}", candidate):
+            return getattr(value, "status", None) not in {"BLOCKED", "FAIL", "stale", "unavailable"}
+    return False
     current = _parse_utc(now) if isinstance(now, str) else (now or datetime.now(UTC)).astimezone(UTC)
     try:
         return current <= _parse_utc(value)
@@ -433,7 +459,7 @@ def evaluate_claim_capability(
     assert decision is not None
     if capability == "citation_verified":
         lifecycle = citation_lifecycle_receipt if citation_lifecycle_receipt is not None else citation_receipt
-        if lifecycle is None:
+        if not _lifecycle_record_present(lifecycle):
             return ClaimCapabilityDecision(
                 capability,
                 "BLOCKED",
@@ -507,15 +533,18 @@ def evaluate_claim_capability(
     # audit_complete: every input is an explicit lifecycle receipt.  Truthy
     # caller booleans are not accepted as substitutes for these records.
     required = (
-        ("missing_run_replay_receipt", run_replay_receipt),
-        ("missing_passport_receipts", passport_receipts),
-        ("missing_graph_projection_receipt", graph_projection_receipt),
-        ("missing_test_receipts", test_receipts),
-        ("missing_build_receipt", build_receipt),
+        ("run_replay_receipt", run_replay_receipt),
+        ("passport_receipts", passport_receipts),
+        ("graph_projection_receipt", graph_projection_receipt),
+        ("test_receipts", test_receipts),
+        ("build_receipt", build_receipt),
+        ("benchmark_receipts", benchmark_receipts),
     )
-    reasons = [code for code, value in required if not value]
-    if benchmark_receipts is None:
-        reasons.append("missing_benchmark_receipts")
+    reasons: list[str] = []
+    for name, value in required:
+        values = value if isinstance(value, (tuple, list)) else (value,)
+        if not values or any(not _lifecycle_record_present(item) for item in values):
+            reasons.append(f"missing_{name}")
     if technical_blockers:
         reasons.append("unresolved_technical_blockers")
     if reasons:
