@@ -168,7 +168,12 @@ class RuntimeState(StrictModel):
     accepted_artifact_manifest_sha256: list[str] = Field(default_factory=list)
     accepted_passport_sha256: list[str] = Field(default_factory=list)
     consumed_passport_sha256: list[str] = Field(default_factory=list)
-    execution_mode: Literal["native_formal", "degraded_inline", "blocked"] | None = None
+    execution_mode: Literal[
+        "native_profile",
+        "assignment_injected_subagent",
+        "degraded_inline",
+        "blocked",
+    ] | None = None
     execution_provenance: str | None = None
     role_catalog_sha256: Sha256 | None = None
     policy_sha256: Sha256 | None = None
@@ -498,7 +503,11 @@ def reduce_events(
                 "superseded",
             } or assignment.status == "superseded":
                 raise ReducerError("stale proposal cannot be accepted")
-            if assignment.execution_mode != "native_formal" and assignment.independence_eligible:
+            if (
+                assignment.execution_mode
+                not in {"native_profile", "assignment_injected_subagent"}
+                and assignment.independence_eligible
+            ):
                 raise ReducerError("formal proposal cannot be accepted from degraded or blocked mode")
             if any(item.proposal_sha256 == payload.proposal_sha256 for item in phase4_proposals):
                 raise ReducerError("proposal digest was already recorded")

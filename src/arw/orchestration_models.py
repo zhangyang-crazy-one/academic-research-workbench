@@ -40,7 +40,12 @@ PHASE4_SCHEMA_MODELS: tuple[type[StrictModel], ...]
 PHASE4_SCHEMA_VERSION = "1.0.0"
 MAX_OUTPUT_BYTES = 8_388_608
 
-ExecutionMode = Literal["native_formal", "degraded_inline", "blocked"]
+ExecutionMode = Literal[
+    "native_profile",
+    "assignment_injected_subagent",
+    "degraded_inline",
+    "blocked",
+]
 ExecutionProvenance = Literal[
     "native_profile",
     "assignment_injected_subagent",
@@ -155,11 +160,14 @@ def _validate_execution_claim(
             raise ValueError("blocked execution mode requires unavailable provenance")
         if independence_eligible:
             raise ValueError("blocked execution mode cannot carry a formal-independence claim")
-    elif execution_provenance not in {
-        "native_profile",
-        "assignment_injected_subagent",
-    }:
-        raise ValueError("native_formal requires native or assignment-injected provenance")
+    elif execution_mode == "native_profile":
+        if execution_provenance != "native_profile":
+            raise ValueError("native_profile requires native_profile provenance")
+    elif execution_mode == "assignment_injected_subagent":
+        if execution_provenance != "assignment_injected_subagent":
+            raise ValueError(
+                "assignment_injected_subagent requires assignment_injected_subagent provenance"
+            )
 
 
 class RoleDefinition(StrictModel):
@@ -175,7 +183,7 @@ class RoleDefinition(StrictModel):
     allowed_execution_modes: Annotated[
         tuple[ExecutionMode, ...],
         BeforeValidator(_freeze_json_array),
-        Field(min_length=1, max_length=3),
+        Field(min_length=1, max_length=4),
     ]
     developer_instructions_sha256: Sha256
 
@@ -288,7 +296,7 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=True,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "blocked"),
+            allowed_execution_modes=("native_profile", "assignment_injected_subagent", "blocked"),
             developer_instructions_sha256=_role_digest("devils_advocate_reviewer"),
         ),
         RoleDefinition(
@@ -297,7 +305,7 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=True,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "blocked"),
+            allowed_execution_modes=("native_profile", "assignment_injected_subagent", "blocked"),
             developer_instructions_sha256=_role_digest("domain_reviewer"),
         ),
         RoleDefinition(
@@ -306,7 +314,12 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=False,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "degraded_inline", "blocked"),
+            allowed_execution_modes=(
+                "native_profile",
+                "assignment_injected_subagent",
+                "degraded_inline",
+                "blocked",
+            ),
             developer_instructions_sha256=_role_digest("editorial_synthesizer"),
         ),
         RoleDefinition(
@@ -315,7 +328,12 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=False,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "degraded_inline", "blocked"),
+            allowed_execution_modes=(
+                "native_profile",
+                "assignment_injected_subagent",
+                "degraded_inline",
+                "blocked",
+            ),
             developer_instructions_sha256=_role_digest("experiment_designer"),
         ),
         RoleDefinition(
@@ -324,7 +342,7 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=True,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "blocked"),
+            allowed_execution_modes=("native_profile", "assignment_injected_subagent", "blocked"),
             developer_instructions_sha256=_role_digest("methodology_reviewer"),
         ),
         RoleDefinition(
@@ -333,7 +351,7 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=True,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "blocked"),
+            allowed_execution_modes=("native_profile", "assignment_injected_subagent", "blocked"),
             developer_instructions_sha256=_role_digest("perspective_reviewer"),
         ),
         RoleDefinition(
@@ -342,7 +360,12 @@ def locked_role_catalog() -> RoleCatalog:
             execution_capability="proposal_only",
             independence_eligible=False,
             capability_ids=("files.read",),
-            allowed_execution_modes=("native_formal", "degraded_inline", "blocked"),
+            allowed_execution_modes=(
+                "native_profile",
+                "assignment_injected_subagent",
+                "degraded_inline",
+                "blocked",
+            ),
             developer_instructions_sha256=_role_digest("research_architect"),
         ),
     )
@@ -876,8 +899,10 @@ class HostQualification(StrictModel):
     @model_validator(mode="after")
     def qualification_claim_is_honest(self) -> Self:
         if self.status == "PASS":
-            if self.execution_mode != "native_formal":
-                raise ValueError("host qualification PASS requires native_formal execution")
+            if self.execution_mode not in {"native_profile", "assignment_injected_subagent"}:
+                raise ValueError(
+                    "host qualification PASS requires a formal native execution mode"
+                )
             if self.worker_identity_id is None or self.host_agent_id is None:
                 raise ValueError("host qualification PASS requires observed distinct identity evidence")
         if self.execution_mode == "blocked" and self.status != "BLOCKED":

@@ -241,7 +241,7 @@
     },
     "execution_mode_selected_payload": {
       "properties": {
-        "execution_mode": {"enum": ["native_formal", "degraded_inline", "blocked"], "type": "string"},
+        "execution_mode": {"enum": ["native_profile", "assignment_injected_subagent", "degraded_inline", "blocked"], "type": "string"},
         "execution_provenance": {"enum": ["native_profile", "assignment_injected_subagent", "degraded_inline", "unavailable"], "type": "string"},
         "role_modes": {"items": {"type": "object"}, "type": "array"},
         "role_catalog_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},

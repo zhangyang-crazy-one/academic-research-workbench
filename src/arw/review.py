@@ -117,18 +117,20 @@ class PanelAssignment:
     blind_envelope: BlindReviewEnvelope
     required: bool = True
     round_number: int = 1
-    execution_mode: Literal["native_formal", "blocked"] = "native_formal"
+    execution_mode: Literal[
+        "native_profile", "assignment_injected_subagent", "blocked"
+    ] = "native_profile"
     execution_provenance: Literal[
-        "assignment_injected_subagent", "unavailable"
-    ] = "assignment_injected_subagent"
+        "native_profile", "assignment_injected_subagent", "unavailable"
+    ] = "native_profile"
     isolation_proven: bool = True
     cross_review_of_assignment_id: str | None = None
 
     @property
     def is_formal(self) -> bool:
         return (
-            self.execution_mode == "native_formal"
-            and self.execution_provenance == "assignment_injected_subagent"
+            self.execution_mode in {"native_profile", "assignment_injected_subagent"}
+            and self.execution_provenance == self.execution_mode
             and self.isolation_proven
         )
 
@@ -166,9 +168,9 @@ class PanelAssignment:
             blind_envelope=envelope,
             required=self.required,
             round_number=round_number,
-            execution_mode="native_formal" if reviewer_identity.isolated else "blocked",
+            execution_mode=self.execution_mode if reviewer_identity.isolated else "blocked",
             execution_provenance=(
-                "assignment_injected_subagent" if reviewer_identity.isolated else "unavailable"
+                self.execution_provenance if reviewer_identity.isolated else "unavailable"
             ),
             isolation_proven=reviewer_identity.isolated,
             cross_review_of_assignment_id=self.assignment_id,
@@ -223,7 +225,9 @@ class ReviewerReport:
     rubric_sha256: str
     findings: tuple[FindingObservation, ...]
     isolated: bool = True
-    execution_mode: Literal["native_formal", "degraded_inline", "blocked"] = "native_formal"
+    execution_mode: Literal[
+        "native_profile", "assignment_injected_subagent", "degraded_inline", "blocked"
+    ] = "native_profile"
     report_sha256: str | None = None
 
     def __post_init__(self) -> None:
@@ -472,7 +476,7 @@ class FormalPanelPolicy:
         rubric_sha256: str,
         reviewer_identities: Mapping[str, ReviewerIdentity | Mapping[str, object]],
         synthesizer_identity: ReviewerIdentity | Mapping[str, object] | None,
-        execution_mode: str = "native_formal",
+        execution_mode: str = "native_profile",
         isolated_assignments: bool = True,
     ) -> PanelPlan:
         blockers: list[str] = []
@@ -485,7 +489,7 @@ class FormalPanelPolicy:
         missing = [role for role in self.required_roles if role not in identities]
         if missing:
             blockers.append(f"missing required reviewer roles: {', '.join(missing)}")
-        if execution_mode != "native_formal":
+        if execution_mode not in {"native_profile", "assignment_injected_subagent"}:
             blockers.append("degraded_inline or non-formal execution cannot claim independence")
         if not isolated_assignments:
             blockers.append("isolated assignment delivery was not proven")
@@ -544,6 +548,7 @@ class FormalPanelPolicy:
                 identity=identities[role],
                 ordinal=ordinal,
                 required=role in self.required_roles,
+                execution_mode=execution_mode,
             )
             for ordinal, role in enumerate(all_roles)
         )
@@ -571,6 +576,8 @@ class FormalPanelPolicy:
             blind_envelope=synthesis_envelope,
             required=True,
             round_number=2,
+            execution_mode=execution_mode,  # type: ignore[arg-type]
+            execution_provenance=execution_mode,  # type: ignore[arg-type]
         )
         return PanelPlan(
             status="ready",
@@ -609,6 +616,7 @@ class FormalPanelPolicy:
         identity: ReviewerIdentity,
         ordinal: int,
         required: bool,
+        execution_mode: str,
     ) -> PanelAssignment:
         assignment_id = f"{panel_id}.{role_id}.assignment"
         envelope = BlindReviewEnvelope(
@@ -631,6 +639,8 @@ class FormalPanelPolicy:
             acceptance_key=(0, ordinal, assignment_id),
             blind_envelope=envelope,
             required=required,
+            execution_mode=execution_mode,  # type: ignore[arg-type]
+            execution_provenance=execution_mode,  # type: ignore[arg-type]
             isolation_proven=identity.isolated,
         )
 
@@ -676,7 +686,10 @@ class FormalPanelPolicy:
                 blockers.append(f"report identity does not match assignment: {role}")
             if report.subject_sha256 != panel.subject_sha256 or report.rubric_sha256 != panel.rubric_sha256:
                 blockers.append(f"report snapshot mismatch: {role}")
-            if report.execution_mode != "native_formal" or not report.isolated:
+            if report.execution_mode not in {
+                "native_profile",
+                "assignment_injected_subagent",
+            } or not report.isolated:
                 blockers.append(f"report independence is unproven: {role}")
         if (
             panel.synthesizer_assignment.worker_identity_id in reviewer_workers

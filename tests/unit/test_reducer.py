@@ -27,7 +27,7 @@ def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
             "task_id": f"task-{task_ordinal:03d}",
             "role_id": "research_architect",
             "worker_identity_id": f"worker.architect-{task_ordinal:03d}",
-            "execution_mode": "native_formal",
+            "execution_mode": "assignment_injected_subagent",
             "execution_provenance": "assignment_injected_subagent",
             "independence_eligible": False,
             "base_revision": 1,
@@ -455,7 +455,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
         _event(
             "execution.mode_selected",
             ExecutionModeSelectedPayload(
-                execution_mode="native_formal",
+                execution_mode="assignment_injected_subagent",
                 execution_provenance="assignment_injected_subagent",
                 role_catalog_sha256=HASH_B,
                 policy_sha256=HASH_C,
@@ -497,7 +497,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
     second = reduce_events("core-research.v1", tuple(events))
 
     assert first == second
-    assert first.execution_mode == "native_formal"
+    assert first.execution_mode == "assignment_injected_subagent"
     assert first.role_catalog_sha256 == HASH_B
     assert [item.assignment_id for item in first.assignments] == [assignment.assignment_id]
     assert first.accepted_proposal_sha256 == (proposal_sha256,)
