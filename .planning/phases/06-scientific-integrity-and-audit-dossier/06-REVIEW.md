@@ -170,19 +170,38 @@ query-string secrets and private paths.
 
 ## Review conclusion
 
-The findings are resolved in `171db95`, `922cbc9`, and `72f38a9`. Public evidence promotion now loads a
+The findings are resolved in `171db95`, `922cbc9`, `4ae96d3`, `72f38a9`, and
+`bb087f3`. Public evidence promotion now loads a
 canonical, digest-bound fresh integrity receipt from the approved run root and
 requires a validated parent authority envelope; lifecycle claims and dossier
 qualification are derived from typed replay evidence; local provenance and
-authority APIs fail closed; read loaders are side-effect free; and the verifier
-scans complete status streams and enforces the retained Phase 04.1 lock.
+authority APIs fail closed (including transition-role binding); credential-bearing
+access references are rejected; read loaders are side-effect free; and the
+verifier scans complete status streams and enforces the retained Phase 04.1 lock.
 
-The serial verifier was rerun after the fixes. Focused Phase 6 regression is
-**85 passed** and the Phase 4/5 composition subset is **34 passed**. The
-technical verifier intentionally returns **BLOCKED** for the current checkout
-because the retained lock is stale: it records ARW wheel, file-base source,
-and ARS adapter identity mismatches in
-`build/evidence/phase-06/integration-lock-drift.json`. This is the required
-fail-closed qualification result, not an implementation PASS. Release remains
-BLOCKED independently by SUP-04/P04-09 and unresolved CC BY-NC intended-use
-permission evidence.
+Post-fix verification on the current `bb087f3` checkout is **83 passed** for
+the focused Phase 6 suite and **34 passed** for the Phase 4/5 composition
+subset. The serial verifier was rerun with an owned repo-local temporary root;
+it exits 70 and writes technical/release `BLOCKED` to
+`build/evidence/phase-06-review/verdict.json`. Its exact retained-lock evidence
+is in `integration-lock-drift.json`: ARW wheel SHA drift, file-base
+`source-manifest.json` SHA drift, and ARS adapter `0.1.20 != 0.1.19`; the
+stage-build stderr additionally records that the retained lock's patch set is
+missing the qualified `0004-phase5-research-graph.patch`. The verifier therefore
+fails closed rather than laundering a stale lock into technical PASS. Release
+remains independently BLOCKED by SUP-04/P04-09 and unresolved CC BY-NC
+intended-use/permission evidence.
+
+A broad non-host invocation under the deliberately relative
+`TMPDIR=build/tmp/phase-06` produced **455 passed, 3 failed**. The failures
+were `test_post_materialization_gate_preserves_native_toolchain_and_receipt`
+(native gate `mktemp` could not resolve that relative directory),
+`test_component_identity_and_release_classifier_do_not_collapse_licenses`
+(the pre-existing dirty `supply-chain/use-distribution.json` carries stale
+technical-provenance hashes), and
+`test_phase1_clean_evidence_gate_retains_every_required_domain` (the broad
+run's shared staged/evidence state yielded an identity mismatch). The latter
+two files are outside the Phase 6 commit scope; rerunning the two affected test
+modules with an absolute repo-local TMPDIR passes **3/3** in 71.44s. These are
+environment/dirty-worktree qualification notes, not residual Phase 6 source
+findings.
