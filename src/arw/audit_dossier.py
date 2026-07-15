@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, field_validator, model_validator
+from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.manifests import ManifestError, _safe_directory, _write_once
@@ -68,6 +68,30 @@ def _safe_text(value: str, *, label: str) -> str:
 
 def _digest(value: object) -> str:
     return sha256_hex(canonical_json_bytes(value))
+
+
+def _qualification_proof(value: Any) -> str:
+    """Digest the complete dossier subject, excluding only its own verdict/hash.
+
+    A technical PASS is therefore replayable from canonical bytes: callers
+    cannot substitute an arbitrary evidence digest while preserving a valid
+    manifest.  The assembler derives this proof after canonical replay.
+    """
+
+    if isinstance(value, AuditDossierManifest):
+        subject = value.model_dump(
+            mode="json",
+            exclude={"dossier_sha256", "technical_qualification"},
+        )
+    elif isinstance(value, Mapping):
+        subject = {
+            key: item
+            for key, item in value.items()
+            if key not in {"dossier_sha256", "technical_qualification"}
+        }
+    else:
+        raise TypeError("qualification proof requires a dossier mapping")
+    return _digest(subject)
 
 
 class DossierRunHistory(StrictModel):
@@ -177,12 +201,6 @@ class DossierBlocker(StrictModel):
 
 class AuditDossierManifest(StrictModel):
     """The sole canonical source for both dossier renderings."""
-
-    # A technical PASS is derived only by ``assemble_audit_dossier`` after it
-    # has replayed and validated the canonical journal.  The marker is kept
-    # out of serialized bytes deliberately: a JSON mapping or a reloaded
-    # dossier must never be able to self-authorize a PASS.
-    _derived_qualification: bool = PrivateAttr(default=False)
 
     schema_version: Literal[AUDIT_DOSSIER_SCHEMA_VERSION]
     dossier_id: StableRuntimeId
@@ -334,9 +352,10 @@ class AuditDossierManifest(StrictModel):
         if self.dossier_sha256 != _digest(unsigned):
             raise ValueError("dossier_sha256 does not match canonical dossier bytes")
         if self.technical_qualification.verdict == "PASS":
-            raise ValueError(
-                "technical PASS must be derived from validated canonical replay"
-            )
+            if self.technical_qualification.evidence_sha256 != (
+                _qualification_proof(self),
+            ):
+                raise ValueError("technical PASS proof is not bound to canonical dossier bytes")
         if self.release_qualification.verdict == "PASS":
             legal = {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"}
             if any(blocker.code in legal for blocker in self.blockers):
@@ -358,12 +377,6 @@ def _seal_audit_dossier(
     allow_derived_pass: bool = False,
 ) -> AuditDossierManifest:
     if isinstance(value, AuditDossierManifest):
-        if value.technical_qualification.verdict == "PASS":
-            if not value._derived_qualification:
-                raise AuditDossierError(
-                    "technical PASS must be derived from validated canonical replay"
-                )
-            return value
         return value
     try:
         body = dict(value)
@@ -379,6 +392,7 @@ def _seal_audit_dossier(
             # Validate every other field through the normal model path while
             # staging the derived verdict as BLOCKED.  Only this internal
             # assembly path may then replace it and recompute canonical bytes.
+            body.pop("dossier_sha256", None)
             body["technical_qualification"] = {
                 "verdict": "BLOCKED",
                 "reason_codes": [],
@@ -389,12 +403,14 @@ def _seal_audit_dossier(
         if is_pass:
             qualified = DossierQualification.model_validate(technical, strict=True)
             object.__setattr__(dossier, "technical_qualification", qualified)
+            proof = _qualification_proof(dossier)
+            qualified = qualified.model_copy(update={"evidence_sha256": (proof,)})
+            object.__setattr__(dossier, "technical_qualification", qualified)
             object.__setattr__(
                 dossier,
                 "dossier_sha256",
                 _digest(dossier.model_dump(mode="json", exclude={"dossier_sha256"})),
             )
-            object.__setattr__(dossier, "_derived_qualification", True)
         return dossier
     except Exception as error:
         raise AuditDossierError(f"invalid audit dossier: {error}") from error
