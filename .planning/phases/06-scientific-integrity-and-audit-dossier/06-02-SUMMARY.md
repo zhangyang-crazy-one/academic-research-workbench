@@ -69,6 +69,7 @@ requirements-completed: [SCI-04, SCI-05]
 4. **06-02-T02 implementation correction** — `46e5161` (component digest binding and qualification receipt canonicalization)
 5. **06-02-T02 forged-object correction** — `49a5c24` (revalidate model-copied qualification receipts before policy)
 6. **06-02-T02 authority correction** — `cacc7b7` (enforce parent role and runtime-root binding for typed envelopes)
+7. **06-02-T02 local-source correction** — `ea8fc16` (defer local byte digest comparison to allowed-root intake)
 
 ## Verification
 
