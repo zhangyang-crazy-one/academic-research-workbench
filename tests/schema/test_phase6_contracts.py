@@ -44,15 +44,17 @@ def test_phase6_receipt_schema_is_registry_generated_and_strict() -> None:
     from arw.integrity import generate_phase6_schema_documents
     from arw.schema_registry import PHASE6_SCHEMA_NAMES, SCHEMA_NAMES
 
-    assert PHASE6_SCHEMA_NAMES == ("integrity-receipt.schema.json",)
-    assert set(PHASE6_SCHEMA_NAMES) <= set(SCHEMA_NAMES)
-    checked = json.loads(
-        (ROOT / "schemas/v1/integrity-receipt.schema.json").read_text(encoding="utf-8")
+    assert PHASE6_SCHEMA_NAMES == (
+        "integrity-receipt.schema.json",
+        "experiment-provenance.schema.json",
     )
-    generated = generate_phase6_schema_documents()["integrity-receipt.schema.json"]
-    assert checked == generated
-    jsonschema.Draft202012Validator.check_schema(checked)
-    assert checked["additionalProperties"] is False
+    assert set(PHASE6_SCHEMA_NAMES) <= set(SCHEMA_NAMES)
+    generated_documents = generate_phase6_schema_documents()
+    for name, generated in generated_documents.items():
+        checked = json.loads((ROOT / "schemas/v1" / name).read_text(encoding="utf-8"))
+        assert checked == generated
+        jsonschema.Draft202012Validator.check_schema(checked)
+        assert checked["additionalProperties"] is False
 
 
 def test_receipt_round_trips_through_json_schema_and_hashes_canonical_payload() -> None:

@@ -294,7 +294,10 @@ def _phase4_record(value: object, model_name: str) -> object:
 
     model = getattr(orchestration_models, model_name)
     if isinstance(value, model):
-        return value
+        # ``model_copy`` deliberately skips validation.  Canonical event
+        # boundaries therefore revalidate even already-typed objects so a
+        # caller cannot preserve a stale self-hash or omit a required binding.
+        value = value.model_dump(mode="python")
     try:
         return model.model_validate(value)
     except Exception as error:  # Pydantic turns this into a strict payload error.
@@ -341,6 +344,14 @@ class ExecutionRoleMode(StrictModel):
     execution_provenance: Phase4ExecutionProvenance
     independence_eligible: bool
     worker_identity_id: StableRuntimeId | None = None
+
+
+class ExperimentProvenanceAcceptedPayload(Phase4Payload):
+    """Parent-authored acceptance of one immutable external provenance record."""
+
+    provenance_id: StableRuntimeId
+    experiment_id: StableRuntimeId
+    provenance_sha256: Sha256
 
 
 class ExecutionModeSelectedPayload(Phase4Payload):
@@ -412,6 +423,12 @@ class AttemptPreparedPayload(Phase4Payload):
         attempt = self.attempt
         if attempt.assignment_id != self.assignment_id:  # type: ignore[attr-defined]
             raise ValueError("attempt does not bind the assignment")
+        if attempt.status != "prepared":  # type: ignore[attr-defined]
+            raise ValueError("attempt.prepared requires a prepared descriptor")
+        if attempt.retry_reason is not None or attempt.retry_eligible:  # type: ignore[attr-defined]
+            raise ValueError("a fresh attempt cannot carry predecessor retry state")
+        if attempt.host_agent_id is not None or attempt.cancellation_deadline_at is not None:  # type: ignore[attr-defined]
+            raise ValueError("a fresh attempt cannot predeclare host observations")
         if self.attempt_sha256 is not None and _phase4_record_digest(attempt) != self.attempt_sha256:
             raise ValueError("attempt digest does not match immutable bytes")
         return self
@@ -435,6 +452,12 @@ class AttemptLifecyclePayload(Phase4Payload):
     def retry_and_cancellation_bounds_are_exact(self) -> Self:
         if self.retry_eligible and self.retry_reason is None:
             raise ValueError("retry eligibility requires a retry reason")
+        if self.retry_eligible and self.retry_reason not in {
+            "timeout",
+            "process_failure",
+            "repairable_envelope",
+        }:
+            raise ValueError("only repairable failures may receive a retry")
         if self.attempt_number >= 2 and self.retry_eligible:
             raise ValueError("retry budget is exhausted after two attempts")
         if self.status == "cancel_requested" and self.cancellation_deadline_at is None:
@@ -448,8 +471,9 @@ class ProposalAcceptedPayload(Phase4Payload):
     attempt_id: StableRuntimeId
     proposal: Annotated[object, BeforeValidator(lambda value: _phase4_record(value, "WorkerProposal"))]
     proposal_sha256: Sha256
-    acceptance_key: tuple[
-        Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId
+    acceptance_key: Annotated[
+        tuple[Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId],
+        BeforeValidator(_phase4_hashes),
     ]
     accepted_status: Literal["accepted"] = "accepted"
 
@@ -472,8 +496,9 @@ class ProposalRejectedPayload(Phase4Payload):
         "rejected", "rejected_invalid", "rejected_stale", "rejected_cancelled", "rejected_superseded"
     ]
     reason_code: StableRuntimeId
-    acceptance_key: tuple[
-        Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId
+    acceptance_key: Annotated[
+        tuple[Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId],
+        BeforeValidator(_phase4_hashes),
     ]
     raw_bytes_retained: bool = True
 
@@ -484,8 +509,51 @@ class ReviewReportAcceptedPayload(Phase4Payload):
 
     @model_validator(mode="after")
     def report_digest_is_bound(self) -> Self:
+        from arw.orchestration_models import review_report_body_sha256
+
         if self.report.report_sha256 != self.report_sha256:  # type: ignore[attr-defined]
             raise ValueError("review report digest does not match the report record")
+        if review_report_body_sha256(self.report) != self.report_sha256:  # type: ignore[arg-type]
+            raise ValueError("review report digest is not derived from canonical report body")
+        return self
+
+
+class HostIdentityAcceptedPayload(Phase4Payload):
+    receipt: Annotated[
+        object, BeforeValidator(lambda value: _phase4_record(value, "HostIdentityReceipt"))
+    ]
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def host_identity_digest_is_bound(self) -> Self:
+        if _phase4_record_digest(self.receipt) != self.receipt_sha256:
+            raise ValueError("host identity receipt digest does not match immutable bytes")
+        return self
+
+
+class PanelPreparedPayload(Phase4Payload):
+    manifest: Annotated[
+        object, BeforeValidator(lambda value: _phase4_record(value, "PanelManifest"))
+    ]
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def panel_manifest_digest_is_bound(self) -> Self:
+        if _phase4_record_digest(self.manifest) != self.manifest_sha256:
+            raise ValueError("panel manifest digest does not match immutable bytes")
+        return self
+
+
+class HumanAuthorityAcceptedPayload(Phase4Payload):
+    authority: Annotated[
+        object, BeforeValidator(lambda value: _phase4_record(value, "HumanAuthority"))
+    ]
+    authority_sha256: Sha256
+
+    @model_validator(mode="after")
+    def human_authority_digest_is_bound(self) -> Self:
+        if _phase4_record_digest(self.authority) != self.authority_sha256:
+            raise ValueError("human authority digest does not match immutable bytes")
         return self
 
 
@@ -529,11 +597,14 @@ class HumanDecisionRecordedPayload(Phase4Payload):
         object, BeforeValidator(lambda value: _phase4_record(value, "HumanDecisionRecord"))
     ]
     decision_sha256: Sha256
+    authority_sha256: Sha256
 
     @model_validator(mode="after")
     def human_decision_digest_is_bound(self) -> Self:
         if _phase4_record_digest(self.decision) != self.decision_sha256:
             raise ValueError("human decision digest does not match immutable bytes")
+        if self.decision.authority_sha256 != self.authority_sha256:  # type: ignore[attr-defined]
+            raise ValueError("human decision does not bind the accepted authority")
         return self
 
 
@@ -546,11 +617,15 @@ PHASE4_EVENT_TYPES = frozenset(
         "attempt.lifecycle",
         "proposal.accepted",
         "proposal.rejected",
+        "host_identity.accepted",
+        "panel.prepared",
         "review.report_accepted",
         "review.synthesis_accepted",
         "hook.observed",
         "gate.evaluated",
+        "human_authority.accepted",
         "human_decision.recorded",
+        "experiment.provenance.accepted",
     }
 )
 
@@ -563,11 +638,15 @@ PHASE4_EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
     "attempt.lifecycle": AttemptLifecyclePayload,
     "proposal.accepted": ProposalAcceptedPayload,
     "proposal.rejected": ProposalRejectedPayload,
+    "host_identity.accepted": HostIdentityAcceptedPayload,
+    "panel.prepared": PanelPreparedPayload,
     "review.report_accepted": ReviewReportAcceptedPayload,
     "review.synthesis_accepted": ReviewSynthesisAcceptedPayload,
     "hook.observed": HookObservedPayload,
     "gate.evaluated": GateEvaluatedPayload,
+    "human_authority.accepted": HumanAuthorityAcceptedPayload,
     "human_decision.recorded": HumanDecisionRecordedPayload,
+    "experiment.provenance.accepted": ExperimentProvenanceAcceptedPayload,
 }
 
 
@@ -610,11 +689,15 @@ class CanonicalEvent(StrictModel):
         "attempt.lifecycle",
         "proposal.accepted",
         "proposal.rejected",
+        "host_identity.accepted",
+        "panel.prepared",
         "review.report_accepted",
         "review.synthesis_accepted",
         "hook.observed",
         "gate.evaluated",
+        "human_authority.accepted",
         "human_decision.recorded",
+        "experiment.provenance.accepted",
     ]
     event_id: EventId
     command_id: CommandId
@@ -645,11 +728,15 @@ class CanonicalEvent(StrictModel):
         | AttemptLifecyclePayload
         | ProposalAcceptedPayload
         | ProposalRejectedPayload
+        | HostIdentityAcceptedPayload
+        | PanelPreparedPayload
         | ReviewReportAcceptedPayload
         | ReviewSynthesisAcceptedPayload
         | HookObservedPayload
         | GateEvaluatedPayload
+        | HumanAuthorityAcceptedPayload
         | HumanDecisionRecordedPayload
+        | ExperimentProvenanceAcceptedPayload
     )
     event_sha256: Sha256
 

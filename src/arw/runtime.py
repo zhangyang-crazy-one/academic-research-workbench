@@ -39,6 +39,7 @@ from arw.models import (
     HumanDecisionRequestedPayload,
     HumanDecisionResolveRequest,
     HumanDecisionResolvedPayload,
+    ExperimentProvenanceAcceptedPayload,
     LifecycleTransitionRequest,
     LifecycleTransitionedPayload,
     MaterialPassport,
@@ -46,6 +47,8 @@ from arw.models import (
     PassportAttemptSnapshot,
     PassportDecisionSnapshot,
     PassportPointer,
+    PHASE4_EVENT_PAYLOAD_TYPES,
+    PHASE4_EVENT_TYPES,
     CheckpointRequest,
     Rejection,
     RecoveryCompletedPayload,
@@ -248,6 +251,61 @@ class RuntimeCommandService:
             event_type="lifecycle.transitioned",
             payload_factory=payload,
             prevalidate=validate,
+        )
+
+    def append_phase4_event(
+        self,
+        request: RuntimeCommandRequest,
+        *,
+        event_type: str,
+        payload: StrictModel,
+        prevalidate=None,
+    ) -> CommandOutcome:
+        """Append one parent-authored Phase 4 event through the normal gate.
+
+        The caller supplies an already validated immutable payload, but it does
+        not supply sequence, revision, hash-chain, actor, or journal fields.
+        Those remain owned by ``_execute`` and the reducer.
+        """
+
+        if event_type not in PHASE4_EVENT_TYPES:
+            raise ValueError(f"not a registered Phase 4 event: {event_type}")
+        expected_type = PHASE4_EVENT_PAYLOAD_TYPES[event_type]
+        if not isinstance(payload, expected_type):
+            raise TypeError(
+                f"{event_type} requires {expected_type.__name__}, got {type(payload).__name__}"
+            )
+        return self._execute(
+            request,
+            event_type=event_type,
+            payload_factory=lambda _state, _replayed: payload,
+            prevalidate=prevalidate,
+        )
+
+    def append_experiment_provenance(
+        self,
+        request: RuntimeCommandRequest,
+        *,
+        provenance_id: str,
+        experiment_id: str,
+        provenance_sha256: str,
+    ) -> CommandOutcome:
+        """Accept one parent-validated external provenance manifest.
+
+        The manifest is published separately by ``ingest_experiment_provenance``;
+        this method owns only the hash-chained acceptance event and performs no
+        subprocess or producer-authority inference.
+        """
+
+        payload = ExperimentProvenanceAcceptedPayload(
+            provenance_id=provenance_id,
+            experiment_id=experiment_id,
+            provenance_sha256=provenance_sha256,
+        )
+        return self.append_phase4_event(
+            request,
+            event_type="experiment.provenance.accepted",
+            payload=payload,
         )
 
     def request_decision(self, request: HumanDecisionRequest) -> CommandOutcome:
@@ -468,7 +526,11 @@ class RuntimeCommandService:
                     for item in state.pending_human_decisions
                 ],
                 active_attempts=[
-                    PassportAttemptSnapshot.model_validate(item.model_dump(mode="json"))
+                    PassportAttemptSnapshot(
+                        attempt_id=item.attempt_id,
+                        base_revision=item.base_revision,
+                        consumed_sha256=list(item.consumed_sha256),
+                    )
                     for item in state.active_attempts
                 ],
                 fresh_until=request.fresh_until,

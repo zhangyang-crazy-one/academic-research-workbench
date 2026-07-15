@@ -326,17 +326,29 @@ def generate_phase6_schema_documents() -> dict[str, dict[str, object]]:
     """Generate checked-in Draft 2020-12 Phase 6 contract documents."""
 
     document = IntegrityReceipt.model_json_schema(mode="validation")
-    return {
+    generated = {
         INTEGRITY_SCHEMA_NAME: {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$id": f"https://academic-research-workbench.local/schemas/v1/{INTEGRITY_SCHEMA_NAME}",
             **document,
         }
     }
+    # Keep one registry-owned Phase 6 name tuple while allowing each contract
+    # module to own its model projection.
+    from arw.experiment_provenance import generate_phase6_schema_documents as generate_provenance_schemas
+
+    generated.update(generate_provenance_schemas())
+    return generated
 
 
-PHASE6_SCHEMA_MODELS: tuple[type[StrictModel], ...] = (IntegrityReceipt,)
-PHASE6_SCHEMA_NAMES: tuple[str, ...] = (INTEGRITY_SCHEMA_NAME,)
+from arw.experiment_provenance import ExperimentProvenance
+
+
+PHASE6_SCHEMA_MODELS: tuple[type[StrictModel], ...] = (IntegrityReceipt, ExperimentProvenance)
+PHASE6_SCHEMA_NAMES: tuple[str, ...] = (
+    INTEGRITY_SCHEMA_NAME,
+    "experiment-provenance.schema.json",
+)
 
 
 def render_integrity_schema_bytes() -> bytes:

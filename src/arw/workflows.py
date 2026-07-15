@@ -237,11 +237,15 @@ def event_category(event_type: str) -> EventCategory:
         "attempt.lifecycle",
         "proposal.accepted",
         "proposal.rejected",
+        "host_identity.accepted",
+        "panel.prepared",
         "review.report_accepted",
         "review.synthesis_accepted",
         "hook.observed",
         "gate.evaluated",
+        "human_authority.accepted",
         "human_decision.recorded",
+        "experiment.provenance.accepted",
     }:
         return "orchestration"
     prefix = event_type.split(".", 1)[0]
