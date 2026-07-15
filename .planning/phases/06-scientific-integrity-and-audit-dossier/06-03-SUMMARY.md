@@ -73,6 +73,7 @@ requirements-completed: [SCI-06, SCI-07]
 3. **06-03 correctness correction** — `701ddea` (restricted ambiguous licenses remain review-bound)
 4. **06-03 contract correction** — `22029a1` (evidence digest arrays and citation lifecycle receipt)
 5. **06-03 staged package correction** — `b1f6191` (Phase 6 schema allowlist coverage)
+6. **06-03 audit receipt correction** — `1a51f78` (reject graph display rows without digest-bearing lifecycle receipts)
 
 ## Verification
 
@@ -81,6 +82,7 @@ requirements-completed: [SCI-06, SCI-07]
 - Staged/package subset after allowlist correction — **25 passed** in 131 seconds; direct `scripts/stage-plugin --clean --stage-root build/stage/academic-research-workbench` — **stage ready**.
 - Initial non-host regression before the allowlist correction — **409 passed**, with stage-related failures caused by the newly added schemas; the allowlist correction addressed that root cause.
 - `git diff --check` for all Plan 03 files — **passed**.
+- Audit receipt negative/positive matrix after the final correction — **10 passed**.
 
 ## Deviations from Plan
 
@@ -108,7 +110,7 @@ SCI-06/SCI-07 are available to the audit-dossier collector through the access de
 ## Self-Check: PASSED
 
 - All key files listed above exist.
-- Commits `9a0539f`, `504d99a`, `701ddea`, `22029a1`, and `b1f6191` are present in history.
+- Commits `9a0539f`, `504d99a`, `701ddea`, `22029a1`, `b1f6191`, and `1a51f78` are present in history.
 - Plan-level acceptance tests and the existing review/human-gate/graph authority subset pass.
 
 ---
