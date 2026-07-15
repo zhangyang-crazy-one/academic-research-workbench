@@ -6,6 +6,7 @@ from arw.audit_dossier import (
     AuditDossierError,
     AuditDossierManifest,
     assemble_audit_dossier,
+    publish_audit_dossier,
     render_audit_dossier_json,
     render_audit_dossier_markdown,
     seal_audit_dossier,
@@ -101,3 +102,32 @@ def test_empty_replayed_dossier_is_technically_blocked() -> None:
     )
     assert dossier.technical_qualification.verdict == "BLOCKED"
     assert any(item.code == "missing_claim_lifecycle_evidence" for item in dossier.blockers)
+
+
+def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
+    dossier = assemble_audit_dossier(
+        replay_state=_state(),
+        run_manifest_sha256="b" * 64,
+        generated_at="2026-07-16T00:00:00Z",
+    )
+    forged = dossier.model_dump(mode="json")
+    forged["technical_qualification"] = {
+        "verdict": "PASS",
+        "reason_codes": [],
+        "evidence_sha256": ["c" * 64],
+        "rationale": "caller supplied",
+    }
+    forged.pop("dossier_sha256")
+    # Recompute the outer digest so the only failing boundary is qualification
+    # authority, not a superficial hash mismatch.
+    from arw.canonical import sha256_hex, canonical_json_bytes
+
+    forged["dossier_sha256"] = sha256_hex(
+        canonical_json_bytes({k: v for k, v in forged.items() if k != "dossier_sha256"})
+    )
+    with pytest.raises(Exception, match="technical PASS"):
+        AuditDossierManifest.model_validate(forged)
+    with pytest.raises(AuditDossierError, match="technical PASS"):
+        seal_audit_dossier(forged)
+    with pytest.raises(AuditDossierError, match="technical PASS"):
+        publish_audit_dossier(tmp_path, forged)

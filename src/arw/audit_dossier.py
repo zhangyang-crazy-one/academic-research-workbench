@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
+from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, field_validator, model_validator
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.manifests import ManifestError, _safe_directory, _write_once
@@ -178,6 +178,12 @@ class DossierBlocker(StrictModel):
 class AuditDossierManifest(StrictModel):
     """The sole canonical source for both dossier renderings."""
 
+    # A technical PASS is derived only by ``assemble_audit_dossier`` after it
+    # has replayed and validated the canonical journal.  The marker is kept
+    # out of serialized bytes deliberately: a JSON mapping or a reloaded
+    # dossier must never be able to self-authorize a PASS.
+    _derived_qualification: bool = PrivateAttr(default=False)
+
     schema_version: Literal[AUDIT_DOSSIER_SCHEMA_VERSION]
     dossier_id: StableRuntimeId
     run_id: RunId
@@ -327,6 +333,10 @@ class AuditDossierManifest(StrictModel):
         unsigned = self.model_dump(mode="json", exclude={"dossier_sha256"})
         if self.dossier_sha256 != _digest(unsigned):
             raise ValueError("dossier_sha256 does not match canonical dossier bytes")
+        if self.technical_qualification.verdict == "PASS":
+            raise ValueError(
+                "technical PASS must be derived from validated canonical replay"
+            )
         if self.release_qualification.verdict == "PASS":
             legal = {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"}
             if any(blocker.code in legal for blocker in self.blockers):
@@ -342,13 +352,58 @@ class AuditDossierManifest(StrictModel):
         return canonical_json_bytes(self.model_dump(mode="json"))
 
 
-def seal_audit_dossier(value: Mapping[str, Any] | AuditDossierManifest) -> AuditDossierManifest:
+def _seal_audit_dossier(
+    value: Mapping[str, Any] | AuditDossierManifest,
+    *,
+    allow_derived_pass: bool = False,
+) -> AuditDossierManifest:
     if isinstance(value, AuditDossierManifest):
-        value = value.model_dump(mode="json")
+        if value.technical_qualification.verdict == "PASS":
+            if not value._derived_qualification:
+                raise AuditDossierError(
+                    "technical PASS must be derived from validated canonical replay"
+                )
+            return value
+        return value
     try:
-        return AuditDossierManifest.model_validate(value)
+        body = dict(value)
+        technical = body.get("technical_qualification")
+        is_pass = (
+            isinstance(technical, Mapping) and technical.get("verdict") == "PASS"
+        )
+        if is_pass and not allow_derived_pass:
+            # Let the canonical model validator produce the same fail-closed
+            # error as direct model_validate; callers cannot self-authorize.
+            return AuditDossierManifest.model_validate(body)
+        if is_pass:
+            # Validate every other field through the normal model path while
+            # staging the derived verdict as BLOCKED.  Only this internal
+            # assembly path may then replace it and recompute canonical bytes.
+            body["technical_qualification"] = {
+                "verdict": "BLOCKED",
+                "reason_codes": [],
+                "evidence_sha256": [],
+                "rationale": "qualification is derived after canonical replay",
+            }
+        dossier = AuditDossierManifest.model_validate(body)
+        if is_pass:
+            qualified = DossierQualification.model_validate(technical, strict=True)
+            object.__setattr__(dossier, "technical_qualification", qualified)
+            object.__setattr__(
+                dossier,
+                "dossier_sha256",
+                _digest(dossier.model_dump(mode="json", exclude={"dossier_sha256"})),
+            )
+            object.__setattr__(dossier, "_derived_qualification", True)
+        return dossier
     except Exception as error:
         raise AuditDossierError(f"invalid audit dossier: {error}") from error
+
+
+def seal_audit_dossier(value: Mapping[str, Any] | AuditDossierManifest) -> AuditDossierManifest:
+    """Validate a dossier mapping without granting it qualification authority."""
+
+    return _seal_audit_dossier(value)
 
 
 class AuditDossierError(ValueError, ManifestError):
@@ -703,7 +758,7 @@ def assemble_audit_dossier(
         "release_qualification": release,
         "blockers": tuple(local_blockers),
     }
-    return seal_audit_dossier(manifest)
+    return _seal_audit_dossier(manifest, allow_derived_pass=True)
 
 
 def run_manifest_sha256_from_root(root: Path) -> str:
