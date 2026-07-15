@@ -346,7 +346,7 @@ class ExecutionRoleMode(StrictModel):
     worker_identity_id: StableRuntimeId | None = None
 
 
-class ExperimentProvenanceAcceptedPayload(Phase4Payload):
+class ExperimentProvenanceAcceptedPayload(StrictModel):
     """Parent-authored acceptance of one immutable external provenance record."""
 
     provenance_id: StableRuntimeId
