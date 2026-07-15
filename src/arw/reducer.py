@@ -17,13 +17,17 @@ from arw.models import (
     ArtifactAcceptedPayload,
     CanonicalEvent,
     ExecutionModeSelectedPayload,
+    ExperimentProvenanceAcceptedPayload,
     GateEvaluatedPayload,
+    HostIdentityAcceptedPayload,
     HookObservedPayload,
+    HumanAuthorityAcceptedPayload,
     HumanDecisionRequestedPayload,
     HumanDecisionRecordedPayload,
     HumanDecisionResolvedPayload,
     LifecycleTransitionedPayload,
     PassportAcceptedPayload,
+    PanelPreparedPayload,
     ProposalAcceptedPayload,
     ProposalRejectedPayload,
     RecoveryHealth,
@@ -36,6 +40,7 @@ from arw.models import (
     StrictModel,
     ZERO_HASH,
 )
+from arw.orchestration_models import RETRYABLE_FAILURES
 from arw.workflows import (
     LEGACY_WORKFLOW_ID,
     WorkflowDefinitionError,
@@ -137,7 +142,29 @@ class GateState(StrictModel):
     required: bool
     subject_sha256: Sha256
     evidence_sha256: tuple[Sha256, ...]
+    decision_sha256: Sha256
     decision: object
+    source_event_id: str
+
+
+class HostIdentityState(StrictModel):
+    receipt_id: StableRuntimeId
+    receipt_sha256: Sha256
+    receipt: object
+    source_event_id: str
+
+
+class HumanAuthorityState(StrictModel):
+    authority_id: StableRuntimeId
+    authority_sha256: Sha256
+    authority: object
+    source_event_id: str
+
+
+class BlockerReleaseState(StrictModel):
+    blocker_code: StableRuntimeId
+    decision_id: StableRuntimeId
+    action: Literal["release", "restore"]
     source_event_id: str
 
 
@@ -149,6 +176,8 @@ class HumanDecisionState(StrictModel):
     applicable_transition: StableRuntimeId
     scope: str
     rationale: str
+    decision_sha256: Sha256
+    authority_sha256: Sha256
     source_event_id: str
     decision: object
 
@@ -163,7 +192,9 @@ class RuntimeState(StrictModel):
     recovery_health: RecoveryHealth = "healthy"
     blockers: list[BlockerState] = Field(default_factory=list)
     pending_human_decisions: list[PendingDecisionState] = Field(default_factory=list)
-    active_attempts: list[AttemptState] = Field(default_factory=list)
+    active_attempts: list[Phase4ActiveAttemptState | AttemptState] = Field(
+        default_factory=list
+    )
     legal_next_transitions: list[str] = Field(default_factory=list)
     accepted_artifact_manifest_sha256: list[str] = Field(default_factory=list)
     accepted_passport_sha256: list[str] = Field(default_factory=list)
@@ -187,6 +218,12 @@ class RuntimeState(StrictModel):
     deterministic_commit_cursor: tuple[int, int, StableRuntimeId] | None = None
     panel_reports: tuple[object, ...] = Field(default_factory=tuple)
     panel_syntheses: tuple[object, ...] = Field(default_factory=tuple)
+    panel_manifests: tuple[object, ...] = Field(default_factory=tuple)
+    host_identity_receipts: tuple[HostIdentityState, ...] = Field(default_factory=tuple)
+    human_authorities: tuple[HumanAuthorityState, ...] = Field(default_factory=tuple)
+    blocker_release_history: tuple[BlockerReleaseState, ...] = Field(default_factory=tuple)
+    canonical_event_sha256: tuple[Sha256, ...] = Field(default_factory=tuple)
+    accepted_evidence_sha256: tuple[Sha256, ...] = Field(default_factory=tuple)
     hook_observations: tuple[object, ...] = Field(default_factory=tuple)
     gates: tuple[GateState, ...] = Field(default_factory=tuple)
     human_decision_history: tuple[HumanDecisionState, ...] = Field(default_factory=tuple)
@@ -321,6 +358,12 @@ def reduce_events(
     phase4_proposals: list[ProposalState] = []
     panel_reports: list[object] = []
     panel_syntheses: list[object] = []
+    panel_manifests: list[object] = []
+    host_identity_receipts: list[HostIdentityState] = []
+    human_authorities: list[HumanAuthorityState] = []
+    blocker_release_history: list[BlockerReleaseState] = []
+    canonical_event_sha256: list[str] = []
+    accepted_evidence_sha256: list[str] = []
     hook_observations: list[object] = []
     gates: dict[str, GateState] = {}
     failed_gate_ids: set[str] = set()
@@ -397,6 +440,8 @@ def reduce_events(
             if assignment.assignment_sha256 != payload.assignment_sha256:
                 raise ReducerError("attempt assignment digest is stale")
             attempt = payload.attempt
+            if attempt.status != "prepared":  # type: ignore[attr-defined]
+                raise ReducerError("attempt.prepared requires a prepared descriptor")
             if attempt.attempt_id in attempt_ids:  # type: ignore[attr-defined]
                 raise ReducerError("attempt ID was already used")
             if attempt.assignment_id != payload.assignment_id:  # type: ignore[attr-defined]
@@ -409,8 +454,24 @@ def reduce_events(
             if attempt.attempt_number > 1:  # type: ignore[attr-defined]
                 if not previous_attempts or max(item.attempt_number for item in previous_attempts) != attempt.attempt_number - 1:  # type: ignore[attr-defined]
                     raise ReducerError("retry must follow the immediately preceding attempt")
-                if any(item.status not in {"failed", "interrupted", "force_terminated"} for item in previous_attempts if item.attempt_number == attempt.attempt_number - 1):
+                predecessor_history = [
+                    item
+                    for item in previous_attempts
+                    if item.attempt_number == attempt.attempt_number - 1
+                ]
+                predecessor = predecessor_history[-1]
+                if predecessor.status not in {
+                    "failed",
+                    "cancelled",
+                    "interrupted",
+                    "force_terminated",
+                }:
                     raise ReducerError("retry requires a terminal repairable attempt")
+                if (
+                    not predecessor.retry_eligible
+                    or predecessor.retry_reason not in RETRYABLE_FAILURES
+                ):
+                    raise ReducerError("retry predecessor is not canonically eligible")
             attempt_ids.add(attempt.attempt_id)  # type: ignore[attr-defined]
             attempts[attempt.attempt_id] = Phase4ActiveAttemptState(  # type: ignore[attr-defined]
                 attempt_id=attempt.attempt_id,  # type: ignore[attr-defined]
@@ -449,7 +510,8 @@ def reduce_events(
             if payload.attempt_number > 1 and not any(
                 item.assignment_id == payload.assignment_id
                 and item.attempt_number == payload.attempt_number - 1
-                and item.status in {"failed", "interrupted", "force_terminated"}
+                and item.status
+                in {"failed", "cancelled", "interrupted", "force_terminated"}
                 for item in phase4_attempt_history
             ):
                 raise ReducerError("retry lifecycle is outside the repairable attempt budget")
@@ -486,6 +548,11 @@ def reduce_events(
                     attempts.pop(payload.attempt_id, None)
                 else:
                     attempts[payload.attempt_id] = updated
+            if payload.status == "blocked":
+                blockers[f"attempt-blocked.{payload.attempt_id}"] = BlockerState(
+                    code=f"attempt-blocked.{payload.attempt_id}",
+                    source_event_id=event.event_id,
+                )
         elif event.event_type == "proposal.accepted":
             assert isinstance(payload, ProposalAcceptedPayload)
             phase4_event_seen = True
@@ -562,21 +629,128 @@ def reduce_events(
                     source_event_id=event.event_id,
                 )
             )
+        elif event.event_type == "host_identity.accepted":
+            assert isinstance(payload, HostIdentityAcceptedPayload)
+            phase4_event_seen = True
+            receipt = payload.receipt
+            if any(
+                item.receipt_id == receipt.receipt_id  # type: ignore[attr-defined]
+                or item.receipt_sha256 == payload.receipt_sha256
+                for item in host_identity_receipts
+            ):
+                raise ReducerError("host identity receipt was already recorded")
+            host_identity_receipts.append(
+                HostIdentityState(
+                    receipt_id=receipt.receipt_id,  # type: ignore[attr-defined]
+                    receipt_sha256=payload.receipt_sha256,
+                    receipt=receipt,
+                    source_event_id=event.event_id,
+                )
+            )
+            accepted_evidence_sha256.append(payload.receipt_sha256)
+        elif event.event_type == "experiment.provenance.accepted":
+            assert isinstance(payload, ExperimentProvenanceAcceptedPayload)
+            phase4_event_seen = True
+            if payload.provenance_sha256 in accepted_evidence_sha256:
+                raise ReducerError("experiment provenance was already accepted")
+            accepted_evidence_sha256.append(payload.provenance_sha256)
+        elif event.event_type == "panel.prepared":
+            assert isinstance(payload, PanelPreparedPayload)
+            phase4_event_seen = True
+            manifest = payload.manifest
+            if any(item.panel_id == manifest.panel_id for item in panel_manifests):  # type: ignore[attr-defined]
+                raise ReducerError("panel ID was already prepared")
+            receipts = {
+                item.receipt_sha256: item.receipt for item in host_identity_receipts
+            }
+            seats = (*manifest.reviewer_seats,)  # type: ignore[attr-defined]
+            if manifest.synthesizer_seat is not None:  # type: ignore[attr-defined]
+                seats = (*seats, manifest.synthesizer_seat)  # type: ignore[attr-defined]
+            for seat in seats:
+                receipt = receipts.get(seat.identity_receipt_sha256)
+                if receipt is None:
+                    raise ReducerError("panel seat references unknown host identity evidence")
+                if (
+                    receipt.role_id != seat.role_id
+                    or receipt.worker_identity_id != seat.worker_identity_id
+                    or receipt.host_agent_id != seat.host_agent_id
+                ):
+                    raise ReducerError("panel seat differs from retained host identity evidence")
+            panel_manifests.append(manifest)
+            accepted_evidence_sha256.append(payload.manifest_sha256)
+            if manifest.status == "blocked":  # type: ignore[attr-defined]
+                blockers[f"panel-blocked.{manifest.panel_id}"] = BlockerState(  # type: ignore[attr-defined]
+                    code=f"panel-blocked.{manifest.panel_id}",  # type: ignore[attr-defined]
+                    source_event_id=event.event_id,
+                )
         elif event.event_type == "review.report_accepted":
             assert isinstance(payload, ReviewReportAcceptedPayload)
             phase4_event_seen = True
-            report_id = payload.report.report_id  # type: ignore[attr-defined]
+            report = payload.report
+            report_id = report.report_id  # type: ignore[attr-defined]
             if any(item.report_id == report_id for item in panel_reports):  # type: ignore[attr-defined]
                 raise ReducerError("review report ID was already recorded")
-            panel_reports.append(payload.report)
+            manifest = next(
+                (
+                    item
+                    for item in panel_manifests
+                    if item.manifest_sha256 == report.panel_manifest_sha256  # type: ignore[attr-defined]
+                ),
+                None,
+            )
+            if manifest is None or manifest.status != "ready":  # type: ignore[attr-defined]
+                raise ReducerError("review report references an unknown or blocked panel")
+            seat = next(
+                (
+                    item
+                    for item in manifest.reviewer_seats  # type: ignore[attr-defined]
+                    if item.assignment_id == report.assignment_id  # type: ignore[attr-defined]
+                ),
+                None,
+            )
+            if seat is None or (
+                seat.attempt_id != report.attempt_id  # type: ignore[attr-defined]
+                or seat.role_id != report.role_id  # type: ignore[attr-defined]
+                or seat.worker_identity_id != report.worker_identity_id  # type: ignore[attr-defined]
+                or seat.host_agent_id != report.host_agent_id  # type: ignore[attr-defined]
+                or seat.identity_receipt_sha256 != report.identity_receipt_sha256  # type: ignore[attr-defined]
+            ):
+                raise ReducerError("review report does not bind its canonical panel seat")
+            panel_reports.append(report)
+            accepted_evidence_sha256.append(payload.report_sha256)
         elif event.event_type == "review.synthesis_accepted":
             assert isinstance(payload, ReviewSynthesisAcceptedPayload)
             phase4_event_seen = True
             matrix = payload.finding_matrix
-            report_hashes = {item.report_sha256 for item in panel_reports}  # type: ignore[attr-defined]
-            if not set(matrix.synthesis.source_report_sha256) <= report_hashes:  # type: ignore[attr-defined]
-                raise ReducerError("synthesis references an unaccepted review report")
+            manifest = next(
+                (
+                    item
+                    for item in panel_manifests
+                    if item.manifest_sha256 == matrix.panel_manifest_sha256  # type: ignore[attr-defined]
+                ),
+                None,
+            )
+            if manifest is None or manifest.status != "ready":  # type: ignore[attr-defined]
+                raise ReducerError("synthesis references an unknown or blocked panel")
+            accepted_reports = {
+                item.report_sha256: item
+                for item in panel_reports
+                if item.panel_manifest_sha256 == matrix.panel_manifest_sha256  # type: ignore[attr-defined]
+            }
+            if set(matrix.synthesis.source_report_sha256) != set(accepted_reports):  # type: ignore[attr-defined]
+                raise ReducerError("synthesis must bind every exact accepted panel report")
+            if {item.report_sha256 for item in matrix.reports} != set(accepted_reports):  # type: ignore[attr-defined]
+                raise ReducerError("synthesis report bodies differ from canonical accepted reports")
+            synth_seat = manifest.synthesizer_seat  # type: ignore[attr-defined]
+            if synth_seat is None or (
+                synth_seat.worker_identity_id != matrix.synthesis.worker_identity_id  # type: ignore[attr-defined]
+                or synth_seat.host_agent_id != matrix.synthesis.host_agent_id  # type: ignore[attr-defined]
+                or synth_seat.identity_receipt_sha256
+                != matrix.synthesis.identity_receipt_sha256  # type: ignore[attr-defined]
+            ):
+                raise ReducerError("synthesis identity differs from the canonical panel")
             panel_syntheses.append(matrix)
+            accepted_evidence_sha256.append(payload.finding_matrix_sha256)
             if matrix.gate_verdict == "BLOCKED":  # type: ignore[attr-defined]
                 blockers["formal-review-blocked"] = BlockerState(
                     code="formal-review-blocked", source_event_id=event.event_id
@@ -587,6 +761,7 @@ def reduce_events(
             if any(item.idempotency_key == payload.observation.idempotency_key for item in hook_observations):  # type: ignore[attr-defined]
                 raise ReducerError("hook observation idempotency key was already recorded")
             hook_observations.append(payload.observation)
+            accepted_evidence_sha256.append(payload.observation_sha256)
         elif event.event_type == "gate.evaluated":
             assert isinstance(payload, GateEvaluatedPayload)
             phase4_event_seen = True
@@ -600,10 +775,12 @@ def reduce_events(
                 required=decision.required,  # type: ignore[attr-defined]
                 subject_sha256=decision.subject_sha256,  # type: ignore[attr-defined]
                 evidence_sha256=decision.evidence_sha256,  # type: ignore[attr-defined]
+                decision_sha256=payload.decision_sha256,
                 decision=decision,
                 source_event_id=event.event_id,
             )
             gates[gate_id] = gate
+            accepted_evidence_sha256.append(payload.decision_sha256)
             if decision.verdict in {"FAIL", "BLOCKED"}:  # type: ignore[attr-defined]
                 if decision.verdict == "FAIL":  # type: ignore[attr-defined]
                     failed_gate_ids.add(gate_id)
@@ -614,6 +791,25 @@ def reduce_events(
                 blockers[f"stale-gate.{gate_id}"] = BlockerState(
                     code=f"stale-gate.{gate_id}", source_event_id=event.event_id
                 )
+        elif event.event_type == "human_authority.accepted":
+            assert isinstance(payload, HumanAuthorityAcceptedPayload)
+            phase4_event_seen = True
+            authority = payload.authority
+            if any(
+                item.authority_id == authority.authority_id  # type: ignore[attr-defined]
+                or item.authority_sha256 == payload.authority_sha256
+                for item in human_authorities
+            ):
+                raise ReducerError("human authority envelope was already recorded")
+            human_authorities.append(
+                HumanAuthorityState(
+                    authority_id=authority.authority_id,  # type: ignore[attr-defined]
+                    authority_sha256=payload.authority_sha256,
+                    authority=authority,
+                    source_event_id=event.event_id,
+                )
+            )
+            accepted_evidence_sha256.append(payload.authority_sha256)
         elif event.event_type == "human_decision.recorded":
             assert isinstance(payload, HumanDecisionRecordedPayload)
             phase4_event_seen = True
@@ -621,9 +817,52 @@ def reduce_events(
             decision_id = decision.decision_id  # type: ignore[attr-defined]
             if any(item.decision_id == decision_id for item in human_decision_history):
                 raise ReducerError("human decision ID was already recorded")
+            gate = gates.get(decision.gate_id)  # type: ignore[attr-defined]
+            if gate is None or gate.decision_sha256 != decision.prior_verdict_sha256:  # type: ignore[attr-defined]
+                raise ReducerError("human decision prior verdict is not the exact gate decision")
+            authority_state = next(
+                (
+                    item
+                    for item in human_authorities
+                    if item.authority_sha256 == payload.authority_sha256
+                ),
+                None,
+            )
+            if authority_state is None:
+                raise ReducerError("human decision references unknown authority evidence")
+            authority = authority_state.authority
+            if (
+                authority.authenticated_actor_id != decision.accountable_actor_id  # type: ignore[attr-defined]
+                or authority.accountable_role != decision.accountable_role  # type: ignore[attr-defined]
+                or decision.decision_kind not in authority.allowed_decision_kinds  # type: ignore[attr-defined]
+                or decision.gate_id not in authority.allowed_gate_ids  # type: ignore[attr-defined]
+                or decision.scope not in authority.allowed_scopes  # type: ignore[attr-defined]
+                or event.occurred_at > authority.expires_at
+            ):
+                raise ReducerError("human decision exceeds its authenticated authority envelope")
             predecessor = decision.supersedes_decision_id  # type: ignore[attr-defined]
-            if decision.decision_kind == "correction" and not any(item.decision_id == predecessor for item in human_decision_history):  # type: ignore[attr-defined]
-                raise ReducerError("correction must supersede an accepted human decision")
+            if decision.decision_kind == "correction":  # type: ignore[attr-defined]
+                prior = next(
+                    (
+                        item
+                        for item in human_decision_history
+                        if item.decision_id == predecessor
+                    ),
+                    None,
+                )
+                latest_for_scope = next(
+                    (
+                        item
+                        for item in reversed(human_decision_history)
+                        if item.gate_id == decision.gate_id  # type: ignore[attr-defined]
+                        and item.scope == decision.scope  # type: ignore[attr-defined]
+                    ),
+                    None,
+                )
+                if prior is None or prior != latest_for_scope:
+                    raise ReducerError(
+                        "correction must supersede the latest decision in the same gate/scope"
+                    )
             human_decision_history.append(
                 HumanDecisionState(
                     decision_id=decision_id,
@@ -633,14 +872,49 @@ def reduce_events(
                     applicable_transition=decision.applicable_transition,  # type: ignore[attr-defined]
                     scope=decision.scope,  # type: ignore[attr-defined]
                     rationale=decision.rationale,  # type: ignore[attr-defined]
+                    decision_sha256=payload.decision_sha256,
+                    authority_sha256=payload.authority_sha256,
                     source_event_id=event.event_id,
                     decision=decision,
                 )
             )
-            if decision.decision_kind in {"waiver", "replacement", "approval"}:  # type: ignore[attr-defined]
-                for blocker_code in tuple(blockers):
-                    if blocker_code == decision.gate_id or decision.scope == blocker_code:  # type: ignore[attr-defined]
-                        blockers.pop(blocker_code, None)
+            if decision.blocker_action == "release":  # type: ignore[attr-defined]
+                code = decision.blocker_code  # type: ignore[attr-defined]
+                if code not in blockers:
+                    raise ReducerError("human decision cannot release an unknown blocker")
+                blockers.pop(code)
+                blocker_release_history.append(
+                    BlockerReleaseState(
+                        blocker_code=code,
+                        decision_id=decision_id,
+                        action="release",
+                        source_event_id=event.event_id,
+                    )
+                )
+            elif decision.blocker_action == "restore":  # type: ignore[attr-defined]
+                code = decision.blocker_code  # type: ignore[attr-defined]
+                prior_release = next(
+                    (
+                        item
+                        for item in reversed(blocker_release_history)
+                        if item.blocker_code == code and item.action == "release"
+                    ),
+                    None,
+                )
+                if prior_release is None or code in blockers:
+                    raise ReducerError("human correction cannot restore an unreleased blocker")
+                blockers[code] = BlockerState(
+                    code=code, source_event_id=event.event_id
+                )
+                blocker_release_history.append(
+                    BlockerReleaseState(
+                        blocker_code=code,
+                        decision_id=decision_id,
+                        action="restore",
+                        source_event_id=event.event_id,
+                    )
+                )
+            accepted_evidence_sha256.append(payload.decision_sha256)
         elif event.event_type == "lifecycle.transitioned":
             assert isinstance(payload, LifecycleTransitionedPayload)
             if blockers:
@@ -658,6 +932,23 @@ def reduce_events(
             if transition.to_stage == "completed" and phase4_event_seen:
                 if execution_mode in {"degraded_inline", "blocked"}:
                     raise ReducerError("formal completion is not legal in degraded or blocked mode")
+                if any(
+                    manifest.status == "ready"
+                    and not any(
+                        matrix.panel_manifest_sha256 == manifest.manifest_sha256
+                        for matrix in panel_syntheses
+                    )
+                    for manifest in panel_manifests
+                ):
+                    raise ReducerError("final completion requires every ready panel synthesis")
+                if any(
+                    item.assignment.completion_contract.requires_human_gate
+                    for item in phase4_assignments.values()
+                    if item.status != "superseded"
+                ) and not any(
+                    gate.required and gate.verdict == "PASS" for gate in gates.values()
+                ):
+                    raise ReducerError("final completion requires a fresh required PASS gate")
                 if not any(
                     item.decision_kind == "approval" and item.applicable_transition == payload.transition_id
                     for item in human_decision_history
@@ -786,6 +1077,7 @@ def reduce_events(
             ):
                 raise ReducerError("recovery event does not bind the accepted prefix")
 
+        canonical_event_sha256.append(event.event_sha256)
         revision = event.resulting_revision
         head = event.event_sha256
         accepted_event_ids.add(event.event_id)
@@ -820,15 +1112,27 @@ def reduce_events(
     terminal_assignment_ids = {
         item.assignment_id for item in projected_proposals if item.effective_status in {"accepted", "rejected"}
     }
-    if blockers:
-        status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"] = "BLOCKED"
-    elif failed_gate_ids:
+    required_gate_satisfied = not any(
+        item.assignment.completion_contract.requires_human_gate
+        for item in current_assignments
+    ) or any(gate.required and gate.verdict == "PASS" for gate in gates.values())
+    ready_panels_satisfied = all(
+        manifest.status != "ready"
+        or any(
+            matrix.panel_manifest_sha256 == manifest.manifest_sha256
+            for matrix in panel_syntheses
+        )
+        for manifest in panel_manifests
+    )
+    if failed_gate_ids:
         status = "FAIL"
+    elif blockers:
+        status: Literal["RUNNING", "PASS", "FAIL", "BLOCKED"] = "BLOCKED"
     elif stage == "completed":
         status = "PASS"
     elif phase4_event_seen and current_assignments and all(
         item.assignment_id in terminal_assignment_ids for item in current_assignments
-    ):
+    ) and required_gate_satisfied and ready_panels_satisfied:
         status = "PASS"
     else:
         status = "RUNNING"
@@ -842,10 +1146,10 @@ def reduce_events(
         recovery_health=recovery_health,
         blockers=list(blockers.values()),
         pending_human_decisions=list(decisions.values()),
-        # Keep the Phase 2 passport/status compatibility projection narrow;
-        # Phase 4 assignment-bound lifecycle detail lives in ``attempts``.
         active_attempts=[
-            AttemptState(
+            item
+            if isinstance(item, Phase4ActiveAttemptState)
+            else AttemptState(
                 attempt_id=item.attempt_id,
                 base_revision=item.base_revision,
                 consumed_sha256=list(item.consumed_sha256),
@@ -870,6 +1174,12 @@ def reduce_events(
         deterministic_commit_cursor=commit_cursor,  # type: ignore[arg-type]
         panel_reports=tuple(panel_reports),
         panel_syntheses=tuple(panel_syntheses),
+        panel_manifests=tuple(panel_manifests),
+        host_identity_receipts=tuple(host_identity_receipts),
+        human_authorities=tuple(human_authorities),
+        blocker_release_history=tuple(blocker_release_history),
+        canonical_event_sha256=tuple(canonical_event_sha256),
+        accepted_evidence_sha256=tuple(dict.fromkeys(accepted_evidence_sha256)),
         hook_observations=tuple(hook_observations),
         gates=tuple(gates.values()),
         human_decision_history=tuple(human_decision_history),

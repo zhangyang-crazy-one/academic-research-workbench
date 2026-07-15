@@ -1,0 +1,460 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/experiment-provenance.schema.json",
+  "$defs": {
+    "ConfigurationIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "canonical_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canonical Sha256",
+          "type": "string"
+        },
+        "content_type": {
+          "maxLength": 127,
+          "minLength": 3,
+          "title": "Content Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "canonical_sha256",
+        "content_type"
+      ],
+      "title": "ConfigurationIdentity",
+      "type": "object"
+    },
+    "DatasetSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "uri_or_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Uri Or Path",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "access_state": {
+          "enum": [
+            "publicly_verified",
+            "locally_supplied",
+            "restricted",
+            "unavailable",
+            "human_review_required"
+          ],
+          "title": "Access State",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Sha256"
+        }
+      },
+      "required": [
+        "uri_or_path",
+        "content_sha256",
+        "access_state"
+      ],
+      "title": "DatasetSource",
+      "type": "object"
+    },
+    "EnvironmentIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "redacted_value_or_digest": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Redacted Value Or Digest",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        },
+        "redacted": {
+          "const": true,
+          "title": "Redacted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "redacted_value_or_digest",
+        "tool_version",
+        "redacted"
+      ],
+      "title": "EnvironmentIdentity",
+      "type": "object"
+    },
+    "ExecutionClaim": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "const": "external_only",
+          "title": "Mode",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "imported",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "status"
+      ],
+      "title": "ExecutionClaim",
+      "type": "object"
+    },
+    "ExperimentArtifact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 127,
+          "minLength": 3,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Path"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "media_type",
+        "content_sha256",
+        "manifest_sha256"
+      ],
+      "title": "ExperimentArtifact",
+      "type": "object"
+    },
+    "ExperimentMetric": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "metric_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Metric Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit",
+        "metric_sha256"
+      ],
+      "title": "ExperimentMetric",
+      "type": "object"
+    },
+    "ModelIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "source_sha256"
+      ],
+      "title": "ModelIdentity",
+      "type": "object"
+    },
+    "QualificationReceiptRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "sandbox_approval",
+            "accountable_approval",
+            "environment_capture",
+            "provenance_equivalence_probe"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "receipt_sha256"
+      ],
+      "title": "QualificationReceiptRef",
+      "type": "object"
+    },
+    "RunnerIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Identity",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "host_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Host Digest",
+          "type": "string"
+        },
+        "started_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "title": "Started At",
+          "type": "string"
+        },
+        "finished_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "title": "Finished At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "command_digest",
+        "host_digest",
+        "started_at",
+        "finished_at"
+      ],
+      "title": "RunnerIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.experiment-provenance.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "provenance_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Provenance Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "experiment_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Experiment Id",
+      "type": "string"
+    },
+    "source_datasets": {
+      "items": {
+        "$ref": "#/$defs/DatasetSource"
+      },
+      "minItems": 1,
+      "title": "Source Datasets",
+      "type": "array"
+    },
+    "model_identity": {
+      "items": {
+        "$ref": "#/$defs/ModelIdentity"
+      },
+      "minItems": 1,
+      "title": "Model Identity",
+      "type": "array"
+    },
+    "configuration": {
+      "items": {
+        "$ref": "#/$defs/ConfigurationIdentity"
+      },
+      "minItems": 1,
+      "title": "Configuration",
+      "type": "array"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/ExperimentMetric"
+      },
+      "minItems": 1,
+      "title": "Metrics",
+      "type": "array"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ExperimentArtifact"
+      },
+      "minItems": 1,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "environment": {
+      "items": {
+        "$ref": "#/$defs/EnvironmentIdentity"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Environment",
+      "type": "array"
+    },
+    "runner": {
+      "$ref": "#/$defs/RunnerIdentity"
+    },
+    "execution_claim": {
+      "$ref": "#/$defs/ExecutionClaim"
+    },
+    "qualification_receipts": {
+      "items": {
+        "$ref": "#/$defs/QualificationReceiptRef"
+      },
+      "maxItems": 4,
+      "title": "Qualification Receipts",
+      "type": "array"
+    },
+    "source_manifest_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Manifest Sha256",
+      "type": "array"
+    },
+    "created_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "provenance_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provenance Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "provenance_id",
+    "run_id",
+    "experiment_id",
+    "source_datasets",
+    "model_identity",
+    "configuration",
+    "metrics",
+    "artifacts",
+    "environment",
+    "runner",
+    "execution_claim",
+    "qualification_receipts",
+    "source_manifest_sha256",
+    "created_at",
+    "provenance_sha256"
+  ],
+  "title": "ExperimentProvenance",
+  "type": "object"
+}

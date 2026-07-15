@@ -98,12 +98,16 @@
     {
       "if": {"properties": {"event_type": {"const": "human_decision.recorded"}}, "required": ["event_type"]},
       "then": {"properties": {"payload": {"$ref": "#/$defs/human_decision_recorded_payload"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "experiment.provenance.accepted"}}, "required": ["event_type"]},
+      "then": {"required": ["actor_role"], "properties": {"payload": {"$ref": "#/$defs/experiment_provenance_accepted_payload"}, "actor_role": {"const": "parent_control_plane"}}}
     }
   ],
   "description": "Strict hash-chained Phase 1 canonical event envelope.",
   "properties": {
     "schema_version": {"const": "1.0.0", "type": "string"},
-    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded", "lifecycle.transitioned", "human_decision.requested", "human_decision.resolved", "attempt.started", "attempt.closed", "artifact.accepted", "passport.accepted", "resume.accepted", "recovery.completed", "execution.mode_selected", "assignment.prepared", "assignment.superseded", "attempt.prepared", "attempt.lifecycle", "proposal.accepted", "proposal.rejected", "review.report_accepted", "review.synthesis_accepted", "hook.observed", "gate.evaluated", "human_decision.recorded"], "type": "string"},
+    "event_type": {"enum": ["run.initialized", "baseline.probe_recorded", "lifecycle.transitioned", "human_decision.requested", "human_decision.resolved", "attempt.started", "attempt.closed", "artifact.accepted", "passport.accepted", "resume.accepted", "recovery.completed", "execution.mode_selected", "assignment.prepared", "assignment.superseded", "attempt.prepared", "attempt.lifecycle", "proposal.accepted", "proposal.rejected", "review.report_accepted", "review.synthesis_accepted", "hook.observed", "gate.evaluated", "human_decision.recorded", "experiment.provenance.accepted"], "type": "string"},
     "event_id": {"pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "command_id": {"pattern": "^cmd-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
     "run_id": {"pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", "type": "string"},
@@ -345,6 +349,16 @@
     "human_decision_recorded_payload": {
       "properties": {"decision": {"type": "object"}, "decision_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}},
       "required": ["decision", "decision_sha256"],
+      "type": "object"
+    },
+    "experiment_provenance_accepted_payload": {
+      "additionalProperties": false,
+      "properties": {
+        "provenance_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "experiment_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "provenance_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["provenance_id", "experiment_id", "provenance_sha256"],
       "type": "object"
     }
   }
