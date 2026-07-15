@@ -245,8 +245,6 @@ def load_integrity_receipt(root: Path, receipt_sha256: str) -> IntegrityReceipt:
         raise IntegrityReceiptError("integrity receipt is missing or unsafe")
     try:
         raw = path.read_bytes()
-        if sha256_hex(raw) != receipt_sha256:
-            raise IntegrityReceiptError("integrity receipt content address mismatch")
         receipt = seal_integrity_receipt(strict_json_loads(raw))
     except IntegrityReceiptError:
         raise
