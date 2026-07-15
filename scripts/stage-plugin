@@ -344,6 +344,9 @@ copy_file "schemas/v1/role-catalog.schema.json"
 copy_file "schemas/v1/worker-proposal.schema.json"
 copy_file "schemas/v1/host-identity-receipt.schema.json"
 copy_file "schemas/v1/human-authority.schema.json"
+copy_file "schemas/v1/integrity-receipt.schema.json"
+copy_file "schemas/v1/experiment-provenance.schema.json"
+copy_file "schemas/v1/evidence-access-decision.schema.json"
 copy_as "schemas/v1/build-identity.schema.json" "share/arw/schemas/build-identity.schema.json"
 copy_as "schemas/v1/event.schema.json" "share/arw/schemas/event.schema.json"
 copy_as "schemas/v1/mcp-read-request.schema.json" "share/arw/schemas/mcp-read-request.schema.json"
@@ -818,6 +821,9 @@ static_files = {
     "schemas/v1/worker-proposal.schema.json",
     "schemas/v1/host-identity-receipt.schema.json",
     "schemas/v1/human-authority.schema.json",
+    "schemas/v1/integrity-receipt.schema.json",
+    "schemas/v1/experiment-provenance.schema.json",
+    "schemas/v1/evidence-access-decision.schema.json",
     "scripts/file-base-mcp",
     "scripts/file-base-graph-mcp",
     "scripts/verify-phase-2",
@@ -858,6 +864,9 @@ static_files = {
     "share/arw/schemas/worker-proposal.schema.json",
     "share/arw/schemas/host-identity-receipt.schema.json",
     "share/arw/schemas/human-authority.schema.json",
+    "share/arw/schemas/integrity-receipt.schema.json",
+    "share/arw/schemas/experiment-provenance.schema.json",
+    "share/arw/schemas/evidence-access-decision.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
