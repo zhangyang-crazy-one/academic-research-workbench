@@ -83,7 +83,13 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     command_root = root / "commands" / name
     command_root.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
+    # Large source/patch checks must not spill into the host's small tmpfs;
+    # keep every Phase 5 disposable tree under the repository's controlled
+    # build area instead.
+    temporary_root = PROJECT_ROOT / "build/tmp/phase-05"
+    temporary_root.mkdir(parents=True, exist_ok=True)
     environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1"})
+    environment.setdefault("TMPDIR", str(temporary_root))
     if env:
         environment.update(env)
     result = subprocess.run(
