@@ -366,6 +366,8 @@ def validate_access_transition(
                 raise ValueError("transition authority does not match parent authority")
             if current.accountable_actor_id != parent.authenticated_actor_id:
                 raise ValueError("transition actor does not match authenticated authority")
+            if current.accountable_role != parent.accountable_role:
+                raise ValueError("transition role does not match authenticated authority")
             if current.scope not in parent.allowed_scopes:
                 raise ValueError("transition scope is not authorized")
             if current.decision_kind not in parent.allowed_decision_kinds:
