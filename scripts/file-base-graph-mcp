@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLUGIN_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+CONTROL_ROOT="${ARW_GRAPH_CONTROL_ROOT:-}"
+ROOT_ID="${ARW_GRAPH_ROOT_ID:-}"
+[[ -n "$CONTROL_ROOT" && -n "$ROOT_ID" ]] || {
+  printf 'file-base-graph-mcp: ARW_GRAPH_CONTROL_ROOT and ARW_GRAPH_ROOT_ID are required\n' >&2
+  exit 64
+}
+[[ "$CONTROL_ROOT" == /* && -d "$CONTROL_ROOT" && ! -L "$CONTROL_ROOT" ]] || {
+  printf 'file-base-graph-mcp: control root must be an absolute non-symlink directory\n' >&2
+  exit 66
+}
+[[ "$ROOT_ID" =~ ^[a-z][a-z0-9._-]{2,127}$ ]] || {
+  printf 'file-base-graph-mcp: graph root ID is invalid\n' >&2
+  exit 64
+}
+unset PYTHONPATH PYTHONHOME VIRTUAL_ENV LD_PRELOAD
+export PYTHONDONTWRITEBYTECODE=1
+exec "$PLUGIN_ROOT/bin/arw" _graph-mcp --control-root "$CONTROL_ROOT" --root-id "$ROOT_ID"

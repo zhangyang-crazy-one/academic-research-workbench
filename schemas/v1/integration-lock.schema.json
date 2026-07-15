@@ -1,0 +1,632 @@
+{
+  "$defs": {
+    "ARWRuntimeBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cli_launcher": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "package": {
+          "const": "academic-research-workbench",
+          "title": "Package",
+          "type": "string"
+        },
+        "plugin_manifest": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "pyproject": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "version": {
+          "const": "0.1.0",
+          "title": "Version",
+          "type": "string"
+        },
+        "wheel": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "wheel_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Wheel Tree Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package",
+        "version",
+        "pyproject",
+        "plugin_manifest",
+        "cli_launcher",
+        "wheel",
+        "wheel_tree_sha256"
+      ],
+      "title": "ARWRuntimeBinding",
+      "type": "object"
+    },
+    "CodexHostBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cli_version": {
+          "pattern": "^codex-cli [0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$",
+          "title": "Cli Version",
+          "type": "string"
+        },
+        "launcher": {
+          "$ref": "#/$defs/ExecutableBinding"
+        },
+        "native_binary": {
+          "$ref": "#/$defs/ExecutableBinding"
+        },
+        "platform_machine": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Platform Machine",
+          "type": "string"
+        },
+        "platform_release": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Platform Release",
+          "type": "string"
+        },
+        "platform_system": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Platform System",
+          "type": "string"
+        },
+        "tuple_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Tuple Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cli_version",
+        "platform_system",
+        "platform_release",
+        "platform_machine",
+        "launcher",
+        "native_binary",
+        "tuple_sha256"
+      ],
+      "title": "CodexHostBinding",
+      "type": "object"
+    },
+    "ExecutableBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "invoked_path": {
+          "title": "Invoked Path",
+          "type": "string"
+        },
+        "resolved_path": {
+          "title": "Resolved Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invoked_path",
+        "resolved_path",
+        "sha256"
+      ],
+      "title": "ExecutableBinding",
+      "type": "object"
+    },
+    "ExternalARSBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "adapter_name": {
+          "const": "academic-research-suite",
+          "title": "Adapter Name",
+          "type": "string"
+        },
+        "adapter_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Tree Sha256",
+          "type": "string"
+        },
+        "adapter_version": {
+          "const": "0.1.20",
+          "title": "Adapter Version",
+          "type": "string"
+        },
+        "bundled": {
+          "const": false,
+          "title": "Bundled",
+          "type": "boolean"
+        },
+        "dependency_model": {
+          "const": "external-exact-installation",
+          "title": "Dependency Model",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "router": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "source_repositories": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/SourceRepositoryBinding"
+            },
+            {
+              "$ref": "#/$defs/SourceRepositoryBinding"
+            }
+          ],
+          "title": "Source Repositories",
+          "type": "array"
+        },
+        "upstream_content_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Upstream Content Tree Sha256",
+          "type": "string"
+        },
+        "version_file": {
+          "$ref": "#/$defs/FileBinding"
+        }
+      },
+      "required": [
+        "dependency_model",
+        "bundled",
+        "adapter_name",
+        "adapter_version",
+        "adapter_tree_sha256",
+        "upstream_content_tree_sha256",
+        "manifest",
+        "version_file",
+        "router",
+        "source_repositories"
+      ],
+      "title": "ExternalARSBinding",
+      "type": "object"
+    },
+    "FileBaseBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binary": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "build_evidence": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "commit": {
+          "const": "ee68144af5453addda995a27cce8142999f318fb",
+          "title": "Commit",
+          "type": "string"
+        },
+        "component_id": {
+          "const": "file-base",
+          "title": "Component Id",
+          "type": "string"
+        },
+        "git_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Git Tree",
+          "type": "string"
+        },
+        "ordered_patches": {
+          "items": {
+            "$ref": "#/$defs/OrderedPatchBinding"
+          },
+          "minItems": 1,
+          "title": "Ordered Patches",
+          "type": "array"
+        },
+        "post_patch_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Post Patch Tree Sha256",
+          "type": "string"
+        },
+        "source_manifest": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "source_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Tree Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id",
+        "commit",
+        "git_tree",
+        "source_tree_sha256",
+        "source_manifest",
+        "build_evidence",
+        "binary",
+        "ordered_patches",
+        "post_patch_tree_sha256"
+      ],
+      "title": "FileBaseBinding",
+      "type": "object"
+    },
+    "FileBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "FileBinding",
+      "type": "object"
+    },
+    "HookBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "arw_runtime_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Arw Runtime Sha256",
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "credential_policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Credential Policy Sha256",
+          "type": "string"
+        },
+        "definition_algorithm": {
+          "const": "relative-name-nul-bytes-nul-v1",
+          "title": "Definition Algorithm",
+          "type": "string"
+        },
+        "definition_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Definition Sha256",
+          "type": "string"
+        },
+        "evidence_bundle_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Bundle Sha256",
+          "type": "string"
+        },
+        "fresh_home_default_trust": {
+          "const": "untrusted_skipped",
+          "title": "Fresh Home Default Trust",
+          "type": "string"
+        },
+        "fresh_home_receipt_sha256": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          ],
+          "title": "Fresh Home Receipt Sha256",
+          "type": "array"
+        },
+        "handler": {
+          "$ref": "#/$defs/FileBinding"
+        },
+        "hook_execution_admission": {
+          "const": "automation_vetted_bypass",
+          "title": "Hook Execution Admission",
+          "type": "string"
+        },
+        "host_canary_evidence_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Host Canary Evidence Sha256",
+          "type": "string"
+        },
+        "live_hook_execution": {
+          "const": "observed",
+          "title": "Live Hook Execution",
+          "type": "string"
+        },
+        "stage_identity_algorithm": {
+          "const": "content-tree-excluding-cycle-metadata-v1",
+          "title": "Stage Identity Algorithm",
+          "type": "string"
+        },
+        "stage_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Stage Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "config",
+        "handler",
+        "definition_algorithm",
+        "definition_sha256",
+        "hook_execution_admission",
+        "live_hook_execution",
+        "fresh_home_default_trust",
+        "host_canary_evidence_sha256",
+        "evidence_bundle_sha256",
+        "fresh_home_receipt_sha256",
+        "arw_runtime_sha256",
+        "stage_identity_algorithm",
+        "stage_sha256",
+        "credential_policy_sha256"
+      ],
+      "title": "HookBinding",
+      "type": "object"
+    },
+    "LicenseBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "reason_codes": {
+          "items": {
+            "enum": [
+              "INTENDED_USE_UNKNOWN",
+              "DISTRIBUTION_CLASS_UNKNOWN",
+              "ACCOUNTABLE_APPROVAL_MISSING",
+              "CC_BY_NC_PERMISSION_UNRESOLVED"
+            ],
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "release_qualification": {
+          "const": "BLOCKED",
+          "title": "Release Qualification",
+          "type": "string"
+        },
+        "technical_qualification": {
+          "const": "PASS",
+          "title": "Technical Qualification",
+          "type": "string"
+        },
+        "use_distribution_path": {
+          "const": "supply-chain/use-distribution.json",
+          "title": "Use Distribution Path",
+          "type": "string"
+        },
+        "use_distribution_policy": {
+          "$ref": "#/$defs/UseDistributionPolicyProjection"
+        },
+        "use_distribution_policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Use Distribution Policy Sha256",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/FileBinding"
+        }
+      },
+      "required": [
+        "verdict",
+        "use_distribution_path",
+        "use_distribution_policy",
+        "use_distribution_policy_sha256",
+        "technical_qualification",
+        "release_qualification",
+        "reason_codes"
+      ],
+      "title": "LicenseBinding",
+      "type": "object"
+    },
+    "OrderedPatchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "order": {
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order",
+        "path",
+        "sha256"
+      ],
+      "title": "OrderedPatchBinding",
+      "type": "object"
+    },
+    "SourceRepositoryBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit",
+          "type": "string"
+        },
+        "component_id": {
+          "enum": [
+            "academic-research-skills",
+            "experiment-agent"
+          ],
+          "title": "Component Id",
+          "type": "string"
+        },
+        "git_tree": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Git Tree",
+          "type": "string"
+        },
+        "source_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Tree Sha256",
+          "type": "string"
+        },
+        "upstream_url": {
+          "title": "Upstream Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id",
+        "upstream_url",
+        "commit",
+        "git_tree",
+        "source_tree_sha256"
+      ],
+      "title": "SourceRepositoryBinding",
+      "type": "object"
+    },
+    "UseDistributionPolicyProjection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Cycle-free legal meaning derived from the mutable evidence declaration.\n\nTechnical evidence hashes in ``use-distribution.json`` may include the\nfinal SBOM, so the lock deliberately binds only these exact legal facts.\nThe final inventory and build identity remain responsible for binding the\ndeclaration's raw bytes.",
+      "properties": {
+        "accountable_approval_status": {
+          "const": "missing",
+          "title": "Accountable Approval Status",
+          "type": "string"
+        },
+        "declaration_schema_version": {
+          "const": "1.0.0",
+          "title": "Declaration Schema Version",
+          "type": "string"
+        },
+        "distribution_class_status": {
+          "const": "unknown",
+          "title": "Distribution Class Status",
+          "type": "string"
+        },
+        "intended_use_status": {
+          "const": "unknown",
+          "title": "Intended Use Status",
+          "type": "string"
+        },
+        "permission_reference_count": {
+          "const": 0,
+          "title": "Permission Reference Count",
+          "type": "integer"
+        },
+        "private_repository_is_noncommercial_evidence": {
+          "const": false,
+          "title": "Private Repository Is Noncommercial Evidence",
+          "type": "boolean"
+        },
+        "repository_visibility": {
+          "const": "private",
+          "title": "Repository Visibility",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.use-distribution-policy-projection.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_path": {
+          "const": "supply-chain/use-distribution.json",
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_path",
+        "declaration_schema_version",
+        "repository_visibility",
+        "intended_use_status",
+        "distribution_class_status",
+        "accountable_approval_status",
+        "permission_reference_count",
+        "private_repository_is_noncommercial_evidence"
+      ],
+      "title": "UseDistributionPolicyProjection",
+      "type": "object"
+    }
+  },
+  "$id": "https://academic-research-workbench.local/schemas/v1/integration-lock.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ars": {
+      "$ref": "#/$defs/ExternalARSBinding"
+    },
+    "arw_runtime": {
+      "$ref": "#/$defs/ARWRuntimeBinding"
+    },
+    "codex_host": {
+      "$ref": "#/$defs/CodexHostBinding"
+    },
+    "dependency_model": {
+      "const": "external-exact-installation",
+      "title": "Dependency Model",
+      "type": "string"
+    },
+    "file_base": {
+      "$ref": "#/$defs/FileBaseBinding"
+    },
+    "hook": {
+      "$ref": "#/$defs/HookBinding"
+    },
+    "license": {
+      "$ref": "#/$defs/LicenseBinding"
+    },
+    "release_qualification": {
+      "const": "BLOCKED",
+      "title": "Release Qualification",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "arw.integration-lock.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "technical_qualification": {
+      "const": "PASS",
+      "title": "Technical Qualification",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dependency_model",
+    "arw_runtime",
+    "ars",
+    "file_base",
+    "codex_host",
+    "hook",
+    "license",
+    "technical_qualification",
+    "release_qualification"
+  ],
+  "title": "ARW Integration Lock",
+  "type": "object"
+}

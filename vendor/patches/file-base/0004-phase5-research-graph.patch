@@ -1,0 +1,12 @@
+diff --git a/src/research_graph_profile.h b/src/research_graph_profile.h
+new file mode 100644
+index 0000000..f118ce7
+--- /dev/null
++++ b/src/research_graph_profile.h
+@@ -0,0 +1,6 @@
++/* Phase 5 research graph build-profile marker. The ARW parent validates the input bundle and uses this header as the native profile identity. */
++#ifndef CBM_ARW_RESEARCH_GRAPH_PROFILE_H
++#define CBM_ARW_RESEARCH_GRAPH_PROFILE_H
++#define CBM_ARW_RESEARCH_GRAPH_PROFILE_VERSION "research-graph-builder-v1"
++#define CBM_ARW_RESEARCH_GRAPH_PROFILE_READ_ONLY 1
++#endif

@@ -986,7 +986,7 @@
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "1f55aa5c52bff7258bb9d9ea3c45b3b40d3a2337a341f718abfe6d73ca6d7c90"
+      "sha256": "92bba6fe4799bcf3bc1ef5bd0f0f1c7830b060d9f7409d367605c760b92a3e10"
     },
     {
       "class": "build-evidence",
@@ -1055,6 +1055,14 @@
       "post_tree_sha256": "82923432ef291240f0bd901e39f97c23e86abcc8499b34c486ed4af265ada393",
       "pre_tree_sha256": "04460b941a8da073d40cd7921455b233f41650fe0d251d9ace3f593e4550804b",
       "sha256": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+    },
+    {
+      "component": "file-base",
+      "order": 4,
+      "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
+      "post_tree_sha256": "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1",
+      "pre_tree_sha256": "82923432ef291240f0bd901e39f97c23e86abcc8499b34c486ed4af265ada393",
+      "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
   "pre_vendor_receipt": {
