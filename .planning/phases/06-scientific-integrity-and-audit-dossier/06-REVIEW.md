@@ -1,10 +1,10 @@
 ---
 phase: 06
-status: findings
+status: resolved_with_qualification_block
 depth: standard
 files_reviewed: 30
-critical: 5
-warning: 4
+critical: 0
+warning: 0
 info: 0
 total: 9
 ---
@@ -170,10 +170,19 @@ query-string secrets and private paths.
 
 ## Review conclusion
 
-The Phase 6 focused tests and staged validation are green, but the five
-critical findings prevent a clean code-review verdict or technical acceptance:
-claim authority/freshness, public evidence promotion, provenance completeness,
-and integration-lock drift are not fail-closed. No implementation files were
-modified by this review. The report is committed separately so these findings
-remain visible to the phase closeout.
+The findings are resolved in `171db95`. Public evidence promotion now loads a
+canonical, digest-bound fresh integrity receipt from the approved run root and
+requires a validated parent authority envelope; lifecycle claims and dossier
+qualification are derived from typed replay evidence; local provenance and
+authority APIs fail closed; read loaders are side-effect free; and the verifier
+scans complete status streams and enforces the retained Phase 04.1 lock.
 
+The serial verifier was rerun after the fixes. Focused Phase 6 regression is
+**85 passed** and the Phase 4/5 composition subset is **34 passed**. The
+technical verifier intentionally returns **BLOCKED** for the current checkout
+because the retained lock is stale: it records ARW wheel, file-base source,
+and ARS adapter identity mismatches in
+`build/evidence/phase-06/integration-lock-drift.json`. This is the required
+fail-closed qualification result, not an implementation PASS. Release remains
+BLOCKED independently by SUP-04/P04-09 and unresolved CC BY-NC intended-use
+permission evidence.
