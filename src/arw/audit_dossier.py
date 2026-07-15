@@ -452,14 +452,14 @@ def _coerce_sha_refs(values: Sequence[Any] | None) -> tuple[str, ...]:
         if isinstance(value, str):
             result.append(value)
         elif isinstance(value, Mapping):
-            for key in ("sha256", "digest", "receipt_sha256", "provenance_sha256", "decision_sha256", "manifest_sha256"):
+            for key in ("sha256", "digest", "receipt_sha256", "provenance_sha256", "decision_sha256", "manifest_sha256", "identity_sha256", "build_identity_sha256", "source_identity_sha256", "integration_lock_sha256"):
                 if isinstance(value.get(key), str):
                     result.append(value[key])
                     break
             else:
                 raise AuditDossierError("evidence reference lacks an exact digest")
         else:
-            for key in ("sha256", "receipt_sha256", "provenance_sha256", "decision_sha256", "manifest_sha256"):
+            for key in ("sha256", "receipt_sha256", "provenance_sha256", "decision_sha256", "manifest_sha256", "identity_sha256", "build_identity_sha256", "source_identity_sha256", "integration_lock_sha256"):
                 candidate = getattr(value, key, None)
                 if isinstance(candidate, str):
                     result.append(candidate)
