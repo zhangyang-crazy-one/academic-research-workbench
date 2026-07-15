@@ -290,7 +290,15 @@ def main() -> int:
                 write_json(root / "integration-lock-drift.json", compare_lock_to_stage(lock_path, stage))
             except (VerificationError, OSError, ValueError) as diagnostic_error:
                 write_json(root / "integration-lock-drift.json", {"technical_qualification": "BLOCKED", "error": str(diagnostic_error)})
-            raise lock_error
+            drift = {}
+            try:
+                drift = json.loads((root / "integration-lock-drift.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+            mismatches = drift.get("mismatches", []) if isinstance(drift, dict) else []
+            raise VerificationError(
+                "integration-lock-drift: " + "; ".join(mismatches or [str(lock_error)])
+            ) from lock_error
         command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only", "--integration-lock", str(lock_path)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
         stage_payload = stage_inventory(root, stage)
         requirements = {req: {"status": "PASS", "evidence": ["source-verification", "phase6-tests", "prior-phase-regressions", "stage-build", "stage-validate"]} for req in ("SCI-01", "SCI-04", "SCI-05", "SCI-06", "SCI-07", "VER-07")}
