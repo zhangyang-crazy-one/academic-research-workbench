@@ -9,6 +9,7 @@ The collective plugin has mixed licensing. Component identities remain separate.
 - `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`.
 - `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029`.
 - `vendor/patches/file-base/0003-phase3-generation-builder.patch` — SHA-256 `12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc`.
+- `vendor/patches/file-base/0004-phase5-research-graph.patch` — SHA-256 `11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c`.
 
 ## Frozen Python wheelhouse
 - `annotated-types==0.7.0` — MIT License.

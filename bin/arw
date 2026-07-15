@@ -10,6 +10,10 @@ Commands:
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
+  orchestration-prepare/orchestration-dispatch
+                 Prepare or dispatch parent-owned Phase 4 assignments.
+  orchestration-panel/orchestration-gate/orchestration-hook/orchestration-recover
+                 Record Phase 4 panel, gate, hook, and recovery evidence.
   init/append/replay/status and Phase 2 runtime commands are forwarded to arw.cli.
   help           Show this help text.
 EOF
@@ -32,7 +36,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|_files-mcp|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild) ;;
+  health|route|version|files|_files-mcp|_graph-mcp|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -221,6 +225,9 @@ PY
     ;;
   _files-mcp)
     exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
+    ;;
+  _graph-mcp)
+    exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
     ;;
   files)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
