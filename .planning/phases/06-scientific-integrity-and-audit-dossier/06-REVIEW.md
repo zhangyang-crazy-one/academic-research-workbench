@@ -1,9 +1,9 @@
 ---
 phase: 06
-status: residual_findings_with_qualification_block
+status: resolved_with_qualification_block
 depth: standard
-files_reviewed: 30
-critical: 1
+files_reviewed: 31
+critical: 0
 warning: 0
 info: 0
 total: 10
@@ -17,7 +17,7 @@ runtime documentation, fixtures, and Phase 6 tests. Existing dirty Phase 4
 and 04.1 files were excluded from implementation review.
 
 **Review depth:** standard. The review included source inspection, focused
-Phase 6 tests (`15 passed`), compile checks, staged validation, and direct
+Phase 6 tests, compile checks, staged validation, and direct
 negative probes for claim, provenance, and integration-lock boundaries.
 
 ## Findings
@@ -117,31 +117,34 @@ ingestion contract. Missing local references must produce a typed blocker (or
 reject ingestion); they must never be treated as verified merely because the
 digest field is syntactically valid.
 
-### CR-06 — Direct dossier sealing still accepts an un-derived technical PASS
+### CR-06 (resolved) — Direct dossier sealing still accepts an un-derived technical PASS
 
 **Severity:** Critical
 **Location:** `src/arw/audit_dossier.py:151-157, 327-343, 365-377`
 
-`assemble_audit_dossier()` now rejects caller-supplied PASS values and derives
-claim/technical verdicts from validated replay and typed evidence. However,
-`AuditDossierManifest.model_validate()` / `seal_audit_dossier()` and the public
-`publish_audit_dossier()` path still accept a hand-built manifest whose
-`technical_qualification` is `PASS` with a self-computed canonical proof but
-without any run root, replay state, typed lifecycle receipts, or qualification
-receipt. Starting from an empty blocked dossier, a caller can compute
-`_qualification_proof(mapping)` and the outer dossier hash, and both the model
-and seal paths accept the forged PASS:
+The original finding was that `AuditDossierManifest.model_validate()` /
+`seal_audit_dossier()` and the public `publish_audit_dossier()` path accepted a
+hand-built manifest whose `technical_qualification` was `PASS` with a
+self-computed canonical proof but without any run root, replay state, typed
+lifecycle receipts, or qualification receipt. Starting from an empty blocked
+dossier, a caller could compute `_qualification_proof(mapping)` and the outer
+dossier hash, and both model and seal paths accepted the forged PASS.
 
 ```text
 AuditDossierManifest.model_validate({technical_qualification: PASS,
   evidence_sha256: [_qualification_proof(mapping)], ...})  -> PASS
 ```
 
-This leaves a second API path that can publish a correctly hashed but
-unsupported technical qualification, bypassing the replay-first assembler.
-The proof must bind to a parent replay/qualification receipt or publication
-must accept only an assembler-produced authority envelope; a self-computed
-subject digest is not evidence of replay.
+Commit `7518bc0` makes direct model/seal/publish boundaries reject technical
+`PASS`; only the replay-first internal assembly path can mark a dossier as
+derived, and publication writes a canonical parent-bound qualification receipt.
+Commit `a8d8d10` additionally requires four typed PASS claim capabilities,
+integrity/provenance/access evidence, and exact replay history/evidence reload
+before a persisted PASS can be cold-loaded. The positive cold-load test now
+uses real run, replay, integrity, provenance, and access records. Direct model,
+seal, publish, and manually persisted-dossier probes all reject forged PASS;
+real-run assembly also succeeds after JSON normalization of nested strict
+models.
 
 ## Warnings
 
@@ -205,8 +208,9 @@ authority APIs fail closed (including transition-role binding); credential-beari
 access references are rejected; read loaders are side-effect free; and the
 verifier scans complete status streams and enforces the retained Phase 04.1 lock.
 
-Post-fix verification on the current `bb087f3` checkout is **83 passed** for
-the focused Phase 6 suite and **34 passed** for the Phase 4/5 composition
+Post-fix verification on the current `a8d8d10` checkout is **92 passed** for
+the focused Phase 6 suite (the expanded audit-dossier/replay qualification
+set run here is **102 passed**) and **34 passed** for the Phase 4/5 composition
 subset. The serial verifier was rerun with an owned repo-local temporary root;
 it exits 70 and writes technical/release `BLOCKED` to
 `build/evidence/phase-06-review/verdict.json`. Its exact retained-lock evidence
@@ -231,7 +235,7 @@ controlled absolute repo-local TMPDIR required by the Phase 6 verifier, the
 complete non-host regression rerun is **458 passed in 373.35s**; the two
 affected modules also pass **3/3** in 71.44s. These are
 environment/dirty-worktree qualification notes, not residual Phase 6 source
-findings. CR-06 remains open after `e3a9250`: the canonical proof makes
-persisted PASS round-trippable, but a caller can compute the same proof from a
-forged mapping without replay or typed evidence. This is not a clean
-code-review verdict until the qualification proof is parent-bound.
+findings. CR-06 is resolved by `7518bc0` and `a8d8d10`; technical qualification
+remains blocked only by the retained Phase 04.1 integration-lock drift, while
+release qualification remains independently blocked by the documented
+SUP-04/P04-09 and CC BY-NC intended-use/permission evidence.
