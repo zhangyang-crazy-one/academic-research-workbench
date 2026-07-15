@@ -170,7 +170,7 @@ query-string secrets and private paths.
 
 ## Review conclusion
 
-The findings are resolved in `171db95`. Public evidence promotion now loads a
+The findings are resolved in `171db95` and `922cbc9`. Public evidence promotion now loads a
 canonical, digest-bound fresh integrity receipt from the approved run root and
 requires a validated parent authority envelope; lifecycle claims and dossier
 qualification are derived from typed replay evidence; local provenance and
