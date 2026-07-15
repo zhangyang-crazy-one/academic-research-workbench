@@ -3,40 +3,25 @@
 from __future__ import annotations
 
 import argparse
-import json
+import asyncio
+import hashlib
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, TypeVar
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from arw.build_identity import BuildIdentityError, load_packaged_build_identity
 from arw.canonical import canonical_json_bytes, strict_json_loads
-from arw.contracts import installed_route
-from arw.files import FilesAdminError, FilesAdminService
-from arw.file_models import ExtractionRegistration
-from arw.journal import JournalError, append_probe, initialize_run, replay_run
-from arw.manifests import ManifestError
-from arw.models import (
-    AppendProbeRequest,
-    ArtifactAcceptanceRequest,
-    AttemptCloseRequest,
-    AttemptStartRequest,
-    CheckpointRequest,
-    HumanDecisionRequest,
-    HumanDecisionResolveRequest,
-    InitRunRequest,
-    LifecycleTransitionRequest,
-    Rejection,
-    RecoveryRequest,
-    ResumeRequest,
-    StrictModel,
-)
-from arw.reducer import ReducerError, reduce_events
-from arw.runtime import RuntimeCommandService
-from arw.status import build_status_report, render_status_text
+
+
+RequestModel = TypeVar("RequestModel", bound=BaseModel)
+
+
+class CLIInputError(ValueError):
+    """A CLI-only envelope or evidence input is invalid."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,6 +91,66 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         command = subparsers.add_parser(name, help=help_text)
         _add_run_request_arguments(command)
+    orchestration_prepare = subparsers.add_parser(
+        "orchestration-prepare",
+        help="Freeze a Phase 4 parent run and materialize immutable assignments.",
+    )
+    _add_run_request_arguments(orchestration_prepare)
+    orchestration_prepare.add_argument(
+        "--assignments",
+        required=True,
+        type=Path,
+        help="Canonical JSON array of parent-authored AssignmentSpec objects.",
+    )
+    orchestration_prepare.add_argument(
+        "--execution-mode",
+        choices=(
+            "native_profile",
+            "assignment_injected_subagent",
+            "degraded_inline",
+            "blocked",
+        ),
+        default="assignment_injected_subagent",
+        help="Freeze execution intent; this does not itself qualify host dispatch.",
+    )
+    orchestration_dispatch = subparsers.add_parser(
+        "orchestration-dispatch",
+        help="Dispatch a frozen Phase 4 run only through exact Codex exec evidence.",
+    )
+    _add_run_request_arguments(orchestration_dispatch)
+    _add_integration_arguments(orchestration_dispatch)
+    orchestration_dispatch.add_argument(
+        "--host-evidence",
+        type=Path,
+        help="Canonical assignment-to-Codex-exec qualification manifest.",
+    )
+    orchestration_dispatch.add_argument(
+        "--host-evidence-sha256",
+        help="Parent-expected SHA-256 of the exact host-evidence manifest bytes.",
+    )
+    orchestration_panel = subparsers.add_parser(
+        "orchestration-panel",
+        help="Freeze a canonical formal-panel manifest from retained host identities.",
+    )
+    _add_run_request_arguments(orchestration_panel)
+    orchestration_panel.add_argument("--panel", required=True, type=Path)
+    orchestration_gate = subparsers.add_parser(
+        "orchestration-gate",
+        help="Evaluate one canonical Phase 4 gate from parent-accepted evidence.",
+    )
+    _add_run_request_arguments(orchestration_gate)
+    orchestration_gate.add_argument("--gate", required=True, type=Path)
+    orchestration_hook = subparsers.add_parser(
+        "orchestration-hook",
+        help="Record one non-authoritative canonical hook observation.",
+    )
+    _add_run_request_arguments(orchestration_hook)
+    orchestration_hook.add_argument("--observation", required=True, type=Path)
+    orchestration_recover = subparsers.add_parser(
+        "orchestration-recover",
+        help="Reconcile replay-visible Phase 4 dispatch crash gaps idempotently.",
+    )
+    _add_run_request_arguments(orchestration_recover)
     rebuild_pointer = subparsers.add_parser(
         "passport-pointer-rebuild",
         help="Explicitly rebuild the derived Passport pointer from accepted events.",
@@ -135,6 +180,9 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--root-id", required=True)
         if name in {"sync", "rebuild", "repair"}:
             command.add_argument("--extractor-version", required=True)
+    graph_mcp = subparsers.add_parser("_graph-mcp", help=argparse.SUPPRESS)
+    graph_mcp.add_argument("--control-root", required=True, type=Path)
+    graph_mcp.add_argument("--root-id", required=True)
     return parser
 
 
@@ -144,13 +192,59 @@ def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lock-timeout", type=float, default=0.2)
 
 
-def _load_request(path: Path, model: type[StrictModel]) -> StrictModel:
+def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--integration-lock", type=Path)
+    parser.add_argument("--stage-root", type=Path)
+    parser.add_argument("--ars-root", type=Path)
+    parser.add_argument("--codex-launcher", type=Path)
+    parser.add_argument("--codex-native-binary", type=Path)
+    parser.add_argument("--host-canary-evidence", type=Path)
+
+
+def _load_request(path: Path, model: type[RequestModel]) -> RequestModel:
     try:
         raw = path.read_bytes()
         payload = strict_json_loads(raw)
         return model.model_validate(payload)
     except (OSError, UnicodeError, ValueError, ValidationError) as error:
-        raise JournalError(f"request is missing or invalid: {error}") from error
+        raise CLIInputError(f"request is missing or invalid: {error}") from error
+
+
+def _canonical_object_from_bytes(raw: bytes, *, label: str) -> dict[str, object]:
+    try:
+        value = strict_json_loads(raw)
+    except (UnicodeError, ValueError) as error:
+        raise CLIInputError(f"{label} is invalid: {error}") from error
+    if not isinstance(value, dict):
+        raise CLIInputError(f"{label} must be a JSON object")
+    if canonical_json_bytes(value) != raw:
+        raise CLIInputError(f"{label} bytes are not canonical")
+    return value
+
+
+def _load_object(path: Path, *, label: str) -> dict[str, object]:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise CLIInputError(f"{label} is missing or invalid: {error}") from error
+    return _canonical_object_from_bytes(raw, label=label)
+
+
+def _is_sha256_text(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
+def _identity_receipt_reference(value: object, *, label: str) -> dict[str, str]:
+    digest = value.get("identity_receipt_sha256") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"identity_receipt_sha256"}
+        or not _is_sha256_text(digest)
+    ):
+        raise CLIInputError(f"{label} must contain one exact identity receipt digest")
+    return {"identity_receipt_sha256": str(digest)}
 
 
 def _write_json(payload: object) -> None:
@@ -163,12 +257,304 @@ def _parse_utc(value: str | None) -> datetime | None:
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
     except ValueError as error:
-        raise JournalError("--at must be an exact UTC YYYY-MM-DDTHH:MM:SSZ timestamp") from error
+        raise CLIInputError(
+            "--at must be an exact UTC YYYY-MM-DDTHH:MM:SSZ timestamp"
+        ) from error
 
 
 def _write_rejection(error: Exception) -> None:
+    from arw.models import Rejection
+
     rejection = Rejection(code="canonical-error", message=str(error))
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
+
+
+def _installed_route_from_environment():
+    from arw.contracts import installed_route
+
+    names = {
+        "lock": "ARW_INTEGRATION_LOCK",
+        "ars": "ARW_ARS_ROOT",
+        "launcher": "ARW_CODEX_LAUNCHER",
+        "native": "ARW_CODEX_NATIVE_BINARY",
+        "canary": "ARW_HOST_CANARY_EVIDENCE",
+    }
+    values = {key: os.environ.get(name) for key, name in names.items()}
+    if not any(values.values()):
+        return installed_route()
+    if not all(values.values()):
+        return installed_route(blocked_reason="integration_inputs_incomplete")
+    from arw.integration_lock import IntegrationLockError, load_and_verify_integration_lock
+
+    try:
+        verification = load_and_verify_integration_lock(
+            Path(values["lock"]),
+            stage_root=Path(os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])),
+            external_ars_root=Path(values["ars"]),
+            codex_launcher=Path(values["launcher"]),
+            codex_native_binary=Path(values["native"]),
+            host_canary_evidence=Path(values["canary"]),
+        )
+    except (IntegrationLockError, OSError, ValueError):
+        return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
+    return installed_route(verification)
+
+
+def _blocked_orchestration_result(command: str, *reason_codes: str) -> None:
+    _write_json(
+        {
+            "schema_version": "arw.orchestration-command-result.v1",
+            "command": command,
+            "status": "BLOCKED",
+            "execution_mode": "blocked",
+            "reason_codes": list(dict.fromkeys(reason_codes)),
+        }
+    )
+
+
+def _blocked_execution_adapter():
+    from arw.execution import CodexExecExecutionAdapter, NativeHostConfig
+
+    return CodexExecExecutionAdapter(NativeHostConfig(execution_mode="blocked"))
+
+
+def _path_argument_or_environment(
+    args: argparse.Namespace,
+    attribute: str,
+    environment_name: str,
+) -> Path | None:
+    value = getattr(args, attribute, None)
+    if value is not None:
+        return Path(value)
+    environment_value = os.environ.get(environment_name)
+    return Path(environment_value) if environment_value else None
+
+
+class _AssignmentCodexExecAdapter:
+    """Route each frozen assignment to its independently qualified adapter."""
+
+    def __init__(self, adapters: Mapping[str, Any]) -> None:
+        self.adapters = dict(adapters)
+
+    def _adapter(self, spec: Any) -> Any:
+        adapter = self.adapters.get(spec.assignment_id)
+        if adapter is None:
+            from arw.execution import HostQualificationBlocked, NativeHostQualification
+
+            raise HostQualificationBlocked(
+                NativeHostQualification(
+                    requested_mode="blocked",
+                    execution_mode="blocked",
+                    formal_independence=False,
+                    stable_host_identity=False,
+                    assignment_mapping_proven=False,
+                    isolation_proven=False,
+                    profile_configured=False,
+                    permission_configured=False,
+                    hook_configured=False,
+                    reason_codes=("assignment_host_evidence_missing",),
+                )
+            )
+        return adapter
+
+    async def dispatch(self, spec: Any) -> Any:
+        return await self._adapter(spec).dispatch(spec)
+
+    async def request_cancel(self, spec: Any) -> None:
+        await self._adapter(spec).request_cancel(spec)
+
+    async def force_terminate(self, spec: Any) -> None:
+        await self._adapter(spec).force_terminate(spec)
+
+
+def _verified_dispatch_adapter(
+    args: argparse.Namespace,
+) -> tuple[_AssignmentCodexExecAdapter | None, object | None, tuple[str, ...]]:
+    """Build no executable route until integration and host evidence both pass."""
+
+    from arw.execution import (
+        CodexExecExecutionAdapter,
+        CodexExecQualificationReceipt,
+        NativeHostConfig,
+    )
+    from arw.integration_lock import (
+        IntegrationLockError,
+        load_and_verify_integration_lock,
+        load_integration_lock,
+    )
+
+    integration_paths = {
+        "lock": _path_argument_or_environment(
+            args, "integration_lock", "ARW_INTEGRATION_LOCK"
+        ),
+        "stage": _path_argument_or_environment(args, "stage_root", "ARW_PLUGIN_ROOT"),
+        "ars": _path_argument_or_environment(args, "ars_root", "ARW_ARS_ROOT"),
+        "launcher": _path_argument_or_environment(
+            args, "codex_launcher", "ARW_CODEX_LAUNCHER"
+        ),
+        "native": _path_argument_or_environment(
+            args, "codex_native_binary", "ARW_CODEX_NATIVE_BINARY"
+        ),
+        "canary": _path_argument_or_environment(
+            args, "host_canary_evidence", "ARW_HOST_CANARY_EVIDENCE"
+        ),
+    }
+    if any(value is None for value in integration_paths.values()):
+        return None, None, ("integration_inputs_incomplete",)
+    try:
+        verification = load_and_verify_integration_lock(
+            integration_paths["lock"],  # type: ignore[arg-type]
+            stage_root=integration_paths["stage"],  # type: ignore[arg-type]
+            external_ars_root=integration_paths["ars"],  # type: ignore[arg-type]
+            codex_launcher=integration_paths["launcher"],  # type: ignore[arg-type]
+            codex_native_binary=integration_paths["native"],  # type: ignore[arg-type]
+            host_canary_evidence=integration_paths["canary"],  # type: ignore[arg-type]
+        )
+        lock = load_integration_lock(integration_paths["lock"])  # type: ignore[arg-type]
+        loaded_lock_sha256 = hashlib.sha256(
+            canonical_json_bytes(lock.model_dump(mode="json"))
+        ).hexdigest()
+        if loaded_lock_sha256 != verification.integration_lock_sha256:
+            raise CLIInputError("integration lock changed during verification")
+    except (IntegrationLockError, OSError, ValueError):
+        return None, None, ("integration_lock_invalid_or_drifted",)
+
+    evidence_path = args.host_evidence
+    expected_evidence_digest = args.host_evidence_sha256
+    if evidence_path is None or expected_evidence_digest is None:
+        return None, verification, ("host_evidence_missing_or_incomplete",)
+    if (
+        not _is_sha256_text(expected_evidence_digest)
+        or evidence_path.is_symlink()
+        or not evidence_path.is_file()
+    ):
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    try:
+        raw = evidence_path.read_bytes()
+    except OSError:
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    if hashlib.sha256(raw).hexdigest() != expected_evidence_digest:
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    try:
+        manifest = _canonical_object_from_bytes(raw, label="host evidence")
+    except CLIInputError:
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    if set(manifest) != {"schema_version", "integration_lock_sha256", "assignments"}:
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    if (
+        manifest.get("schema_version") != "arw.codex-exec-dispatch-evidence.v1"
+        or manifest.get("integration_lock_sha256")
+        != verification.integration_lock_sha256
+        or not isinstance(manifest.get("assignments"), list)
+    ):
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+
+    codex_version = lock.codex_host.cli_version.removeprefix("codex-cli ")
+    adapters: dict[str, CodexExecExecutionAdapter] = {}
+    expected_row_keys = {
+        "assignment_id",
+        "qualification_receipt_path",
+        "qualification_receipt_sha256",
+        "credential_source_codex_home",
+        "permission_digest",
+    }
+    try:
+        for raw_row in manifest["assignments"]:
+            if not isinstance(raw_row, dict) or set(raw_row) != expected_row_keys:
+                raise CLIInputError("host evidence assignment row is invalid")
+            if any(not isinstance(raw_row[key], str) for key in expected_row_keys):
+                raise CLIInputError("host evidence assignment values must be strings")
+            assignment_id = raw_row["assignment_id"]
+            if assignment_id in adapters:
+                raise CLIInputError("host evidence assignment IDs must be unique")
+            receipt_path = Path(raw_row["qualification_receipt_path"])
+            credential_home = Path(raw_row["credential_source_codex_home"])
+            if not receipt_path.is_absolute() or not credential_home.is_absolute():
+                raise CLIInputError("host evidence paths must be absolute")
+            receipt = CodexExecQualificationReceipt.from_canonical_bytes(
+                receipt_path.read_bytes()
+            )
+            if receipt.assignment_id != assignment_id:
+                raise CLIInputError("host receipt assignment mapping drifted")
+            adapters[assignment_id] = CodexExecExecutionAdapter(
+                NativeHostConfig(
+                    execution_mode=receipt.execution_mode,
+                    profile_name=receipt.profile_name,
+                    permission_digest=raw_row["permission_digest"],
+                    hook_config_digest=verification.hook_definition_sha256,
+                    codex_version=codex_version,
+                    codex_binary_sha256=lock.codex_host.native_binary.sha256,
+                    profile_digest=receipt.profile_digest,
+                    qualification_receipt_path=receipt_path,
+                    expected_qualification_receipt_sha256=raw_row[
+                        "qualification_receipt_sha256"
+                    ],
+                    credential_source_codex_home=credential_home,
+                    credential_files=("auth.json", "config.toml"),
+                    codex_command=(str(integration_paths["native"]),),
+                )
+            )
+    except (CLIInputError, OSError, ValueError):
+        return None, verification, ("host_evidence_invalid_or_drifted",)
+    if not adapters:
+        return None, verification, ("host_evidence_missing_or_incomplete",)
+    return _AssignmentCodexExecAdapter(adapters), verification, ()
+
+
+def _rehydrate_prepared_run(service: Any) -> Any:
+    from arw.orchestration import OrchestrationError, PreparedRun
+
+    state = service.runtime.read_state()
+    if not all(
+        (
+            state.role_catalog_sha256,
+            state.policy_sha256,
+            state.dag_sha256,
+            state.execution_mode,
+        )
+    ):
+        raise OrchestrationError("canonical run has no complete prepared orchestration intent")
+    assignments = tuple(item.assignment for item in state.assignments)
+    if not assignments:
+        raise OrchestrationError("canonical run has no prepared assignments")
+    return PreparedRun(
+        state=state,
+        assignments=assignments,
+        role_catalog_sha256=state.role_catalog_sha256,
+        policy_sha256=state.policy_sha256,
+        dag_sha256=state.dag_sha256,
+        execution_mode=state.execution_mode,
+    )
+
+
+def _dispatch_report_json(report: Any, integration_lock_sha256: str) -> dict[str, object]:
+    return {
+        "schema_version": "arw.orchestration-command-result.v1",
+        "command": "orchestration-dispatch",
+        "status": report.state.status,
+        "execution_mode": report.state.execution_mode,
+        "accepted_revision": report.state.accepted_revision,
+        "ledger_head_sha256": report.state.ledger_head_sha256,
+        "integration_lock_sha256": integration_lock_sha256,
+        "outcomes": [
+            {
+                "assignment_id": outcome.assignment_id,
+                "status": outcome.status,
+                "classification": outcome.classification,
+                "retry_reason": outcome.retry_reason,
+                "attempts": [
+                    {
+                        "attempt_id": attempt.attempt_id,
+                        "attempt_number": attempt.attempt_number,
+                        "status": attempt.status,
+                        "failure_reason": attempt.failure_reason,
+                    }
+                    for attempt in outcome.attempts
+                ],
+            }
+            for outcome in report.outcomes
+        ],
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -178,11 +564,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "route":
         if not args.json_output:
             parser.error("route requires --json")
-        _write_json(installed_route().model_dump(mode="json"))
+        _write_json(_installed_route_from_environment().model_dump(mode="json"))
         return 0
     if args.command == "version":
         if not args.json_output:
             parser.error("version requires --json")
+        from arw.build_identity import BuildIdentityError, load_packaged_build_identity
+
         try:
             identity, digest = load_packaged_build_identity()
         except BuildIdentityError as error:
@@ -198,6 +586,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "files":
+        from arw.file_models import ExtractionRegistration
+        from arw.files import FilesAdminError, FilesAdminService
+
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
             service = FilesAdminService(
@@ -224,9 +615,47 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 _write_json(service.status(args.root_id))
             return 0
-        except (FilesAdminError, JournalError, ValidationError) as error:
+        except (FilesAdminError, CLIInputError, ValidationError) as error:
             print(f"arw: files-admin-error: {error}", file=sys.stderr)
             return 65
+    if args.command == "_graph-mcp":
+        from arw.graph_mcp import GraphMcpServer, run_stdio
+        from arw.graph_store import GraphStore
+
+        return run_stdio(GraphMcpServer(GraphStore(args.control_root, args.root_id)))
+
+    # Writable/runtime services are intentionally imported only after the two
+    # read-only installed commands above have returned.
+    from arw.journal import (
+        JournalError,
+        append_probe,
+        initialize_run,
+        replay_run,
+    )
+    from arw.manifests import ManifestError
+    from arw.models import (
+        AppendProbeRequest,
+        ArtifactAcceptanceRequest,
+        AttemptCloseRequest,
+        AttemptStartRequest,
+        CheckpointRequest,
+        HumanDecisionRequest,
+        HumanDecisionResolveRequest,
+        InitRunRequest,
+        LifecycleTransitionRequest,
+        RecoveryRequest,
+        ResumeRequest,
+        RuntimeCommandRequest,
+    )
+    from arw.orchestration import (
+        AssignmentSpec,
+        OrchestrationError,
+        OrchestrationService,
+    )
+    from arw.orchestration_models import GateDecision, HookObservation
+    from arw.reducer import ReducerError, reduce_events
+    from arw.runtime import RuntimeCommandService
+    from arw.status import build_status_report, render_status_text
 
     try:
         if args.command == "init":
@@ -283,6 +712,241 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 sys.stdout.write(render_status_text(report))
             return 0
+        if args.command == "orchestration-prepare":
+            request = _load_request(args.request, LifecycleTransitionRequest)
+            try:
+                raw_assignments = strict_json_loads(args.assignments.read_bytes())
+                if not isinstance(raw_assignments, list):
+                    raise ValueError("--assignments must contain a JSON array")
+                assignments = tuple(
+                    AssignmentSpec(**item)
+                    for item in raw_assignments
+                    if isinstance(item, dict)
+                )
+                if len(assignments) != len(raw_assignments):
+                    raise ValueError("every assignment entry must be a JSON object")
+            except (OSError, UnicodeError, ValueError, TypeError) as error:
+                raise JournalError(f"assignments are missing or invalid: {error}") from error
+            prepared = OrchestrationService(
+                args.run_root,
+                adapter=_blocked_execution_adapter(),
+                lock_timeout=args.lock_timeout,
+            ).prepare(
+                request,
+                assignments=assignments,
+                execution_mode=args.execution_mode,
+            )
+            _write_json(
+                {
+                    "accepted_revision": prepared.state.accepted_revision,
+                    "assignment_ids": [item.assignment_id for item in prepared.assignments],
+                    "dag_sha256": prepared.dag_sha256,
+                    "execution_mode": prepared.execution_mode,
+                    "ledger_head_sha256": prepared.state.ledger_head_sha256,
+                    "policy_sha256": prepared.policy_sha256,
+                    "role_catalog_sha256": prepared.role_catalog_sha256,
+                    "run_id": prepared.state.run_id,
+                    "stage": prepared.state.stage,
+                }
+            )
+            return 0
+        if args.command == "orchestration-dispatch":
+            request = _load_request(args.request, RuntimeCommandRequest)
+            adapter, verification, reasons = _verified_dispatch_adapter(args)
+            if adapter is None or verification is None:
+                _blocked_orchestration_result(args.command, *reasons)
+                return 65
+            service = OrchestrationService(
+                args.run_root,
+                adapter=adapter,
+                lock_timeout=args.lock_timeout,
+            )
+            prepared = _rehydrate_prepared_run(service)
+            assignment_ids = {item.assignment_id for item in prepared.assignments}
+            if set(adapter.adapters) != assignment_ids:
+                _blocked_orchestration_result(
+                    args.command, "host_evidence_assignment_set_mismatch"
+                )
+                return 65
+            from arw.execution import DispatchSpec
+
+            qualification_reasons: list[str] = []
+            for assignment in prepared.assignments:
+                host_adapter = adapter.adapters[assignment.assignment_id]
+                qualification = host_adapter.qualification_for(
+                    DispatchSpec(
+                        assignment_id=assignment.assignment_id,
+                        attempt_id=f"attempt.{assignment.assignment_id}.qualification",
+                        acceptance_key=assignment.acceptance_key.value,
+                        assignment_path=(
+                            args.run_root
+                            / "assignments"
+                            / f"{assignment.assignment_id}.json"
+                        ),
+                        attempt_root=(
+                            args.run_root
+                            / "attempts"
+                            / f"attempt.{assignment.assignment_id}.qualification"
+                        ),
+                    )
+                )
+                required_proofs = {
+                    "stable_host_identity_not_proven": qualification.stable_host_identity,
+                    "assignment_mapping_not_proven": (
+                        qualification.assignment_mapping_proven
+                    ),
+                    "isolation_not_proven": qualification.isolation_proven,
+                    "profile_not_proven": qualification.profile_configured,
+                    "permission_not_proven": qualification.permission_configured,
+                    "hook_not_proven": qualification.hook_configured,
+                }
+                if not qualification.formal_independence:
+                    qualification_reasons.extend(qualification.reason_codes)
+                qualification_reasons.extend(
+                    reason
+                    for reason, proven in required_proofs.items()
+                    if not proven
+                )
+                if qualification.execution_mode != prepared.execution_mode:
+                    qualification_reasons.append("prepared_execution_mode_mismatch")
+            if qualification_reasons:
+                _blocked_orchestration_result(
+                    args.command,
+                    *(f"host_qualification:{item}" for item in qualification_reasons),
+                )
+                return 65
+            # Library and app callers await OrchestrationService.dispatch;
+            # asyncio.run is confined to this process-level CLI boundary.
+            report = asyncio.run(service.dispatch(request, prepared))
+            _write_json(
+                _dispatch_report_json(
+                    report,
+                    verification.integration_lock_sha256,  # type: ignore[union-attr]
+                )
+            )
+            return 0 if all(item.status == "completed" for item in report.outcomes) else 65
+        if args.command == "orchestration-panel":
+            request = _load_request(args.request, RuntimeCommandRequest)
+            panel_request = _load_object(args.panel, label="panel request")
+            expected_keys = {
+                "schema_version",
+                "panel_id",
+                "subject_sha256",
+                "rubric_sha256",
+                "reviewer_identities",
+                "synthesizer_identity",
+                "execution_mode",
+            }
+            if (
+                set(panel_request) != expected_keys
+                or panel_request.get("schema_version") != "arw.cli-panel-request.v1"
+                or not isinstance(panel_request.get("panel_id"), str)
+                or not panel_request["panel_id"]
+                or not _is_sha256_text(panel_request.get("subject_sha256"))
+                or not _is_sha256_text(panel_request.get("rubric_sha256"))
+                or not isinstance(panel_request.get("reviewer_identities"), dict)
+                or panel_request.get("execution_mode")
+                not in {"native_profile", "assignment_injected_subagent"}
+            ):
+                raise CLIInputError("panel request does not match the strict CLI contract")
+            reviewer_identities: dict[str, dict[str, str]] = {}
+            for role_id, identity_reference in panel_request[
+                "reviewer_identities"
+            ].items():
+                if not isinstance(role_id, str) or not role_id:
+                    raise CLIInputError("panel reviewer role IDs must be non-empty strings")
+                reviewer_identities[role_id] = _identity_receipt_reference(
+                    identity_reference,
+                    label=f"panel reviewer {role_id}",
+                )
+            synthesizer_identity = panel_request["synthesizer_identity"]
+            if synthesizer_identity is not None:
+                synthesizer_identity = _identity_receipt_reference(
+                    synthesizer_identity,
+                    label="panel synthesizer",
+                )
+            service = OrchestrationService(
+                args.run_root,
+                adapter=_blocked_execution_adapter(),
+                lock_timeout=args.lock_timeout,
+            )
+            panel = service.prepare_formal_panel(
+                request,
+                panel_id=panel_request["panel_id"],  # type: ignore[arg-type]
+                subject_sha256=panel_request["subject_sha256"],  # type: ignore[arg-type]
+                rubric_sha256=panel_request["rubric_sha256"],  # type: ignore[arg-type]
+                reviewer_identities=reviewer_identities,
+                synthesizer_identity=synthesizer_identity,
+                execution_mode=panel_request["execution_mode"],  # type: ignore[arg-type]
+            )
+            _write_json(
+                {
+                    "schema_version": "arw.orchestration-command-result.v1",
+                    "command": args.command,
+                    "status": "PASS" if panel.status == "ready" else "BLOCKED",
+                    "execution_mode": (
+                        panel_request["execution_mode"]
+                        if panel.status == "ready"
+                        else "blocked"
+                    ),
+                    "panel_id": panel.panel_id,
+                    "manifest_sha256": panel.manifest_sha256,
+                    "reviewer_assignment_ids": [
+                        item.assignment_id for item in panel.reviewer_assignments
+                    ],
+                    "synthesizer_assignment_id": (
+                        panel.synthesizer_assignment.assignment_id
+                        if panel.synthesizer_assignment is not None
+                        else None
+                    ),
+                    "blockers": panel.blockers,
+                    "limitations": panel.limitations,
+                }
+            )
+            return 0 if panel.status == "ready" else 65
+        if args.command == "orchestration-gate":
+            request = _load_request(args.request, RuntimeCommandRequest)
+            decision = GateDecision.model_validate(
+                _load_object(args.gate, label="gate decision")
+            )
+            outcome = OrchestrationService(
+                args.run_root,
+                adapter=_blocked_execution_adapter(),
+                lock_timeout=args.lock_timeout,
+            ).evaluate_gate(request, decision)
+            _write_json(outcome.model_dump(mode="json"))
+            return 0 if outcome.accepted else 65
+        if args.command == "orchestration-hook":
+            request = _load_request(args.request, RuntimeCommandRequest)
+            observation = HookObservation.model_validate(
+                _load_object(args.observation, label="hook observation")
+            )
+            outcome = OrchestrationService(
+                args.run_root,
+                adapter=_blocked_execution_adapter(),
+                lock_timeout=args.lock_timeout,
+            ).record_hook_observation(request, observation)
+            _write_json(outcome.model_dump(mode="json"))
+            return 0 if outcome.accepted else 65
+        if args.command == "orchestration-recover":
+            request = _load_request(args.request, RuntimeCommandRequest)
+            state = OrchestrationService(
+                args.run_root,
+                adapter=_blocked_execution_adapter(),
+                lock_timeout=args.lock_timeout,
+            ).recover_orphans(request)
+            _write_json(
+                {
+                    "schema_version": "arw.orchestration-command-result.v1",
+                    "command": args.command,
+                    "status": state.status,
+                    "execution_mode": state.execution_mode,
+                    "accepted_revision": state.accepted_revision,
+                    "ledger_head_sha256": state.ledger_head_sha256,
+                    "attempt_count": len(state.attempts),
+                }
+            )
+            return 0
         runtime_commands = {
             "transition": (LifecycleTransitionRequest, "execute_transition"),
             "decision-request": (HumanDecisionRequest, "request_decision"),
@@ -307,7 +971,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             ).rebuild_passport_pointer()
             _write_json(pointer.model_dump(mode="json"))
             return 0
-    except (JournalError, ManifestError, ReducerError) as error:
+    except (
+        CLIInputError,
+        JournalError,
+        ManifestError,
+        ReducerError,
+        OrchestrationError,
+        ValidationError,
+    ) as error:
         if args.command == "status" and args.json_output:
             _write_rejection(error)
         else:

@@ -68,6 +68,19 @@
       "title": "Timeout Ms",
       "type": "integer"
     },
+    "expected_ledger_watermark": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Ledger Watermark"
+    },
     "cursor": {
       "anyOf": [
         {

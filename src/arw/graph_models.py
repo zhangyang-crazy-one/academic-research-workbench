@@ -213,6 +213,7 @@ class GraphQueryRequest(GraphModel):
     max_rows: Annotated[int, Field(ge=1, le=500)] = 100
     max_bytes: Annotated[int, Field(ge=256, le=262_144)] = 65_536
     timeout_ms: Annotated[int, Field(ge=1, le=5_000)] = 5_000
+    expected_ledger_watermark: Annotated[int, Field(ge=0)] | None = None
     cursor: Annotated[str, StringConstraints(max_length=4096)] | None = None
 
     @model_validator(mode="after")
@@ -288,4 +289,3 @@ def render_phase5_schema_bytes(name: str) -> bytes:
     if name not in documents:
         raise KeyError(name)
     return (json.dumps(documents[name], ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-

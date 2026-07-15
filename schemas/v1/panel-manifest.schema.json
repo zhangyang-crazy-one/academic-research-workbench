@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/panel-manifest.schema.json",
+  "$defs": {
+    "PanelSeat": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assignment_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Assignment Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "role_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Role Id",
+          "type": "string"
+        },
+        "worker_identity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Worker Identity Id",
+          "type": "string"
+        },
+        "host_agent_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Host Agent Id",
+          "type": "string"
+        },
+        "identity_receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Receipt Sha256",
+          "type": "string"
+        },
+        "acceptance_key": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            }
+          ],
+          "title": "Acceptance Key",
+          "type": "array"
+        },
+        "blind_envelope_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Blind Envelope Sha256",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "round_number": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Round Number",
+          "type": "integer"
+        },
+        "synthesizer": {
+          "default": false,
+          "title": "Synthesizer",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "assignment_id",
+        "attempt_id",
+        "role_id",
+        "worker_identity_id",
+        "host_agent_id",
+        "identity_receipt_sha256",
+        "acceptance_key",
+        "blind_envelope_sha256",
+        "required",
+        "round_number"
+      ],
+      "title": "PanelSeat",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.panel-manifest.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "panel_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Panel Id",
+      "type": "string"
+    },
+    "subject_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Subject Sha256",
+      "type": "string"
+    },
+    "rubric_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Rubric Sha256",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "execution_mode": {
+      "enum": [
+        "native_profile",
+        "assignment_injected_subagent",
+        "blocked"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "reviewer_seats": {
+      "items": {
+        "$ref": "#/$defs/PanelSeat"
+      },
+      "maxLength": 64,
+      "title": "Reviewer Seats",
+      "type": "array"
+    },
+    "synthesizer_seat": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PanelSeat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "required_report_roles": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxLength": 16,
+      "title": "Required Report Roles",
+      "type": "array"
+    },
+    "blockers": {
+      "items": {
+        "maxLength": 1024,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxLength": 64,
+      "title": "Blockers",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "maxLength": 1024,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxLength": 64,
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "panel_id",
+    "subject_sha256",
+    "rubric_sha256",
+    "policy_sha256",
+    "execution_mode",
+    "status",
+    "reviewer_seats",
+    "synthesizer_seat",
+    "required_report_roles",
+    "blockers",
+    "limitations"
+  ],
+  "title": "PanelManifest",
+  "type": "object"
+}

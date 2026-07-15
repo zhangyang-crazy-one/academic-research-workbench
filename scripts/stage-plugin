@@ -363,6 +363,7 @@ copy_file "vendor/source-manifest.json"
 copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
 copy_file "vendor/patches/file-base/0002-phase1-confined-read.patch"
 copy_file "vendor/patches/file-base/0003-phase3-generation-builder.patch"
+copy_file "vendor/patches/file-base/0004-phase5-research-graph.patch"
 copy_file "vendor/python/wheelhouse.lock.json"
 copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
 
@@ -840,6 +841,7 @@ static_files = {
     "vendor/patches/file-base/0001-file-base-server-name.patch",
     "vendor/patches/file-base/0002-phase1-confined-read.patch",
     "vendor/patches/file-base/0003-phase3-generation-builder.patch",
+    "vendor/patches/file-base/0004-phase5-research-graph.patch",
 }
 phase3_schema_names = {
     "extraction-registration.schema.json",

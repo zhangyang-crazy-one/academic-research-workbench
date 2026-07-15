@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/human-authority.schema.json",
+  "additionalProperties": false,
+  "description": "Parent-validated authentication/authorization envelope.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.human-authority.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "authority_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Authority Id",
+      "type": "string"
+    },
+    "authenticated_actor_id": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Authenticated Actor Id",
+      "type": "string"
+    },
+    "accountable_role": {
+      "enum": [
+        "operator",
+        "review_authority",
+        "access_authority"
+      ],
+      "title": "Accountable Role",
+      "type": "string"
+    },
+    "validated_by_actor_id": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Validated By Actor Id",
+      "type": "string"
+    },
+    "allowed_decision_kinds": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxLength": 16,
+      "minLength": 1,
+      "title": "Allowed Decision Kinds",
+      "type": "array"
+    },
+    "allowed_gate_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Allowed Gate Ids",
+      "type": "array"
+    },
+    "allowed_scopes": {
+      "items": {
+        "maxLength": 256,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Allowed Scopes",
+      "type": "array"
+    },
+    "authenticated_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Authenticated At",
+      "type": "string"
+    },
+    "expires_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Evidence Sha256",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "authority_id",
+    "authenticated_actor_id",
+    "accountable_role",
+    "validated_by_actor_id",
+    "allowed_decision_kinds",
+    "allowed_gate_ids",
+    "allowed_scopes",
+    "authenticated_at",
+    "expires_at",
+    "evidence_sha256"
+  ],
+  "title": "HumanAuthority",
+  "type": "object"
+}
