@@ -48,6 +48,7 @@ def test_phase6_receipt_schema_is_registry_generated_and_strict() -> None:
         "integrity-receipt.schema.json",
         "experiment-provenance.schema.json",
         "evidence-access-decision.schema.json",
+        "lifecycle-evidence.schema.json",
     )
     assert set(PHASE6_SCHEMA_NAMES) <= set(SCHEMA_NAMES)
     generated_documents = generate_phase6_schema_documents()

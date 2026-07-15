@@ -51,10 +51,15 @@ CLAIM_CAPABILITIES: tuple[str, ...] = (
     "independent_review_complete",
     "audit_complete",
 )
+LIFECYCLE_SCHEMA_NAME = "lifecycle-evidence.schema.json"
 
 LicenseStatus = Literal["clear", "ambiguous", "restricted", "unavailable", "unknown"]
 DecisionKind = Literal["initial", "verification", "correction", "waiver", "replacement"]
 _ID = Annotated[str, StringConstraints(min_length=3, max_length=128, pattern=r"^[a-z][a-z0-9._:-]*$")]
+_SECRET_PATTERN = re.compile(
+    r"(?i)(api[_-]?key|access[_-]?token|password|passwd|secret|authorization|bearer|private[_-]?key|begin [^-\n]*private key|sk-[a-z0-9]|ghp_[a-z0-9])"
+)
+_PRIVATE_PATH_PATTERN = re.compile(r"(?:^|[/\\])(?:home|users|private|secrets?)(?:[/\\]|$)", re.I)
 
 
 def _parse_utc(value: str) -> datetime:
@@ -169,8 +174,20 @@ class EvidenceAccessDecision(StrictModel):
     @field_validator("source_uri")
     @classmethod
     def source_uri_is_bounded(cls, value: str | None) -> str | None:
-        if value is not None and ("\x00" in value or "\\" in value):
-            raise ValueError("source_uri contains unsafe path characters")
+        if value is not None and (
+            "\x00" in value
+            or "\\" in value
+            or _SECRET_PATTERN.search(value)
+            or _PRIVATE_PATH_PATTERN.search(value)
+        ):
+            raise ValueError("source_uri contains unsafe or private content")
+        return value
+
+    @field_validator("rationale", "scope")
+    @classmethod
+    def decision_text_is_redacted(cls, value: str) -> str:
+        if _SECRET_PATTERN.search(value) or _PRIVATE_PATH_PATTERN.search(value):
+            raise ValueError("access decision text contains secret or private content")
         return value
 
     @model_validator(mode="after")
@@ -286,6 +303,12 @@ def validate_access_transition(
     successor: EvidenceAccessDecision,
     *,
     public_verification_receipt_sha256: str | None = None,
+    root: Path | None = None,
+    allowed_root: Path | None = None,
+    evidence_root: Path | None = None,
+    parent_authority: Any = None,
+    authority: Any = None,
+    now: datetime | str | None = None,
 ) -> AccessTransition:
     """Validate a successor without mutating or rewriting its predecessor."""
 
@@ -300,9 +323,56 @@ def validate_access_transition(
     if current.access_state not in _ALLOWED_TRANSITIONS[previous.access_state]:
         raise EvidenceAccessError("access transition is not allowed")
     if current.access_state == EvidenceAccessState.PUBLICLY_VERIFIED:
-        receipt = public_verification_receipt_sha256 or current.public_verification_receipt_sha256
-        if receipt is None or receipt != current.public_verification_receipt_sha256:
+        receipt = current.public_verification_receipt_sha256
+        if (
+            receipt is None
+            or public_verification_receipt_sha256 is not None
+            and public_verification_receipt_sha256 != receipt
+        ):
             raise EvidenceAccessError("public promotion requires the exact fresh verification receipt")
+        receipt_root = allowed_root or root or evidence_root
+        if receipt_root is None:
+            raise EvidenceAccessError("public promotion requires a run-root verification receipt")
+        try:
+            from arw.integrity import evaluate_integrity_receipt, load_integrity_receipt
+
+            checked_receipt = load_integrity_receipt(receipt_root, receipt)
+            evaluation = evaluate_integrity_receipt(
+                checked_receipt,
+                current.subject_sha256,
+                current.evidence_sha256,
+                now,
+            )
+        except Exception as error:
+            raise EvidenceAccessError("public verification receipt is missing or invalid") from error
+        if evaluation.verdict != "PASS":
+            raise EvidenceAccessError(
+                "public verification receipt is stale or digest-mismatched: "
+                + ",".join(evaluation.reason_codes)
+            )
+        parent = authority if authority is not None else parent_authority
+        if parent is None:
+            raise EvidenceAccessError("public promotion requires parent-authorized transition")
+        try:
+            from arw.orchestration_models import HumanAuthority
+
+            if not isinstance(parent, HumanAuthority):
+                raise TypeError("authority must be a validated HumanAuthority")
+            clock = _coerce_utc(now)
+            if not (_parse_utc(parent.authenticated_at) <= clock <= _parse_utc(parent.expires_at)):
+                raise ValueError("authority is outside its authentication window")
+            if current.authority_sha256 != parent.authority_sha256:
+                raise ValueError("transition authority does not match parent authority")
+            if current.accountable_actor_id != parent.authenticated_actor_id:
+                raise ValueError("transition actor does not match authenticated authority")
+            if current.scope not in parent.allowed_scopes:
+                raise ValueError("transition scope is not authorized")
+            if current.decision_kind not in parent.allowed_decision_kinds:
+                raise ValueError("transition kind is not authorized")
+        except EvidenceAccessError:
+            raise
+        except Exception as error:
+            raise EvidenceAccessError("transition lacks a valid parent authority envelope") from error
     if current.license_status in {"ambiguous", "unknown", "unavailable"} and current.access_state == EvidenceAccessState.PUBLICLY_VERIFIED:
         raise EvidenceAccessError("unresolved license cannot be promoted to public verification")
     return AccessTransition(previous.decision_sha256, current.decision_sha256, f"{previous.access_state.value}->{current.access_state.value}")
@@ -313,12 +383,24 @@ def supersede_evidence_access_decision(
     successor: Mapping[str, Any] | EvidenceAccessDecision,
     *,
     public_verification_receipt_sha256: str | None = None,
+    root: Path | None = None,
+    allowed_root: Path | None = None,
+    evidence_root: Path | None = None,
+    parent_authority: Any = None,
+    authority: Any = None,
+    now: datetime | str | None = None,
 ) -> EvidenceAccessDecision:
     current = seal_evidence_access_decision(successor)
     validate_access_transition(
         predecessor,
         current,
         public_verification_receipt_sha256=public_verification_receipt_sha256,
+        root=root,
+        allowed_root=allowed_root,
+        evidence_root=evidence_root,
+        parent_authority=parent_authority,
+        authority=authority,
+        now=now,
     )
     return current
 
@@ -387,37 +469,112 @@ def _fresh_integrity(
 def _fresh_until(value: str | None, now: datetime | str | None) -> bool:
     if value is None:
         return False
-
-
-def _lifecycle_record_present(value: Any) -> bool:
-    """Accept only a digest-bearing lifecycle record, never a display row."""
-
-    if value is None or isinstance(value, (bool, str, bytes)):
-        return False
-    if isinstance(value, Mapping):
-        if any(
-            isinstance(item, str)
-            and (item == "receipt_sha256" or item.endswith("_sha256"))
-            and isinstance(candidate, str)
-            and re.fullmatch(r"[0-9a-f]{64}", candidate)
-            for item, candidate in value.items()
-        ):
-            status = value.get("status")
-            return status not in {"BLOCKED", "FAIL", "stale", "unavailable"}
-        return False
-    fields = getattr(value, "model_fields", {})
-    for name in fields or dir(value):
-        if not (name == "receipt_sha256" or name.endswith("_sha256")):
-            continue
-        candidate = getattr(value, name, None)
-        if isinstance(candidate, str) and re.fullmatch(r"[0-9a-f]{64}", candidate):
-            return getattr(value, "status", None) not in {"BLOCKED", "FAIL", "stale", "unavailable"}
-    return False
-    current = _parse_utc(now) if isinstance(now, str) else (now or datetime.now(UTC)).astimezone(UTC)
     try:
+        current = _coerce_utc(now)
         return current <= _parse_utc(value)
-    except ValueError:
+    except (TypeError, ValueError):
         return False
+
+
+def _coerce_utc(value: datetime | str | None) -> datetime:
+    if value is None:
+        return datetime.now(UTC)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise ValueError("evaluation clock must be timezone-aware")
+        return value.astimezone(UTC)
+    return _parse_utc(value)
+
+
+class LifecycleEvidenceRecord(StrictModel):
+    """Typed, digest-bound lifecycle evidence used by claim capabilities."""
+
+    schema_version: Literal["arw.lifecycle-evidence.v1"]
+    record_kind: Annotated[str, StringConstraints(min_length=3, max_length=64, pattern=r"^[a-z][a-z0-9._:-]*$")]
+    receipt_id: StableRuntimeId
+    subject_sha256: Sha256
+    input_sha256: Annotated[tuple[Sha256, ...], BeforeValidator(_freeze_array)] = Field(min_length=1)
+    observed_at: UtcTimestamp
+    fresh_until: UtcTimestamp
+    verdict: Literal["PASS", "FAIL", "BLOCKED"]
+    receipt_sha256: Sha256
+
+    @field_validator("input_sha256")
+    @classmethod
+    def inputs_are_canonical(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _ordered_unique(value, label="input_sha256")
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_digest(cls, value: Any) -> Any:
+        if isinstance(value, cls) or not isinstance(value, Mapping):
+            return value
+        body = dict(value)
+        supplied = body.pop("receipt_sha256", None)
+        expected = sha256_hex(canonical_json_bytes(body))
+        if supplied is not None and supplied != expected:
+            raise ValueError("lifecycle receipt digest does not match canonical bytes")
+        body["receipt_sha256"] = expected
+        return body
+
+    @model_validator(mode="after")
+    def digest_is_canonical(self) -> "LifecycleEvidenceRecord":
+        if self.receipt_sha256 != sha256_hex(canonical_json_bytes(self.model_dump(mode="json", exclude={"receipt_sha256"}))):
+            raise ValueError("lifecycle receipt digest does not match canonical bytes")
+        if _parse_utc(self.fresh_until) <= _parse_utc(self.observed_at):
+            raise ValueError("lifecycle receipt freshness window must be positive")
+        return self
+
+
+def _lifecycle_record(
+    value: Any,
+    *,
+    record_kind: str,
+    subject_sha256: str,
+    input_sha256: Sequence[str],
+    now: datetime | str | None,
+) -> LifecycleEvidenceRecord | None:
+    try:
+        raw = value.model_dump(mode="json") if isinstance(value, LifecycleEvidenceRecord) else value
+        record = LifecycleEvidenceRecord.model_validate(raw)
+        if record.record_kind != record_kind or record.subject_sha256 != subject_sha256:
+            return None
+        if record.input_sha256 != tuple(sorted(set(input_sha256))):
+            return None
+        if record.verdict != "PASS" or not _fresh_until(record.fresh_until, now):
+            return None
+        return record
+    except Exception:
+        return None
+
+
+def _lifecycle_block_reason(
+    value: Any,
+    *,
+    record_kind: str,
+    subject_sha256: str,
+    input_sha256: Sequence[str],
+    now: datetime | str | None,
+) -> str:
+    """Return a stable reason without treating malformed rows as evidence."""
+
+    if value is None:
+        return "missing_citation_lifecycle_receipt" if record_kind == "citation" else "missing_lifecycle_receipt"
+
+    try:
+        raw = value.model_dump(mode="json") if isinstance(value, LifecycleEvidenceRecord) else value
+        record = LifecycleEvidenceRecord.model_validate(raw)
+        if record.record_kind != record_kind or record.subject_sha256 != subject_sha256:
+            return "lifecycle_receipt_subject_mismatch"
+        if record.input_sha256 != tuple(sorted(set(input_sha256))):
+            return "lifecycle_receipt_input_mismatch"
+        if record.verdict != "PASS":
+            return "lifecycle_receipt_not_pass"
+        if not _fresh_until(record.fresh_until, now):
+            return "lifecycle_receipt_stale"
+    except Exception:
+        return "lifecycle_receipt_invalid"
+    return "lifecycle_receipt_invalid"
 
 
 def evaluate_claim_capability(
@@ -459,11 +616,30 @@ def evaluate_claim_capability(
     assert decision is not None
     if capability == "citation_verified":
         lifecycle = citation_lifecycle_receipt if citation_lifecycle_receipt is not None else citation_receipt
-        if not _lifecycle_record_present(lifecycle):
+        lifecycle_record = _lifecycle_record(
+            lifecycle,
+            record_kind="citation",
+            subject_sha256=decision.subject_sha256,
+            input_sha256=decision.evidence_sha256,
+            now=now,
+        )
+        if lifecycle_record is None:
+            lifecycle_reason = _lifecycle_block_reason(
+                lifecycle,
+                record_kind="citation",
+                subject_sha256=decision.subject_sha256,
+                input_sha256=decision.evidence_sha256,
+                now=now,
+            )
+            lifecycle_reasons = (
+                (lifecycle_reason, "freshness_expired")
+                if lifecycle_reason == "lifecycle_receipt_stale"
+                else (lifecycle_reason,)
+            )
             return ClaimCapabilityDecision(
                 capability,
                 "BLOCKED",
-                ("missing_citation_lifecycle_receipt",),
+                lifecycle_reasons,
                 ("citation-lifecycle-receipt",),
                 scope,
             )
@@ -517,6 +693,10 @@ def evaluate_claim_capability(
             gate = GateDecision.model_validate(gate_decision.model_dump(mode="json") if hasattr(gate_decision, "model_dump") else gate_decision)
             if panel.status != "ready" or panel.manifest_sha256 != matrix.panel_manifest_sha256:
                 reasons.append("panel_manifest_not_ready_or_mismatch")
+            if matrix.subject_sha256 != decision.subject_sha256:
+                reasons.append("review_subject_mismatch")
+            if gate.subject_sha256 != decision.subject_sha256 or not set(decision.evidence_sha256).issubset(set(gate.evidence_sha256)):
+                reasons.append("review_evidence_unbound")
             if matrix.gate_verdict != "PASS" or gate.verdict != "PASS":
                 reasons.append("review_gate_not_pass")
             if not _fresh_until(gate.fresh_until, now):
@@ -541,9 +721,27 @@ def evaluate_claim_capability(
         ("benchmark_receipts", benchmark_receipts),
     )
     reasons: list[str] = []
+    record_kinds = {
+        "run_replay_receipt": "run_replay",
+        "passport_receipts": "passport",
+        "graph_projection_receipt": "graph_projection",
+        "test_receipts": "test",
+        "build_receipt": "build",
+        "benchmark_receipts": "benchmark",
+    }
     for name, value in required:
         values = value if isinstance(value, (tuple, list)) else (value,)
-        if not values or any(not _lifecycle_record_present(item) for item in values):
+        if not values or any(
+            _lifecycle_record(
+                item,
+                record_kind=record_kinds[name],
+                subject_sha256=decision.subject_sha256,
+                input_sha256=decision.evidence_sha256,
+                now=now,
+            )
+            is None
+            for item in values
+        ):
             reasons.append(f"missing_{name}")
     if technical_blockers:
         reasons.append("unresolved_technical_blockers")
@@ -554,16 +752,23 @@ def evaluate_claim_capability(
 
 def generate_phase6_schema_documents() -> dict[str, dict[str, object]]:
     document = EvidenceAccessDecision.model_json_schema(mode="validation")
-    return {
+    generated = {
         EVIDENCE_ACCESS_SCHEMA_NAME: {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$id": f"https://academic-research-workbench.local/schemas/v1/{EVIDENCE_ACCESS_SCHEMA_NAME}",
             **document,
         }
     }
+    lifecycle = LifecycleEvidenceRecord.model_json_schema(mode="validation")
+    generated[LIFECYCLE_SCHEMA_NAME] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"https://academic-research-workbench.local/schemas/v1/{LIFECYCLE_SCHEMA_NAME}",
+        **lifecycle,
+    }
+    return generated
 
 
-PHASE6_SCHEMA_NAMES: tuple[str, ...] = (EVIDENCE_ACCESS_SCHEMA_NAME,)
+PHASE6_SCHEMA_NAMES: tuple[str, ...] = (EVIDENCE_ACCESS_SCHEMA_NAME, LIFECYCLE_SCHEMA_NAME)
 
 
 __all__ = [
@@ -572,10 +777,12 @@ __all__ = [
     "ClaimCapabilityDecision",
     "EVIDENCE_ACCESS_SCHEMA_NAME",
     "EVIDENCE_ACCESS_SCHEMA_VERSION",
+    "LIFECYCLE_SCHEMA_NAME",
     "EVIDENCE_ACCESS_STATES",
     "EvidenceAccessDecision",
     "EvidenceAccessError",
     "EvidenceAccessState",
+    "LifecycleEvidenceRecord",
     "evaluate_claim_capability",
     "generate_phase6_schema_documents",
     "load_evidence_access_decision",

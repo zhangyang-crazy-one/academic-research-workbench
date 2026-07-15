@@ -95,3 +95,11 @@ def test_tampered_file_is_not_revivable_by_evaluator_or_loader(tmp_path: Path) -
     path.write_bytes(path.read_bytes() + b"tamper")
     with pytest.raises(IntegrityReceiptError, match="address|invalid"):
         load_integrity_receipt(tmp_path, receipt.receipt_sha256)
+
+
+def test_missing_integrity_load_is_read_only(tmp_path: Path) -> None:
+    from arw.integrity import IntegrityReceiptError, load_integrity_receipt
+
+    with pytest.raises(IntegrityReceiptError):
+        load_integrity_receipt(tmp_path, "a" * 64)
+    assert not (tmp_path / "integrity").exists()

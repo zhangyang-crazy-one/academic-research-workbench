@@ -149,6 +149,12 @@ class DossierQualification(StrictModel):
     def rationale_safe(cls, value: str) -> str:
         return _safe_text(value, label="qualification rationale")
 
+    @model_validator(mode="after")
+    def pass_requires_evidence(self) -> "DossierQualification":
+        if self.verdict == "PASS" and not self.evidence_sha256:
+            raise ValueError("PASS qualification requires exact evidence digests")
+        return self
+
 
 class DossierBlocker(StrictModel):
     code: _CODE
@@ -533,10 +539,16 @@ def assemble_audit_dossier(
 ) -> AuditDossierManifest:
     """Assemble references after replay; no event, graph, or SQLite writes occur."""
 
-    if replay_state is None and run_root is not None:
-        from arw.journal import replay_run
+    from arw.journal import ReplayState, replay_run
 
-        replay_state = replay_run(run_root)
+    if run_root is not None:
+        replayed = replay_run(run_root)
+        if replay_state is not None:
+            if not isinstance(replay_state, ReplayState) or replay_state.public_dict() != replayed.public_dict():
+                raise AuditDossierError("supplied replay_state is not the validated canonical replay")
+        replay_state = replayed
+    elif replay_state is not None and not isinstance(replay_state, ReplayState):
+        raise AuditDossierError("replay_state must be the validated canonical replay from replay_run over a canonical run root")
     if replay_state is None:
         raise AuditDossierError("replay_state or run_root is required")
     run_id = getattr(replay_state, "run_id", None)
@@ -588,8 +600,69 @@ def assemble_audit_dossier(
         _validated_refs("graph", graph_items)
     if projection_available is False or graph.get("status") in {"BLOCKED", "projection_unavailable", "projection_corrupt"}:
         local_blockers.append({"code": "projection_unavailable", "severity": "high", "message": "disposable graph projection is unavailable; canonical replay remains authoritative", "replacement_evidence": ("graph-projection-rebuild",)})
+    if isinstance(technical_qualification, DossierQualification):
+        technical_qualification = technical_qualification.model_dump(mode="json")
+    if isinstance(technical_qualification, Mapping) and technical_qualification.get("verdict") == "PASS":
+        raise AuditDossierError("caller-supplied technical PASS is not authoritative")
+    if isinstance(claim_capabilities, Sequence):
+        supplied_pass = [
+            item for item in claim_capabilities
+            if isinstance(item, Mapping) and item.get("verdict") == "PASS"
+        ]
+        if supplied_pass:
+            raise AuditDossierError("caller-supplied claim PASS is not authoritative")
+
+    # Derive capabilities from typed records before reducing them to digest
+    # references.  A correctly hashed display row cannot launder a PASS.
+    from arw.evidence_access import evaluate_claim_capability, seal_evidence_access_decision
+
+    def first_typed(key: str) -> Any:
+        values = ev.get(key) or ev.get({"access_decisions": "access", "integrity_receipts": "integrity", "provenance": "provenance"}.get(key, key))
+        if isinstance(values, (tuple, list)):
+            return values[0] if values else None
+        return values
+
+    access_value = first_typed("access_decisions")
+    try:
+        access_value = seal_evidence_access_decision(access_value) if access_value is not None else None
+    except Exception:
+        access_value = None
+    integrity_value = first_typed("integrity_receipts")
+    provenance_value = first_typed("provenance")
+    lifecycle = ev.get("lifecycle") or ev.get("citation_lifecycle_receipt")
+    claim_inputs = {
+        "citation_verified": {"integrity_receipt": integrity_value, "citation_lifecycle_receipt": lifecycle},
+        "experiment_reproduced": {"provenance": provenance_value},
+        "independent_review_complete": {
+            "panel_manifest": rev.get("panel_manifest"),
+            "review_matrix": rev.get("review_matrix"),
+            "gate_decision": rev.get("gate_decision"),
+        },
+        "audit_complete": {
+            "run_replay_receipt": ev.get("run_replay_receipt"),
+            "passport_receipts": ev.get("passport_receipts"),
+            "graph_projection_receipt": graph_items,
+            "test_receipts": ev.get("test_receipts"),
+            "benchmark_receipts": ev.get("benchmark_receipts"),
+            "build_receipt": ev.get("build_receipt"),
+        },
+    }
+    derived_claims: list[dict[str, Any]] = []
+    for capability in ("audit_complete", "citation_verified", "experiment_reproduced", "independent_review_complete"):
+        result = evaluate_claim_capability(capability, access_value, now=generated_at, **claim_inputs[capability])
+        derived_claims.append({
+            "capability": capability,
+            "verdict": result.status,
+            "reason_codes": result.reason_codes,
+            "replacement_evidence": result.replacement_evidence,
+            "scope": result.scope,
+        })
+    if not ev and not rev and not graph_items and not test_logs and not build_identity_sha256:
+        local_blockers.append({"code": "missing_claim_lifecycle_evidence", "severity": "critical", "message": "typed integrity, access, review, and audit lifecycle evidence is absent", "replacement_evidence": ("claim-lifecycle-evidence",)})
     technical_codes = sorted({item.get("code") for item in local_blockers if isinstance(item, Mapping) and item.get("code") not in {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"}})
-    technical = technical_qualification or ({"verdict": "BLOCKED", "reason_codes": technical_codes, "evidence_sha256": (), "rationale": "one or more replay or projection technical blockers remain"} if technical_codes else {"verdict": "PASS", "reason_codes": (), "evidence_sha256": (), "rationale": "canonical replay and typed evidence were assembled"})
+    technical_codes.extend(sorted({reason for claim in derived_claims for reason in claim["reason_codes"] if reason.startswith(("missing_", "invalid_", "review_", "integrity_", "evidence_"))}))
+    technical_codes = sorted(set(technical_codes))
+    technical = {"verdict": "BLOCKED", "reason_codes": technical_codes, "evidence_sha256": (), "rationale": "one or more replay or typed evidence blockers remain"} if technical_codes else {"verdict": "PASS", "reason_codes": (), "evidence_sha256": (head,), "rationale": "canonical replay and typed evidence were assembled"}
     release = release_qualification or {"verdict": "BLOCKED", "reason_codes": ("CC_BY_NC_PERMISSION_UNRESOLVED", "P04-09", "SUP-04"), "evidence_sha256": (), "rationale": "intended use, distribution, accountable approval, and permission evidence remain unresolved"}
     manifest = {
         "schema_version": AUDIT_DOSSIER_SCHEMA_VERSION,
@@ -605,10 +678,7 @@ def assemble_audit_dossier(
         "integrity_receipt_sha256": _validated_refs("integrity", ev.get("integrity", ev.get("integrity_receipt_sha256"))),
         "experiment_provenance_sha256": _validated_refs("provenance", ev.get("provenance", ev.get("experiment_provenance_sha256"))),
         "access_decisions": _validated_refs("access", ev.get("access", ev.get("access_decisions"))),
-        "claim_capabilities": tuple(claim_capabilities or (
-            {"capability": capability, "verdict": "BLOCKED", "reason_codes": ("missing_claim_lifecycle_evidence",), "replacement_evidence": ("claim-lifecycle-evidence",)}
-            for capability in ("audit_complete", "citation_verified", "experiment_reproduced", "independent_review_complete")
-        )),
+        "claim_capabilities": tuple(derived_claims),
         "panel_manifest_sha256": rev.get("panel_manifest_sha256"),
         "review_matrix_sha256": rev.get("review_matrix_sha256"),
         "review_report_sha256": _coerce_sha_refs(rev.get("review_report_sha256", rev.get("reports"))),

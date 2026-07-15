@@ -216,9 +216,9 @@ def seal_integrity_receipt(value: Mapping[str, Any] | IntegrityReceipt) -> Integ
         raise IntegrityReceiptError(f"invalid integrity receipt: {error}") from error
 
 
-def _receipt_directory(root: Path) -> Path:
+def _receipt_directory(root: Path, *, create: bool) -> Path:
     try:
-        return _safe_directory(root, ("integrity", "receipts", "sha256"), create=True)
+        return _safe_directory(root, ("integrity", "receipts", "sha256"), create=create)
     except ManifestError as error:
         raise IntegrityReceiptError(str(error)) from error
 
@@ -227,7 +227,7 @@ def publish_integrity_receipt(root: Path, value: Mapping[str, Any] | IntegrityRe
     """Publish one receipt exactly once below a caller-approved run root."""
 
     receipt = seal_integrity_receipt(value)
-    directory = _receipt_directory(root)
+    directory = _receipt_directory(root, create=True)
     try:
         return _write_once(directory / f"{receipt.receipt_sha256}.json", receipt.canonical_bytes())
     except ManifestError as error:
@@ -239,7 +239,7 @@ def load_integrity_receipt(root: Path, receipt_sha256: str) -> IntegrityReceipt:
 
     if len(receipt_sha256) != 64 or any(c not in "0123456789abcdef" for c in receipt_sha256):
         raise IntegrityReceiptError("receipt address must be a lowercase SHA-256 digest")
-    directory = _receipt_directory(root)
+    directory = _receipt_directory(root, create=False)
     path = directory / f"{receipt_sha256}.json"
     if path.is_symlink() or not path.is_file():
         raise IntegrityReceiptError("integrity receipt is missing or unsafe")
@@ -359,6 +359,7 @@ PHASE6_SCHEMA_NAMES: tuple[str, ...] = (
     INTEGRITY_SCHEMA_NAME,
     "experiment-provenance.schema.json",
     "evidence-access-decision.schema.json",
+    "lifecycle-evidence.schema.json",
 )
 
 

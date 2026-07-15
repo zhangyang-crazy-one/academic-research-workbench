@@ -470,9 +470,9 @@ def seal_experiment_provenance(value: Mapping[str, Any] | ExperimentProvenance) 
         raise ProvenanceError(f"invalid experiment provenance: {error}") from error
 
 
-def _provenance_directory(root: Path) -> Path:
+def _provenance_directory(root: Path, *, create: bool) -> Path:
     try:
-        return _safe_directory(root, ("experiment", "provenance", "sha256"), create=True)
+        return _safe_directory(root, ("experiment", "provenance", "sha256"), create=create)
     except ManifestError as error:
         raise ProvenanceError(str(error)) from error
 
@@ -483,7 +483,7 @@ def publish_experiment_provenance(root: Path, value: Mapping[str, Any] | Experim
         raise ProvenanceError("provenance envelope exceeds the bounded byte limit")
     try:
         return _write_once(
-            _provenance_directory(root) / f"{provenance.provenance_sha256}.json",
+            _provenance_directory(root, create=True) / f"{provenance.provenance_sha256}.json",
             provenance.canonical_bytes(),
         )
     except ManifestError as error:
@@ -493,7 +493,7 @@ def publish_experiment_provenance(root: Path, value: Mapping[str, Any] | Experim
 def load_experiment_provenance(root: Path, provenance_sha256: str) -> ExperimentProvenance:
     if not re.fullmatch(r"[0-9a-f]{64}", provenance_sha256):
         raise ProvenanceError("provenance address must be a lowercase SHA-256 digest")
-    path = _provenance_directory(root) / f"{provenance_sha256}.json"
+    path = _provenance_directory(root, create=False) / f"{provenance_sha256}.json"
     if path.is_symlink() or not path.is_file():
         raise ProvenanceError("experiment provenance is missing or unsafe")
     try:
@@ -526,7 +526,7 @@ def _verify_local_references(root: Path, provenance: ExperimentProvenance) -> No
         if candidate.is_symlink():
             raise ProvenanceError("local provenance reference must not be a symlink")
         if not candidate.exists():
-            continue
+            raise ProvenanceError(f"local provenance reference is missing: {reference}")
         if not candidate.is_file() or not candidate.resolve().is_relative_to(root):
             raise ProvenanceError("local provenance reference escapes the allowed root")
         if sha256_hex(candidate.read_bytes()) != expected:
@@ -534,46 +534,29 @@ def _verify_local_references(root: Path, provenance: ExperimentProvenance) -> No
 
 
 def _authority_parts(
-    allowed_root: Path, authority_envelope: ProvenanceAuthorityEnvelope | Mapping[str, Any] | Any
+    allowed_root: Path, authority_envelope: ProvenanceAuthorityEnvelope
 ) -> ProvenanceAuthorityEnvelope:
     from arw.models import RuntimeCommandRequest
     from arw.runtime import RuntimeCommandService
 
-    runtime: RuntimeCommandService | None = None
-    request: RuntimeCommandRequest | None = None
-    if isinstance(authority_envelope, ProvenanceAuthorityEnvelope):
-        if authority_envelope.request.actor_role != "parent_control_plane":
-            raise ProvenanceError("only parent_control_plane may publish provenance")
-        if authority_envelope.runtime.run_root.resolve() != allowed_root.resolve():
-            raise ProvenanceError("authority runtime root differs from allowed_root")
-        return authority_envelope
-    if isinstance(authority_envelope, Mapping):
-        runtime_candidate = authority_envelope.get("runtime") or authority_envelope.get("service")
-        request_candidate = authority_envelope.get("request")
-        runtime = runtime_candidate if isinstance(runtime_candidate, RuntimeCommandService) else None
-        request_value = request_candidate if request_candidate is not None else authority_envelope
-    else:
-        request_value = getattr(authority_envelope, "request", authority_envelope)
-        runtime_candidate = getattr(authority_envelope, "runtime", None)
-        runtime = runtime_candidate if isinstance(runtime_candidate, RuntimeCommandService) else None
-    if isinstance(request_value, RuntimeCommandRequest):
-        request = request_value
-    elif isinstance(request_value, Mapping):
-        request = RuntimeCommandRequest.model_validate(request_value)
-    if request is None:
-        raise ProvenanceError("authority envelope must contain a strict runtime request")
+    if not isinstance(authority_envelope, ProvenanceAuthorityEnvelope):
+        raise ProvenanceError("authority envelope must be an existing ProvenanceAuthorityEnvelope")
+    if not isinstance(authority_envelope.runtime, RuntimeCommandService) or not isinstance(
+        authority_envelope.request, RuntimeCommandRequest
+    ):
+        raise ProvenanceError("authority envelope must contain typed parent runtime objects")
+    request = authority_envelope.request
     if request.actor_role != "parent_control_plane":
         raise ProvenanceError("only parent_control_plane may publish provenance")
-    runtime = runtime or RuntimeCommandService(allowed_root)
-    if runtime.run_root.resolve() != allowed_root.resolve():
+    if authority_envelope.runtime.run_root.resolve() != allowed_root.resolve():
         raise ProvenanceError("authority runtime root differs from allowed_root")
-    return ProvenanceAuthorityEnvelope(runtime=runtime, request=request)
+    return authority_envelope
 
 
 def ingest_experiment_provenance(
     provenance: Mapping[str, Any] | ExperimentProvenance,
     allowed_root: Path,
-    authority_envelope: ProvenanceAuthorityEnvelope | Mapping[str, Any] | Any,
+    authority_envelope: ProvenanceAuthorityEnvelope,
 ) -> ProvenanceIngestResult:
     """Parent-owned immutable publication followed by one canonical event."""
 

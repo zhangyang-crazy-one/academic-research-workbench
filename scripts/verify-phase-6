@@ -137,7 +137,9 @@ def command(root: Path, name: str, argv: list[str], *, env: dict[str, str] | Non
     write_json(target / "result.json", payload)
     if result.returncode != 0:
         raise VerificationError(f"{name} failed with exit {result.returncode}")
-    text = (stdout + b"\n" + stderr).decode("utf-8", "replace").lower()
+    # Scan the complete producer status stream before bounding retained logs;
+    # a skipped/xfail marker after 512 KiB must not be laundered into PASS.
+    text = (result.stdout + b"\n" + result.stderr).decode("utf-8", "replace").lower()
     # A green verifier must never launder skipped, xfailed, or xpassed tests.
     if re.search(r"\b(?:skipped|xfailed|xpassed)\b", text):
         raise VerificationError(f"{name} reported skipped/xfail evidence")
@@ -149,7 +151,18 @@ def observed_identities(root: Path) -> dict[str, Any]:
         return {"path": str(path), "sha256": digest_file(path)} if path.is_file() else {"path": str(path), "missing": True}
 
     locks = sorted(EVIDENCE_BASE.glob("phase-04.1-host-canary-*/integration-lock.json"))
-    lock = locks[-1] if locks else None
+    if not locks:
+        raise VerificationError("retained Phase 04.1 integration lock is missing")
+    lock = locks[-1]
+    lock_raw = lock.read_bytes()
+    try:
+        checked_lock = json.loads(lock_raw)
+        if not isinstance(checked_lock, dict) or checked_lock.get("schema_version") != "arw.integration-lock.v1":
+            raise ValueError("schema_version is not arw.integration-lock.v1")
+        if lock_raw != canonical(checked_lock):
+            raise ValueError("integration lock bytes are not canonical")
+    except Exception as error:
+        raise VerificationError(f"retained integration lock is invalid: {error}") from error
     identity = {
         "git_head": run_git("rev-parse", "HEAD").decode().strip(),
         "git_dirty": bool(run_git("status", "--porcelain=v1")),
@@ -162,7 +175,7 @@ def observed_identities(root: Path) -> dict[str, Any]:
         "sbom": optional(PROJECT_ROOT / "SBOM.cdx.json"),
         "license_verdict": optional(PROJECT_ROOT / "supply-chain/license-verdict.json"),
         "wheelhouse_lock": optional(PROJECT_ROOT / "vendor/python/wheelhouse.lock.json"),
-        "integration_lock": optional(lock) if lock else {"missing": True},
+        "integration_lock": {"path": str(lock), "sha256": digest_bytes(lock_raw)},
         "codex_cli": "unavailable",
         "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
@@ -193,6 +206,7 @@ def stage_inventory(root: Path, stage: Path) -> dict[str, Any]:
         "share/arw/schemas/audit-dossier.schema.json",
         "share/arw/build-identity.json",
         "supply-chain/stage-inventory.json",
+        "supply-chain/integration-lock.json",
     }
     actual = {item["path"] for item in paths}
     if not required <= actual:
@@ -200,6 +214,42 @@ def stage_inventory(root: Path, stage: Path) -> dict[str, Any]:
     payload = {"stage": str(stage), "files": paths, "tree_sha256": digest_bytes(canonical(paths))}
     write_json(root / "stage-tree.json", payload)
     return payload
+
+
+def compare_lock_to_stage(lock_path: Path, stage: Path) -> dict[str, Any]:
+    """Compare retained lock identities to a freshly built stage without importing ARW."""
+
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    mismatches: list[str] = []
+
+    def staged_digest(relative: str) -> str | None:
+        path = stage / relative
+        return digest_file(path) if path.is_file() and not path.is_symlink() else None
+
+    expected_wheel = lock.get("arw_runtime", {}).get("wheel", {})
+    actual_wheel = staged_digest(str(expected_wheel.get("path", "")))
+    if actual_wheel != expected_wheel.get("sha256"):
+        mismatches.append(f"arw_runtime.wheel.sha256:{expected_wheel.get('sha256')}!={actual_wheel}")
+    for section, relative in (
+        ("hook.config", "hooks/hooks.json"),
+        ("hook.handler", "hooks/arw_hook.py"),
+        ("license.verdict", "supply-chain/license-verdict.json"),
+        ("file_base.source_manifest", "vendor/source-manifest.json"),
+    ):
+        cursor: Any = lock
+        for part in section.split("."):
+            cursor = cursor.get(part, {}) if isinstance(cursor, dict) else {}
+        expected = cursor.get("sha256") if isinstance(cursor, dict) else None
+        actual = staged_digest(relative)
+        if expected != actual:
+            mismatches.append(f"{section}.sha256:{expected}!={actual}")
+    identity_path = stage / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8")) if identity_path.is_file() else {}
+    lock_ars = lock.get("ars", {})
+    observed_ars = next((item for item in identity.get("components", []) if item.get("id") == "academic-research-skills"), {})
+    if observed_ars.get("version") not in {None, lock_ars.get("adapter_version")}:
+        mismatches.append(f"ars.adapter_version:{lock_ars.get('adapter_version')}!={observed_ars.get('version')}")
+    return {"lock": str(lock_path), "stage": str(stage), "mismatches": mismatches, "technical_qualification": "PASS" if not mismatches else "BLOCKED"}
 
 
 def main() -> int:
@@ -212,6 +262,8 @@ def main() -> int:
         root = owned_root(args.evidence_root, clean=args.clean)
         write_json(root / "preflight.json", {"schema_version": "1.0.0", "phase": "06", "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "evidence_root": str(root)})
         identities = observed_identities(root)
+        lock_path = Path(identities["integration_lock"]["path"])
+        shutil.copyfile(lock_path, root / "integration-lock.json")
         command(root, "source-verification", ["./scripts/verify-sources", "--inputs-only"])
         license_path = PROJECT_ROOT / "supply-chain/license-verdict.json"
         try:
@@ -227,8 +279,19 @@ def main() -> int:
         command(root, "prior-phase-regressions", [str(PYTHON), "-m", "pytest", "-q", "-ra", *PRIOR_TESTS])
         stage = PROJECT_ROOT / "build/stage/academic-research-workbench"
         stage_evidence = root / "stage"
-        command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
-        command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only"], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
+        try:
+            command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence), "--integration-lock", str(lock_path)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
+        except VerificationError as lock_error:
+            # Preserve a complete diagnostic stage when the retained lock is
+            # stale.  The unlocked build is never qualified; it only permits
+            # exact wheel/source/hook/license drift evidence to be retained.
+            try:
+                command(root, "stage-build-unlocked-diagnostic", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
+                write_json(root / "integration-lock-drift.json", compare_lock_to_stage(lock_path, stage))
+            except (VerificationError, OSError, ValueError) as diagnostic_error:
+                write_json(root / "integration-lock-drift.json", {"technical_qualification": "BLOCKED", "error": str(diagnostic_error)})
+            raise lock_error
+        command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only", "--integration-lock", str(lock_path)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
         stage_payload = stage_inventory(root, stage)
         requirements = {req: {"status": "PASS", "evidence": ["source-verification", "phase6-tests", "prior-phase-regressions", "stage-build", "stage-validate"]} for req in ("SCI-01", "SCI-04", "SCI-05", "SCI-06", "SCI-07", "VER-07")}
         verdict = {
