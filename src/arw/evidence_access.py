@@ -99,7 +99,9 @@ class EvidenceAccessDecision(StrictModel):
     decision_id: StableRuntimeId
     evidence_id: _ID
     subject_sha256: Sha256
-    evidence_sha256: Sha256
+    evidence_sha256: Annotated[tuple[Sha256, ...], BeforeValidator(_freeze_array)] = Field(
+        min_length=1, max_length=64
+    )
     source_manifest_sha256: Annotated[tuple[Sha256, ...], BeforeValidator(_freeze_array)] = Field(
         min_length=1, max_length=64
     )
@@ -151,6 +153,11 @@ class EvidenceAccessDecision(StrictModel):
     @classmethod
     def source_manifests_are_canonical(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return _ordered_unique(value, label="source_manifest_sha256")
+
+    @field_validator("evidence_sha256")
+    @classmethod
+    def evidence_digests_are_canonical(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _ordered_unique(value, label="evidence_sha256")
 
     @field_validator("created_at", "superseded_at")
     @classmethod
@@ -394,6 +401,9 @@ def evaluate_claim_capability(
     integrity_receipt: Any = None,
     provenance: Any = None,
     qualification_receipts: Mapping[str, Any] | Sequence[Any] | None = None,
+    citation_lifecycle_receipt: Any = None,
+    citation_receipt: Any = None,
+    reproduction_decision: Any = None,
     panel_manifest: Any = None,
     review_matrix: Any = None,
     gate_decision: Any = None,
@@ -422,10 +432,19 @@ def evaluate_claim_capability(
 
     assert decision is not None
     if capability == "citation_verified":
+        lifecycle = citation_lifecycle_receipt if citation_lifecycle_receipt is not None else citation_receipt
+        if lifecycle is None:
+            return ClaimCapabilityDecision(
+                capability,
+                "BLOCKED",
+                ("missing_citation_lifecycle_receipt",),
+                ("citation-lifecycle-receipt",),
+                scope,
+            )
         more_reasons, more_replacements = _fresh_integrity(
             integrity_receipt,
             subject_sha256=decision.subject_sha256,
-            input_sha256=(decision.evidence_sha256,),
+            input_sha256=decision.evidence_sha256,
             now=now,
         )
         if more_reasons:
@@ -440,11 +459,22 @@ def evaluate_claim_capability(
 
             checked = seal_experiment_provenance(provenance)
             policy = evaluate_controlled_execution_policy(checked, qualification_receipts, now=now)
+            policy_reasons = list(policy.reason_codes)
+            policy_replacements = list(policy.replacement_evidence)
+            if reproduction_decision is None:
+                policy_reasons.append("missing_reproduction_decision")
+                policy_replacements.append("reproduction-decision")
+            if any(
+                item.access_state != "publicly_verified"
+                for item in checked.source_datasets
+            ):
+                policy_reasons.append("provenance_source_access_not_publicly_verified")
+                policy_replacements.append("public-dataset-access-receipt")
             return ClaimCapabilityDecision(
                 capability,
                 "BLOCKED",
-                tuple(dict.fromkeys(policy.reason_codes)),
-                tuple(dict.fromkeys(policy.replacement_evidence)),
+                tuple(dict.fromkeys(policy_reasons)),
+                tuple(dict.fromkeys(policy_replacements)),
                 scope,
             )
         except Exception:

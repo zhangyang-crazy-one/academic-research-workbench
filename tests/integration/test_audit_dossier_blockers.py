@@ -11,7 +11,7 @@ def test_audit_blocker_scope_is_explicit_and_graph_loss_is_not_a_pass() -> None:
             "decision_id": "decision.audit-access",
             "evidence_id": "run.audit-001",
             "subject_sha256": "a" * 64,
-            "evidence_sha256": "b" * 64,
+            "evidence_sha256": ["b" * 64],
             "source_manifest_sha256": ["c" * 64],
             "access_state": "publicly_verified",
             "license_status": "clear",
