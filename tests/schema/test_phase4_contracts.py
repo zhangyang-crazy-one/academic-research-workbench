@@ -14,9 +14,12 @@ EXPECTED_PHASE4_SCHEMAS = (
     "assignment.schema.json",
     "worker-proposal.schema.json",
     "review-finding-matrix.schema.json",
+    "panel-manifest.schema.json",
     "gate-decision.schema.json",
     "hook-observation.schema.json",
     "host-qualification.schema.json",
+    "host-identity-receipt.schema.json",
+    "human-authority.schema.json",
     "phase4-evaluation-verdict.schema.json",
 )
 

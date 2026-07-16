@@ -94,6 +94,26 @@
           "title": "Report Id",
           "type": "string"
         },
+        "panel_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Panel Manifest Sha256",
+          "type": "string"
+        },
+        "assignment_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Assignment Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "identity_receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Receipt Sha256",
+          "type": "string"
+        },
         "role_id": {
           "pattern": "^[a-z][a-z0-9._-]{2,95}$",
           "title": "Role Id",
@@ -121,9 +141,17 @@
           "type": "string"
         },
         "report_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Report Sha256",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Sha256"
         },
         "findings": {
           "items": {
@@ -137,12 +165,15 @@
       },
       "required": [
         "report_id",
+        "panel_manifest_sha256",
+        "assignment_id",
+        "attempt_id",
+        "identity_receipt_sha256",
         "role_id",
         "worker_identity_id",
         "host_agent_id",
         "subject_sha256",
         "rubric_sha256",
-        "report_sha256",
         "findings"
       ],
       "title": "ReviewReport",
@@ -155,6 +186,16 @@
         "synthesis_id": {
           "pattern": "^[a-z][a-z0-9._-]{2,95}$",
           "title": "Synthesis Id",
+          "type": "string"
+        },
+        "panel_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Panel Manifest Sha256",
+          "type": "string"
+        },
+        "identity_receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Receipt Sha256",
           "type": "string"
         },
         "worker_identity_id": {
@@ -200,6 +241,8 @@
       },
       "required": [
         "synthesis_id",
+        "panel_manifest_sha256",
+        "identity_receipt_sha256",
         "worker_identity_id",
         "host_agent_id",
         "source_report_sha256",
@@ -220,6 +263,11 @@
     "panel_id": {
       "pattern": "^[a-z][a-z0-9._-]{2,95}$",
       "title": "Panel Id",
+      "type": "string"
+    },
+    "panel_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Panel Manifest Sha256",
       "type": "string"
     },
     "subject_sha256": {
@@ -257,6 +305,7 @@
   "required": [
     "schema_version",
     "panel_id",
+    "panel_manifest_sha256",
     "subject_sha256",
     "rubric_sha256",
     "reports",

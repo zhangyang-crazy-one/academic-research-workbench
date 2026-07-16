@@ -2313,7 +2313,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9cd8355a2bf04a3ff91a3883bcb7dad6265859926c5e5b6988c6bbdd35ef528c"
+          "content": "a67a59c32e068a6830ac84353fc34540debce19f44803e02a31ded501221a14d"
         }
       ],
       "licenses": [
@@ -2928,7 +2928,7 @@
       ],
       "name": "academic-research-skills",
       "type": "library",
-      "version": "0.1.19"
+      "version": "0.1.20"
     },
     {
       "bom-ref": "source:experiment-agent",

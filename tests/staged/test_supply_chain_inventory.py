@@ -6,6 +6,19 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from arw.canonical import canonical_json_bytes
+from arw.integration_lock import (
+    IntegrationLock,
+    _validate_arw_runtime,
+    _validate_file_base,
+    _validate_license,
+    integration_lock_bytes,
+    observe_hook_definition,
+    observe_stage_identity,
+)
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -31,22 +44,175 @@ def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _stage(stage_root: Path) -> subprocess.CompletedProcess[str]:
+def _write_pretty(path: Path, payload: object) -> None:
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _rebind_inventory(stage_root: Path, *relative_paths: str) -> None:
+    inventory_path = stage_root / "supply-chain/stage-inventory.json"
+    inventory = _load(inventory_path)
+    covered = {item["path"]: item for item in inventory["covered_files"]}
+    for relative in relative_paths:
+        covered[relative]["sha256"] = _sha256(stage_root / relative)
+    _write_pretty(inventory_path, inventory)
+
+
+def _stage(
+    stage_root: Path,
+    *,
+    integration_lock: Path | None = None,
+    cachebuster: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment.update({"PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1", "PIP_NO_INDEX": "1"})
+    command = [
+        str(REPOSITORY_ROOT / "scripts/stage-plugin"),
+        "--clean",
+        "--stage-root",
+        str(stage_root),
+    ]
+    if integration_lock is not None:
+        command.extend(("--integration-lock", str(integration_lock)))
+    if cachebuster is not None:
+        command.extend(("--cachebuster", cachebuster))
     return subprocess.run(
-        [
-            str(REPOSITORY_ROOT / "scripts/stage-plugin"),
-            "--clean",
-            "--stage-root",
-            str(stage_root),
-        ],
+        command,
         cwd=REPOSITORY_ROOT,
         env=environment,
         text=True,
         capture_output=True,
         check=False,
     )
+
+
+def _validate_stage(
+    stage_root: Path, *, integration_lock: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    command = [
+        str(REPOSITORY_ROOT / "scripts/stage-plugin"),
+        "--stage-root",
+        str(stage_root),
+        "--validate-only",
+    ]
+    if integration_lock is not None:
+        command.extend(("--integration-lock", str(integration_lock)))
+    return subprocess.run(
+        command,
+        cwd=REPOSITORY_ROOT,
+        env={
+            **os.environ,
+            "PYTHONNOUSERSITE": "1",
+            "UV_OFFLINE": "1",
+            "PIP_NO_INDEX": "1",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _canonical_test_lock(stage_root: Path) -> bytes:
+    """Return a model-valid qualification lock without publishing real evidence."""
+
+    repeated = lambda value: value * 64  # noqa: E731
+    binding = lambda path, value="a": {  # noqa: E731
+        "path": path,
+        "sha256": repeated(value),
+    }
+    host = {
+        # Phase 7 binds the retained exact host baseline; fixture locks must
+        # exercise that same supported tuple rather than the prior 0.144.3
+        # probe, which is intentionally covered by the negative canary tests.
+        "cli_version": "codex-cli 0.144.4",
+        "platform_system": "Linux",
+        "platform_release": "qualification-test",
+        "platform_machine": "x86_64",
+        "launcher": {
+            "invoked_path": "/qualification/codex",
+            "resolved_path": "/qualification/codex",
+            "sha256": repeated("a"),
+        },
+        "native_binary": {
+            "invoked_path": "/qualification/codex-native",
+            "resolved_path": "/qualification/codex-native",
+            "sha256": repeated("b"),
+        },
+    }
+    host["tuple_sha256"] = hashlib.sha256(canonical_json_bytes(host)).hexdigest()
+    observed_arw = _validate_arw_runtime(stage_root)
+    source_manifest = _load(stage_root / "vendor/source-manifest.json")
+    observed_file_base = _validate_file_base(stage_root, source_manifest)
+    observed_license = _validate_license(stage_root)
+    hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
+    payload = {
+        "schema_version": "arw.integration-lock.v1",
+        "dependency_model": "external-exact-installation",
+        "arw_runtime": observed_arw.model_dump(mode="json"),
+        "ars": {
+            "dependency_model": "external-exact-installation",
+            "bundled": False,
+            "adapter_name": "academic-research-suite",
+            "adapter_version": "0.1.20",
+            "adapter_tree_sha256": repeated("a"),
+            "upstream_content_tree_sha256": repeated("b"),
+            "manifest": binding("manifest.json"),
+            "version_file": binding("VERSION"),
+            "router": binding("SKILL.md"),
+            "source_repositories": [
+                {
+                    "component_id": "academic-research-skills",
+                    "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
+                    "commit": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
+                    "git_tree": "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
+                    "source_tree_sha256": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+                },
+                {
+                    "component_id": "experiment-agent",
+                    "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
+                    "commit": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
+                    "git_tree": "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
+                    "source_tree_sha256": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+                },
+            ],
+        },
+        "file_base": observed_file_base.model_dump(mode="json"),
+        "codex_host": host,
+        "hook": {
+            "config": hook_config.model_dump(mode="json"),
+            "handler": hook_handler.model_dump(mode="json"),
+            "definition_algorithm": "relative-name-nul-bytes-nul-v1",
+            "definition_sha256": hook_definition,
+            "hook_execution_admission": "automation_vetted_bypass",
+            "live_hook_execution": "observed",
+            "fresh_home_default_trust": "untrusted_skipped",
+            "host_canary_evidence_sha256": repeated("b"),
+            "evidence_bundle_sha256": repeated("c"),
+            "fresh_home_receipt_sha256": [
+                repeated("a"),
+                repeated("b"),
+                repeated("c"),
+            ],
+            "arw_runtime_sha256": observed_arw.wheel.sha256,
+            "stage_identity_algorithm": "content-tree-excluding-cycle-metadata-v1",
+            "stage_sha256": observe_stage_identity(stage_root),
+            "credential_policy_sha256": repeated("f"),
+        },
+        "license": observed_license.model_dump(mode="json"),
+        "technical_qualification": "PASS",
+        "release_qualification": "BLOCKED",
+    }
+    lock = IntegrationLock.model_validate_json(canonical_json_bytes(payload), strict=True)
+    return integration_lock_bytes(lock)
+
+
+def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
+    base_stage = tmp_path / f"{label}-lock-input" / PLUGIN_NAME
+    result = _stage(base_stage)
+    assert result.returncode == 0, result.stderr
+    return _canonical_test_lock(base_stage)
 
 
 def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components() -> None:
@@ -64,6 +230,11 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
     expected_refs |= {
         f"artifact:{item['path']}" for item in source_manifest["declared_artifacts"]
     }
+    expected_refs |= {
+        "artifact:hooks/hooks.json",
+        "artifact:hooks/arw_hook.py",
+        "artifact:schemas/v1/integration-lock.schema.json",
+    }
     assert expected_refs <= set(components)
     for item in source_manifest["patches"]:
         assert components[f"patch:{item['sha256']}"]["hashes"] == [
@@ -74,6 +245,14 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         assert component["name"] == wheel["package"]
         assert component["version"] == wheel["version"]
         assert component["hashes"] == [{"alg": "SHA-256", "content": wheel["sha256"]}]
+    for relative in (
+        "hooks/hooks.json",
+        "hooks/arw_hook.py",
+        "schemas/v1/integration-lock.schema.json",
+    ):
+        assert components[f"artifact:{relative}"]["hashes"] == [
+            {"alg": "SHA-256", "content": _sha256(REPOSITORY_ROOT / relative)}
+        ]
 
 
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
@@ -109,3 +288,216 @@ def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) ->
             "wheelhouse",
         }
 
+
+def test_base_stage_remains_lock_free_and_validate_only_compatible(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "base-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    source_sbom = (REPOSITORY_ROOT / "SBOM.cdx.json").read_bytes()
+    staged_sbom = stage_root / "SBOM.cdx.json"
+    assert staged_sbom.read_bytes() == source_sbom
+    assert not (stage_root / "supply-chain/integration-lock.json").exists()
+    sbom = _load(staged_sbom)
+    assert "artifact:supply-chain/integration-lock.json" not in {
+        item["bom-ref"] for item in sbom["components"]
+    }
+
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    assert "supply-chain/integration-lock.json" not in payloads
+    assert payloads["SBOM.cdx.json"]["sha256"] == _sha256(staged_sbom)
+    validated = _validate_stage(stage_root)
+    assert validated.returncode == 0, validated.stderr
+
+
+def test_optional_integration_lock_is_bound_without_changing_release_verdict(
+    tmp_path: Path,
+) -> None:
+    lock_path = tmp_path / "qualification-lock.json"
+    lock_bytes = _locally_bound_test_lock(tmp_path, "included")
+    lock_path.write_bytes(lock_bytes)
+    source_sbom_path = REPOSITORY_ROOT / "SBOM.cdx.json"
+    source_sbom = source_sbom_path.read_bytes()
+    stage_root = tmp_path / "qualified-stage" / PLUGIN_NAME
+
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode == 0, result.stderr
+    staged_lock = stage_root / "supply-chain/integration-lock.json"
+    staged_sbom = stage_root / "SBOM.cdx.json"
+    assert staged_lock.read_bytes() == lock_bytes
+    assert source_sbom_path.read_bytes() == source_sbom
+
+    lock_sha256 = _sha256(staged_lock)
+    sbom = _load(staged_sbom)
+    components = {item["bom-ref"]: item for item in sbom["components"]}
+    assert components["artifact:supply-chain/integration-lock.json"] == {
+        "bom-ref": "artifact:supply-chain/integration-lock.json",
+        "hashes": [{"alg": "SHA-256", "content": lock_sha256}],
+        "name": "supply-chain/integration-lock.json",
+        "type": "file",
+        "version": "1",
+    }
+
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    assert payloads["supply-chain/integration-lock.json"]["sha256"] == lock_sha256
+    assert payloads["SBOM.cdx.json"]["sha256"] == _sha256(staged_sbom)
+    assert "share/arw/build-identity.json" not in payloads
+
+    inventory = _load(stage_root / "supply-chain/stage-inventory.json")
+    covered = {item["path"]: item for item in inventory["covered_files"]}
+    for relative in (
+        "supply-chain/integration-lock.json",
+        "SBOM.cdx.json",
+        "share/arw/build-identity.json",
+    ):
+        assert covered[relative]["sha256"] == _sha256(stage_root / relative)
+    assert _load(stage_root / "supply-chain/license-verdict.json")[
+        "release_qualification"
+    ] == "BLOCKED"
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode == 0, validated.stderr
+    validated_against_input = _validate_stage(
+        stage_root, integration_lock=lock_path
+    )
+    assert validated_against_input.returncode == 0, validated_against_input.stderr
+
+
+@pytest.mark.parametrize(
+    "relative",
+    ("supply-chain/integration-lock.json", "SBOM.cdx.json"),
+)
+def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
+    tmp_path: Path, relative: str
+) -> None:
+    lock_path = tmp_path / "qualification-lock.json"
+    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, relative.replace("/", "-")))
+    stage_root = tmp_path / relative.replace("/", "-") / PLUGIN_NAME
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode == 0, result.stderr
+
+    target = stage_root / relative
+    target.write_bytes(target.read_bytes() + b"\n")
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "digest mismatch" in validated.stderr
+
+
+def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> None:
+    lock_path = tmp_path / "noncanonical-lock.json"
+    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "noncanonical") + b"\n")
+    stage_root = tmp_path / "rejected-stage" / PLUGIN_NAME
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode != 0
+    assert "not canonical JSON" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("drift", "expected_error"),
+    (
+        ("cachebuster", "does not bind the staged ARW runtime"),
+        ("stage-identity", "does not bind the staged content-tree identity"),
+    ),
+)
+def test_stage_rejects_live_payload_drift_against_lock(
+    tmp_path: Path, drift: str, expected_error: str
+) -> None:
+    lock_path = tmp_path / f"{drift}-lock.json"
+    lock_bytes = _locally_bound_test_lock(tmp_path, drift)
+    if drift == "stage-identity":
+        payload = json.loads(lock_bytes)
+        payload["hook"]["stage_sha256"] = "0" * 64
+        lock_bytes = canonical_json_bytes(payload)
+    lock_path.write_bytes(lock_bytes)
+    stage_root = tmp_path / f"{drift}-stage" / PLUGIN_NAME
+
+    result = _stage(
+        stage_root,
+        integration_lock=lock_path,
+        cachebuster="must-drift" if drift == "cachebuster" else None,
+    )
+    assert result.returncode != 0
+    assert expected_error in result.stderr
+
+
+def test_validate_only_recomputes_local_lock_bindings(tmp_path: Path) -> None:
+    lock_path = tmp_path / "qualification-lock.json"
+    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "recheck"))
+    stage_root = tmp_path / "recheck-stage" / PLUGIN_NAME
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode == 0, result.stderr
+
+    staged_lock = stage_root / "supply-chain/integration-lock.json"
+    lock_payload = _load(staged_lock)
+    lock_payload["hook"]["stage_sha256"] = "0" * 64
+    staged_lock.write_bytes(canonical_json_bytes(lock_payload))
+
+    sbom_path = stage_root / "SBOM.cdx.json"
+    sbom = _load(sbom_path)
+    lock_component = next(
+        item
+        for item in sbom["components"]
+        if item["bom-ref"] == "artifact:supply-chain/integration-lock.json"
+    )
+    lock_component["hashes"][0]["content"] = _sha256(staged_lock)
+    _write_pretty(sbom_path, sbom)
+
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["supply-chain/integration-lock.json"]["sha256"] = _sha256(staged_lock)
+    payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(
+        stage_root,
+        "supply-chain/integration-lock.json",
+        "SBOM.cdx.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "does not bind the staged content-tree identity" in validated.stderr
+
+
+def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None:
+    lock_path = tmp_path / "qualification-lock.json"
+    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "duplicates"))
+    stage_root = tmp_path / "duplicate-stage" / PLUGIN_NAME
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode == 0, result.stderr
+
+    sbom_path = stage_root / "SBOM.cdx.json"
+    identity_path = stage_root / "share/arw/build-identity.json"
+    inventory_path = stage_root / "supply-chain/stage-inventory.json"
+    original_sbom = sbom_path.read_bytes()
+    original_identity = identity_path.read_bytes()
+    original_inventory = inventory_path.read_bytes()
+
+    sbom = _load(sbom_path)
+    sbom["components"].append(dict(sbom["components"][0]))
+    _write_pretty(sbom_path, sbom)
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(stage_root, "SBOM.cdx.json", "share/arw/build-identity.json")
+    duplicate_sbom = _validate_stage(stage_root)
+    assert duplicate_sbom.returncode != 0
+    assert "duplicate component references" in duplicate_sbom.stderr
+
+    sbom_path.write_bytes(original_sbom)
+    identity_path.write_bytes(original_identity)
+    inventory_path.write_bytes(original_inventory)
+    identity = _load(identity_path)
+    identity["staged_payloads"].append(dict(identity["staged_payloads"][0]))
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(stage_root, "share/arw/build-identity.json")
+    duplicate_payload = _validate_stage(stage_root)
+    assert duplicate_payload.returncode != 0
+    assert "duplicate staged payload paths" in duplicate_payload.stderr

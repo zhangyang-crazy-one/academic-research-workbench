@@ -313,6 +313,19 @@ def generate_sbom(
             "version": "1",
             "hashes": [{"alg": "SHA-256", "content": artifact["sha256"]}],
         }
+    for relative in (
+        "hooks/hooks.json",
+        "hooks/arw_hook.py",
+        "schemas/v1/integration-lock.schema.json",
+    ):
+        path = PROJECT_ROOT / relative
+        components[f"artifact:{relative}"] = {
+            "type": "file",
+            "bom-ref": f"artifact:{relative}",
+            "name": relative,
+            "version": "1",
+            "hashes": [{"alg": "SHA-256", "content": digest(path)}],
+        }
     file_base = next(item for item in manifest["components"] if item["id"] == "file-base")
     for legal_input in file_base["legal_inputs"]:
         reference = f"file-base-legal:{legal_input['path']}"

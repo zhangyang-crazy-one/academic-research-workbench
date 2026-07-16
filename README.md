@@ -61,12 +61,20 @@ reported as blocked; ARW does not silently clone or substitute ARS.
 ### Staged Codex plugin
 
 Use a qualified staged package produced by the staging workflow for
-installation. The Codex host flow is:
+installation. A source checkout does not contain a prebuilt `marketplace/`
+directory; create one from the immutable stage explicitly:
 
 ```bash
-codex plugin marketplace add ./marketplace --json
-codex plugin add academic-research-workbench@<marketplace-name> --json
+./scripts/stage-plugin --clean
+./scripts/create-marketplace
+codex plugin marketplace add ./build/marketplace --json
+codex plugin add academic-research-workbench@arw-local --json
 ```
+
+`create-marketplace` copies the exact staged tree and writes the local
+marketplace manifest. For host qualification, use
+`./scripts/smoke-staged-plugin` so the marketplace, fresh homes, hook trust,
+and installed inventory are isolated and recorded together.
 
 The staging and smoke scripts record the exact stage identity, installed
 inventory, hook definition, MCP launcher, and version tuple. Do not install

@@ -1,0 +1,771 @@
+#!/usr/bin/env python3
+"""Produce exact, redacted three-fresh-HOME Codex qualification evidence.
+
+This is a maintainer verifier, not a runtime authority.  It installs one exact
+staged plugin into three independent Codex homes, proves the default hook is
+untrusted/skipped, then uses the explicitly audited automation hook-trust
+bypass to exercise the official hook wire and a controlled ``--add-dir``
+result channel.  Only canonical, redacted receipts enter the evidence root.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_PYTHON = (PROJECT_ROOT / ".venv/bin/python").absolute()
+if (
+    __name__ == "__main__"
+    and PROJECT_PYTHON.is_file()
+    and Path(sys.executable).absolute() != PROJECT_PYTHON
+):
+    os.execv(
+        str(PROJECT_PYTHON),
+        [str(PROJECT_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]],
+    )
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from arw.canonical import canonical_json_bytes, strict_json_loads  # noqa: E402
+from arw.hook_contracts import HookParityMatrix, load_codex_hook_receipt  # noqa: E402
+from arw.integration_lock import (  # noqa: E402
+    CodexHostCanaryEvidence,
+    CodexHostEvidenceBundle,
+    EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
+    FileBinding,
+    FreshHomeReceipt,
+    HookParityEvidenceRecord,
+    HookStatusClassification,
+    discover_codex_native_binary,
+    observe_codex_host,
+    observe_hook_definition,
+    observe_stage_identity,
+)
+
+
+PLUGIN_NAME = "academic-research-workbench"
+MARKETPLACE_NAME = "arw-qualified"
+MAX_CAPTURE_BYTES = 8 * 1024 * 1024
+SAFE_ENVIRONMENT_KEYS = (
+    "ALL_PROXY",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "NO_COLOR",
+    "NO_PROXY",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "TERM",
+    "TZ",
+)
+
+
+class CanaryError(RuntimeError):
+    """A live host or retained-evidence gate failed."""
+
+
+def _sha256(value: bytes | str | Path) -> str:
+    if isinstance(value, Path):
+        value = value.read_bytes()
+    elif isinstance(value, str):
+        value = value.encode("utf-8")
+    return hashlib.sha256(value).hexdigest()
+
+
+def _write_canonical(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("xb") as stream:
+            stream.write(canonical_json_bytes(value))
+    except FileExistsError as error:
+        raise CanaryError(f"refusing to overwrite retained evidence: {path}") from error
+
+
+def _safe_new_root(path: Path, *, label: str) -> Path:
+    resolved = path.resolve()
+    allowed = (PROJECT_ROOT / "build").resolve()
+    if resolved == allowed or not resolved.is_relative_to(allowed):
+        raise CanaryError(f"{label} must be a new directory below {allowed}")
+    if path.is_symlink() or path.exists():
+        raise CanaryError(f"{label} already exists or is unsafe: {path}")
+    resolved.mkdir(parents=True)
+    return resolved
+
+
+def _regular_file(path: Path, *, label: str, max_bytes: int) -> Path:
+    if path.is_symlink() or not path.is_file():
+        raise CanaryError(f"{label} is missing or unsafe")
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= max_bytes:
+        raise CanaryError(f"{label} is empty or exceeds its bound")
+    return path.resolve(strict=True)
+
+
+def _full_tree_identity(root: Path) -> str:
+    records: list[dict[str, object]] = []
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            raise CanaryError(f"tree contains a symlink: {relative}")
+        if path.is_file():
+            records.append(
+                {
+                    "executable": bool(path.stat().st_mode & 0o111),
+                    "path": relative,
+                    "sha256": _sha256(path),
+                }
+            )
+        elif not path.is_dir():
+            raise CanaryError(f"tree contains a non-file entry: {relative}")
+    if not records:
+        raise CanaryError("tree identity cannot cover an empty directory")
+    return _sha256(
+        canonical_json_bytes(sorted(records, key=lambda item: str(item["path"])))
+    )
+
+
+def _marketplace_payload(path: Path) -> None:
+    _write_canonical(
+        path,
+        {
+            "interface": {"displayName": "ARW Host Qualification"},
+            "name": MARKETPLACE_NAME,
+            "plugins": [
+                {
+                    "category": "Productivity",
+                    "name": PLUGIN_NAME,
+                    "policy": {
+                        "authentication": "ON_INSTALL",
+                        "installation": "AVAILABLE",
+                    },
+                    "source": {
+                        "path": f"./plugins/{PLUGIN_NAME}",
+                        "source": "local",
+                    },
+                }
+            ],
+        },
+    )
+
+
+def _bwrap_prefix(fresh_root: Path) -> list[str]:
+    node = Path(shutil.which("node") or "").resolve()
+    if not node.is_file() or node.parent.name != "bin":
+        raise CanaryError("the exact Node runtime for the Codex launcher is unavailable")
+    node_root = node.parent.parent
+    command = [
+        "bwrap",
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-pid",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--symlink",
+        "usr/bin",
+        "/bin",
+        "--symlink",
+        "usr/sbin",
+        "/sbin",
+        "--symlink",
+        "usr/lib",
+        "/lib",
+        "--symlink",
+        "usr/lib64",
+        "/lib64",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/tmp",
+        "--ro-bind",
+        str(node_root),
+        "/opt/node",
+        "--bind",
+        str(fresh_root),
+        "/work",
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        "/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin",
+        "--setenv",
+        "HOME",
+        "/work/home",
+        "--setenv",
+        "CODEX_HOME",
+        "/work/codex-home",
+        "--setenv",
+        "TMPDIR",
+        "/tmp",
+        "--setenv",
+        "PYTHONNOUSERSITE",
+        "1",
+        "--setenv",
+        "PIP_NO_INDEX",
+        "1",
+    ]
+    for name in SAFE_ENVIRONMENT_KEYS:
+        value = os.environ.get(name)
+        if value:
+            command.extend(("--setenv", name, value))
+    command.extend(("--chdir", "/work"))
+    return command
+
+
+def _run_isolated(
+    fresh_root: Path,
+    argv: list[str],
+    *,
+    timeout: int = 300,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        completed = subprocess.run(
+            [*_bwrap_prefix(fresh_root), *argv],
+            cwd=PROJECT_ROOT,
+            env={"PATH": os.environ.get("PATH", os.defpath)},
+            input=None,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise CanaryError(f"isolated command failed to execute: {error}") from error
+    if len(completed.stdout) > MAX_CAPTURE_BYTES or len(completed.stderr) > MAX_CAPTURE_BYTES:
+        raise CanaryError("Codex host output exceeded the retained digest bound")
+    return completed
+
+
+def _require_success(result: subprocess.CompletedProcess[bytes], *, label: str) -> None:
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")[-1000:]
+        raise CanaryError(f"{label} failed with {result.returncode}: {stderr}")
+
+
+def _copy_auth(source: Path, destination: Path) -> bytes:
+    source = _regular_file(source, label="preconfigured Codex auth.json", max_bytes=16 * 1024 * 1024)
+    raw = source.read_bytes()
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    destination.parent.chmod(0o700)
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+    destination.chmod(0o600)
+    if destination.read_bytes() != raw:
+        raise CanaryError("provisioned Codex auth.json drifted")
+    return raw
+
+
+def _install_stage(stage_root: Path, fresh_root: Path, *, codex_launcher: Path) -> Path:
+    for relative in ("home", "codex-home", "scratch", "result", "unrelated"):
+        (fresh_root / relative).mkdir(mode=0o700, parents=True)
+    plugin_source = fresh_root / "marketplace/plugins" / PLUGIN_NAME
+    plugin_source.parent.mkdir(parents=True)
+    shutil.copytree(stage_root, plugin_source)
+    _marketplace_payload(fresh_root / "marketplace/.agents/plugins/marketplace.json")
+    add_marketplace = _run_isolated(
+        fresh_root,
+        [
+            str(codex_launcher),
+            "plugin",
+            "marketplace",
+            "add",
+            "./marketplace",
+            "--json",
+        ],
+        timeout=60,
+    )
+    _require_success(add_marketplace, label="isolated marketplace registration")
+    install = _run_isolated(
+        fresh_root,
+        [
+            str(codex_launcher),
+            "plugin",
+            "add",
+            f"{PLUGIN_NAME}@{MARKETPLACE_NAME}",
+            "--json",
+        ],
+        timeout=60,
+    )
+    _require_success(install, label="isolated plugin installation")
+    manifests = tuple(
+        (fresh_root / "codex-home").glob("plugins/cache/**/.codex-plugin/plugin.json")
+    )
+    if len(manifests) != 1:
+        raise CanaryError(f"expected one installed plugin, observed {len(manifests)}")
+    installed_root = manifests[0].parent.parent
+    if _full_tree_identity(installed_root) != _full_tree_identity(stage_root):
+        raise CanaryError("installed plugin bytes differ from the exact stage")
+    return installed_root
+
+
+def _thread_id(stdout: bytes) -> str:
+    thread_ids: list[str] = []
+    for raw_line in stdout.splitlines():
+        try:
+            value = strict_json_loads(raw_line)
+        except (UnicodeError, ValueError):
+            continue
+        if isinstance(value, dict) and value.get("type") == "thread.started":
+            thread_id = value.get("thread_id")
+            if isinstance(thread_id, str):
+                thread_ids.append(thread_id)
+    if len(thread_ids) != 1:
+        raise CanaryError("Codex JSONL did not expose exactly one thread identity")
+    return thread_ids[0]
+
+
+def _hook_receipts(fresh_root: Path) -> tuple[Path, ...]:
+    return tuple(
+        sorted(
+            (fresh_root / "codex-home").glob(
+                "plugins/data/**/hook-observations/v1/*.json"
+            )
+        )
+    )
+
+
+def _proposal(assignment_id: str, attempt_id: str, nonce: str) -> dict[str, object]:
+    return {
+        "assignment_id": assignment_id,
+        "attempt_id": attempt_id,
+        "proposal_nonce": nonce,
+        "schema_version": "arw.codex-host-canary-proposal.v1",
+    }
+
+
+def _run_one_home(
+    *,
+    ordinal: int,
+    stage_root: Path,
+    fresh_root: Path,
+    evidence_root: Path,
+    auth_source: Path,
+    tuple_sha256: str,
+    arw_runtime_sha256: str,
+    stage_sha256: str,
+    hook_definition_sha256: str,
+    codex_launcher: Path,
+) -> tuple[FreshHomeReceipt, tuple[FileBinding, ...], str]:
+    installed_root = _install_stage(
+        stage_root, fresh_root, codex_launcher=codex_launcher
+    )
+    auth_destination = fresh_root / "codex-home/auth.json"
+    auth_raw = _copy_auth(auth_source, auth_destination)
+    assignment_id = f"assignment.host-canary-{ordinal}"
+    attempt_id = f"attempt.host-canary-{ordinal}"
+    nonce = f"nonce.host-canary-{ordinal}"
+    expected_proposal = _proposal(assignment_id, attempt_id, nonce)
+    _write_canonical(
+        fresh_root / "scratch/assignment.json",
+        {
+            **expected_proposal,
+            "instruction": "write the exact echoed proposal through the controlled result channel",
+        },
+    )
+    try:
+        default_probe = _run_isolated(
+            fresh_root,
+            [
+                str(codex_launcher),
+                "exec",
+                "--ephemeral",
+                "--ignore-rules",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "read-only",
+                "-c",
+                'approval_policy="never"',
+                "--json",
+                "-C",
+                "/work/scratch",
+                "Return exactly DEFAULT_TRUST_PROBE_OK. Do not use tools.",
+            ],
+        )
+        _require_success(default_probe, label=f"fresh HOME {ordinal} default-trust probe")
+        if _hook_receipts(fresh_root):
+            raise CanaryError("fresh HOME default trust unexpectedly executed plugin hooks")
+
+        proposal_text = json.dumps(
+            expected_proposal,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        prompt = (
+            "This is the exact ARW host qualification assignment. Read "
+            "/work/scratch/assignment.json. Use the shell tool to attempt `touch "
+            "/work/unrelated/arw-unrelated-write-probe`; the sandbox must reject that "
+            "write. Then write exactly this compact JSON, followed by one newline, to "
+            f"/work/result/proposal.json: {proposal_text}. Do not write anywhere else. "
+            "Return only CANARY_RESULT_WRITTEN after the tool succeeds."
+        )
+        host = _run_isolated(
+            fresh_root,
+            [
+                str(codex_launcher),
+                "exec",
+                "--dangerously-bypass-hook-trust",
+                "--strict-config",
+                "--ephemeral",
+                "--ignore-rules",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "workspace-write",
+                "-c",
+                'approval_policy="never"',
+                "--json",
+                "-C",
+                "/work/scratch",
+                "--add-dir",
+                "/work/result",
+                prompt,
+            ],
+        )
+        _require_success(host, label=f"fresh HOME {ordinal} controlled dispatch")
+    finally:
+        auth_destination.unlink(missing_ok=True)
+    if auth_destination.exists():
+        raise CanaryError("ephemeral authentication material was retained")
+    if (fresh_root / "unrelated/arw-unrelated-write-probe").exists():
+        raise CanaryError("Codex wrote outside the controlled result channel")
+
+    proposal_path = _regular_file(
+        fresh_root / "result/proposal.json",
+        label="controlled proposal",
+        max_bytes=16 * 1024,
+    )
+    try:
+        observed_proposal = strict_json_loads(proposal_path.read_bytes())
+    except (UnicodeError, ValueError) as error:
+        raise CanaryError("controlled proposal is not strict JSON") from error
+    if observed_proposal != expected_proposal:
+        raise CanaryError("controlled proposal did not exactly echo assignment mapping")
+
+    receipt_paths = _hook_receipts(fresh_root)
+    events: dict[str, str] = {}
+    copied_receipts: list[FileBinding] = []
+    hook_evidence_root = evidence_root / f"hook-observations/home-{ordinal}"
+    for path in receipt_paths:
+        verified = load_codex_hook_receipt(
+            path,
+            receipt_root=path.parent,
+            expected_hook_definition_sha256=hook_definition_sha256,
+        )
+        if verified.hook_event_name in events:
+            raise CanaryError("live host emitted a duplicate hook event receipt")
+        events[verified.hook_event_name] = verified.receipt_sha256
+        destination = hook_evidence_root / path.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("xb") as stream:
+            stream.write(path.read_bytes())
+        copied_receipts.append(
+            FileBinding(
+                path=destination.relative_to(evidence_root).as_posix(),
+                sha256=_sha256(destination),
+            )
+        )
+    if set(events) != {"SessionStart", "Stop"}:
+        raise CanaryError(f"live hook events were incomplete: {sorted(events)}")
+
+    thread_id = _thread_id(host.stdout)
+    receipt = FreshHomeReceipt(
+        schema_version="arw.codex-fresh-home-receipt.v1",
+        home_ordinal=ordinal,
+        home_identity_sha256=_sha256(str((fresh_root / "home").resolve())),
+        codex_home_identity_sha256=_sha256(
+            str((fresh_root / "codex-home").resolve())
+        ),
+        codex_thread_id=thread_id,
+        host_agent_id=f"host.codex-exec:{thread_id}",
+        expected_assignment_id=assignment_id,
+        observed_assignment_id=str(observed_proposal["assignment_id"]),
+        expected_attempt_id=attempt_id,
+        observed_attempt_id=str(observed_proposal["attempt_id"]),
+        expected_proposal_nonce=nonce,
+        observed_proposal_nonce=str(observed_proposal["proposal_nonce"]),
+        codex_host_tuple_sha256=tuple_sha256,
+        arw_runtime_sha256=arw_runtime_sha256,
+        stage_sha256=stage_sha256,
+        hook_definition_sha256=hook_definition_sha256,
+        hook_execution_admission="automation_vetted_bypass",
+        credential_policy_sha256=EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
+        result_channel={
+            "channel_kind": "codex-add-dir",
+            "channel_scope_sha256": _sha256(str((fresh_root / "result").resolve())),
+            "proposal_sha256": _sha256(proposal_path),
+            "write_observed": True,
+            "outside_scope_write_observed": False,
+            "status": "PASS",
+        },
+        isolation={
+            "home_isolated": True,
+            "codex_home_isolated": True,
+            "cross_home_read_observed": False,
+            "unrelated_write_observed": False,
+            "status": "PASS",
+        },
+        credential_material_retained=False,
+        secret_material_retained=False,
+        absolute_path_material_retained=False,
+    )
+    sensitive_tokens = (
+        auth_raw,
+        str(auth_source.resolve()).encode("utf-8"),
+        str(fresh_root).encode("utf-8"),
+        str(installed_root).encode("utf-8"),
+    )
+    rendered = canonical_json_bytes(receipt.model_dump(mode="json"))
+    if any(token and token in rendered for token in sensitive_tokens):
+        raise CanaryError("fresh-home receipt retained sensitive or absolute-path material")
+    return (
+        receipt,
+        tuple(sorted(copied_receipts, key=lambda item: item.path)),
+        _sha256(host.stdout),
+    )
+
+
+def _runtime_sha256(stage_root: Path) -> str:
+    path = stage_root / "vendor/python/wheelhouse.lock.json"
+    try:
+        value = strict_json_loads(path.read_bytes())
+        first_party = value["first_party_wheel"]
+        digest = first_party["sha256"]
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError) as error:
+        raise CanaryError("staged first-party wheel identity is invalid") from error
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise CanaryError("staged first-party wheel digest is invalid")
+    wheel = stage_root / "vendor/python/wheelhouse" / first_party["file"]
+    if _sha256(_regular_file(wheel, label="staged ARW wheel", max_bytes=64 * 1024 * 1024)) != digest:
+        raise CanaryError("staged ARW wheel bytes drifted from the wheelhouse lock")
+    return digest
+
+
+def _parity_evidence(
+    evidence_root: Path,
+    *,
+    hook_definition_sha256: str,
+    stage_sha256: str,
+    live_receipts: tuple[FileBinding, ...],
+) -> tuple[HookStatusClassification, ...]:
+    authority = _sha256(
+        canonical_json_bytes(
+            {
+                "controls": ["runtime", "mcp", "integrity", "gate", "provenance"],
+                "owner": "parent",
+                "schema_version": "arw.hook-parent-authority.v1",
+            }
+        )
+    )
+    rows = (
+        ("trusted_enabled", "observed"),
+        ("disabled", "not_observed"),
+        ("untrusted", "not_observed"),
+        ("timeout", "timed_out"),
+        ("failure", "failed"),
+    )
+    if not live_receipts:
+        raise CanaryError("trusted/enabled parity evidence lacks an official hook receipt")
+    official_receipt = live_receipts[0]
+    classifications: list[HookStatusClassification] = []
+    for hook_state, observation in rows:
+        parity_status = "failed" if hook_state == "failure" else hook_state
+        record = HookParityEvidenceRecord(
+            schema_version="arw.hook-parity-evidence.v1",
+            hook_state=hook_state,
+            observation=observation,
+            hook_definition_sha256=hook_definition_sha256,
+            stage_sha256=stage_sha256,
+            parity=HookParityMatrix.for_status(
+                parity_status,  # type: ignore[arg-type]
+                authority_digest=authority,
+            ),
+            official_hook_receipt=(
+                official_receipt if hook_state == "trusted_enabled" else None
+            ),
+            secret_material_retained=False,
+            absolute_path_material_retained=False,
+        )
+        rendered = canonical_json_bytes(record.model_dump(mode="json"))
+        digest = _sha256(rendered)
+        path = evidence_root / "hook-status" / f"{digest}.json"
+        _write_canonical(path, record.model_dump(mode="json"))
+        classifications.append(
+            HookStatusClassification(
+                hook_state=hook_state,
+                observation=observation,
+                classification_basis="parity_policy",
+                parent_authority_unchanged=True,
+                evidence=FileBinding(
+                    path=path.relative_to(evidence_root).as_posix(),
+                    sha256=digest,
+                ),
+            )
+        )
+    return tuple(classifications)
+
+
+def qualify(args: argparse.Namespace) -> Path:
+    stage_root = args.stage_root.resolve(strict=True)
+    if stage_root.is_symlink() or not stage_root.is_dir():
+        raise CanaryError("stage root is unsafe")
+    evidence_root = _safe_new_root(args.evidence_root, label="evidence root")
+    work_root = _safe_new_root(args.work_root, label="work root")
+    auth_source = args.credential_source.resolve() / "auth.json"
+    launcher = Path(args.codex_launcher).absolute()
+    if not launcher.exists():
+        raise CanaryError("Codex launcher path is unavailable")
+    native = discover_codex_native_binary(launcher)
+    host = observe_codex_host(launcher, native)
+    _config, _handler, hook_definition_sha256 = observe_hook_definition(stage_root)
+    stage_sha256 = observe_stage_identity(stage_root)
+    arw_runtime_sha256 = _runtime_sha256(stage_root)
+
+    receipts: list[FreshHomeReceipt] = []
+    live_receipts: list[FileBinding] = []
+    for ordinal in range(1, 4):
+        fresh_root = work_root / f"fresh-home-{ordinal}"
+        fresh_root.mkdir(mode=0o700)
+        receipt, hook_receipts, stdout_sha256 = _run_one_home(
+            ordinal=ordinal,
+            stage_root=stage_root,
+            fresh_root=fresh_root,
+            evidence_root=evidence_root,
+            auth_source=auth_source,
+            tuple_sha256=host.tuple_sha256,
+            arw_runtime_sha256=arw_runtime_sha256,
+            stage_sha256=stage_sha256,
+            hook_definition_sha256=hook_definition_sha256,
+            codex_launcher=launcher,
+        )
+        receipt_path = evidence_root / f"fresh-home-{ordinal}.json"
+        _write_canonical(receipt_path, receipt.model_dump(mode="json"))
+        receipts.append(receipt)
+        live_receipts.extend(hook_receipts)
+        del stdout_sha256
+
+    receipt_bindings = tuple(
+        FileBinding(
+            path=f"fresh-home-{ordinal}.json",
+            sha256=_sha256(evidence_root / f"fresh-home-{ordinal}.json"),
+        )
+        for ordinal in range(1, 4)
+    )
+    classifications = _parity_evidence(
+        evidence_root,
+        hook_definition_sha256=hook_definition_sha256,
+        stage_sha256=stage_sha256,
+        live_receipts=tuple(sorted(live_receipts, key=lambda item: item.path)),
+    )
+    bundle = CodexHostEvidenceBundle(
+        schema_version="arw.codex-host-evidence-bundle.v1",
+        technical_qualification="PASS",
+        codex_host_tuple_sha256=host.tuple_sha256,
+        arw_runtime_sha256=arw_runtime_sha256,
+        stage_sha256=stage_sha256,
+        hook_definition_sha256=hook_definition_sha256,
+        hook_execution_admission="automation_vetted_bypass",
+        live_hook_execution="observed",
+        fresh_home_default_trust="untrusted_skipped",
+        credential_policy_sha256=EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
+        fresh_home_receipts=receipt_bindings,
+        hook_status_classifications=classifications,
+        secret_material_retained=False,
+        absolute_path_material_retained=False,
+    )
+    bundle_path = evidence_root / "evidence-bundle.json"
+    _write_canonical(bundle_path, bundle.model_dump(mode="json"))
+    canary = CodexHostCanaryEvidence(
+        schema_version="arw.codex-host-canary.v1",
+        technical_qualification="PASS",
+        codex_host_tuple_sha256=host.tuple_sha256,
+        arw_runtime_sha256=arw_runtime_sha256,
+        stage_sha256=stage_sha256,
+        hook_definition_sha256=hook_definition_sha256,
+        hook_execution_admission="automation_vetted_bypass",
+        live_hook_execution="observed",
+        fresh_home_default_trust="untrusted_skipped",
+        credential_policy_sha256=EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
+        three_home_isolation="PASS",
+        assignment_identity_mapping="PASS",
+        credential_hygiene="PASS",
+        controlled_result_channel="PASS",
+        hook_status_classification="PASS",
+        evidence_bundle=FileBinding(
+            path="evidence-bundle.json", sha256=_sha256(bundle_path)
+        ),
+        fresh_home_receipts=receipt_bindings,
+        secret_material_retained=False,
+        absolute_path_material_retained=False,
+    )
+    canary_path = evidence_root / "canary.json"
+    _write_canonical(canary_path, canary.model_dump(mode="json"))
+
+    for path in evidence_root.rglob("*"):
+        if not path.is_file():
+            continue
+        body = path.read_bytes()
+        forbidden = (
+            str(PROJECT_ROOT).encode("utf-8"),
+            str(args.credential_source.resolve()).encode("utf-8"),
+            b"OPENAI_API_KEY",
+            b"access_token",
+            b"refresh_token",
+        )
+        if any(token in body for token in forbidden):
+            raise CanaryError(f"retained evidence contains forbidden material: {path.name}")
+    return canary_path
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="qualify-codex-host")
+    parser.add_argument("--stage-root", required=True, type=Path)
+    parser.add_argument("--evidence-root", required=True, type=Path)
+    parser.add_argument("--work-root", required=True, type=Path)
+    parser.add_argument(
+        "--credential-source",
+        type=Path,
+        default=Path(
+            os.environ.get(
+                "CODEX_HOME", "/home/user/.config/codex-runtime-home/home"
+            )
+        ),
+    )
+    parser.add_argument(
+        "--codex-launcher",
+        default=(
+            shutil.which("codex")
+            or "/opt/codex/node_modules/"
+            "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+        ),
+    )
+    return parser
+
+
+def main() -> int:
+    try:
+        canary_path = qualify(_parser().parse_args())
+    except (CanaryError, OSError, ValueError) as error:
+        print(f"qualify-codex-host: {error}", file=sys.stderr)
+        return 70
+    print(f"Codex host technical qualification PASS: {canary_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

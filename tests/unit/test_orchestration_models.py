@@ -13,6 +13,7 @@ from arw.orchestration_models import (
     GateDecision,
     HookObservation,
     HostQualification,
+    HumanAuthority,
     HumanDecisionRecord,
     ImmutableAssignment,
     Phase4EvaluationVerdict,
@@ -278,6 +279,21 @@ def test_gate_human_hook_and_host_contracts_are_strict_and_append_only() -> None
         }
     )
     assert gate.verdict == "BLOCKED"
+    authority = HumanAuthority.model_validate(
+        {
+            "schema_version": "arw.human-authority.v1",
+            "authority_id": "authority.review-001",
+            "authenticated_actor_id": "operator.user",
+            "accountable_role": "operator",
+            "validated_by_actor_id": "parent.coordinator",
+            "allowed_decision_kinds": ["waiver"],
+            "allowed_gate_ids": [gate.gate_id],
+            "allowed_scopes": ["gate.formal-review-001"],
+            "authenticated_at": "2026-07-15T00:00:00Z",
+            "expires_at": "2026-07-16T00:00:00Z",
+            "evidence_sha256": [HASH_D],
+        }
+    )
     decision = HumanDecisionRecord.model_validate(
         {
             "schema_version": "arw.human-decision.v1",
@@ -292,6 +308,7 @@ def test_gate_human_hook_and_host_contracts_are_strict_and_append_only() -> None
             "scope": "gate.formal-review-001",
             "rationale": "The named blocker may be released only for the next transition.",
             "prior_verdict_sha256": HASH_C,
+            "authority_sha256": authority.authority_sha256,
             "supersedes_decision_id": None,
         }
     )

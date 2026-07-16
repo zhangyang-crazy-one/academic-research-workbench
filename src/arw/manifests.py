@@ -484,7 +484,11 @@ def validate_event_manifest_semantics(
         for item in state_before.pending_human_decisions
     ]
     expected_attempts = [
-        PassportAttemptSnapshot.model_validate(item.model_dump(mode="json"))
+        PassportAttemptSnapshot(
+            attempt_id=item.attempt_id,
+            base_revision=item.base_revision,
+            consumed_sha256=list(item.consumed_sha256),
+        )
         for item in state_before.active_attempts
     ]
     checks = (

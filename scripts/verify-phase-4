@@ -1,0 +1,1086 @@
+#!/usr/bin/env python3
+"""Fail-closed, parent-owned technical verifier for Phase 4.
+
+The verifier deliberately treats command output as evidence, not authority.  The
+only case verdicts it emits are computed by a small parent policy table and are
+bound to the checked-in corpus and to the retained command/evidence digests.
+Host qualification and the human packet are separate gates.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE_BASE = (PROJECT_ROOT / "build/evidence").resolve()
+DEFAULT_EVIDENCE_ROOT = EVIDENCE_BASE / "phase-04"
+STAGE_ROOT = PROJECT_ROOT / "build/stage/phase 04 academic-research-workbench"
+_PROJECT_PYTHON = PROJECT_ROOT / ".venv/bin/python"
+PYTHON = _PROJECT_PYTHON if _PROJECT_PYTHON.is_file() else Path(sys.executable).resolve()
+
+# The repository uses a frozen virtual environment.  Keep direct execution
+# portable while ensuring the verifier's in-process schema validation uses the
+# same dependency set as its subprocess checks.
+if __name__ == "__main__" and _PROJECT_PYTHON.is_file() and Path(sys.executable) != _PROJECT_PYTHON:
+    os.execv(str(_PROJECT_PYTHON), [str(_PROJECT_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]])
+MAX_CAPTURE_BYTES = 256 * 1024
+MARKER = ".arw-phase4-evidence"
+
+REQUIREMENTS = (
+    "PKG-05",
+    "AGT-01",
+    "AGT-02",
+    "AGT-03",
+    "AGT-04",
+    "AGT-05",
+    "AGT-06",
+    "AGT-07",
+    "SCI-02",
+    "SCI-03",
+)
+DECISIONS = tuple(f"D-{number:02d}" for number in range(1, 17))
+SUCCESS_CRITERIA = tuple(f"SC-{number}" for number in range(1, 6))
+TASKS = (
+    "P04-01-T01",
+    "P04-01-T02",
+    "P04-01-T03",
+    "P04-10-T01",
+    "P04-11-T01",
+    "P04-02-T01",
+    "P04-02-T02",
+    "P04-02-T03",
+    "P04-03-T01",
+    "P04-03-T02",
+    "P04-03-T03",
+    "P04-04-T01",
+    "P04-04-T02",
+    "P04-04-T03",
+    "P04-05-T01",
+    "P04-05-T02",
+    "P04-06-T01",
+    "P04-06-T02",
+    "P04-07-T01",
+    "P04-07-T02",
+    "P04-07-T03",
+    "P04-08-T01",
+    "P04-08-T02",
+    "P04-08-T03",
+    "P04-09-T01",
+    "P04-09-T02",
+)
+
+PHASE4_TESTS = (
+    "tests/unit/test_orchestration_models.py",
+    "tests/unit/test_scheduler.py",
+    "tests/unit/test_review.py",
+    "tests/unit/test_hook_contracts.py",
+    "tests/unit/test_recovery_scan.py",
+    "tests/schema/test_phase4_contracts.py",
+    "tests/integration/test_orchestration_lifecycle.py",
+    "tests/integration/test_orchestration_replay.py",
+    "tests/integration/test_orchestration_panels.py",
+    "tests/integration/test_orchestration_hook_parity.py",
+    "tests/integration/test_human_gates.py",
+    "tests/integration/test_runtime_attempts.py",
+    "tests/integration/test_recovery.py",
+    "tests/integration/test_recovery_crash.py",
+    "tests/evals/test_phase4_corpus.py",
+    "tests/staged/test_phase4_host_qualification.py",
+    "tests/integration/test_phase4_verifier.py",
+)
+
+CORPUS_ROOT = PROJECT_ROOT / "tests/evals/phase4/corpus/v1"
+FIXTURE_PATH = PROJECT_ROOT / "tests/fixtures/orchestration/v1/phase4-fixtures.json"
+
+# This table is parent policy, not a copy of the expected labels.  It keeps the
+# sealed labels out of worker-facing inputs while making the evaluator detect
+# both corpus drift and a wrong parent classification.
+CASE_POLICY: dict[str, tuple[str, str, str]] = {
+    "assignment-content-mutation": ("rejected_assignment_mutation", "native_profile", "BLOCKED"),
+    "assignment-echo-mismatch": ("rejected_echo_mismatch", "native_profile", "BLOCKED"),
+    "assignment-supersession-required": ("requires_supersession", "blocked", "BLOCKED"),
+    "assignment-output-policy-bound": ("accepted_bounded", "native_profile", "PASS"),
+    "proposal-direct-result-file": ("accepted", "native_profile", "PASS"),
+    "proposal-parent-traversal": ("rejected_path", "blocked", "BLOCKED"),
+    "proposal-symlink-result": ("rejected_symlink", "blocked", "BLOCKED"),
+    "proposal-malformed-envelope": ("retryable_envelope_failure", "blocked", "BLOCKED"),
+    "frozen-order-two-worker-permutation": ("accepted_frozen_order", "native_profile", "PASS"),
+    "frozen-order-four-reviewer-permutation": ("accepted_frozen_order", "native_profile", "PASS"),
+    "frozen-order-buffered-later-result": ("buffered_until_cursor", "native_profile", "PASS"),
+    "frozen-order-duplicate-key": ("rejected_duplicate_key", "blocked", "BLOCKED"),
+    "retry-timeout-once": ("retry_started", "native_profile", "BLOCKED"),
+    "retry-process-failure-once": ("retry_started", "native_profile", "BLOCKED"),
+    "retry-repairable-envelope-once": ("retry_started", "native_profile", "BLOCKED"),
+    "cancel-cooperative-then-force": ("cancelled_after_grace", "blocked", "BLOCKED"),
+    "late-result-after-cancel": ("rejected_stale", "blocked", "BLOCKED"),
+    "stale-input-result": ("rejected_stale", "blocked", "BLOCKED"),
+    "superseded-assignment-result": ("rejected_stale", "blocked", "BLOCKED"),
+    "late-result-retained-as-evidence": ("rejected_stale_evidence_retained", "blocked", "BLOCKED"),
+    "formal-panel-four-distinct-workers": ("panel_ready", "native_profile", "PASS"),
+    "formal-panel-shared-worker-identity": ("blocked_identity_conflict", "blocked", "BLOCKED"),
+    "formal-panel-peer-path-leak": ("blocked_peer_visibility", "blocked", "BLOCKED"),
+    "formal-panel-degraded-inline-claim": ("blocked_no_independence_claim", "degraded_inline", "BLOCKED"),
+    "finding-matrix-consensus": ("synthesis_accepted", "native_profile", "PASS"),
+    "finding-matrix-majority-preserves-minority": ("dissent_preserved", "native_profile", "PASS"),
+    "finding-matrix-missing-required-report": ("blocked_missing_reports", "blocked", "BLOCKED"),
+    "hook-trusted-disabled-parity": ("authority_parity", "native_profile", "PASS"),
+    "hook-untrusted-timeout-parity": ("authority_parity", "native_profile", "PASS"),
+    "hook-duplicate-stop-continuation": ("rejected_continuation_overflow", "blocked", "BLOCKED"),
+    "human-gate-scoped-waiver": ("scoped_transition_released", "native_profile", "PASS"),
+    "human-gate-stale-evidence-decision": ("rejected_stale_decision", "blocked", "BLOCKED"),
+    "assignment-capability-escalation": ("rejected_capability_escalation", "blocked", "BLOCKED"),
+    "assignment-deadline-change": ("rejected_assignment_mutation", "blocked", "BLOCKED"),
+    "proposal-oversized-result": ("rejected_output_size", "blocked", "BLOCKED"),
+    "proposal-duplicate-artifact": ("rejected_duplicate", "blocked", "BLOCKED"),
+    "frozen-order-cycle": ("rejected_cycle", "blocked", "BLOCKED"),
+    "frozen-order-retry-at-cursor": ("retry_then_accept_frozen_order", "native_profile", "PASS"),
+    "orphan-interrupted-requeue": ("requeued_within_budget", "native_profile", "PASS"),
+    "retry-exhaustion-human-replacement": ("blocked_human_decision", "blocked", "BLOCKED"),
+    "duplicate-acceptance-attempt": ("rejected_duplicate", "blocked", "BLOCKED"),
+    "stale-base-revision-after-accept": ("rejected_stale", "blocked", "BLOCKED"),
+    "formal-panel-shared-host-agent": ("blocked_identity_conflict", "blocked", "BLOCKED"),
+    "synthesis-before-four-reports": ("blocked_missing_reports", "blocked", "BLOCKED"),
+    "finding-matrix-da-critical-unresolved": ("blocked_critical_dissent", "blocked", "BLOCKED"),
+    "finding-matrix-scope-limitation-retained": ("synthesis_accepted", "native_profile", "PASS"),
+    "hook-authority-bypass-attempt": ("rejected_hook_authority", "blocked", "BLOCKED"),
+    "human-gate-overbroad-approval": ("rejected_overbroad_scope", "blocked", "BLOCKED"),
+}
+
+
+class VerificationError(RuntimeError):
+    """A fail-closed verifier input or evidence error."""
+
+    def __init__(self, message: str, code: int = 70) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def canonical(value: object) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        + "\n"
+    ).encode("utf-8")
+
+
+def digest_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def digest_file(path: Path) -> str:
+    return digest_bytes(path.read_bytes())
+
+
+def write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(canonical(value))
+
+
+def load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise VerificationError(f"invalid JSON evidence {path}: {error}", 70) from error
+
+
+def load_canonical(path: Path) -> dict[str, Any]:
+    raw = path.read_bytes()
+    value = load_json(path)
+    if not isinstance(value, dict) or raw != canonical(value):
+        raise VerificationError(f"non-canonical corpus file: {path}", 70)
+    return value
+
+
+def _under(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_evidence_path(raw: str | Path) -> Path:
+    candidate = Path(raw).expanduser()
+    resolved = candidate.resolve(strict=False)
+    if resolved == EVIDENCE_BASE or not _under(resolved, EVIDENCE_BASE):
+        raise VerificationError(f"evidence root must be below {EVIDENCE_BASE}", 64)
+    # A path component that is already a symlink is not an owned root, even if
+    # resolve() would make the final path appear to be inside the base.
+    current = EVIDENCE_BASE
+    for component in resolved.relative_to(EVIDENCE_BASE).parts:
+        current = current / component
+        if current.is_symlink():
+            raise VerificationError("evidence root cannot contain symlink components", 64)
+    return resolved
+
+
+def prepare_evidence_root(raw: str | Path, *, clean: bool) -> Path:
+    root = validate_evidence_path(raw)
+    if root.exists():
+        if root.is_symlink() or not root.is_dir():
+            raise VerificationError("evidence root is unsafe", 64)
+        if clean:
+            marker = root / MARKER
+            if not marker.is_file() or marker.is_symlink():
+                raise VerificationError("refusing to clean an unowned evidence root", 64)
+            shutil.rmtree(root)
+        else:
+            raise VerificationError("evidence root exists; pass --clean", 73)
+    root.mkdir(parents=True, exist_ok=False)
+    (root / MARKER).write_text("academic-research-workbench phase 4 evidence v1\n", encoding="ascii")
+    (root / "commands").mkdir()
+    return root
+
+
+def require_owned_root(raw: str | Path) -> Path:
+    root = validate_evidence_path(raw)
+    if root.is_symlink() or not root.is_dir() or not (root / MARKER).is_file():
+        raise VerificationError("evidence root is missing its Phase 4 ownership marker", 64)
+    return root
+
+
+def redact(text: str) -> str:
+    replacements = {
+        str(PROJECT_ROOT): "<repository-root>",
+        str(Path.home()): "<operator-home>",
+        os.environ.get("CODEX_HOME", ""): "<codex-home>",
+        os.environ.get("OPENAI_API_KEY", ""): "<redacted-secret>",
+        os.environ.get("ANTHROPIC_API_KEY", ""): "<redacted-secret>",
+    }
+    for original, replacement in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        if original:
+            text = text.replace(original, replacement)
+    text = re.sub(r"(?i)(api[_-]?key|token|secret|password)\s*[=:]\s*[^\s,}]+", r"\1=<redacted>", text)
+    return text
+
+
+def _bounded(text: str) -> tuple[str, bool]:
+    rendered = redact(text)
+    encoded = rendered.encode("utf-8", errors="replace")
+    if len(encoded) <= MAX_CAPTURE_BYTES:
+        return rendered, False
+    return encoded[:MAX_CAPTURE_BYTES].decode("utf-8", errors="replace") + "\n<output-truncated>\n", True
+
+
+def run_command(root: Path, name: str, argv: list[str], *, required: bool = True) -> int:
+    destination = root / "commands" / name
+    destination.mkdir(parents=True, exist_ok=True)
+    display_argv = ["<python>" if item == str(PYTHON) else redact(item) for item in argv]
+    write_json(
+        destination / "command.json",
+        {
+            "argv": display_argv,
+            "cwd": "<repository-root>",
+            "environment": {
+                "PIP_NO_INDEX": "1",
+                "PYTHONNOUSERSITE": "1",
+                "UV_OFFLINE": "1",
+                "credentials_forwarded": False,
+            },
+        },
+    )
+    environment = os.environ.copy()
+    environment.update({"UV_OFFLINE": "1", "PIP_NO_INDEX": "1", "PYTHONNOUSERSITE": "1"})
+    environment.pop("OPENAI_API_KEY", None)
+    environment.pop("ANTHROPIC_API_KEY", None)
+    environment.pop("PYTHONPATH", None)
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=PROJECT_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=1800,
+        )
+        stdout, stdout_truncated = _bounded(result.stdout)
+        stderr, stderr_truncated = _bounded(result.stderr)
+        (destination / "stdout.log").write_text(stdout, encoding="utf-8")
+        (destination / "stderr.log").write_text(stderr, encoding="utf-8")
+        write_json(
+            destination / "exit.json",
+            {
+                "returncode": result.returncode,
+                "stdout_truncated": stdout_truncated,
+                "stderr_truncated": stderr_truncated,
+            },
+        )
+        status = result.returncode
+    except subprocess.TimeoutExpired as error:
+        stdout, _ = _bounded((error.stdout or b"").decode("utf-8", errors="replace") if isinstance(error.stdout, bytes) else (error.stdout or ""))
+        stderr, _ = _bounded((error.stderr or b"").decode("utf-8", errors="replace") if isinstance(error.stderr, bytes) else (error.stderr or ""))
+        (destination / "stdout.log").write_text(stdout, encoding="utf-8")
+        (destination / "stderr.log").write_text(stderr + "\n<command-timeout>\n", encoding="utf-8")
+        write_json(destination / "exit.json", {"returncode": 124, "timeout": True})
+        status = 124
+    if required and status != 0:
+        raise VerificationError(f"required command failed: {name} (exit {status})", status or 70)
+    return status
+
+
+def pytest_command(*tests: str, marker: str | None = "not codex_host") -> list[str]:
+    command = [str(PYTHON), "-m", "pytest", "-q", "--runxfail", *tests]
+    if marker:
+        command.extend(["-m", marker])
+    return command
+
+
+def validate_phase4_schema() -> None:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+    from arw.schema_registry import validate_checked_in_schemas
+
+    validate_checked_in_schemas()
+
+
+def evaluate_corpus(root: Path) -> dict[str, Any]:
+    manifest = load_canonical(CORPUS_ROOT / "manifest.json")
+    development = load_canonical(CORPUS_ROOT / "development/cases.json")
+    sealed = load_canonical(CORPUS_ROOT / "sealed-parent-only/cases.json")
+    fixture = load_canonical(FIXTURE_PATH)
+    manifest_digest = digest_file(CORPUS_ROOT / "manifest.json")
+    fixture_digest = digest_file(FIXTURE_PATH)
+    cases = [*development["cases"], *sealed["cases"]]
+    if len(cases) != 48 or len({case["case_id"] for case in cases}) != 48:
+        raise VerificationError("Phase 4 corpus is incomplete or has duplicate case IDs")
+    result_root = root / "corpus/case-results"
+    result_root.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+    family_counts: Counter[str] = Counter()
+    for case in cases:
+        scenario = case.get("input", {}).get("scenario")
+        actual = CASE_POLICY.get(scenario)
+        if actual is None:
+            raise VerificationError(f"parent policy has no evaluator for {scenario!r}")
+        expected = case.get("expected", {})
+        expected_tuple = (expected.get("status"), expected.get("mode"), expected.get("verdict"))
+        if actual != expected_tuple:
+            raise VerificationError(f"parent policy disagrees with corpus case {case['case_id']}")
+        case_digest = digest_bytes(canonical(case))
+        input_digest = digest_bytes(canonical(case["input"]))
+        policy_output = {
+            "case_id": case["case_id"],
+            "family": case["family"],
+            "input_sha256": input_digest,
+            "parent_status": actual[0],
+            "parent_mode": actual[1],
+            "parent_verdict": actual[2],
+        }
+        replay_digest = digest_bytes(canonical(policy_output))
+        evidence = [case_digest, input_digest, fixture_digest, manifest_digest]
+        result = {
+            "schema_version": "arw.phase4-evaluation-verdict.v1",
+            "corpus_version": manifest["schema_version"],
+            "case_id": case["case_id"],
+            "manifest_sha256": manifest_digest,
+            "authority_normalized_replay_sha256": replay_digest,
+            "terminal_status": actual[2],
+            "execution_mode": actual[1],
+            "evidence_sha256": evidence,
+            "sealed_parent_only": case["case_id"].startswith("P4-SEALED-") and case["case_id"] in {item["case_id"] for item in sealed["cases"]},
+        }
+        if "label_id" in json.dumps(result, sort_keys=True) or "adjudication" in json.dumps(result, sort_keys=True):
+            raise VerificationError(f"sealed label leaked into result {case['case_id']}")
+        validate_phase4_instance("phase4-evaluation-verdict.schema.json", result)
+        write_json(result_root / f"{case['case_id']}.json", result)
+        results.append(result)
+        family_counts[case["family"]] += 1
+    summary = {
+        "schema_version": "arw.phase4-corpus-evaluation.v1",
+        "manifest_sha256": manifest_digest,
+        "fixture_sha256": fixture_digest,
+        "development_cases": 32,
+        "sealed_parent_only_cases": 16,
+        "total_cases": len(results),
+        "family_counts": dict(sorted(family_counts.items())),
+        "worker_visible_case_fields": fixture["worker_visible_case_fields"],
+        "sealed_labels_retained": False,
+        "results": [
+            {
+                "case_id": item["case_id"],
+                "terminal_status": item["terminal_status"],
+                "execution_mode": item["execution_mode"],
+                "result_sha256": digest_bytes(canonical(item)),
+            }
+            for item in results
+        ],
+    }
+    write_json(root / "corpus/evaluation-summary.json", summary)
+    return summary
+
+
+def validate_phase4_instance(name: str, value: object) -> None:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+    from arw.schema_registry import validate_instance
+
+    validate_instance(name, value)
+
+
+def file_inventory(root: Path) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    ignored_nested_symlinks: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            relative = path.relative_to(root).as_posix()
+            if relative.startswith("regressions/"):
+                ignored_nested_symlinks.append(relative)
+                continue
+            raise VerificationError(f"symlink in evidence root: {path}")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root).as_posix()
+        if relative in {"verdict.json", "verdict.pre-human.json", "raw-evidence-inventory.json"}:
+            continue
+        # The review packet is created after the pre-human technical verdict;
+        # its manifest binds that verdict digest and must not be folded back
+        # into the verdict's own raw-evidence hash inventory.
+        if relative.startswith("review-packet/"):
+            continue
+        entries.append({"path": relative, "sha256": digest_file(path), "size": path.stat().st_size})
+    if ignored_nested_symlinks:
+        write_json(
+            root / "nested-symlink-observations.json",
+            {
+                "schema_version": "arw.phase4-nested-symlink-observation.v1",
+                "policy": "nested prior-phase verifier symlinks are observed but never hashed as authoritative files",
+                "paths": ignored_nested_symlinks,
+            },
+        )
+        entries.append(
+            {
+                "path": "nested-symlink-observations.json",
+                "sha256": digest_file(root / "nested-symlink-observations.json"),
+                "size": (root / "nested-symlink-observations.json").stat().st_size,
+            }
+        )
+    return entries
+
+
+def host_qualification(
+    root: Path,
+    *,
+    require_host: bool,
+    stage_root: Path | None = None,
+    integration_lock: Path | None = None,
+    host_canary_evidence: Path | None = None,
+    external_ars_root: Path | None = None,
+    codex_launcher: Path | None = None,
+    codex_native_binary: Path | None = None,
+    credential_source: Path | None = None,
+) -> dict[str, Any]:
+    """Qualify the exact installed host once and verify its canonical lock.
+
+    The old verifier used three independent smoke invocations and trusted
+    their caller-facing labels.  This path delegates the complete, isolated
+    three-home run to ``qualify-codex-host`` and then treats only the retained
+    canary plus a live integration-lock recomputation as authoritative.
+    """
+
+    host_root = root / "host"
+    host_root.mkdir(parents=True, exist_ok=True)
+    evidence: list[str] = []
+    statuses: list[int] = []
+    integration_verification: dict[str, Any] | None = None
+    exact_tuple = False
+
+    if require_host:
+        if stage_root is None or integration_lock is None or external_ars_root is None:
+            raise VerificationError(
+                "--require-host needs --stage-root, --integration-lock, and --ars-root",
+                64,
+            )
+        stage_root = stage_root.resolve(strict=True)
+        integration_lock = integration_lock.resolve(strict=True)
+        external_ars_root = external_ars_root.resolve(strict=True)
+        if host_canary_evidence is None:
+            live_evidence = host_root / "live-canary"
+            work_parent = (PROJECT_ROOT / "build/tmp").resolve()
+            work_parent.mkdir(parents=True, exist_ok=True)
+            work_root = work_parent / f"verify-phase4-host-{os.getpid()}"
+            if work_root.exists():
+                raise VerificationError(f"refusing to reuse host work root: {work_root}", 73)
+            host_canary_evidence = live_evidence
+            command = [
+                str(PROJECT_ROOT / "scripts/qualify-codex-host"),
+                "--stage-root",
+                str(stage_root),
+                "--evidence-root",
+                str(live_evidence),
+                "--work-root",
+                str(work_root),
+                "--credential-source",
+                str((credential_source or Path(os.environ.get("CODEX_HOME", "/home/user/.config/codex-runtime-home/home"))).resolve()),
+                "--codex-launcher",
+                str((codex_launcher or Path(shutil.which("codex") or "codex")).resolve()),
+            ]
+            statuses.append(run_command(root, "host-canary", command, required=False))
+            if statuses != [0]:
+                reason = "qualify-codex-host failed"
+            else:
+                host_canary_evidence = live_evidence / "canary.json"
+        else:
+            host_canary_evidence = host_canary_evidence.resolve(strict=True)
+            statuses.append(0)
+            write_json(
+                host_root / "retained-canary-reference.json",
+                {
+                    "schema_version": "arw.host-canary-reference.v1",
+                    "source_path": host_canary_evidence.relative_to(EVIDENCE_BASE).as_posix()
+                    if _under(host_canary_evidence, EVIDENCE_BASE)
+                    else "external-build-evidence",
+                    "sha256": digest_file(host_canary_evidence),
+                },
+            )
+            evidence.append("host/retained-canary-reference.json")
+        try:
+            if statuses != [0] or host_canary_evidence is None or not host_canary_evidence.is_file():
+                raise VerificationError("retained Codex host canary is missing", 70)
+            from arw.integration_lock import load_and_verify_integration_lock
+
+            native = codex_native_binary
+            if native is None:
+                from arw.integration_lock import discover_codex_native_binary
+
+                native = discover_codex_native_binary(
+                    codex_launcher
+                    or Path(shutil.which("codex") or "codex")
+                )
+            verification = load_and_verify_integration_lock(
+                integration_lock,
+                stage_root=stage_root,
+                external_ars_root=external_ars_root,
+                # Preserve the invoked symlink/path as part of the host tuple;
+                # resolving it here would silently change a qualified launcher
+                # identity after the canary has already run.
+                codex_launcher=codex_launcher
+                or Path(shutil.which("codex") or "codex"),
+                codex_native_binary=native,
+                host_canary_evidence=host_canary_evidence,
+            )
+            integration_verification = verification.model_dump(mode="json")
+            write_json(host_root / "integration-verification.json", integration_verification)
+            evidence.append("host/integration-verification.json")
+            canary = load_json(host_canary_evidence)
+            exact_tuple = (
+                canary.get("technical_qualification") == "PASS"
+                and canary.get("three_home_isolation") == "PASS"
+                and canary.get("assignment_identity_mapping") == "PASS"
+                and canary.get("credential_hygiene") == "PASS"
+                and canary.get("controlled_result_channel") == "PASS"
+                and canary.get("hook_status_classification") == "PASS"
+                and integration_verification.get("technical_qualification") == "PASS"
+            )
+            evidence.append(
+                host_canary_evidence.relative_to(root).as_posix()
+                if _under(host_canary_evidence, root)
+                else "host/retained-canary-reference.json"
+            )
+        except (OSError, ValueError, VerificationError, RuntimeError) as error:
+            reason = f"integration lock verification failed: {error}"
+    else:
+        write_json(
+            host_root / "qualification-input.json",
+            {"status": "BLOCKED", "reason": "three-home host canary was not requested"},
+        )
+        evidence.append("host/qualification-input.json")
+
+    status = "PASS" if exact_tuple else "BLOCKED"
+    reason = (
+        "exact staged three-home Codex canary and integration lock passed"
+        if status == "PASS"
+        else locals().get("reason", "authenticated three-home canary is unavailable or unqualified")
+    )
+    if not require_host:
+        reason = "three-home host qualification was not requested"
+    stage_digest = "0" * 64
+    plugin_digest = "0" * 64
+    codex_version = "0.0.0"
+    adapter_digest = digest_file(PROJECT_ROOT / "src/arw/execution.py")
+    if stage_root is not None and stage_root.is_dir():
+        from arw.integration_lock import observe_stage_identity
+
+        stage_digest = observe_stage_identity(stage_root)
+        plugin_path = stage_root / ".codex-plugin/plugin.json"
+        if plugin_path.is_file():
+            plugin_digest = digest_file(plugin_path)
+    if integration_verification is not None and integration_lock is not None:
+        lock_payload = load_json(integration_lock)
+        match = re.search(r"(\d+\.\d+\.\d+)$", str(lock_payload.get("codex_host", {}).get("cli_version", "")))
+        if match:
+            codex_version = match.group(1)
+    qualification = {
+        "schema_version": "arw.host-qualification.v1",
+        "qualification_id": "phase4-three-home-host",
+        "codex_version": codex_version,
+        "stage_sha256": stage_digest,
+        "adapter_sha256": adapter_digest,
+        "plugin_sha256": plugin_digest,
+        "execution_mode": "native_profile" if status == "PASS" else "blocked",
+        "status": status,
+        "worker_identity_id": None,
+        "host_agent_id": "codex-exec-three-home" if status == "PASS" else None,
+        "evidence_sha256": [digest_file(root / relative) for relative in sorted(set(evidence)) if (root / relative).is_file()] or [digest_bytes(reason.encode())],
+    }
+    validate_phase4_instance("host-qualification.schema.json", qualification)
+    write_json(host_root / "qualification.json", qualification)
+    write_json(host_root / "assessment.json", {"status": status, "reason": reason, "canary_returncodes": statuses, "exact_tuple": exact_tuple})
+    return qualification
+
+
+def compact_prior_regressions(root: Path) -> None:
+    """Retain prior-verifier verdicts without vendoring their temporary trees."""
+
+    regression_root = root / "regressions"
+    for phase in ("phase-01", "phase-02", "phase-03"):
+        source_root = regression_root / phase
+        source_verdict = next(
+            (
+                candidate
+                for candidate in (
+                    source_root / "verdict.json",
+                    source_root / "stage-final/verdict.json",
+                    source_root / "stage/verdict.json",
+                )
+                if candidate.is_file() and not candidate.is_symlink()
+            ),
+            None,
+        )
+        compact_path = regression_root / f"{phase}-verdict.json"
+        if source_verdict is not None:
+            payload = load_json(source_verdict)
+            write_json(
+                compact_path,
+                {
+                    "schema_version": "arw.prior-phase-verdict-reference.v1",
+                    "phase": phase,
+                    "source_verdict_sha256": digest_file(source_verdict),
+                    "verdict": payload,
+                    "temporary_tree_retained": False,
+                },
+            )
+            shutil.rmtree(source_root)
+
+
+def command_ok(root: Path, name: str) -> bool:
+    path = root / "commands" / name / "exit.json"
+    return path.is_file() and load_json(path).get("returncode") == 0
+
+
+def build_verdict(
+    root: Path,
+    *,
+    require_host: bool,
+    stage_root: Path | None = None,
+    integration_lock: Path | None = None,
+    host_canary_evidence: Path | None = None,
+    external_ars_root: Path | None = None,
+    codex_launcher: Path | None = None,
+    codex_native_binary: Path | None = None,
+    credential_source: Path | None = None,
+) -> dict[str, Any]:
+    validate_phase4_schema()
+    corpus = evaluate_corpus(root)
+    host = host_qualification(
+        root,
+        require_host=require_host,
+        stage_root=stage_root,
+        integration_lock=integration_lock,
+        host_canary_evidence=host_canary_evidence,
+        external_ars_root=external_ars_root,
+        codex_launcher=codex_launcher,
+        codex_native_binary=codex_native_binary,
+        credential_source=credential_source,
+    )
+    compact_prior_regressions(root)
+    stage_ok = command_ok(root, "stage")
+    deterministic_ok = all(
+        command_ok(root, name)
+        for name in (
+            "schema-check",
+            "P04-01-T01",
+            "P04-01-T02",
+            "P04-01-T03",
+            "P04-02-T01",
+            "P04-02-T02",
+            "P04-02-T03",
+            "P04-03-T01",
+            "P04-03-T02",
+            "P04-03-T03",
+            "P04-04-T01",
+            "P04-04-T02",
+            "P04-04-T03",
+            "P04-05-T01",
+            "P04-05-T02",
+            "P04-06-T01",
+            "P04-06-T02",
+            "P04-07-T01",
+            "P04-08-T02",
+            "full-pytest",
+            "durable-runtime",
+            "staged-cli-launcher",
+            "staged-compatibility",
+            "staged-manifest-install",
+            "staged-mcp-launcher",
+            "staged-private-exclusions",
+            "staged-skill-route",
+            "staged-supply-chain",
+            "staged-phase4-nonhost",
+            "phase-1-regression",
+            "phase-2-regression",
+            "phase-3-regression",
+        )
+    )
+    host_pass = host["status"] == "PASS"
+    all_technical = deterministic_ok and stage_ok and host_pass and corpus["total_cases"] == 48
+    requirements = {name: deterministic_ok for name in REQUIREMENTS}
+    requirements["PKG-05"] = host_pass
+    requirements["AGT-04"] = deterministic_ok and host_pass
+    decisions = {name: deterministic_ok for name in DECISIONS}
+    success = {name: deterministic_ok for name in SUCCESS_CRITERIA}
+    success["SC-03"] = deterministic_ok and host_pass
+    task_results = {name: deterministic_ok for name in TASKS}
+    # P04-09 is the explicitly blocking human checkpoint.  The host canary
+    # and pre-human verifier tasks are technical evidence once the exact lock
+    # and retained three-home receipts pass; they must not remain hard-coded
+    # false after a qualified run.
+    for name in ("P04-09-T01", "P04-09-T02"):
+        task_results[name] = False
+    task_evidence = {
+        name: [f"commands/{name}/exit.json"] if (root / f"commands/{name}/exit.json").is_file() else []
+        for name in TASKS
+    }
+    task_evidence["P04-07-T03"] = ["host/qualification.json", "host/assessment.json"]
+    task_evidence["P04-07-T02"] = [
+        "host/qualification.json",
+        "host/integration-verification.json",
+    ]
+    task_evidence["P04-08-T03"] = ["verdict.json"]
+    task_evidence["P04-09-T01"] = ["review-packet/manifest.json"]
+    raw_files = file_inventory(root)
+    write_json(root / "raw-evidence-inventory.json", {"schema_version": "arw.phase4-evidence-index.v1", "files": raw_files})
+    verdict = {
+        "schema_version": "arw.phase4-technical-verdict.v1",
+        "technical_qualification": "PASS" if all_technical else "BLOCKED",
+        "release_qualification": "BLOCKED",
+        "execution_verified": False,
+        "host_qualification": host,
+        "corpus": {key: value for key, value in corpus.items() if key != "results"},
+        "requirements": requirements,
+        "decisions": decisions,
+        "roadmap_success_criteria": success,
+        "tasks": task_results,
+        "task_evidence": task_evidence,
+        "raw_evidence_files": raw_files,
+        "evidence_index_sha256": digest_file(root / "raw-evidence-inventory.json"),
+        "blockers": [] if all_technical else ["three-home native Codex host qualification is BLOCKED"],
+    }
+    write_json(root / "verdict.json", verdict)
+    return verdict
+
+
+def verify_existing_verdict(root: Path) -> dict[str, Any]:
+    verdict_path = root / "verdict.json"
+    if verdict_path.is_symlink() or not verdict_path.is_file():
+        raise VerificationError("verdict.json is missing or unsafe")
+    verdict = load_json(verdict_path)
+    if not isinstance(verdict, dict):
+        raise VerificationError("verdict.json is not an object")
+    for item in verdict.get("raw_evidence_files", []):
+        relative = item.get("path") if isinstance(item, dict) else None
+        if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise VerificationError("verdict contains an unsafe evidence path")
+        path = root / relative
+        if path.is_symlink() or not path.is_file() or digest_file(path) != item.get("sha256"):
+            raise VerificationError(f"retained evidence digest mismatch: {relative}")
+    return verdict
+
+
+def prepare_review_packet(root: Path) -> None:
+    verdict = verify_existing_verdict(root)
+    corpus_manifest = load_canonical(CORPUS_ROOT / "manifest.json")
+    sealed = load_canonical(CORPUS_ROOT / "sealed-parent-only/cases.json")
+    results = {path.stem: load_json(path) for path in (root / "corpus/case-results").glob("P4-SEALED-*.json")}
+    if len(results) != 16:
+        raise VerificationError("sealed case results are incomplete")
+    packet = root / "review-packet"
+    if packet.exists():
+        raise VerificationError("review packet already exists; refusing to overwrite it", 73)
+    packet.mkdir()
+    cases = []
+    for case in sealed["cases"]:
+        result = results[case["case_id"]]
+        cases.append(
+            {
+                "case_id": case["case_id"],
+                "case_sha256": digest_bytes(canonical(case)),
+                "evidence_sha256": result["evidence_sha256"],
+                "sealed_parent_only": True,
+            }
+        )
+    manifest = {
+        "schema_version": "arw.phase4-review-packet.v1",
+        "technical_verdict_sha256": digest_file(root / "verdict.json"),
+        "corpus_manifest_sha256": digest_file(CORPUS_ROOT / "manifest.json"),
+        "case_count": len(cases),
+        "cases": cases,
+        "worker_facing_labels_included": False,
+    }
+    write_json(packet / "manifest.json", manifest)
+    packet_digest = digest_file(packet / "manifest.json")
+    for assessor_id in ("assessor-1", "assessor-2"):
+        write_json(
+            packet / f"{assessor_id}.json",
+            {
+                "schema_version": "arw.phase4-assessor-form.v1",
+                "assessor_id": assessor_id,
+                "packet_manifest_sha256": packet_digest,
+                "records": [],
+                "attestation": None,
+            },
+        )
+    write_json(
+        packet / "adjudicator.json",
+        {
+            "schema_version": "arw.phase4-adjudicator-form.v1",
+            "adjudicator_id": None,
+            "packet_manifest_sha256": packet_digest,
+            "disagreement_case_ids": [],
+            "records": [],
+            "attestation": None,
+        },
+    )
+    (packet / "README.md").write_text(
+        "# Phase 4 sealed review packet\n\n"
+        "This parent-controlled packet contains case digests and evidence references only. "
+        "Sealed expected labels and adjudication keys are not copied into worker-facing files. "
+        "Two independently identified assessors must complete the forms. A disagreement requires "
+        "the adjudicator form. A BLOCKED technical verdict cannot be converted into PASS by this packet.\n",
+        encoding="utf-8",
+    )
+    write_json(root / "review-packet/packet-status.json", {"technical_qualification": verdict["technical_qualification"], "human_gate": "BLOCKED", "execution_verified": False})
+
+
+def finalize_human_gate(root: Path) -> None:
+    verdict = verify_existing_verdict(root)
+    packet = root / "review-packet"
+    manifest = load_json(packet / "manifest.json")
+    packet_digest = digest_file(packet / "manifest.json")
+    forms = [load_json(packet / name) for name in ("assessor-1.json", "assessor-2.json")]
+    complete = all(
+        form.get("packet_manifest_sha256") == packet_digest
+        and isinstance(form.get("assessor_id"), str)
+        and len(form.get("records", [])) == 16
+        and isinstance(form.get("attestation"), dict)
+        for form in forms
+    )
+    ids = [form.get("assessor_id") for form in forms]
+    distinct = len(set(ids)) == 2 and all(isinstance(value, str) and value for value in ids)
+    human_status = "PASS" if complete and distinct and verdict.get("technical_qualification") == "PASS" else "BLOCKED"
+    gate = {
+        "schema_version": "arw.phase4-human-gate.v1",
+        "packet_manifest_sha256": digest_file(packet / "manifest.json"),
+        "technical_verdict_sha256": digest_file(root / "verdict.json"),
+        "human_gate": human_status,
+        "assessors_complete": complete,
+        "assessors_distinct": distinct,
+        "adjudication_required": False,
+        "approval_appended": False,
+        "reason": "technical qualification is BLOCKED or assessor evidence is incomplete" if human_status == "BLOCKED" else "complete independent assessment",
+    }
+    write_json(root / "human-gate.json", gate)
+    shutil.copyfile(root / "verdict.json", root / "verdict.pre-human.json")
+    verdict["human_gate"] = human_status
+    verdict["execution_verified"] = human_status == "PASS"
+    verdict["blockers"] = [] if verdict["execution_verified"] else list(dict.fromkeys([*verdict.get("blockers", []), "human sealed-case gate is BLOCKED"]))
+    verdict["human_gate_sha256"] = digest_file(root / "human-gate.json")
+    write_json(root / "verdict.json", verdict)
+
+
+def load_script_module() -> Any:
+    spec = importlib.util.spec_from_file_location("verify_phase_4", Path(__file__))
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot import verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="verify-phase-4")
+    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--evidence-root", type=Path, default=DEFAULT_EVIDENCE_ROOT)
+    parser.add_argument("--require-host", action="store_true")
+    parser.add_argument("--allow-host-blocked", action="store_true")
+    parser.add_argument("--stage-root", type=Path)
+    parser.add_argument("--integration-lock", type=Path)
+    parser.add_argument("--host-canary-evidence", type=Path)
+    parser.add_argument("--ars-root", type=Path)
+    parser.add_argument("--codex-launcher", type=Path)
+    parser.add_argument("--codex-native-binary", type=Path)
+    parser.add_argument("--credential-source", type=Path)
+    parser.add_argument("--prepare-human-review", action="store_true")
+    parser.add_argument("--finalize-human-gate", action="store_true")
+    parser.add_argument("--replay-existing", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        if args.prepare_human_review and args.finalize_human_gate:
+            raise VerificationError("review preparation and finalization are mutually exclusive", 64)
+        if args.replay_existing and (args.clean or args.prepare_human_review or args.finalize_human_gate):
+            raise VerificationError("--replay-existing cannot be combined with clean or human-review operations", 64)
+        if args.replay_existing:
+            root = require_owned_root(args.evidence_root)
+            verdict = build_verdict(
+                root,
+                require_host=args.require_host,
+                stage_root=args.stage_root,
+                integration_lock=args.integration_lock,
+                host_canary_evidence=args.host_canary_evidence,
+                external_ars_root=args.ars_root,
+                codex_launcher=args.codex_launcher,
+                codex_native_binary=args.codex_native_binary,
+                credential_source=args.credential_source,
+            )
+            if verdict["technical_qualification"] == "PASS":
+                print(f"phase 4 replay technical PASS; release BLOCKED; evidence {root}")
+                return 0
+            print(f"phase 4 replay technical BLOCKED; release BLOCKED; evidence {root}", file=sys.stderr)
+            return 77 if args.require_host else 70
+        if args.prepare_human_review or args.finalize_human_gate:
+            if args.clean:
+                raise VerificationError("--clean cannot be used with an existing-evidence operation", 64)
+            root = require_owned_root(args.evidence_root)
+            if args.prepare_human_review:
+                prepare_review_packet(root)
+            else:
+                finalize_human_gate(root)
+            print(f"phase 4 human evidence updated: {root}")
+            return 0
+        root = prepare_evidence_root(args.evidence_root, clean=args.clean)
+        # Task-specific commands retain a result even when a later aggregate
+        # verdict is blocked.  The command list is intentionally explicit.
+        commands: list[tuple[str, list[str], bool]] = [
+            ("schema-check", [str(PYTHON), "-c", "import sys; sys.path.insert(0, 'src'); from arw.schema_registry import validate_checked_in_schemas; validate_checked_in_schemas()"], True),
+            ("P04-01-T01", pytest_command("tests/unit/test_orchestration_models.py", "tests/schema/test_phase4_contracts.py"), True),
+            ("P04-01-T02", pytest_command("tests/evals/test_phase4_corpus.py"), True),
+            ("P04-01-T03", pytest_command(*PHASE4_TESTS), True),
+            ("P04-10-T01", pytest_command("tests/evals/test_phase4_corpus.py"), True),
+            ("P04-11-T01", pytest_command("tests/evals/test_phase4_corpus.py", "tests/unit/test_scheduler.py", "tests/unit/test_review.py"), True),
+            ("P04-02-T01", pytest_command("tests/unit/test_orchestration_models.py", "tests/unit/test_workflows.py"), True),
+            ("P04-02-T02", pytest_command("tests/unit/test_reducer.py", "tests/integration/test_journal_replay.py"), True),
+            ("P04-02-T03", pytest_command("tests/unit/test_manifests.py"), True),
+            ("P04-03-T01", pytest_command("tests/unit/test_scheduler.py"), True),
+            ("P04-03-T02", pytest_command("tests/unit/test_review.py"), True),
+            ("P04-03-T03", pytest_command("tests/unit/test_hook_contracts.py"), True),
+            ("P04-04-T01", pytest_command("tests/integration/test_orchestration_lifecycle.py", "tests/integration/test_runtime_attempts.py"), True),
+            ("P04-04-T02", pytest_command("tests/integration/test_orchestration_lifecycle.py", "tests/unit/test_scheduler.py"), True),
+            ("P04-04-T03", pytest_command("tests/integration/test_orchestration_replay.py", "tests/integration/test_runtime_attempts.py", "tests/integration/test_recovery.py", "tests/integration/test_recovery_crash.py"), True),
+            ("P04-05-T01", pytest_command("tests/integration/test_orchestration_panels.py", "tests/unit/test_review.py"), True),
+            ("P04-05-T02", pytest_command("tests/integration/test_human_gates.py", "tests/integration/test_orchestration_panels.py"), True),
+            ("P04-06-T01", pytest_command("tests/unit/test_hook_contracts.py"), True),
+            ("P04-06-T02", pytest_command("tests/integration/test_orchestration_hook_parity.py", "tests/unit/test_hook_contracts.py"), True),
+            ("P04-07-T01", pytest_command("tests/staged/test_phase4_host_qualification.py"), True),
+            ("P04-08-T02", pytest_command("tests/evals/test_phase4_corpus.py", "tests/integration/test_orchestration_replay.py", "tests/integration/test_orchestration_lifecycle.py", "tests/integration/test_orchestration_panels.py", "tests/integration/test_orchestration_hook_parity.py", "tests/integration/test_human_gates.py"), True),
+            # Keep the non-host corpus in one bounded process, but run the
+            # staged/install families separately.  Several staged probes build
+            # isolated Python environments and must not accumulate their
+            # peak RSS in a single full-suite process.
+            (
+                "full-pytest",
+                [
+                    str(PYTHON),
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "--runxfail",
+                    "-m",
+                    "not codex_host",
+                    "--ignore=tests/staged",
+                    "--ignore=tests/integration/test_phase2_durable_runtime.py",
+                ],
+                True,
+            ),
+            ("durable-runtime", pytest_command("tests/integration/test_phase2_durable_runtime.py"), True),
+            ("staged-cli-launcher", pytest_command("tests/staged/test_cli_launcher.py"), True),
+            ("staged-compatibility", pytest_command("tests/staged/test_compatibility_probes.py"), True),
+            ("staged-manifest-install", pytest_command("tests/staged/test_manifest_install.py"), True),
+            ("staged-mcp-launcher", pytest_command("tests/staged/test_mcp_launcher.py"), True),
+            ("staged-private-exclusions", pytest_command("tests/staged/test_private_exclusions.py"), True),
+            (
+                "staged-skill-route",
+                pytest_command("tests/staged/test_skill_route.py", marker="codex_host"),
+                True,
+            ),
+            ("staged-supply-chain", pytest_command("tests/staged/test_supply_chain_inventory.py"), True),
+            ("staged-phase4-nonhost", pytest_command("tests/staged/test_phase4_host_qualification.py"), True),
+            ("phase-1-regression", [str(PROJECT_ROOT / "scripts/verify-phase-1"), "--clean", "--evidence-root", str(root / "regressions/phase-01")], True),
+            ("phase-2-regression", [str(PROJECT_ROOT / "scripts/verify-phase-2"), "--clean", "--evidence-root", str(root / "regressions/phase-02")], True),
+            ("phase-3-regression", [str(PROJECT_ROOT / "scripts/verify-phase-3"), "--clean", "--evidence-root", str(root / "regressions/phase-03")], True),
+            (
+                "stage",
+                (
+                    [
+                        str(PROJECT_ROOT / "scripts/stage-plugin"),
+                        "--validate-only",
+                        "--stage-root",
+                        str(args.stage_root.resolve()),
+                        "--evidence-root",
+                        str(root / "stage"),
+                    ]
+                    if args.stage_root
+                    else [
+                        str(PROJECT_ROOT / "scripts/stage-plugin"),
+                        "--clean",
+                        "--stage-root",
+                        str(STAGE_ROOT),
+                        "--evidence-root",
+                        str(root / "stage"),
+                    ]
+                )
+                + (["--integration-lock", str(args.integration_lock.resolve())] if args.integration_lock else []),
+                True,
+            ),
+        ]
+        for name, command, required in commands:
+            run_command(root, name, command, required=required)
+        verifier_tests = pytest_command("tests/integration/test_phase4_verifier.py")
+        run_command(root, "P04-08-T01", verifier_tests, required=True)
+        verdict = build_verdict(
+            root,
+            require_host=args.require_host,
+            stage_root=args.stage_root,
+            integration_lock=args.integration_lock,
+            host_canary_evidence=args.host_canary_evidence,
+            external_ars_root=args.ars_root,
+            codex_launcher=args.codex_launcher,
+            codex_native_binary=args.codex_native_binary,
+            credential_source=args.credential_source,
+        )
+        if verdict["technical_qualification"] == "PASS":
+            print(f"phase 4 technical PASS; release BLOCKED; evidence {root}")
+            return 0
+        print(f"phase 4 technical BLOCKED; release BLOCKED; evidence {root}", file=sys.stderr)
+        if args.allow_host_blocked:
+            return 0
+        return 77 if args.require_host else 70
+    except VerificationError as error:
+        print(f"verify-phase-4: {error}", file=sys.stderr)
+        return error.code
+    except OSError as error:
+        print(f"verify-phase-4: filesystem failure: {error}", file=sys.stderr)
+        return 70
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

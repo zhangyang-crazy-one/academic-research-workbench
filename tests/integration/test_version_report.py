@@ -10,6 +10,8 @@ import jsonschema
 import pytest
 from referencing import Registry, Resource
 
+from arw.schema_registry import SCHEMA_NAMES
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -89,8 +91,17 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         "asan_ubsan",
         "tsan",
     }
-    assert len(identity["schemas"]["files"]) == 37
+    assert len(identity["schemas"]["files"]) == len(SCHEMA_NAMES)
     assert identity["staged_payloads"]
+    payload_paths = {entry["path"] for entry in identity["staged_payloads"]}
+    assert {
+        "hooks/hooks.json",
+        "hooks/arw_hook.py",
+        "schemas/v1/integration-lock.schema.json",
+        "vendor/patches/file-base/0001-file-base-server-name.patch",
+        "vendor/patches/file-base/0002-phase1-confined-read.patch",
+        "vendor/patches/file-base/0003-phase3-generation-builder.patch",
+    } <= payload_paths
     assert identity["native"]["compile_profile"] == "release-o2"
     assert identity["native"]["patched_source_tree_sha256"]
     assert identity["file_contract"]["tokenizer_id"] == "unicode61-cjk-v1"

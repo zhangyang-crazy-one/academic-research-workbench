@@ -8,7 +8,7 @@ dependency; a later runtime may decide how to record these observations.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -20,6 +20,7 @@ from arw.execution import (
     ExecutionPolicySnapshot,
     HostResult,
 )
+from arw.faults import inject
 
 
 RETRYABLE_FAILURES = frozenset({"timeout", "process_failure", "repairable_envelope"})
@@ -44,8 +45,10 @@ AttemptStatus = Literal[
     "timed_out",
     "cancelled",
     "force_terminated",
+    "interrupted",
 ]
 ObservationClassification = Literal["observed", "rejected_stale"]
+ResultValidator = Callable[[DispatchSpec, HostResult], Awaitable[None]]
 
 
 def retry_is_eligible(
@@ -91,6 +94,9 @@ class ScheduledOutcome:
     retry_eligible: bool
     classification: ObservationClassification
     late_result: bool
+    error: str | None
+    cancellation_requested: bool
+    force_termination_requested: bool
 
 
 def _failure_reason(error: BaseException) -> str:
@@ -111,6 +117,15 @@ def _error_text(error: BaseException) -> str:
     return f"{type(error).__name__}: {message}" if message else type(error).__name__
 
 
+def _consume_task_result(task: asyncio.Task[HostResult]) -> None:
+    """Consume a detached host observation without cancelling the host."""
+
+    try:
+        task.result()
+    except (BaseException, asyncio.CancelledError):
+        return
+
+
 class DeterministicScheduler:
     """Run attempts concurrently while returning frozen-order observations."""
 
@@ -119,9 +134,13 @@ class DeterministicScheduler:
         adapter: ExecutionAdapter,
         *,
         policy: SchedulerPolicy = DEFAULT_SCHEDULER_POLICY,
+        cancel_observer: Callable[[DispatchSpec, float], Awaitable[None]] | None = None,
+        result_validator: ResultValidator | None = None,
     ) -> None:
         self.adapter = adapter
         self.policy = policy
+        self.cancel_observer = cancel_observer
+        self.result_validator = result_validator
 
     async def run(self, specs: Iterable[DispatchSpec]) -> tuple[ScheduledOutcome, ...]:
         frozen_specs = tuple(specs)
@@ -129,33 +148,28 @@ class DeterministicScheduler:
         if not frozen_specs:
             return ()
 
-        first_attempts = await self._collect(frozen_specs)
-        retry_specs = tuple(
-            spec.for_retry(spec.attempt_number + 1)
-            for spec in frozen_specs
-            if first_attempts[spec.assignment_id].retry_eligible
-        )
-        retry_attempts = await self._collect(retry_specs) if retry_specs else {}
+        # Execute exactly the generation supplied by the sole-writer parent.
+        # A retry is a new canonical attempt, so this component must never
+        # manufacture or dispatch one on its own.
+        attempt_outcomes = await self._collect(frozen_specs)
 
         outcomes: list[ScheduledOutcome] = []
         for spec in sorted(frozen_specs, key=lambda item: item.frozen_order_key):
-            first = first_attempts[spec.assignment_id]
-            attempts = (first,)
-            final = first
-            if spec.assignment_id in retry_attempts:
-                final = retry_attempts[spec.assignment_id]
-                attempts = (first, final)
+            final = attempt_outcomes[spec.assignment_id]
             outcomes.append(
                 ScheduledOutcome(
                     assignment_id=spec.assignment_id,
                     acceptance_key=spec.frozen_order_key,
                     status=final.status,
                     result=final.result,
-                    attempts=attempts,
-                    retry_reason=first.failure_reason,
+                    attempts=(final,),
+                    retry_reason=final.failure_reason,
                     retry_eligible=final.retry_eligible,
                     classification=final.classification,
                     late_result=final.late_result,
+                    error=final.error,
+                    cancellation_requested=final.cancellation_requested,
+                    force_termination_requested=final.force_termination_requested,
                 )
             )
         return tuple(outcomes)
@@ -194,6 +208,11 @@ class DeterministicScheduler:
         return completed
 
     async def _run_attempt(self, spec: DispatchSpec) -> AttemptOutcome:
+        # Host dispatch is intentionally below the parent's canonical
+        # ``attempt.prepared``/dispatch lifecycle events.  The guarded seam
+        # allows Phase 7 to terminate this boundary deterministically without
+        # giving a child authority to create a retry.
+        inject("phase7.host-dispatch")
         host_task = asyncio.create_task(self.adapter.dispatch(spec))
         try:
             result = await asyncio.wait_for(
@@ -212,7 +231,9 @@ class DeterministicScheduler:
                 failure_reason=reason,
                 error=_error_text(error),
                 retry_eligible=retry_is_eligible(
-                    reason, attempt_number=spec.attempt_number, policy=self.policy
+                    reason,
+                    attempt_number=spec.attempt_number,
+                    policy=spec.policy_snapshot,
                 ),
             )
 
@@ -229,6 +250,25 @@ class DeterministicScheduler:
                 classification="rejected_stale",
                 late_result=True,
             )
+        if self.result_validator is not None:
+            try:
+                await self.result_validator(spec, result)
+            except Exception as error:
+                reason = _failure_reason(error)
+                return AttemptOutcome(
+                    assignment_id=spec.assignment_id,
+                    attempt_id=spec.attempt_id,
+                    attempt_number=spec.attempt_number,
+                    status="failed",
+                    result=result,
+                    failure_reason=reason,
+                    error=_error_text(error),
+                    retry_eligible=retry_is_eligible(
+                        reason,
+                        attempt_number=spec.attempt_number,
+                        policy=spec.policy_snapshot,
+                    ),
+                )
         return AttemptOutcome(
             assignment_id=spec.assignment_id,
             attempt_id=spec.attempt_id,
@@ -246,6 +286,29 @@ class DeterministicScheduler:
         host_task: asyncio.Task[HostResult],
         first_timeout: BaseException,
     ) -> AttemptOutcome:
+        if self.cancel_observer is not None:
+            try:
+                await self.cancel_observer(
+                    spec,
+                    asyncio.get_running_loop().time()
+                    + spec.effective_cancellation_grace_seconds,
+                )
+            except Exception as error:
+                # A failed canonical request authorizes no host action.  The
+                # still-running child is detached and any late result remains
+                # non-authoritative evidence for parent recovery.
+                host_task.add_done_callback(_consume_task_result)
+                return AttemptOutcome(
+                    assignment_id=spec.assignment_id,
+                    attempt_id=spec.attempt_id,
+                    attempt_number=spec.attempt_number,
+                    status="interrupted",
+                    result=None,
+                    failure_reason="cancelled",
+                    error=f"parent cancellation record failed: {_error_text(error)}",
+                    retry_eligible=False,
+                    classification="rejected_stale",
+                )
         cancel_error: str | None = None
         try:
             await self.adapter.request_cancel(spec)
@@ -279,13 +342,17 @@ class DeterministicScheduler:
                 assignment_id=spec.assignment_id,
                 attempt_id=spec.attempt_id,
                 attempt_number=spec.attempt_number,
-                status="force_terminated",
+                status="force_terminated" if force_error is None else "interrupted",
                 result=late_result,
-                failure_reason="cancelled",
+                failure_reason="timeout",
                 error="; ".join(details),
-                retry_eligible=False,
+                retry_eligible=retry_is_eligible(
+                    "timeout",
+                    attempt_number=spec.attempt_number,
+                    policy=spec.policy_snapshot,
+                ),
                 cancellation_requested=True,
-                force_termination_requested=True,
+                force_termination_requested=force_error is None,
                 classification="rejected_stale",
                 late_result=late_result is not None,
             )
@@ -296,9 +363,13 @@ class DeterministicScheduler:
                 attempt_number=spec.attempt_number,
                 status="cancelled",
                 result=None,
-                failure_reason="cancelled",
+                failure_reason="timeout",
                 error=_error_text(error),
-                retry_eligible=False,
+                retry_eligible=retry_is_eligible(
+                    "timeout",
+                    attempt_number=spec.attempt_number,
+                    policy=spec.policy_snapshot,
+                ),
                 cancellation_requested=True,
                 classification="rejected_stale",
             )
@@ -309,9 +380,13 @@ class DeterministicScheduler:
             attempt_number=spec.attempt_number,
             status="cancelled",
             result=late_result,
-            failure_reason="cancelled",
+            failure_reason="timeout",
             error=cancel_error,
-            retry_eligible=False,
+            retry_eligible=retry_is_eligible(
+                "timeout",
+                attempt_number=spec.attempt_number,
+                policy=spec.policy_snapshot,
+            ),
             cancellation_requested=True,
             classification="rejected_stale",
             late_result=True,

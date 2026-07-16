@@ -161,6 +161,14 @@ def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root
     with tempfile.TemporaryDirectory(prefix="arw-patch-check.") as temporary:
         candidate = Path(temporary) / "file-base"
         shutil.copytree(source, candidate, symlinks=True)
+        # A repo-local TMPDIR may place this disposable source tree beneath the
+        # enclosing ARW checkout.  Prevent git from discovering that unrelated
+        # repository, otherwise `git apply` can return success while filtering
+        # every patch path outside the discovered prefix.
+        git_environment = {
+            **os.environ,
+            "GIT_CEILING_DIRECTORIES": str(candidate.parent.resolve()),
+        }
         for expected_order, patch in enumerate(patches, start=1):
             if patch.get("order") != expected_order:
                 fail("patch", "patch order is not contiguous")
@@ -176,6 +184,7 @@ def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root
             checked = subprocess.run(
                 ["git", "apply", "--check", str(patch_path)],
                 cwd=candidate,
+                env=git_environment,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -185,6 +194,7 @@ def post_patch_digest(source: Path, patches: list[dict[str, object]], patch_root
             applied = subprocess.run(
                 ["git", "apply", str(patch_path)],
                 cwd=candidate,
+                env=git_environment,
                 text=True,
                 capture_output=True,
                 check=False,

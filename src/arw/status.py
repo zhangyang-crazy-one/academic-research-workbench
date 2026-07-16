@@ -74,7 +74,14 @@ def build_status_report(state: RuntimeState) -> StatusReport:
         recovery_health=state.recovery_health,
         blockers=list(state.blockers),
         pending_human_decisions=list(state.pending_human_decisions),
-        active_attempts=list(state.active_attempts),
+        active_attempts=[
+            AttemptState(
+                attempt_id=item.attempt_id,
+                base_revision=item.base_revision,
+                consumed_sha256=list(item.consumed_sha256),
+            )
+            for item in state.active_attempts
+        ],
         legal_next_transitions=list(state.legal_next_transitions),
         status=state.status,
         execution_mode=state.execution_mode,

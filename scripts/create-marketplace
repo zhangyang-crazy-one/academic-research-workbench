@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_NAME="academic-research-workbench"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
+MARKETPLACE_ROOT="$PROJECT_ROOT/build/marketplace"
+
+usage() {
+  cat <<'EOF'
+Usage: create-marketplace [--stage-root PATH] [--marketplace-root PATH]
+
+Copy an exact staged plugin into a local Codex marketplace directory.
+EOF
+}
+
+fail() {
+  printf 'create-marketplace: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stage-root)
+      [[ $# -ge 2 ]] || fail "--stage-root requires a path" 64
+      STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --marketplace-root)
+      [[ $# -ge 2 ]] || fail "--marketplace-root requires a path" 64
+      MARKETPLACE_ROOT="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+STAGE_ROOT="$(realpath -m -- "$STAGE_ROOT")"
+MARKETPLACE_ROOT="$(realpath -m -- "$MARKETPLACE_ROOT")"
+[[ "$STAGE_ROOT" != "$PROJECT_ROOT" && "$STAGE_ROOT" != / ]] \
+  || fail "refusing unsafe stage root" 64
+[[ "$MARKETPLACE_ROOT" != "$PROJECT_ROOT" && "$MARKETPLACE_ROOT" != / ]] \
+  || fail "refusing unsafe marketplace root" 64
+[[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] \
+  || fail "staged plugin is missing or is a symlink" 66
+[[ -f "$STAGE_ROOT/.codex-plugin/plugin.json" ]] \
+  || fail "staged plugin manifest is missing" 66
+
+rm -rf -- "$MARKETPLACE_ROOT"
+PLUGIN_ROOT="$MARKETPLACE_ROOT/plugins/$PLUGIN_NAME"
+mkdir -p -- "$PLUGIN_ROOT" "$MARKETPLACE_ROOT/.agents/plugins"
+cp -a -- "$STAGE_ROOT/." "$PLUGIN_ROOT/"
+
+cat > "$MARKETPLACE_ROOT/.agents/plugins/marketplace.json" <<EOF
+{
+  "name": "arw-local",
+  "interface": {"displayName": "Academic Research Workbench (local)"},
+  "plugins": [
+    {
+      "name": "$PLUGIN_NAME",
+      "source": {"source": "local", "path": "./plugins/$PLUGIN_NAME"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}
+EOF
+
+printf 'marketplace=%s\nplugin=%s\n' "$MARKETPLACE_ROOT" "$PLUGIN_ROOT"

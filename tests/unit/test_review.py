@@ -15,11 +15,18 @@ SUBJECT = "a" * 64
 RUBRIC = "b" * 64
 
 
+def _receipt(role: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(f"receipt:{role}".encode()).hexdigest()
+
+
 def _identities() -> dict[str, ReviewerIdentity]:
     return {
         role: ReviewerIdentity(
             worker_identity_id=f"worker.{role}",
             host_agent_id=f"host.{role}",
+            identity_receipt_sha256=_receipt(role),
         )
         for role in FORMAL_REVIEW_ROLES
     }
@@ -35,6 +42,7 @@ def test_p04_03_t02_panel_requires_four_distinct_isolated_roles() -> None:
         synthesizer_identity=ReviewerIdentity(
             worker_identity_id="worker.editorial",
             host_agent_id="host.editorial",
+            identity_receipt_sha256=_receipt("editorial"),
         ),
     )
 
@@ -68,7 +76,11 @@ def test_p04_03_t02_panel_requires_four_distinct_isolated_roles() -> None:
         subject_sha256=SUBJECT,
         rubric_sha256=RUBRIC,
         reviewer_identities=duplicate,
-        synthesizer_identity=ReviewerIdentity("worker.editorial-2", "host.editorial-2"),
+        synthesizer_identity=ReviewerIdentity(
+            "worker.editorial-2",
+            "host.editorial-2",
+            identity_receipt_sha256=_receipt("editorial-2"),
+        ),
     )
     assert blocked.status == "blocked"
     assert any("distinct" in reason or "identity" in reason for reason in blocked.blockers)
@@ -81,7 +93,11 @@ def test_p04_03_t02_unresolved_critical_dissent_blocks_synthesis() -> None:
         subject_sha256=SUBJECT,
         rubric_sha256=RUBRIC,
         reviewer_identities=_identities(),
-        synthesizer_identity=ReviewerIdentity("worker.editorial-3", "host.editorial-3"),
+        synthesizer_identity=ReviewerIdentity(
+            "worker.editorial-3",
+            "host.editorial-3",
+            identity_receipt_sha256=_receipt("editorial-3"),
+        ),
     )
     reports = []
     for assignment in panel.reviewer_assignments:
