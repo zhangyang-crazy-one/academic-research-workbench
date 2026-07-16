@@ -87,11 +87,14 @@ def validate_fault_sidecar(
     run_root: Path | None = None,
     expected_event_sequence: Sequence[object] | None = None,
     expected_recovery_event: Mapping[str, object] | None = None,
+    allow_detached: bool = False,
 ) -> Mapping[str, object]:
     """Cold-validate a sidecar and its sibling digest before replay accepts it."""
 
     if path.is_symlink() or not path.is_file():
         raise ValueError("fault sidecar is missing or unsafe")
+    if run_root is None and not allow_detached:
+        raise ValueError("fault sidecar validation requires a replay run root")
     raw = path.read_bytes()
     payload = strict_json_loads(raw)
     if not isinstance(payload, Mapping) or payload.get("schema_version") != "arw.phase7-fault-sidecar.v1":
@@ -272,6 +275,7 @@ def write_fault_sidecar(
     validate_fault_sidecar(
         sidecar,
         run_root=run_root,
+        allow_detached=run_root is None,
         expected_event_sequence=sequence_payload,
         expected_recovery_event=recovery_event,
     )
