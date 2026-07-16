@@ -27,7 +27,10 @@ Apply these rules:
 - Keep output ownership precise. A platform or workflow may output data
   products, logs, versions, and observations; an evaluation module should own
   evaluative conclusions, effect judgments, and applicability boundaries.
-- Route feedback to every module that the feedback actually revises. Do not
+- Route feedback to every module that the feedback actually revises. A named
+  revision object may serve as one aggregate target only when it explicitly
+  enumerates the affected artifacts and the relationship contract defines that
+  aggregation; otherwise, branch the feedback to every affected module. Do not
   terminate a general design-iteration arrow at only one affected module.
 - Treat parallel evidence categories as parallel categories, not as a temporal
   sequence. When one source supplies several categories, use a common rail or
@@ -96,7 +99,7 @@ Apply these rules:
 
 ```svg
 <marker id="arrow" markerWidth="14" markerHeight="12"
-        refX="13" refY="6" orient="auto"
+        refX="14" refY="6" orient="auto" overflow="visible"
         markerUnits="userSpaceOnUse">
   <path d="M0,0 L14,6 L0,12 Z" fill="currentColor"/>
 </marker>
@@ -150,6 +153,74 @@ Relationship labels are part of the geometry, not an afterthought.
 - Check that the diagram agrees with the surrounding prose about which evidence
   supports which conclusion and which module is revised by feedback.
 
+### Treat Rails and Brackets as Junction Geometry
+
+- Treat a rail as a non-directional junction, not as an arrow target. Terminate
+  incoming segments exactly on the rail without `marker-end`; retain arrowheads
+  only on branches that leave the rail for semantic target boxes. An arrowhead
+  entering a rail often pierces or visually crosses the rail after reduction.
+- Make junction coordinates exact. If a vertical rail is at `x_r`, an incoming
+  segment must end at `x_r`, not at `x_r - 1` or `x_r + 1`. Do not use an
+  arrowhead to conceal a coordinate gap.
+- Span a horizontal distribution rail exactly from the centerline of the first
+  branch to the centerline of the last branch:
+
+  `x_left = min(branch_x)` and `x_right = max(branch_x)`.
+
+  Apply the axis-symmetric rule to a vertical rail. Use
+  `stroke-linecap="butt"` so the painted rail does not extend half a stroke width
+  past its endpoint. Do not add decorative end caps beyond the outer branch
+  centerlines. A rail can remain inside its panel yet still look like it
+  overflows the grouped outputs when reduced to manuscript width.
+- When one contract, baseline, or scope condition groups several role lanes
+  without expressing direction, use a plain bracket, brace, or containment band
+  with non-directional ticks. Do not replace those ticks with very short arrows
+  that terminate in empty lane space or on an unlabeled boundary line. If the
+  relationship contract defines a directed constraint, use named fan-out
+  connections to the actual target objects instead.
+- Route evaluation feedback to an explicit revision object or named module. Do
+  not terminate a feedback arrow on an unlabeled panel frame. When the feedback
+  changes several artifacts, either branch to every affected module or use the
+  explicitly defined aggregate revision object described in Section 1.
+- Keep feedback corridors inside the declared frame by a visible safety inset
+  unless the route is intentionally external and labeled as such. The full
+  painted bounds of strokes and markers must remain inside the frame with at
+  least one dominant connector stroke width of residual clearance at the final
+  figure scale.
+- Give every rail and bracket an explicit visible stroke class or stroke value.
+  A class that defines only width, caps, or joins can leave the intended
+  constraint bracket invisible in the production renderer.
+
+A robust geometry-only one-to-many pattern is shown below. It repeats the
+canonical marker from Section 4 so the fragment remains independently
+renderable; production figures must add manuscript-facing source and target
+labels.
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240">
+  <style>
+    .rail,.connector,.box { fill:none; stroke:#3d4b5a; stroke-width:2; }
+    .rail { stroke-linecap:butt; stroke-linejoin:miter; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="12" refX="14" refY="6"
+            orient="auto" overflow="visible" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 14 6 L 0 12 Z" fill="#3d4b5a"/>
+    </marker>
+  </defs>
+  <!-- Incoming connection and rail have no arrowheads. -->
+  <path d="M 300 40 V 100" class="rail"/>
+  <path d="M 140 100 H 460" class="rail"/>
+  <!-- Only semantic branches carry arrowheads. -->
+  <path d="M 140 100 V 180" class="connector" marker-end="url(#arrow)"/>
+  <path d="M 300 100 V 180" class="connector" marker-end="url(#arrow)"/>
+  <path d="M 460 100 V 180" class="connector" marker-end="url(#arrow)"/>
+  <rect x="90" y="180" width="100" height="50" class="box"/>
+  <rect x="250" y="180" width="100" height="50" class="box"/>
+  <rect x="410" y="180" width="100" height="50" class="box"/>
+</svg>
+```
+
 ## 7. Keep the SVG Deterministic and Editable
 
 - Use native SVG shapes, paths, and editable text.
@@ -178,9 +249,17 @@ Validate source and rendering; source inspection alone is insufficient.
 6. Inspect a crop of every external arrow, arrowhead, branch, and relationship
    label. Check the actual pixels for border collisions, oversized heads,
    clipped glyphs, and ambiguous endpoints.
-7. Inspect the entire figure at the intended manuscript insertion size.
-8. Correct the SVG geometry, rerender, and repeat the audit.
-9. Produce the final raster derivative at two-times resolution when a PNG is
+7. For every rail, compare the rendered endpoints with the outermost branch
+   centerlines and inspect each incoming junction for a gap, arrowhead overlap,
+   or line cap extending past the grouped branches. Passing panel-containment
+   checks alone is insufficient.
+8. Read the computed style of every rail and bracket; reject any intended line
+   whose effective `stroke` is `none` or transparent, whose `stroke-width` or
+   composed opacity is zero, whose computed `visibility` is not visible, or
+   whose own or any ancestor's `display` is `none`.
+9. Inspect the entire figure at the intended manuscript insertion size.
+10. Correct the SVG geometry, rerender, and repeat the audit.
+11. Produce the final raster derivative at two-times resolution when a PNG is
    required, while retaining the SVG as the editable source.
 
 ## 9. Acceptance Gate
@@ -199,8 +278,17 @@ Do not deliver the box diagram until all answers are yes:
   or overlapping glyphs in the production renderer?
 - Are one-to-many evidence relations drawn with an explicit rail or branches to
   every target?
+- Do incoming rail joins omit arrowheads and meet the rail at exact coordinates?
+- Does each distribution rail stop at the first and last branch centerlines,
+  with no decorative overhang beyond the grouped outputs?
+- Are undirected shared scope conditions represented by visible, arrow-free
+  brackets, braces, or containment bands, while directed constraints connect to
+  named target objects rather than empty lane space?
 - Are platform observations separated from evaluation conclusions?
-- Do feedback arrows reach every module they are claimed to revise?
+- Do feedback arrows reach every module they are claimed to revise, either
+  directly or through an explicitly defined aggregate revision object?
+- Does every feedback arrow terminate at a named semantic object rather than an
+  unlabeled outer frame?
 - Are all visible strings manuscript-facing rather than conversational?
 - Is all text editable, with no embedded raster or HTML content?
 - Is the figure free of an in-image title and false quantitative encodings?

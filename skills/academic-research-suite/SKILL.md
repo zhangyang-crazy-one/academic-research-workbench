@@ -389,8 +389,9 @@ Use `ars/shared/` for cross-workflow contracts and quality gates:
   checks, prompt brief templates, negative constraints, and final figure audits.
 - `ars/academic-paper/references/academic_svg_box_diagram_standards.md` defines
   semantic contracts, restrained visual grammar, constant-scale arrows,
-  relationship-label spacing, evidence rails, and rendered-image audits for
-  explicitly requested strict academic SVG box diagrams only.
+  relationship-label spacing, rail and bracket junction geometry, explicit
+  feedback targets, and rendered-image audits for explicitly requested strict
+  academic SVG box diagrams only.
 - `ars/shared/mode_spectrum.md` defines fidelity, balanced, and originality modes.
 - `ars/shared/agents/compliance_agent.md` defines compliance checks.
 - `ars/shared/compliance_checkpoint_protocol.md`, `ars/shared/prisma_trAIce_protocol.md`, and `ars/shared/raise_framework.md` define integrity and reporting gates.
