@@ -6,6 +6,7 @@ requirements:
   - VER-06
 commits:
   - b8ac51a
+  - 47e06ca
 ---
 
 # Phase 7 Plan 03 Summary
@@ -60,6 +61,9 @@ the fixture, ARS evidence, dossier, or replay comparison.
 - Retained evidence:
   - `build/evidence/phase-07/representative-dossier.json`
   - `build/evidence/phase-07/representative-dossier-replay.json`
+- Human-resolution references are derived from canonical `HumanDecisionRecord`
+  bytes, and append-only dossier publication returns a content-addressed
+  sibling when a prior retained receipt has a different stage identity.
 
 ## Verification
 
@@ -89,7 +93,14 @@ granting them write authority, and kept graph projection receipts separate
 from lifecycle receipts.  Verification: installed journey and cold replay
 passed; commit `b8ac51a`.
 
-**Total deviations:** 2 auto-fixed (safety/correctness). **Impact:** bounded
+**[Rule 1 - Safety] Append-only dossier revision** — Found during: final
+rerun | A prior retained dossier used a placeholder human-decision digest.
+The fixture now derives the digest from canonical human bytes and publishes
+the refreshed dossier under a content-addressed sibling instead of replacing
+the retained receipt. Verification: representative journey/cold replay
+passed; commit `47e06ca`.
+
+**Total deviations:** 3 auto-fixed (safety/correctness/safety). **Impact:** bounded
 installed evidence and sole-writer authority are preserved; no tests were
 removed or xfailed.
 
@@ -111,7 +122,7 @@ receipts for final serial aggregation and full-regression verification.
 ## Self-Check: PASSED
 
 - Key fixture, test, dossier, and source files exist.
-- Production commit `b8ac51a` is present.
+- Production commits `b8ac51a` and `47e06ca` are present.
 - Plan acceptance and verification commands pass with no skip/xfail
   substitution.
 - Technical PASS and legal release BLOCKED remain separate.
