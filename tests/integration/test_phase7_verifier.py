@@ -66,6 +66,18 @@ def test_tampered_graph_verdict_fails_closed(tmp_path: Path) -> None:
         verifier.validate_receipts(phase5_root=phase5)
 
 
+def test_tampered_graph_control_receipt_fails_closed(tmp_path: Path) -> None:
+    verifier = _verifier_module()
+    phase5 = tmp_path / "phase-05"
+    shutil.copytree(verifier.PHASE5_ROOT, phase5)
+    path = phase5 / "graph-control/roots/research-root/selected-generation.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value["tampered_probe"] = True
+    path.write_bytes(_canonical(value))
+    with pytest.raises(verifier.VerificationError, match="graph-control parent receipt"):
+        verifier.validate_receipts(phase5_root=phase5)
+
+
 def test_tampered_independence_receipt_fails_closed(tmp_path: Path) -> None:
     verifier = _verifier_module()
     phase41 = tmp_path / "phase-04.1"

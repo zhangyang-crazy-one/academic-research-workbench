@@ -52,6 +52,7 @@ PHASE5_LOCKED_DIGESTS = {
     "stage_identity": "ffa3de621afdc57fc1327da66ba0b19687080b22c42b2fee31306900684e6ee4",
     "stage_inventory": "e488b3f1b8bf88d50e202423f92a24a3d5c9190c3d6a0a93aad68b15ec09beae",
     "verdict": "2ecccae9a4300b4cbfe76c23d8db7d64d9566f95af95776421861577fd8939b6",
+    "graph_control": "fd0d4baad32ebc64c631f6613ce36394457495eab543eefa8006353ce80f679a",
 }
 PHASE41_LOCKED_DIGESTS = {
     "verdict": "73c3ee48ecd4ef589954e3d6bb79cef504986de3206b06a1411b5ba8d47b36de",
@@ -229,6 +230,37 @@ def digest_file(path: Path) -> str:
         return digest_bytes(path.read_bytes())
     except OSError as error:
         raise VerificationError(f"missing evidence file: {path}") from error
+
+
+def worktree_digest() -> str:
+    """Bind the exact dirty source tree used by the serial verifier."""
+
+    try:
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", ".", ":(exclude)build"],
+            cwd=PROJECT_ROOT,
+        )
+        diff = subprocess.check_output(
+            ["git", "diff", "--binary", "HEAD", "--", ".", ":(exclude)build"],
+            cwd=PROJECT_ROOT,
+        )
+        paths = subprocess.check_output(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", ".", ":(exclude)build"],
+            cwd=PROJECT_ROOT,
+        ).split(b"\0")
+        untracked = []
+        for raw in paths:
+            if not raw:
+                continue
+            path = PROJECT_ROOT / os.fsdecode(raw)
+            if path.is_symlink():
+                content = os.readlink(path).encode("utf-8")
+            else:
+                content = path.read_bytes()
+            untracked.append((os.fsdecode(raw), digest_bytes(content)))
+    except (OSError, subprocess.SubprocessError) as error:
+        raise VerificationError("unable to bind verifier worktree") from error
+    return digest_bytes(canonical({"status": status.decode("utf-8", "replace"), "diff_sha256": digest_bytes(diff), "untracked": sorted(untracked)}))
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -544,6 +576,8 @@ def _validate_phase5(root: Path) -> dict[str, Any]:
         raise VerificationError("phase5-graph-equivalence: release boundary was silently cleared")
     graph_control = root / "graph-control/roots/research-root/selected-generation.json"
     _require_file(graph_control, "phase5 graph-control generation")
+    if digest_file(graph_control) != PHASE5_LOCKED_DIGESTS["graph_control"]:
+        raise VerificationError("phase5-graph-equivalence: graph-control parent receipt is not qualified")
     mcp_transcript = _require_file(root / "mcp-transcript.json", "phase5 MCP transcript")
     build_candidates = (
         root / ".file-base/build-evidence.json",
@@ -776,7 +810,7 @@ def _license_verdict() -> dict[str, Any]:
     return {"sha256": digest_file(path), "technical_qualification": "PASS", "release_qualification": "BLOCKED", "blockers": list(verdict.get("reason_codes", LEGAL_BLOCKERS))}
 
 
-def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: object, test_commands: list[dict[str, Any]], license_summary: object, git_head: str, git_tree: str) -> dict[str, Any]:
+def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: object, test_commands: list[dict[str, Any]], license_summary: object, git_head: str, git_tree: str, git_worktree: str = "") -> dict[str, Any]:
     blocked_requirements = {requirement: {"status": "BLOCKED", "evidence": [reason]} for requirement in REQUIREMENTS}
     receipts = receipt_summary.to_dict() if isinstance(receipt_summary, ValidatedReceiptSummary) else {}
     stage = stage_summary.to_dict() if isinstance(stage_summary, ValidatedStageSummary) else {}
@@ -785,6 +819,7 @@ def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: o
         "phase": "07",
         "git_head": git_head,
         "git_tree": git_tree,
+        "git_worktree_sha256": git_worktree,
         "technical_qualification": "BLOCKED",
         "release_qualification": "BLOCKED",
         "release_blockers": list(LEGAL_BLOCKERS),
@@ -798,13 +833,23 @@ def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: o
     }
 
 
-def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary: ValidatedStageSummary, test_commands: list[dict[str, Any]], license_summary: dict[str, Any], git_head: str, git_tree: str) -> dict[str, Any]:
+def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary: ValidatedStageSummary, test_commands: list[dict[str, Any]], license_summary: dict[str, Any], git_head: str, git_tree: str, git_worktree: str = "") -> dict[str, Any]:
     """Aggregate only typed validators and successful command receipts."""
 
     if not isinstance(receipt_summary, ValidatedReceiptSummary) or not receipt_summary.is_validated:
         return _blocked_aggregate(reason="unvalidated-prior-phase-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     if not isinstance(stage_summary, ValidatedStageSummary) or not stage_summary.is_validated:
         return _blocked_aggregate(reason="unvalidated-stage-inputs", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    # Re-read the immutable inputs at the aggregation boundary.  The typed
+    # wrappers are intentionally opaque, but a Python caller could otherwise
+    # mutate their fields after validation and launder a different corpus.
+    try:
+        fresh_receipts = validate_receipts()
+        fresh_stage = validate_stage_and_inputs(STAGE_ROOT, PHASE7_LOCK, PHASE7_CANARY)
+        if receipt_summary.to_dict() != fresh_receipts.to_dict() or stage_summary.to_dict() != fresh_stage.to_dict():
+            raise VerificationError("validated summary changed after input qualification")
+    except (OSError, VerificationError):
+        return _blocked_aggregate(reason="validated-summary-drift", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     if not isinstance(test_commands, list) or not test_commands:
         return _blocked_aggregate(reason="missing-command-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands if isinstance(test_commands, list) else [], license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     names = tuple(command.get("name") if isinstance(command, dict) else None for command in test_commands)
@@ -815,7 +860,7 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
             return _blocked_aggregate(reason=f"command-{index}-failed", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         try:
             result_path = command.result_path
-            if not result_path.is_file() or read_json(result_path) != dict(command):
+            if not result_path.is_file() or not result_path.resolve().is_relative_to(EVIDENCE_BASE) or result_path.name != "result.json" or result_path.parent.name != command.get("name") or read_json(result_path) != dict(command) or result_path.read_bytes() != canonical(dict(command)):
                 raise VerificationError("command result is not bound to verifier-owned receipt")
             if digest_file(result_path.parent / "stdout.log") != command.get("stdout_sha256") or digest_file(result_path.parent / "stderr.log") != command.get("stderr_sha256"):
                 raise VerificationError("command stream digest is not bound to verifier-owned receipt")
@@ -837,6 +882,8 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
         return _blocked_aggregate(reason="license-receipt-incomplete", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     if not GIT_SHA_RE.fullmatch(git_head) or not GIT_SHA_RE.fullmatch(git_tree):
         return _blocked_aggregate(reason="git-identity-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if not SHA256_RE.fullmatch(git_worktree):
+        return _blocked_aggregate(reason="git-worktree-identity-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree, git_worktree=git_worktree)
     requirements = {
         "VER-02": {"status": "PASS", "evidence": ["installed-qualification", "stage-qualification", "host-canary"]},
         "VER-04": {"status": "PASS", "evidence": ["recovery-matrix"]},
@@ -848,6 +895,7 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
         "phase": "07",
         "git_head": git_head,
         "git_tree": git_tree,
+        "git_worktree_sha256": git_worktree,
         "technical_qualification": "PASS",
         "release_qualification": "BLOCKED",
         "release_blockers": list(LEGAL_BLOCKERS),
@@ -868,7 +916,7 @@ def main(argv: list[str] | None = None) -> int:
     root: Path | None = None
     try:
         root = owned_root(args.evidence_root, clean=args.clean)
-        write_json(root / "preflight.json", {"schema_version": "arw.phase7-preflight.v1", "phase": "07", "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True).strip()})
+        write_json(root / "preflight.json", {"schema_version": "arw.phase7-preflight.v1", "phase": "07", "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True).strip(), "git_worktree_sha256": worktree_digest()})
 
         # Existing Wave 1–3 receipts are immutable inputs.  Copy their hashes
         # into the owned root before running commands; never overwrite them.
@@ -897,7 +945,8 @@ def main(argv: list[str] | None = None) -> int:
         license_summary = _license_verdict()
         git_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True).strip()
         git_tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=PROJECT_ROOT, text=True).strip()
-        verdict = aggregate_verdict(receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=command_records, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+        git_worktree = worktree_digest()
+        verdict = aggregate_verdict(receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=command_records, license_summary=license_summary, git_head=git_head, git_tree=git_tree, git_worktree=git_worktree)
         write_json(root / "requirements.json", verdict["requirements"])
         write_json(root / "phase-7-verification.json", verdict)
         write_json(root / "verdict.json", verdict)
