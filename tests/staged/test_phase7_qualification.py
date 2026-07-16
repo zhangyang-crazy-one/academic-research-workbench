@@ -23,9 +23,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 STAGE_ROOT = REPOSITORY_ROOT / "build/stage/phase-07-qualified"
 LOCK_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/integration-lock.json"
 ARS_ROOT = Path(
-    os.environ.get(
-        "ARW_ARS_ROOT", "/home/user/.codex/skills/academic-research-suite"
-    )
+    os.environ.get("ARW_ARS_ROOT", str(REPOSITORY_ROOT / "build/external-ars"))
 ).resolve()
 CANARY_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/host-canary/canary.json"
 
@@ -92,10 +90,9 @@ def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
         "ARW_PLUGIN_ROOT": str(qualified_stage),
         "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
         "ARW_ARS_ROOT": str(ARS_ROOT),
-        "ARW_CODEX_LAUNCHER": "codex",
-        "ARW_CODEX_NATIVE_BINARY": (
-            "/opt/codex/node_modules/"
-            "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+        "ARW_CODEX_LAUNCHER": os.environ.get("ARW_CODEX_LAUNCHER", "codex"),
+        "ARW_CODEX_NATIVE_BINARY": os.environ.get(
+            "ARW_CODEX_NATIVE_BINARY", "codex"
         ),
         "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
     }

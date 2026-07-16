@@ -504,6 +504,14 @@ def host_qualification(
         stage_root = stage_root.resolve(strict=True)
         integration_lock = integration_lock.resolve(strict=True)
         external_ars_root = external_ars_root.resolve(strict=True)
+        launcher_path = codex_launcher
+        if launcher_path is None:
+            discovered = shutil.which("codex")
+            if not discovered:
+                raise VerificationError(
+                    "--require-host needs --codex-launcher or an executable codex on PATH", 64
+                )
+            launcher_path = Path(discovered)
         if host_canary_evidence is None:
             live_evidence = host_root / "live-canary"
             work_parent = (PROJECT_ROOT / "build/tmp").resolve()
@@ -511,6 +519,14 @@ def host_qualification(
             work_root = work_parent / f"verify-phase4-host-{os.getpid()}"
             if work_root.exists():
                 raise VerificationError(f"refusing to reuse host work root: {work_root}", 73)
+            credential_path = credential_source
+            if credential_path is None:
+                configured_home = os.environ.get("CODEX_HOME")
+                if not configured_home:
+                    raise VerificationError(
+                        "--require-host needs --credential-source or CODEX_HOME", 64
+                    )
+                credential_path = Path(configured_home)
             host_canary_evidence = live_evidence
             command = [
                 str(PROJECT_ROOT / "scripts/qualify-codex-host"),
@@ -521,9 +537,9 @@ def host_qualification(
                 "--work-root",
                 str(work_root),
                 "--credential-source",
-                str((credential_source or Path(os.environ.get("CODEX_HOME", "/home/user/.config/codex-runtime-home/home"))).resolve()),
+                str(credential_path.resolve()),
                 "--codex-launcher",
-                str((codex_launcher or Path(shutil.which("codex") or "codex")).resolve()),
+                str(launcher_path.resolve()),
             ]
             statuses.append(run_command(root, "host-canary", command, required=False))
             if statuses != [0]:
@@ -553,10 +569,7 @@ def host_qualification(
             if native is None:
                 from arw.integration_lock import discover_codex_native_binary
 
-                native = discover_codex_native_binary(
-                    codex_launcher
-                    or Path(shutil.which("codex") or "codex")
-                )
+                native = discover_codex_native_binary(launcher_path)
             verification = load_and_verify_integration_lock(
                 integration_lock,
                 stage_root=stage_root,
@@ -564,8 +577,7 @@ def host_qualification(
                 # Preserve the invoked symlink/path as part of the host tuple;
                 # resolving it here would silently change a qualified launcher
                 # identity after the canary has already run.
-                codex_launcher=codex_launcher
-                or Path(shutil.which("codex") or "codex"),
+                codex_launcher=launcher_path,
                 codex_native_binary=native,
                 host_canary_evidence=host_canary_evidence,
             )

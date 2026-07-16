@@ -202,7 +202,7 @@ def _bwrap_prefix(fresh_root: Path) -> list[str]:
         "--clearenv",
         "--setenv",
         "PATH",
-        "/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin",
+        os.pathsep.join(("/opt/node/bin", os.defpath)),
         "--setenv",
         "HOME",
         "/work/home",
@@ -627,6 +627,10 @@ def qualify(args: argparse.Namespace) -> Path:
     evidence_root = _safe_new_root(args.evidence_root, label="evidence root")
     work_root = _safe_new_root(args.work_root, label="work root")
     auth_source = args.credential_source.resolve() / "auth.json"
+    if not args.codex_launcher:
+        raise CanaryError(
+            "Codex launcher is unavailable; set ARW_CODEX_EXECUTABLE or pass --codex-launcher"
+        )
     launcher = Path(args.codex_launcher).absolute()
     if not launcher.exists():
         raise CanaryError("Codex launcher path is unavailable")
@@ -740,19 +744,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--credential-source",
         type=Path,
-        default=Path(
-            os.environ.get(
-                "CODEX_HOME", "/home/user/.config/codex-runtime-home/home"
-            )
-        ),
+        required=True,
     )
     parser.add_argument(
         "--codex-launcher",
-        default=(
-            shutil.which("codex")
-            or "/opt/codex/node_modules/"
-            "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
-        ),
+        default=os.environ.get("ARW_CODEX_EXECUTABLE") or shutil.which("codex"),
     )
     return parser
 

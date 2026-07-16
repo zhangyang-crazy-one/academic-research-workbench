@@ -185,16 +185,13 @@ def command_environment(home: Path, codex_home: Path) -> dict[str, str]:
     # (the system `codex` shim is not guaranteed to survive host cleanup).
     # Materialize a per-canary command shim so all recorded probes exercise the
     # exact installed host without mutating PATH or relying on a caller alias.
-    launcher = Path(
-        os.environ.get(
-            "ARW_CODEX_EXECUTABLE",
-            "/opt/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+    configured = os.environ.get("ARW_CODEX_EXECUTABLE")
+    discovered = configured or shutil.which("codex")
+    if not discovered:
+        raise CanaryDefect(
+            "Codex launcher is unavailable; set ARW_CODEX_EXECUTABLE or install codex on PATH"
         )
-    )
-    if not launcher.is_file():
-        discovered = shutil.which("codex")
-        if discovered:
-            launcher = Path(discovered).resolve()
+    launcher = Path(discovered).resolve()
     if not launcher.is_file():
         raise CanaryDefect(f"Codex launcher is unavailable: {launcher}")
     shim = home.parent / "codex"

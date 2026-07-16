@@ -53,18 +53,15 @@ from .test_orchestration_lifecycle import _run as _init_run
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ARS_ROOT = Path(
-    os.environ.get(
-        "ARW_ARS_ROOT", "/home/user/.codex/skills/academic-research-suite"
-    )
+    os.environ.get("ARW_ARS_ROOT", str(REPOSITORY_ROOT / "build/external-ars"))
 ).resolve()
 PLUGIN_NAME = "academic-research-workbench"
 LOCK_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/integration-lock.json"
 CANARY_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/host-canary/canary.json"
-CODEX_LAUNCHER = Path("codex")
-CODEX_NATIVE = Path(
-    "/opt/codex/node_modules/"
-    "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+CODEX_LAUNCHER = Path(
+    os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex"
 )
+CODEX_NATIVE = Path(os.environ.get("ARW_CODEX_NATIVE_BINARY") or CODEX_LAUNCHER)
 
 
 def _digest(path: Path) -> str:
