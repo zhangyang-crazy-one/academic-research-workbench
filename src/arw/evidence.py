@@ -8,8 +8,10 @@ import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+import re
 
-from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.faults import FAULT_SPECS
 
 
 ALLOWLISTED_ENVIRONMENT = (
@@ -21,6 +23,82 @@ ALLOWLISTED_ENVIRONMENT = (
 _SIDEcar_SECRET_PATTERN = re.compile(
     r"(?i)(api[_-]?key|access[_-]?token|password|passwd|secret|authorization|bearer|private[_-]?key|\bsk-[a-z0-9]+)"
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_FAULT_CLASSIFICATIONS = frozenset(
+    {"RETRYABLE", "DURABLE_OBSERVATION", "BLOCKED", "RECOVERABLE", "RECOVERED_TAIL", "REJECTED"}
+)
+
+
+def _validate_relative_path(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value or value.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:[\\/]", value):
+        raise ValueError(f"{label} must be a relative path")
+    if ".." in Path(value).parts:
+        raise ValueError(f"{label} cannot contain '..'")
+    return value
+
+
+def _validate_digest(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not _SHA256_PATTERN.fullmatch(value):
+        raise ValueError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def validate_fault_sidecar_payload(payload: Mapping[str, object]) -> None:
+    """Validate the parent-owned fault sidecar contract before publication."""
+
+    fault_id = payload.get("fault_id")
+    if not isinstance(fault_id, str) or fault_id not in FAULT_SPECS:
+        raise ValueError("fault sidecar fault_id is not registered")
+    boundary = payload.get("boundary")
+    if boundary != FAULT_SPECS[fault_id].boundary:
+        raise ValueError("fault sidecar boundary does not match registered fault")
+    _validate_relative_path(payload.get("run_relative_root"), label="run_relative_root")
+    if payload.get("replay_classification") not in _FAULT_CLASSIFICATIONS:
+        raise ValueError("fault sidecar replay classification is not registered")
+    reason = payload.get("reason_code")
+    if not isinstance(reason, str) or not re.fullmatch(r"[a-z][a-z0-9._-]{2,95}", reason):
+        raise ValueError("fault sidecar reason_code is malformed")
+    retry_count = payload.get("retry_count")
+    if isinstance(retry_count, bool) or not isinstance(retry_count, int) or not 0 <= retry_count <= 1:
+        raise ValueError("fault sidecar retry_count must be between 0 and 1")
+    _validate_digest(payload.get("event_sequence_sha256"), label="event_sequence_sha256")
+    recovery_classification = str(payload.get("replay_classification", ""))
+    recovery_digest = payload.get("canonical_recovery_event_sha256")
+    if recovery_classification.startswith("RECOVERED_"):
+        _validate_digest(recovery_digest, label="canonical_recovery_event_sha256")
+    elif recovery_digest is not None:
+        _validate_digest(recovery_digest, label="canonical_recovery_event_sha256")
+    snapshots = payload.get("file_snapshots")
+    if not isinstance(snapshots, Mapping):
+        raise ValueError("fault sidecar file_snapshots must be an object")
+    for relative, digest in snapshots.items():
+        _validate_relative_path(relative, label="file snapshot path")
+        _validate_digest(digest, label=f"file snapshot {relative}")
+    process_state = payload.get("process_state")
+    if not isinstance(process_state, Mapping):
+        raise ValueError("fault sidecar process_state must be an object")
+    returncode = process_state.get("returncode")
+    if returncode is not None and (isinstance(returncode, bool) or not isinstance(returncode, int)):
+        raise ValueError("fault sidecar process returncode is malformed")
+
+
+def validate_fault_sidecar(path: Path) -> Mapping[str, object]:
+    """Cold-validate a sidecar and its sibling digest before replay accepts it."""
+
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("fault sidecar is missing or unsafe")
+    payload = strict_json_loads(path.read_bytes())
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != "arw.phase7-fault-sidecar.v1":
+        raise ValueError("fault sidecar schema is invalid")
+    validate_fault_sidecar_payload(payload)
+    digest_path = path.with_name("sidecar.sha256")
+    if digest_path.is_symlink() or not digest_path.is_file():
+        raise ValueError("fault sidecar digest is missing or unsafe")
+    expected = digest_path.read_text(encoding="ascii").strip()
+    actual = sha256_hex(path.read_bytes())
+    if expected != actual:
+        raise ValueError("fault sidecar digest mismatch")
+    return payload
 
 
 def _assert_bounded_fault_value(value: object, *, key: str = "") -> None:
@@ -89,6 +167,7 @@ def write_fault_sidecar(
         "event_sequence_sha256": event_sequence_sha256,
         "canonical_recovery_event_sha256": canonical_recovery_event_sha256,
     }
+    validate_fault_sidecar_payload(payload)
     _assert_bounded_fault_value(payload)
     output_root.mkdir(parents=True, exist_ok=True)
     sidecar = output_root / "sidecar.json"

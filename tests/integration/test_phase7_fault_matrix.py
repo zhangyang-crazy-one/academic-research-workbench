@@ -220,6 +220,57 @@ def test_phase7_fault_registry_is_guarded_and_stable(tmp_path: Path, monkeypatch
         RuntimeCommandService(root).read_state()
 
 
+def test_phase7_fault_sidecar_rejects_forged_identity_boundary_and_retry(tmp_path: Path) -> None:
+    """Sidecars cannot invent a fault, boundary, digest, or second retry."""
+
+    base = {
+        "fault_id": "phase7.canonical-write-before-commit",
+        "boundary": "canonical-write",
+        "run_relative_root": "run",
+        "replay_classification": "RETRYABLE",
+        "reason_code": "write-before-commit",
+        "retry_count": 0,
+        "event_sequence_sha256": "a" * 64,
+        "canonical_recovery_event_sha256": None,
+        "file_snapshots": {"journal/manifest.json": "b" * 64},
+        "process_state": {"returncode": 1, "signal": None},
+    }
+    from arw.evidence import validate_fault_sidecar_payload
+
+    for mutation, pattern in (
+        ({"fault_id": "phase7.not-registered"}, "not registered"),
+        ({"boundary": "host-dispatch"}, "does not match"),
+        ({"retry_count": 2}, "between 0 and 1"),
+        ({"event_sequence_sha256": "not-a-digest"}, "SHA-256"),
+    ):
+        candidate = {**base, **mutation}
+        with pytest.raises(ValueError, match=pattern):
+            validate_fault_sidecar_payload(candidate)
+    recovered = {**base, "replay_classification": "RECOVERED_TAIL"}
+    with pytest.raises(ValueError, match="canonical_recovery_event"):
+        validate_fault_sidecar_payload(recovered)
+
+
+def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
+    from arw.evidence import validate_fault_sidecar, write_fault_sidecar
+
+    root = tmp_path / "sidecar"
+    write_fault_sidecar(
+        root,
+        fault_id="phase7.canonical-write-before-commit",
+        boundary="canonical-write",
+        run_relative_root="run",
+        replay_classification="RETRYABLE",
+        reason_code="write-before-commit",
+        retry_count=1,
+        event_sequence_sha256="a" * 64,
+    )
+    assert validate_fault_sidecar(root / "sidecar.json")["fault_id"] == "phase7.canonical-write-before-commit"
+    (root / "sidecar.sha256").write_text("0" * 64 + "\n", encoding="ascii")
+    with pytest.raises(ValueError, match="digest mismatch"):
+        validate_fault_sidecar(root / "sidecar.json")
+
+
 def test_phase7_write_and_fsync_boundaries_have_distinct_replay_semantics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -42,6 +43,89 @@ LEGAL_BLOCKERS = (
     "CC_BY_NC_PERMISSION_UNRESOLVED",
 )
 REQUIREMENTS = ("VER-02", "VER-04", "VER-06", "VER-08")
+STAGE_BASE = (PROJECT_ROOT / "build/stage").resolve()
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+# The verifier is intentionally a positive-environment subprocess boundary.
+# Credentials and profile discovery variables are not inherited even when a
+# caller happens to export them in its shell.
+SAFE_ENVIRONMENT = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "CODEX_HOME",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        "PYTHONPATH",
+        "ARW_ARS_ROOT",
+        "ARW_PLUGIN_ROOT",
+        "ARW_INTEGRATION_LOCK",
+        "ARW_HOST_CANARY_EVIDENCE",
+        "ARW_CODEX_LAUNCHER",
+        "ARW_CODEX_NATIVE_BINARY",
+        "ARW_PHASE7_STAGE",
+        "ARW_PHASE7_LOCK",
+        "ARW_PHASE7_CANARY",
+        "UV_OFFLINE",
+        "PYTHONNOUSERSITE",
+        "PIP_NO_INDEX",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+    }
+)
+SECRET_MARKER_RE = re.compile(
+    r"(?i)(?:openai[_-]?api[_-]?key|api[_-]?key|access[_-]?token|refresh[_-]?token|"
+    r"password|passwd|authorization|bearer|private[_-]?key|client[_-]?secret|"
+    r"secret[_-]?(?:key|token|value)?|\bsk-[A-Za-z0-9_-]{8,})"
+)
+
+
+class ValidatedReceiptSummary:
+    """Receipt summary produced only by the prior-phase validators."""
+
+    __slots__ = ("phase5_graph", "phase41_independence")
+
+    def __init__(self, phase5_graph: dict[str, Any], phase41_independence: dict[str, Any]) -> None:
+        self.phase5_graph = phase5_graph
+        self.phase41_independence = phase41_independence
+
+    def __getitem__(self, key: str) -> dict[str, Any]:
+        if key == "phase5_graph":
+            return self.phase5_graph
+        if key == "phase41_independence":
+            return self.phase41_independence
+        raise KeyError(key)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "phase5_graph": self.phase5_graph,
+            "phase41_independence": self.phase41_independence,
+        }
+
+
+class ValidatedStageSummary:
+    __slots__ = ("stage_sha256", "integration_lock_sha256", "host_canary_sha256", "stage_relative_path", "lock_relative_path", "canary_relative_path")
+
+    def __init__(self, *, stage_sha256: str, integration_lock_sha256: str, host_canary_sha256: str, stage_relative_path: str, lock_relative_path: str, canary_relative_path: str) -> None:
+        self.stage_sha256 = stage_sha256
+        self.integration_lock_sha256 = integration_lock_sha256
+        self.host_canary_sha256 = host_canary_sha256
+        self.stage_relative_path = stage_relative_path
+        self.lock_relative_path = lock_relative_path
+        self.canary_relative_path = canary_relative_path
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "stage_sha256": self.stage_sha256,
+            "integration_lock_sha256": self.integration_lock_sha256,
+            "host_canary_sha256": self.host_canary_sha256,
+            "stage_relative_path": self.stage_relative_path,
+            "lock_relative_path": self.lock_relative_path,
+            "canary_relative_path": self.canary_relative_path,
+        }
 
 
 class VerificationError(RuntimeError):
@@ -68,11 +152,30 @@ def digest_file(path: Path) -> str:
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    if path.is_symlink() or not path.is_file():
+    try:
+        mode = path.lstat().st_mode
+    except OSError as error:
+        raise VerificationError(f"missing or unsafe JSON evidence: {path}") from error
+    if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
         raise VerificationError(f"missing or unsafe JSON evidence: {path}")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        def reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            result: dict[str, object] = {}
+            for key, item in pairs:
+                if key in result:
+                    raise ValueError(f"duplicate JSON object key: {key}")
+                result[key] = item
+            return result
+
+        raw = path.read_bytes()
+        value = json.loads(
+            raw,
+            object_pairs_hook=reject_duplicate_pairs,
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"non-finite JSON number rejected: {token}")
+            ),
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
         raise VerificationError(f"invalid JSON evidence {path}: {error}") from error
     if not isinstance(value, dict):
         raise VerificationError(f"JSON evidence must be an object: {path}")
@@ -90,33 +193,109 @@ def owned_root(raw: Path, *, clean: bool = False) -> Path:
     candidate = raw.expanduser()
     if not candidate.is_absolute():
         candidate = PROJECT_ROOT / candidate
+    # Reject traversal lexically.  ``absolute()`` deliberately does not
+    # normalize ``..`` and resolving first would allow a path to escape before
+    # the ownership check runs.
+    if ".." in candidate.parts:
+        raise VerificationError("evidence root cannot contain '..' components", 64)
     candidate = candidate.absolute()
     if candidate == EVIDENCE_BASE or not candidate.is_relative_to(EVIDENCE_BASE):
         raise VerificationError(f"evidence root must be below {EVIDENCE_BASE}", 64)
     current = EVIDENCE_BASE
     for component in candidate.relative_to(EVIDENCE_BASE).parts:
         current /= component
-        if current.is_symlink():
-            raise VerificationError("evidence root cannot contain symlink components", 64)
+        try:
+            if stat.S_ISLNK(current.lstat().st_mode):
+                raise VerificationError("evidence root cannot contain symlink components", 64)
+        except FileNotFoundError:
+            # Missing descendants are safe to create; continue checking any
+            # later existing component only after its parent is created.
+            pass
+        except OSError as error:
+            raise VerificationError("evidence root component cannot be inspected", 64) from error
+    resolved_base = EVIDENCE_BASE.resolve(strict=True)
     root = candidate.resolve(strict=False)
+    if root == resolved_base or not root.is_relative_to(resolved_base):
+        raise VerificationError("resolved evidence root escaped owned base", 64)
     if root.exists():
-        if root.is_symlink() or not root.is_dir():
+        try:
+            root_mode = root.lstat().st_mode
+        except OSError as error:
+            raise VerificationError("evidence root is unsafe", 64) from error
+        if stat.S_ISLNK(root_mode) or not stat.S_ISDIR(root_mode):
             raise VerificationError("evidence root is unsafe", 64)
         marker = root / MARKER
-        if not clean or marker.is_symlink() or not marker.is_file():
+        try:
+            marker_mode = marker.lstat().st_mode
+        except OSError as error:
+            raise VerificationError("existing evidence root is not an owned cleanable root", 64) from error
+        if not clean or stat.S_ISLNK(marker_mode) or not stat.S_ISREG(marker_mode):
             raise VerificationError("existing evidence root is not an owned cleanable root", 64)
         shutil.rmtree(root)
     root.mkdir(parents=True)
-    (root / MARKER).write_text("phase-7 evidence\n", encoding="ascii")
+    marker = root / MARKER
+    marker.write_text("phase-7 evidence\n", encoding="ascii")
     return root
+
+
+def _safe_phase7_input(raw: Path, *, base: Path, label: str) -> Path:
+    """Validate a lexical input before resolving it.
+
+    Every existing component is inspected with ``lstat`` so a symlink cannot
+    be hidden by ``Path.resolve``.  The returned path is the exact resolved
+    object that was checked and is later recorded in the stage receipt.
+    """
+
+    candidate = raw.expanduser()
+    if not candidate.is_absolute():
+        candidate = PROJECT_ROOT / candidate
+    if ".." in candidate.parts:
+        raise VerificationError(f"{label}: path cannot contain '..' components", 64)
+    lexical = candidate.absolute()
+    resolved_base = base.resolve(strict=True)
+    if lexical == resolved_base or not lexical.is_relative_to(resolved_base):
+        raise VerificationError(f"{label}: path must remain below {resolved_base}", 64)
+    try:
+        relative = lexical.relative_to(resolved_base)
+    except ValueError as error:
+        raise VerificationError(f"{label}: path is outside expected base", 64) from error
+    current = resolved_base
+    try:
+        if stat.S_ISLNK(current.lstat().st_mode):
+            raise VerificationError(f"{label}: expected base is a symlink", 64)
+    except OSError as error:
+        raise VerificationError(f"{label}: expected base cannot be inspected", 64) from error
+    parts = relative.parts
+    for index, component in enumerate(parts):
+        current /= component
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            if index != len(parts) - 1:
+                raise VerificationError(f"{label}: missing parent component", 64)
+            break
+        except OSError as error:
+            raise VerificationError(f"{label}: path component cannot be inspected", 64) from error
+        if stat.S_ISLNK(mode):
+            raise VerificationError(f"{label}: symlink path component is not allowed", 64)
+        if index != len(parts) - 1 and not stat.S_ISDIR(mode):
+            raise VerificationError(f"{label}: non-directory parent component", 64)
+    resolved = lexical.resolve(strict=False)
+    if resolved == resolved_base or not resolved.is_relative_to(resolved_base):
+        raise VerificationError(f"{label}: resolved path escaped expected base", 64)
+    return resolved
 
 
 def _redact(text: bytes) -> bytes:
     """Keep bounded diagnostics while removing host paths and secret-like data."""
 
     value = text.decode("utf-8", "replace")
+    if SECRET_MARKER_RE.search(value):
+        # A secret-bearing stream is not safe to persist.  Do not try to
+        # preserve a partially redacted transcript: fail closed before any
+        # stdout/stderr evidence is written.
+        raise VerificationError("verifier subprocess emitted a secret marker")
     value = value.replace(str(PROJECT_ROOT), "<project>")
-    value = re.sub(r"(?i)(openai_api_key|api[_-]?key|access[_-]?token|refresh[_-]?token)=\S+", r"\1=<redacted>", value)
     value = re.sub(r"(?:/(?:[^\s:/]+/)+[^\s:]+)", "<path>", value)
     return value[:MAX_CAPTURE].encode("utf-8")
 
@@ -126,12 +305,14 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
 
     command_root = root / "commands" / name
     command_root.mkdir(parents=True, exist_ok=True)
-    environment = os.environ.copy()
+    environment = {key: value for key, value in os.environ.items() if key in SAFE_ENVIRONMENT}
     temporary = PROJECT_ROOT / "build/tmp/phase-07" / name
     temporary.mkdir(parents=True, exist_ok=True)
     environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
     if env:
-        environment.update(env)
+        environment.update({key: value for key, value in env.items() if key in SAFE_ENVIRONMENT})
+    # These controls are verifier-owned and cannot be overridden by a caller.
+    environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
     result = subprocess.run(argv, cwd=PROJECT_ROOT, env=environment, capture_output=True, check=False, timeout=timeout)
     stdout = _redact(result.stdout)
     stderr = _redact(result.stderr)
@@ -153,9 +334,60 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
 
 
 def _require_file(path: Path, label: str) -> Path:
-    if path.is_symlink() or not path.is_file():
+    try:
+        mode = path.lstat().st_mode
+    except OSError as error:
+        raise VerificationError(f"{label}: missing or unsafe receipt {path}") from error
+    if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
         raise VerificationError(f"{label}: missing or unsafe receipt {path}")
     return path
+
+
+def _canonical_receipt(path: Path, label: str) -> tuple[dict[str, Any], str]:
+    """Read a strict object and derive its digest from canonical JSON bytes."""
+
+    value = read_json(path)
+    try:
+        payload = canonical(value)
+    except (TypeError, ValueError) as error:
+        raise VerificationError(f"{label}: JSON is not canonicalizable") from error
+    return value, digest_bytes(payload)
+
+
+def _require_sha(value: object, label: str) -> str:
+    if not isinstance(value, str) or not SHA256_RE.fullmatch(value):
+        raise VerificationError(f"{label}: expected lowercase SHA-256 digest")
+    return value
+
+
+def _validate_stage_tree(stage_tree: dict[str, Any]) -> tuple[str, str]:
+    """Recompute every staged content digest and the build identity digest."""
+
+    rows = stage_tree.get("files")
+    if not isinstance(rows, list) or not rows:
+        raise VerificationError("phase5-graph-equivalence: stage-tree files are missing")
+    seen: set[str] = set()
+    stage = PROJECT_ROOT / "build/stage/phase-05"
+    if not stage.is_dir() or stage.is_symlink():
+        raise VerificationError("phase5-graph-equivalence: retained phase5 stage is missing")
+    for item in rows:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise VerificationError("phase5-graph-equivalence: malformed stage-tree row")
+        relative = item["path"]
+        path = Path(relative)
+        if path.is_absolute() or ".." in path.parts or relative in seen:
+            raise VerificationError("phase5-graph-equivalence: unsafe or duplicate stage-tree path")
+        seen.add(relative)
+        expected = _require_sha(item.get("sha256"), f"phase5 stage-tree {relative}")
+        staged = stage / path
+        _require_file(staged, f"phase5 stage-tree {relative}")
+        if digest_file(staged) != expected:
+            raise VerificationError(f"phase5-graph-equivalence: staged content digest mismatch: {relative}")
+    actual = {p.relative_to(stage).as_posix() for p in stage.rglob("*") if p.is_file() and not p.is_symlink()}
+    if actual != seen:
+        raise VerificationError("phase5-graph-equivalence: stage-tree coverage is incomplete")
+    identity = _require_file(stage / "share/arw/build-identity.json", "phase5 build identity")
+    return digest_file(identity), digest_bytes(canonical(sorted((row["path"], row["sha256"]) for row in rows)))
 
 
 def _validate_phase5(root: Path) -> dict[str, Any]:
@@ -164,9 +396,9 @@ def _validate_phase5(root: Path) -> dict[str, Any]:
     verdict_path = _require_file(root / "verdict.json", "phase5 graph verdict")
     summary_path = _require_file(root / "summary.json", "phase5 graph summary")
     stage_tree_path = _require_file(root / "stage-tree.json", "phase5 stage tree")
-    verdict = read_json(verdict_path)
-    summary = read_json(summary_path)
-    stage_tree = read_json(stage_tree_path)
+    verdict, verdict_canonical_sha256 = _canonical_receipt(verdict_path, "phase5 graph verdict")
+    summary, summary_canonical_sha256 = _canonical_receipt(summary_path, "phase5 graph summary")
+    stage_tree, stage_tree_canonical_sha256 = _canonical_receipt(stage_tree_path, "phase5 stage tree")
     if verdict.get("technical_qualification") != "PASS" or summary.get("technical_qualification") != "PASS":
         raise VerificationError("phase5-graph-equivalence: technical receipt is not PASS")
     if verdict.get("release_qualification") != "BLOCKED":
@@ -183,13 +415,16 @@ def _validate_phase5(root: Path) -> dict[str, Any]:
     if build_evidence is None:
         raise VerificationError("phase5-graph-equivalence: missing exact .file-base/build-evidence.json (fail-closed)")
     stage_rows = stage_tree.get("files")
-    if not isinstance(stage_rows, list):
-        raise VerificationError("phase5-graph-equivalence: stage-tree files are missing")
+    stage_identity_digest, stage_rows_digest = _validate_stage_tree(stage_tree)
     row = next((item for item in stage_rows if isinstance(item, dict) and item.get("path") == ".file-base/build-evidence.json"), None)
     if not isinstance(row, dict) or row.get("sha256") != digest_file(build_evidence):
         raise VerificationError("phase5-graph-equivalence: .file-base/build-evidence.json digest mismatch")
-    if verdict.get("stage_identity_sha256") != stage_tree.get("sha256"):
+    if verdict.get("stage_identity_sha256") != stage_tree.get("sha256") or verdict.get("stage_identity_sha256") != stage_identity_digest:
         raise VerificationError("phase5-graph-equivalence: stage identity is stale")
+    _require_sha(stage_tree.get("sha256"), "phase5 stage identity")
+    transcript_sha = _require_sha(verdict.get("mcp", {}).get("transcript_sha256"), "phase5 MCP transcript")
+    if transcript_sha != digest_file(mcp_transcript) or transcript_sha != summary.get("mcp_transcript_sha256"):
+        raise VerificationError("phase5-graph-equivalence: MCP transcript digest is stale")
     requirements = verdict.get("requirements")
     required = {"GRAPH-01", "GRAPH-02", "GRAPH-03", "GRAPH-04", "GRAPH-05", "GRAPH-06", "VER-05"}
     if not isinstance(requirements, dict) or any(requirements.get(req, {}).get("status") != "PASS" for req in required):
@@ -197,9 +432,11 @@ def _validate_phase5(root: Path) -> dict[str, Any]:
     return {
         "technical_qualification": "PASS",
         "release_qualification": "BLOCKED",
-        "verdict_sha256": digest_file(verdict_path),
-        "summary_sha256": digest_file(summary_path),
-        "stage_tree_sha256": digest_file(stage_tree_path),
+        "verdict_sha256": verdict_canonical_sha256,
+        "summary_sha256": summary_canonical_sha256,
+        "stage_tree_sha256": stage_tree_canonical_sha256,
+        "stage_rows_sha256": stage_rows_digest,
+        "stage_identity_sha256": stage_identity_digest,
         "graph_control_sha256": digest_file(graph_control),
         "mcp_transcript_sha256": digest_file(mcp_transcript),
         "file_base_build_evidence_path": str(build_evidence.relative_to(PROJECT_ROOT)),
@@ -212,30 +449,85 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
     """Validate retained Phase 4.1 subagent/panel independence receipts."""
 
     verdict_path = _require_file(root / "verdict.json", "phase4.1 independence verdict")
-    verdict = read_json(verdict_path)
+    verdict, verdict_canonical_sha256 = _canonical_receipt(verdict_path, "phase4.1 independence verdict")
     if verdict.get("technical_qualification") != "PASS":
         raise VerificationError("phase4.1-subagent-independence: technical receipt is not PASS")
-    host = read_json(_require_file(root / "host/integration-verification.json", "phase4.1 host integration"))
+    host_path = _require_file(root / "host/integration-verification.json", "phase4.1 host integration")
+    host, host_canonical_sha256 = _canonical_receipt(host_path, "phase4.1 host integration")
     if host.get("technical_qualification") != "PASS":
         raise VerificationError("phase4.1-subagent-independence: host receipt is not PASS")
-    for relative in ("host/qualification.json", "host/assessment.json", "review-packet/manifest.json", "review-packet/packet-status.json", "corpus/evaluation-summary.json"):
-        _require_file(root / relative, "phase4.1 independence")
+    qualification_path = _require_file(root / "host/qualification.json", "phase4.1 host qualification")
+    assessment_path = _require_file(root / "host/assessment.json", "phase4.1 host assessment")
+    packet_manifest_path = _require_file(root / "review-packet/manifest.json", "phase4.1 review packet")
+    packet_status_path = _require_file(root / "review-packet/packet-status.json", "phase4.1 packet status")
+    evaluation_path = _require_file(root / "corpus/evaluation-summary.json", "phase4.1 evaluation summary")
+    qualification, qualification_canonical_sha256 = _canonical_receipt(qualification_path, "phase4.1 host qualification")
+    assessment, assessment_canonical_sha256 = _canonical_receipt(assessment_path, "phase4.1 host assessment")
+    packet_manifest, packet_manifest_canonical_sha256 = _canonical_receipt(packet_manifest_path, "phase4.1 review packet")
+    packet_status, packet_status_canonical_sha256 = _canonical_receipt(packet_status_path, "phase4.1 packet status")
+    evaluation, evaluation_canonical_sha256 = _canonical_receipt(evaluation_path, "phase4.1 evaluation summary")
+    try:
+        import jsonschema
+        qualification_schema = json.loads((PROJECT_ROOT / "schemas/v1/host-qualification.schema.json").read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator(qualification_schema).validate(qualification)
+    except (ImportError, OSError, json.JSONDecodeError, jsonschema.ValidationError) as error:
+        raise VerificationError(f"phase4.1-subagent-independence: host qualification schema invalid: {error}") from error
+    if assessment.get("status") != "PASS" or assessment.get("exact_tuple") is not True or not assessment.get("canary_returncodes") or any(code != 0 for code in assessment["canary_returncodes"]):
+        raise VerificationError("phase4.1-subagent-independence: host assessment is incomplete")
+    if packet_status.get("technical_qualification") != "PASS" or packet_status.get("human_gate") != "BLOCKED":
+        raise VerificationError("phase4.1-subagent-independence: packet status is incomplete")
+    if packet_manifest.get("schema_version") != "arw.phase4-review-packet.v1" or packet_manifest.get("worker_facing_labels_included") is not False:
+        raise VerificationError("phase4.1-subagent-independence: review packet schema/status is invalid")
+    if evaluation.get("schema_version") != "arw.phase4-corpus-evaluation.v1" or evaluation.get("total_cases") != 48 or evaluation.get("sealed_parent_only_cases") != 16:
+        raise VerificationError("phase4.1-subagent-independence: evaluation summary is incomplete")
     case_results = sorted((root / "corpus/case-results").glob("*.json"))
-    if not case_results:
+    expected_cases = {item.get("case_id") for item in evaluation.get("results", []) if isinstance(item, dict)}
+    if len(case_results) != 48 or expected_cases != {path.stem for path in case_results}:
         raise VerificationError("phase4.1-subagent-independence: corpus case results missing")
+    case_hashes: dict[str, str] = {}
+    try:
+        case_schema = json.loads((PROJECT_ROOT / "schemas/v1/phase4-evaluation-verdict.schema.json").read_text(encoding="utf-8"))
+        validator = jsonschema.Draft202012Validator(case_schema)
+        for path in case_results:
+            case, case_digest = _canonical_receipt(path, f"phase4.1 case {path.stem}")
+            validator.validate(case)
+            if case.get("case_id") != path.stem or case.get("terminal_status") not in {"PASS", "FAIL", "BLOCKED"}:
+                raise VerificationError(f"phase4.1-subagent-independence: malformed case {path.stem}")
+            case_hashes[path.stem] = case_digest
+    except (jsonschema.ValidationError, OSError, json.JSONDecodeError) as error:
+        raise VerificationError(f"phase4.1-subagent-independence: case schema invalid: {error}") from error
+    for item in evaluation.get("results", []):
+        if isinstance(item, dict) and item.get("result_sha256") != case_hashes.get(item.get("case_id")):
+            raise VerificationError(f"phase4.1-subagent-independence: case digest mismatch: {item.get('case_id')}")
+    inventory_path = _require_file(root / "raw-evidence-inventory.json", "phase4.1 raw evidence inventory")
+    inventory, inventory_canonical_sha256 = _canonical_receipt(inventory_path, "phase4.1 raw evidence inventory")
+    if verdict.get("evidence_index_sha256") != digest_file(inventory_path) or not isinstance(inventory.get("files"), list):
+        raise VerificationError("phase4.1-subagent-independence: parent evidence index is stale")
+    for item in inventory["files"]:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str) or Path(item["path"]).is_absolute() or ".." in Path(item["path"]).parts:
+            raise VerificationError("phase4.1-subagent-independence: unsafe inventory path")
+        receipt = _require_file(root / item["path"], f"phase4.1 inventory {item['path']}")
+        if item.get("sha256") != digest_file(receipt) or item.get("size") != receipt.stat().st_size:
+            raise VerificationError(f"phase4.1-subagent-independence: inventory digest mismatch: {item['path']}")
     command_hashes: dict[str, str] = {}
     for task in ("P04-05-T01", "P04-05-T02"):
         path = _require_file(root / f"commands/{task}/exit.json", f"phase4.1 {task}")
-        exit_record = read_json(path)
-        if exit_record.get("returncode") != 0:
+        exit_record, _ = _canonical_receipt(path, f"phase4.1 {task}")
+        if exit_record.get("returncode") != 0 or exit_record.get("stderr_truncated") is not False or exit_record.get("stdout_truncated") is not False:
             raise VerificationError(f"phase4.1-subagent-independence: {task} failed")
         command_hashes[task] = digest_file(path)
     if verdict.get("execution_verified") not in (False, True):
         raise VerificationError("phase4.1-subagent-independence: malformed execution status")
     return {
         "technical_qualification": "PASS",
-        "verdict_sha256": digest_file(verdict_path),
-        "host_integration_sha256": digest_file(root / "host/integration-verification.json"),
+        "verdict_sha256": verdict_canonical_sha256,
+        "host_integration_sha256": host_canonical_sha256,
+        "host_qualification_sha256": qualification_canonical_sha256,
+        "host_assessment_sha256": assessment_canonical_sha256,
+        "review_packet_sha256": packet_manifest_canonical_sha256,
+        "packet_status_sha256": packet_status_canonical_sha256,
+        "evaluation_summary_sha256": evaluation_canonical_sha256,
+        "evidence_index_sha256": inventory_canonical_sha256,
         "case_result_count": len(case_results),
         "case_results_sha256": digest_bytes(canonical([(path.name, digest_file(path)) for path in case_results])),
         "independence_command_exit_sha256": command_hashes,
@@ -243,19 +535,31 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
     }
 
 
-def validate_receipts(*, project_root: Path = PROJECT_ROOT, phase5_root: Path = PHASE5_ROOT, phase41_root: Path = PHASE41_ROOT) -> dict[str, Any]:
+def validate_receipts(*, project_root: Path = PROJECT_ROOT, phase5_root: Path = PHASE5_ROOT, phase41_root: Path = PHASE41_ROOT) -> ValidatedReceiptSummary:
     """Public helper used by verifier tests to validate prior-phase evidence."""
 
     del project_root  # roots are explicit parameters for tamper probes
-    return {"phase5_graph": _validate_phase5(phase5_root), "phase41_independence": _validate_phase41(phase41_root)}
+    return ValidatedReceiptSummary(_validate_phase5(phase5_root), _validate_phase41(phase41_root))
 
 
-def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> dict[str, Any]:
-    if stage.is_symlink() or not stage.is_dir():
+def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> ValidatedStageSummary:
+    stage = _safe_phase7_input(stage, base=STAGE_BASE, label="stage-qualification")
+    lock = _safe_phase7_input(lock, base=EVIDENCE_BASE, label="stage-qualification")
+    canary = _safe_phase7_input(canary, base=EVIDENCE_BASE, label="host-qualification")
+    # Callers must pass the result of _safe_phase7_input; repeat direct lstat
+    # checks here so this helper remains safe when imported independently.
+    for path, label in ((stage, "stage-qualification"), (lock, "stage-qualification"), (canary, "host-qualification")):
+        try:
+            mode = path.lstat().st_mode
+        except OSError as error:
+            raise VerificationError(f"{label}: missing or unsafe input {path}") from error
+        if stat.S_ISLNK(mode):
+            raise VerificationError(f"{label}: symlink input is not allowed {path}")
+    if not stage.is_dir():
         raise VerificationError(f"stage-qualification: missing staged package {stage}")
-    if lock.is_symlink() or not lock.is_file():
+    if not lock.is_file():
         raise VerificationError(f"stage-qualification: missing integration lock {lock}")
-    if canary.is_symlink() or not canary.is_file():
+    if not canary.is_file():
         raise VerificationError(f"host-qualification: missing exact host canary {canary}")
     lock_data = read_json(lock)
     canary_data = read_json(canary)
@@ -274,7 +578,14 @@ def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> dict[str
     missing = [relative for relative in required if not (stage / relative).is_file()]
     if missing:
         raise VerificationError(f"stage-qualification: required artifact missing: {missing}")
-    return {"stage_sha256": digest_bytes(canonical(sorted((p.relative_to(stage).as_posix(), digest_file(p)) for p in stage.rglob("*") if p.is_file()))), "integration_lock_sha256": digest_file(lock), "host_canary_sha256": digest_file(canary)}
+    return ValidatedStageSummary(
+        stage_sha256=digest_bytes(canonical(sorted((p.relative_to(stage).as_posix(), digest_file(p)) for p in stage.rglob("*") if p.is_file() and not p.is_symlink()))),
+        integration_lock_sha256=digest_file(lock),
+        host_canary_sha256=digest_file(canary),
+        stage_relative_path=stage.relative_to(PROJECT_ROOT).as_posix(),
+        lock_relative_path=lock.relative_to(PROJECT_ROOT).as_posix(),
+        canary_relative_path=canary.relative_to(PROJECT_ROOT).as_posix(),
+    )
 
 
 def _license_verdict() -> dict[str, Any]:
@@ -287,7 +598,49 @@ def _license_verdict() -> dict[str, Any]:
     return {"sha256": digest_file(path), "technical_qualification": "PASS", "release_qualification": "BLOCKED", "blockers": list(verdict.get("reason_codes", LEGAL_BLOCKERS))}
 
 
-def aggregate_verdict(*, receipt_summary: dict[str, Any], stage_summary: dict[str, Any], test_commands: list[dict[str, Any]], license_summary: dict[str, Any], git_head: str, git_tree: str) -> dict[str, Any]:
+def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: object, test_commands: list[dict[str, Any]], license_summary: object, git_head: str, git_tree: str) -> dict[str, Any]:
+    blocked_requirements = {requirement: {"status": "BLOCKED", "evidence": [reason]} for requirement in REQUIREMENTS}
+    receipts = receipt_summary.to_dict() if isinstance(receipt_summary, ValidatedReceiptSummary) else {}
+    stage = stage_summary.to_dict() if isinstance(stage_summary, ValidatedStageSummary) else {}
+    return {
+        "schema_version": "arw.phase7-verification.v1",
+        "phase": "07",
+        "git_head": git_head,
+        "git_tree": git_tree,
+        "technical_qualification": "BLOCKED",
+        "release_qualification": "BLOCKED",
+        "release_blockers": list(LEGAL_BLOCKERS),
+        "requirements": blocked_requirements,
+        "stage": stage,
+        "prior_phase_receipts": receipts,
+        "commands": test_commands,
+        "license": license_summary,
+        "evidence_bound": False,
+        "technical_blockers": [reason],
+    }
+
+
+def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary: ValidatedStageSummary, test_commands: list[dict[str, Any]], license_summary: dict[str, Any], git_head: str, git_tree: str) -> dict[str, Any]:
+    """Aggregate only typed validators and successful command receipts."""
+
+    if not isinstance(receipt_summary, ValidatedReceiptSummary):
+        return _blocked_aggregate(reason="unvalidated-prior-phase-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if not isinstance(stage_summary, ValidatedStageSummary):
+        return _blocked_aggregate(reason="unvalidated-stage-inputs", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if not isinstance(test_commands, list) or not test_commands:
+        return _blocked_aggregate(reason="missing-command-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands if isinstance(test_commands, list) else [], license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    for index, command in enumerate(test_commands):
+        if not isinstance(command, dict) or command.get("returncode") != 0:
+            return _blocked_aggregate(reason=f"command-{index}-failed", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+        for key in ("stdout_sha256", "stderr_sha256"):
+            if not SHA256_RE.fullmatch(str(command.get(key, ""))):
+                return _blocked_aggregate(reason=f"command-{index}-digest-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if receipt_summary.phase5_graph.get("technical_qualification") != "PASS" or receipt_summary.phase41_independence.get("technical_qualification") != "PASS":
+        return _blocked_aggregate(reason="prior-phase-technical-receipt-not-pass", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if not isinstance(license_summary, dict) or license_summary.get("technical_qualification") != "PASS" or license_summary.get("release_qualification") != "BLOCKED":
+        return _blocked_aggregate(reason="license-receipt-incomplete", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+    if not GIT_SHA_RE.fullmatch(git_head) or not GIT_SHA_RE.fullmatch(git_tree):
+        return _blocked_aggregate(reason="git-identity-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     requirements = {
         "VER-02": {"status": "PASS", "evidence": ["installed-qualification", "stage-qualification", "host-canary"]},
         "VER-04": {"status": "PASS", "evidence": ["recovery-matrix"]},
@@ -303,8 +656,8 @@ def aggregate_verdict(*, receipt_summary: dict[str, Any], stage_summary: dict[st
         "release_qualification": "BLOCKED",
         "release_blockers": list(LEGAL_BLOCKERS),
         "requirements": requirements,
-        "stage": stage_summary,
-        "prior_phase_receipts": receipt_summary,
+        "stage": stage_summary.to_dict(),
+        "prior_phase_receipts": receipt_summary.to_dict(),
         "commands": test_commands,
         "license": license_summary,
         "evidence_bound": True,
@@ -324,12 +677,15 @@ def main(argv: list[str] | None = None) -> int:
         # Existing Wave 1–3 receipts are immutable inputs.  Copy their hashes
         # into the owned root before running commands; never overwrite them.
         receipt_summary = validate_receipts()
-        write_json(root / "prior-phase-receipts.json", receipt_summary)
-        stage = Path(os.environ.get("ARW_PHASE7_STAGE", str(STAGE_ROOT))).resolve()
-        lock = Path(os.environ.get("ARW_PHASE7_LOCK", str(PHASE7_LOCK))).resolve()
-        canary = Path(os.environ.get("ARW_PHASE7_CANARY", str(PHASE7_CANARY))).resolve()
+        write_json(root / "prior-phase-receipts.json", receipt_summary.to_dict())
+        # Validate lexical paths and parent components before resolving.  A
+        # resolved target alone cannot prove that the caller did not supply a
+        # symlink or escape the project-owned stage/evidence bases.
+        stage = _safe_phase7_input(Path(os.environ.get("ARW_PHASE7_STAGE", str(STAGE_ROOT))), base=STAGE_BASE, label="stage-qualification")
+        lock = _safe_phase7_input(Path(os.environ.get("ARW_PHASE7_LOCK", str(PHASE7_LOCK))), base=EVIDENCE_BASE, label="stage-qualification")
+        canary = _safe_phase7_input(Path(os.environ.get("ARW_PHASE7_CANARY", str(PHASE7_CANARY))), base=EVIDENCE_BASE, label="host-qualification")
         stage_summary = validate_stage_and_inputs(stage, lock, canary)
-        write_json(root / "stage-inputs.json", stage_summary)
+        write_json(root / "stage-inputs.json", stage_summary.to_dict())
         command_records: list[dict[str, Any]] = []
 
         # Keep the complete qualification serial and bounded.  The retained
