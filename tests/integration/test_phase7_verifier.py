@@ -46,7 +46,7 @@ def test_missing_file_base_receipt_fails_closed(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    with pytest.raises(verifier.VerificationError, match="file-base/build-evidence.json"):
+    with pytest.raises(verifier.VerificationError, match="missing-build-evidence.json"):
         verifier.validate_receipts(phase5_root=phase5)
 
 
@@ -68,7 +68,7 @@ def test_tampered_independence_receipt_fails_closed(tmp_path: Path) -> None:
     shutil.copytree(verifier.PHASE41_ROOT, phase41)
     exit_path = phase41 / "commands/P04-05-T01/exit.json"
     exit_path.write_text('{"returncode":1}\n', encoding="utf-8")
-    with pytest.raises(verifier.VerificationError, match="P04-05-T01 failed"):
+    with pytest.raises(verifier.VerificationError, match="inventory digest mismatch|P04-05-T01 failed"):
         verifier.validate_receipts(phase41_root=phase41)
 
 
@@ -82,6 +82,49 @@ def test_technical_pass_keeps_legal_release_blocked() -> None:
         git_head="b" * 40,
         git_tree="c" * 40,
     )
-    assert result["technical_qualification"] == "PASS"
+    assert result["technical_qualification"] == "BLOCKED"
     assert result["release_qualification"] == "BLOCKED"
     assert {"SUP-04", "P04-09", "CC_BY_NC_PERMISSION_UNRESOLVED"} <= set(result["release_blockers"])
+
+
+def test_owned_root_rejects_traversal_and_unowned_clean(tmp_path: Path) -> None:
+    verifier = _verifier_module()
+    with pytest.raises(verifier.VerificationError, match="cannot contain '..'"):
+        verifier.owned_root(Path("build/evidence/phase-07/../../outside"), clean=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / verifier.MARKER).write_text("phase-7 evidence\n", encoding="ascii")
+    with pytest.raises(verifier.VerificationError, match="below"):
+        verifier.owned_root(outside, clean=True)
+
+
+def test_phase7_inputs_reject_symlink_and_external_root(tmp_path: Path) -> None:
+    verifier = _verifier_module()
+    stage_link = tmp_path / "stage-link"
+    stage_link.symlink_to(verifier.STAGE_ROOT, target_is_directory=True)
+    with pytest.raises(verifier.VerificationError, match="path must remain below|symlink"):
+        verifier._safe_phase7_input(stage_link, base=verifier.STAGE_BASE, label="stage")
+
+
+def test_secret_stream_and_incomplete_commands_fail_closed() -> None:
+    verifier = _verifier_module()
+    with pytest.raises(verifier.VerificationError, match="secret marker"):
+        verifier._redact(b'{"api_key":"sk-test-secret-value"}')
+    result = verifier.aggregate_verdict(
+        receipt_summary=verifier.ValidatedReceiptSummary(
+            {"technical_qualification": "PASS"}, {"technical_qualification": "PASS"}
+        ),
+        stage_summary=verifier.ValidatedStageSummary(
+            stage_sha256="a" * 64,
+            integration_lock_sha256="b" * 64,
+            host_canary_sha256="c" * 64,
+            stage_relative_path="build/stage/phase-07-qualified",
+            lock_relative_path="build/evidence/phase-07/integration-lock.json",
+            canary_relative_path="build/evidence/phase-07/host-canary/canary.json",
+        ),
+        test_commands=[],
+        license_summary={"technical_qualification": "PASS", "release_qualification": "BLOCKED"},
+        git_head="b" * 40,
+        git_tree="c" * 40,
+    )
+    assert result["technical_qualification"] == "BLOCKED"

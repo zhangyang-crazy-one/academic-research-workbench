@@ -87,6 +87,11 @@ FAULT_SPECS: Final[dict[str, FaultSpec]] = {
     "phase7.malformed-proposal": FaultSpec(
         "phase7.malformed-proposal", "result-acceptance"
     ),
+    # Replay-corruption observations are registered as explicit evidence
+    # identities so a sidecar cannot invent a classification after the fact.
+    "phase7.middle-chain": FaultSpec("phase7.middle-chain", "canonical-write"),
+    "phase7.event-hash": FaultSpec("phase7.event-hash", "journal-fsync"),
+    "phase7.manifest": FaultSpec("phase7.manifest", "canonical-write"),
 }
 
 

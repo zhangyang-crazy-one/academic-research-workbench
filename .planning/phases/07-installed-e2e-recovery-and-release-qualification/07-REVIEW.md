@@ -1,7 +1,7 @@
 ---
 phase: 07-installed-e2e-recovery-and-release-qualification
 reviewer: codex
-status: findings
+status: findings-fixed
 scope: committed Phase 7 changes from 7813473..HEAD
 ---
 
@@ -120,9 +120,33 @@ bindings.
 
 ## Overall assessment
 
-The implementation and focused tests cover the intended happy-path journeys,
-but the aggregate verifier is not yet independently fail-closed against
-tampered or externally supplied receipts. Status is therefore **FINDINGS**;
-technical qualification should remain blocked until F-001 through F-004 are
-addressed and their negative tests are retained.
+The initial implementation covered the intended happy-path journeys but was
+not independently fail-closed against tampered or externally supplied
+receipts. The remediation below closes those findings; technical qualification
+still remains distinct from the legal release gate.
 
+## Remediation verification (2026-07-16)
+
+F-001 through F-006 are fixed in the verifier/evidence boundary. The retained
+Phase 5 and Phase 4.1 receipts now require canonical JSON parsing, recomputed
+content/stage digests, schema and expected-case checks, and parent inventory
+coverage. Stage, lock, canary, and clean evidence roots are checked lexically
+with `lstat` before resolution. Verifier subprocesses use a positive
+environment allowlist and fail closed on secret markers. Fault sidecars bind a
+registered `FAULT_SPECS` identity/boundary, bounded retry count, SHA-256
+digests, and recovered-event digest presence.
+
+Focused evidence:
+
+```text
+tests/integration/test_phase7_verifier.py
+tests/integration/test_phase7_fault_matrix.py
+tests/staged/test_phase7_qualification.py
+tests/integration/test_recovery_crash.py
+tests/integration/test_journal_replay.py
+tests/unit/test_canonical.py
+34 passed
+```
+
+The Phase 7 verifier also completed with technical qualification PASS and
+release qualification BLOCKED. This does not clear the legal release gate.
