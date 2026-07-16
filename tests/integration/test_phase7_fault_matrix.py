@@ -27,6 +27,7 @@ from arw.faults import (
     FaultConfigurationError,
     InjectedFault,
     fault_ids,
+    inject,
 )
 from arw.journal import JournalError, replay_run
 from arw.models import InitRunRequest, LifecycleTransitionRequest, RecoveryRequest, RuntimeCommandRequest
@@ -314,6 +315,97 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
             )
         )
 
+    def transition_process(
+        fault_id: str,
+        root_name: str,
+        event_number: int,
+        *,
+        boundary: str,
+        classification: str,
+        reason: str,
+        expect_signal: int | None = None,
+        retries: int = 0,
+        expected_revision: int = 1,
+    ) -> Path:
+        root = matrix_root / root_name
+        _fresh_run(root)
+        request_path = tmp_path / f"{root_name}.json"
+        _write_request(request_path, _transition_request(RUN_ID, event_number=event_number))
+        child_env = os.environ.copy()
+        child_env.update({"ARW_TEST_MODE": "1", "ARW_TEST_FAULT_ID": fault_id})
+        child = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "arw.cli",
+                "transition",
+                "--run-root",
+                str(root),
+                "--request",
+                str(request_path),
+            ],
+            env=child_env,
+            capture_output=True,
+            check=False,
+        )
+        if expect_signal is not None:
+            assert child.returncode == expect_signal
+        else:
+            assert child.returncode != 0
+        assert replay_run(root).revision == expected_revision
+        record(
+            fault_id,
+            boundary,
+            root,
+            classification,
+            reason,
+            retries=retries,
+            stderr=child.stderr,
+        )
+        return root
+
+    # Base canonical-write and fsync IDs are separate from the hard/torn
+    # variants below so the registry has direct evidence for each boundary.
+    transition_process(
+        "phase7.canonical-write-before-commit",
+        "canonical-write-before-commit",
+        785,
+        boundary="canonical-write",
+        classification="RETRYABLE",
+        reason="write-before-commit",
+        retries=1,
+    )
+    transition_process(
+        "phase7.journal-fsync",
+        "journal-fsync",
+        786,
+        boundary="journal-fsync",
+        classification="DURABLE_OBSERVATION",
+        reason="fsync-boundary",
+        retries=1,
+        expected_revision=2,
+    )
+
+    # Read-lock acquisition is an explicit fail-closed observation.
+    lock_root = matrix_root / "lock-acquire"
+    _fresh_run(lock_root)
+    monkeypatch.setenv("ARW_TEST_MODE", "1")
+    monkeypatch.setenv("ARW_TEST_FAULT_ID", "phase7.lock-acquire")
+    with pytest.raises(InjectedFault):
+        RuntimeCommandService(lock_root).read_state()
+    monkeypatch.delenv("ARW_TEST_FAULT_ID", raising=False)
+    record("phase7.lock-acquire", "lock-acquire", lock_root, "BLOCKED", "lock-acquisition")
+
+    transition_process(
+        "phase7.lock-owner-death",
+        "lock-owner-death",
+        787,
+        boundary="lock-owner",
+        classification="BLOCKED",
+        reason="lock-owner-death",
+        expect_signal=-signal.SIGKILL,
+    )
+
     # Hard termination before a canonical write: no event is accepted.
     root = matrix_root / "hard-termination"
     _fresh_run(root)
@@ -484,6 +576,47 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
         async def force_terminate(self, _spec: DispatchSpec) -> None:
             return None
 
+    # Host dispatch and result acceptance boundaries are separate observations;
+    # both are parent-retryable and neither can create a child-owned retry.
+    host_root = matrix_root / "host-dispatch"
+    _fresh_run(host_root)
+    host_spec = DispatchSpec(
+        assignment_id="assignment.phase7-host",
+        attempt_id="attempt.phase7-host.001",
+        acceptance_key=(0, 0),
+        assignment_path=host_root / "assignment.json",
+        attempt_root=host_root / "attempt",
+        policy_snapshot=ExecutionPolicySnapshot(max_concurrency=1),
+    )
+    monkeypatch.setenv("ARW_TEST_MODE", "1")
+    monkeypatch.setenv("ARW_TEST_FAULT_ID", "phase7.host-dispatch")
+    with pytest.raises(BaseException):
+        asyncio.run(DeterministicScheduler(_ResultAdapter()).run((host_spec,)))
+    monkeypatch.delenv("ARW_TEST_FAULT_ID", raising=False)
+    record("phase7.host-dispatch", "host-dispatch", host_root, "RETRYABLE", "host-dispatch", retries=1)
+
+    result_root = matrix_root / "result-acceptance"
+    _fresh_run(result_root)
+    result_spec = DispatchSpec(
+        assignment_id="assignment.phase7-result",
+        attempt_id="attempt.phase7-result.001",
+        acceptance_key=(0, 0),
+        assignment_path=result_root / "assignment.json",
+        attempt_root=result_root / "attempt",
+        policy_snapshot=ExecutionPolicySnapshot(max_concurrency=1),
+    )
+
+    async def reject_result(_spec: DispatchSpec, _result: HostResult) -> None:
+        inject("phase7.result-acceptance")
+
+    monkeypatch.setenv("ARW_TEST_FAULT_ID", "phase7.result-acceptance")
+    result_outcome = asyncio.run(
+        DeterministicScheduler(_ResultAdapter(), result_validator=reject_result).run((result_spec,))
+    )[0]
+    assert result_outcome.retry_eligible and result_outcome.retry_reason == "process_failure"
+    monkeypatch.delenv("ARW_TEST_FAULT_ID", raising=False)
+    record("phase7.result-acceptance", "result-acceptance", result_root, "RETRYABLE", "process-failure", retries=1)
+
     for suffix, fault_id in (("repairable", "phase7.repairable-proposal"), ("malformed", "phase7.malformed-proposal")):
         root = matrix_root / suffix
         _fresh_run(root)
@@ -520,6 +653,7 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
     aggregate_path.write_bytes(canonical_json_bytes(aggregate))
     loaded = strict_json_loads(aggregate_path.read_bytes())
     assert loaded["scenario_ids"] == aggregate["scenario_ids"]
+    assert set(fault_ids()) <= set(aggregate["scenario_ids"])
     assert len(records) >= 12
     for path in sorted(evidence_root.glob("*/sidecar.json")):
         digest_path = path.with_name("sidecar.sha256")
