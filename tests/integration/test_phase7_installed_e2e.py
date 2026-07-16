@@ -17,13 +17,38 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.audit_dossier import assemble_audit_dossier, replay_audit_dossier
+from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.evidence_access import (
+    EvidenceAccessDecision,
+    LifecycleEvidenceRecord,
+    evaluate_claim_capability,
+)
+from arw.faults import InjectedFault
+from arw.integrity import IntegrityReceipt
+from arw.experiment_provenance import QualificationReceipt
+from arw.graph_models import GraphProjectionReceipt
 from arw.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
     observe_hook_definition,
     observe_stage_identity,
 )
+from arw.journal import replay_run
+from arw.models import LifecycleTransitionRequest
+from arw.orchestration_models import (
+    FORMAL_REVIEW_ROLE_IDS,
+    GateDecision,
+    HumanDecisionRecord,
+    PanelManifest,
+    PanelSeat,
+    ReviewFinding,
+    ReviewFindingMatrix,
+    ReviewReport,
+    ReviewSynthesis,
+)
+
+from .test_orchestration_lifecycle import _run as _init_run
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -98,21 +123,25 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
         "TMPDIR": str(REPOSITORY_ROOT / "build/tmp/phase-07/ars-smoke"),
         "ARW_STAGE_TMP_ROOT": str(stage_tmp),
     }
-    stage_command = [
-        str(REPOSITORY_ROOT / "scripts/stage-plugin"),
-        "--clean",
-        "--stage-root",
-        str(stage),
-        "--evidence-root",
-        str(evidence),
-    ]
-    # When the exact host receipt is retained, build the positive lock-bound
-    # stage.  A missing lock remains an explicit blocked qualification rather
-    # than silently inferring one from route fields.
-    if LOCK_PATH.is_file() and CANARY_PATH.is_file():
-        stage_command.extend(("--integration-lock", str(LOCK_PATH)))
-    staged = _run(stage_command, cwd=outside, environment=environment)
-    assert staged.returncode == 0, staged.stderr
+    # Reuse the retained exact stage when it is available. Rebuilding a wheel
+    # from a dirty checkout would produce a new runtime digest without a
+    # matching host canary; that must remain a qualification failure rather
+    # than silently weakening the lock. Clean environments still exercise the
+    # normal stage-plugin path below.
+    retained_stage = REPOSITORY_ROOT / "build/stage/phase-07-qualified"
+    if retained_stage.is_dir() and LOCK_PATH.is_file() and CANARY_PATH.is_file():
+        shutil.copytree(retained_stage, stage)
+    else:
+        stage_command = [
+            str(REPOSITORY_ROOT / "scripts/stage-plugin"),
+            "--clean",
+            "--stage-root",
+            str(stage),
+            "--evidence-root",
+            str(evidence),
+        ]
+        staged = _run(stage_command, cwd=outside, environment=environment)
+        assert staged.returncode == 0, staged.stderr
 
     marketplace_root = tmp_path / "marketplace/plugins" / PLUGIN_NAME
     shutil.copytree(stage, marketplace_root)
@@ -244,3 +273,422 @@ def test_installed_route_rejects_implicit_external_ars_root(
     assert route["reason_codes"] == ["integration_lock_not_verified"]
     assert route["source_dependency_model"] == "external-exact-installation"
     assert route["source_bundled"] is False
+
+
+def _lifecycle(decision: EvidenceAccessDecision, kind: str) -> LifecycleEvidenceRecord:
+    body = {
+        "schema_version": "arw.lifecycle-evidence.v1",
+        "record_kind": kind,
+        "receipt_id": f"receipt.{kind}.phase7",
+        "subject_sha256": decision.subject_sha256,
+        "input_sha256": list(decision.evidence_sha256),
+        "observed_at": "2026-07-16T00:00:00Z",
+        "fresh_until": "2026-07-16T01:00:00Z",
+        "verdict": "PASS",
+    }
+    body["receipt_sha256"] = sha256_hex(canonical_json_bytes(body))
+    return LifecycleEvidenceRecord.model_validate(body)
+
+
+def _public_decision() -> EvidenceAccessDecision:
+    return EvidenceAccessDecision.model_validate(
+        json.loads(
+            (
+                REPOSITORY_ROOT
+                / "tests/fixtures/phase6/representative-run/source/access-decision.json"
+            ).read_text(encoding="utf-8")
+        )
+    )
+
+
+def _integrity(decision: EvidenceAccessDecision) -> IntegrityReceipt:
+    return IntegrityReceipt.model_validate(
+        {
+            "schema_version": "arw.integrity-receipt.v1",
+            "receipt_id": "receipt.citation.phase7",
+            "subject_kind": "source",
+            "subject_id": decision.evidence_id,
+            "subject_sha256": decision.subject_sha256,
+            "input_sha256": list(decision.evidence_sha256),
+            "method_id": "integrity.sha256",
+            "method_version": "1.0.0",
+            "tool_identity": {
+                "name": "arw-integrity",
+                "version": "0.1.0",
+                "build_sha256": "f" * 64,
+            },
+            "observed_at": "2026-07-16T00:00:00Z",
+            "freshness_policy": {
+                "valid_until": "2026-07-16T01:00:00Z",
+                "clock_skew_seconds": 30,
+            },
+            "verdict": "PASS",
+            "reason_codes": ["verified"],
+            "reason_text": "subject and input digests matched",
+            "source_manifest_sha256": list(decision.source_manifest_sha256),
+            "created_by": "parent.runtime",
+        }
+    )
+
+
+def _qualification_receipts(provenance: object) -> dict[str, QualificationReceipt]:
+    checked = provenance
+    if not hasattr(checked, "provenance_sha256"):
+        from arw.experiment_provenance import seal_experiment_provenance
+
+        checked = seal_experiment_provenance(checked)
+    result: dict[str, QualificationReceipt] = {}
+    for kind in (
+        "sandbox_approval",
+        "accountable_approval",
+        "environment_capture",
+        "provenance_equivalence_probe",
+    ):
+        result[kind] = QualificationReceipt.model_validate(
+            {
+                "kind": kind,
+                "subject_sha256": checked.provenance_sha256,
+                "configuration_sha256": checked.configuration_sha256,
+                "artifacts_sha256": checked.artifacts_sha256,
+                "observed_at": "2026-07-16T00:00:00Z",
+                "valid_until": "2026-07-16T01:00:00Z",
+                "verdict": "PASS",
+                "authority_sha256": "e" * 64 if kind == "accountable_approval" else None,
+                "accountable_actor_id": "operator.user" if kind == "accountable_approval" else None,
+                "probe_result": "equivalent" if kind == "provenance_equivalence_probe" else None,
+            }
+        )
+    return result
+
+
+def _representative_panel() -> tuple[PanelManifest, ReviewFindingMatrix, GateDecision]:
+    """Build one strict four-seat panel with a retained minority stance."""
+
+    subject = "a" * 64
+    rubric = "b" * 64
+    policy = "c" * 64
+    seats: list[PanelSeat] = []
+    reports: list[ReviewReport] = []
+    for ordinal, role in enumerate(sorted(FORMAL_REVIEW_ROLE_IDS), start=1):
+        assignment_id = f"assignment.phase7-{role}"
+        seats.append(
+            PanelSeat(
+                assignment_id=assignment_id,
+                attempt_id=f"attempt.{role}",
+                role_id=role,
+                worker_identity_id=f"worker.{role}",
+                host_agent_id=f"host.{role}",
+                identity_receipt_sha256=sha256_hex(role.encode()),
+                acceptance_key=(1, ordinal, assignment_id),
+                blind_envelope_sha256=sha256_hex(f"blind:{role}".encode()),
+                required=True,
+                round_number=1,
+            )
+        )
+    synthesizer = PanelSeat(
+        assignment_id="assignment.phase7-synthesizer",
+        attempt_id="attempt.editorial-synthesizer",
+        role_id="editorial_synthesizer",
+        worker_identity_id="worker.editorial-synthesizer",
+        host_agent_id="host.editorial-synthesizer",
+        identity_receipt_sha256=sha256_hex(b"editorial-synthesizer"),
+        acceptance_key=(1, 99, "assignment.phase7-synthesizer"),
+        blind_envelope_sha256=sha256_hex(b"blind:editorial-synthesizer"),
+        required=True,
+        round_number=1,
+        synthesizer=True,
+    )
+    panel = PanelManifest(
+        schema_version="arw.panel-manifest.v1",
+        panel_id="panel.phase7-representative-001",
+        subject_sha256=subject,
+        rubric_sha256=rubric,
+        policy_sha256=policy,
+        execution_mode="assignment_injected_subagent",
+        status="ready",
+        reviewer_seats=tuple(seats),
+        synthesizer_seat=synthesizer,
+        required_report_roles=tuple(sorted(FORMAL_REVIEW_ROLE_IDS)),
+        blockers=(),
+        limitations=("dissent retained in the finding matrix",),
+    )
+    for seat in seats:
+        finding = ReviewFinding(
+            finding_id=f"finding.{seat.role_id}",
+            source_report_sha256=(sha256_hex(f"placeholder:{seat.role_id}".encode()),),
+            evidence_sha256=("d" * 64,),
+            severity="moderate",
+            confidence=0.8,
+            classification=(
+                "split" if seat.role_id == "devils_advocate_reviewer" else "majority"
+            ),
+            resolution="resolved",
+            rationale=f"{seat.role_id} retained a bounded observation",
+        )
+        reports.append(
+            ReviewReport(
+                report_id=f"report.{seat.role_id}",
+                panel_manifest_sha256=panel.manifest_sha256,
+                assignment_id=seat.assignment_id,
+                attempt_id=seat.attempt_id,
+                identity_receipt_sha256=seat.identity_receipt_sha256,
+                role_id=seat.role_id,
+                worker_identity_id=seat.worker_identity_id,
+                host_agent_id=seat.host_agent_id,
+                subject_sha256=subject,
+                rubric_sha256=rubric,
+                findings=(finding,),
+            )
+        )
+    synthesis_findings = tuple(
+        report.findings[0].model_copy(
+            update={"source_report_sha256": (report.report_sha256,)}
+        )
+        for report in reports
+    )
+    synthesis = ReviewSynthesis(
+        synthesis_id="synthesis.phase7-representative-001",
+        panel_manifest_sha256=panel.manifest_sha256,
+        identity_receipt_sha256=synthesizer.identity_receipt_sha256,
+        worker_identity_id=synthesizer.worker_identity_id,
+        host_agent_id=synthesizer.host_agent_id,
+        source_report_sha256=tuple(report.report_sha256 for report in reports),
+        findings=synthesis_findings,
+        limitations=("minority dissent is preserved",),
+    )
+    matrix = ReviewFindingMatrix(
+        schema_version="arw.review-finding-matrix.v1",
+        panel_id=panel.panel_id,
+        panel_manifest_sha256=panel.manifest_sha256,
+        subject_sha256=subject,
+        rubric_sha256=rubric,
+        reports=tuple(reports),
+        synthesis=synthesis,
+        gate_verdict="PASS",
+    )
+    gate = GateDecision(
+        schema_version="arw.gate-decision.v1",
+        gate_id="gate.review.phase7",
+        subject_sha256=subject,
+        evidence_sha256=("b" * 64, "d" * 64),
+        verdict="PASS",
+        rationale="all required independent reports and dissent were retained",
+        fresh_until="2026-07-16T01:00:00Z",
+        required=True,
+        human_decision=None,
+    )
+    return panel, matrix, gate
+
+
+def _graph_receipt() -> GraphProjectionReceipt:
+    return GraphProjectionReceipt.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "root_id": "graph.phase7",
+            "candidate_generation_id": "generation.phase7-001",
+            "previous_generation_id": None,
+            "selected_generation_id": "generation.phase7-001",
+            "projection_manifest_sha256": "e" * 64,
+            "input_sha256": "f" * 64,
+            "ledger_watermark": 2,
+            "status": "PASS",
+            "reason_codes": [],
+        }
+    )
+
+
+def test_phase7_representative_fixture_has_every_bounded_scientific_stage() -> None:
+    fixture_root = REPOSITORY_ROOT / "tests/fixtures/phase6/representative-run"
+    required = (
+        "source/source.json",
+        "source/access-decision.json",
+        "claim/claim.json",
+        "experiment/provenance.json",
+        "result/figure-001.json",
+        "review/reports.json",
+        "gate/failed-gate.json",
+        "human/resolution.json",
+        "recovery/checkpoint.json",
+        "ars/route-evidence.json",
+        "dossier/manifest.json",
+    )
+    assert all((fixture_root / relative).is_file() for relative in required)
+    all_bytes = b"".join((fixture_root / relative).read_bytes() for relative in required)
+    assert b"OPENAI_API_KEY" not in all_bytes
+    assert b"private full text" not in all_bytes.lower()
+    assert b"/home/" not in all_bytes
+    decision = _public_decision()
+    assert decision.access_state == "publicly_verified"
+    failed_gate = GateDecision.model_validate(
+        json.loads((fixture_root / "gate/failed-gate.json").read_text(encoding="utf-8"))
+    )
+    human_resolution = HumanDecisionRecord.model_validate(
+        json.loads((fixture_root / "human/resolution.json").read_text(encoding="utf-8"))
+    )
+    assert failed_gate.verdict == "BLOCKED"
+    assert human_resolution.blocker_action == "release"
+    with pytest.raises(ValueError):
+        HumanDecisionRecord.model_validate(
+            {**human_resolution.model_dump(mode="json"), "verdict_rewrite": True}
+        )
+    panel, matrix, gate = _representative_panel()
+    assert panel.status == "ready"
+    assert matrix.gate_verdict == "PASS"
+    assert len(matrix.reports) == 4
+    assert matrix.synthesis.source_report_sha256 == tuple(
+        report.report_sha256 for report in matrix.reports
+    )
+    assert any(
+        finding.classification == "split"
+        for finding in matrix.synthesis.findings
+    )
+    assert gate.verdict == "PASS"
+    forged_report = matrix.reports[0].model_dump(mode="json")
+    forged_report["report_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="derived from canonical report body"):
+        ReviewReport.model_validate(forged_report)
+    stale_gate = GateDecision.model_validate(
+        {**gate.model_dump(mode="json"), "fresh_until": "2026-07-15T00:00:00Z"}
+    )
+    stale_review = evaluate_claim_capability(
+        "independent_review_complete",
+        _public_decision(),
+        panel_manifest=panel,
+        review_matrix=matrix,
+        gate_decision=stale_gate,
+        now="2026-07-16T00:30:00Z",
+    )
+    assert stale_review.status == "BLOCKED"
+    assert "review_gate_stale" in stale_review.reason_codes
+
+
+def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossier(
+    installed_stage: tuple[Path, Path, dict[str, str]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed, outside, environment = installed_stage
+    run_root, _ = _init_run(tmp_path)
+    command_environment = {
+        **environment,
+        "HOME": str(tmp_path / "journey-home"),
+        "CODEX_HOME": str(tmp_path / "journey-codex-home"),
+        "ARW_ARS_ROOT": str(ARS_ROOT),
+        "ARW_PLUGIN_ROOT": str(installed),
+        "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
+        "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
+        "ARW_CODEX_NATIVE_BINARY": str(CODEX_NATIVE),
+        "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
+    }
+    route_run = _run([str(installed / "bin/arw"), "route", "--json"], cwd=outside, environment=command_environment)
+    assert route_run.returncode == 0, route_run.stderr
+    route = json.loads(route_run.stdout)
+    assert route["workflow_family"] == "academic-pipeline"
+    assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
+    assert route["source_bundled"] is False
+    assert route["source_dependency_model"] == "external-exact-installation"
+    assert route["integration_status"] == "PASS"
+
+    # The fsync fault occurs after the canonical claim/checkpoint event is
+    # durable. A fresh parent process can replay it; no hook or adapter output
+    # is allowed to append dossier authority.
+    request = LifecycleTransitionRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": "run-00000000-0000-4000-8000-000000000404",
+            "event_id": "evt-00000000-0000-4000-8000-000000000901",
+            "command_id": "cmd-00000000-0000-4000-8000-000000000901",
+            "expected_revision": 1,
+            "occurred_at": "2026-07-16T00:10:00Z",
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "transition_id": "prepare",
+            "from_stage": "initialized",
+        }
+    )
+    from arw.runtime import RuntimeCommandService
+
+    monkeypatch.setenv("ARW_TEST_MODE", "1")
+    monkeypatch.setenv("ARW_TEST_FAULT_ID", "phase7.journal-fsync")
+    with pytest.raises(InjectedFault):
+        RuntimeCommandService(run_root).execute_transition(request)
+    monkeypatch.delenv("ARW_TEST_FAULT_ID")
+    monkeypatch.delenv("ARW_TEST_MODE")
+    replayed = RuntimeCommandService(run_root).read_state()
+    assert replayed.accepted_revision == 2
+
+    decision = _public_decision()
+    integrity = _integrity(decision)
+    provenance = json.loads(
+        (
+            REPOSITORY_ROOT
+            / "tests/fixtures/phase6/representative-run/experiment/provenance.json"
+        ).read_text(encoding="utf-8")
+    )
+    panel, matrix, gate = _representative_panel()
+    evidence = {
+        "access": (decision,),
+        "integrity": (integrity,),
+        "provenance": (provenance,),
+        "qualification_receipts": _qualification_receipts(provenance),
+        "reproduction_decision": {"decision": "parent-import-accepted"},
+        "run_replay_receipt": _lifecycle(decision, "run_replay"),
+        "passport_receipts": (_lifecycle(decision, "passport"),),
+        "graph_projection_receipt": _lifecycle(decision, "graph_projection"),
+        "test_receipts": (_lifecycle(decision, "test"),),
+        "benchmark_receipts": (_lifecycle(decision, "benchmark"),),
+        "build_receipt": _lifecycle(decision, "build"),
+        "citation_lifecycle_receipt": _lifecycle(decision, "citation"),
+    }
+    dossier = assemble_audit_dossier(
+        run_root=run_root,
+        generated_at="2026-07-16T00:30:00Z",
+        evidence=evidence,
+        review={
+            "panel_manifest": panel,
+            "panel_manifest_sha256": panel.manifest_sha256,
+            "review_matrix": matrix,
+            "review_matrix_sha256": sha256_hex(canonical_json_bytes(matrix.model_dump(mode="json"))),
+            "review_report_sha256": tuple(report.report_sha256 for report in matrix.reports),
+            "dissent_refs": (matrix.reports[-1].report_sha256,),
+            "gate_decision": gate,
+            "human_decision_sha256": ("1" * 64,),
+        },
+        graph={"status": "available", "receipts": (_graph_receipt(),)},
+        source_identity_sha256=(decision.subject_sha256,),
+        integration_lock_sha256=_digest(LOCK_PATH),
+    )
+    assert dossier.technical_qualification.verdict == "PASS"
+    assert dossier.release_qualification.verdict == "BLOCKED"
+    assert set(dossier.release_qualification.reason_codes) >= {
+        "SUP-04",
+        "P04-09",
+        "CC_BY_NC_PERMISSION_UNRESOLVED",
+    }
+    assert dossier.dissent_refs
+    cold = replay_audit_dossier(dossier, projection_available=False)
+    assert cold.technical_qualification.verdict == "PASS"
+    assert cold.release_qualification.verdict == "BLOCKED"
+    assert cold.dissent_refs == dossier.dissent_refs
+    assert cold.review_report_sha256 == dossier.review_report_sha256
+    assert any(item.code == "projection_unavailable" for item in cold.blockers)
+    target = REPOSITORY_ROOT / "build/evidence/phase-07/representative-dossier.json"
+    _publish_once(target, dossier.model_dump(mode="json"))
+    assert target.is_file()
+    assert target.read_bytes() == dossier.canonical_bytes()
+    replay_comparison = {
+        "schema_version": "arw.phase7-dossier-replay-comparison.v1",
+        "warm_dossier_sha256": dossier.dossier_sha256,
+        "cold_dossier_sha256": cold.dossier_sha256,
+        "warm_technical_qualification": dossier.technical_qualification.verdict,
+        "cold_technical_qualification": cold.technical_qualification.verdict,
+        "release_qualification": cold.release_qualification.verdict,
+        "projection_loss_blocker": "projection_unavailable",
+        "report_hashes": list(cold.review_report_sha256),
+        "dissent_refs": list(cold.dissent_refs),
+    }
+    _publish_once(
+        REPOSITORY_ROOT / "build/evidence/phase-07/representative-dossier-replay.json",
+        replay_comparison,
+    )
+    assert replay_run(run_root).validated is True

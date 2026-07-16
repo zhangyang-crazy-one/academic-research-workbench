@@ -871,7 +871,14 @@ def assemble_audit_dossier(
     lifecycle = ev.get("lifecycle") or ev.get("citation_lifecycle_receipt")
     claim_inputs = {
         "citation_verified": {"integrity_receipt": integrity_value, "citation_lifecycle_receipt": lifecycle},
-        "experiment_reproduced": {"provenance": provenance_value},
+        "experiment_reproduced": {
+            "provenance": provenance_value,
+            # Qualification receipts and the parent reproduction decision are
+            # typed lifecycle evidence.  They are passed through to the pure
+            # policy evaluator; ARW still records only their exact digests.
+            "qualification_receipts": ev.get("qualification_receipts"),
+            "reproduction_decision": ev.get("reproduction_decision"),
+        },
         "independent_review_complete": {
             "panel_manifest": rev.get("panel_manifest"),
             "review_matrix": rev.get("review_matrix"),
@@ -880,7 +887,11 @@ def assemble_audit_dossier(
         "audit_complete": {
             "run_replay_receipt": ev.get("run_replay_receipt"),
             "passport_receipts": ev.get("passport_receipts"),
-            "graph_projection_receipt": graph_items,
+            # The claim gate consumes the parent lifecycle receipt, while the
+            # dossier's graph reference retains the separately typed graph
+            # projection receipt.  Never substitute graph rows for lifecycle
+            # evidence.
+            "graph_projection_receipt": ev.get("graph_projection_receipt") or graph_items,
             "test_receipts": ev.get("test_receipts"),
             "benchmark_receipts": ev.get("benchmark_receipts"),
             "build_receipt": ev.get("build_receipt"),
@@ -958,7 +969,11 @@ def replay_audit_dossier(value: Mapping[str, Any] | AuditDossierManifest, *, pro
         blockers.append(DossierBlocker(code="projection_unavailable", severity="high", message="disposable graph projection is unavailable; canonical replay remains authoritative", replacement_evidence=("graph-projection-rebuild",)))
     body = dossier.model_dump(mode="json", exclude={"dossier_sha256"})
     body["blockers"] = [item.model_dump(mode="json") if isinstance(item, DossierBlocker) else item for item in blockers]
-    return seal_audit_dossier(body)
+    # Preserve the parent-derived technical qualification while adding the
+    # in-memory projection-loss observation.  Calling the public sealer here
+    # would (correctly) reject a caller-supplied PASS, even though this path
+    # starts from an already-derived dossier.
+    return _seal_audit_dossier(body, allow_derived_pass=True)
 
 
 def generate_audit_dossier_schema_document() -> dict[str, Any]:

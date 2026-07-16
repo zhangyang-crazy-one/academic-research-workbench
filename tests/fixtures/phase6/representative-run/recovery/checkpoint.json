@@ -1,0 +1,1 @@
+{"checkpoint":"post-claim-pre-dossier","fault_id":"phase7.journal-fsync","replay_source":"run-manifest.json+journal/segments","resumed":true,"schema_version":"arw.phase7-recovery-checkpoint.v1","transcript_retained":false}
