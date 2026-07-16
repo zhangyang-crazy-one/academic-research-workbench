@@ -1,0 +1,18 @@
+# Keep project planning and local qualification material out of source archives.
+.planning export-ignore
+.evidence export-ignore
+build export-ignore
+.file-base export-ignore
+vendor/sources export-ignore
+vendor/.materialize.tmp.* export-ignore
+
+# Keep accidental local credentials out of source archives as a second gate.
+.env* export-ignore
+**/.codex export-ignore
+**/.claude export-ignore
+**/credentials export-ignore
+**/secrets export-ignore
+**/*.pem export-ignore
+**/*.key export-ignore
+**/*.p12 export-ignore
+**/*.pfx export-ignore

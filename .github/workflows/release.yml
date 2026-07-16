@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Qualify release boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.11.28'
+          enable-cache: true
+      - run: uv sync --frozen --all-groups
+      - name: Verify legal and accountable gates before publication
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          use = json.loads(Path('supply-chain/use-distribution.json').read_text())
+          verdict = json.loads(Path('supply-chain/license-verdict.json').read_text())
+          qualification = Path('build/evidence/phase-07-final-13/phase-7-verification.json')
+          if not qualification.is_file():
+              raise SystemExit(
+                  'release blocked: retained Phase 7 qualification evidence is not present; '
+                  'run the qualification workflow and supply its evidence bundle'
+              )
+          phase7 = json.loads(qualification.read_text())
+          required = {
+              'intended_use': 'declared',
+              'distribution_class': 'declared',
+              'accountable_approval': 'approved',
+          }
+          for field, status in required.items():
+              if use.get(field, {}).get('status') != status:
+                  raise SystemExit(f'release blocked: {field} is not {status}')
+          if not use.get('permission_references'):
+              raise SystemExit('release blocked: permission_references is empty')
+          if verdict.get('release_qualification') != 'PASS':
+              raise SystemExit('release blocked: license-verdict is not PASS')
+          if phase7.get('technical_qualification') != 'PASS':
+              raise SystemExit('release blocked: Phase 7 technical qualification is not PASS')
+          if phase7.get('release_qualification') != 'PASS':
+              raise SystemExit('release blocked: Phase 7 release qualification is not PASS')
+          if 'P04-09' in phase7.get('release_blockers', []):
+              raise SystemExit('release blocked: P04-09 human gate is unresolved')
+          PY
+      - name: Run release-safe tests
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: uv run pytest -q tests/unit tests/schema tests/integration/test_license_gate.py
+      - name: Build release artifacts
+        run: |
+          rm -rf dist
+          uv build --out-dir dist
+          git archive --worktree-attributes --format=tar --output=dist/academic-research-workbench-source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academic-research-workbench-${{ github.ref_name }}
+          path: dist/
+
+  publish:
+    name: Publish GitHub release
+    needs: qualify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: academic-research-workbench-${{ github.ref_name }}
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -1,0 +1,18 @@
+Academic Research Workbench uses a component-scoped upstream license model.
+
+ARS-derived research workflow content and the first-party ARS adapter contract
+are distributed under the upstream Creative Commons Attribution-NonCommercial
+4.0 International terms. The complete text is retained at:
+
+  LICENSES/academic-research-skills-CC-BY-NC-4.0.txt
+  LICENSES/experiment-agent-CC-BY-NC-4.0.txt
+
+Canonical license URL: https://creativecommons.org/licenses/by-nc/4.0/
+
+The vendored file-base data plane remains under its upstream MIT license:
+
+  LICENSES/file-base-MIT.txt
+
+This file is a license index, not a blanket relicensing of third-party source.
+See MODIFICATIONS.md, THIRD_PARTY_NOTICES.md, SBOM.cdx.json, and
+vendor/source-manifest.json for exact provenance and component boundaries.
