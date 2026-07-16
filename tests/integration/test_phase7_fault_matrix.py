@@ -235,6 +235,7 @@ def _sidecar(
         run_root=run_root if replayable else None,
         expected_event_sequence=event_sequence,
         expected_recovery_event=recovery_event,
+        allow_detached=not replayable,
     )
     return {
         "fault_id": fault_id,
@@ -319,10 +320,10 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
         event_sequence_sha256=sha256_hex(canonical_json_bytes(sequence)),
         event_sequence=sequence,
     )
-    assert validate_fault_sidecar(root / "sidecar.json", expected_event_sequence=sequence)["fault_id"] == "phase7.canonical-write-before-commit"
+    assert validate_fault_sidecar(root / "sidecar.json", expected_event_sequence=sequence, allow_detached=True)["fault_id"] == "phase7.canonical-write-before-commit"
     (root / "sidecar.sha256").write_text("0" * 64 + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="digest mismatch"):
-        validate_fault_sidecar(root / "sidecar.json")
+        validate_fault_sidecar(root / "sidecar.json", allow_detached=True)
 
 
 def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp_path: Path) -> None:
@@ -346,11 +347,11 @@ def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp
     sidecar.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     (root / "sidecar.sha256").write_text(sha256_hex(sidecar.read_bytes()) + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="canonical"):
-        validate_fault_sidecar(sidecar)
+        validate_fault_sidecar(sidecar, allow_detached=True)
     sidecar.write_bytes(canonical_json_bytes({**payload, "event_sequence_sha256": "a" * 64}))
     (root / "sidecar.sha256").write_text(sha256_hex(sidecar.read_bytes()) + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="event sequence digest|canonical ledger"):
-        validate_fault_sidecar(sidecar)
+        validate_fault_sidecar(sidecar, allow_detached=True)
 
 
 def test_phase7_write_and_fsync_boundaries_have_distinct_replay_semantics(

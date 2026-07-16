@@ -43,12 +43,33 @@ LEGAL_BLOCKERS = (
     "CC_BY_NC_PERMISSION_UNRESOLVED",
 )
 REQUIREMENTS = ("VER-02", "VER-04", "VER-06", "VER-08")
+# Retained prior-phase evidence is an immutable input to Phase 7.  These
+# digests are the checked-in qualification lock for the exact Phase 5/4.1
+# receipts; any replacement corpus must be explicitly re-qualified instead
+# of being made internally self-consistent.
+PHASE5_LOCKED_DIGESTS = {
+    "stage_tree": "3ed4bb887c0fdd6754acab0bdf06ffd3fcdaa79ad84d4aa689dcc7e765f50502",
+    "stage_identity": "ffa3de621afdc57fc1327da66ba0b19687080b22c42b2fee31306900684e6ee4",
+    "stage_inventory": "e488b3f1b8bf88d50e202423f92a24a3d5c9190c3d6a0a93aad68b15ec09beae",
+    "verdict": "2ecccae9a4300b4cbfe76c23d8db7d64d9566f95af95776421861577fd8939b6",
+}
+PHASE41_LOCKED_DIGESTS = {
+    "verdict": "73c3ee48ecd4ef589954e3d6bb79cef504986de3206b06a1411b5ba8d47b36de",
+    "inventory": "4ee6ca8a052335f11e3761a4f4127bb5f229c025134f7b5f981a6ddb308cfbac",
+    "packet_manifest": "abf1d315dd4b3649d1c1b824a7f8c81fad1708580264b21bcf89999ffdb57293",
+    "packet_status": "9d8a0909d760f5beb7d34602efb2f42e4d4f5f80945222c5b0cefb010e80c03c",
+    "evaluation": "4b214b357575d17aa23e5ab4f10983325b85cb82bec269959d0586be0546fbfd",
+    "host_integration": "544339a3a5ec0c94b82ce2948624151a43e50b311fd45c9acea518256295dd8a",
+    "host_qualification": "0977751c08b5e4f1f91ed95bdc6a5d0ea71e2bea846d2ab2f47da7dad93ee4cf",
+    "host_assessment": "530fefa5a0d7c46b51589b398553916c80a905113962b735dcaf363eaf7adeca",
+}
 REQUIRED_COMMAND_NAMES = (
     "phase7-focused",
     "stage-validate",
     "phase7-nonhost",
     "phase7-host-canary",
 )
+_VALIDATION_TOKEN = object()
 
 
 def _expected_command_argv(name: str) -> list[str]:
@@ -67,7 +88,7 @@ def _expected_command_argv(name: str) -> list[str]:
     raise KeyError(name)
 
 
-def _command_argv_matches(name: str, argv: object) -> bool:
+def _command_argv_matches(name: str, argv: object, stage_summary: ValidatedStageSummary) -> bool:
     if not isinstance(argv, list) or any(not isinstance(item, str) for item in argv):
         return False
     expected = _expected_command_argv(name)
@@ -79,10 +100,8 @@ def _command_argv_matches(name: str, argv: object) -> bool:
         and argv[1] == expected[1]
         and argv[3] == expected[3]
         and argv[4] == expected[4]
-        and Path(argv[2]).is_absolute()
-        and Path(argv[5]).is_absolute()
-        and Path(argv[2]).name == "phase-07-qualified"
-        and Path(argv[5]).name == "integration-lock.json"
+        and Path(argv[2]).resolve() == (PROJECT_ROOT / stage_summary.stage_relative_path).resolve()
+        and Path(argv[5]).resolve() == (PROJECT_ROOT / stage_summary.lock_relative_path).resolve()
     )
 STAGE_BASE = (PROJECT_ROOT / "build/stage").resolve()
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -127,11 +146,16 @@ SECRET_MARKER_RE = re.compile(
 class ValidatedReceiptSummary:
     """Receipt summary produced only by the prior-phase validators."""
 
-    __slots__ = ("phase5_graph", "phase41_independence")
+    __slots__ = ("phase5_graph", "phase41_independence", "_token")
 
-    def __init__(self, phase5_graph: dict[str, Any], phase41_independence: dict[str, Any]) -> None:
+    def __init__(self, phase5_graph: dict[str, Any], phase41_independence: dict[str, Any], *, _token: object | None = None) -> None:
         self.phase5_graph = phase5_graph
         self.phase41_independence = phase41_independence
+        self._token = _token
+
+    @property
+    def is_validated(self) -> bool:
+        return self._token is _VALIDATION_TOKEN
 
     def __getitem__(self, key: str) -> dict[str, Any]:
         if key == "phase5_graph":
@@ -148,15 +172,20 @@ class ValidatedReceiptSummary:
 
 
 class ValidatedStageSummary:
-    __slots__ = ("stage_sha256", "integration_lock_sha256", "host_canary_sha256", "stage_relative_path", "lock_relative_path", "canary_relative_path")
+    __slots__ = ("stage_sha256", "integration_lock_sha256", "host_canary_sha256", "stage_relative_path", "lock_relative_path", "canary_relative_path", "_token")
 
-    def __init__(self, *, stage_sha256: str, integration_lock_sha256: str, host_canary_sha256: str, stage_relative_path: str, lock_relative_path: str, canary_relative_path: str) -> None:
+    def __init__(self, *, stage_sha256: str, integration_lock_sha256: str, host_canary_sha256: str, stage_relative_path: str, lock_relative_path: str, canary_relative_path: str, _token: object | None = None) -> None:
         self.stage_sha256 = stage_sha256
         self.integration_lock_sha256 = integration_lock_sha256
         self.host_canary_sha256 = host_canary_sha256
         self.stage_relative_path = stage_relative_path
         self.lock_relative_path = lock_relative_path
         self.canary_relative_path = canary_relative_path
+        self._token = _token
+
+    @property
+    def is_validated(self) -> bool:
+        return self._token is _VALIDATION_TOKEN
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -167,6 +196,16 @@ class ValidatedStageSummary:
             "lock_relative_path": self.lock_relative_path,
             "canary_relative_path": self.canary_relative_path,
         }
+
+
+class ValidatedCommandReceipt(dict[str, Any]):
+    """Opaque command receipt produced by this verifier's subprocess boundary."""
+
+    __slots__ = ("result_path",)
+
+    def __init__(self, record: dict[str, Any], result_path: Path) -> None:
+        super().__init__(record)
+        self.result_path = result_path
 
 
 class VerificationError(RuntimeError):
@@ -372,7 +411,7 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     write_json(command_root / "result.json", record)
     if result.returncode != 0:
         raise VerificationError(f"{name} failed with exit {result.returncode}")
-    return record
+    return ValidatedCommandReceipt(record, command_root / "result.json")
 
 
 def _require_file(path: Path, label: str) -> Path:
@@ -443,6 +482,8 @@ def _validate_stage_tree(stage_tree: dict[str, Any]) -> tuple[str, str]:
     # the builder's pretty JSON formatting, so validate the object strictly
     # without imposing the evidence-receipt canonical encoding on it.
     identity_value = read_json(identity)
+    if digest_file(identity) != PHASE5_LOCKED_DIGESTS["stage_identity"]:
+        raise VerificationError("phase5-graph-equivalence: build identity is not the qualified parent manifest")
     staged_payloads = identity_value.get("staged_payloads")
     if not isinstance(staged_payloads, list) or not staged_payloads:
         raise VerificationError("phase5-graph-equivalence: build identity parent manifest is missing")
@@ -465,6 +506,8 @@ def _validate_stage_tree(stage_tree: dict[str, Any]) -> tuple[str, str]:
         raise VerificationError("phase5-graph-equivalence: stage tree is not bound to build identity parent manifest")
     inventory_path = PROJECT_ROOT / "build/evidence/phase-05/stage-plugin/inventory.json"
     inventory = read_json(_require_file(inventory_path, "phase5 stage inventory"))
+    if digest_file(inventory_path) != PHASE5_LOCKED_DIGESTS["stage_inventory"]:
+        raise VerificationError("phase5-graph-equivalence: stage inventory is not the qualified parent manifest")
     inventory_files = inventory.get("files")
     inventory_covered = inventory.get("covered_files")
     if not isinstance(inventory_files, list) or not isinstance(inventory_covered, list):
@@ -493,6 +536,8 @@ def _validate_phase5(root: Path) -> dict[str, Any]:
     verdict, verdict_canonical_sha256 = _canonical_receipt(verdict_path, "phase5 graph verdict")
     summary, summary_canonical_sha256 = _canonical_receipt(summary_path, "phase5 graph summary")
     stage_tree, stage_tree_canonical_sha256 = _canonical_receipt(stage_tree_path, "phase5 stage tree")
+    if verdict_canonical_sha256 != PHASE5_LOCKED_DIGESTS["verdict"] or stage_tree_canonical_sha256 != PHASE5_LOCKED_DIGESTS["stage_tree"]:
+        raise VerificationError("phase5-graph-equivalence: retained parent evidence digest is not the qualified corpus")
     if verdict.get("technical_qualification") != "PASS" or summary.get("technical_qualification") != "PASS":
         raise VerificationError("phase5-graph-equivalence: technical receipt is not PASS")
     if verdict.get("release_qualification") != "BLOCKED":
@@ -546,10 +591,14 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
 
     verdict_path = _require_file(root / "verdict.json", "phase4.1 independence verdict")
     verdict, verdict_canonical_sha256 = _canonical_receipt(verdict_path, "phase4.1 independence verdict")
+    if verdict_canonical_sha256 != PHASE41_LOCKED_DIGESTS["verdict"]:
+        raise VerificationError("phase4.1-subagent-independence: retained verdict is not the qualified corpus")
     if verdict.get("technical_qualification") != "PASS":
         raise VerificationError("phase4.1-subagent-independence: technical receipt is not PASS")
     host_path = _require_file(root / "host/integration-verification.json", "phase4.1 host integration")
     host, host_canonical_sha256 = _canonical_receipt(host_path, "phase4.1 host integration")
+    if host_canonical_sha256 != PHASE41_LOCKED_DIGESTS["host_integration"]:
+        raise VerificationError("phase4.1-subagent-independence: host integration is not the qualified corpus")
     if host.get("technical_qualification") != "PASS":
         raise VerificationError("phase4.1-subagent-independence: host receipt is not PASS")
     qualification_path = _require_file(root / "host/qualification.json", "phase4.1 host qualification")
@@ -559,9 +608,13 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
     evaluation_path = _require_file(root / "corpus/evaluation-summary.json", "phase4.1 evaluation summary")
     qualification, qualification_canonical_sha256 = _canonical_receipt(qualification_path, "phase4.1 host qualification")
     assessment, assessment_canonical_sha256 = _canonical_receipt(assessment_path, "phase4.1 host assessment")
+    if qualification_canonical_sha256 != PHASE41_LOCKED_DIGESTS["host_qualification"] or assessment_canonical_sha256 != PHASE41_LOCKED_DIGESTS["host_assessment"]:
+        raise VerificationError("phase4.1-subagent-independence: host qualification is not the qualified corpus")
     packet_manifest, packet_manifest_canonical_sha256 = _canonical_receipt(packet_manifest_path, "phase4.1 review packet")
     packet_status, packet_status_canonical_sha256 = _canonical_receipt(packet_status_path, "phase4.1 packet status")
     evaluation, evaluation_canonical_sha256 = _canonical_receipt(evaluation_path, "phase4.1 evaluation summary")
+    if packet_manifest_canonical_sha256 != PHASE41_LOCKED_DIGESTS["packet_manifest"] or packet_status_canonical_sha256 != PHASE41_LOCKED_DIGESTS["packet_status"] or evaluation_canonical_sha256 != PHASE41_LOCKED_DIGESTS["evaluation"]:
+        raise VerificationError("phase4.1-subagent-independence: panel/corpus receipt is not the qualified corpus")
     try:
         import jsonschema
         qualification_schema = json.loads((PROJECT_ROOT / "schemas/v1/host-qualification.schema.json").read_text(encoding="utf-8"))
@@ -610,6 +663,8 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
             raise VerificationError("phase4.1-subagent-independence: review packet case is not bound to corpus manifest")
     inventory_path = _require_file(root / "raw-evidence-inventory.json", "phase4.1 raw evidence inventory")
     inventory, inventory_canonical_sha256 = _canonical_receipt(inventory_path, "phase4.1 raw evidence inventory")
+    if inventory_canonical_sha256 != PHASE41_LOCKED_DIGESTS["inventory"]:
+        raise VerificationError("phase4.1-subagent-independence: evidence inventory is not the qualified parent manifest")
     if verdict.get("evidence_index_sha256") != digest_file(inventory_path) or not isinstance(inventory.get("files"), list):
         raise VerificationError("phase4.1-subagent-independence: parent evidence index is stale")
     raw_manifest = verdict.get("raw_evidence_files")
@@ -661,7 +716,7 @@ def validate_receipts(*, project_root: Path = PROJECT_ROOT, phase5_root: Path = 
     """Public helper used by verifier tests to validate prior-phase evidence."""
 
     del project_root  # roots are explicit parameters for tamper probes
-    return ValidatedReceiptSummary(_validate_phase5(phase5_root), _validate_phase41(phase41_root))
+    return ValidatedReceiptSummary(_validate_phase5(phase5_root), _validate_phase41(phase41_root), _token=_VALIDATION_TOKEN)
 
 
 def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> ValidatedStageSummary:
@@ -707,6 +762,7 @@ def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> Validate
         stage_relative_path=stage.relative_to(PROJECT_ROOT).as_posix(),
         lock_relative_path=lock.relative_to(PROJECT_ROOT).as_posix(),
         canary_relative_path=canary.relative_to(PROJECT_ROOT).as_posix(),
+        _token=_VALIDATION_TOKEN,
     )
 
 
@@ -745,9 +801,9 @@ def _blocked_aggregate(*, reason: str, receipt_summary: object, stage_summary: o
 def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary: ValidatedStageSummary, test_commands: list[dict[str, Any]], license_summary: dict[str, Any], git_head: str, git_tree: str) -> dict[str, Any]:
     """Aggregate only typed validators and successful command receipts."""
 
-    if not isinstance(receipt_summary, ValidatedReceiptSummary):
+    if not isinstance(receipt_summary, ValidatedReceiptSummary) or not receipt_summary.is_validated:
         return _blocked_aggregate(reason="unvalidated-prior-phase-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
-    if not isinstance(stage_summary, ValidatedStageSummary):
+    if not isinstance(stage_summary, ValidatedStageSummary) or not stage_summary.is_validated:
         return _blocked_aggregate(reason="unvalidated-stage-inputs", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     if not isinstance(test_commands, list) or not test_commands:
         return _blocked_aggregate(reason="missing-command-receipts", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands if isinstance(test_commands, list) else [], license_summary=license_summary, git_head=git_head, git_tree=git_tree)
@@ -755,15 +811,23 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
     if names != REQUIRED_COMMAND_NAMES:
         return _blocked_aggregate(reason="command-manifest-incomplete-or-unexpected", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     for index, command in enumerate(test_commands):
-        if not isinstance(command, dict) or command.get("returncode") != 0:
+        if not isinstance(command, ValidatedCommandReceipt) or command.get("returncode") != 0:
             return _blocked_aggregate(reason=f"command-{index}-failed", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+        try:
+            result_path = command.result_path
+            if not result_path.is_file() or read_json(result_path) != dict(command):
+                raise VerificationError("command result is not bound to verifier-owned receipt")
+            if digest_file(result_path.parent / "stdout.log") != command.get("stdout_sha256") or digest_file(result_path.parent / "stderr.log") != command.get("stderr_sha256"):
+                raise VerificationError("command stream digest is not bound to verifier-owned receipt")
+        except (OSError, VerificationError) as error:
+            return _blocked_aggregate(reason=f"command-{index}-receipt-unbound", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         for key in ("stdout_sha256", "stderr_sha256"):
             if not SHA256_RE.fullmatch(str(command.get(key, ""))):
                 return _blocked_aggregate(reason=f"command-{index}-digest-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         argv = command.get("argv")
         if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
             return _blocked_aggregate(reason=f"command-{index}-argv-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
-        if not _command_argv_matches(str(command.get("name")), argv):
+        if not _command_argv_matches(str(command.get("name")), argv, stage_summary):
             return _blocked_aggregate(reason=f"command-{index}-argv-unexpected", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         if command.get("cwd") != "<project>" or not isinstance(command.get("stdout_truncated"), bool) or not isinstance(command.get("stderr_truncated"), bool):
             return _blocked_aggregate(reason=f"command-{index}-receipt-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
