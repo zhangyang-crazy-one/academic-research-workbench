@@ -5,7 +5,7 @@
   "registry": "https://pypi.org/simple",
   "uv_lock": {
     "path": "uv.lock",
-    "sha256": "69314b27ce227b2e747ebbf5f4a6f67629ad628342a3f1060e8a2384e1cf34b5"
+    "sha256": "e0870c0118e849cafb2784d31c7fd436a5af4168d410d386466b488ecab30afc"
   },
   "runtime_requirements": {
     "path": "vendor/python/wheelhouse/requirements-runtime.txt",

@@ -298,7 +298,7 @@ def test_installed_route_requires_qualification_lock(
     assert result.returncode == 0, result.stderr
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
-    assert route["reason_codes"] == ["integration_inputs_incomplete"]
+    assert route["reason_codes"] == ["integration_lock_not_verified"]
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
 

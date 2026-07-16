@@ -72,6 +72,14 @@ uv sync --frozen --all-groups
 ./bin/arw help
 ```
 
+`--all-groups` also installs the dependencies required by the bundled ARS
+self-tests. Verify the complete vendored skill suite from the checkout root:
+
+```bash
+(cd skills/academic-research-suite/ars && \
+  uv run --frozen --all-groups --project ../../.. python -m pytest -q)
+```
+
 Source verification is an explicit online preparation step and materializes
 ignored snapshots under `vendor/sources/`:
 

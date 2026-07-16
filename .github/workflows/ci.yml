@@ -23,6 +23,8 @@ jobs:
         python-version: ['3.13', '3.14']
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -68,12 +70,20 @@ jobs:
           tests/integration/test_orchestration_panels.py
           tests/integration/test_orchestration_replay.py
           tests/integration/test_phase4_verifier.py
+      - name: Run bundled ARS self-tests
+        working-directory: skills/academic-research-suite/ars
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: uv run --frozen --all-groups --project ../../.. python -m pytest -q
 
   package-boundary:
     name: Wheel and source archive boundary
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'

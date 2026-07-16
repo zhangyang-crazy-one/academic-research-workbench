@@ -31,6 +31,32 @@ def _smoke_namespace(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     return namespace
 
 
+def test_smoke_reuses_an_existing_stage_without_rebuilding_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    namespace = _smoke_namespace(monkeypatch)
+    stage_root = tmp_path / "qualified-stage"
+    stage_root.mkdir()
+    lock = stage_root / "supply-chain/integration-lock.json"
+    lock.parent.mkdir()
+    lock.write_text('{"qualified":true}\n', encoding="utf-8")
+    before = lock.read_bytes()
+
+    def unexpected_restage(*args, **kwargs):
+        pytest.fail("an existing stage must not be passed to stage-plugin")
+
+    monkeypatch.setitem(namespace, "run_recorded", unexpected_restage)
+    materialized = namespace["materialize_stage_if_missing"](
+        stage_root,
+        tmp_path / "evidence",
+        cachebuster="must-not-be-used",
+    )
+
+    assert materialized is False
+    assert lock.read_bytes() == before
+    assert not (tmp_path / "evidence").exists()
+
+
 def test_route_smoke_validates_official_hook_receipt_and_definition(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

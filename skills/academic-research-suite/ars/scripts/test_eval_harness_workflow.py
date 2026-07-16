@@ -15,7 +15,13 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "eval-harness.yml"
+UPSTREAM_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "eval-harness.yml"
+CODEX_FIXTURE_PATH = (
+    REPO_ROOT.parent / "codex" / "tests" / "fixtures" / "upstream-eval-harness.yml"
+)
+WORKFLOW_PATH = (
+    UPSTREAM_WORKFLOW_PATH if UPSTREAM_WORKFLOW_PATH.is_file() else CODEX_FIXTURE_PATH
+)
 
 
 class _NoDuplicateKeyLoader(yaml.SafeLoader):

@@ -11,6 +11,7 @@ import pytest
 from arw.canonical import canonical_json_bytes
 from arw.integration_lock import (
     IntegrationLock,
+    _tree_sha256,
     _validate_arw_runtime,
     _validate_file_base,
     _validate_license,
@@ -236,6 +237,11 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         "artifact:hooks/arw_hook.py",
         "artifact:schemas/v1/integration-lock.schema.json",
         "artifact:vendor/mcp-manifest.json",
+        "artifact:skills/academic-research-suite",
+        "artifact:skills/academic-research-suite/ars",
+        "artifact:skills/academic-research-suite/SKILL.md",
+        "artifact:skills/academic-research-suite/manifest.json",
+        "artifact:skills/academic-research-suite/VERSION",
     }
     assert expected_refs <= set(components)
     for item in source_manifest["patches"]:
@@ -256,6 +262,16 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         assert components[f"artifact:{relative}"]["hashes"] == [
             {"alg": "SHA-256", "content": _sha256(REPOSITORY_ROOT / relative)}
         ]
+    suite_root = REPOSITORY_ROOT / "skills/academic-research-suite"
+    assert components["artifact:skills/academic-research-suite"]["hashes"] == [
+        {"alg": "SHA-256", "content": _tree_sha256(suite_root, ignore_runtime_caches=True)}
+    ]
+    assert components["artifact:skills/academic-research-suite/ars"]["hashes"] == [
+        {
+            "alg": "SHA-256",
+            "content": _tree_sha256(suite_root / "ars", ignore_runtime_caches=True),
+        }
+    ]
 
 
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
