@@ -107,6 +107,7 @@ provided_lock = Path(sys.argv[3]) if sys.argv[3] else None
 sys.path.insert(0, str(project_root / "src"))
 
 from arw.integration_lock import (  # noqa: E402
+    EXPECTED_CODEX_CLI_VERSION,
     IntegrationLock,
     _validate_arw_runtime,
     _validate_file_base,
@@ -146,6 +147,11 @@ def canonical_lock(path: Path) -> tuple[bytes, IntegrationLock]:
 
 
 def verify_local_lock(lock: IntegrationLock) -> None:
+    if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+        raise SystemExit(
+            "integration lock records an unsupported Codex CLI; "
+            "exact codex-cli 0.144.4 evidence is required"
+        )
     observed_arw = _validate_arw_runtime(stage_root)
     if lock.arw_runtime != observed_arw:
         raise SystemExit("integration lock does not bind the staged ARW runtime")
@@ -402,6 +408,7 @@ sys.path.insert(0, str(project_root / "src"))
 
 from arw.canonical import strict_json_loads  # noqa: E402
 from arw.integration_lock import (  # noqa: E402
+    EXPECTED_CODEX_CLI_VERSION,
     IntegrationLock,
     integration_lock_bytes,
 )
@@ -428,6 +435,11 @@ try:
     lock = IntegrationLock.model_validate_json(raw, strict=True)
 except (UnicodeError, ValueError) as error:
     raise SystemExit(f"integration lock is invalid: {error}") from error
+if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+    raise SystemExit(
+        "integration lock records an unsupported Codex CLI; "
+        "exact codex-cli 0.144.4 evidence is required"
+    )
 if raw != integration_lock_bytes(lock):
     raise SystemExit("integration lock bytes are not canonical JSON")
 
@@ -732,6 +744,11 @@ except (UnicodeError, ValueError) as error:
     raise SystemExit(f"staged integration lock is invalid: {error}") from error
 if raw != integration_lock_bytes(lock):
     raise SystemExit("staged integration lock bytes are not canonical JSON")
+if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+    raise SystemExit(
+        "staged integration lock records an unsupported Codex CLI; "
+        "exact codex-cli 0.144.4 evidence is required"
+    )
 
 observed_arw = _validate_arw_runtime(stage_root)
 if lock.arw_runtime != observed_arw:
