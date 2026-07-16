@@ -78,8 +78,8 @@ accountable-approval, and permission evidence.
 
 ## Retained Phase 7 evidence
 
-- `build/evidence/phase-07-final-11/phase-7-verification.json`
-- `build/evidence/phase-07-final-11/commands/phase7-focused/result.json`
-- `build/evidence/phase-07-final-11/commands/phase7-nonhost/result.json`
-- `build/evidence/phase-07-final-11/commands/phase7-host-canary/result.json`
-- `build/evidence/phase-07-final-11/prior-phase-receipts.json`
+- `build/evidence/phase-07-final-13/phase-7-verification.json`
+- `build/evidence/phase-07-final-13/commands/phase7-focused/result.json`
+- `build/evidence/phase-07-final-13/commands/phase7-nonhost/result.json`
+- `build/evidence/phase-07-final-13/commands/phase7-host-canary/result.json`
+- `build/evidence/phase-07-final-13/prior-phase-receipts.json`

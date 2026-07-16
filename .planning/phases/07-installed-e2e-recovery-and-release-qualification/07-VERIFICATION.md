@@ -21,7 +21,7 @@ explicit legal/permission gates recorded in the receipts.
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | Installed tests exercise a source-hidden staged package and retain manifest, route, launcher, MCP, hook, and version evidence. | ✓ VERIFIED | `build/evidence/phase-07-final-11/phase-7-verification.json` binds the qualified stage, lock, host canary, and four serial command receipts; stage validation passed and the installed qualification receipt reports no retained absolute paths or secrets. |
+| 1 | Installed tests exercise a source-hidden staged package and retain manifest, route, launcher, MCP, hook, and version evidence. | ✓ VERIFIED | `build/evidence/phase-07-final-13/phase-7-verification.json` binds the qualified stage, lock, host canary, and four serial command receipts; stage validation passed and the installed qualification receipt reports no retained absolute paths or secrets. |
 | 2 | The external ARS adapter is explicit, exact, lock-bound, and not bundled. | ✓ VERIFIED | `build/evidence/phase-07/installed-qualification.json` and `integration-lock.json` bind adapter/stage/host digests; staged qualification and installed smoke passed with external ARS input. |
 | 3 | Codex 0.144.4 compatibility, hook observation, isolation, and controlled result-channel evidence are retained. | ✓ VERIFIED | `build/evidence/phase-07/host-canary/canary.json` records the exact host tuple, hook digest/status, controlled result channel, credential hygiene, and three fresh-home receipts; all three isolation receipts pass. |
 | 4 | Canonical write, fsync, lock, and host-dispatch faults have stable IDs and a test-only injection seam. | ✓ VERIFIED | `tests/fixtures/recovery/phase7_faults`, `src/arw/faults.py`, and the serial fault matrix enumerate 18 registered scenarios and pass the focused recovery suite. |
@@ -30,7 +30,7 @@ explicit legal/permission gates recorded in the receipts.
 | 7 | One installed representative journey covers source/access, claim, experiment, figure/result, independent review with dissent, failed gate, human resolution, crash/resume, and dossier. | ✓ VERIFIED | `build/evidence/phase-07/representative-dossier.json` contains the canonical run history, experiment/artifact/review/human hashes, dissent reference, and separate technical/release verdicts. |
 | 8 | ARS contributes only bounded validated route/handoff/result evidence; ARW ledger, manifests, gates, and dossier remain authoritative. | ✓ VERIFIED | Installed E2E and dossier tests pass; ARS evidence is digest-bound and the dossier is assembled from ARW canonical records. |
 | 9 | Cold replay after projection loss is hash-stable and preserves identities, report hashes, dissent, human resolution, and the release blocker. | ✓ VERIFIED | `build/evidence/phase-07/representative-dossier-replay.json` reports warm/cold technical `PASS`, `projection_unavailable`, all report hashes, and release `BLOCKED`. |
-| 10 | A serial aggregate verifier validates installed, ARS, host, recovery, E2E, inventory/SBOM/build, and prior-phase evidence under one owned root. | ✓ VERIFIED | `scripts/verify-phase-7` produced `build/evidence/phase-07-final-11/phase-7-verification.json` with `evidence_bound: true`, four ordered command receipts, prior Phase 5/4.1 bindings, and a clean code-review status. |
+| 10 | A serial aggregate verifier validates installed, ARS, host, recovery, E2E, inventory/SBOM/build, and prior-phase evidence under one owned root. | ✓ VERIFIED | `scripts/verify-phase-7` produced `build/evidence/phase-07-final-13/phase-7-verification.json` with `evidence_bound: true`, four ordered command receipts, prior Phase 5/4.1 bindings, and a clean code-review status. |
 | 11 | Missing, stale, tampered, incompatible, source-leaking, or legally unresolved evidence fails closed with named blockers. | ✓ VERIFIED | Verifier tamper/adversarial tests pass; final receipt names `SUP-04`, `P04-09`, `INTENDED_USE_UNKNOWN`, `DISTRIBUTION_CLASS_UNKNOWN`, `ACCOUNTABLE_APPROVAL_MISSING`, and `CC_BY_NC_PERMISSION_UNRESOLVED`. |
 | 12 | Focused, non-host, staged, exact-host, and full regression results are retained without masking defects or parallel memory-heavy installs. | ✓ VERIFIED | Final retained logs show focused 16 passed, host 2 passed, non-host 490 passed/3 deselected, and stage validation passed; the verifier executes serially and the live follow-up focused suite passes 27 tests. |
 
@@ -51,7 +51,7 @@ explicit legal/permission gates recorded in the receipts.
 | `build/evidence/phase-07/representative-dossier-replay.json` | ✓ EXISTS + VERIFIED | Warm/cold replay comparison and projection-loss result. |
 | `scripts/verify-phase-7` | ✓ EXISTS + SUBSTANTIVE | Serial, owned-root, fail-closed aggregate verifier. |
 | `tests/integration/test_phase7_verifier.py` | ✓ EXISTS + SUBSTANTIVE | Positive, missing, stale, tamper, command-identity, and legal-block probes. |
-| `build/evidence/phase-07-final-11/phase-7-verification.json` (content-addressed revision of the plan's `build/evidence/phase-07/phase-7-verification.json` target) | ✓ EXISTS + VERIFIED | Canonical append-only aggregate: technical `PASS`, release `BLOCKED`, `evidence_bound: true`; the revisioned root avoids overwriting earlier receipts. |
+| `build/evidence/phase-07-final-13/phase-7-verification.json` (content-addressed revision of the plan's `build/evidence/phase-07/phase-7-verification.json` target) | ✓ EXISTS + VERIFIED | Canonical append-only aggregate: technical `PASS`, release `BLOCKED`, `evidence_bound: true`; the revisioned root avoids overwriting earlier receipts. |
 
 **Artifacts:** 12/12 verified.
 
@@ -119,7 +119,7 @@ host/staged probes passed, and stage validation passed.
 **Human checks required:** 1 legal/accountable approval gate.
 **Decision coverage:** No trackable decisions in `07-CONTEXT.md` (GSD query
 returned `skipped: true`, `total: 0`).
-**Final evidence:** `build/evidence/phase-07-final-11/phase-7-verification.json`.
+**Final evidence:** `build/evidence/phase-07-final-13/phase-7-verification.json`.
 
 ---
 *Verified: 2026-07-16T03:53:18Z*

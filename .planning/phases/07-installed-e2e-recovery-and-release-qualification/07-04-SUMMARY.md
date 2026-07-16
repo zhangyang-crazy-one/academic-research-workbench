@@ -116,7 +116,7 @@ review closeout `e8169fe`:
   do not inherit credential variables.
 
 Final serial evidence is retained at
-`build/evidence/phase-07-final-11/phase-7-verification.json` with technical
+`build/evidence/phase-07-final-13/phase-7-verification.json` with technical
 qualification `PASS`, all VER-02/04/06/08 requirements `PASS`, and release
 qualification `BLOCKED` only for the named legal/permission/accountable-human
 gates. The final non-host command recorded 490 passed and 3 deselected; the
