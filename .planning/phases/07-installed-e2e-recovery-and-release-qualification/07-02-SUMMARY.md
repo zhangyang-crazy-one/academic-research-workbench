@@ -7,6 +7,7 @@ requirements:
 commits:
   - a0d6007
   - caf40b9
+  - 13d03d4
 ---
 
 # Phase 7 Plan 02 Summary
@@ -50,6 +51,8 @@ none is relabeled as cancellation.
   sidecar hashes.  Aggregate evidence is written to
   `build/evidence/phase-07/recovery-matrix.json` with technical `PASS` and
   separate legal release `BLOCKED_LEGAL_GATE`.
+- The ordered aggregate includes all 18 stable registry boundary/scenario IDs,
+  including direct lock, host-dispatch, and result-acceptance receipts.
 
 ### 07-02-T3 — Crash/resume and stale rejection
 
