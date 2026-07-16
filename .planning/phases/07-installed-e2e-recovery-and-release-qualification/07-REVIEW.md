@@ -1,8 +1,8 @@
 ---
 phase: 07-installed-e2e-recovery-and-release-qualification
 reviewer: codex
-status: findings-open
-scope: committed Phase 7 changes from 7813473..HEAD
+status: clean
+scope: committed Phase 7 changes from 7813473..f1fe630
 ---
 
 # Phase 7 Code Review
@@ -253,3 +253,23 @@ The Phase 7 verifier's happy-path run completed with technical qualification
 PASS and release qualification BLOCKED, but these residual evidence-boundary
 findings mean the qualification is not independently replayable yet. This does
 not clear the legal release gate.
+
+## Final remediation review (2026-07-16)
+
+The residual findings are closed in `70fbe9d`, `a1253eb`, and `f1fe630`:
+
+- Phase 5 graph-control, stage, inventory, build-identity, and verdict bytes,
+  plus the Phase 4.1 retained corpus, are locked to the qualified digests.
+- Aggregation requires validator-issued opaque receipts, exact command argv,
+  canonical verifier-owned result/log files, and dirty-worktree provenance.
+- Fault sidecars replay against the supplied run root by default; detached
+  publication is an explicit fixture-only opt-in.
+
+Focused verification after remediation:
+
+```text
+27 passed
+```
+
+No HIGH or MEDIUM code-review findings remain. The separate SUP-04/P04-09 and
+CC BY-NC intended-use/distribution/permission blockers remain release gates.
