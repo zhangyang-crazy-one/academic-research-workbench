@@ -290,7 +290,7 @@ Plans:
 | 04.1. Phase 4 Qualification Closure and Installed Host Verification | 3/3 | Technical pass; release blocked | 2026-07-15 |
 | 5. Rebuildable Research Graph and Evidence Queries | 4/4 | Technical complete; release blocked by P04-09/SUP-04 | 2026-07-15 |
 | 6. Scientific Integrity and Audit Dossier | 5/5 | Technical complete; release blocked by SUP-04/P04-09/permission | 2026-07-16 |
-| 7. Installed E2E Recovery and Release Qualification | 0/4 | Planned    |  |
+| 7. Installed E2E Recovery and Release Qualification | 1/4 | In Progress|  |
 
 ---
 *Roadmap created: 2026-07-12 for v1.0 MVP*
