@@ -161,6 +161,7 @@ def _sidecar(
     recovery_hash: str | None = None,
     stdout: bytes | str = "",
     stderr: bytes | str = "",
+    process_state: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     def redact(value: bytes | str) -> str:
         text = value.decode("utf-8", "replace") if isinstance(value, bytes) else value
@@ -177,7 +178,7 @@ def _sidecar(
         stdout=redact(stdout),
         stderr=redact(stderr),
         file_snapshots=_redacted_snapshot(run_root),
-        process_state={"returncode": 0, "signal": None},
+        process_state=process_state or {"returncode": 0, "signal": None},
         replay_classification=classification,
         reason_code=reason,
         retry_count=retries,
@@ -299,6 +300,7 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
         recovery_hash: str | None = None,
         stdout: bytes | str = "",
         stderr: bytes | str = "",
+        process_state: dict[str, object] | None = None,
     ) -> None:
         records.append(
             _sidecar(
@@ -312,6 +314,7 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
                 recovery_hash=recovery_hash,
                 stdout=stdout,
                 stderr=stderr,
+                process_state=process_state,
             )
         )
 
@@ -361,6 +364,12 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
             reason,
             retries=retries,
             stderr=child.stderr,
+            process_state={
+                "returncode": child.returncode,
+                "signal": signal.Signals(-child.returncode).name
+                if child.returncode < 0
+                else None,
+            },
         )
         return root
 
@@ -422,7 +431,15 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
     )
     assert child.returncode == -signal.SIGKILL
     assert replay_run(root).revision == 1
-    record("phase7.hard-termination", "canonical-write", root, "RECOVERABLE", "process-terminated", stderr=child.stderr)
+    record(
+        "phase7.hard-termination",
+        "canonical-write",
+        root,
+        "RECOVERABLE",
+        "process-terminated",
+        stderr=child.stderr,
+        process_state={"returncode": child.returncode, "signal": "SIGKILL"},
+    )
 
     # Torn final write is the one repairable tail case and must be explicitly
     # quarantined before the canonical recovery event is published.
@@ -451,6 +468,7 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
         "process-terminated",
         recovery_hash=recovered.event.event_sha256,
         stderr=child.stderr,
+        process_state={"returncode": child.returncode, "signal": "SIGKILL"},
     )
 
     # Middle-chain, event-hash, and manifest corruption are never self-healed.
@@ -511,7 +529,16 @@ def test_phase7_serial_fault_matrix_retains_parent_sidecars_and_verdicts(
         )
         assert child.returncode != 0
         assert replay_run(root).revision == 1
-        record(fault_id, "journal-fsync", root, "RETRYABLE", reason, retries=1, stderr=child.stderr)
+        record(
+            fault_id,
+            "journal-fsync",
+            root,
+            "RETRYABLE",
+            reason,
+            retries=1,
+            stderr=child.stderr,
+            process_state={"returncode": child.returncode, "signal": None},
+        )
 
     # Duplicate command delivery and stale completion are rejected by the
     # parent revision/identity gate.
