@@ -726,6 +726,7 @@ stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
 from arw.integration_lock import (  # noqa: E402
+    EXPECTED_CODEX_CLI_VERSION,
     IntegrationLock,
     _validate_arw_runtime,
     _validate_file_base,
