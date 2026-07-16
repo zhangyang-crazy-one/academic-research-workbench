@@ -423,11 +423,15 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     environment = {key: value for key, value in os.environ.items() if key in SAFE_ENVIRONMENT}
     temporary = PROJECT_ROOT / "build/tmp/phase-07" / name
     temporary.mkdir(parents=True, exist_ok=True)
-    environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
+    isolated_home = temporary / "home"
+    isolated_codex_home = temporary / "codex-home"
+    isolated_home.mkdir(parents=True, exist_ok=True)
+    isolated_codex_home.mkdir(parents=True, exist_ok=True)
+    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
     if env:
         environment.update({key: value for key, value in env.items() if key in SAFE_ENVIRONMENT})
     # These controls are verifier-owned and cannot be overridden by a caller.
-    environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
+    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
     result = subprocess.run(argv, cwd=PROJECT_ROOT, env=environment, capture_output=True, check=False, timeout=timeout)
     stdout = _redact(result.stdout)
     stderr = _redact(result.stderr)
