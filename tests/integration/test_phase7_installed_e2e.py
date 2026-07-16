@@ -83,12 +83,12 @@ def _run(command: list[str], *, cwd: Path, environment: dict[str, str]) -> subpr
     )
 
 
-def _publish_once(path: Path, payload: object) -> None:
+def _publish_once(path: Path, payload: object) -> Path:
     encoded = canonical_json_bytes(payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         if path.read_bytes() == encoded:
-            return
+            return path
         # Evidence is append-only.  A later plan may legitimately produce a
         # new stage/lock identity; retain the old receipt and publish the new
         # canonical bytes under a content-addressed sibling instead of
@@ -97,8 +97,9 @@ def _publish_once(path: Path, payload: object) -> None:
         path = path.with_name(f"{path.stem}-{suffix}{path.suffix}")
         if path.exists():
             assert path.read_bytes() == encoded, f"retained receipt drifted: {path}"
-            return
+            return path
     path.write_bytes(encoded)
+    return path
 
 
 @pytest.fixture
@@ -626,6 +627,17 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
         ).read_text(encoding="utf-8")
     )
     panel, matrix, gate = _representative_panel()
+    human_record = HumanDecisionRecord.model_validate(
+        json.loads(
+            (
+                REPOSITORY_ROOT
+                / "tests/fixtures/phase6/representative-run/human/resolution.json"
+            ).read_text(encoding="utf-8")
+        )
+    )
+    human_decision_sha256 = sha256_hex(
+        canonical_json_bytes(human_record.model_dump(mode="json"))
+    )
     evidence = {
         "access": (decision,),
         "integrity": (integrity,),
@@ -652,7 +664,7 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
             "review_report_sha256": tuple(report.report_sha256 for report in matrix.reports),
             "dissent_refs": (matrix.reports[-1].report_sha256,),
             "gate_decision": gate,
-            "human_decision_sha256": ("1" * 64,),
+            "human_decision_sha256": (human_decision_sha256,),
         },
         graph={"status": "available", "receipts": (_graph_receipt(),)},
         source_identity_sha256=(decision.subject_sha256,),
@@ -673,9 +685,9 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
     assert cold.review_report_sha256 == dossier.review_report_sha256
     assert any(item.code == "projection_unavailable" for item in cold.blockers)
     target = REPOSITORY_ROOT / "build/evidence/phase-07/representative-dossier.json"
-    _publish_once(target, dossier.model_dump(mode="json"))
-    assert target.is_file()
-    assert target.read_bytes() == dossier.canonical_bytes()
+    published_dossier = _publish_once(target, dossier.model_dump(mode="json"))
+    assert published_dossier.is_file()
+    assert published_dossier.read_bytes() == dossier.canonical_bytes()
     replay_comparison = {
         "schema_version": "arw.phase7-dossier-replay-comparison.v1",
         "warm_dossier_sha256": dossier.dossier_sha256,
