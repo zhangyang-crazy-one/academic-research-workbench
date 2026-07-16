@@ -49,6 +49,41 @@ REQUIRED_COMMAND_NAMES = (
     "phase7-nonhost",
     "phase7-host-canary",
 )
+
+
+def _expected_command_argv(name: str) -> list[str]:
+    """Return the only command shapes that can establish Phase 7 evidence."""
+
+    if name == "phase7-focused":
+        return [str(PYTHON), "-m", "pytest", "-q", "tests/integration/test_phase7_installed_e2e.py", "tests/integration/test_phase7_fault_matrix.py", "tests/staged/test_phase7_qualification.py"]
+    if name == "stage-validate":
+        # Paths are checked structurally below because the CLI records the
+        # concrete stage/lock roots used by this invocation.
+        return ["./scripts/stage-plugin", "--stage-root", "<stage>", "--validate-only", "--integration-lock", "<lock>"]
+    if name == "phase7-nonhost":
+        return [str(PYTHON), "-m", "pytest", "-q", "-m", "not", "codex_host"]
+    if name == "phase7-host-canary":
+        return [str(PYTHON), "-m", "pytest", "-q", "tests/staged/test_phase7_qualification.py::test_exact_stage_inventory_sbmom_build_identity_and_host_lock", "tests/staged/test_phase7_qualification.py::test_official_hook_definition_is_observational_and_parity_inputs_are_present"]
+    raise KeyError(name)
+
+
+def _command_argv_matches(name: str, argv: object) -> bool:
+    if not isinstance(argv, list) or any(not isinstance(item, str) for item in argv):
+        return False
+    expected = _expected_command_argv(name)
+    if name != "stage-validate":
+        return argv == expected
+    return (
+        len(argv) == len(expected)
+        and argv[0] == expected[0]
+        and argv[1] == expected[1]
+        and argv[3] == expected[3]
+        and argv[4] == expected[4]
+        and Path(argv[2]).is_absolute()
+        and Path(argv[5]).is_absolute()
+        and Path(argv[2]).name == "phase-07-qualified"
+        and Path(argv[5]).name == "integration-lock.json"
+    )
 STAGE_BASE = (PROJECT_ROOT / "build/stage").resolve()
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -428,6 +463,24 @@ def _validate_stage_tree(stage_tree: dict[str, Any]) -> tuple[str, str]:
     ]
     if sorted(tree_payload_rows, key=lambda item: item["path"]) != sorted(payload_rows, key=lambda item: item["path"]):
         raise VerificationError("phase5-graph-equivalence: stage tree is not bound to build identity parent manifest")
+    inventory_path = PROJECT_ROOT / "build/evidence/phase-05/stage-plugin/inventory.json"
+    inventory = read_json(_require_file(inventory_path, "phase5 stage inventory"))
+    inventory_files = inventory.get("files")
+    inventory_covered = inventory.get("covered_files")
+    if not isinstance(inventory_files, list) or not isinstance(inventory_covered, list):
+        raise VerificationError("phase5-graph-equivalence: stage inventory parent manifest is malformed")
+    if sorted(inventory_files) != sorted(seen):
+        raise VerificationError("phase5-graph-equivalence: stage inventory does not cover stage tree")
+    covered_rows = [
+        {"path": item.get("path"), "sha256": item.get("sha256")}
+        for item in inventory_covered
+        if isinstance(item, dict)
+    ]
+    if sorted(covered_rows, key=lambda item: item["path"]) != sorted(
+        [row for row in rows if row["path"] != "supply-chain/stage-inventory.json"],
+        key=lambda item: item["path"],
+    ):
+        raise VerificationError("phase5-graph-equivalence: stage inventory hashes are not bound to stage tree")
     return digest_file(identity), digest_bytes(canonical(sorted((row["path"], row["sha256"]) for row in rows)))
 
 
@@ -521,6 +574,8 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
         raise VerificationError("phase4.1-subagent-independence: packet status is incomplete")
     if packet_manifest.get("schema_version") != "arw.phase4-review-packet.v1" or packet_manifest.get("worker_facing_labels_included") is not False:
         raise VerificationError("phase4.1-subagent-independence: review packet schema/status is invalid")
+    if packet_manifest.get("technical_verdict_sha256") != verdict_canonical_sha256:
+        raise VerificationError("phase4.1-subagent-independence: review packet is not bound to verdict")
     if evaluation.get("schema_version") != "arw.phase4-corpus-evaluation.v1" or evaluation.get("total_cases") != 48 or evaluation.get("sealed_parent_only_cases") != 16:
         raise VerificationError("phase4.1-subagent-independence: evaluation summary is incomplete")
     case_results = sorted((root / "corpus/case-results").glob("*.json"))
@@ -542,6 +597,17 @@ def _validate_phase41(root: Path) -> dict[str, Any]:
     for item in evaluation.get("results", []):
         if isinstance(item, dict) and item.get("result_sha256") != case_hashes.get(item.get("case_id")):
             raise VerificationError(f"phase4.1-subagent-independence: case digest mismatch: {item.get('case_id')}")
+    packet_cases = packet_manifest.get("cases")
+    if not isinstance(packet_cases, list) or packet_manifest.get("case_count") != len(packet_cases):
+        raise VerificationError("phase4.1-subagent-independence: review packet case manifest is incomplete")
+    case_by_id = {item.get("case_id"): item for item in evaluation.get("results", []) if isinstance(item, dict)}
+    for packet_case in packet_cases:
+        if not isinstance(packet_case, dict) or packet_case.get("case_id") not in case_by_id:
+            raise VerificationError("phase4.1-subagent-independence: review packet case is not in corpus")
+        if not SHA256_RE.fullmatch(str(packet_case.get("case_sha256", ""))):
+            raise VerificationError("phase4.1-subagent-independence: review packet case hash is malformed")
+        if evaluation.get("manifest_sha256") not in packet_case.get("evidence_sha256", []):
+            raise VerificationError("phase4.1-subagent-independence: review packet case is not bound to corpus manifest")
     inventory_path = _require_file(root / "raw-evidence-inventory.json", "phase4.1 raw evidence inventory")
     inventory, inventory_canonical_sha256 = _canonical_receipt(inventory_path, "phase4.1 raw evidence inventory")
     if verdict.get("evidence_index_sha256") != digest_file(inventory_path) or not isinstance(inventory.get("files"), list):
@@ -697,6 +763,8 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
         argv = command.get("argv")
         if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
             return _blocked_aggregate(reason=f"command-{index}-argv-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
+        if not _command_argv_matches(str(command.get("name")), argv):
+            return _blocked_aggregate(reason=f"command-{index}-argv-unexpected", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         if command.get("cwd") != "<project>" or not isinstance(command.get("stdout_truncated"), bool) or not isinstance(command.get("stderr_truncated"), bool):
             return _blocked_aggregate(reason=f"command-{index}-receipt-invalid", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
     if receipt_summary.phase5_graph.get("technical_qualification") != "PASS" or receipt_summary.phase41_independence.get("technical_qualification") != "PASS":

@@ -166,3 +166,40 @@ def test_aggregate_rejects_fabricated_successful_command_manifest() -> None:
     )
     assert result["technical_qualification"] == "BLOCKED"
     assert "command-manifest-incomplete-or-unexpected" in result["technical_blockers"]
+
+
+def test_aggregate_rejects_required_names_with_wrong_argv() -> None:
+    verifier = _verifier_module()
+    commands = []
+    for name in verifier.REQUIRED_COMMAND_NAMES:
+        commands.append(
+            {
+                "name": name,
+                "argv": ["echo", "evil"],
+                "cwd": "<project>",
+                "returncode": 0,
+                "stdout_sha256": "d" * 64,
+                "stderr_sha256": "e" * 64,
+                "stdout_truncated": False,
+                "stderr_truncated": False,
+            }
+        )
+    result = verifier.aggregate_verdict(
+        receipt_summary=verifier.ValidatedReceiptSummary(
+            {"technical_qualification": "PASS"}, {"technical_qualification": "PASS"}
+        ),
+        stage_summary=verifier.ValidatedStageSummary(
+            stage_sha256="a" * 64,
+            integration_lock_sha256="b" * 64,
+            host_canary_sha256="c" * 64,
+            stage_relative_path="build/stage/phase-07-qualified",
+            lock_relative_path="build/evidence/phase-07/integration-lock.json",
+            canary_relative_path="build/evidence/phase-07/host-canary/canary.json",
+        ),
+        test_commands=commands,
+        license_summary={"technical_qualification": "PASS", "release_qualification": "BLOCKED"},
+        git_head="b" * 40,
+        git_tree="c" * 40,
+    )
+    assert result["technical_qualification"] == "BLOCKED"
+    assert "command-0-argv-unexpected" in result["technical_blockers"]
