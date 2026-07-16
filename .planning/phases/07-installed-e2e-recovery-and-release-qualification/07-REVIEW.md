@@ -187,6 +187,68 @@ tests/unit/test_canonical.py
 34 passed
 ```
 
+## Final residual review after ad85a33
+
+The follow-up review was run against `7813473..ad85a33` with the focused
+verifier, recovery, journal, and fault-matrix tests. The tests pass, but the
+adversarial evidence probes below still fail the intended fail-closed
+boundary. The review therefore remains `findings-open`.
+
+### F-003R — HIGH: phase receipts still have no independent parent binding
+
+The Phase 5 validator recomputes staged file digests and checks the mutable
+`build-identity.json` rows against the mutable `stage-tree.json`, but it does
+not require an independently retained digest for the complete stage-tree
+manifest. `stage-tree.sha256` is the build-identity digest rather than a
+digest derived from the canonical stage rows, and `stage_rows_sha256` is
+optional in the verdict. A writer able to edit the retained stage, stage tree,
+and verdict can produce a self-consistent replacement corpus that still
+qualifies as PASS.
+
+The Phase 4.1 validator similarly binds `raw-evidence-inventory.json` to its
+own listed files and compares a few selected hashes, but that inventory and
+the phase verdict are both mutable. `review-packet/manifest.json`,
+`review-packet/packet-status.json`, and several checked receipts are not
+covered by an immutable parent aggregate. Updating the inventory, verdict,
+and receipt hashes together is accepted. Qualification needs a canonical
+parent manifest (or equivalent immutable evidence index) covering every
+accepted receipt and a verdict field bound to that exact parent digest.
+
+### F-004R — HIGH: required command names do not prove command identity
+
+`aggregate_verdict` now requires four names in the expected order, but accepts
+arbitrary argv and caller-supplied stream digests for those names. A direct
+probe passing `argv: ["echo", "evil"]` for all four required names, zero
+return codes, and well-shaped hashes returns technical `PASS`. The aggregate
+must consume a typed command manifest with exact command identity/argv and
+result-file or output-content bindings produced by the verifier itself;
+names and digest shape alone are insufficient.
+
+### F-006R — MEDIUM: sidecar sequence and recovery evidence remain forgeable
+
+`validate_fault_sidecar` verifies that `event_sequence_sha256` hashes the
+sidecar's own `event_sequence`, but it never loads the run ledger or replay
+result to establish that the sequence is canonical. An arbitrary sequence
+such as `[{"forged": "not-ledger"}]` with its matching digest is accepted. For
+`RECOVERED_*`, a caller-provided mapping containing only an arbitrary
+`event_sha256` is accepted when the field matches the supplied digest. A
+repository search shows no runtime/replay publication path invoking this
+validator; the current use is confined to evidence tests. The parent must
+cold-replay the registered run, compare canonical event bytes and the recovery
+event digest, and invoke that validation before retaining the sidecar.
+
+### Reproduction probes
+
+```text
+aggregate_verdict(required names + argv=["echo", "evil"]): technical PASS
+validate_fault_sidecar(event_sequence=[{"forged":"not-ledger"}]): accepts
+```
+
+Until these three residual findings are closed and independently replayed,
+Phase 7 technical qualification cannot be considered complete. The separate
+SUP-04/P04-09 and CC BY-NC intended-use/distribution/permission blockers
+remain unchanged.
+
 The Phase 7 verifier's happy-path run completed with technical qualification
 PASS and release qualification BLOCKED, but these residual evidence-boundary
 findings mean the qualification is not independently replayable yet. This does
