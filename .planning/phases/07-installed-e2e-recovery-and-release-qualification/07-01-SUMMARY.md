@@ -9,6 +9,7 @@ commits:
   - 0b50173
   - 9d9ac6c
   - 638db0e
+  - 0da2ec6
 ---
 
 # Phase 7 Plan 01 Summary
@@ -48,6 +49,8 @@ technical receipt.
   runs the installed `bin/arw route --json` command offline.
 - Retains only bounded ARS route/handoff digests and redacted command identity;
   full workflow text, credentials, absolute roots, and transcripts are absent.
+- Later stage/lock identities publish content-addressed sibling receipts rather
+  than overwrite the prior qualification receipt.
 - Focused result: `2 passed`; final combined installed/staged qualification
   probe result: `5 passed` with the exact lock-bound stage.
 
@@ -81,7 +84,9 @@ controlled result-channel `PASS`.
 
 **[Rule 1 - Bug] Staged lock verifier omitted the newly imported exact-version constant** — Found during: final lock-bound stage refresh | The first refresh failed with `NameError: EXPECTED_CODEX_CLI_VERSION` in the final stage-validation block | Added the missing import and reran the stage build/validation | File: `scripts/stage-plugin` | Verification: lock-bound stage validates and all Phase 7 staged probes pass | Commit: `638db0e`.
 
-**Total deviations:** 1 auto-fixed (one staged-verifier import defect). **Impact:** no qualification boundary weakened; the failure was fail-closed before publication and the refreshed exact host/stage/lock evidence passed.
+**[Rule 1 - Safety] Repeated Phase 7 runs encountered an existing receipt with a newer stage identity** — Found during: final refreshed installed smoke | The evidence root is append-only, so the fixed receipt path could not be overwritten | New receipt revisions are published under a content-addressed sibling while the prior receipt remains intact | File: `tests/integration/test_phase7_installed_e2e.py` | Verification: installed smoke `2 passed` after refresh | Commit: `0da2ec6`.
+
+**Total deviations:** 2 auto-fixed (one staged-verifier import defect; one append-only receipt publication path). **Impact:** no qualification boundary weakened; stale evidence is never overwritten and refreshed exact host/stage/lock evidence passed.
 
 ## Self-Check: PASSED
 
