@@ -177,6 +177,18 @@
       "version": "1"
     },
     {
+      "bom-ref": "artifact:vendor/mcp-manifest.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4302f4db1acdbe7f57a247712af9fea2b7cd0361fca9dc4af5e1e0be1bc1ad03"
+        }
+      ],
+      "name": "vendor/mcp-manifest.json",
+      "type": "file",
+      "version": "1"
+    },
+    {
       "bom-ref": "attrs-3@26.1.0",
       "name": "attrs",
       "purl": "pkg:pypi/attrs@26.1.0",

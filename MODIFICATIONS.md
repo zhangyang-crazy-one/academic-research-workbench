@@ -20,6 +20,12 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## file-base
 
+ARW's MCP is the locally modified `codebase-memory-mcp` adapter. The runtime
+launcher keeps the upstream-compatible `file-base` name, while
+`vendor/mcp-manifest.json` is the canonical machine-readable identity for the
+upstream commit, patched tree, ordered ARW patch series, protocol, binary, and
+capability profile. It is not an unpinned external MCP dependency.
+
 - Upstream revision: `ee68144af5453addda995a27cce8142999f318fb`
 - Materialized source: `vendor/sources/file-base`
 - License: MIT, with the preserved generated third-party notices for bundled dependencies.

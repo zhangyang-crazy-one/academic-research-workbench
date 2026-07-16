@@ -32,6 +32,7 @@ LEGAL_FILES = {
     "supply-chain/use-distribution.json",
     "supply-chain/license-verdict.json",
     "vendor/source-manifest.json",
+    "vendor/mcp-manifest.json",
 }
 
 
@@ -234,6 +235,7 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         "artifact:hooks/hooks.json",
         "artifact:hooks/arw_hook.py",
         "artifact:schemas/v1/integration-lock.schema.json",
+        "artifact:vendor/mcp-manifest.json",
     }
     assert expected_refs <= set(components)
     for item in source_manifest["patches"]:
@@ -249,6 +251,7 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         "hooks/hooks.json",
         "hooks/arw_hook.py",
         "schemas/v1/integration-lock.schema.json",
+        "vendor/mcp-manifest.json",
     ):
         assert components[f"artifact:{relative}"]["hashes"] == [
             {"alg": "SHA-256", "content": _sha256(REPOSITORY_ROOT / relative)}

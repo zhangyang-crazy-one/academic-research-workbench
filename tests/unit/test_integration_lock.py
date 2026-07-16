@@ -161,6 +161,32 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     }
     _json(stage / "vendor/source-manifest.json", source_manifest)
     _json(
+        stage / "vendor/mcp-manifest.json",
+        {
+            "schema_version": "arw.mcp-integration-manifest.v1",
+            "name": "codebase-memory-mcp",
+            "arw_component_id": "file-base",
+            "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
+            "upstream_commit": FILE_BASE_COMMIT,
+            "upstream_git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
+            "upstream_source_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+            "patched_source_tree_sha256": patches[-1]["post_tree_sha256"],
+            "source_materialization": "vendor/sources/file-base",
+            "binary": {
+                "path": ".file-base/bin/file-base",
+                "staged_path": "libexec/file-base-mcp",
+                "sha256": _digest(binary),
+            },
+            "patches": [
+                {"order": patch["order"], "path": patch["path"], "sha256": patch["sha256"]}
+                for patch in patches
+            ],
+            "protocol": "MCP-2025-11-25-stdio",
+            "capabilities": ["bounded-list-files"],
+            "license": "MIT",
+        },
+    )
+    _json(
         stage / ".file-base/build-evidence.json",
         {
             "schema_version": "1.0.0",

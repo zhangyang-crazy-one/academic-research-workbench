@@ -3,7 +3,8 @@ The collective plugin has mixed licensing. Component identities remain separate.
 ## Source components
 - `academic-research-skills` `0.1.20` — `CC-BY-NC-4.0`; bundled adapter source `skills/academic-research-suite/ars/`.
 - `experiment-agent` `pinned` — `CC-BY-NC-4.0`; bundled and reshaped inside `skills/academic-research-suite/ars/`.
-- `file-base` `v0.9.0-2-gee68144` — `MIT`; source `vendor/sources/file-base`.
+- `codebase-memory-mcp` (ARW `file-base` adapter) `v0.9.0-2-gee68144` — `MIT`;
+  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.
 
 ## Ordered local patches
 - `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`.

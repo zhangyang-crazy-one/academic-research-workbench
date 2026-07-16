@@ -396,6 +396,7 @@ copy_file "SBOM.cdx.json"
 copy_file "supply-chain/use-distribution.json"
 copy_file "supply-chain/license-verdict.json"
 copy_file "vendor/source-manifest.json"
+copy_file "vendor/mcp-manifest.json"
 copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
 copy_file "vendor/patches/file-base/0002-phase1-confined-read.patch"
 copy_file "vendor/patches/file-base/0003-phase3-generation-builder.patch"
@@ -920,6 +921,7 @@ static_files = {
     "vendor/python/wheelhouse/requirements-installed.txt",
     "vendor/python/wheelhouse/requirements-runtime.txt",
     "vendor/source-manifest.json",
+    "vendor/mcp-manifest.json",
     "vendor/patches/file-base/0001-file-base-server-name.patch",
     "vendor/patches/file-base/0002-phase1-confined-read.patch",
     "vendor/patches/file-base/0003-phase3-generation-builder.patch",
@@ -1046,7 +1048,7 @@ for relative, record in payloads.items():
 
 
 def inventory_source(relative: str) -> str:
-    if relative == "vendor/source-manifest.json":
+    if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
         return "source-manifest"
     if relative.startswith("vendor/python/wheelhouse/") or relative in {"uv.lock", ".python-version"}:
         return "wheelhouse"

@@ -321,6 +321,7 @@ def generate_sbom(
         "hooks/hooks.json",
         "hooks/arw_hook.py",
         "schemas/v1/integration-lock.schema.json",
+        "vendor/mcp-manifest.json",
     ):
         path = PROJECT_ROOT / relative
         components[f"artifact:{relative}"] = {

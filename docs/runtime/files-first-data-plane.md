@@ -3,6 +3,10 @@
 The files-first plane separates parent-controlled administration from an
 agent-facing, read-only MCP process. One MCP process is authorized for exactly
 one registered root and snapshots exactly one selected generation at startup.
+The process is ARW's modified `codebase-memory-mcp`/`file-base` adapter, not a
+runtime download or a generic MCP placeholder. Its source commit, patch
+series, binary digest, protocol, and capabilities are bound by
+`vendor/mcp-manifest.json` and the integration lock.
 
 ## Ownership Boundary
 

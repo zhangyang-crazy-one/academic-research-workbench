@@ -1087,9 +1087,34 @@ def _validate_file_base(
     stage_root: Path, source_manifest: Mapping[str, object]
 ) -> FileBaseBinding:
     source_binding = FileBinding.from_path(stage_root, "vendor/source-manifest.json")
+    mcp_manifest_binding = FileBinding.from_path(stage_root, "vendor/mcp-manifest.json")
     evidence_binding = FileBinding.from_path(stage_root, ".file-base/build-evidence.json")
     binary_binding = FileBinding.from_path(stage_root, "libexec/file-base-mcp")
     component = _component(source_manifest, "file-base")
+    mcp_manifest = _read_object(
+        _bound_file(stage_root, mcp_manifest_binding), label="MCP integration manifest"
+    )
+    if (
+        mcp_manifest.get("schema_version") != "arw.mcp-integration-manifest.v1"
+        or mcp_manifest.get("name") != "codebase-memory-mcp"
+        or mcp_manifest.get("arw_component_id") != "file-base"
+        or mcp_manifest.get("upstream_url") != component.get("upstream_url")
+        or mcp_manifest.get("upstream_commit") != component.get("revision")
+        or mcp_manifest.get("upstream_git_tree") != component.get("git_tree")
+        or mcp_manifest.get("upstream_source_tree_sha256") != component.get("tree_sha256")
+        or mcp_manifest.get("source_materialization") != "vendor/sources/file-base"
+        or mcp_manifest.get("protocol") != "MCP-2025-11-25-stdio"
+        or mcp_manifest.get("license") != "MIT"
+    ):
+        raise IntegrationLockError("MCP manifest does not bind the qualified codebase-memory-mcp source")
+    mcp_binary = mcp_manifest.get("binary")
+    if (
+        not isinstance(mcp_binary, dict)
+        or mcp_binary.get("path") != ".file-base/bin/file-base"
+        or mcp_binary.get("staged_path") != "libexec/file-base-mcp"
+        or mcp_binary.get("sha256") != binary_binding.sha256
+    ):
+        raise IntegrationLockError("MCP manifest does not bind the staged file-base binary")
     evidence = _read_object(
         _bound_file(stage_root, evidence_binding), label="file-base build evidence"
     )
@@ -1130,6 +1155,9 @@ def _validate_file_base(
         expected_rows.append(binding.model_dump(mode="json"))
     if evidence_patches != expected_rows:
         raise IntegrationLockError("file-base build evidence patch series drift")
+    mcp_patches = mcp_manifest.get("patches")
+    if mcp_patches != expected_rows:
+        raise IntegrationLockError("MCP manifest patch series drift")
     post_patch = manifest_patches[-1].get("post_tree_sha256")
     if evidence.get("post_patch_tree_sha256") != post_patch:
         raise IntegrationLockError("file-base post-patch tree drift")

@@ -24,6 +24,12 @@ complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 The Science Workbench paper AST/export remains a v2/deferred boundary; ARW
 does not claim to replace a complete research-to-paper workflow.
 
+The files-first MCP is ARW's modified `DeusData/codebase-memory-mcp` adapter.
+The installed launcher retains the upstream-compatible `file-base` command
+name; `vendor/mcp-manifest.json` records its exact source commit, ordered ARW
+patches, patched-tree digest, binary digest, protocol, and bounded capability
+profile.
+
 ## Qualification status
 
 The retained Phase 7 verifier records technical qualification separately from

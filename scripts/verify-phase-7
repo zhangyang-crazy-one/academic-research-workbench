@@ -798,6 +798,7 @@ def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> Validate
         "skills/academic-research-suite/SKILL.md",
         "skills/academic-research-suite/manifest.json",
         "skills/academic-research-suite/VERSION",
+        "vendor/mcp-manifest.json",
     )
     missing = [relative for relative in required if not (stage / relative).is_file()]
     if missing:
