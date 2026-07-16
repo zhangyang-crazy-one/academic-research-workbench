@@ -40,6 +40,7 @@ from arw.recovery import (
     publish_recovery_segment,
     validate_recovery_boundary,
 )
+from arw.faults import active_fault, inject
 from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 
@@ -619,6 +620,9 @@ def replay_run(run_root: Path, *, lock_timeout: float = 0.2) -> ReplayState:
     root = _existing_root(run_root)
     try:
         with _read_lock(root, lock_timeout):
+            # Read-side lock acquisition is also part of the qualification
+            # boundary; a lock fault must not be observable only on mutation.
+            inject("phase7.lock-acquire")
             return _replay_unlocked(root)
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
@@ -633,6 +637,11 @@ def locked_replay(
     root = require_existing_run_root(run_root)
     try:
         with _lock(root, lock_timeout):
+            # This guarded seam runs only after the OS lock is acquired.  It
+            # lets the parent matrix prove lock acquisition/owner-death
+            # behavior without exposing a request-controlled bypass.
+            inject("phase7.lock-acquire")
+            inject("phase7.lock-owner-death", kill=True)
             yield root, _replay_unlocked(root)
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
@@ -697,12 +706,23 @@ def append_runtime_event_unlocked(
     ):
         raise JournalError("runtime event does not extend the accepted tip")
     segment_path = root / state.segments[-1].relative_path
+    # The candidate event has already been validated and all chain fields are
+    # parent-derived.  A write-before-commit fault therefore leaves no bytes
+    # behind and cannot manufacture a retry attempt in the child.
+    inject("phase7.canonical-write-before-commit")
+    inject("phase7.hard-termination")
+    inject("phase7.io-failure")
+    inject("phase7.disk-exhaustion")
     before_size = segment_path.stat().st_size
     event_bytes = canonical_json_bytes(_event_wire_mapping(event))
     if segment_path.stat().st_size != before_size:
         raise JournalError("journal changed during locked replay")
     with segment_path.open("ab") as handle:
-        if os.environ.get(FAILPOINT_ENV) == PARTIAL_RUNTIME_APPEND_SIGKILL:
+        torn = active_fault("phase7.torn-final-write")
+        if (
+            os.environ.get(FAILPOINT_ENV) == PARTIAL_RUNTIME_APPEND_SIGKILL
+            or (torn is not None and torn.action == "torn-write")
+        ):
             handle.write(event_bytes[: max(1, len(event_bytes) // 2)])
             handle.flush()
             os.fsync(handle.fileno())
@@ -710,6 +730,9 @@ def append_runtime_event_unlocked(
         handle.write(event_bytes)
         handle.flush()
         os.fsync(handle.fileno())
+    # The event is durable before this seam fires.  A parent replay can prove
+    # whether the command receipt was lost without accepting a duplicate.
+    inject("phase7.journal-fsync")
     return event, _replay_unlocked(root)
 
 

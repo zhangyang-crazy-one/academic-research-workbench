@@ -1,0 +1,11 @@
+{
+  "schema_version": "arw.phase7-fault-registry.v1",
+  "faults": [
+    {"fault_id": "phase7.canonical-write-before-commit", "boundary": "canonical-write", "expected": "no_event"},
+    {"fault_id": "phase7.journal-fsync", "boundary": "journal-fsync", "expected": "event_durable"},
+    {"fault_id": "phase7.lock-acquire", "boundary": "lock-acquire", "expected": "blocked"},
+    {"fault_id": "phase7.lock-owner-death", "boundary": "lock-owner", "expected": "blocked"},
+    {"fault_id": "phase7.host-dispatch", "boundary": "host-dispatch", "expected": "retryable"},
+    {"fault_id": "phase7.result-acceptance", "boundary": "result-acceptance", "expected": "retryable"}
+  ]
+}
