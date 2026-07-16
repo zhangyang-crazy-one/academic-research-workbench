@@ -148,6 +148,23 @@ def _evidence_event_hash(root: Path) -> str:
         return sha256_hex(canonical_json_bytes(payload))
 
 
+def _evidence_event_sequence(root: Path) -> list[object]:
+    """Return the exact canonical sequence retained by a parent sidecar."""
+
+    try:
+        replayed = replay_run(root)
+        return [
+            canonical_event_bytes(event.model_dump(mode="json")).decode("utf-8")
+            for event in replayed.events
+        ]
+    except (JournalError, OSError, ValueError):
+        return [
+            (path.relative_to(root).as_posix(), sha256_hex(path.read_bytes()))
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        ]
+
+
 def _sidecar(
     evidence_root: Path,
     *,
@@ -184,6 +201,7 @@ def _sidecar(
         retry_count=retries,
         event_sequence_sha256=event_hash or _evidence_event_hash(run_root),
         canonical_recovery_event_sha256=recovery_hash,
+        event_sequence=_evidence_event_sequence(run_root),
     )
     return {
         "fault_id": fault_id,
@@ -269,6 +287,34 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
     (root / "sidecar.sha256").write_text("0" * 64 + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="digest mismatch"):
         validate_fault_sidecar(root / "sidecar.json")
+
+
+def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp_path: Path) -> None:
+    from arw.evidence import validate_fault_sidecar, write_fault_sidecar
+
+    root = tmp_path / "sidecar"
+    write_fault_sidecar(
+        root,
+        fault_id="phase7.canonical-write-before-commit",
+        boundary="canonical-write",
+        run_relative_root="run",
+        file_snapshots={"journal/manifest.json": "b" * 64},
+        replay_classification="RETRYABLE",
+        reason_code="write-before-commit",
+        retry_count=0,
+        event_sequence_sha256="0" * 64,
+    )
+    sidecar = root / "sidecar.json"
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["event_sequence_sha256"] = "a" * 64
+    sidecar.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (root / "sidecar.sha256").write_text(sha256_hex(sidecar.read_bytes()) + "\n", encoding="ascii")
+    with pytest.raises(ValueError, match="canonical"):
+        validate_fault_sidecar(sidecar)
+    sidecar.write_bytes(canonical_json_bytes({**payload, "event_sequence_sha256": "a" * 64}))
+    (root / "sidecar.sha256").write_text(sha256_hex(sidecar.read_bytes()) + "\n", encoding="ascii")
+    with pytest.raises(ValueError, match="event sequence digest"):
+        validate_fault_sidecar(sidecar)
 
 
 def test_phase7_write_and_fsync_boundaries_have_distinct_replay_semantics(

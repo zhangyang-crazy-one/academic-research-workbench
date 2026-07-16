@@ -8,7 +8,6 @@ import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-import re
 
 from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.faults import FAULT_SPECS
@@ -87,10 +86,25 @@ def validate_fault_sidecar(path: Path) -> Mapping[str, object]:
 
     if path.is_symlink() or not path.is_file():
         raise ValueError("fault sidecar is missing or unsafe")
-    payload = strict_json_loads(path.read_bytes())
+    raw = path.read_bytes()
+    payload = strict_json_loads(raw)
     if not isinstance(payload, Mapping) or payload.get("schema_version") != "arw.phase7-fault-sidecar.v1":
         raise ValueError("fault sidecar schema is invalid")
+    if raw != canonical_json_bytes(payload):
+        raise ValueError("fault sidecar JSON is not canonical")
     validate_fault_sidecar_payload(payload)
+    event_sequence = payload.get("event_sequence")
+    if not isinstance(event_sequence, Sequence) or isinstance(event_sequence, (str, bytes, bytearray)):
+        raise ValueError("fault sidecar event_sequence is missing")
+    if sha256_hex(canonical_json_bytes(event_sequence)) != payload.get("event_sequence_sha256"):
+        raise ValueError("fault sidecar event sequence digest is not bound")
+    recovery_event = payload.get("recovery_event")
+    if str(payload.get("replay_classification", "")).startswith("RECOVERED_"):
+        if not isinstance(recovery_event, Mapping):
+            raise ValueError("fault sidecar recovery event is missing")
+        recovery_hash = recovery_event.get("event_sha256")
+        if recovery_hash != payload.get("canonical_recovery_event_sha256"):
+            raise ValueError("fault sidecar recovery event digest is not bound")
     digest_path = path.with_name("sidecar.sha256")
     if digest_path.is_symlink() or not digest_path.is_file():
         raise ValueError("fault sidecar digest is missing or unsafe")
@@ -137,6 +151,8 @@ def write_fault_sidecar(
     retry_count: int,
     event_sequence_sha256: str,
     canonical_recovery_event_sha256: str | None = None,
+    event_sequence: Sequence[object] | None = None,
+    recovery_event: Mapping[str, object] | None = None,
 ) -> str:
     """Write one parent-owned, hash-bound fault receipt.
 
@@ -152,6 +168,24 @@ def write_fault_sidecar(
         # diagnose the boundary while preventing unbounded output retention.
         return raw[:4096]
 
+    snapshots = dict(file_snapshots or {})
+    sequence_payload: Sequence[object] = event_sequence if event_sequence is not None else sorted(snapshots.items())
+    derived_event_sequence_sha256 = sha256_hex(canonical_json_bytes(sequence_payload))
+    if event_sequence is not None and event_sequence_sha256 != derived_event_sequence_sha256:
+        raise ValueError("event_sequence_sha256 does not match canonical event sequence")
+    # A caller that has no replayable sequence is still bound to the immutable
+    # bounded snapshot fallback.  The normal parent path supplies the exact
+    # canonical ledger event sequence above.
+    event_sequence_sha256 = derived_event_sequence_sha256
+    if recovery_event is not None:
+        recovery_digest = recovery_event.get("event_sha256")
+        if recovery_digest != canonical_recovery_event_sha256:
+            raise ValueError("canonical recovery event digest does not match event")
+    elif str(replay_classification).startswith("RECOVERED_"):
+        # Legacy callers may provide only the sealed event digest.  Retain it
+        # as an explicit canonical-event envelope so cold validation cannot
+        # silently treat a recovered classification as unbound metadata.
+        recovery_event = {"event_sha256": canonical_recovery_event_sha256}
     payload: dict[str, object] = {
         "schema_version": "arw.phase7-fault-sidecar.v1",
         "fault_id": fault_id,
@@ -159,14 +193,17 @@ def write_fault_sidecar(
         "run_relative_root": run_relative_root,
         "stdout": bounded_stream(stdout),
         "stderr": bounded_stream(stderr),
-        "file_snapshots": dict(file_snapshots or {}),
+        "file_snapshots": snapshots,
         "process_state": dict(process_state or {}),
         "replay_classification": replay_classification,
         "reason_code": reason_code,
         "retry_count": retry_count,
         "event_sequence_sha256": event_sequence_sha256,
         "canonical_recovery_event_sha256": canonical_recovery_event_sha256,
+        "event_sequence": sequence_payload,
     }
+    if recovery_event is not None:
+        payload["recovery_event"] = dict(recovery_event)
     validate_fault_sidecar_payload(payload)
     _assert_bounded_fault_value(payload)
     output_root.mkdir(parents=True, exist_ok=True)
