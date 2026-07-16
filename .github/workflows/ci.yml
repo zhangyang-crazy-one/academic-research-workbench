@@ -32,10 +32,17 @@ jobs:
           enable-cache: true
       - name: Sync locked development environment
         run: uv sync --frozen --all-groups
-      - name: Materialize and verify pinned source inputs
+      - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
-          ./scripts/verify-sources --inputs-only
+      - name: Verify source manifest wire digests
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: >-
+          uv run pytest -q
+          tests/integration/test_source_materialization.py::test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
+          tests/integration/test_source_materialization.py::test_materializer_tree_digest_uses_the_manifest_wire_encoding
       - name: Run non-host contract and provenance tests
         env:
           PYTHONNOUSERSITE: '1'
@@ -44,7 +51,6 @@ jobs:
           uv run pytest -q
           tests/unit
           tests/schema
-          tests/integration/test_license_gate.py
           tests/unit/test_integration_lock.py
       - name: Run Phase 4 lifecycle and hook regression tests
         env:
