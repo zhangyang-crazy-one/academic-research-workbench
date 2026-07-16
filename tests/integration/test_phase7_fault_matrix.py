@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from arw.canonical import canonical_event_bytes, canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.canonical import canonical_event_bytes, canonical_json_bytes, seal_event, sha256_hex, strict_json_loads
 from arw.evidence import write_fault_sidecar
 from arw.faults import (
     FAULT_SPECS,
@@ -154,15 +154,23 @@ def _evidence_event_sequence(root: Path) -> list[object]:
     try:
         replayed = replay_run(root)
         return [
-            canonical_event_bytes(event.model_dump(mode="json")).decode("utf-8")
+            canonical_json_bytes(event.model_dump(mode="json")).decode("utf-8")
             for event in replayed.events
         ]
     except (JournalError, OSError, ValueError):
-        return [
-            (path.relative_to(root).as_posix(), sha256_hex(path.read_bytes()))
-            for path in sorted(root.rglob("*"))
-            if path.is_file()
-        ]
+        snapshot_digest = sha256_hex(
+            canonical_json_bytes(
+                [
+                    (path.relative_to(root).as_posix(), sha256_hex(path.read_bytes()))
+                    for path in sorted(root.rglob("*"))
+                    if path.is_file()
+                ]
+            )
+        )
+        observation = seal_event(
+            {"event_type": "fault-observation", "snapshot_sha256": snapshot_digest}
+        )
+        return [canonical_json_bytes(observation).decode("utf-8")]
 
 
 def _sidecar(
@@ -187,6 +195,21 @@ def _sidecar(
         text = re.sub(r"(?:/(?:[^\s:/]+/)+[^\s:]+)", "<path>", text)
         return text[:4096]
 
+    event_sequence = _evidence_event_sequence(run_root)
+    event_sequence_hash = sha256_hex(canonical_json_bytes(event_sequence))
+    try:
+        replay_run(run_root)
+        replayable = True
+    except (JournalError, OSError, ValueError):
+        replayable = False
+    recovery_event = None
+    if recovery_hash is not None:
+        replayed = replay_run(run_root)
+        recovery_event = next(
+            (event.model_dump(mode="json") for event in replayed.events if event.event_sha256 == recovery_hash),
+            None,
+        )
+        assert recovery_event is not None
     digest = write_fault_sidecar(
         evidence_root,
         fault_id=fault_id,
@@ -199,15 +222,25 @@ def _sidecar(
         replay_classification=classification,
         reason_code=reason,
         retry_count=retries,
-        event_sequence_sha256=event_hash or _evidence_event_hash(run_root),
+        event_sequence_sha256=event_sequence_hash,
         canonical_recovery_event_sha256=recovery_hash,
-        event_sequence=_evidence_event_sequence(run_root),
+        event_sequence=event_sequence,
+        recovery_event=recovery_event,
+        run_root=run_root if replayable else None,
+    )
+    from arw.evidence import validate_fault_sidecar
+
+    validate_fault_sidecar(
+        evidence_root / "sidecar.json",
+        run_root=run_root if replayable else None,
+        expected_event_sequence=event_sequence,
+        expected_recovery_event=recovery_event,
     )
     return {
         "fault_id": fault_id,
         "boundary": boundary,
         "sidecar_sha256": digest,
-        "event_sequence_sha256": event_hash or _evidence_event_hash(run_root),
+        "event_sequence_sha256": event_sequence_hash,
         "replay_classification": classification,
         "reason_code": reason,
         "retry_count": retries,
@@ -273,6 +306,8 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
     from arw.evidence import validate_fault_sidecar, write_fault_sidecar
 
     root = tmp_path / "sidecar"
+    event = seal_event({"event_type": "fault-observation", "snapshot_sha256": "b" * 64})
+    sequence = [canonical_json_bytes(event).decode("utf-8")]
     write_fault_sidecar(
         root,
         fault_id="phase7.canonical-write-before-commit",
@@ -281,9 +316,10 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
         replay_classification="RETRYABLE",
         reason_code="write-before-commit",
         retry_count=1,
-        event_sequence_sha256="a" * 64,
+        event_sequence_sha256=sha256_hex(canonical_json_bytes(sequence)),
+        event_sequence=sequence,
     )
-    assert validate_fault_sidecar(root / "sidecar.json")["fault_id"] == "phase7.canonical-write-before-commit"
+    assert validate_fault_sidecar(root / "sidecar.json", expected_event_sequence=sequence)["fault_id"] == "phase7.canonical-write-before-commit"
     (root / "sidecar.sha256").write_text("0" * 64 + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="digest mismatch"):
         validate_fault_sidecar(root / "sidecar.json")
@@ -313,7 +349,7 @@ def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp
         validate_fault_sidecar(sidecar)
     sidecar.write_bytes(canonical_json_bytes({**payload, "event_sequence_sha256": "a" * 64}))
     (root / "sidecar.sha256").write_text(sha256_hex(sidecar.read_bytes()) + "\n", encoding="ascii")
-    with pytest.raises(ValueError, match="event sequence digest"):
+    with pytest.raises(ValueError, match="event sequence digest|canonical ledger"):
         validate_fault_sidecar(sidecar)
 
 

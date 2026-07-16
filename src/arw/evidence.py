@@ -81,7 +81,13 @@ def validate_fault_sidecar_payload(payload: Mapping[str, object]) -> None:
         raise ValueError("fault sidecar process returncode is malformed")
 
 
-def validate_fault_sidecar(path: Path) -> Mapping[str, object]:
+def validate_fault_sidecar(
+    path: Path,
+    *,
+    run_root: Path | None = None,
+    expected_event_sequence: Sequence[object] | None = None,
+    expected_recovery_event: Mapping[str, object] | None = None,
+) -> Mapping[str, object]:
     """Cold-validate a sidecar and its sibling digest before replay accepts it."""
 
     if path.is_symlink() or not path.is_file():
@@ -94,10 +100,49 @@ def validate_fault_sidecar(path: Path) -> Mapping[str, object]:
         raise ValueError("fault sidecar JSON is not canonical")
     validate_fault_sidecar_payload(payload)
     event_sequence = payload.get("event_sequence")
-    if not isinstance(event_sequence, Sequence) or isinstance(event_sequence, (str, bytes, bytearray)):
+    if not isinstance(event_sequence, Sequence) or isinstance(event_sequence, (str, bytes, bytearray)) or not event_sequence:
         raise ValueError("fault sidecar event_sequence is missing")
+    for encoded_event in event_sequence:
+        if not isinstance(encoded_event, str):
+            raise ValueError("fault sidecar event_sequence is not a canonical ledger sequence")
+        try:
+            event = strict_json_loads(encoded_event.encode("utf-8"))
+        except (TypeError, ValueError) as error:
+            raise ValueError("fault sidecar event_sequence contains invalid event JSON") from error
+        if not isinstance(event, Mapping) or not isinstance(event.get("event_sha256"), str):
+            raise ValueError("fault sidecar event_sequence contains a non-ledger event")
+        unsigned = dict(event)
+        event_hash = unsigned.pop("event_sha256")
+        if sha256_hex(canonical_json_bytes(unsigned)) != event_hash:
+            raise ValueError("fault sidecar event_sequence contains an unsealed event")
     if sha256_hex(canonical_json_bytes(event_sequence)) != payload.get("event_sequence_sha256"):
         raise ValueError("fault sidecar event sequence digest is not bound")
+    if expected_event_sequence is not None and list(expected_event_sequence) != list(event_sequence):
+        raise ValueError("fault sidecar event sequence does not match replay")
+    if run_root is not None:
+        try:
+            from arw.journal import replay_run
+
+            replayed = replay_run(run_root)
+            replay_sequence = [
+                canonical_json_bytes(event.model_dump(mode="json")).decode("utf-8")
+                for event in replayed.events
+            ]
+        except (OSError, ValueError, RuntimeError) as error:
+            raise ValueError("fault sidecar run replay is unavailable") from error
+        if replay_sequence != list(event_sequence):
+            raise ValueError("fault sidecar event sequence does not match run replay")
+        if expected_recovery_event is None and str(payload.get("replay_classification", "")).startswith("RECOVERED_"):
+            expected_recovery_event = next(
+                (
+                    event.model_dump(mode="json")
+                    for event in replayed.events
+                    if event.event_sha256 == payload.get("canonical_recovery_event_sha256")
+                ),
+                None,
+            )
+            if expected_recovery_event is None:
+                raise ValueError("fault sidecar recovery event is absent from run replay")
     recovery_event = payload.get("recovery_event")
     if str(payload.get("replay_classification", "")).startswith("RECOVERED_"):
         if not isinstance(recovery_event, Mapping):
@@ -105,6 +150,12 @@ def validate_fault_sidecar(path: Path) -> Mapping[str, object]:
         recovery_hash = recovery_event.get("event_sha256")
         if recovery_hash != payload.get("canonical_recovery_event_sha256"):
             raise ValueError("fault sidecar recovery event digest is not bound")
+        unsigned_recovery = dict(recovery_event)
+        sealed_hash = unsigned_recovery.pop("event_sha256", None)
+        if not isinstance(sealed_hash, str) or sha256_hex(canonical_json_bytes(unsigned_recovery)) != sealed_hash:
+            raise ValueError("fault sidecar recovery event is not canonically sealed")
+        if expected_recovery_event is not None and dict(expected_recovery_event) != dict(recovery_event):
+            raise ValueError("fault sidecar recovery event does not match replay")
     digest_path = path.with_name("sidecar.sha256")
     if digest_path.is_symlink() or not digest_path.is_file():
         raise ValueError("fault sidecar digest is missing or unsafe")
@@ -153,6 +204,7 @@ def write_fault_sidecar(
     canonical_recovery_event_sha256: str | None = None,
     event_sequence: Sequence[object] | None = None,
     recovery_event: Mapping[str, object] | None = None,
+    run_root: Path | None = None,
 ) -> str:
     """Write one parent-owned, hash-bound fault receipt.
 
@@ -169,7 +221,14 @@ def write_fault_sidecar(
         return raw[:4096]
 
     snapshots = dict(file_snapshots or {})
-    sequence_payload: Sequence[object] = event_sequence if event_sequence is not None else sorted(snapshots.items())
+    if event_sequence is None:
+        snapshot_digest = sha256_hex(canonical_json_bytes(sorted(snapshots.items())))
+        unsigned_observation = {"event_type": "fault-observation", "snapshot_sha256": snapshot_digest}
+        sealed_observation = dict(unsigned_observation)
+        sealed_observation["event_sha256"] = sha256_hex(canonical_json_bytes(unsigned_observation))
+        sequence_payload: Sequence[object] = [canonical_json_bytes(sealed_observation).decode("utf-8")]
+    else:
+        sequence_payload = event_sequence
     derived_event_sequence_sha256 = sha256_hex(canonical_json_bytes(sequence_payload))
     if event_sequence is not None and event_sequence_sha256 != derived_event_sequence_sha256:
         raise ValueError("event_sequence_sha256 does not match canonical event sequence")
@@ -182,10 +241,7 @@ def write_fault_sidecar(
         if recovery_digest != canonical_recovery_event_sha256:
             raise ValueError("canonical recovery event digest does not match event")
     elif str(replay_classification).startswith("RECOVERED_"):
-        # Legacy callers may provide only the sealed event digest.  Retain it
-        # as an explicit canonical-event envelope so cold validation cannot
-        # silently treat a recovered classification as unbound metadata.
-        recovery_event = {"event_sha256": canonical_recovery_event_sha256}
+        raise ValueError("recovered fault sidecar requires canonical recovery event")
     payload: dict[str, object] = {
         "schema_version": "arw.phase7-fault-sidecar.v1",
         "fault_id": fault_id,
@@ -211,6 +267,14 @@ def write_fault_sidecar(
     write_evidence_json(sidecar, payload)
     digest = sha256_hex(sidecar.read_bytes())
     write_evidence_bytes(output_root / "sidecar.sha256", f"{digest}\n".encode("ascii"))
+    # Publication is not complete until the same cold validator used by
+    # recovery has replay-bound the bytes and sealed event envelope.
+    validate_fault_sidecar(
+        sidecar,
+        run_root=run_root,
+        expected_event_sequence=sequence_payload,
+        expected_recovery_event=recovery_event,
+    )
     return digest
 
 
