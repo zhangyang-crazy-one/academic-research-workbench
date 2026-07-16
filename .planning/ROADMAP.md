@@ -12,7 +12,7 @@ Academic Research Workbench v1.0 progresses from a legally classified, reproduci
 - [ ] **Phase 4: Subagent Orchestration, Hooks, and Human Gates** - Execute scoped workers with deterministic handoffs, genuine review independence, defense-in-depth hooks, and explicit human decisions.
 - [x] **Phase 5: Rebuildable Research Graph and Evidence Queries** - Project canonical artifacts into disposable, equivalent graph generations and bounded evidence-chain queries. (technical complete 2026-07-15; release remains blocked by SUP-04/P04-09)
 - [x] **Phase 6: Scientific Integrity and Audit Dossier** - Turn scientific checks, experiment provenance, evidence access, and unresolved claims into immutable receipts and an inspectable dossier. (technical complete 2026-07-16; release remains blocked by SUP-04/P04-09/permission)
-- [ ] **Phase 7: Installed E2E Recovery and Release Qualification** - Qualify the staged package through compatibility, adversarial recovery, representative research, and release-blocking evidence gates.
+- [x] **Phase 7: Installed E2E Recovery and Release Qualification** - Qualify the staged package through compatibility, adversarial recovery, representative research, and release-blocking evidence gates. (completed 2026-07-16)
 
 ## Phase Details
 
@@ -277,7 +277,7 @@ Plans:
   3. From the installed staged package, the representative E2E fixture processes sources and claims, ingests an experiment and figure or result, records genuinely independent review evidence, encounters a failed gate, captures human resolution, crashes and resumes, and emits the final audit dossier without repeating accepted work.
   4. Release qualification fails whenever licensing, integrity, recovery, security, graph-equivalence, subagent-independence, compatibility, or staged-package evidence is missing, stale, unresolved, or unverifiable, and names the exact blocking receipt or test artifact.
 
-**Plans**: TBD
+**Plans**: 4/4 plans complete
 
 ## Progress
 
@@ -290,7 +290,7 @@ Plans:
 | 04.1. Phase 4 Qualification Closure and Installed Host Verification | 3/3 | Technical pass; release blocked | 2026-07-15 |
 | 5. Rebuildable Research Graph and Evidence Queries | 4/4 | Technical complete; release blocked by P04-09/SUP-04 | 2026-07-15 |
 | 6. Scientific Integrity and Audit Dossier | 5/5 | Technical complete; release blocked by SUP-04/P04-09/permission | 2026-07-16 |
-| 7. Installed E2E Recovery and Release Qualification | 3/4 | In Progress|  |
+| 7. Installed E2E Recovery and Release Qualification | 4/4 | Complete    | 2026-07-16 |
 
 ---
 *Roadmap created: 2026-07-12 for v1.0 MVP*

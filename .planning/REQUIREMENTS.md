@@ -75,13 +75,13 @@
 ### Verification And Release Evidence
 
 - [x] **VER-01**: Continuous integration validates schemas independently across Python and MCP boundaries and blocks incompatible schema drift.
-- [ ] **VER-02**: Installed-plugin tests exercise manifest discovery, skill routing, launcher resolution, MCP negotiation, hooks, and version reporting from a staged package.
+- [x] **VER-02**: Installed-plugin tests exercise manifest discovery, skill routing, launcher resolution, MCP negotiation, hooks, and version reporting from a staged package.
 - [x] **VER-03**: Security tests cover traversal, symlink or junction escape, race-sensitive file replacement, sensitive files, malformed input, and output-budget exhaustion.
-- [ ] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
+- [x] **VER-04**: Recovery tests inject hard termination, torn writes, I/O failure, disk exhaustion, lock death, duplicate delivery, and stale worker completion while preserving raw evidence.
 - [x] **VER-05**: Projection tests compare clean, full-rebuild, incremental, delete, rename, migration, and supersession query results under a declared normalization oracle.
-- [ ] **VER-06**: One representative end-to-end fixture covers sources, claims, an experiment record, a figure or result, independent review, a failed gate, human resolution, crash/resume, and final audit output.
+- [x] **VER-06**: One representative end-to-end fixture covers sources, claims, an experiment record, a figure or result, independent review, a failed gate, human resolution, crash/resume, and final audit output.
 - [x] **VER-07**: A release candidate produces an inspectable audit dossier containing run history, manifests, Passports, evidence receipts, review matrix, waivers, projection receipts, test logs, benchmark versions, and build provenance.
-- [ ] **VER-08**: Release qualification fails on unresolved licensing, integrity, recovery, security, compatibility, or staged-package evidence gates.
+- [x] **VER-08**: Release qualification fails on unresolved licensing, integrity, recovery, security, compatibility, or staged-package evidence gates.
 
 ## User Stories
 
@@ -184,13 +184,13 @@
 | SCI-06 | Phase 6 | Complete |
 | SCI-07 | Phase 6 | Complete |
 | VER-01 | Phase 1 | Complete |
-| VER-02 | Phase 7 | Pending |
+| VER-02 | Phase 7 | Complete |
 | VER-03 | Phase 3 | Complete |
-| VER-04 | Phase 7 | Pending |
+| VER-04 | Phase 7 | Complete |
 | VER-05 | Phase 5 | Complete |
-| VER-06 | Phase 7 | Pending |
+| VER-06 | Phase 7 | Complete |
 | VER-07 | Phase 6 | Complete |
-| VER-08 | Phase 7 | Pending |
+| VER-08 | Phase 7 | Complete |
 
 **Coverage:**
 - v1 requirements: 54 total

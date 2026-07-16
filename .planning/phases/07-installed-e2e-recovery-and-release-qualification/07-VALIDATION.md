@@ -40,7 +40,7 @@ created: 2026-07-16
 | 07-01 | 01 | 1 | VER-02 | T-07-01/T-07-02 | Installed bytes and external local ARS identity are lock-bound; source checkout and bundled ARS are rejected | staged/integration | `pytest -q tests/integration/test_integration_lock.py tests/staged/test_manifest_install.py tests/staged/test_mcp_launcher.py tests/staged/test_skill_route.py` plus locked stage/canary | ✅ existing, new probes W0 | ✅ PASS |
 | 07-02 | 02 | 2 | VER-04 | T-07-03/T-07-04/T-07-05 | Fault classes produce deterministic replay/recovery/block verdicts with parent-owned sidecar evidence and bounded retry | unit/integration/property | `pytest -q tests/integration/test_recovery.py tests/integration/test_recovery_crash.py tests/unit/test_recovery_scan.py` plus Phase 7 fault matrix | ✅ existing, new matrix W0 | ✅ PASS |
 | 07-03 | 03 | 3 | VER-06 | T-07-06/T-07-07 | Installed representative fixture completes ARS route, scientific evidence, review/gate/human resolution, crash/resume, and dossier cold replay | installed E2E/integration | `pytest -q tests/staged/test_phase6_audit_dossier.py tests/integration/test_audit_dossier_replay.py` plus installed fixture command | ✅ existing, new E2E W0 | ✅ PASS |
-| 07-04 | 04 | 4 | VER-08 | T-07-08/T-07-09 | Missing, stale, tampered, incompatible, or legally unresolved evidence yields technical/release verdict separation and named blockers | staged/full/adversarial | `./scripts/verify-phase-7 --clean --evidence-root build/evidence/phase-07-final-2` plus serial non-host/full host checks | ✅ verifier | ✅ PASS (technical) / BLOCKED (legal) |
+| 07-04 | 04 | 4 | VER-08 | T-07-08/T-07-09 | Missing, stale, tampered, incompatible, or legally unresolved evidence yields technical/release verdict separation and named blockers | staged/full/adversarial | `./scripts/verify-phase-7 --clean --evidence-root build/evidence/phase-07-final-11` plus serial non-host/full host checks | ✅ verifier | ✅ PASS (technical) / BLOCKED (legal) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -78,8 +78,8 @@ accountable-approval, and permission evidence.
 
 ## Retained Phase 7 evidence
 
-- `build/evidence/phase-07-final-2/phase-7-verification.json`
-- `build/evidence/phase-07-final-2/commands/phase7-focused/result.json`
-- `build/evidence/phase-07-final-2/commands/phase7-nonhost/result.json`
-- `build/evidence/phase-07-final-2/commands/phase7-host-canary/result.json`
-- `build/evidence/phase-07-final-2/prior-phase-receipts.json`
+- `build/evidence/phase-07-final-11/phase-7-verification.json`
+- `build/evidence/phase-07-final-11/commands/phase7-focused/result.json`
+- `build/evidence/phase-07-final-11/commands/phase7-nonhost/result.json`
+- `build/evidence/phase-07-final-11/commands/phase7-host-canary/result.json`
+- `build/evidence/phase-07-final-11/prior-phase-receipts.json`

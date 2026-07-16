@@ -98,6 +98,30 @@ stripping API-key environment variables and retaining no secret bytes.
 - Technical qualification and legal release qualification remain separate.
 - No push, PR, or publication action was performed.
 
+## Residual Remediation and Final Requalification
+
+The independent verifier review initially found fail-closed gaps in command
+identity, prior-phase parent evidence, graph-control binding, fault sidecar
+replay binding, dirty-worktree provenance, and verifier subprocess credential
+hygiene. These were closed in the follow-up commits through `ef3974e` and the
+review closeout `e8169fe`:
+
+- prior Phase 5/4.1 receipts and graph-control are pinned to the qualified
+  canonical digests and revalidated at aggregation;
+- command receipts are verifier-owned, exact-argv, output-hash bound, and
+  tied to the current dirty worktree digest;
+- fault sidecars require canonical sealed event sequences and replay-root
+  validation; detached fixtures require explicit opt-in;
+- verifier subprocesses use empty repo-local HOME/CODEX_HOME directories and
+  do not inherit credential variables.
+
+Final serial evidence is retained at
+`build/evidence/phase-07-final-11/phase-7-verification.json` with technical
+qualification `PASS`, all VER-02/04/06/08 requirements `PASS`, and release
+qualification `BLOCKED` only for the named legal/permission/accountable-human
+gates. The final non-host command recorded 481 passed and 3 deselected; the
+focused Phase 7 suite recorded 76 passed in the current working tree.
+
 ---
 *Phase: 07-installed-e2e-recovery-and-release-qualification*
 *Plan: 04*

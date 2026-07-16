@@ -51,7 +51,7 @@ explicit legal/permission gates recorded in the receipts.
 | `build/evidence/phase-07/representative-dossier-replay.json` | ✓ EXISTS + VERIFIED | Warm/cold replay comparison and projection-loss result. |
 | `scripts/verify-phase-7` | ✓ EXISTS + SUBSTANTIVE | Serial, owned-root, fail-closed aggregate verifier. |
 | `tests/integration/test_phase7_verifier.py` | ✓ EXISTS + SUBSTANTIVE | Positive, missing, stale, tamper, command-identity, and legal-block probes. |
-| `build/evidence/phase-07-final-11/phase-7-verification.json` | ✓ EXISTS + VERIFIED | Canonical aggregate: technical `PASS`, release `BLOCKED`, `evidence_bound: true`. |
+| `build/evidence/phase-07-final-11/phase-7-verification.json` (content-addressed revision of the plan's `build/evidence/phase-07/phase-7-verification.json` target) | ✓ EXISTS + VERIFIED | Canonical append-only aggregate: technical `PASS`, release `BLOCKED`, `evidence_bound: true`; the revisioned root avoids overwriting earlier receipts. |
 
 **Artifacts:** 12/12 verified.
 
