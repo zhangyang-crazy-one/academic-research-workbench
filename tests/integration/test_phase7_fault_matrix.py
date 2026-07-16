@@ -227,6 +227,7 @@ def _sidecar(
         event_sequence=event_sequence,
         recovery_event=recovery_event,
         run_root=run_root if replayable else None,
+        allow_detached=not replayable,
     )
     from arw.evidence import validate_fault_sidecar
 
@@ -319,6 +320,7 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
         retry_count=1,
         event_sequence_sha256=sha256_hex(canonical_json_bytes(sequence)),
         event_sequence=sequence,
+        allow_detached=True,
     )
     assert validate_fault_sidecar(root / "sidecar.json", expected_event_sequence=sequence, allow_detached=True)["fault_id"] == "phase7.canonical-write-before-commit"
     (root / "sidecar.sha256").write_text("0" * 64 + "\n", encoding="ascii")
@@ -340,6 +342,7 @@ def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp
         reason_code="write-before-commit",
         retry_count=0,
         event_sequence_sha256="0" * 64,
+        allow_detached=True,
     )
     sidecar = root / "sidecar.json"
     payload = json.loads(sidecar.read_text(encoding="utf-8"))

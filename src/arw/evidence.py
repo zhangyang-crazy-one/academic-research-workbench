@@ -208,6 +208,7 @@ def write_fault_sidecar(
     event_sequence: Sequence[object] | None = None,
     recovery_event: Mapping[str, object] | None = None,
     run_root: Path | None = None,
+    allow_detached: bool = False,
 ) -> str:
     """Write one parent-owned, hash-bound fault receipt.
 
@@ -223,6 +224,8 @@ def write_fault_sidecar(
         # diagnose the boundary while preventing unbounded output retention.
         return raw[:4096]
 
+    if run_root is None and not allow_detached:
+        raise ValueError("fault sidecar publication requires a replay run root")
     snapshots = dict(file_snapshots or {})
     if event_sequence is None:
         snapshot_digest = sha256_hex(canonical_json_bytes(sorted(snapshots.items())))
@@ -275,7 +278,7 @@ def write_fault_sidecar(
     validate_fault_sidecar(
         sidecar,
         run_root=run_root,
-        allow_detached=run_root is None,
+        allow_detached=allow_detached,
         expected_event_sequence=sequence_payload,
         expected_recovery_event=recovery_event,
     )
