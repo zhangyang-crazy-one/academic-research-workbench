@@ -1,7 +1,7 @@
 ---
 phase: 07-installed-e2e-recovery-and-release-qualification
 reviewer: codex
-status: findings-fixed
+status: findings-open
 scope: committed Phase 7 changes from 7813473..HEAD
 ---
 
@@ -127,14 +127,53 @@ still remains distinct from the legal release gate.
 
 ## Remediation verification (2026-07-16)
 
-F-001 through F-006 are fixed in the verifier/evidence boundary. The retained
-Phase 5 and Phase 4.1 receipts now require canonical JSON parsing, recomputed
-content/stage digests, schema and expected-case checks, and parent inventory
-coverage. Stage, lock, canary, and clean evidence roots are checked lexically
-with `lstat` before resolution. Verifier subprocesses use a positive
-environment allowlist and fail closed on secret markers. Fault sidecars bind a
-registered `FAULT_SPECS` identity/boundary, bounded retry count, SHA-256
-digests, and recovered-event digest presence.
+F-001, F-002, and F-005 are fixed in the verifier/evidence boundary. The
+retained Phase 5 and Phase 4.1 receipts now require canonical JSON parsing,
+content checks, and schema/expected-case checks, while stage, lock, canary, and
+clean evidence roots are checked lexically with `lstat` before resolution.
+Verifier subprocesses use a positive environment allowlist and fail closed on
+secret markers. Fault sidecars bind a registered `FAULT_SPECS` identity and
+boundary, bounded retry count, SHA-256-shaped fields, and recovered-event
+digest presence. Those checks are useful hygiene, but they do not yet provide
+an independent parent manifest or ledger binding.
+
+## Residual findings after 86199d7
+
+### F-003R — HIGH: prior receipts remain mutable without an independent aggregate binding
+
+`_validate_phase41` verifies each case against its schema and verifies the
+mutable `raw-evidence-inventory.json` against the mutable files it lists, but
+does not require the phase verdict to bind the canonical hashes of the host,
+assessment, packet, evaluation, and case-result corpus. An attacker can edit
+those receipts to a different internally consistent PASS corpus, update the
+inventory digest, and retain a fabricated technical PASS. `_validate_stage_tree`
+recomputes staged file bytes but accepts `stage-tree.json.sha256` as a copied
+build-identity value; it does not derive an independent stage-tree/parent
+manifest digest. The verifier still needs a canonical parent manifest that
+covers every retained receipt and is itself bound by the phase verdict.
+
+### F-004R — HIGH: aggregate helper still launders arbitrary successful commands
+
+`aggregate_verdict` only checks that `test_commands` is a non-empty list with
+zero return codes and SHA-256-shaped stream fields. It does not enforce the
+required command names, exact argv, command count, or semantic result receipts.
+Therefore a direct caller can pass one fabricated successful `echo` record and
+typed dummy PASS receipt summaries and receive technical `PASS` (verified
+locally with `argv=["echo", "evil"]`). Aggregation must consume a typed,
+complete command manifest with required names and validated result digests,
+and remain `BLOCKED` for any missing or unexpected command.
+
+### F-006R — MEDIUM: sidecar event/recovery digests are still caller-forgeable
+
+`validate_fault_sidecar_payload` checks digest shape but not that
+`event_sequence_sha256` is the digest of the run's canonical ledger sequence
+or that `canonical_recovery_event_sha256` names a validated recovery event.
+`validate_fault_sidecar` additionally checks only a sibling hash and is not
+called by the replay/runtime path. It also accepts a non-canonical JSON
+encoding when the sibling digest matches. A parent-owned publication path must
+cold-replay the registered run, recompute the sequence/event bytes, require a
+canonical sidecar byte representation, and reject a sidecar that is not bound
+to that exact replay.
 
 Focused evidence:
 
@@ -148,5 +187,7 @@ tests/unit/test_canonical.py
 34 passed
 ```
 
-The Phase 7 verifier also completed with technical qualification PASS and
-release qualification BLOCKED. This does not clear the legal release gate.
+The Phase 7 verifier's happy-path run completed with technical qualification
+PASS and release qualification BLOCKED, but these residual evidence-boundary
+findings mean the qualification is not independently replayable yet. This does
+not clear the legal release gate.
