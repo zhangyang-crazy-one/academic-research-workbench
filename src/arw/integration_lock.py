@@ -41,6 +41,7 @@ from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
 
 
 EXPECTED_ARS_ADAPTER_VERSION = "0.1.20"
+EXPECTED_CODEX_CLI_VERSION = "codex-cli 0.144.4"
 EXPECTED_ARS_UPSTREAM_COMMIT = "c22c17eed8a5753aa60681be9734919f2e2f5b42"
 EXPECTED_EXPERIMENT_AGENT_COMMIT = "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26"
 EXPECTED_FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
@@ -1470,6 +1471,10 @@ def build_integration_lock(
     ars = _validate_external_ars(external_ars_root, source_manifest)
     file_base = _validate_file_base(stage_root, source_manifest)
     host = observe_codex_host(codex_launcher, codex_native_binary)
+    if host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+        raise IntegrationLockError(
+            "Codex CLI version is unsupported; exact 0.144.4 host evidence is required"
+        )
     hook = _validate_hook(
         stage_root, host_canary_evidence, host, arw_runtime
     )
@@ -1607,6 +1612,7 @@ __all__ = (
     "CodexHostCanaryEvidence",
     "CodexHostEvidenceBundle",
     "ControlledResultChannelProof",
+    "EXPECTED_CODEX_CLI_VERSION",
     "EXPECTED_CODEX_CREDENTIAL_POLICY",
     "EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256",
     "FileBinding",

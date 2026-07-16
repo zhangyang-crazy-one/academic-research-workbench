@@ -244,7 +244,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         launcher,
         "#!/bin/sh\n"
         "if [ \"${1:-}\" = \"--version\" ]; then\n"
-        "  printf 'codex-cli 0.144.3\\n'\n"
+        "  printf 'codex-cli 0.144.4\\n'\n"
         "  exit 0\n"
         "fi\n"
         "exit 64\n",
