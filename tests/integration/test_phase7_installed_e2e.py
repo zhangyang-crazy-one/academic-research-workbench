@@ -30,6 +30,7 @@ from arw.graph_models import GraphProjectionReceipt
 from arw.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
+    discover_codex_native_binary,
     observe_hook_definition,
     observe_stage_identity,
 )
@@ -52,12 +53,42 @@ from .test_orchestration_lifecycle import _run as _init_run
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
-LOCK_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/integration-lock.json"
-CANARY_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/host-canary/canary.json"
+def _retained_bundled_qualification() -> tuple[Path, Path, Path | None]:
+    """Select only a lock/canary/stage tuple whose bytes are still bound."""
+
+    candidates = (
+        (
+            REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix",
+            REPOSITORY_ROOT / "build/stage/phase-07-live-route-fix",
+        ),
+        (
+            REPOSITORY_ROOT / "build/evidence/phase-07-live-bundled",
+            REPOSITORY_ROOT / "build/stage/phase-07-live-bundled",
+        ),
+        (
+            REPOSITORY_ROOT / "build/evidence/phase-07",
+            REPOSITORY_ROOT / "build/stage/phase-07-qualified",
+        ),
+    )
+    for evidence_root, stage_root in candidates:
+        lock = evidence_root / "integration-lock.json"
+        canary_candidates = (evidence_root / "canary.json", evidence_root / "host-canary/canary.json")
+        canary = next((path for path in canary_candidates if path.is_file()), None)
+        staged_lock = stage_root / "supply-chain/integration-lock.json"
+        if lock.is_file() and canary is not None and staged_lock.is_file():
+            if lock.read_bytes() == staged_lock.read_bytes():
+                return lock, canary, stage_root
+    return candidates[0][0] / "integration-lock.json", candidates[0][0] / "canary.json", None
+
+
+LOCK_PATH, CANARY_PATH, RETAINED_STAGE = _retained_bundled_qualification()
 CODEX_LAUNCHER = Path(
     os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex"
 )
-CODEX_NATIVE = Path(os.environ.get("ARW_CODEX_NATIVE_BINARY") or CODEX_LAUNCHER)
+CODEX_NATIVE = Path(
+    os.environ.get("ARW_CODEX_NATIVE_BINARY")
+    or discover_codex_native_binary(CODEX_LAUNCHER)
+)
 
 
 def _digest(path: Path) -> str:
@@ -119,9 +150,10 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     # matching host canary; that must remain a qualification failure rather
     # than silently weakening the lock. Clean environments still exercise the
     # normal stage-plugin path below.
-    retained_stage = REPOSITORY_ROOT / "build/stage/phase-07-qualified"
+    retained_stage = RETAINED_STAGE
     if (
-        retained_stage.is_dir()
+        retained_stage is not None
+        and retained_stage.is_dir()
         and (retained_stage / "skills/academic-research-suite/SKILL.md").is_file()
         and LOCK_PATH.is_file()
         and CANARY_PATH.is_file()
@@ -191,7 +223,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         assert route["reason_codes"] == []
     else:
         assert route["integration_status"] == "BLOCKED"
-        assert route["reason_codes"] == ["integration_inputs_incomplete"]
+        assert route["reason_codes"] == ["integration_lock_not_verified"]
 
     workflow = installed / "skills/academic-research-suite/ars/academic-pipeline/WORKFLOW.md"
     assert workflow.is_file() and not workflow.is_symlink()
@@ -266,7 +298,7 @@ def test_installed_route_requires_qualification_lock(
     assert result.returncode == 0, result.stderr
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
-    assert route["reason_codes"] == ["integration_lock_not_verified"]
+    assert route["reason_codes"] == ["integration_inputs_incomplete"]
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
 
@@ -564,6 +596,10 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     installed, outside, environment = installed_stage
+    if not (installed / "supply-chain/integration-lock.json").is_file() or not (
+        LOCK_PATH.is_file() and CANARY_PATH.is_file()
+    ):
+        pytest.skip("retained exact bundled host qualification evidence is absent")
     run_root, _ = _init_run(tmp_path)
     command_environment = {
         **environment,

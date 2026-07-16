@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import hashlib
 import os
+import shutil
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -270,14 +271,41 @@ def _write_rejection(error: Exception) -> None:
 
 def _installed_route_from_environment():
     from arw.contracts import installed_route
+    from arw.integration_lock import discover_codex_native_binary
 
+    plugin_root = Path(
+        os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])
+    ).resolve()
+    # A staged plugin carries the lock as a runtime input. Discovering that
+    # path is safe, but it never constitutes qualification: the exact host
+    # tuple and retained canary below remain mandatory and are verified from
+    # bytes on every route request.
+    lock_default = plugin_root / "supply-chain/integration-lock.json"
+    launcher_default = shutil.which("codex") if lock_default.is_file() else None
+    native_default: str | None = None
+    if launcher_default:
+        try:
+            native_default = str(
+                discover_codex_native_binary(Path(launcher_default))
+            )
+        except (OSError, ValueError):
+            native_default = None
     names = {
         "lock": "ARW_INTEGRATION_LOCK",
         "launcher": "ARW_CODEX_LAUNCHER",
         "native": "ARW_CODEX_NATIVE_BINARY",
         "canary": "ARW_HOST_CANARY_EVIDENCE",
     }
-    values = {key: os.environ.get(name) for key, name in names.items()}
+    defaults = {
+        "lock": str(lock_default) if lock_default.is_file() else None,
+        "launcher": launcher_default,
+        "native": native_default,
+        "canary": None,
+    }
+    values = {
+        key: os.environ.get(name) or defaults[key]
+        for key, name in names.items()
+    }
     if not any(values.values()):
         return installed_route()
     if not all(values.values()):
@@ -287,7 +315,7 @@ def _installed_route_from_environment():
     try:
         verification = load_and_verify_integration_lock(
             Path(values["lock"]),
-            stage_root=Path(os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])),
+            stage_root=plugin_root,
             codex_launcher=Path(values["launcher"]),
             codex_native_binary=Path(values["native"]),
             host_canary_evidence=Path(values["canary"]),

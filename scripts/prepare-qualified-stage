@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One explicit, fail-closed entry point for a technically qualified stage.
+# Network materialization, the offline native build, host canary retention,
+# lock creation, and final staging are deliberately separate boundaries.
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/phase-07-qualified"
+EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-07-qualified"
+LOCK_PATH=""
+HOST_CANARY=""
+CODEX_LAUNCHER=""
+CODEX_NATIVE=""
+CREDENTIAL_SOURCE=""
+CLEAN=0
+RUN_NATIVE_TESTS=0
+
+usage() {
+  cat <<'EOF'
+Usage: prepare-qualified-stage --host-canary-evidence PATH \
+       --codex-launcher PATH --codex-native-binary PATH \
+       [--credential-source PATH] [--integration-lock PATH] [--clean] \
+       [--stage-root PATH] [--evidence-root PATH] [--run-native-tests]
+
+Materialize and verify pinned sources, build the modified file-base through
+offline-exec when needed, bind the retained exact Codex host canary into an
+integration lock, and assemble/validate the final allowlisted plugin stage.
+The command never fabricates host evidence and never turns a missing legal or
+technical input into a qualified package.
+EOF
+}
+
+fail() {
+  printf 'prepare-qualified-stage: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --host-canary-evidence)
+      [[ $# -ge 2 ]] || fail "--host-canary-evidence requires a path" 64
+      HOST_CANARY="$2"; shift 2
+      ;;
+    --codex-launcher)
+      [[ $# -ge 2 ]] || fail "--codex-launcher requires a path" 64
+      CODEX_LAUNCHER="$2"; shift 2
+      ;;
+    --codex-native-binary)
+      [[ $# -ge 2 ]] || fail "--codex-native-binary requires a path" 64
+      CODEX_NATIVE="$2"; shift 2
+      ;;
+    --credential-source)
+      [[ $# -ge 2 ]] || fail "--credential-source requires a path" 64
+      CREDENTIAL_SOURCE="$2"; shift 2
+      ;;
+    --integration-lock)
+      [[ $# -ge 2 ]] || fail "--integration-lock requires a path" 64
+      LOCK_PATH="$2"; shift 2
+      ;;
+    --stage-root)
+      [[ $# -ge 2 ]] || fail "--stage-root requires a path" 64
+      STAGE_ROOT="$2"; shift 2
+      ;;
+    --evidence-root)
+      [[ $# -ge 2 ]] || fail "--evidence-root requires a path" 64
+      EVIDENCE_ROOT="$2"; shift 2
+      ;;
+    --clean)
+      CLEAN=1; shift
+      ;;
+    --run-native-tests)
+      RUN_NATIVE_TESTS=1; shift
+      ;;
+    --help|-h)
+      usage; exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
+EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
+[[ "$STAGE_ROOT" != "$PROJECT_ROOT" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing a repository root as stage/evidence output" 64
+
+[[ -n "$HOST_CANARY" ]] || fail "exact retained host canary is required; run scripts/qualify-codex-host first" 65
+[[ -n "$CODEX_LAUNCHER" && -x "$CODEX_LAUNCHER" ]] \
+  || fail "--codex-launcher must name an executable exact host launcher" 66
+[[ -n "$CODEX_NATIVE" && -x "$CODEX_NATIVE" ]] \
+  || fail "--codex-native-binary must name an executable exact native binary" 66
+[[ -f "$HOST_CANARY" && ! -L "$HOST_CANARY" ]] \
+  || fail "host canary must be a direct regular file" 66
+if [[ -n "$CREDENTIAL_SOURCE" ]]; then
+  [[ -d "$CREDENTIAL_SOURCE" && ! -L "$CREDENTIAL_SOURCE" ]] \
+    || fail "credential source must be an existing non-symlink directory" 66
+fi
+
+if [[ ! -d "$PROJECT_ROOT/vendor/sources" ]]; then
+  "$PROJECT_ROOT/scripts/materialize-sources" --clean
+fi
+"$PROJECT_ROOT/scripts/verify-sources" --inputs-only
+
+if [[ ! -x "$PROJECT_ROOT/.file-base/bin/file-base" || ! -f "$PROJECT_ROOT/.file-base/build-evidence.json" ]]; then
+  NATIVE_EVIDENCE="$EVIDENCE_ROOT/native-build"
+  [[ ! -e "$NATIVE_EVIDENCE" ]] || fail "native evidence exists; choose a new --evidence-root or pass --clean" 73
+  mkdir -p "$NATIVE_EVIDENCE"
+  OFFLINE_ARGS=(--evidence-root "$NATIVE_EVIDENCE" "$PROJECT_ROOT/scripts/build-file-base" --clean)
+  if [[ "$RUN_NATIVE_TESTS" -eq 1 ]]; then
+    OFFLINE_ARGS+=(--run-upstream-tests)
+  fi
+  TMPDIR="${TMPDIR:-$PROJECT_ROOT/build/tmp}" \
+    "$PROJECT_ROOT/scripts/offline-exec" "${OFFLINE_ARGS[@]}"
+fi
+"$PROJECT_ROOT/scripts/verify-sources" --inputs-only
+
+if [[ -z "$LOCK_PATH" ]]; then
+  LOCK_PATH="$EVIDENCE_ROOT/integration-lock.json"
+fi
+LOCK_PATH="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$LOCK_PATH")"
+mkdir -p "$(dirname -- "$LOCK_PATH")"
+
+BOOTSTRAP_STAGE="$EVIDENCE_ROOT/bootstrap-stage"
+BOOTSTRAP_EVIDENCE="$EVIDENCE_ROOT/bootstrap-stage-evidence"
+if [[ ! -f "$LOCK_PATH" ]]; then
+  [[ ! -e "$BOOTSTRAP_STAGE" && ! -e "$BOOTSTRAP_EVIDENCE" ]] \
+    || fail "bootstrap output exists; choose a new --evidence-root or pass --clean" 73
+  "$PROJECT_ROOT/scripts/stage-plugin" --clean \
+    --stage-root "$BOOTSTRAP_STAGE" --evidence-root "$BOOTSTRAP_EVIDENCE"
+  "$PYTHON" - "$BOOTSTRAP_STAGE" "$CODEX_LAUNCHER" "$CODEX_NATIVE" "$HOST_CANARY" "$LOCK_PATH" <<'PY'
+from pathlib import Path
+import sys
+from arw.integration_lock import build_integration_lock, write_integration_lock
+
+stage, launcher, native, canary, output = map(Path, sys.argv[1:])
+lock = build_integration_lock(
+    stage_root=stage,
+    codex_launcher=launcher,
+    codex_native_binary=native,
+    host_canary_evidence=canary,
+)
+print(f"integration lock: {write_integration_lock(output, lock)}")
+PY
+else
+  [[ -f "$LOCK_PATH" && ! -L "$LOCK_PATH" ]] || fail "integration lock input is unsafe" 66
+fi
+
+FINAL_EVIDENCE="$EVIDENCE_ROOT/final-stage"
+if [[ -e "$FINAL_EVIDENCE" ]]; then
+  [[ "$CLEAN" -eq 1 && -f "$FINAL_EVIDENCE/.arw-stage-evidence" ]] \
+    || fail "final stage evidence exists without an owned clean marker" 73
+  rm -rf -- "$FINAL_EVIDENCE"
+fi
+"$PROJECT_ROOT/scripts/stage-plugin" --clean \
+  --stage-root "$STAGE_ROOT" --evidence-root "$FINAL_EVIDENCE" \
+  --integration-lock "$LOCK_PATH"
+"$PROJECT_ROOT/scripts/stage-plugin" --validate-only \
+  --stage-root "$STAGE_ROOT" --integration-lock "$LOCK_PATH"
+
+printf 'qualified stage ready: %s\n' "$STAGE_ROOT"
+printf 'integration lock: %s\n' "$LOCK_PATH"

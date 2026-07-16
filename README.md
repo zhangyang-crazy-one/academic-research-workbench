@@ -61,6 +61,19 @@ ignored snapshots under `vendor/sources/`:
 ./scripts/verify-sources --inputs-only
 ```
 
+The native `file-base` binary is a separately qualified, modified
+`codebase-memory-mcp` data-plane artifact. A clean checkout cannot skip the
+pre-vendor license receipt: if the retained receipt or its source archives are
+absent, `verify-sources` must fail closed. When those local qualification
+inputs are present, build it through the denied-network evidence boundary:
+
+```bash
+mkdir -p build/evidence/local-native
+./scripts/offline-exec \
+  --evidence-root build/evidence/local-native \
+  ./scripts/build-file-base --clean --run-upstream-tests
+```
+
 The ARS skill is staged with ARW; no silent clone or second installation is
 used. A clean stage/install verification is required before the route can pass.
 
@@ -68,10 +81,12 @@ used. A clean stage/install verification is required before the route can pass.
 
 Use a qualified staged package produced by the staging workflow for
 installation. A source checkout does not contain a prebuilt `marketplace/`
-directory; create one from the immutable stage explicitly:
+directory; create one from the immutable stage explicitly. The stage must
+carry `supply-chain/integration-lock.json`; an unlocked stage is diagnostic
+only and cannot qualify the route:
 
 ```bash
-./scripts/stage-plugin --clean
+./scripts/stage-plugin --clean --stage-root build/stage/bootstrap
 ./scripts/create-marketplace
 codex plugin marketplace add ./build/marketplace --json
 codex plugin add academic-research-workbench@arw-local --json
@@ -85,6 +100,35 @@ and installed inventory are isolated and recorded together.
 The staging and smoke scripts record the exact stage identity, installed
 inventory, hook definition, MCP launcher, and version tuple. Do not install
 from a dirty source checkout when making a qualification claim.
+
+For a repeatable final stage, first run
+`scripts/qualify-codex-host` against the deterministic bootstrap stage and
+retain its redacted `canary.json`. Then bind that exact evidence to the stage
+with the fail-closed helper (the launcher/native paths are part of the lock):
+
+```bash
+./scripts/qualify-codex-host \
+  --stage-root build/stage/bootstrap \
+  --evidence-root build/evidence/host-canary \
+  --work-root build/qualification-work \
+  --credential-source "$CODEX_HOME" \
+  --codex-launcher "$(command -v codex)"
+./scripts/prepare-qualified-stage \
+  --host-canary-evidence build/evidence/host-canary/canary.json \
+  --codex-launcher /usr/local/sbin/codex \
+  --codex-native-binary /path/to/exact/native/codex \
+  --stage-root build/stage/qualified \
+  --evidence-root build/evidence/qualified
+```
+
+The helper never fabricates a canary or silently upgrades a missing lock. A
+qualified stage still reports `release_qualification: BLOCKED` until the
+retained CC BY-NC intended-use, distribution, accountable-approval, and
+permission evidence is resolved. If host canary evidence is not supplied,
+`bin/arw route --json` remains blocked with
+`integration_inputs_incomplete` by design; supplying the exact retained
+`ARW_HOST_CANARY_EVIDENCE` makes the verifier recompute the lock and can return
+`integration_status: PASS` on the same host.
 
 ## Release boundary
 

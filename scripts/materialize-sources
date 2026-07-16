@@ -36,10 +36,10 @@ def tree_digest(root: Path) -> str:
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
         relative = path.relative_to(root).as_posix()
         if path.is_symlink():
-            record = f"L\\0{relative}\\0{os.readlink(path)}\\n".encode()
+            record = f"L\0{relative}\0{os.readlink(path)}\n".encode()
         elif path.is_file():
             mode = "755" if path.stat().st_mode & stat.S_IXUSR else "644"
-            record = f"F\\0{mode}\\0{relative}\\0{digest(path)}\\n".encode()
+            record = f"F\0{mode}\0{relative}\0{digest(path)}\n".encode()
         else:
             continue
         hasher.update(record)

@@ -80,6 +80,7 @@ jobs:
         run: |
           test -f src/arw/orchestration.py
           test -f hooks/arw_hook.py
+          test -x scripts/prepare-qualified-stage
           test -x scripts/create-marketplace
           python - <<'PY'
           import json
