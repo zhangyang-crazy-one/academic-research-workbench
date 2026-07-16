@@ -533,6 +533,74 @@ def test_same_upstream_commit_does_not_hide_adapter_version_drift(
 
 
 @pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("manifest", "version identities disagree"),
+        ("version", "version identities disagree"),
+        ("router", "version identities disagree"),
+        ("local-only", "live integration identity differs"),
+        ("upstream-commit", "external ARS commits"),
+    ],
+)
+def test_external_ars_identity_mismatches_fail_closed(
+    integration_fixture: dict[str, Path], mutation: str, message: str
+) -> None:
+    """Every external ARS identity surface is independently lock-bound."""
+
+    lock = _build(integration_fixture)
+    external = integration_fixture["external"]
+    if mutation == "manifest":
+        manifest = json.loads((external / "manifest.json").read_text(encoding="utf-8"))
+        manifest["adapter_version"] = "0.1.19"
+        _json(external / "manifest.json", manifest)
+    elif mutation == "version":
+        _write(external / "VERSION", "0.1.19\n")
+    elif mutation == "router":
+        _write(
+            external / "SKILL.md",
+            "---\nname: academic-research-suite\nmetadata:\n"
+            "  version: \"0.1.19\"\n---\n",
+        )
+    elif mutation == "local-only":
+        _write(external / "ars/academic-pipeline/WORKFLOW.md", "# changed\n")
+    else:
+        manifest = json.loads((external / "manifest.json").read_text(encoding="utf-8"))
+        manifest["source_repositories"][0]["commit"] = "0" * 40
+        _json(external / "manifest.json", manifest)
+
+    with pytest.raises(IntegrationLockError, match=message):
+        _verify(integration_fixture, lock)
+
+
+def test_external_ars_root_must_be_present_and_not_a_symlink(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    missing = integration_fixture["external"].parent / "missing-ars"
+    with pytest.raises(IntegrationLockError, match="external ARS root"):
+        verify_integration_lock(
+            lock,
+            stage_root=integration_fixture["stage"],
+            external_ars_root=missing,
+            codex_launcher=integration_fixture["launcher"],
+            codex_native_binary=integration_fixture["native"],
+            host_canary_evidence=integration_fixture["canary"],
+        )
+
+    symlink = integration_fixture["external"].parent / "ars-link"
+    symlink.symlink_to(integration_fixture["external"], target_is_directory=True)
+    with pytest.raises(IntegrationLockError, match="external ARS root"):
+        verify_integration_lock(
+            lock,
+            stage_root=integration_fixture["stage"],
+            external_ars_root=symlink,
+            codex_launcher=integration_fixture["launcher"],
+            codex_native_binary=integration_fixture["native"],
+            host_canary_evidence=integration_fixture["canary"],
+        )
+
+
+@pytest.mark.parametrize(
     ("target", "kind"),
     [
         ("external:ars/academic-pipeline/WORKFLOW.md", "append"),
