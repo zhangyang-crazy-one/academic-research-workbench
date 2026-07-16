@@ -8,6 +8,7 @@ commits:
   - a0d6007
   - caf40b9
   - 13d03d4
+  - c6366b9
 ---
 
 # Phase 7 Plan 02 Summary
@@ -53,6 +54,8 @@ none is relabeled as cancellation.
   separate legal release `BLOCKED_LEGAL_GATE`.
 - The ordered aggregate includes all 18 stable registry boundary/scenario IDs,
   including direct lock, host-dispatch, and result-acceptance receipts.
+- Parent sidecars retain bounded subprocess return codes/signals alongside
+  their stream, snapshot, replay, and canonical hash bindings.
 
 ### 07-02-T3 — Crash/resume and stale rejection
 
