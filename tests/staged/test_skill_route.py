@@ -161,8 +161,8 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     assert route["workflow_family"]
     assert route["execution_mode"]
     assert route["source_adapter_version"] == "0.1.20"
-    assert route["source_dependency_model"] == "external-exact-installation"
-    assert route["source_bundled"] is False
+    assert route["source_dependency_model"] == "bundled-pinned-adapter"
+    assert route["source_bundled"] is True
     assert route["integration_status"] == "BLOCKED"
     assert route["execution_mode"] == "blocked"
     assert route["integration_lock_sha256"] is None

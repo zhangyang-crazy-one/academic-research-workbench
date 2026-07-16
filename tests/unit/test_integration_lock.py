@@ -100,9 +100,9 @@ def _make_wheel(path: Path) -> None:
 @pytest.fixture
 def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     stage = tmp_path / "stage"
-    external = tmp_path / "external-ars"
+    external = stage / "skills/academic-research-suite"
     stage.mkdir()
-    external.mkdir()
+    external.mkdir(parents=True)
 
     _write(
         stage / "pyproject.toml",
@@ -450,7 +450,6 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
 def _build(paths: dict[str, Path]):
     return build_integration_lock(
         stage_root=paths["stage"],
-        external_ars_root=paths["external"],
         codex_launcher=paths["launcher"],
         codex_native_binary=paths["native"],
         host_canary_evidence=paths["canary"],
@@ -461,7 +460,6 @@ def _verify(paths: dict[str, Path], lock):
     return verify_integration_lock(
         lock,
         stage_root=paths["stage"],
-        external_ars_root=paths["external"],
         codex_launcher=paths["launcher"],
         codex_native_binary=paths["native"],
         host_canary_evidence=paths["canary"],
@@ -495,7 +493,7 @@ def test_exact_external_integration_lock_round_trips_and_retains_legal_block(
 ) -> None:
     lock = _build(integration_fixture)
     assert lock.ars.adapter_version == "0.1.20"
-    assert lock.ars.bundled is False
+    assert lock.ars.bundled is True
     assert lock.ars.source_repositories[0].commit == ARS_COMMIT
     assert lock.file_base.commit == FILE_BASE_COMMIT
     assert [patch.order for patch in lock.file_base.ordered_patches] == [1, 2, 3, 4]
@@ -511,7 +509,6 @@ def test_exact_external_integration_lock_round_trips_and_retains_legal_block(
     receipt = load_and_verify_integration_lock(
         integration_fixture["lock"],
         stage_root=integration_fixture["stage"],
-        external_ars_root=integration_fixture["external"],
         codex_launcher=integration_fixture["launcher"],
         codex_native_binary=integration_fixture["native"],
         host_canary_evidence=integration_fixture["canary"],
@@ -538,14 +535,14 @@ def test_same_upstream_commit_does_not_hide_adapter_version_drift(
         ("manifest", "version identities disagree"),
         ("version", "version identities disagree"),
         ("router", "version identities disagree"),
-        ("local-only", "live integration identity differs"),
-        ("upstream-commit", "external ARS commits"),
+            ("local-only", "canary covered another live stage identity"),
+        ("upstream-commit", "bundled ARS commits"),
     ],
 )
-def test_external_ars_identity_mismatches_fail_closed(
+def test_bundled_ars_identity_mismatches_fail_closed(
     integration_fixture: dict[str, Path], mutation: str, message: str
 ) -> None:
-    """Every external ARS identity surface is independently lock-bound."""
+    """Every bundled ARS identity surface is independently lock-bound."""
 
     lock = _build(integration_fixture)
     external = integration_fixture["external"]
@@ -572,28 +569,29 @@ def test_external_ars_identity_mismatches_fail_closed(
         _verify(integration_fixture, lock)
 
 
-def test_external_ars_root_must_be_present_and_not_a_symlink(
+def test_bundled_ars_root_must_be_present_and_not_a_symlink(
     integration_fixture: dict[str, Path],
 ) -> None:
     lock = _build(integration_fixture)
-    missing = integration_fixture["external"].parent / "missing-ars"
-    with pytest.raises(IntegrationLockError, match="external ARS root"):
+    bundled = integration_fixture["external"]
+    backup = bundled.parent / "ars-real"
+    bundled.rename(backup)
+    missing = integration_fixture["stage"] / "skills/academic-research-suite"
+    with pytest.raises(IntegrationLockError, match="bundled ARS"):
         verify_integration_lock(
             lock,
             stage_root=integration_fixture["stage"],
-            external_ars_root=missing,
             codex_launcher=integration_fixture["launcher"],
             codex_native_binary=integration_fixture["native"],
             host_canary_evidence=integration_fixture["canary"],
         )
 
-    symlink = integration_fixture["external"].parent / "ars-link"
-    symlink.symlink_to(integration_fixture["external"], target_is_directory=True)
-    with pytest.raises(IntegrationLockError, match="external ARS root"):
+    symlink = integration_fixture["stage"] / "skills/academic-research-suite"
+    symlink.symlink_to(backup, target_is_directory=True)
+    with pytest.raises(IntegrationLockError, match="bundled ARS"):
         verify_integration_lock(
             lock,
             stage_root=integration_fixture["stage"],
-            external_ars_root=symlink,
             codex_launcher=integration_fixture["launcher"],
             codex_native_binary=integration_fixture["native"],
             host_canary_evidence=integration_fixture["canary"],
@@ -671,7 +669,7 @@ def test_any_retained_fresh_home_receipt_drift_fails_closed(
         _verify(integration_fixture, lock)
 
 
-def test_external_dependency_cannot_be_missing_or_silently_bundled(
+def test_bundled_dependency_cannot_be_missing_or_drifted(
     integration_fixture: dict[str, Path],
 ) -> None:
     shutil.rmtree(integration_fixture["external"] / "ars")
@@ -683,10 +681,11 @@ def test_external_dependency_cannot_be_missing_or_silently_bundled(
         "# restored\n",
     )
     _write(
-        integration_fixture["stage"] / "skills/academic-research-suite/SKILL.md",
-        "# silently bundled\n",
+        integration_fixture["external"] / "ars/academic-pipeline/WORKFLOW.md",
+        "# restored\n",
     )
-    with pytest.raises(IntegrationLockError, match="silently bundles ARS"):
+    _write(integration_fixture["external"] / "SKILL.md", "# drifted\n")
+    with pytest.raises(IntegrationLockError, match="router metadata version"):
         _build(integration_fixture)
 
 
@@ -996,7 +995,6 @@ def test_noncanonical_lock_bytes_are_rejected(
         load_and_verify_integration_lock(
             integration_fixture["lock"],
             stage_root=integration_fixture["stage"],
-            external_ars_root=integration_fixture["external"],
             codex_launcher=integration_fixture["launcher"],
             codex_native_binary=integration_fixture["native"],
             host_canary_evidence=integration_fixture["canary"],

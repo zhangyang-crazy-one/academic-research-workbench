@@ -74,7 +74,6 @@ def test_dispatch_without_exact_integration_evidence_is_blocked_before_asyncio(
     for name in (
         "ARW_INTEGRATION_LOCK",
         "ARW_PLUGIN_ROOT",
-        "ARW_ARS_ROOT",
         "ARW_CODEX_LAUNCHER",
         "ARW_CODEX_NATIVE_BINARY",
         "ARW_HOST_CANARY_EVIDENCE",
@@ -241,7 +240,6 @@ def test_read_only_route_import_never_probes_a_writable_temp_directory(
         "TEMP",
         "ARW_INTEGRATION_LOCK",
         "ARW_PLUGIN_ROOT",
-        "ARW_ARS_ROOT",
         "ARW_CODEX_LAUNCHER",
         "ARW_CODEX_NATIVE_BINARY",
         "ARW_HOST_CANARY_EVIDENCE",

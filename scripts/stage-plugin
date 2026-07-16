@@ -319,12 +319,26 @@ copy_as() {
   install -D -m "$mode" -- "$source" "$TEMP_STAGE/$destination_relative"
 }
 
+copy_tree() {
+  local relative_root="$1"
+  local source_root="$PROJECT_ROOT/$relative_root"
+  [[ -d "$source_root" && ! -L "$source_root" ]] \
+    || fail "allowlisted source tree is unsafe or missing: $relative_root" 66
+  while IFS= read -r -d '' source; do
+    local relative="${source#"$PROJECT_ROOT/"}"
+    local mode=0644
+    [[ -x "$source" ]] && mode=0755
+    copy_file "$relative" "$mode"
+  done < <(find "$source_root" -type f ! -path '*/.pytest_cache/*' ! -path '*/__pycache__/*' ! -name '*.pyc' -print0 | sort -z)
+}
+
 copy_file ".python-version"
 copy_file "pyproject.toml"
 copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
+copy_tree "skills/academic-research-suite"
 copy_file "hooks/hooks.json"
 copy_file "hooks/arw_hook.py" 0755
 copy_file "docs/runtime/durable-provenance.md"
@@ -941,6 +955,14 @@ phase5_schema_names = {
     "graph-query-result.schema.json",
 }
 static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
+ars_source = project_root / "skills/academic-research-suite"
+if not ars_source.is_dir() or ars_source.is_symlink():
+    raise SystemExit("bundled ARS source tree is missing or unsafe")
+for path in ars_source.rglob("*"):
+    if path.is_symlink():
+        raise SystemExit(f"bundled ARS source contains a symlink: {path.relative_to(project_root)}")
+    if path.is_file() and ".pytest_cache" not in path.parts and "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}:
+        static_files.add(path.relative_to(project_root).as_posix())
 lock_relative = "supply-chain/integration-lock.json"
 if (stage_root / lock_relative).is_file():
     static_files.add(lock_relative)

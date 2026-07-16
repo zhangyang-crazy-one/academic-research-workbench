@@ -195,7 +195,6 @@ def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--integration-lock", type=Path)
     parser.add_argument("--stage-root", type=Path)
-    parser.add_argument("--ars-root", type=Path)
     parser.add_argument("--codex-launcher", type=Path)
     parser.add_argument("--codex-native-binary", type=Path)
     parser.add_argument("--host-canary-evidence", type=Path)
@@ -274,7 +273,6 @@ def _installed_route_from_environment():
 
     names = {
         "lock": "ARW_INTEGRATION_LOCK",
-        "ars": "ARW_ARS_ROOT",
         "launcher": "ARW_CODEX_LAUNCHER",
         "native": "ARW_CODEX_NATIVE_BINARY",
         "canary": "ARW_HOST_CANARY_EVIDENCE",
@@ -290,7 +288,6 @@ def _installed_route_from_environment():
         verification = load_and_verify_integration_lock(
             Path(values["lock"]),
             stage_root=Path(os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])),
-            external_ars_root=Path(values["ars"]),
             codex_launcher=Path(values["launcher"]),
             codex_native_binary=Path(values["native"]),
             host_canary_evidence=Path(values["canary"]),
@@ -388,7 +385,6 @@ def _verified_dispatch_adapter(
             args, "integration_lock", "ARW_INTEGRATION_LOCK"
         ),
         "stage": _path_argument_or_environment(args, "stage_root", "ARW_PLUGIN_ROOT"),
-        "ars": _path_argument_or_environment(args, "ars_root", "ARW_ARS_ROOT"),
         "launcher": _path_argument_or_environment(
             args, "codex_launcher", "ARW_CODEX_LAUNCHER"
         ),
@@ -405,7 +401,6 @@ def _verified_dispatch_adapter(
         verification = load_and_verify_integration_lock(
             integration_paths["lock"],  # type: ignore[arg-type]
             stage_root=integration_paths["stage"],  # type: ignore[arg-type]
-            external_ars_root=integration_paths["ars"],  # type: ignore[arg-type]
             codex_launcher=integration_paths["launcher"],  # type: ignore[arg-type]
             codex_native_binary=integration_paths["native"],  # type: ignore[arg-type]
             host_canary_evidence=integration_paths["canary"],  # type: ignore[arg-type]

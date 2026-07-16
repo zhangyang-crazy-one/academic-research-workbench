@@ -28,12 +28,12 @@
       "type": "string"
     },
     "source_dependency_model": {
-      "const": "external-exact-installation",
+      "const": "bundled-pinned-adapter",
       "title": "Source Dependency Model",
       "type": "string"
     },
     "source_bundled": {
-      "const": false,
+      "const": true,
       "title": "Source Bundled",
       "type": "boolean"
     },

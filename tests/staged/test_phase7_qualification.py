@@ -22,9 +22,6 @@ from arw.integration_lock import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 STAGE_ROOT = REPOSITORY_ROOT / "build/stage/phase-07-qualified"
 LOCK_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/integration-lock.json"
-ARS_ROOT = Path(
-    os.environ.get("ARW_ARS_ROOT", str(REPOSITORY_ROOT / "build/external-ars"))
-).resolve()
 CANARY_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/host-canary/canary.json"
 
 
@@ -50,15 +47,13 @@ def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
     assert inventory["symlinks"] == []
     assert "hooks/arw_hook.py" in files
     assert "hooks/hooks.json" in files
-    assert not any(
-        path == "skills/academic-research-suite" or path.startswith("skills/academic-research-suite/")
-        for path in files
-    )
+    assert "skills/academic-research-suite/SKILL.md" in files
+    assert any(path.startswith("skills/academic-research-suite/ars/") for path in files)
 
     lock = json.loads(LOCK_PATH.read_text())
     assert lock["codex_host"]["cli_version"] == EXPECTED_CODEX_CLI_VERSION
     assert lock["ars"]["adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
-    assert lock["ars"]["bundled"] is False
+    assert lock["ars"]["bundled"] is True
     assert lock["technical_qualification"] == "PASS"
     assert lock["release_qualification"] == "BLOCKED"
 
@@ -89,7 +84,6 @@ def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
         "UV_OFFLINE": "1",
         "ARW_PLUGIN_ROOT": str(qualified_stage),
         "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
-        "ARW_ARS_ROOT": str(ARS_ROOT),
         "ARW_CODEX_LAUNCHER": os.environ.get("ARW_CODEX_LAUNCHER", "codex"),
         "ARW_CODEX_NATIVE_BINARY": os.environ.get(
             "ARW_CODEX_NATIVE_BINARY", "codex"
@@ -142,7 +136,6 @@ def test_unsupported_codex_host_version_fails_closed(qualified_stage: Path, tmp_
     with pytest.raises(IntegrationLockError, match="unsupported.*0.144.4"):
         build_integration_lock(
             stage_root=qualified_stage,
-            external_ars_root=ARS_ROOT,
             codex_launcher=launcher,
             codex_native_binary=discover_codex_native_binary(launcher),
             host_canary_evidence=CANARY_PATH,

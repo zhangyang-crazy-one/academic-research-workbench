@@ -33,6 +33,66 @@
       "version": "1"
     },
     {
+      "bom-ref": "artifact:skills/academic-research-suite",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "af72983ab789924f9bbeabd7197ebc4b0c0e87e91748ef82bcc37f28e0addbd0"
+        }
+      ],
+      "name": "skills/academic-research-suite",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/ars",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1926cf9a9c7b8988f5257af9d83d9bac091ef024c05769f913914f6b3f2e8bf9"
+        }
+      ],
+      "name": "skills/academic-research-suite/ars",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/SKILL.md",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b390280444e66149a0557a3c7f5309429f100a3bfece6bcc2427f4de721b6a23"
+        }
+      ],
+      "name": "skills/academic-research-suite/SKILL.md",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/manifest.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4b41422c4eec1f4d14f796b334313a0c9d5950ced7dd776891af4a2b64277437"
+        }
+      ],
+      "name": "skills/academic-research-suite/manifest.json",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/VERSION",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a93167bc7b1e6cf2ffcbba0f51fea8122c7e61252cefe1f5152bee90beacd8b4"
+        }
+      ],
+      "name": "skills/academic-research-suite/VERSION",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
       "bom-ref": "artifact:build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
       "hashes": [
         {
@@ -73,7 +133,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c47ad15db702f592364152ad47ef9cbd7a6fb196d99a2ed3b36489111e1314a7"
+          "content": "e46e33e9f3db3f03050878f1a19f3be86bb032c15b354afd909460722f4073eb"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",

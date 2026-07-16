@@ -475,7 +475,6 @@ def host_qualification(
     stage_root: Path | None = None,
     integration_lock: Path | None = None,
     host_canary_evidence: Path | None = None,
-    external_ars_root: Path | None = None,
     codex_launcher: Path | None = None,
     codex_native_binary: Path | None = None,
     credential_source: Path | None = None,
@@ -496,14 +495,13 @@ def host_qualification(
     exact_tuple = False
 
     if require_host:
-        if stage_root is None or integration_lock is None or external_ars_root is None:
+        if stage_root is None or integration_lock is None:
             raise VerificationError(
-                "--require-host needs --stage-root, --integration-lock, and --ars-root",
+                "--require-host needs --stage-root and --integration-lock",
                 64,
             )
         stage_root = stage_root.resolve(strict=True)
         integration_lock = integration_lock.resolve(strict=True)
-        external_ars_root = external_ars_root.resolve(strict=True)
         launcher_path = codex_launcher
         if launcher_path is None:
             discovered = shutil.which("codex")
@@ -573,7 +571,6 @@ def host_qualification(
             verification = load_and_verify_integration_lock(
                 integration_lock,
                 stage_root=stage_root,
-                external_ars_root=external_ars_root,
                 # Preserve the invoked symlink/path as part of the host tuple;
                 # resolving it here would silently change a qualified launcher
                 # identity after the canary has already run.
@@ -697,7 +694,6 @@ def build_verdict(
     stage_root: Path | None = None,
     integration_lock: Path | None = None,
     host_canary_evidence: Path | None = None,
-    external_ars_root: Path | None = None,
     codex_launcher: Path | None = None,
     codex_native_binary: Path | None = None,
     credential_source: Path | None = None,
@@ -710,7 +706,6 @@ def build_verdict(
         stage_root=stage_root,
         integration_lock=integration_lock,
         host_canary_evidence=host_canary_evidence,
-        external_ars_root=external_ars_root,
         codex_launcher=codex_launcher,
         codex_native_binary=codex_native_binary,
         credential_source=credential_source,
@@ -938,7 +933,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stage-root", type=Path)
     parser.add_argument("--integration-lock", type=Path)
     parser.add_argument("--host-canary-evidence", type=Path)
-    parser.add_argument("--ars-root", type=Path)
     parser.add_argument("--codex-launcher", type=Path)
     parser.add_argument("--codex-native-binary", type=Path)
     parser.add_argument("--credential-source", type=Path)
@@ -959,7 +953,6 @@ def main(argv: list[str] | None = None) -> int:
                 stage_root=args.stage_root,
                 integration_lock=args.integration_lock,
                 host_canary_evidence=args.host_canary_evidence,
-                external_ars_root=args.ars_root,
                 codex_launcher=args.codex_launcher,
                 codex_native_binary=args.codex_native_binary,
                 credential_source=args.credential_source,
@@ -1074,7 +1067,6 @@ def main(argv: list[str] | None = None) -> int:
             stage_root=args.stage_root,
             integration_lock=args.integration_lock,
             host_canary_evidence=args.host_canary_evidence,
-            external_ars_root=args.ars_root,
             codex_launcher=args.codex_launcher,
             codex_native_binary=args.codex_native_binary,
             credential_source=args.credential_source,

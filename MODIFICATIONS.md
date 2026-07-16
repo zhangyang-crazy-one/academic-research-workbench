@@ -1,20 +1,21 @@
 # Modifications and Source Partitioning
 
-Academic Research Workbench preserves each upstream source identity and records local changes as ordered, digest-bound patch inputs.
+Academic Research Workbench preserves each upstream source identity and records
+the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
 - Upstream revision: `c22c17eed8a5753aa60681be9734919f2e2f5b42`
 - Adapter version: `0.1.20`
-- Materialized source: `vendor/sources/academic-research-skills`
-- Local source modifications: none; the snapshot is bundled unchanged.
+- Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
+- Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot; upstream commit identities remain pinned in `manifest.json`.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
 
 ## experiment-agent
 
 - Upstream revision: `9b063fa895eaf1f63ac99ac03f924f8d31aa8d26`
-- Materialized source: `vendor/sources/experiment-agent`
-- Local source modifications: none; the snapshot is bundled unchanged.
+- Bundled adapter component: `skills/academic-research-suite/ars/`
+- Local source modifications: the bundled adapter integrates the pinned experiment-agent material into the reshaped local ARS skill; upstream commit identity remains pinned in `manifest.json`.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
 
 ## file-base

@@ -149,11 +149,11 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
     hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
     payload = {
         "schema_version": "arw.integration-lock.v1",
-        "dependency_model": "external-exact-installation",
+        "dependency_model": "bundled-pinned-adapter",
         "arw_runtime": observed_arw.model_dump(mode="json"),
         "ars": {
-            "dependency_model": "external-exact-installation",
-            "bundled": False,
+            "dependency_model": "bundled-pinned-adapter",
+            "bundled": True,
             "adapter_name": "academic-research-suite",
             "adapter_version": "0.1.20",
             "adapter_tree_sha256": repeated("a"),

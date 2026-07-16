@@ -51,6 +51,10 @@ MARKETPLACE_ROOT="$(realpath -m -- "$MARKETPLACE_ROOT")"
   || fail "staged plugin is missing or is a symlink" 66
 [[ -f "$STAGE_ROOT/.codex-plugin/plugin.json" ]] \
   || fail "staged plugin manifest is missing" 66
+[[ -f "$STAGE_ROOT/skills/academic-research-suite/SKILL.md" && \
+   -f "$STAGE_ROOT/skills/academic-research-suite/manifest.json" && \
+   -d "$STAGE_ROOT/skills/academic-research-suite/ars" ]] \
+  || fail "staged modified ARS skill is missing" 66
 
 rm -rf -- "$MARKETPLACE_ROOT"
 PLUGIN_ROOT="$MARKETPLACE_ROOT/plugins/$PLUGIN_NAME"

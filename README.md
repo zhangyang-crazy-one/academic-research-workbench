@@ -8,10 +8,11 @@ projections.
 ## ARS integration boundary
 
 ARW uses the current locally maintained and reshaped Academic Research Suite
-(ARS) adapter as an explicit external integration input. The adapter is not
-bundled into the staged ARW plugin: `ARW_ARS_ROOT` must point to the exact,
-lock-bound installation (adapter version, upstream identities, and content
-digests). A missing, symlinked, drifting, or implicitly discovered ARS root is
+(ARS) adapter as a bundled plugin skill at
+`skills/academic-research-suite/`. The staged package carries the exact
+modified router, workflows, references, Codex profile metadata, and adapter
+manifest. The integration lock binds the bundled adapter version, upstream
+source identities, and content digests; missing or drifting bundled content is
 blocked. This repository's wording does not assert public fork ownership,
 redistribution permission, or a license grant for ARS content.
 
@@ -54,9 +55,8 @@ ignored snapshots under `vendor/sources/`:
 ./scripts/verify-sources --inputs-only
 ```
 
-Set `ARW_ARS_ROOT` to the separately installed, exact ARS adapter before using
-the integration route. An absent or drifting external adapter is intentionally
-reported as blocked; ARW does not silently clone or substitute ARS.
+The ARS skill is staged with ARW; no silent clone or second installation is
+used. A clean stage/install verification is required before the route can pass.
 
 ### Staged Codex plugin
 

@@ -1,0 +1,43 @@
+{
+  "skill_name": "academic-research-suite",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ARS formatter 视角审查一份中文技术报告 PDF 是否可称为 ACL camera-ready。PDF 路径由运行者提供。要求：必须按 venue family 分开写，不能把 ACL/IEEE/中文报告混成一套标准；给出 Venue Family Compliance 结论；若未声明 family，先说明应选哪个。",
+      "expected_output": "Uses exact slug cn_tech_report; ACL compliance table with PASS/FAIL/NOT-CHECKED; Length NOT-CHECKED without declared CFP year; refuses ACL camera-ready; does not FAIL solely on typical 8-page memory.",
+      "files": [],
+      "expectations": [
+        "Contains the exact slug `cn_tech_report` as recommended or preferred family",
+        "Contains a Venue Family Compliance table using only PASS, FAIL, or NOT-CHECKED statuses",
+        "Marks ACL Length/page-cap as NOT-CHECKED (does not FAIL solely because page count exceeds a typical 8/9-page memory)",
+        "Explicitly refuses ACL camera-ready / submission-ready for this PDF",
+        "Flags missing acl.sty or single-column layout as ACL FAIL"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "我要把一篇中文架构设计报告排成学术 PDF。目标不是投会，只是技术报告基线。请按 ARS 给出应声明的 venue_family、标题颜色、字体、图注与参考文献最低要求，并列出 Final Quality Checklist 里 Venue Family Compliance 应检查的条目。不要加载全部顶会细则长文，只要对应 family。",
+      "expected_output": "Exact slug cn_tech_report; black headings; Chinese captions/三线表; checklist rows from cn_tech_report pack only; forbids top-venue camera-ready claim.",
+      "files": [],
+      "expectations": [
+        "States venue_family exactly as `cn_tech_report` (machine slug, not only a Chinese paraphrase)",
+        "Requires black section headings",
+        "Does not require ACL two-column or acl.sty for this baseline",
+        "Mentions Chinese figure captions (图) and/or 三线表",
+        "States the output must not claim ACL/IEEE/NeurIPS camera-ready"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "用户说目标期刊是 NeurIPS，但没有填写字数上限。按 ARS intake/formatter 规则：能否从期刊名自动填 page limit？应如何记录 Venue Family 与 Venue Profile？给出简短操作步骤。",
+      "expected_output": "Forbids inferring limits and forbids auto-setting venue_family from the journal name; asks for exact slug; undeclared limits stay null/NOT-CHECKED; no authoritative invented page count.",
+      "files": [],
+      "expectations": [
+        "Forbids inferring word/page limits from the journal name",
+        "States that Target Journal=NeurIPS does not auto-set Venue Family; scholar must pick the exact slug",
+        "Keeps undeclared numeric limits as null or NOT-CHECKED",
+        "Does not invent a specific page count (e.g. 9 pages) as an authoritative filled value"
+      ]
+    }
+  ]
+}

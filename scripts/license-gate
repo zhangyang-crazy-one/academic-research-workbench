@@ -212,6 +212,10 @@ def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                 "staged_sha256": digest(destination),
             }
         )
+        if component_id == "academic-research-skills":
+            bundled_license = PROJECT_ROOT / "skills/academic-research-suite/ars/LICENSE"
+            if bundled_license.is_file() and digest(bundled_license) != declared["sha256"]:
+                fail("bundled ARS license bytes do not match the pinned source license")
     return records
 
 

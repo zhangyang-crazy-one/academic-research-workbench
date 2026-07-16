@@ -1,7 +1,7 @@
-"""Fail-closed qualification lock for the external ARS/Codex integration.
+"""Fail-closed qualification lock for the bundled ARS/Codex integration.
 
 The lock is deliberately independent of mutable run state.  It binds the
-exact staged ARW wheel, the separately installed ARS adapter, the reconstructed
+exact staged ARW wheel, the bundled ARS adapter, the reconstructed
 file-base binary and ordered patch series, the Codex launcher/native host
 tuple, the hook definition plus retained trust canary, and the legal verdict.
 
@@ -204,9 +204,9 @@ class SourceRepositoryBinding(LockModel):
     source_tree_sha256: Sha256
 
 
-class ExternalARSBinding(LockModel):
-    dependency_model: Literal["external-exact-installation"]
-    bundled: Literal[False]
+class ARSBinding(LockModel):
+    dependency_model: Literal["bundled-pinned-adapter"]
+    bundled: Literal[True]
     adapter_name: Literal["academic-research-suite"]
     adapter_version: Literal["0.1.20"]
     adapter_tree_sha256: Sha256
@@ -597,9 +597,9 @@ class LicenseBinding(LockModel):
 
 class IntegrationLock(LockModel):
     schema_version: Literal["arw.integration-lock.v1"]
-    dependency_model: Literal["external-exact-installation"]
+    dependency_model: Literal["bundled-pinned-adapter"]
     arw_runtime: ARWRuntimeBinding
-    ars: ExternalARSBinding
+    ars: ARSBinding
     file_base: FileBaseBinding
     codex_host: CodexHostBinding
     hook: HookBinding
@@ -609,8 +609,8 @@ class IntegrationLock(LockModel):
 
     @model_validator(mode="after")
     def dependency_model_is_explicit(self) -> Self:
-        if self.ars.dependency_model != self.dependency_model or self.ars.bundled:
-            raise ValueError("staged ARW must declare and verify external exact ARS")
+        if self.ars.dependency_model != self.dependency_model or not self.ars.bundled:
+            raise ValueError("staged ARW must declare and verify the bundled exact ARS")
         return self
 
 
@@ -619,7 +619,7 @@ class IntegrationVerification(LockModel):
     integration_lock_sha256: Sha256
     codex_host_tuple_sha256: Sha256
     hook_definition_sha256: Sha256
-    external_ars_tree_sha256: Sha256
+    ars_tree_sha256: Sha256
     technical_qualification: Literal["PASS"]
     release_qualification: Literal["BLOCKED"]
 
@@ -966,29 +966,29 @@ def _source_binding(
         ) from error
 
 
-def _validate_external_ars(
-    root: Path, source_manifest: Mapping[str, object]
-) -> ExternalARSBinding:
-    root = _safe_root(root, label="external ARS")
+def _validate_bundled_ars(
+    stage_root: Path, source_manifest: Mapping[str, object]
+) -> ARSBinding:
+    root = _safe_root(stage_root / "skills/academic-research-suite", label="bundled ARS")
     manifest_binding = FileBinding.from_path(root, "manifest.json")
     version_binding = FileBinding.from_path(root, "VERSION")
     router_binding = FileBinding.from_path(root, "SKILL.md")
-    manifest = _read_object(root / "manifest.json", label="external ARS manifest")
+    manifest = _read_object(root / "manifest.json", label="bundled ARS manifest")
     try:
         version = (root / "VERSION").read_text(encoding="ascii").strip()
     except (OSError, UnicodeError) as error:
-        raise IntegrationLockError(f"external ARS version is unreadable: {error}") from error
+        raise IntegrationLockError(f"bundled ARS version is unreadable: {error}") from error
     if (
         manifest.get("name") != "academic-research-suite"
         or manifest.get("adapter_version") != EXPECTED_ARS_ADAPTER_VERSION
         or version != EXPECTED_ARS_ADAPTER_VERSION
         or _skill_metadata_version(root / "SKILL.md") != EXPECTED_ARS_ADAPTER_VERSION
     ):
-        raise IntegrationLockError("external ARS adapter version identities disagree")
+        raise IntegrationLockError("bundled ARS adapter version identities disagree")
     repository_rows = manifest.get("source_repositories")
     if not isinstance(repository_rows, list):
-        raise IntegrationLockError("external ARS source repository identities are missing")
-    external_commits = {
+        raise IntegrationLockError("bundled ARS source repository identities are missing")
+    bundled_commits = {
         row.get("name"): row.get("commit") for row in repository_rows if isinstance(row, dict)
     }
     source_bindings = (
@@ -999,14 +999,14 @@ def _validate_external_ars(
         _source_binding(_component(source_manifest, "experiment-agent"), "experiment-agent"),
     )
     if any(
-        external_commits.get(item.component_id) != item.commit for item in source_bindings
+        bundled_commits.get(item.component_id) != item.commit for item in source_bindings
     ):
-        raise IntegrationLockError("external ARS commits do not match the pinned source identities")
+        raise IntegrationLockError("bundled ARS commits do not match the pinned source identities")
     ars_root = root / "ars"
     try:
-        return ExternalARSBinding(
-            dependency_model="external-exact-installation",
-            bundled=False,
+        return ARSBinding(
+            dependency_model="bundled-pinned-adapter",
+            bundled=True,
             adapter_name="academic-research-suite",
             adapter_version="0.1.20",
             adapter_tree_sha256=_tree_sha256(root, ignore_runtime_caches=True),
@@ -1019,7 +1019,7 @@ def _validate_external_ars(
             source_repositories=source_bindings,
         )
     except ValidationError as error:
-        raise IntegrationLockError(f"external ARS identity is invalid: {error}") from error
+        raise IntegrationLockError(f"bundled ARS identity is invalid: {error}") from error
 
 
 def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
@@ -1059,7 +1059,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     if any(
         name.startswith(("ars/", "academic_research_suite/")) for name in members
     ):
-        raise IntegrationLockError("ARW wheel silently bundles the external ARS dependency")
+        raise IntegrationLockError("ARW wheel unexpectedly includes the standalone ARS runtime")
     if "arw/integration_lock.py" not in members:
         raise IntegrationLockError("ARW wheel omits the integration-lock runtime")
     metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
@@ -1453,22 +1453,20 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
 def build_integration_lock(
     *,
     stage_root: Path,
-    external_ars_root: Path,
     codex_launcher: Path,
     codex_native_binary: Path,
     host_canary_evidence: Path,
 ) -> IntegrationLock:
-    """Build a lock only after all exact inputs can be independently verified."""
+    """Build a lock from the stage's bundled ARS bytes.
+
+    The staged ``skills/academic-research-suite`` tree is the only ARS input.
+    """
 
     stage_root = _safe_root(stage_root, label="stage")
-    if (stage_root / "skills/academic-research-suite").exists():
-        raise IntegrationLockError(
-            "stage silently bundles ARS despite the external dependency model"
-        )
     source_path = _regular_file_under(stage_root, "vendor/source-manifest.json")
     source_manifest = _read_object(source_path, label="source manifest")
     arw_runtime = _validate_arw_runtime(stage_root)
-    ars = _validate_external_ars(external_ars_root, source_manifest)
+    ars = _validate_bundled_ars(stage_root, source_manifest)
     file_base = _validate_file_base(stage_root, source_manifest)
     host = observe_codex_host(codex_launcher, codex_native_binary)
     if host.cli_version != EXPECTED_CODEX_CLI_VERSION:
@@ -1481,7 +1479,7 @@ def build_integration_lock(
     license_binding = _validate_license(stage_root)
     return IntegrationLock(
         schema_version="arw.integration-lock.v1",
-        dependency_model="external-exact-installation",
+        dependency_model="bundled-pinned-adapter",
         arw_runtime=arw_runtime,
         ars=ars,
         file_base=file_base,
@@ -1548,7 +1546,6 @@ def verify_integration_lock(
     lock: IntegrationLock,
     *,
     stage_root: Path,
-    external_ars_root: Path,
     codex_launcher: Path,
     codex_native_binary: Path,
     host_canary_evidence: Path,
@@ -1557,7 +1554,6 @@ def verify_integration_lock(
 
     observed = build_integration_lock(
         stage_root=stage_root,
-        external_ars_root=external_ars_root,
         codex_launcher=codex_launcher,
         codex_native_binary=codex_native_binary,
         host_canary_evidence=host_canary_evidence,
@@ -1570,7 +1566,7 @@ def verify_integration_lock(
         integration_lock_sha256=hashlib.sha256(lock_bytes).hexdigest(),
         codex_host_tuple_sha256=lock.codex_host.tuple_sha256,
         hook_definition_sha256=lock.hook.definition_sha256,
-        external_ars_tree_sha256=lock.ars.adapter_tree_sha256,
+        ars_tree_sha256=lock.ars.adapter_tree_sha256,
         technical_qualification="PASS",
         release_qualification="BLOCKED",
     )
@@ -1580,7 +1576,6 @@ def load_and_verify_integration_lock(
     path: Path,
     *,
     stage_root: Path,
-    external_ars_root: Path,
     codex_launcher: Path,
     codex_native_binary: Path,
     host_canary_evidence: Path,
@@ -1588,7 +1583,6 @@ def load_and_verify_integration_lock(
     return verify_integration_lock(
         load_integration_lock(path),
         stage_root=stage_root,
-        external_ars_root=external_ars_root,
         codex_launcher=codex_launcher,
         codex_native_binary=codex_native_binary,
         host_canary_evidence=host_canary_evidence,
@@ -1607,6 +1601,7 @@ def integration_lock_schema_document() -> dict[str, object]:
 
 
 __all__ = (
+    "ARSBinding",
     "CodexCredentialPolicy",
     "CodexHostBinding",
     "CodexHostCanaryEvidence",
