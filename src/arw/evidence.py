@@ -19,7 +19,7 @@ ALLOWLISTED_ENVIRONMENT = (
 )
 
 _SIDEcar_SECRET_PATTERN = re.compile(
-    r"(?i)(api[_-]?key|access[_-]?token|password|passwd|secret|authorization|bearer|private[_-]?key|sk-[a-z0-9]+)"
+    r"(?i)(api[_-]?key|access[_-]?token|password|passwd|secret|authorization|bearer|private[_-]?key|\bsk-[a-z0-9]+)"
 )
 
 
