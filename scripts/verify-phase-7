@@ -61,7 +61,7 @@ def _expected_command_argv(name: str) -> list[str]:
         # concrete stage/lock roots used by this invocation.
         return ["./scripts/stage-plugin", "--stage-root", "<stage>", "--validate-only", "--integration-lock", "<lock>"]
     if name == "phase7-nonhost":
-        return [str(PYTHON), "-m", "pytest", "-q", "-m", "not", "codex_host"]
+        return [str(PYTHON), "-m", "pytest", "-q", "-m", "not codex_host"]
     if name == "phase7-host-canary":
         return [str(PYTHON), "-m", "pytest", "-q", "tests/staged/test_phase7_qualification.py::test_exact_stage_inventory_sbmom_build_identity_and_host_lock", "tests/staged/test_phase7_qualification.py::test_official_hook_definition_is_observational_and_parity_inputs_are_present"]
     raise KeyError(name)
