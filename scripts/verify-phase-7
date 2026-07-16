@@ -71,6 +71,7 @@ REQUIRED_COMMAND_NAMES = (
     "phase7-host-canary",
 )
 _VALIDATION_TOKEN = object()
+_COMMAND_TOKEN = object()
 
 
 def _expected_command_argv(name: str) -> list[str]:
@@ -204,7 +205,9 @@ class ValidatedCommandReceipt(dict[str, Any]):
 
     __slots__ = ("result_path",)
 
-    def __init__(self, record: dict[str, Any], result_path: Path) -> None:
+    def __init__(self, record: dict[str, Any], result_path: Path, *, _token: object | None = None) -> None:
+        if _token is not _COMMAND_TOKEN:
+            raise TypeError("command receipts are verifier-owned")
         super().__init__(record)
         self.result_path = result_path
 
@@ -443,7 +446,7 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     write_json(command_root / "result.json", record)
     if result.returncode != 0:
         raise VerificationError(f"{name} failed with exit {result.returncode}")
-    return ValidatedCommandReceipt(record, command_root / "result.json")
+    return ValidatedCommandReceipt(record, command_root / "result.json", _token=_COMMAND_TOKEN)
 
 
 def _require_file(path: Path, label: str) -> Path:
