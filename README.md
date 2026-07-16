@@ -87,13 +87,10 @@ only and cannot qualify the route:
 
 ```bash
 ./scripts/stage-plugin --clean --stage-root build/stage/bootstrap
-./scripts/create-marketplace
-codex plugin marketplace add ./build/marketplace --json
-codex plugin add academic-research-workbench@arw-local --json
 ```
 
-`create-marketplace` copies the exact staged tree and writes the local
-marketplace manifest. For host qualification, use
+This bootstrap stage is only the deterministic input for host qualification;
+do not install it. For host qualification, use
 `./scripts/smoke-staged-plugin` so the marketplace, fresh homes, hook trust,
 and installed inventory are isolated and recorded together.
 
@@ -120,6 +117,18 @@ with the fail-closed helper (the launcher/native paths are part of the lock):
   --stage-root build/stage/qualified \
   --evidence-root build/evidence/qualified
 ```
+
+Only after that command succeeds, create and install the qualified marketplace
+copy:
+
+```bash
+./scripts/create-marketplace --stage-root build/stage/qualified
+codex plugin marketplace add ./build/marketplace --json
+codex plugin add academic-research-workbench@arw-local --json
+```
+
+`create-marketplace` copies the exact staged tree and writes the local
+marketplace manifest. Do not install an unlocked bootstrap stage.
 
 The helper never fabricates a canary or silently upgrades a missing lock. A
 qualified stage still reports `release_qualification: BLOCKED` until the
