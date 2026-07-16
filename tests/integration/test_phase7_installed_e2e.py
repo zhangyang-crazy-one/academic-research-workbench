@@ -62,8 +62,17 @@ def _publish_once(path: Path, payload: object) -> None:
     encoded = canonical_json_bytes(payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        assert path.read_bytes() == encoded, f"retained receipt drifted: {path}"
-        return
+        if path.read_bytes() == encoded:
+            return
+        # Evidence is append-only.  A later plan may legitimately produce a
+        # new stage/lock identity; retain the old receipt and publish the new
+        # canonical bytes under a content-addressed sibling instead of
+        # overwriting or failing the next qualification run.
+        suffix = hashlib.sha256(encoded).hexdigest()[:16]
+        path = path.with_name(f"{path.stem}-{suffix}{path.suffix}")
+        if path.exists():
+            assert path.read_bytes() == encoded, f"retained receipt drifted: {path}"
+            return
     path.write_bytes(encoded)
 
 
