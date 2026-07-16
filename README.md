@@ -21,6 +21,25 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
+### Personal non-commercial research use
+
+The maintainer's intended use of this repository is personal, non-commercial
+academic research. In the CC BY-NC 4.0 license, “NonCommercial” means a use
+that is not primarily intended for or directed toward commercial advantage or
+monetary compensation ([license text](https://creativecommons.org/licenses/by-nc/4.0/legalcode),
+[Creative Commons FAQ](https://creativecommons.org/faq/)). This project-use
+statement is not a relicensing of the ARS-derived material and is not legal
+advice. It does not authorize commercial use, imply endorsement, or remove the
+obligation to preserve attribution, license notices, and modification notices
+when sharing ARS-derived material. Commercial use or a materially different
+distribution context requires separate permission from the applicable rights
+holder.
+
+The source repository is public for this declared personal research purpose.
+The qualified-plugin and tagged-release workflows remain fail-closed and
+continue to require their machine-verifiable evidence; a README statement
+alone does not turn an unqualified stage into a release artifact.
+
 The Science Workbench paper AST/export remains a v2/deferred boundary; ARW
 does not claim to replace a complete research-to-paper workflow.
 
