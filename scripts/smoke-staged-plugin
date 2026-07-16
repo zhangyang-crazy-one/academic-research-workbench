@@ -495,6 +495,52 @@ def install_exact_stage(
     }
 
 
+def materialize_stage_if_missing(
+    stage_root: Path,
+    evidence: Path,
+    *,
+    cachebuster: str | None = None,
+) -> bool:
+    """Create a diagnostic stage only when the caller did not provide one.
+
+    An existing stage is an immutable canary input.  In particular, a
+    qualified stage may carry an integration lock that must survive every
+    smoke mode byte-for-byte.
+    """
+    if stage_root.exists():
+        if not stage_root.is_dir():
+            raise CanaryDefect("stage root is not a directory")
+        return False
+
+    command = [
+        str(PROJECT_ROOT / "scripts/stage-plugin"),
+        "--clean",
+        "--stage-root",
+        str(stage_root),
+    ]
+    recorded_command = [
+        "<repository-root>/scripts/stage-plugin",
+        "--clean",
+        "--stage-root",
+        "<stage-root>",
+    ]
+    if cachebuster is not None:
+        command.extend(["--cachebuster", cachebuster])
+        recorded_command.extend(["--cachebuster", cachebuster])
+    stage_evidence = evidence / "stage-evidence"
+    command.extend(["--evidence-root", str(stage_evidence)])
+    write_command(evidence / "command.json", recorded_command)
+    staged = run_recorded(
+        command,
+        cwd=PROJECT_ROOT,
+        environment=os.environ.copy(),
+        evidence=evidence,
+    )
+    if staged.returncode != 0:
+        raise CanaryDefect("diagnostic stage materialization failed")
+    return True
+
+
 def offline_installed_command(
     installed: dict[str, Any],
     arguments: list[str],
@@ -638,36 +684,11 @@ def run_mcp(args: argparse.Namespace) -> int:
     shutil.rmtree(fresh_root, ignore_errors=True)
     evidence_root.mkdir(parents=True)
     cachebuster = f"mcp-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{os.getpid()}"
-    stage_build = evidence_root / "stage-build"
-    stage_evidence = stage_build / "stage-evidence"
-    write_command(
-        stage_build / "command.json",
-        [
-            "<repository-root>/scripts/stage-plugin",
-            "--clean",
-            "--stage-root",
-            "<stage-root>",
-            "--cachebuster",
-            cachebuster,
-        ],
+    materialize_stage_if_missing(
+        stage_root,
+        evidence_root / "stage-build",
+        cachebuster=cachebuster,
     )
-    staged = run_recorded(
-        [
-            str(PROJECT_ROOT / "scripts/stage-plugin"),
-            "--clean",
-            "--stage-root",
-            str(stage_root),
-            "--cachebuster",
-            cachebuster,
-            "--evidence-root",
-            str(stage_evidence),
-        ],
-        cwd=PROJECT_ROOT,
-        environment=os.environ.copy(),
-        evidence=stage_build,
-    )
-    if staged.returncode != 0:
-        raise CanaryDefect("clean MCP restage failed")
 
     installed = install_exact_stage(
         stage_root,
@@ -842,21 +863,7 @@ def run_version(args: argparse.Namespace) -> int:
     shutil.rmtree(evidence_root, ignore_errors=True)
     shutil.rmtree(fresh_root, ignore_errors=True)
     evidence_root.mkdir(parents=True)
-    staged = run_recorded(
-        [
-            str(PROJECT_ROOT / "scripts/stage-plugin"),
-            "--clean",
-            "--stage-root",
-            str(stage_root),
-            "--evidence-root",
-            str(evidence_root / "stage"),
-        ],
-        cwd=PROJECT_ROOT,
-        environment=os.environ.copy(),
-        evidence=evidence_root / "stage-build",
-    )
-    if staged.returncode != 0:
-        raise CanaryDefect("clean version restage failed")
+    materialize_stage_if_missing(stage_root, evidence_root / "stage-build")
     installed = install_exact_stage(stage_root, fresh_root, evidence_root, copy_auth=False)
     version_dir = evidence_root / "plugin/version"
     reported = offline_installed_command(installed, ["version", "--json"], version_dir)
@@ -1345,6 +1352,12 @@ def run_route(args: argparse.Namespace) -> int:
         raise CanaryDefect("refusing unsafe stage or fresh-home root")
     evidence_root.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(fresh_root, ignore_errors=True)
+    cachebuster = f"route-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{os.getpid()}"
+    materialize_stage_if_missing(
+        stage_root,
+        evidence_root / "stage-build",
+        cachebuster=cachebuster,
+    )
     start = next_attempt_number(evidence_root)
     last_reason = "no attempts executed"
 
@@ -1352,49 +1365,6 @@ def run_route(args: argparse.Namespace) -> int:
         attempt = f"{number:03d}"
         attempt_dir = evidence_root / "plugin/route/attempts" / attempt
         attempt_fresh = fresh_root / f"attempt-{attempt}"
-        cachebuster = (
-            f"route-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{attempt}-{os.getpid()}"
-        )
-        stage_build = attempt_dir / "stage-build"
-        write_command(
-            stage_build / "command.json",
-            [
-                "<repository-root>/scripts/stage-plugin",
-                "--clean",
-                "--stage-root",
-                "<stage-root>",
-                "--cachebuster",
-                cachebuster,
-            ],
-        )
-        staged = run_recorded(
-            [
-                str(PROJECT_ROOT / "scripts/stage-plugin"),
-                "--clean",
-                "--stage-root",
-                str(stage_root),
-                "--cachebuster",
-                cachebuster,
-            ],
-            cwd=PROJECT_ROOT,
-            environment=os.environ.copy(),
-            evidence=stage_build,
-        )
-        if staged.returncode != 0:
-            classification = {
-                "attempt": attempt,
-                "classification": "non-authentication-defect",
-                "hook_status": "not-probed",
-                "host_status": None,
-                "installed_identity_sha256": None,
-                "installed_skill_invoked": False,
-                "reason": "clean restage failed",
-                "route_result": None,
-            }
-            write_json(attempt_dir / "classification.json", classification)
-            last_reason = str(classification["reason"])
-            continue
-
         try:
             installed = install_exact_stage(
                 stage_root,

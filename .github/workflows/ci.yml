@@ -68,6 +68,12 @@ jobs:
           tests/integration/test_orchestration_panels.py
           tests/integration/test_orchestration_replay.py
           tests/integration/test_phase4_verifier.py
+      - name: Run bundled ARS self-tests
+        working-directory: skills/academic-research-suite/ars
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: uv run --frozen --all-groups --project ../../.. python -m pytest -q
 
   package-boundary:
     name: Wheel and source archive boundary

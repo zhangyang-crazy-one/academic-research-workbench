@@ -55,6 +55,43 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def tree_digest(root: Path) -> str:
+    """Hash a staged source tree with the integration-lock wire algorithm."""
+    ignored_directories = {
+        ".pytest_cache",
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+    }
+    ignored_names = {".DS_Store"}
+    files: list[Path] = []
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if any(part in ignored_directories for part in relative.parts):
+            continue
+        if path.name in ignored_names or path.suffix in {".pyc", ".pyo"}:
+            continue
+        if path.is_symlink():
+            fail(f"bundled artifact tree contains a symlink: {relative.as_posix()}")
+        if path.is_file():
+            files.append(path)
+        elif not path.is_dir():
+            fail(f"bundled artifact tree contains a non-file entry: {relative.as_posix()}")
+    if not files:
+        fail(f"bundled artifact tree is empty: {root}")
+    aggregate = hashlib.sha256()
+    for path in sorted(files, key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        executable = "1" if path.stat().st_mode & 0o111 else "0"
+        aggregate.update(relative.encode("utf-8"))
+        aggregate.update(b"\0")
+        aggregate.update(executable.encode("ascii"))
+        aggregate.update(b"\0")
+        aggregate.update(digest(path).encode("ascii"))
+        aggregate.update(b"\n")
+    return aggregate.hexdigest()
+
+
 def read_json(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -331,6 +368,23 @@ def generate_sbom(
             "version": "1",
             "hashes": [{"alg": "SHA-256", "content": digest(path)}],
         }
+    suite_root = PROJECT_ROOT / "skills/academic-research-suite"
+    adapter_version = (suite_root / "VERSION").read_text(encoding="ascii").strip()
+    bundled_artifacts = {
+        "skills/academic-research-suite": tree_digest(suite_root),
+        "skills/academic-research-suite/ars": tree_digest(suite_root / "ars"),
+        "skills/academic-research-suite/SKILL.md": digest(suite_root / "SKILL.md"),
+        "skills/academic-research-suite/manifest.json": digest(suite_root / "manifest.json"),
+        "skills/academic-research-suite/VERSION": digest(suite_root / "VERSION"),
+    }
+    for relative, sha256 in bundled_artifacts.items():
+        components[f"artifact:{relative}"] = {
+            "type": "file",
+            "bom-ref": f"artifact:{relative}",
+            "name": relative,
+            "version": adapter_version,
+            "hashes": [{"alg": "SHA-256", "content": sha256}],
+        }
     file_base = next(item for item in manifest["components"] if item["id"] == "file-base")
     for legal_input in file_base["legal_inputs"]:
         reference = f"file-base-legal:{legal_input['path']}"
@@ -352,16 +406,27 @@ def create_notices(
     manifest: dict[str, Any],
     wheelhouse: dict[str, Any],
 ) -> None:
+    preserved_notices = upstream_notices.read_text(encoding="utf-8").rstrip("\n") + "\n"
     sections = [
         "# Academic Research Workbench Third-Party Notices\n",
         "The collective plugin has mixed licensing. Component identities remain separate.\n",
         "## Source components\n",
     ]
-    for component in manifest["components"]:
-        sections.append(
-            f"- `{component['id']}` `{component['version']}` — "
-            f"`{component['licenses'][0]['spdx']}`; source `{component['source_path']}`.\n"
-        )
+    components = {item["id"]: item for item in manifest["components"]}
+    ars = components["academic-research-skills"]
+    experiment = components["experiment-agent"]
+    file_base = components["file-base"]
+    sections.extend(
+        [
+            f"- `academic-research-skills` `{ars['version']}` — `{ars['licenses'][0]['spdx']}`; "
+            "bundled adapter source `skills/academic-research-suite/ars/`.\n",
+            f"- `experiment-agent` `{experiment['version']}` — `{experiment['licenses'][0]['spdx']}`; "
+            "bundled and reshaped inside `skills/academic-research-suite/ars/`.\n",
+            f"- `codebase-memory-mcp` (ARW `file-base` adapter) `{file_base['version']}` — "
+            f"`{file_base['licenses'][0]['spdx']}`;\n"
+            "  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.\n",
+        ]
+    )
     sections.append("\n## Ordered local patches\n")
     for patch in manifest["patches"]:
         sections.append(f"- `{patch['path']}` — SHA-256 `{patch['sha256']}`.\n")
@@ -372,7 +437,7 @@ def create_notices(
     sections.extend(
         [
             "\n## Preserved file-base generated notices\n\n",
-            upstream_notices.read_text(encoding="utf-8"),
+            preserved_notices,
         ]
     )
     (PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").write_text("".join(sections), encoding="utf-8")

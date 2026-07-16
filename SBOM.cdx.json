@@ -33,66 +33,6 @@
       "version": "1"
     },
     {
-      "bom-ref": "artifact:skills/academic-research-suite",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "af72983ab789924f9bbeabd7197ebc4b0c0e87e91748ef82bcc37f28e0addbd0"
-        }
-      ],
-      "name": "skills/academic-research-suite",
-      "type": "file",
-      "version": "0.1.20"
-    },
-    {
-      "bom-ref": "artifact:skills/academic-research-suite/ars",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "1926cf9a9c7b8988f5257af9d83d9bac091ef024c05769f913914f6b3f2e8bf9"
-        }
-      ],
-      "name": "skills/academic-research-suite/ars",
-      "type": "file",
-      "version": "0.1.20"
-    },
-    {
-      "bom-ref": "artifact:skills/academic-research-suite/SKILL.md",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "b390280444e66149a0557a3c7f5309429f100a3bfece6bcc2427f4de721b6a23"
-        }
-      ],
-      "name": "skills/academic-research-suite/SKILL.md",
-      "type": "file",
-      "version": "0.1.20"
-    },
-    {
-      "bom-ref": "artifact:skills/academic-research-suite/manifest.json",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "4b41422c4eec1f4d14f796b334313a0c9d5950ced7dd776891af4a2b64277437"
-        }
-      ],
-      "name": "skills/academic-research-suite/manifest.json",
-      "type": "file",
-      "version": "0.1.20"
-    },
-    {
-      "bom-ref": "artifact:skills/academic-research-suite/VERSION",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "a93167bc7b1e6cf2ffcbba0f51fea8122c7e61252cefe1f5152bee90beacd8b4"
-        }
-      ],
-      "name": "skills/academic-research-suite/VERSION",
-      "type": "file",
-      "version": "0.1.20"
-    },
-    {
       "bom-ref": "artifact:build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
       "hashes": [
         {
@@ -175,6 +115,66 @@
       "name": "schemas/v1/source-manifest.schema.json",
       "type": "file",
       "version": "1"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "af778bc9086dfb32252b452c1078dd5ad94f626e4685326677ee3171561c187c"
+        }
+      ],
+      "name": "skills/academic-research-suite",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/SKILL.md",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b390280444e66149a0557a3c7f5309429f100a3bfece6bcc2427f4de721b6a23"
+        }
+      ],
+      "name": "skills/academic-research-suite/SKILL.md",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/VERSION",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a93167bc7b1e6cf2ffcbba0f51fea8122c7e61252cefe1f5152bee90beacd8b4"
+        }
+      ],
+      "name": "skills/academic-research-suite/VERSION",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/ars",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "bc4b65b182e6a6ba6ce88c68825a4dc76383eeb771d75bedc2b7ff778aa36230"
+        }
+      ],
+      "name": "skills/academic-research-suite/ars",
+      "type": "file",
+      "version": "0.1.20"
+    },
+    {
+      "bom-ref": "artifact:skills/academic-research-suite/manifest.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b4d5a3b3d7e47f3c5ca25e6801db340f41f6266833058e1ac01903f0deb15e2c"
+        }
+      ],
+      "name": "skills/academic-research-suite/manifest.json",
+      "type": "file",
+      "version": "0.1.20"
     },
     {
       "bom-ref": "artifact:vendor/mcp-manifest.json",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a67a59c32e068a6830ac84353fc34540debce19f44803e02a31ded501221a14d"
+          "content": "e4146fed9ccc00dd0177ca0e61170c609dafa859cfcc3b9179c84245a1b8acb1"
         }
       ],
       "licenses": [
