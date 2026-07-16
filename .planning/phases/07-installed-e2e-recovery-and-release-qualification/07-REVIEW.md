@@ -256,7 +256,8 @@ not clear the legal release gate.
 
 ## Final remediation review (2026-07-16)
 
-The residual findings are closed in `70fbe9d`, `a1253eb`, and `f1fe630`:
+The residual findings are closed in `70fbe9d`, `a1253eb`, `f1fe630`, and
+`ef3974e`:
 
 - Phase 5 graph-control, stage, inventory, build-identity, and verdict bytes,
   plus the Phase 4.1 retained corpus, are locked to the qualified digests.
@@ -264,6 +265,8 @@ The residual findings are closed in `70fbe9d`, `a1253eb`, and `f1fe630`:
   canonical verifier-owned result/log files, and dirty-worktree provenance.
 - Fault sidecars replay against the supplied run root by default; detached
   publication is an explicit fixture-only opt-in.
+- Verifier subprocesses use fresh verifier-owned `HOME` and `CODEX_HOME`
+  directories, so host credential/profile files are not exposed.
 
 Focused verification after remediation:
 
