@@ -15,6 +15,7 @@ SCRIPT = Path(__file__).resolve()
 DEFAULT_PROFILE = SCRIPT.parents[1] / "references" / "annual_venue_profiles.json"
 DATE_STATUSES = {"confirmed", "provisional", "not_announced"}
 PROFILE_KINDS = {"review_system", "publication_venue"}
+MILESTONE_SOURCE_AUTHORITIES = {"official_venue_year", "official_review_system"}
 STYLE_EXEMPLAR_ROLES = {
     "direct_writing_and_method_exemplar",
     "supporting_exemplar",
@@ -44,15 +45,22 @@ def _source_refs(
         for key, child in value.items():
             child_path = f"{path}.{key}"
             if key == "source_id":
-                if child not in known_sources:
+                if not isinstance(child, str):
+                    errors.append(f"{child_path}: must be a string")
+                elif child not in known_sources:
                     errors.append(f"{child_path}: unknown source {child!r}")
             elif key == "source_ids":
                 if not isinstance(child, list) or not child:
                     errors.append(f"{child_path}: must be a non-empty list")
                 else:
-                    for source_id in child:
-                        if source_id not in known_sources:
-                            errors.append(f"{child_path}: unknown source {source_id!r}")
+                    for index, source_id in enumerate(child):
+                        source_path = f"{child_path}[{index}]"
+                        if not isinstance(source_id, str):
+                            errors.append(f"{source_path}: must be a string")
+                        elif source_id not in known_sources:
+                            errors.append(
+                                f"{source_path}: unknown source {source_id!r}"
+                            )
             else:
                 _source_refs(child, child_path, known_sources, errors)
     elif isinstance(value, list):
@@ -94,14 +102,19 @@ def _validate_milestones(
         if milestone_time is not None and not milestone.get("timezone"):
             errors.append(f"{milestone_path}.timezone: required when time is present")
         source_id = milestone.get("source_id")
+        if not isinstance(source_id, str):
+            errors.append(f"{milestone_path}.source_id: must be a string")
+            continue
         source = sources.get(source_id)
-        if source is None:
+        if not isinstance(source, dict):
             errors.append(f"{milestone_path}.source_id: unknown source {source_id!r}")
-        elif status in {"confirmed", "provisional"} and not str(
-            source.get("authority", "")
-        ).startswith("official_"):
+        elif (
+            status in {"confirmed", "provisional"}
+            and source.get("authority") not in MILESTONE_SOURCE_AUTHORITIES
+        ):
             errors.append(
-                f"{milestone_path}.source_id: dated facts require an official source"
+                f"{milestone_path}.source_id: dated milestones require an official "
+                "venue-year or review-system schedule source"
             )
 
 
@@ -271,7 +284,9 @@ def validate_document(document: dict[str, Any]) -> list[str]:
                 )
                 if isinstance(source_id, str):
                     exemplar_ids.append(source_id)
-                source = sources.get(source_id, {})
+                source = (
+                    sources.get(source_id, {}) if isinstance(source_id, str) else {}
+                )
                 if source.get("authority") != "official_published_paper":
                     errors.append(
                         f"style_learning.exemplars[{index}]: expected an official published-paper source"

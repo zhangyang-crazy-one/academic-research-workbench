@@ -170,7 +170,38 @@ def test_validator_rejects_nonofficial_deadline_source() -> None:
     document["venues"][0]["milestones"]["commitment"]["source_id"] = "ucas-ccf-2026-pdf"
 
     errors = validator.validate_document(document)
-    assert any("dated facts require an official source" in error for error in errors)
+    assert any("dated milestones require an official" in error for error in errors)
+
+
+def test_validator_rejects_published_paper_as_deadline_source() -> None:
+    validator = _load_validator()
+    document = copy.deepcopy(_document())
+    document["venues"][0]["milestones"]["commitment"]["source_id"] = (
+        "coling-2025-zero-shot-ontology"
+    )
+
+    errors = validator.validate_document(document)
+    assert any(
+        "venue-year or review-system schedule source" in error for error in errors
+    )
+
+
+def test_validator_cli_reports_non_string_source_ids(tmp_path: Path) -> None:
+    document = copy.deepcopy(_document())
+    document["venues"][0]["source_ids"] = [{}]
+    malformed_profile = tmp_path / "malformed-venue-profiles.json"
+    malformed_profile.write_text(json.dumps(document), encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR_PATH), str(malformed_profile), "--json"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert "$.venues[0].source_ids[0]: must be a string" in payload["errors"]
 
 
 def test_validator_rejects_silent_naacl_date_invention() -> None:
