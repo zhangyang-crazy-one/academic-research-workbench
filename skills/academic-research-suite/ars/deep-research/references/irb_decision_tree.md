@@ -1,40 +1,44 @@
-# IRB Decision Tree — Human Subjects Research Ethics Review Guide
+# Human-Subjects Context Navigation Aid — Institutional Determination Required
 
 ## Purpose
-IRB (Institutional Review Board) ethics review decision tree and Taiwan process guide. Used by the ethics_review_agent to determine whether research involves human subjects, and by the research_architect_agent to plan IRB review during methodology design.
+This retained IRB/Taiwan material helps the ethics_review_agent and research_architect_agent collect protocol facts and prepare questions for the responsible institution. It is not an authorization tool and does not determine a review pathway.
+
+> **Temporary authority state (#665; correction/migration tracked in #680/#666):** The category names, examples, and Taiwan process notes below come from different authority contexts. They are visibly retained for migration, not presented as universal rules. ARS output must use `institutional determination required`; applicability, requirements, and timing come from the responsible institution and selected authority profile.
 
 ---
 
-## 1. Human Subjects Research Determination Decision Tree
+## 1. Human-Subjects Context Questions
 
 ```
 Does your research collect, use, or analyze data from humans?
 │
-├── No → Does not involve human subjects, no IRB review needed
+├── No → Record the basis and ask whether institutional policy still requires a determination
 │         (e.g., pure theoretical research, literature review, secondary analysis of public statistics)
 │
 └── Yes → Is the data personally identifiable?
           │
           ├── No → Is the data publicly available public data?
           │        │
-          │        ├── Yes → Typically exempt from review
-          │        │         But must still submit an exempt review application to IRB for confirmation
+          │        ├── Yes → Record public/de-identified status as a candidate fact
+          │        │         Institutional determination is still required where applicable
           │        │
-          │        └── No → Proceed to "Review Level Determination" below
+          │        └── No → Prepare unresolved pathway questions for the institution
           │
           └── Yes → Does the research involve direct interaction with subjects?
                     │
                     ├── No → Only uses existing data/specimens
                     │        │
-                    │        ├── Data already de-identified → May apply for exempt review
-                    │        └── Data contains identifiable information → Expedited or full board review
+                    │        ├── Data already de-identified → Record de-identification and provenance facts
+                    │        └── Data contains identifiable information → Record access, consent, and privacy facts
                     │
-                    └── Yes → Proceed to "Review Level Determination" below
+                    └── Yes → Prepare interaction, risk, and consent facts for institutional determination
 ```
 
 ---
 
-## 2. Three-Level Review System
+## 2. Retained Three-Level Convention Examples (Non-Authoritative)
+
+The following labels are retained pending #680 migration. They are not universal, and ARS must not choose among them.
 
 ### 2.1 Exempt Review
 
@@ -97,7 +101,7 @@ Does your research collect, use, or analyze data from humans?
    ↓
 2. Determine whether human subjects are involved
    ↓ (Involved)
-3. Confirm review level (Exempt / Expedited / Full Board)
+3. Submit candidate-pathway facts for institutional determination
    ↓
 4. Submit application to institutional IRB
    - Research proposal
@@ -105,7 +109,7 @@ Does your research collect, use, or analyze data from humans?
    - Questionnaire/interview guide
    - Researcher qualification documentation (CITI or equivalent training)
    ↓
-5. IRB review (timeline: Expedited 2-4 weeks, Full Board 4-8 weeks)
+5. Institutional review (obtain the current process estimate directly from the institution)
    ↓
 6. Research may only begin after receiving approval letter
    ↓

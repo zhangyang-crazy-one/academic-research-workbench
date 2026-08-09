@@ -1,7 +1,7 @@
 {
   "components": [
     {
-      "git_tree": "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
+      "git_tree": "571a3ae0fa5316340f34febf9b467807dc6b3739",
       "id": "academic-research-skills",
       "legal_inputs": [
         {
@@ -22,14 +22,14 @@
           "spdx": "CC-BY-NC-4.0"
         }
       ],
-      "revision": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
+      "revision": "5d9b1f288457a3b2b2f1df1e915c883e36ea9a58",
       "source_path": "vendor/sources/academic-research-skills",
-      "tree_sha256": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+      "tree_sha256": "4fef363197878e5ace5dfe807c5cedcb43437b1984e6b3cc85bcc327ba5171bd",
       "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
-      "git_tree": "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
+      "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
       "id": "experiment-agent",
       "legal_inputs": [
         {
@@ -45,11 +45,11 @@
           "spdx": "CC-BY-NC-4.0"
         }
       ],
-      "revision": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
+      "revision": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
       "source_path": "vendor/sources/experiment-agent",
-      "tree_sha256": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+      "tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
       "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
-      "version": "pinned"
+      "version": "1.1.0"
     },
     {
       "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
@@ -1067,7 +1067,7 @@
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "6c107e43de558dd09f09792605920a033ee60ad149cf03950629feb66eaa29a2"
+    "sha256": "8f0872e7e5da9ef20446b516f0485ae1db3e6d8db22391249a4e3064cfdaaa6e"
   },
   "schema_version": "1.0.0"
 }

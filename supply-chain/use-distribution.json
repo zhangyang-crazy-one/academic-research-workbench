@@ -9,17 +9,17 @@
     {
       "path": "vendor/source-manifest.json",
       "purpose": "technical-provenance-only",
-      "sha256": "8e578a1958220b5ac394e77324116c61322932dd87e263f787577c773f4d28d1"
+      "sha256": "9f1f71d5d490f892e183ba3e058f8048917f09be517dfeb0206935c808b9bb98"
     },
     {
       "path": "SBOM.cdx.json",
       "purpose": "technical-provenance-only",
-      "sha256": "908159729d2f0329788c496cf9defd6877969949b6e193f9afac0c615584a8a1"
+      "sha256": "8a6c1cc8010072c6e94c21a4b8ccf6492a96cc99056b8467025ddb76c9e4e821"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
       "purpose": "technical-provenance-only",
-      "sha256": "ea28e1756a13ea90765eb199acf08a57532d93bdd2ae3ef51d229d9dffb74f7e"
+      "sha256": "ce505e55c5ba3c4e5b581131a89607cf2d9eacf78a9feaeafe9757df18f1df3e"
     }
   ],
   "intended_use": {
@@ -27,6 +27,6 @@
   },
   "permission_references": [],
   "private_repository_is_noncommercial_evidence": false,
-  "repository_visibility": "private",
+  "repository_visibility": "public",
   "schema_version": "1.0.0"
 }

@@ -1,8 +1,8 @@
 interface:
-  display_name: "Academic Research Suite"
-  short_description: "ARS papers, audits, source checks, and academic figures"
+  display_name: "ARS-Codex"
+  short_description: "Codex-native research workflows plus ars-* aliases"
   brand_color: "#2563EB"
-  default_prompt: "Use $academic-research-suite to design a non-boxed academic main figure for my research paper."
+  default_prompt: "Use $academic-research-suite with ars-plan to map my paper structure and missing evidence."
 
 policy:
   allow_implicit_invocation: true

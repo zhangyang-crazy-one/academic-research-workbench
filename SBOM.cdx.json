@@ -73,7 +73,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e46e33e9f3db3f03050878f1a19f3be86bb032c15b354afd909460722f4073eb"
+          "content": "dc3031902666c25a3f070f05acf75ca55387c4019a641ed79073d7519ae4fc42"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -121,60 +121,60 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "af778bc9086dfb32252b452c1078dd5ad94f626e4685326677ee3171561c187c"
+          "content": "ce309b225a27d18a176f926be54f4c2f51a84e40f1bbcbf9d865f00b470b994c"
         }
       ],
       "name": "skills/academic-research-suite",
       "type": "file",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/SKILL.md",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b390280444e66149a0557a3c7f5309429f100a3bfece6bcc2427f4de721b6a23"
+          "content": "741a1a2d1a8b4a9c5df355a49b07a80d61bc96469c5b0441828e6f7ed1b2dd10"
         }
       ],
       "name": "skills/academic-research-suite/SKILL.md",
       "type": "file",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/VERSION",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a93167bc7b1e6cf2ffcbba0f51fea8122c7e61252cefe1f5152bee90beacd8b4"
+          "content": "19408c72bbb91a1f1e134b12c4366af698302c129d3a789800be552c92e77dc7"
         }
       ],
       "name": "skills/academic-research-suite/VERSION",
       "type": "file",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/ars",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "bc4b65b182e6a6ba6ce88c68825a4dc76383eeb771d75bedc2b7ff778aa36230"
+          "content": "073bd7983f72a20b3baa11a02406c40765ff39dabfe00b09751ef71fd2da4527"
         }
       ],
       "name": "skills/academic-research-suite/ars",
       "type": "file",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/manifest.json",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b4d5a3b3d7e47f3c5ca25e6801db340f41f6266833058e1ac01903f0deb15e2c"
+          "content": "a48d5b0c08380c9697295a34f98033da4d2d0e14362e9832b414b5aa3b04b099"
         }
       ],
       "name": "skills/academic-research-suite/manifest.json",
       "type": "file",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "artifact:vendor/mcp-manifest.json",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e4146fed9ccc00dd0177ca0e61170c609dafa859cfcc3b9179c84245a1b8acb1"
+          "content": "fde7b49a4e02a13e0725efa0cd80197d305b1e743046c63fb0d61cb3b10f58ca"
         }
       ],
       "licenses": [
@@ -2988,7 +2988,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d"
+          "content": "4fef363197878e5ace5dfe807c5cedcb43437b1984e6b3cc85bcc327ba5171bd"
         }
       ],
       "licenses": [
@@ -3000,7 +3000,7 @@
       ],
       "name": "academic-research-skills",
       "type": "library",
-      "version": "0.1.20"
+      "version": "0.1.25"
     },
     {
       "bom-ref": "source:experiment-agent",
@@ -3013,7 +3013,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82"
+          "content": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae"
         }
       ],
       "licenses": [
@@ -3025,7 +3025,7 @@
       ],
       "name": "experiment-agent",
       "type": "library",
-      "version": "pinned"
+      "version": "1.1.0"
     },
     {
       "bom-ref": "source:file-base",
@@ -3207,7 +3207,7 @@
       "type": "library",
       "version": "0.1.0"
     },
-    "timestamp": "2026-07-13T03:09:21Z",
+    "timestamp": "2026-08-09T02:23:55Z",
     "tools": [
       {
         "name": "uv",
@@ -3216,7 +3216,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:6c107e43-0000-4000-8000-de558dd09f09",
+  "serialNumber": "urn:uuid:8f0872e7-0000-4000-8000-e5da9ef20446",
   "specVersion": "1.5",
   "version": 1
 }

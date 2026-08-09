@@ -1,11 +1,11 @@
 # Claude Code 向け Academic Research Skills
 
-[![Version](https://img.shields.io/badge/version-v3.13.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.13.0)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20696614.svg)](https://doi.org/10.5281/zenodo.20696614)
+[![Version](https://img.shields.io/badge/version-v3.19.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.19.0)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20696614-blue)](https://doi.org/10.5281/zenodo.20696614)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Sponsor](https://img.shields.io/badge/sponsor-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/crucify020v)
 
-[English](README.md) | [简体中文版](README.zh-CN.md) | [繁體中文版](README.zh-TW.md)
+[English](README.md) | [简体中文版](README.zh-CN.md) | [繁體中文版](README.zh-TW.md) | [한국어](README.ko-KR.md)
 
 学術研究のための Claude Code スキル統合スイート。研究から論文公開までの全工程をカバーします。
 
@@ -59,7 +59,11 @@ v3.3 は [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（Song, Song, Pf
 
 **動作確認:** `/ars-plan` を実行して取り組んでいる論文について説明してください — ARS がソクラテス式対話を開始し、章構成をマップします。代わりに単発テストを行うには、`/ars-lit-review "your topic"` を試してください。
 
-**👉 [docs/SETUP.md](docs/SETUP.md)** — 完全ガイド: Claude Code インストール、API キー設定、DOCX/PDF 用のオプション Pandoc/tectonic、クロスモデル検証（`ARS_CROSS_MODEL`）、5 つのインストール方法（Plugin、プロジェクトスキル、グローバルスキル、claude.ai Project、リポジトリクローン）。
+**👉 [docs/SETUP.md](docs/SETUP.md)** — 完全ガイド: Claude Code インストール、API キー設定、DOCX/PDF 用のオプション Pandoc/tectonic、クロスモデル検証（`ARS_CROSS_MODEL`）、6 つのインストール方法（Plugin、プロジェクトスキル、グローバルスキル、claude.ai Project、リポジトリクローン、Claude Science インポート）。
+
+**Claude Science をお使いですか？** 4 つのスキルは直接インポートできます: **Skills → Import from GitHub** で `https://github.com/Imbad0202/academic-research-skills` を貼り付け、**Preview** → **Import 4 skills**（本リポジトリ v3.14.0+ が必要 — インポーターは marketplace manifest に明示されたスキルパスを読み取ります）。インポートはその時点のスナップショットです: ARS の更新後は再インポートしてください。インポートされたスキルは ARS の方法論（研究・執筆・査読プロトコル）を伝えます。Claude Code 固有の仕組み — slash commands、hooks、サブエージェントオーケストレーション — は移行されません。詳細は [docs/SETUP.md](docs/SETUP.md) の Method 5 を参照。
+
+**Pi を使用していますか？** `pi install git:github.com/Imbad0202/academic-research-skills` で、リポジトリ内のコミュニティ管理 wrapper をインストールできます。元の ARS コンテンツを正本として維持し、Pi 固有のオーケストレーションと hook の制限を明記しています。詳細は [`pi/README.md`](pi/README.md) を参照してください。
 
 **Codex CLI を使用していますか?** 代わりに姉妹ディストリビューションをインストールしてください: [`Imbad0202/academic-research-skills-codex`](https://github.com/Imbad0202/academic-research-skills-codex) — 同じワークフローコンテンツ、`ars-*` エイリアスを持つ単一の `$academic-research-suite` スキルとしての Codex ネイティブパッケージング。
 
@@ -78,13 +82,15 @@ v3.3 は [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（Song, Song, Pf
 
 - **Deep Research** — 13 エージェントの研究チーム。ソクラテス式ガイドモード、PRISMA システマティックレビュー、意図検出、対話健全性モニタリング、オプションのクロスモデル DA、Semantic Scholar API 検証付き。
 - **Academic Paper** — 12 エージェントの論文執筆。Style Calibration、Writing Quality Check、LaTeX ハードニング、可視化、改訂コーチング、引用変換、アンチリーケージプロトコル、VLM 図表検証付き。
-- **Academic Paper Reviewer** — 0-100 品質ルーブリックを持つ 7 エージェントの多視点ピアレビュー（EIC + 3 動的レビュアー + Devil's Advocate）、譲歩閾値プロトコル、攻撃強度保持、オプションのクロスモデル DA 批評/キャリブレーション、R&R トレーサビリティマトリクス、read-only 制約。
+- **Academic Paper Reviewer** — 0-100 品質ルーブリックを持つ 7 エージェントの多視点ピアレビュー（Journal-Fit Reviewer + 3 動的レビュアー + Devil's Advocate）、譲歩閾値プロトコル、攻撃強度保持、オプションのクロスモデル DA 批評/キャリブレーション、R&R トレーサビリティマトリクス、read-only 制約。
 - **Academic Pipeline** — 10 ステージのパイプラインオーケストレーター。適応的チェックポイント、主張検証、Material Passport、オプションの `repro_lock`、オプションのクロスモデル整合性検証、会話中強化、スコア軌跡追跡付き。
 - **Data Access Level Metadata**（v3.3.2+）— 各スキルが `data_access_level`（`raw` / `redacted` / `verified_only`）を宣言。`scripts/check_data_access_level.py` で強制。Anthropic の automated-w2s-researcher（2026）から適応されたパターン。[`shared/ground_truth_isolation_pattern.md`](shared/ground_truth_isolation_pattern.md) を参照。
 - **Task Type Annotation**（v3.3.2+）— 各スキルが `task_type`（`open-ended` または `outcome-gradable`）を宣言。現在の ARS スキルはすべて `open-ended`。
 - **Benchmark Report Schema**（v3.3.5+）— 誠実なベンチマーク比較のための JSON Schema + lint。[`shared/benchmark_report_pattern.md`](shared/benchmark_report_pattern.md) を参照。
 - **Artifact Reproducibility Lockfile**（v3.3.5+）— Material Passport 上のオプションの `repro_lock` サブブロック。**設定ドキュメントであり、再生保証ではありません** — LLM 出力はバイト再現可能ではありません。[`shared/artifact_reproducibility_pattern.md`](shared/artifact_reproducibility_pattern.md) を参照。
 - **実験来歴インテーク**（#260）— Material Passport のオプションの `experiment_provenance[]` は、研究者が**外部で**実行した実験を記録し（ARS は実験を実行しません）、論文の主張は `claim_intent_manifest.planned_experiment_ids[]` 経由でそれに join します。整合性ゲート（Stage 2.5/4.5）は実験裏付け主張を宣言された来歴と照合します — `ALIGNED` / `OVERSTATED` / `NOT_SUPPORTED_BY_PROVENANCE` / `PROVENANCE_INSUFFICIENT` — **ただし実験自体の正しさは判定しません**。fail-closed な `experiment_intake_declaration` により「実験を実行したか」が Stage 1 の明示的な決定になります。[`shared/handoff_schemas.md`](shared/handoff_schemas.md) を参照。
+
+**整合性・検証の境界：**ARS が確認するのは、原稿と報告された研究プロセスです。引用の存在、主張と出典の整合、報告された方法、申告された実験結果と原稿主張の整合、図表の忠実性、報告・工程・提出パッケージの適合性を対象とし、一部はサンプリングまたは LLM による判断です。ARS は、手続きが実際に実施されたこと、原データが真正であること、結果が再現できることを**証明しません**。捏造が一貫して報告されていれば、これらのチェックを通過し得ます。詳しくは [POSITIONING.md「Integrity checks and the empirical-work boundary」](POSITIONING.md#integrity-checks-and-the-empirical-work-boundary) を参照してください。
 
 ---
 
@@ -100,7 +106,7 @@ v3.3 は [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（Song, Song, Pf
 | [Final Paper (ZH)](examples/showcase/full_paper_zh_apa7.pdf) | 中国語版、APA 7.0 |
 | [Integrity Report — Pre-Review](examples/showcase/integrity_report_stage2.5.pdf) | Stage 2.5: 捏造参照 15 件 + 統計エラー 3 件を捕捉 |
 | [Integrity Report — Final](examples/showcase/integrity_report_stage4.5.pdf) | Stage 4.5: ゼロリグレッションを確認 |
-| [Peer Review Round 1](examples/showcase/stage3_review_report.pdf) | EIC + 3 Reviewers + Devil's Advocate |
+| [Peer Review Round 1](examples/showcase/stage3_review_report.pdf) | Journal-Fit Reviewer + 3 Reviewers + Devil's Advocate |
 | [Re-Review](examples/showcase/stage3prime_rereview_report.pdf) | 改訂後の検証 |
 | [Peer Review Round 2](examples/showcase/stage3_review_report_r2.pdf) | フォローアップレビュー |
 | [Response to Reviewers](examples/showcase/response_to_reviewers_r2.pdf) | ポイントごとの著者回答 |
@@ -179,7 +185,7 @@ You: "status"
 #### Academic Paper Reviewer（6 モード）
 
 ```
-"Review this paper"                                   → full モード（EIC + R1/R2/R3 + Devil's Advocate）
+"Review this paper"                                   → full モード（Journal-Fit Reviewer + R1/R2/R3 + Devil's Advocate）
 "Quick assessment of this paper"                      → quick モード
 "Guide me to improve this paper"                      → guided モード
 "Check the methodology"                               → methodology-focus モード
@@ -240,9 +246,9 @@ You: "status"
 
 ### Academic Paper Reviewer（v1.10.0）
 
-**0-100 品質ルーブリック** を持つ 7 エージェントの多視点レビュー。モード: full、re-review、quick、methodology-focus、guided、calibration。**決定マッピング:** ≥80 Accept、65-79 Minor Revision、50-64 Major Revision、<50 Reject。初回レビューチーム vs. 限定的な再レビューチームの境界: ARCHITECTURE.md §3 Stage 3 / Stage 3' を参照。
+**0-100 品質ルーブリック** を持つ 7 エージェントの多視点レビュー。モード: full、re-review、quick、methodology-focus、guided、calibration。**決定マッピング:** ≥80 Accept、65-79 Minor Revision、50-64 Major Revision、<50 Reject。初回レビューパネル vs. 契約管理された再レビューディスパッチの境界: ARCHITECTURE.md §3 Stage 3 / Stage 3' を参照。
 
-### Academic Pipeline（v3.13.0）
+### Academic Pipeline（v3.19.0）
 
 整合性検証、二段階レビュー、ソクラテス式コーチング、コラボレーション評価を持つ 10 ステージのオーケストレーター。パイプライン保証: 各ステージにユーザー確認チェックポイントが必要。整合性検証（Stage 2.5 + 4.5）はスキップできない。R&R Traceability Matrix（Schema 11）は著者の改訂主張を独立に検証する。v3.4 は Stage 2.5 / 4.5 に Compliance Agent（PRISMA-trAIce + RAISE）を追加した。v3.5 はすべての FULL/SLIM チェックポイントとパイプライン完了時に **Collaboration Depth Observer**（`collaboration_depth_agent`、advisory のみ — 決してブロックしない）を追加する。MANDATORY 整合性ゲート（2.5 / 4.5）は、コンプライアンスチェックが希薄化されないよう observer を明示的にスキップする。Wang & Zhang（2026）, IJETHE 23:11 に基づく。エージェント、成果物、ゲートを含むステージごとのマトリクス: ARCHITECTURE.md §3 を参照。
 
@@ -319,9 +325,35 @@ https://github.com/Imbad0202/academic-research-skills
 
 **[eltociear](https://github.com/eltociear)**（Ikko Eltociear Ashimine）— 貢献者。日本語版 README（[`README.ja-JP.md`](README.ja-JP.md)）を翻訳（[PR #161](https://github.com/Imbad0202/academic-research-skills/pull/161)）。
 
+**[ktao732084-arch](https://github.com/ktao732084-arch)** — 貢献者。`academic-paper` の disclosure システムを、9 つの医学出版ポリシー対象、対象別の必須事実インテーク、fail-closed のスタンドアロンレンダリングで拡張しました（[Issue #596](https://github.com/Imbad0202/academic-research-skills/issues/596)、[PR #599](https://github.com/Imbad0202/academic-research-skills/pull/599)）。さらに、EQUATOR の臨床報告リファレンスを拡張し、CARE、STARD、TRIPOD+AI の要約ガイダンスと fail-closed な研究デザイン・ルーティングを追加しました（[Issue #594](https://github.com/Imbad0202/academic-research-skills/issues/594)、[PR #601](https://github.com/Imbad0202/academic-research-skills/pull/601)）。また、独立型の中国語文献リゾルバー、API プロトコル、合成トランスポート fixture テストスイートを設計・提供しました（[Issue #595](https://github.com/Imbad0202/academic-research-skills/issues/595)、[PR #600](https://github.com/Imbad0202/academic-research-skills/pull/600)）。
+
 ---
 
 ## Changelog
+
+### v3.19.0 (2026-07-22) — 改訂ラウンドのクレームドリフト防御、PDF 読み取り整合性プリフライト、read-scope アテステーション
+
+> **追加**：3 つの advisory-or-opt-in 整合性層とランチャー修正。**改訂ラウンドのクレームドリフト防御（#569/#570）**：クレーム強度ラダー（`is associated with < predicts < causes` を、権限を与えるロードマップ項目なしに黙って動かさない）を改訂ドラフトと新しい advisory Phase E6 に接続し、決定論的な数値/引用トークン保存チェッカーを追加 — #390 の honest-claim 残余（触れたブロック内部に整合性チェックがなかった）の認識面とトークン面を閉じる。現行フロンティアモデルでベースラインを先に測定（`evals/heldout/revision_claim_drift/`）、メカニズムの着想は [Yila-AI/sci-ssci-skills](https://github.com/Yila-AI/sci-ssci-skills) に帰属。**PDF 読み取り整合性プリフライト（#512）**：3 信号のページ数クロスチェックにより、切り詰め/ページ番号ずれの PDF 読み取りが一見有効な `page` アンカーを生成できないようにする。**read_scope アテステーション（#513）**：人間読了台帳への任意の誠実カバレッジ宣言（`full_text` / `sections` / `abstract_only` / `toc_only`）で、ファイナライザの引用昇格を read-scope 対応にする。**ランチャー watchdog 修正（#545）**：正常な PreToolUse write-scope-guard 呼び出しを wall-clock 全体ブロックしていたパイプ停止を除去。スイートは v3.19.0 へ；基盤 3 スキルのバージョンは不変。
+
+### v3.18.0 (2026-07-18) — 自己改善サーベイ統合
+
+> **追加**：Ren et al.（2026、arXiv:2607.13104）に動機づけられた 8 つの品質メカニズム — サブ質問スコープ束縛＋Phase E スコープ整合アドバイザリ（#547）、検索範囲で有界化されたノベルティ主張＋E5 分類（#548、いずれも advisory-only、MANDATORY チェックポイントで行単位表示）；Stage 2.5 リスク層別クレーム検証（HIGH-IMPACT 全数＋ランダム歩哨、#549）；引用検証ゲートへのキャッシュ接続＋鮮度アドバイザリ＋opt-in 再検証（#541）；同意制クロスモデル査読席（固定 5 席の 1 席を別モデルファミリで、#540）と再査読の審査独立性＋Judge Record（#539）；ルーティング/ゲート頑健性評価シードセット（#550）；サーベイ自体を第 3 の human-in-the-loop 文献アンカーとして追加（#542）。サーベイ・トラックとは独立に、#544 SessionStart 更新リマインダーも搭載（インストール版が main より古い場合に `/plugin update` を案内；`ARS_UPDATE_CHECK=0` で無効化可）。`academic-pipeline` はスイートに追従して v3.18.0 へ；他 3 スキルのバージョンは不変。
+
+### v3.17.0 (2026-07-16) — パイプライン境界セマンティクス、正準クロスモデルハンドオフ・エンベロープ、実行可能パネルチェッカー
+
+> **修正:** #528 の 2 つの不明確なパイプライン境界を解消 — Stage 5 の「finalize 前は常に MANDATORY」は、Stage 4.5 の PASS と Stage 5 のディスパッチの間にある 1 つのチェックポイント（エントリーゲート）のみを指すよう定義され、Stage 6 には終端の確認語彙（`finish`/`end`/`done`/`confirm`）と明示的な辞退パスが追加された。5 つのパイプライン面すべてに全文 sha256 コンテンツロックが付与され（#529）、今後のプロンプト面のドリフトは同一コミットでハッシュを更新しない限り CI で失敗する。ブラインドチェックポイントの伝送はディスパッチ層へ移動（#523）— 元々 Bucket A のチェックポイント所有者にクロスモデル伝送の実行を求めていたが、ランタイムの Bash 拒否のもとでは実行不能だった。現在はディスパッチ層が伝送呼び出しを担う。**追加:** 正準 `[CROSS-MODEL-HANDOFF v1]` エンベロープ + 規範的な Python 文法（#527）が、これまでプローズのみで担保されていた owner→dispatcher→owner 伝送経路を置き換え、一致・不一致・不正形式の結果ルーティングを 3 つのチェックポイント所有者すべてに固定する。#514 ツール許可リストのドリフト防止ロック（#524、74 件のミューテーションテスト）は、エージェント本体とそのミラーを対称的に編集して Bash を静かに再追加するドリフト経路を塞ぐ。実行可能な sprint-contract パネルチェッカー（#510）は一次成果物から v3.6.2 の 2 層決定を再計算し、多数決の式にあった転記ミスを捕捉する。機械可読な degradation registry（#511 Part A）はスイート内のすべての優雅な劣化メカニズムを索引化し、引用検証ゲート向けの hermetic transport-fixture 統合テスト（#511 Part B）が 4 つのリゾルバークライアントをチェックイン済みの合成 API レスポンスに対してエンドツーエンドで検証する。`academic-pipeline` はスイートに合わせて v3.17.0 へ、他の 3 スキルのバージョンは変更ありません。
+
+### v3.16.0 (2026-07-12) — モデル階層化、クロスモデルゲート強化、WP アドバイザリ精緻化
+
+> **追加:** オプトインのモデル階層化（#517）— 新しい `ARS_MODEL_TIERING` スイッチに 2 方向（`economy`: 13 の実行型エージェントをセッションモデルの 1 段下で派遣、下限は Opus 級；`quality-boost`: 整合性ゲートと最終レビュー面の判断型エージェントをフロンティア段へ引き上げ）；未設定時は旧挙動とバイト等価で、凍結された 39 エージェント分類は新しいマニフェスト + lint で固定。クロスモデルゲート強化（#518）— リスク層別サンプリング（HIGH-IMPACT 参照は両ゲートで 100% 検証）、2 つの不可逆な決定点（設計凍結 + 最終編集判定）でのブラインド不一致チェック、検証モデル id ステータス許可リスト、昇格ベイクオフ・プロトコル；かつて計画されていた汎用第 6 レビュアーは延期ではなく廃止。GPT-5.6 Sol を暫定クロスモデル検証者として掲載し、明示的な reasoning-effort 制御を追加（#515）。devCharlotte 提案の韓国語トリガーキーワード + ルーティング境界フィクスチャ（#452/#509）。論文執筆側に CARS 序論レトリック + タイトル設計リファレンス（#500）。**変更:** WP 研究課題アドバイザリを名詞置換テストで 20 シェル表の外へ一般化（#501）し、装飾型タイトルシェルを捕捉するよう免除条項を精緻化（#505）— held-out 見逃し率 0.34–0.38 → 0.094、誤発火 0/16 を維持；レビュアー校正プロトコルに LLM 審査の寛大化方向を記載（FARS アンカー、#484）；OpenAlex API キー認証 + 予算対応 429 処理 + arXiv ToU 準拠バックオフ（#495/#496）。**ドキュメント:** THIRD_PARTY.md コミュニティディレクトリ（#497/#498）。`academic-pipeline` はスイートに合わせて v3.16.0 へ、他の 3 スキルのバージョンは変更ありません。
+
+### v3.15.0 (2026-07-04) — リリースゲート強化、プロンプト負債整理第 2 弾、ドリフト防止ロック
+
+> リリース規律と品質衛生を中心としたリリースで、スキルの挙動に変更はありません。**追加:** 3 つの CI ゲート — CHANGELOG-covers-merges のタグ前ゲート（#483）、version-consistency の invariant 9-11 とタグ時再実行ゲート（#487）、SessionStart アナウンス一覧を実際の 16 コマンド一覧に固定する command-invariants ゲート（#486）— に加え、2 つのドリフト防止ロック: Phase Boundary の enforcement 文を全 23 の Bucket A エージェントブロックで逐語固定し、SETUP のクロスモデル例を相互および正準モデル表に固定（#491 → #492）。**変更:** プロンプト負債整理第 2 弾は第 1 弾で先送りされた 17 エージェントを精査（#489 → #490）: 両 socratic_mentor の実害ある自己矛盾（期限切れの「15 ラウンドで打ち切り」規則 vs 文書化された典型 20-30 ラウンド）を修正、リポジトリ全体 29 箇所の期限切れ enforcement 状態文を修正、7 エージェントの few-shot と重複プロセス・スキャフォールドを削減 — 4 バッチ並列監査 + 独立 codex クロスモデルチャレンジで検証。監査レポートは `audits/` 配下。**修正:** DOI バッジを shields.io から配信（#482）。`academic-pipeline` はスイートに合わせて v3.15.0 へ、他の 3 スキルのバージョンは変更ありません。
+
+### v3.14.0 (2026-07-02) — Claude Science インポート対応、eval コメント表示、プロンプト負債の整理
+
+> 可搬性と仕上げに焦点を当てたリリースで、スキルの挙動に変更はありません。**追加:** Claude Science インポート対応 — marketplace manifest がスキルパスを明示的に宣言し、symlink の `skills/` ディレクトリを辿れない GitHub API ベースのインポーター（Claude Science「Import from GitHub」、Windows チェックアウト）でも 4 つのスキルすべてが検出されるようになりました。Claude Science 上でエンドツーエンド検証済み、README + SETUP にインポートガイドを追加（#480）。eval-harness の PR コメントは、生の JSON レポート全文の貼り付けに代わり、1 行の判定 + タスク別テーブル + `<details>` に折りたたんだ JSON で表示されます — 表示層のみの変更で、ゲートロジックはバイト単位で不変（#479）。**変更:** 2026-07 の harness-retirement 監査に基づき、4 つのライター系エージェントから期限切れの writing-harness スキャフォールドを除去（#476/#477 → #478、正味 −111 プロンプト行）。PR が新しいトップレベルディレクトリを追加した際に platform-ports ポリシーを通知する remind-don't-block の Platform Port Reminder を追加（#473）。**ドキュメント:** devCharlotte によるネイティブ査読済み韓国語 README（#469/#471）、GitHub Copilot repository instructions（#465）、Skip Permissions より auto permission mode を推奨（#464）。`[Unreleased]` に蓄積されていた 16 件のバックログ（コードはいずれも v3.13.0 タグ以前に反映済み — diff/patch revision mode #390、submission-package verifier #394、eval gold sets #215/#216 ほか）をバージョン記録に統合。詳細は `CHANGELOG.md` を参照。`academic-pipeline` はスイートに合わせて v3.14.0 へ、他の 3 スキルのバージョンは変更ありません。
 
 ### v3.13.0 (2026-06-18) — フック移植性、プロバイダ非依存の検証、ガード正確性
 
@@ -565,7 +597,7 @@ Lu ら（2026、*Nature* 651:914-919）からの洞察を統合 — ブライン
 
 - **7 モード AI Research Failure Mode Checklist** — 疑われる実装バグ、ハルシネーション結果、shortcut reliance、bug-as-insight、方法論の捏造、フレームロックに対して Stage 2.5/4.5 でパイプラインをブロック。既存の 5 タイプ引用ハルシネーション分類を拡張。
 - **Reviewer Calibration Mode**（academic-paper-reviewer v1.8）— ユーザー提供ゴールドセットに対するオプトイン FNR/FPR/balanced-accuracy 測定。5× アンサンブル、クロスモデル default-on、session-scoped confidence disclosure。
-- **Disclosure Mode**（academic-paper v2.9）— venue 固有 AI 使用ステートメントジェネレーター。v1 は ICLR、NeurIPS、Nature、Science、ACL、EMNLP をカバー。
+- **Disclosure Mode**（academic-paper v2.9）— 既定の venue パスは `REQUIRED`、`ACTION_ONLY`、`NOT_REQUIRED`、`UNKNOWN` の適用結果と、必要な場合は型付き停止状態を返す。policy-anchor パスは独立した anchor 固有のレンダリング契約を使う。v1 は ICLR、NeurIPS、Nature、Science、ACL、EMNLP をカバー。（その後拡張：v2 データベース（#596）は 9 つの医学出版ポリシー対象 — ICMJE、NEJM、The Lancet、JAMA、BMJ、PLOS、Frontiers、およびデータベース初の中国語ポリシー対象 2 件（出版社横断の Chinese Nursing Journals Publishing House（`中华护理杂志社`）と単一誌の International Eye Science（`国际眼科杂志`））— を追加。）
 - **Early-Stopping Criterion**（academic-pipeline v3.1）— パイプライン開始時の収束チェック + 予算透明性。
 - **Fidelity-Originality Mode Spectrum** — Lu 2026 Fig 1c に従い 3 スキルにわたるすべてのモードを分類。
 - 新バージョン: academic-paper v2.9、academic-paper-reviewer v1.8、academic-pipeline v3.1

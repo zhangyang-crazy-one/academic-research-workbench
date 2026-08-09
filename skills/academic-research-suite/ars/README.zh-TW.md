@@ -1,11 +1,11 @@
 # Academic Research Skills for Claude Code
 
-[![Version](https://img.shields.io/badge/version-v3.13.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.13.0)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20696614.svg)](https://doi.org/10.5281/zenodo.20696614)
+[![Version](https://img.shields.io/badge/version-v3.19.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.19.0)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20696614-blue)](https://doi.org/10.5281/zenodo.20696614)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Sponsor](https://img.shields.io/badge/sponsor-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/crucify020v)
 
-[English](README.md) | [简体中文版](README.zh-CN.md) | [日本語版](README.ja-JP.md)
+[English](README.md) | [简体中文版](README.zh-CN.md) | [日本語版](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
 一套完整的學術研究 Claude Code 技能包，涵蓋從研究到論文出版的全流程。
 
@@ -31,6 +31,8 @@ ARS 建立在這個前提上：**人類研究者 + AI 的組合，比純自動�
 [**Zhao 等人**](https://arxiv.org/abs/2605.07723)（2026-05）盤點了 arXiv、bioRxiv、SSRN、PMC 上 250 萬篇論文裡的 1.11 億筆引用，保守估計 2025 年單年就有 146,932 筆幻覺引用，並觀察到 2024 年中是上升的拐點；bioRxiv-to-PMC 這條配對的「預印本進到正式發表」幻覺存活率達 85.3%。他們把「真實引用被用來支撐被引文獻其實沒有提出的主張」描述為當前未解的問題。ARS v3.7.1 為來源 provenance 加上 trust-chain frontmatter，v3.7.3 為未來的 claim-level 稽核鋪上 locator 基礎建設（三層引用 anchor），並在引用時段帶出 advisory 風險訊號（ARS 內部把這條 claim-faithfulness 缺口標記為「L3」，此為 ARS 的用詞，不是論文的用詞）。v3.7.x 的設計動機來自 Zhao 等人的 corpus-scale 發現；ARS 本身的 corpus-scale 評估仍是未來工作。
 
 v3.8 補上 L3 缺口的另一半。v3.7.3 讓每一筆引用都帶 locator anchor，v3.8 在這個基礎上加一道 opt-in 稽核（`ARS_CLAIM_AUDIT=1`）：抓回每一個 anchor 指向的原始文本，判斷論文裡的 claim 是否真有被該引用支撐。五類新的 HIGH-WARN annotation（claim-not-supported、negative-constraint-violation、fabricated-reference、anchorless、constraint-violation-uncited）會在 formatter terminal hard gate 直接攔下輸出。Calibration 隨 release 出 20 筆 gold set，採 FNR<0.15、FPR<0.10 雙閾值；正式放大投入前要先有 calibration 證據（v3.8 spec §5）。
+
+[**Ren 等人**](https://arxiv.org/abs/2607.13104)（2026，*Self-Improvements in Modern Agentic Systems: A Survey*）補上第三個、survey 層級的錨點。其科學發現章節的綜合結論（§7.4）指出：發現型 agent 難以自行驗證 novelty、正確性與可重現性，反而可能鑽弱代理指標的漏洞；證據管理必須跨異質工具與文獻維持；並帶有治理疑慮——「證據薄弱時，科學寫作也會放大錯誤資訊」。其生成迴圈章節（§5.1–§5.2）把人工稽核與保留人類標註列為自生成評估迴圈的實務防護；歷史章節（§2.2）則記下同一課題最早的版本：Lenat 的 EURISKO 的實務成功高度依賴使用者充當外部評估訊號、修剪無效的 heuristic 漂移——survey 明言此限制延續到現代 agentic 系統。ARS 引用這篇 survey 作為 human-in-the-loop 立場的設計依據，而非「人機協作必然勝過全自動」的實證證明；survey 對 ARS 可落地的增量記錄在 #539–#541 與 #547–#550。
 
 v3.3 的靈感來自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（Song, Song, Pfister & Yoon, 2026, Google）：Semantic Scholar API 驗證、反洩漏協議、VLM 圖表驗證、分數軌跡追蹤。
 
@@ -59,7 +61,11 @@ v3.3 的靈感來自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 
 **驗證可用：** 跑 `/ars-plan` 並描述你正在寫的論文，ARS 會用蘇格拉底對話幫你規劃章節結構。想要單次測試的話改跑 `/ars-lit-review "你的主題"`。
 
-**👉 [docs/SETUP.zh-TW.md](docs/SETUP.zh-TW.md)** — 完整指南：安裝 Claude Code、設定 API key、選用的 Pandoc/tectonic（DOCX/PDF）、跨模型驗證（`ARS_CROSS_MODEL`），以及五種安裝方式（Plugin、專案 skills、全域 skills、claude.ai Project、repo clone）。
+**👉 [docs/SETUP.zh-TW.md](docs/SETUP.zh-TW.md)** — 完整指南：安裝 Claude Code、設定 API key、選用的 Pandoc/tectonic（DOCX/PDF）、跨模型驗證（`ARS_CROSS_MODEL`），以及六種安裝方式（Plugin、專案 skills、全域 skills、claude.ai Project、repo clone、Claude Science 匯入）。
+
+**使用 Claude Science？** 四個 skill 可直接匯入：**Skills → Import from GitHub**，貼上 `https://github.com/Imbad0202/academic-research-skills`，按 **Preview**，再按 **Import 4 skills**（需本 repo v3.14.0+——匯入器讀取 marketplace manifest 中明列的 skill 路徑）。匯入是單次快照：ARS 更新後需重新匯入。匯入的 skill 承載 ARS 方法論（研究／寫作／審查協定）；Claude Code 專屬機制——slash commands、hooks、subagent 編排——不會轉移。細節見 [docs/SETUP.zh-TW.md](docs/SETUP.zh-TW.md) 方法五。
+
+**使用 Pi？** 執行 `pi install git:github.com/Imbad0202/academic-research-skills` 安裝 repo 內的社群維護 wrapper。它持續以原始 ARS 內容為準，並記錄 Pi 在編排與 hooks 方面的限制。詳見 [`pi/README.md`](pi/README.md)。
 
 **用 Codex CLI？** 請改裝姊妹版：[`Imbad0202/academic-research-skills-codex`](https://github.com/Imbad0202/academic-research-skills-codex)。同一套 workflow 內容，Codex 原生包裝為單一 `$academic-research-suite` skill，提供 `ars-*` 別名。
 
@@ -78,13 +84,15 @@ v3.3 的靈感來自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 
 - **Deep Research** — 13 個 Agent 的研究團隊，支援蘇格拉底引導、PRISMA 系統性回顧、意圖偵測、對話健康度監控、可選跨模型 DA、Semantic Scholar API 驗證。
 - **Academic Paper** — 12 個 Agent 的論文撰寫團隊，含風格校準、寫作品質檢查、LaTeX 輸出強化、視覺化、修訂教練、引用格式轉換、反洩漏協議、VLM 圖表驗證。
-- **Academic Paper Reviewer** — 7 個 Agent 的多視角同儕審查，0-100 品質量表（主編 + 3 位動態審查者 + 魔鬼代言人），含讓步門檻協議、攻擊強度保持、可選跨模型 DA critique / calibration、R&R 追溯矩陣、唯讀約束。
+- **Academic Paper Reviewer** — 7 個 Agent 的多視角同儕審查，0-100 品質量表（Journal-Fit Reviewer + 3 位動態審查者 + 魔鬼代言人），含讓步門檻協議、攻擊強度保持、可選跨模型 DA critique / calibration、R&R 追溯矩陣、唯讀約束。
 - **Academic Pipeline** — 10 階段全流程調度器，含自適應 checkpoint、宣稱驗證、素材護照、可選 `repro_lock`、可選跨模型誠信驗證、中途強化機制、分數軌跡追蹤。
 - **資料存取層級標註**（v3.3.2+）— 每個 skill 宣告 `data_access_level`（`raw` / `redacted` / `verified_only`），由 `scripts/check_data_access_level.py` 強制執行。設計靈感來自 Anthropic 的 automated-w2s-researcher（2026）。詳見 [`shared/ground_truth_isolation_pattern.md`](shared/ground_truth_isolation_pattern.md)。
 - **任務類型標註**（v3.3.2+）— 每個 skill 宣告 `task_type`（`open-ended` 或 `outcome-gradable`）。目前 ARS 所有 skills 皆為 `open-ended`。
 - **Benchmark 報告 Schema**（v3.3.5+）— JSON Schema + lint script，要求誠實的 benchmark 比較報告。詳見 [`shared/benchmark_report_pattern.md`](shared/benchmark_report_pattern.md)。
 - **Artifact 可重現性 Lockfile**（v3.3.5+）— Material Passport 新增可選 `repro_lock` 子區塊。**是設定文件化，不是重播保證** — LLM 輸出不是位元可重現。詳見 [`shared/artifact_reproducibility_pattern.md`](shared/artifact_reproducibility_pattern.md)。
 - **實驗來源憑證登錄**（#260）— Material Passport 可選的 `experiment_provenance[]` 記錄研究者在**外部**跑過的實驗（ARS 從不執行實驗），論文宣稱透過 `claim_intent_manifest.planned_experiment_ids[]` 與之 join。誠信 gate（Stage 2.5/4.5）逐條比對實驗支撐型宣稱與登錄憑證 — `ALIGNED` / `OVERSTATED` / `NOT_SUPPORTED_BY_PROVENANCE` / `PROVENANCE_INSUFFICIENT` — **但不判定實驗本身是否正確**。fail-closed 的 `experiment_intake_declaration` 讓「有沒有跑實驗」成為 Stage 1 明確決定。詳見 [`shared/handoff_schemas.md`](shared/handoff_schemas.md)。
+
+**誠信與驗證邊界：**ARS 檢查的是論文與被報告的研究過程，包括引用是否存在、宣稱與來源是否一致、所述方法、已登錄實驗結果與論文宣稱的一致性、圖表忠實度，以及報告／流程／提交包的一致性；部分檢查採抽樣或由 LLM 判斷。ARS **不能**證明程序確實執行、原始資料真實，或結果可重現；若捏造內容被前後一致地報告，仍可能通過這些檢查。詳見 [POSITIONING.md〈Integrity checks and the empirical-work boundary〉](POSITIONING.md#integrity-checks-and-the-empirical-work-boundary)。
 
 ---
 
@@ -100,7 +108,7 @@ v3.3 的靈感來自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 | [完稿論文（中文）](examples/showcase/full_paper_zh_apa7.pdf) | 中文版，APA 7.0 |
 | [誠信報告 — 審稿前](examples/showcase/integrity_report_stage2.5.pdf) | Stage 2.5：抓出 15 個虛構引用 + 3 個統計錯誤 |
 | [誠信報告 — 最終](examples/showcase/integrity_report_stage4.5.pdf) | Stage 4.5：確認零回歸 |
-| [同儕審查第一輪](examples/showcase/stage3_review_report.pdf) | 主編 + 3 審查者 + 魔鬼代言人 |
+| [同儕審查第一輪](examples/showcase/stage3_review_report.pdf) | Journal-Fit Reviewer + 3 審查者 + 魔鬼代言人 |
 | [複審](examples/showcase/stage3prime_rereview_report.pdf) | 修訂後驗證審查 |
 | [同儕審查第二輪](examples/showcase/stage3_review_report_r2.pdf) | 追蹤審查 |
 | [回覆審查意見](examples/showcase/response_to_reviewers_r2.pdf) | 逐點回覆 |
@@ -179,7 +187,7 @@ ARS Stage 2 寫作      →  用驗證過的實驗結果撰寫論文
 #### Academic Paper Reviewer（論文審查，6 種模式）
 
 ```
-"審查這篇論文"                                → full mode（主編 + R1/R2/R3 + 魔鬼代言人）
+"審查這篇論文"                                → full mode（Journal-Fit Reviewer + R1/R2/R3 + 魔鬼代言人）
 "快速評估這篇論文"                            → quick mode（快速評估）
 "引導我改進這篇論文"                          → guided mode（引導改進）
 "檢查研究方法"                                → methodology-focus mode（方法論聚焦）
@@ -240,9 +248,9 @@ ARS Stage 2 寫作      →  用驗證過的實驗結果撰寫論文
 
 ### Academic Paper Reviewer (v1.10.0)
 
-7 個 Agent 的多視角審查，搭配 **0-100 品質量表**。模式：full、re-review、quick、methodology-focus、guided、calibration。**決策對照：** ≥80 接受、65-79 小修、50-64 大修、<50 退稿。第一輪審查團隊 vs. 精簡再審團隊的分界：見 ARCHITECTURE.md §3 Stage 3 / Stage 3'。
+7 個 Agent 的多視角審查，搭配 **0-100 品質量表**。模式：full、re-review、quick、methodology-focus、guided、calibration。**決策對照：** ≥80 接受、65-79 小修、50-64 大修、<50 退稿。第一輪審查面板 vs. 契約治理再審派送的分界：見 ARCHITECTURE.md §3 Stage 3 / Stage 3'。
 
-### Academic Pipeline (v3.13.0)
+### Academic Pipeline (v3.19.0)
 
 10 階段調度器，含誠信驗證、兩階段審查、蘇格拉底指導、協作品質評估。Pipeline 保證：每個階段都需使用者確認 checkpoint；誠信驗證（Stage 2.5 + 4.5）不可跳過；R&R 追溯矩陣（Schema 11）獨立驗證作者修訂宣稱。v3.4 新增 Compliance Agent（PRISMA-trAIce + RAISE）於 Stage 2.5 / 4.5。v3.5 新增 **協作深度觀察員**（`collaboration_depth_agent`，僅諮詢性質、永不阻擋流程）於每一次 FULL/SLIM checkpoint 與 pipeline 完成時。MANDATORY 誠信閘門（2.5 / 4.5）明確跳過觀察員，避免稀釋合規檢查。理論基礎：Wang & Zhang (2026), IJETHE 23:11。逐階段矩陣（agent、產出物、閘門）：見 ARCHITECTURE.md §3。
 
@@ -302,9 +310,35 @@ https://github.com/Imbad0202/academic-research-skills
 
 **[xpfo-go](https://github.com/xpfo-go)**（xpfo）— 貢獻者。翻譯了簡體中文版 README（[`README.zh-CN.md`](README.zh-CN.md)）（[PR #181](https://github.com/Imbad0202/academic-research-skills/pull/181)）。
 
+**[ktao732084-arch](https://github.com/ktao732084-arch)** — 貢獻者。擴充了 `academic-paper` 揭露系統，新增九個醫學出版政策目標、依目標收集必要事實的流程，以及 fail-closed 的獨立揭露渲染（[Issue #596](https://github.com/Imbad0202/academic-research-skills/issues/596)、[PR #599](https://github.com/Imbad0202/academic-research-skills/pull/599)）；擴充 EQUATOR 臨床報告參考，加入 CARE、STARD 與 TRIPOD+AI 的精簡指引，以及 fail-closed 的研究設計路由流程（[Issue #594](https://github.com/Imbad0202/academic-research-skills/issues/594)、[PR #601](https://github.com/Imbad0202/academic-research-skills/pull/601)）；並設計及貢獻獨立的中文文獻解析器、API 協定與合成傳輸 fixture 測試套件（[Issue #595](https://github.com/Imbad0202/academic-research-skills/issues/595)、[PR #600](https://github.com/Imbad0202/academic-research-skills/pull/600)）。
+
 ---
 
 ## 更新紀錄
+
+### v3.19.0（2026-07-22）— 修訂輪次的主張漂移防護、PDF 讀取完整性預檢、read-scope 誠實覆蓋標記
+
+> **新增**：三個 advisory-or-opt-in 的完整性層加一個 launcher 修復。**修訂輪次主張漂移防護（#569/#570）**：一條主張強度階梯（`is associated with < predicts < causes`，未經授權的 roadmap 項目不得靜默移動）接進修訂草擬與新的 advisory Phase E6，外加一支決定性的數值/引註 token 守恆檢查器；兩者為 #390 honest-claim 殘餘的認知面與 token 面各加上一道看守（被改動的 block 內部原本沒有完整性檢查；防護屬 advisory 看守，是否降低已量測到的漂移率由 #652 複測回答）。先在當前前沿模型量測 baseline（`evals/heldout/revision_claim_drift/`），機制形狀出處歸功 [Yila-AI/sci-ssci-skills](https://github.com/Yila-AI/sci-ssci-skills)。**PDF 讀取完整性預檢（#512）**：三信號的頁數交叉檢查，讓被截斷／頁碼錯位的 PDF 讀取無法產生一個看似有效的 `page` 錨點。**read_scope 誠實覆蓋標記（#513）**：在人工讀取台帳上可選地宣告誠實覆蓋範圍（`full_text` / `sections` / `abstract_only` / `toc_only`），讓 finalizer 的引用晉升具備 read-scope 意識。**launcher watchdog 修復（#545）**：移除一個會讓每次正常 PreToolUse write-scope-guard 呼叫卡滿整個 wall-clock 上限的 pipe 停滯。套件 → v3.19.0；底層三個 skill 版本不變。
+
+### v3.18.0（2026-07-18）— 自我改進 survey 整合
+
+> **新增**：由 Ren et al.（2026，arXiv:2607.13104）驅動的八項品質機制——子問題範圍綁定＋Phase E 範圍一致性 advisory（#547）、有界化 novelty 主張＋E5 分類（#548，皆 advisory-only、於 MANDATORY 檢查點逐列顯示）；Stage 2.5 風險分層 claim 查核（HIGH-IMPACT 全查＋隨機哨兵，#549）；引用查驗 gate 真正接上快取層＋時效 advisory＋opt-in 即時重驗（#541，補完 v3.11 Delta-2 forward-decl）；同意制跨模型審查席（五席面板一席換基座，#540）與再審判官獨立性＋Judge Record（#539）；路由/關卡措辭穩健性測試集 v0.1（#550，並補上 reviewer skill 缺失的中文觸發詞）；survey 本身列為第三個 human-in-the-loop 文獻錨點（#542）。另有一項獨立於 survey 軌的功能：#544 SessionStart 更新提醒——plugin 安裝落後 main 時提示 `/plugin update`（`ARS_UPDATE_CHECK=0` 可關閉）。`academic-pipeline` 隨套件升至 v3.18.0；其餘三個 skill 版本不變。
+
+### v3.17.0（2026-07-16）— Pipeline 邊界語意、跨模型交接信封、可執行 panel checker
+
+> **修復：**收斂 #528 兩個未明確定義的 pipeline 邊界 — Stage 5「finalize 前一律 MANDATORY」現在只指定唯一一個 checkpoint（Stage 4.5 通過與 Stage 5 派工之間的入口閘門），Stage 6 新增終止確認詞彙（`finish`/`end`/`done`/`confirm`）與明確的婉拒路徑；五個 pipeline 表面現在都加上全檔 sha256 內容鎖（#529），日後任何 prompt 表面漂移都會擋 CI，直到同一個 commit 更新雜湊值。盲測 checkpoint 傳輸移到派工層（#523）— 原本 Bucket A 的 checkpoint 擁有者被要求自行執行跨模型傳輸，但這在 runtime Bash deny 下無法執行；現在改由派工層負責傳輸呼叫。**新增：**canonical `[CROSS-MODEL-HANDOFF v1]` 信封 + 標準化 Python 文法（#527）取代原本純文字約束的擁有者→派工者→擁有者傳輸路徑，把一致/分歧/格式錯誤結果的路由釘死在全部三個 checkpoint 擁有者上。#514 工具白名單的防漂移鎖（#524，74 個 mutation test）擋住「對 agent 本體與其鏡像同步修改、悄悄加回 Bash」的漂移路徑。可執行的 sprint-contract panel checker（#510）從原始產出物重新算出 v3.6.2 的兩層決策，並抓到多數決公式的一個轉錄錯誤。機器可讀的降級註冊表（#511 Part A）把套件內每個優雅降級機制都列成索引，另加引用驗證閘門的 hermetic transport-fixture 整合測試（#511 Part B），對四個解析器 client 端到端跑過檢入版的合成 API 回應。`academic-pipeline` 跟隨套件版本至 v3.17.0；其他三個 skill 版本不變。
+
+### v3.16.0（2026-07-12）— 模型分層、跨模型閘門強化、WP 提示語銳化
+
+> **新增：**選用型模型分層（#517）— 新 `ARS_MODEL_TIERING` 開關含兩個方向（`economy` 讓 13 個執行型 agent 以低於 session 模型一階派工、下限 Opus 級；`quality-boost` 讓完整性閘門與最終審查面的判斷型 agent 升到前沿階）；未設定時逐位元組等同舊行為，凍結的 39-agent 分類由新 manifest + lint 釘死。跨模型閘門強化（#518）— 風險分層抽驗（HIGH-IMPACT 參考文獻在兩道閘門 100% 驗證）、兩個不可逆決策點（設計凍結 + 最終編輯決定）的盲測分歧檢查、驗證模型 id 狀態白名單、升格 bakeoff 協定；原規劃的通用第 6 位審查者確定除役、非延期。GPT-5.6 Sol 列為暫定跨模型驗證者並增設明確 reasoning-effort 控制（#515）。devCharlotte 提案的韓文觸發詞 + 路由邊界 fixture（#452/#509）。論文寫作端新增 CARS 導論修辭 + 標題設計參考檔（#500）。**變更：**WP 研究問題提示語經名詞替換測試泛化到 20 殼表之外（#501）並銳化豁免條款、抓到裝飾型標題殼（#505）— held-out 漏判率 0.34–0.38 → 0.094、誤觸 0/16 維持；審查者校準協定記載 LLM 評審偏寬方向（FARS 錨點，#484）；OpenAlex API key 認證 + 預算感知 429 處理 + arXiv ToU 對齊退避（#495/#496）。**文件：**THIRD_PARTY.md 社群目錄（#497/#498）。`academic-pipeline` 跟隨套件版本至 v3.16.0；其他三個 skill 版本不變。
+
+### v3.15.0（2026-07-04）— 發版閘門強化、prompt 債務清理第二輪、防漂移鎖
+
+> 以發版紀律與品質衛生為主的版本；skill 行為無變更。**新增：**三道 CI 閘門 — CHANGELOG-covers-merges tag 前閘門（#483）、版本一致性 invariant 9-11 加 tag 時重跑閘門（#487）、把 SessionStart announce 清單釘到實際 16 個指令清單的 command-invariants 閘門（#486）— 以及兩道防漂移鎖：Phase Boundary enforcement 句在全部 23 個 Bucket A agent 區塊逐字釘死、SETUP 跨模型範例與 canonical 型號表互相釘死（#491 → #492）。**變更：**prompt 債務清理第二輪深掃第一輪延後的 17 個 agent（#489 → #490）：修正兩個 socratic_mentor 的活矛盾（過期的 15 輪勸退規則 vs 文件明載的典型 20-30 輪）、修正全 repo 29 處過期的 enforcement 狀態句、修剪 7 個 agent 的 few-shot 與重複流程鷹架 — 經 4 批平行稽核 + 獨立 codex 跨模型挑戰驗證；稽核報告在 `audits/`。**修復：**DOI 徽章改由 shields.io 提供（#482）。`academic-pipeline` 跟隨套件版本至 v3.15.0；其他三個 skill 版本不變。
+
+### v3.14.0（2026-07-02）— Claude Science 可匯入性、eval comment 呈現、prompt 債務清理
+
+> 一個以可移植性與打磨為主的 release，skill 行為無變更。**新增：** Claude Science 可匯入性——marketplace manifest 明列 skill 路徑，讓無法穿越 symlink `skills/` 目錄的 GitHub-API 匯入器（Claude Science「Import from GitHub」、Windows checkout）能找到全部四個 skill；已在 Claude Science 端對端驗證，README + SETUP 新增匯入指南（#480）。eval-harness 的 PR comment 改為一行結論 + 逐任務表格、原始 JSON 摺疊進 `<details>`，取代裸貼整份報告——僅顯示層，gate 邏輯位元組不變（#479）。**變更：** 依 2026-07 harness-retirement 稽核，自四個寫作面 agent 移除過期的 writing-harness scaffold（#476/#477 → #478，淨 −111 行 prompt）；remind-don't-block 的 Platform Port Reminder 在 PR 新增頂層目錄時提示 platform-ports 政策（#473）。**文件：** devCharlotte 母語審校的韓文 README（#469/#471）；GitHub Copilot repository instructions（#465）；建議 auto permission mode 取代 Skip Permissions（#464）。累積於 `[Unreleased]` 的 16 條積壓條目（程式碼皆在 v3.13.0 tag 前已上——diff/patch revision mode #390、submission-package verifier #394、eval gold sets #215/#216 等）併入版本紀錄；詳見 `CHANGELOG.md`。`academic-pipeline` 隨 suite 至 v3.14.0；其餘三個 skill 版本不變。
 
 ### v3.13.0（2026-06-18）— Hook 可移植性、provider-agnostic 驗證、guard 正確性
 
@@ -539,7 +573,7 @@ v3.5.1 新增 Socratic Mentor 的選用式誠實探測（設定 `ARS_SOCRATIC_RE
 
 - **7 類 AI 研究失敗模式檢查清單** — 在 Stage 2.5/4.5 阻斷管線：偵測實作錯誤、幻覺實驗結果、取巧特徵依賴、錯誤包裝為發現、方法偽造、框架鎖定。擴充現有 5 類引用幻覺分類。
 - **Reviewer 校準模式**（academic-paper-reviewer v1.8）— opt-in 的 FNR/FPR/balanced accuracy 測量，使用者提供 gold set。5 次集成、跨模型預設開啟、session 內強制附加信心揭露。
-- **揭露模式**（academic-paper v2.9）— 針對特定期刊/會議的 AI 使用聲明生成器。v1 涵蓋 ICLR、NeurIPS、Nature、Science、ACL、EMNLP。
+- **揭露模式**（academic-paper v2.9）— 預設期刊路徑回傳 `REQUIRED`、`ACTION_ONLY`、`NOT_REQUIRED` 或 `UNKNOWN` 適用性結果，並在無法渲染時顯式回傳類型化停止狀態；政策錨點路徑使用獨立的錨點渲染契約。v1 涵蓋 ICLR、NeurIPS、Nature、Science、ACL、EMNLP。（後續擴充：v2 資料庫（#596）新增 9 個醫學出版政策目標 — ICMJE、NEJM、The Lancet、JAMA、BMJ、PLOS、Frontiers，以及資料庫首批兩個中文政策目標：出版社層級的 Chinese Nursing Journals Publishing House（`中华护理杂志社`）條目與期刊層級的 International Eye Science（`国际眼科杂志`）條目。）
 - **提前停止機制**（academic-pipeline v3.1）— 收斂檢查 + pipeline 開始時的 token 預算透明化。
 - **忠實度-原創性模式光譜** — 按 Lu 2026 Fig 1c 分類所有 3 個 skill 的模式。
 - 新版本：academic-paper v2.9、academic-paper-reviewer v1.8、academic-pipeline v3.1

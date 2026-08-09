@@ -1,6 +1,6 @@
 # ARS Setup
 
-Prerequisites and optional setup for Academic Research Skills. If you only need Markdown output and the default Claude Opus 4.8 pipeline, you can skip most of this — see "Minimum viable setup" below.
+Prerequisites and optional setup for Academic Research Skills. If you only need Markdown output and the default Claude pipeline (the inherited session model), you can skip most of this — see "Minimum viable setup" below.
 
 ---
 
@@ -116,7 +116,7 @@ v3.6.5 wires `bibliography_agent` (deep-research, Phase 1) and `literature_strat
 
 ## Optional environment flags (v3.5.1+)
 
-ARS exposes a few opt-in flags. All default to OFF; setting them changes behaviour for the current session only.
+ARS exposes a few opt-in flags. All default to OFF; setting them changes behaviour for the current session only. These flags are behavior toggles; for standing *content* preferences (citation style, search inclusion), see [§"Standing preferences via CLAUDE.md"](#standing-preferences-via-claudemd) below.
 
 | Flag | Since | What it does | Reference |
 |---|---|---|---|
@@ -125,6 +125,37 @@ ARS exposes a few opt-in flags. All default to OFF; setting them changes behavio
 | `ARS_PASSPORT_RESET=1` | v3.6.3 | Promote every FULL checkpoint to a context-reset boundary. Required to *emit* boundary entries; **not** required to invoke `resume_from_passport=<hash>` in a fresh session. With the flag ON in `systematic-review` mode, reset is mandatory at every FULL checkpoint. | `academic-pipeline/references/passport_as_reset_boundary.md` |
 | `ARS_CROSS_MODEL_SAMPLE_INTERVAL` | v3.5.0 | Sampling interval for cross-model integrity checks (advisory) | `shared/cross_model_verification.md` |
 | `ARS_VERIFICATION_CACHE_PATH` | v3.11 | Override the citation-verification cache location (see below). Not an on/off flag — the cache is on by default; this only relocates it. | `scripts/verification_cache.py` |
+| `ARS_CACHE_STALE_ADVISORY_DAYS` | v3.18.0 (#541) | Age threshold (days) for the cache-staleness advisory: cache-served verifications older than this surface as `ADV-CACHE` advisory rows at the integrity checkpoints (never gating). Default 30; `0` disables; malformed/negative values fall back to the default. | `scripts/verification_cache.py` |
+| `ARS_CACHE_REVALIDATE=1` | v3.18.0 (#541) | Opt-in live re-verification at the gate: cached rows past the staleness threshold are re-verified live (per-row bypass, then re-populated) instead of served. Cost scales with the stale-row count. Default off = advisory-only. | `scripts/verification_gate/__init__.py` + `integrity_verification_agent.md` § A0.5 |
+| `ARS_MODEL_TIERING` | v3.16.0 (#517) | Opt-in model tiering: `economy` (frontier session — execution-type agents step down one tier, floor Opus-class) or `quality-boost` (below-frontier session — judgment-type agents jump up to the frontier tier at the checkpoint surfaces: Stage 2.5/4.5 gates, the opt-in Stage 4→5 claim–ref audit, and final review). Unset = session model everywhere; unknown values warn once and behave as unset. | `shared/model_tiering.md` |
+
+---
+
+## Standing preferences via CLAUDE.md
+
+ARS deliberately ships no user-level configuration file. The supported way to get "set once, applies every run" behavior for content preferences is a preferences block in your project's `CLAUDE.md`: Claude Code loads it at session start, and every ARS agent dispatched in that session inherits it as context. This is a stated design position, not a missing feature — search-related preferences are per-project inclusion/exclusion criteria that belong in the Annotated Bibliography's `search_strategy` (Schema 2), and a machine-global config silently inherited across projects would be a methodological hazard for systematic-review work. Decision record: #634.
+
+Copy-pasteable template (adjust to taste):
+
+```markdown
+## ARS standing preferences
+
+- Citation style: APA 7th unless a venue template says otherwise.
+- Literature search: exclude preprints unless I explicitly ask; prefer
+  peer-reviewed journal articles.
+- Journal tier: when ranking or shortlisting sources, prefer higher-tier
+  journals in the field, and say so when unsure of a journal's tier.
+- Open access: prefer OA versions when citing, and link the OA copy.
+```
+
+Two honest limitations:
+
+- **Journal tiers are model judgment.** None of the four lookup indexes (Semantic Scholar, OpenAlex, Crossref, arXiv) serves quartile or tier data, so a tier preference is applied from the model's own knowledge and should be stated as such — treat tier claims as advisory, never as verified metadata.
+- **There is intentionally no output-directory setting.** The user-supplied Material Passport path is the single discovery anchor (v3.6.8 design round, decision R4-003); a standing output-location preference would create a second source of truth. Name the destination per run.
+
+If a preference changes what a systematic review may include (preprint exclusion, language limits, date windows), record it in that project's `search_strategy` rather than relying on the ambient block — the ambient block sets defaults, the Schema 2 `search_strategy` is the auditable record.
+
+Re-evaluation trigger (recorded in #634): an ARS-owned preferences surface gets revisited only if additional users independently request it, or a platform port lacks a `CLAUDE.md` equivalent. If ever built, the architecturally consistent shape is a Material Passport-level `user_preferences` input aggregate (like `literature_corpus[]`), not a machine-global config file.
 
 ---
 
@@ -142,18 +173,22 @@ The cache is single-process (SQLite WAL); concurrent multi-user access to one ca
 
 ## Cross-model verification (optional)
 
-ARS works with Claude Opus 4.8 alone. For higher confidence, you can optionally enable a second AI model to independently verify integrity checks and challenge the devil's advocate.
+ARS works with the inherited Claude session model alone. For higher confidence, you can optionally enable a second AI model to independently verify integrity checks and challenge the devil's advocate.
 
 ### Quick setup
 
 ```bash
 # Step 1: Set your API key (choose one or both)
-export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.4 Pro
+export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.5 / GPT-5.5 Pro
 export GOOGLE_AI_API_KEY="AIza-your-key-here"    # For Gemini 3.1 Pro
 
 # Step 2: Choose your cross-verification model
-export ARS_CROSS_MODEL="gpt-5.4-pro"            # Best reasoning
+export ARS_CROSS_MODEL="gpt-5.5"                # Recommended pair (gpt-5.5-pro = strongest reasoning, ~6x cost)
 # or: export ARS_CROSS_MODEL="gemini-3.1-pro-preview"  # Strong at factual verification
+# or: export ARS_CROSS_MODEL="gpt-5.6-sol"      # Frontier, provisional pending ARS validation (same rates as gpt-5.5)
+
+# Optional: reasoning effort for OpenAI verifier calls (unset = provider default)
+# export ARS_CROSS_MODEL_REASONING_EFFORT="medium"
 
 # Step 3: Run Claude Code as normal — cross-verification activates automatically
 claude
@@ -163,13 +198,14 @@ claude
 
 | Feature | Without cross-model | With cross-model |
 |---|---|---|
-| Integrity verification | Single-model 100% check | + 30% sample independently verified by 2nd model |
+| Integrity verification | Single-model 100% check | + risk-stratified verification by 2nd model: 100% of high-impact references (final gate adds 100% of new/changed-claim references) + a sampled remainder |
 | Devil's Advocate | Single-model DA | + Cross-model generates independent critique, novel findings added |
 | Peer Review | 5 reviewers (same model) | Same 5 reviewers + cross-model DA critique/calibration support |
+| Irreversible checkpoints | Single-model decision | + Blind cross-model decision at design freeze + final editorial decision; divergence escalated to you, never averaged |
 
 ### Cost
 
-Full pipeline adds ~$0.60-1.10 in cross-model API costs (GPT-5.4 Pro pricing). See [`shared/cross_model_verification.md`](../shared/cross_model_verification.md) for the detailed breakdown.
+Full pipeline adds ~$0.60-1.10 in cross-model API costs (order-of-magnitude; measured at GPT-5.4 Pro pricing). See [`shared/cross_model_verification.md`](../shared/cross_model_verification.md) for the current model lineup and detailed breakdown.
 
 ### No API key? No problem
 
@@ -199,7 +235,11 @@ If you use Claude Code CLI, VS Code extension, or JetBrains extension, install A
 
 The four skills (`deep-research`, `academic-paper`, `academic-paper-reviewer`, `academic-pipeline`) are auto-discovered from the plugin's `skills/` directory.
 
+**Slash command forms (#633).** Plugin installs namespace commands as `/academic-research-skills:ars-<mode>` — that form is canonical. Every command also declares an explicit frontmatter `name`, so on Claude Code v2.1.216 or later the bare `/ars-<mode>` alias works too whenever no other command claims that name; the bare form is what the session-start announce lists. On Claude Code older than v2.1.216, the frontmatter `name` replaces the whole command name, so commands appear only in their bare `/ars-<mode>` form (still invocable; the namespaced form loses autocomplete).
+
 **Strongly recommended: open auto-update.** Open the `/plugin` UI, find `academic-research-skills`, and toggle auto-update on. ARS releases roughly every 1–2 weeks; auto-update keeps you in sync without manual refreshes. To refresh manually: `/plugin update academic-research-skills`. (`/plugin marketplace update academic-research-skills` only refreshes the marketplace source list, not the installed plugin itself.)
+
+**Built-in update reminder.** The plugin also nudges you on its own: at session start it compares your installed version against `main` (at most one network request per day, 3-second ceiling, silent on any failure) and, when you are behind, prepends one line to the session-start announce pointing at `/plugin update academic-research-skills`. Set `ARS_UPDATE_CHECK=0` to disable the check entirely. Privacy: the check performs a single HTTPS GET of this repository's public `.claude-plugin/plugin.json` and transmits no user data.
 
 **Plugin platform scope:**
 - ✅ Claude Code CLI / VS Code extension / JetBrains extension — full support
@@ -226,10 +266,10 @@ cp -R ~/academic-research-skills/academic-pipeline .claude/skills/academic-pipel
 Expected path shape:
 
 ```text
-/path/to/your/project/.claude/skills/deep-research/SKILL.md
-/path/to/your/project/.claude/skills/academic-paper/SKILL.md
-/path/to/your/project/.claude/skills/academic-paper-reviewer/SKILL.md
-/path/to/your/project/.claude/skills/academic-pipeline/SKILL.md
+/path/to/your/project/.claude/skills/deep-research/WORKFLOW.md
+/path/to/your/project/.claude/skills/academic-paper/WORKFLOW.md
+/path/to/your/project/.claude/skills/academic-paper-reviewer/WORKFLOW.md
+/path/to/your/project/.claude/skills/academic-pipeline/WORKFLOW.md
 ```
 
 Then copy the `.claude/CLAUDE.md` content into your project's `.claude/CLAUDE.md` (merge with existing if you have one).
@@ -368,7 +408,7 @@ Anthropic's current [Project file limits](https://support.claude.com/en/articles
 Method 4a is claude.ai's standard Custom Skill install path: zip each skill folder, upload through Settings → Capabilities → Skills, and Claude treats it as an installed Skill with auto-loading and routing. claude.ai's Custom Skills do support multi-file skill packages including `scripts/` (see Anthropic's [How to create custom Skills](https://support.claude.com/en/articles/12512198-how-to-create-custom-skills) on supporting files and code execution), so Method 4a is mechanically capable of hosting skills with executable assets. The reasons not to recommend it for this specific suite are different and compound:
 
 1. **ARS depends on Claude Code-only orchestration features**. Each ARS skill drives 12-13 specialised agents through Claude Code's Task / subagent tooling and Material Passport file handoffs that resume across sessions. The Anthropic-documented scope of claude.ai's Custom Skill runtime — a containerised code-execution environment per session, with the Skills user guide ([Use Skills in Claude](https://support.claude.com/en/articles/12512180-use-skills-in-claude)) describing skill activation but not multi-agent dispatch — does not include Claude Code's Task / subagent control surface. Method 4a is therefore expected to surface ARS as the SKILL.md body's instructions, without the multi-agent dispatch that produces the suite's actual outputs. We have not run a live upload to characterise this in detail; the recommendation is forward-looking based on the Claude Code-specific assumptions baked into the agent orchestration, not on a measured failure.
-2. **Cost to Claude Code and Cowork routing**. claude.ai limits each skill's `description` field to 200 characters per the [Custom Skills documentation](https://claude.com/docs/skills/how-to), while the [Agent Skills specification](https://agentskills.io/specification) and [Claude Code Skills documentation](https://code.claude.com/docs/en/skills) allow up to 1,024 characters. The four ARS descriptions currently sit in the 440-842 range, front-loading routing keywords that Claude Code and Cowork use to discriminate between research, writing, review, and orchestration. Trimming them to fit Method 4a would weaken routing on Claude Code and Cowork — the platforms ARS was built for — in exchange for an unverified partial fit on claude.ai.
+2. **Cost to Claude Code and Cowork routing**. claude.ai limits each skill's `description` field to 200 characters per the [Custom Skills documentation](https://claude.com/docs/skills/how-to), while the [Agent Skills specification](https://agentskills.io/specification) and [Claude Code Skills documentation](https://code.claude.com/docs/en/skills) allow up to 1,024 characters. The four ARS descriptions each exceed the 200-character claude.ai cap while staying under the 1,024-character Claude Code allowance, front-loading routing keywords that Claude Code and Cowork use to discriminate between research, writing, review, and orchestration. Trimming them to fit Method 4a would weaken routing on Claude Code and Cowork — the platforms ARS was built for — in exchange for an unverified partial fit on claude.ai.
 
 **Recommended paths instead:**
 
@@ -407,3 +447,17 @@ The upload UI will reject each zip with a description-too-long error because eve
 - claude.ai does not support local shell commands; results may be less comprehensive than Claude Code workflows that rely on local scripts.
 - Cross-model verification (`ARS_CROSS_MODEL`) requires Claude Code with API keys.
 - Direct `.docx` generation requires Pandoc, and LaTeX/PDF output requires Claude Code with `tectonic`; claude.ai can still produce Markdown and DOCX conversion instructions.
+### Method 5: Claude Science import (v3.14.0+)
+
+Claude Science imports the four ARS skills straight from GitHub:
+
+1. Open **Customize → Capabilities → Skills → Import from GitHub**.
+2. Paste `https://github.com/Imbad0202/academic-research-skills` and click **Preview**.
+3. All four skills (`academic-paper`, `academic-paper-reviewer`, `academic-pipeline`, `deep-research`) appear — click **Import 4 skills**.
+
+**Notes:**
+
+- Requires repo state v3.14.0+ — the importer reads the explicit skill paths declared in `.claude-plugin/marketplace.json`. Earlier tags exposed skills only through the symlinked `skills/` directory, which GitHub-API importers cannot traverse (they report "no skills/ dirs with SKILL.md").
+- Imports are **point-in-time snapshots**: Claude Science does not track the repo. Re-import after an ARS release to pick up changes.
+- **What transfers:** the methodology layer — each skill's `SKILL.md` and its protocols (research / writing / review), which Claude Science's agent reads when relevant.
+- **What does not transfer:** Claude Code-specific machinery — the `/ars-*` slash commands, hooks (including the write-scope guard), cross-model verification scripts, and Task-tool subagent orchestration. Claude Science runs its own specialist-agent system and a built-in citation-checking reviewer; treat a Claude Science run as "ARS methodology + Claude Science's own machinery", not a 1:1 pipeline port.

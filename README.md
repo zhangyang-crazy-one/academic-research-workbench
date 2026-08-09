@@ -21,6 +21,17 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
+The bundled adapter is version `0.1.25`. It tracks
+`academic-research-skills@5d9b1f288457a3b2b2f1df1e915c883e36ea9a58`
+(ARS v3.19.0 plus post-tag `main` updates through 2026-08-09) and
+`experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
+The Codex overlay also provides a source-audited annual venue registry for the
+October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027 under
+`skills/academic-research-suite/codex/references/annual_venue_profiles.*`.
+Current venue facts must still be rechecked against official pages at use time;
+accepted-paper patterns in that registry are editorial evidence, not template
+requirements.
+
 ### Personal non-commercial research use
 
 The maintainer's intended use of this repository is personal, non-commercial
@@ -77,8 +88,14 @@ self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash
 (cd skills/academic-research-suite/ars && \
-  uv run --frozen --all-groups --project ../../.. python -m pytest -q)
+  uv run --frozen --all-groups --project ../../.. python -m pytest -q \
+    --ignore scripts/test_check_calibration_tiers.py)
 ```
+
+The ignored calibration-tier test is an upstream maintainer check that requires
+the deliberately non-vendored `.claude/CLAUDE.md`; the runtime manifest records
+that boundary. Its executable Codex equivalents remain covered by the adapter
+quality gates.
 
 Source verification is an explicit online preparation step and materializes
 ignored snapshots under `vendor/sources/`:

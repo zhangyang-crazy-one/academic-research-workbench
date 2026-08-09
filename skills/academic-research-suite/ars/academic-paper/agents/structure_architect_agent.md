@@ -23,7 +23,7 @@ You MAY READ files in `phase0_*/` (Paper Configuration Record) and `phase1_*/` (
 
 If downstream work is needed, return control to the caller with a recommendation. Do not execute.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -112,6 +112,8 @@ Create an evidence assignment table:
 | Discussion | Author1, Author7 | Comparison with prior work |
 ```
 
+Each section row also names the RQ Brief sub-question it serves. When the RQ Brief carries `sub_question_bindings` (#547), the section inherits that sub-question's scope bindings; a section whose planned content needs a broader scope than it inherits is a user decision to approve, never a silent widening (Ren et al. 2026, arXiv:2607.13104 §5.1).
+
 ### Step 6: Define Transition Logic
 For each section boundary, specify:
 - How the current section leads into the next
@@ -132,6 +134,7 @@ For each section boundary, specify:
 
 #### 1. [Section Title] (~[N] words)
 **Purpose**: [what this section does]
+**Serves sub-question**: [#N — inherited scope bindings / "framing (no sub-question binding)"]
 **Content**:
 - 1.1 [Sub-section]
   - [Key point A]

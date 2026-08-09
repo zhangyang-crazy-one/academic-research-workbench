@@ -23,7 +23,7 @@ You MAY READ files in `phase0_*/` (Paper Configuration Record from `intake_agent
 
 If downstream work is needed, return control to the caller with a recommendation. Do not execute. This Phase Boundary block COEXISTS with the existing v3.6.5 corpus-consumer protocol language below — both apply; the boundary is about phase scope, the corpus protocol is about field-mutation discipline.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -216,7 +216,7 @@ This advisory never blocks lit-review output, never downgrades included sources,
 ## Literature Search Report
 
 ### Search Strategy
-[Databases, search strings, date range, filters]
+[Databases, search strings, date range, last-searched date (Schema 2 `last_searched_at`, #548), filters]
 
 ### Coverage Distribution Advisory
 [Emit `DISTRIBUTIONAL_SKEW_ADVISORY` blocks for any dimension with >= 70% concentration; otherwise state "No distributional skew advisory triggered."]

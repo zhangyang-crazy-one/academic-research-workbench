@@ -66,15 +66,6 @@ Determine the entry point from the user's first message. Use the following keywo
 
    When `pending_decision` is set on the boundary entry, replace `<next>` with `(pending user decision)` in the template above. The actual next stage is determined after the user picks a branch (step 8). After the user picks, print the resolved `next_stage` from the matched option as part of the decision-prompt flow.
 
-   Example rendering (no `pending_decision`, no override):
-   ```
-   ### Resume Acknowledged
-   - Hash: a3f2b7c9d0e1
-   - Source session: sess-42 (generated 2026-04-23T14:00:00Z)
-   - Recovered stage: 2
-   - Next stage: 2.5
-   ```
-
    Example rendering (`pending_decision` set, resolved after user chose `revise`):
    ```
    ### Resume Acknowledged
@@ -129,9 +120,9 @@ You can adjust any stage's mode at any time. Ready to begin?
 
 | Type | When Used | Content |
 |------|-----------|---------|
-| FULL | First checkpoint; after integrity boundaries; before finalization | Full deliverables list + decision dashboard + all options |
+| FULL | First checkpoint; after integrity boundaries; Stage 5 completion (final-deliverable acceptance) | Full deliverables list + decision dashboard + all options |
 | SLIM | After 2+ consecutive "continue" responses on non-critical stages | One-line status + explicit continue/pause prompt |
-| MANDATORY | Integrity FAIL; Review decision; Stage 5 | Cannot be skipped; requires explicit user input |
+| MANDATORY | Integrity FAIL; Review decision; Stage 5 entry gate (before finalization) | Cannot be skipped; requires explicit user input |
 
 #### Checkpoint Type Rules
 
@@ -139,7 +130,7 @@ You can adjust any stage's mode at any time. Ready to begin?
 2. After 2+ consecutive "continue" without reviewing deliverables: switch to SLIM and prompt user awareness ("You've continued 3 times in a row. Want to review progress?")
 3. Integrity boundaries (Stage 2.5, 4.5): always MANDATORY
 4. Review decisions (Stage 3, 3'): always MANDATORY
-5. Before finalization (Stage 5): always MANDATORY
+5. Before finalization (Stage 5 entry gate): always MANDATORY — this is the checkpoint between Stage 4.5 PASS and the Stage 5 dispatch, where the user explicitly confirms proceeding and makes the finalization-format decision (citation style); the in-stage LaTeX question and content confirmation stay inside Stage 5 execution. The Stage 5 completion checkpoint (Final Paper delivered, before Stage 6) is FULL — never SLIM. See `../references/pipeline_state_machine.md` § Stage 5 boundary semantics
 6. All other stages: start FULL, downgrade to SLIM if user says "just continue"
 
 #### User Engagement Tracking
@@ -151,8 +142,8 @@ consecutive_continue_count: integer (reset to 0 when user chooses any action oth
 ```
 
 - `consecutive_continue_count < 2` -> FULL checkpoint (unless rules above override)
-- `consecutive_continue_count >= 2` -> SLIM checkpoint (unless rules above override to MANDATORY)
-- `consecutive_continue_count >= 4` -> SLIM + awareness prompt ("You've continued [N] times in a row...")
+- `consecutive_continue_count >= 2` -> SLIM checkpoint (unless rules above override to MANDATORY, or the checkpoint is one the rules pin to FULL — the Stage 5 completion checkpoint is FULL — never SLIM, regardless of the continue count)
+- `consecutive_continue_count >= 4` -> SLIM + awareness prompt ("You've continued [N] times in a row..."); the FULL-pinned checkpoints above still render FULL
 
 #### Steps
 
@@ -162,14 +153,9 @@ consecutive_continue_count: integer (reset to 0 when user chooses any action oth
 3. If checkpoint_type is FULL or SLIM: invoke collaboration_depth_agent on the just-completed stage's dialogue range (advisory only; non-blocking). If MANDATORY: SKIP this step — integrity gates must not be diluted. See "Collaboration Depth Observer" section below.
 4. Display checkpoint notification matching the type (FULL/SLIM: inject observer output as a named section per templates below; MANDATORY: no observer section)
 5. Wait for user response
-5. Based on user response, decide:
-   - "continue" "yes" -> increment consecutive_continue_count; proceed to next stage
-   - "pause" "stop here" -> reset count; pause pipeline
-   - "adjust" "change settings" -> reset count; let user adjust settings
-   - "view progress" -> reset count; display Dashboard
-   - "redo" "roll back" -> reset count; return to previous stage
-   - "skip" -> only allowed for explicitly skippable non-critical stages; never for integrity or failure-mode blocks
-   - "abort" "terminate" -> reset count; terminate pipeline
+6. Act on the response per "Checkpoint Confirmation Semantics" (the single authority for
+   response handling); update consecutive_continue_count per "User Engagement Tracking"
+   (increment on "continue", reset on any other action)
 ```
 
 **IRON RULE**: the user's response handling above considers only the checkpoint's metrics, deliverables, and integrity results. The `collaboration_depth_agent` output is **advisory only and must never appear in the blocking criteria** — it is inserted for the user's reflection, not the orchestrator's decision logic.
@@ -217,7 +203,7 @@ SLIM checkpoints never reset. MANDATORY checkpoints co-occur with reset when app
 4. The `[PASSPORT-RESET: ...]` tag is the sole machine-stable handoff anchor. The `### Resume Instruction` subsection is for user ergonomics.
 5. Hash mismatch on `resume_from_passport=<hash>` is a hard error; orchestrator refuses to proceed.
 6. A `boundary` is consumed only by appending a `kind: resume` entry with matching `consumes_hash`. Double-resume (second resume of an already-consumed boundary) is a hard error.
-7. MANDATORY checkpoints (Stage 2.5 / 4.5, review decisions, Stage 5) remain MANDATORY even when reset co-occurs. Integrity gates are never diluted. If the boundary carries `pending_decision`, resume must re-prompt the user; `next` is advisory. Actual routing comes from the matched option's `next_stage`/`next_mode`, not from the boundary `next` field.
+7. MANDATORY checkpoints (Stage 2.5 / 4.5, review decisions, the Stage 5 entry gate) remain MANDATORY even when reset co-occurs. Integrity gates are never diluted. If the boundary carries `pending_decision`, resume must re-prompt the user; `next` is advisory. Actual routing comes from the matched option's `next_stage`/`next_mode`, not from the boundary `next` field.
 8. `collaboration_depth_agent` observer fires on FULL checkpoints as before; its output is included in the checkpoint notification regardless of reset state. Observer state does NOT cross reset boundaries.
 9. Resume consumption MUST hold an exclusive advisory lock on the passport file for the entire read-check-append sequence (acquire the lock on the "Acquire passport lock" obligation, hold across the read-ledger, no-prior-resume check, and resume-entry append steps, release only after the append is durable). Releasing the lock between the no-prior-resume check and the resume-entry append reopens the double-resume race this rule exists to prevent. Non-POSIX implementations that cannot provide OS-level exclusion MUST refuse to resume rather than degrade silently (fail with an explicit error surfaced to the user). See §"Concurrency model" in the protocol doc.
 
@@ -307,8 +293,11 @@ Verification result: [PASS / PASS WITH NOTES / FAIL]
 - Data verification: [X/X] passed
 - Originality check: [PASS/ISSUES]
 - Claim verification: [X/X] verified [PASS/ISSUES]
+- Advisory rows (#547/#548/#541, non-gating): [none / N rows, listed below]
 
 [If FAIL: list correction items with severity]
+
+[If advisory rows exist: list every `ADV-*-<n>` row (any advisory family — E4 scope, E5 novelty, E6 claim-strength drift, REV token-conservation, CACHE staleness, and any later-added family) with its ID and content, then ask the user per row — proceed open (default) or the family's second option (E4 accept-with-justification / E5 confirm-absolute / E6 accept-the-change / REV accept-the-token-change or (if a genuine content error) send back as a revision instruction / CACHE note the invalidate option) — and record each response in this checkpoint dialogue. Advisory rows never block continuation.]
 
 Flagged: [issues requiring attention]
 
@@ -326,14 +315,15 @@ Users respond to checkpoint prompts with one of these commands. The orchestrator
 | User Input | Action | State Change |
 |------------|--------|-------------|
 | `continue` / `yes` | Proceed to next stage | `pipeline_state` -> next stage's `in_progress` |
-| `pause` | Pause pipeline; can resume later | `pipeline_state` = `paused`; all materials preserved |
-| `adjust` | Allow user to modify next stage's mode or parameters | Prompt user for adjustments; apply before proceeding |
+| `pause` / `stop here` | Pause pipeline; can resume later | `pipeline_state` = `paused`; all materials preserved |
+| `adjust` / `change settings` | Allow user to modify next stage's mode or parameters | Prompt user for adjustments; apply before proceeding |
+| `view progress` | Display the pipeline Dashboard, then re-prompt the same checkpoint | No state change |
 | `redo` / `roll back` | Return to previous stage and re-execute | Roll back `pipeline_state` to previous stage; increment version label |
 | `skip` | Skip next stage (only explicitly skippable non-critical stages) | Validate skip is safe (see below); proceed only if the stage is marked skippable |
 | `abort` / `terminate` | Terminate pipeline entirely | `pipeline_state` = `aborted`; save all materials with current versions |
 
 **Skippable vs Non-Skippable Stages**:
-- Skippable: Stage 1 (deep-research, if user provides own bibliography), Stage 3' (re-review, if only minor revisions), Stage 4' (re-revise, if accepted)
+- Skippable: Stage 1 (deep-research, if user provides own bibliography), Stage 3' (re-review, if only minor revisions), Stage 4' (re-revise, if accepted), Stage 6 (process summary — declined at the Stage 5 completion checkpoint; marked `skipped`, pipeline still terminates `completed`)
 - Non-Skippable: Stage 2 (writing), Stage 2.5 (pre-review integrity), Stage 3 (initial review), Stage 4.5 (final integrity), Stage 5 (finalize)
 
 ### Mode Switching Rules
@@ -370,18 +360,20 @@ When a sub-skill stage fails or produces unacceptable output:
 
 ### Collaboration Depth Observer (advisory, never blocks)
 
-**When.** At every FULL checkpoint, every SLIM checkpoint, and after Stage 6 (pipeline completion). This is an **observer** agent — it reads the just-completed dialogue range (per-stage) or the whole pipeline log (at completion), scores the user-AI collaboration pattern against `shared/collaboration_depth_rubric.md`, and emits a short advisory report. It is **not** in the blocking path; the orchestrator's progression decision ignores its output.
+**When.** At every FULL checkpoint, every SLIM checkpoint, and during Stage 6 record compilation (the whole-pipeline pass, before the Process Record is delivered). This is an **observer** agent — it reads the just-completed dialogue range (per-stage) or the whole pipeline log (at completion), scores the user-AI collaboration pattern against `shared/collaboration_depth_rubric.md`, and emits a short advisory report. It is **not** in the blocking path; the orchestrator's progression decision ignores its output.
 
 **How the orchestrator invokes it.**
 1. At checkpoint step 3 (above), after updating `state_tracker` with the new checkpoint, derive the stage's `dialogue_log_ref` (turn range covering only the just-completed stage; see `state_tracker_agent.md`).
 2. **Short-stage guard**: if the stage's user-turn count is less than 5, skip the dispatch and inject a static `Collaboration Depth: insufficient_evidence (stage had N user turns; rubric needs ≥5)` block. This avoids a full-model call just to receive the agent's own `insufficient_evidence` answer.
 3. Otherwise, dispatch `collaboration_depth_agent` with the range pointer. It reads live conversation turns — **do not** pass a summary.
 4. Receive its Markdown block and inject it as a named section into the checkpoint template (FULL: full block; SLIM: one-line compact; MANDATORY: omit — MANDATORY checkpoints are integrity gates and must not be diluted).
-5. At Stage 6 completion, dispatch the observer a second time in **whole-pipeline mode** (range = all stages). Its output becomes a new chapter, "Collaboration Depth Trajectory", in the Process Record, **separate from** the existing 6-dimension Collaboration Quality Evaluation (which is AI self-reflection; the observer is about the user's collaboration pattern).
+5. During Stage 6 compilation — after the dialogue review (Process Summary Workflow step 2) and BEFORE the Process Record is generated and delivered (steps 3-5), so its output can be a chapter of the record the user acknowledges — dispatch the observer a second time in **whole-pipeline mode** (range = all stages). Its output becomes a new chapter, "Collaboration Depth Trajectory", in the Process Record, **separate from** the existing 6-dimension Collaboration Quality Evaluation (which is AI self-reflection; the observer is about the user's collaboration pattern).
 
 **Cross-model cost and behaviour.** When `ARS_CROSS_MODEL` is set, do not re-dispatch automatically. The secondary-model invocation reads raw dialogue turns that may contain the user's private reasoning and unpublished material, so apply the consent gate first: ask for explicit user consent (if not already granted in this session) and identify the external provider, model, and content class (raw dialogue turns) that would be sent. The environment variable alone is not consent to upload that material. If consent is not granted, log `[CROSS-MODEL-SKIPPED]`, run only the primary-model observer, and append no `cross_model_divergence` block. If consent is granted, re-dispatch `collaboration_depth_agent` on the secondary model; if any dimension score diverges by > 2 points between primary and secondary, append a `cross_model_divergence` block to the checkpoint section. **Never silently average cross-model scores.** The gate gates only the upload — the observer's advisory-only, non-blocking role is unchanged. See `shared/cross_model_verification.md` for the consent boundary.
 
-The cost is multiplicative: a 10-stage pipeline with cross-model enabled produces up to ~20 observer invocations (10 primary + 10 secondary) on top of primary pipeline work. Users willing to trade coverage for cost may set `ARS_CROSS_MODEL_SAMPLE_INTERVAL=N` (default `1` = every checkpoint; `3` = every third, plus always at pipeline completion). The short-stage guard above also applies per-model, so empty stages incur no cross-model cost.
+**Cross-model handoff consumption (#527, Mode A dispatcher).** When a dispatched checkpoint owner's output contains a handoff-shaped fence (`[CROSS-MODEL-HANDOFF ...]` — ANY version, detection is generous), that block is a transport request, never an ordinary deliverable — do not file it as content, summarize it, or drop it. Only the exact column-0 `[CROSS-MODEL-HANDOFF v1]` fence is valid; an indented or other-version fence is `malformed_handoff`, never transported and never a deliverable. Consume it per `shared/cross_model_verification.md` § Cross-model handoff envelope (#527), whose normative grammar is `scripts/cross_model_handoff.py`: validate the envelope (anything malformed → `[CROSS-MODEL-ERROR: malformed_handoff]`, outcome `unavailable`, proceed single-model — never repair or guess); execute the provider transport per § API Call Patterns (endpoint, auth, model id, error handling) with the payload only as input material and the checkpoint's structured-decision prompt (or the DA-critique prompt for `full_return`) — never the citation-verification prompt or its grounding-status normalization (the `owner_decision` header is never forwarded — blindness); validate the structured result (malformed JSON or unknown enum → `[CROSS-MODEL-ERROR: malformed_result]`, outcome `unavailable` — never fabricate a judgment). Outcome routing: **agreement** (equal enums) → perform the mechanical fill and do NOT re-invoke the owner; **divergence** (differing enums) → re-invoke the ORIGINAL owner with the minimum return context (`correlation_id`, the owner's committed `owner_decision`, the cross-model's full structured result, the original payload or a pointer to the same artifact on file) — the rebuttal is the owner's, never the dispatcher's; **`expected_result: full_return`** (DA critique) → every successful response returns to the owner. With `ARS_CROSS_MODEL` unset, owners emit no envelope and behavior is unchanged; a stray envelope is logged `[CROSS-MODEL-SKIPPED]` and not transported.
+
+The cost is multiplicative: a 10-stage pipeline with cross-model enabled produces up to ~20 observer invocations (10 primary + 10 secondary) on top of primary pipeline work. Users willing to trade coverage for cost may set `ARS_CROSS_MODEL_SAMPLE_INTERVAL=N` (default `1` = every checkpoint; `3` = every third, plus always at the Stage 6 whole-pipeline pass). The short-stage guard above also applies per-model, so empty stages incur no cross-model cost.
 
 **Non-blocking guarantees** (orchestrator-level discipline):
 - The observer's output never appears in the "Flagged" line (that line is reserved for integrity and metric issues).
@@ -430,13 +422,14 @@ The cost is multiplicative: a 10-stage pipeline with cross-model enabled produce
 
 **Why not Stage 5→6:** `formatter_agent`'s terminal hard gate runs **during** Stage 5. Dispatching at Stage 5→6 would produce `claim_audit_results[]` after the gate has already passed; HIGH-WARN-CLAIM-NOT-SUPPORTED could not block output. Stage 4→5 is the only slot where (a) the draft prose carries resolved v3.7.3 anchors, (b) the cite finalizer has settled anchor presence, and (c) the formatter hard gate has NOT yet run.
 
-**Mode flag.** Audit dispatch is **opt-in** per pipeline run; configurable in `academic-pipeline/SKILL.md` mode flags. Default OFF for v3.8.0; ramp-on plan deferred to post-calibration evidence. When OFF, the gate is skipped entirely and Stage 5 proceeds as in v3.7.x.
+**Mode flag.** Audit dispatch is **opt-in** per pipeline run; configurable in `academic-pipeline/WORKFLOW.md` mode flags. Default OFF for v3.8.0; ramp-on plan deferred to post-calibration evidence. When OFF, the gate is skipped entirely and Stage 5 proceeds as in v3.7.x.
 
 **The audit agent receives.**
 
 - All in-text citations with their resolved `<!--ref:slug ...-->` + `<!--anchor:...-->` marker pairs (post-finalizer)
 - The `claim_intent_manifests[]` aggregate from the writing-stage agents (per spec §3.2 + the v3.8 "Claim Intent Manifest Emission" sibling sections on `synthesis_agent` / `draft_writer_agent` / `report_compiler_agent`)
 - The `literature_corpus[]` aggregate (retrieval input)
+- **PDF read-integrity sidecars (#512).** The orchestrator runs `python scripts/pdf_read_preflight.py <pdf> --output <sidecar>.json` ONCE per locally-read PDF in the `literature_corpus[]` **at Stage 1 corpus intake — NOT only when this audit gate is active**. This audit is opt-in and default OFF while the three emitters run earlier at Stages 2/4; if the preflight only ran here, default-mode runs would reach R-L3-1-D with no sidecar in context and valid local-PDF page citations would be forced to `anchor:none` and gate-refused. Running at intake (every local PDF, not an attempted pre-filter by which anchors it sourced — anchor→file provenance is not recorded anywhere the orchestrator can read, and an extra preflight run is cheap and deterministic) means the sidecars ride the emitters' context from the first dispatch onward, so R-L3-1-D holds at emission, and this gate simply consumes the same sidecars when active. This is the layer that CAN run Bash (Bucket A writers cannot), so enforcement sits here, upstream of the writers. Pass the sidecars keyed by `ref_slug` (verdict `PASS`/`FAIL`/`UNAVAILABLE` + file `sha256` + declared/enumerated/reader page counts; the hash is confirmatory, and the natural #513 join key later): `PASS` licenses page-scoped retrieval; `FAIL`/`UNAVAILABLE`/missing routes the row to the `[pdf_read_integrity_unverified]` advisory path. When the audit runs through the executable pipeline, pass the same map as `run_audit_pipeline(pdf_preflight_sidecars=...)` so the tag is applied on the executable path too, cache hits included. **Freshness:** before every dispatch that consumes sidecars, re-hash each PDF and compare against its sidecar `sha256`; on mismatch (file replaced since intake) re-run the preflight — a stale `PASS` must never license new bytes. **Coverage beyond this pipeline:** when the emitters are dispatched standalone by `deep-research` / `academic-paper`, or Stage 1 is skipped for user-supplied research, whatever layer ingests local PDFs runs the same preflight before the first emitter dispatch; where no layer can run it (e.g. a no-Python install), R-L3-1-D's no-sidecar regime applies (advisory warning, never a refusal manufactured by the missing layer).
 - **The Stage 4 draft sentence stream — all uncited sentences with `sentence_text` + `section_path` + optional `adjacent_text`** (the surrounding 1–3 clauses for context). Required for the §4 step 5 stream (d) `constraint_violations[]` HIGH-WARN path (any uncited sentence whose scope matches an MNC/NC rule + judge returns VIOLATED) AND the §4 step 6 `uncited_assertions[]` LOW-WARN advisory path. Without this stream the `[HIGH-WARN-CONSTRAINT-VIOLATION-UNCITED]` gate-refuse annotation cannot fire for author-declared MUST-NOT violations that carry no citation. See `claim_ref_alignment_audit_agent.md` Input contract for the full schema.
 
 **Outputs feeding formatter hard gate (same Stage 5 pass).**
@@ -455,10 +448,11 @@ The cost is multiplicative: a 10-stage pipeline with cross-model enabled produce
 
 - Per-stage `defect_stage` histogram appendix (renders when ≥5 completed entries via `scripts/claim_audit_finalizer.py:render_stage6_histogram`) — added to the existing Stage 6 AI Self-Reflection Report after gate pass.
 
-**Finalizer matrix (8-row).** The matrix discriminates the previously-conflated paywall vs anchorless cases by reading `ref_retrieval_method` alongside `(judgment, defect_stage)`. Rows are evaluated top-to-bottom, first match wins. Spec source-of-truth: §5. Implementation: `scripts/claim_audit_finalizer.py:classify_claim_audit_result`.
+**Finalizer matrix (8-row + one #512 conditional).** The matrix discriminates the previously-conflated paywall vs anchorless cases by reading `ref_retrieval_method` alongside `(judgment, defect_stage)`. Rows are evaluated top-to-bottom, first match wins. Spec source-of-truth: §5 (+ the #512 spec for the tagged-SUPPORTED row). Implementation: `scripts/claim_audit_finalizer.py:classify_claim_audit_result`.
 
 | `judgment` | `defect_stage` | `ref_retrieval_method` | Annotation | Severity Tier | Gate behavior |
 |---|---|---|---|---|---|
+| SUPPORTED, rationale contains `[pdf_read_integrity_unverified]` (#512) | `null` | (any) | `[LOW-WARN-PDF-READ-INTEGRITY-UNVERIFIED]` | LOW-WARN | pass |
 | SUPPORTED | `null` | (any) | (no annotation) | — | pass |
 | AMBIGUOUS | source_description / citation_anchor / synthesis_overclaim / null | (any) | `[CLAIM-AUDIT-AMBIGUOUS]` | LOW-WARN | pass |
 | UNSUPPORTED | source_description / metadata / citation_anchor / synthesis_overclaim | (any) | `[HIGH-WARN-CLAIM-NOT-SUPPORTED]` | HIGH-WARN | gate-refuse |
@@ -513,14 +507,16 @@ Reference helper: `scripts/slr_lineage.py` `emit(stages, incoming_slr_lineage)`.
 
 | Transition | Transferred Materials | Schema Reference | Transfer Method |
 |-----------|----------------------|-----------------|----------------|
-| Stage 1 -> 2 | RQ Brief, Annotated Bibliography, Synthesis Report | Schema 1 (RQ Brief), Schema 2 (Bibliography), Schema 3 (Synthesis) | deep-research handoff protocol |
-| Stage 2 -> 2.5 | Complete Paper Draft | Schema 4 (Paper Draft) | Pass to integrity_verification_agent |
+| Stage 1 -> 2 | RQ Brief, Methodology Blueprint, Annotated Bibliography, Synthesis Report | Schema 1 (RQ Brief), Schema 2 (Bibliography), Schema 3 (Synthesis) | deep-research handoff protocol |
+| Stage 2 -> 2.5 | Complete Paper Draft + #547 scope context for Phase E4 (RQ Brief `scope` — the required E4 input; `sub_question_bindings` + outline section→sub-question map when present) + the Schema 2 Annotated Bibliography (#548 — `search_strategy` is the E5 comparison basis; `sources[].relevance` + `relevance_score` ground the nearest-prior-work check), when one exists | Schema 4 (Paper Draft) + Schema 1 scope fields + Schema 2 (search_strategy + source relevance metadata) | Pass to integrity_verification_agent |
 | Stage 2.5 -> 3 | Verified Paper Draft + Integrity Report | Schema 4 + Schema 5 (Integrity Report) | Pass to reviewer (with verification report attached). Carry forward `experiment_provenance[]` + `experiment_alignment_results[]` + `experiment_intake_declaration` (#260) |
 | Stage 3 -> **coaching** -> 4 | Editorial Decision, Revision Roadmap, 5 Review Reports | Schema 6 (Review Report), Schema 7 (Revision Roadmap) | **First Socratic dialogue** -> academic-paper revision mode input |
-| Stage 4 -> 3' | Revised Draft, Response to Reviewers | Schema 4 (revised) + Schema 8 (Response to Reviewers) | Pass to reviewer (marked as verification round) |
-| Stage 3' -> **coaching** -> 4' | New Revision Roadmap (if Major) | Schema 7 (Revision Roadmap) | **First Socratic dialogue** -> academic-paper revision mode input |
-| Stage 4/4' -> 4.5 | Revised/Re-Revised Draft | Schema 4 (revised) | Pass to integrity_verification_agent (final verification) |
+| Stage 4 -> 3' | Revised Draft, Original (pre-revision) Draft (the #576 §3.1 Phase 2A input — without it every new issue degrades to `indeterminate` and the regression channel is structurally dead; the §11 input manifest sources it from this handoff, `passport:`-tagged when passport-tracked), Response to Reviewers + Editorial Decision Letter (its Review Panel Provenance block feeds the #539 Judge Record) + the Round-1 review findings (the Schema 6 review reports the roadmap items trace to — the #576 §4 level-3 criterion layer; absent → transported Schema 7 fields alone, `[ROUND1-FINDINGS-ABSENT]`) + the Round-1 Revision Roadmap being verified + the round's apply report(s) and the paired revision patch/diff files (`<output>.apply-report.json`, the sidecar beside each revised draft, #390 — machine-guaranteed untouched-block evidence; the two travel TOGETHER: reports present without their paired patches is `manifest_incomplete`, fail closed; chain verified by the #576 §11 ORDERED-CHAIN rule: the FIRST report's `base_draft_hash` must equal the Original Draft's hash prefix, each subsequent report's `base_draft_hash` its predecessor's `output_draft_hash`, and the LAST report's `output_draft_hash` — and only the last's — the Revised Draft's hash prefix; any broken link → `manifest_hash_mismatch`, fail closed) + the Round-1 Reviewer Configuration Cards (yardstick continuity — field_analyst is NOT re-run at Stage 3'; `re_review_mode_protocol.md` § Yardstick Continuity) | Schema 4 (revised + original) + Schema 8 (Response to Reviewers) + Schema 6 (letter + Round-1 review reports) + Schema 7 (Roadmap, machine-form JSON — § Stage 3' Re-Review Contract Dispatch producer obligations) + apply-report sidecar JSON + revision patch JSON + configuration cards (no numbered schema) | Pass to reviewer (marked as verification round) under § Stage 3' Re-Review Contract Dispatch. This row is the re-review-mode transfer — the default Stage 3'. When the user explicitly requests a fresh full review at 3' instead (mid-entry quick→full path: no Schema 7 Roadmap or Round-1 cards exist), transfer the Revised Draft + available context only, dispatch full mode (field_analyst runs by definition), and do NOT mark it a verification round |
+| Stage 3' -> **coaching** -> 4' | New Revision Roadmap (if Major) | Schema 7 (Revision Roadmap — includes any `REV-PM-<n>` previously-missed forward-seed items, #576 §8) + `shared/contracts/re_review/traceability.schema.json` sidecar | **First Socratic dialogue** -> academic-paper revision mode input; the traceability sidecar rides through 4' with the roadmap toward Stage 4.5 |
+| Stage 3' -> 4.5 | (Accept/Minor direct path — no Stage 4' between) Verified Revised Draft + the traceability sidecar with its frozen `previously_missed`/`indeterminate` new-issue records (#576 §8 — Material Passport cargo consumed by the Stage 4.5 gate) | Schema 4 (revised) + traceability sidecar | Pass to integrity_verification_agent (final verification); the frozen records are gate INPUT, not just cargo |
+| Stage 4/4' -> 4.5 | Revised/Re-Revised Draft + the same #547 scope context and #548 Schema 2 bibliography (search_strategy + source relevance metadata) as Stage 2 -> 2.5 + the #569 Revision-Evidence Bundle (§ below): every round's `phase6_*/revision_patch_round<N>.json` + the pre-round anchored draft(s) + the Revision Roadmap(s), so E6 can audit claim-strength drift per round + (Major-via-4' path) the Stage 3' traceability sidecar with its frozen `previously_missed`/`indeterminate` new-issue records (#576 §8 — carried through 4' with the roadmap; gate INPUT at 4.5) | Schema 4 (revised) + traceability sidecar (when a contract-mode Stage 3' ran) | Pass to integrity_verification_agent (final verification) |
 | Stage 4.5 -> 5 | Final Verified Draft + Final Integrity Report | Schema 4 + Schema 5 (Integrity Report) | Produce MD -> DOCX via Pandoc when available (otherwise instructions) -> ask about LaTeX -> confirm -> PDF. Carry forward `experiment_alignment_results[]` + `experiment_intake_declaration` (#260) to formatter surface + Stage 6 histogram |
+| Stage 5 -> 6 | Final deliverables list + pipeline state history (state_tracker JSON, agent logs) | — (Process Record; no numbered schema) | Dispatched only after the user confirms the Stage 5 completion checkpoint (FULL). User may decline Stage 6 there: mark it `skipped`, set pipeline state `completed`. Protocol: `../references/process_summary_protocol.md`; terminal semantics: `../references/pipeline_state_machine.md` § Stage 6 terminal semantics |
 
 **All artifacts must carry a Material Passport (Schema 9)** with `origin_skill`, `origin_mode`, `origin_date`, `verification_status`, and `version_label`. From v3.7.4+, the passport also carries the run-level `slr_lineage` boolean computed per the emission step above.
 
@@ -581,6 +577,7 @@ Notify state_tracker_agent to update state whenever a stage begins or completes:
 - Checkpoint passed: `update_pipeline_state("running")`
 - Material produced: `update_material(material_name, true)`
 - Integrity check result: `update_integrity(stage_id, verdict, details)`
+- Pipeline terminal transition: on the Stage 6 terminal acknowledgement (`finish` / `end` / `done` / `confirm`, or an unambiguous natural-language equivalent) — `update_stage("6", "completed", outputs)` + `update_pipeline_state("completed")`; if the user declined Stage 6 at the Stage 5 completion checkpoint — `update_stage("6", "skipped", {reason: "user declined Stage 6"})` + `update_pipeline_state("completed")`
 
 Request state_tracker_agent to produce the Progress Dashboard when needed.
 
@@ -588,7 +585,7 @@ Request state_tracker_agent to produce the Progress Dashboard when needed.
 
 ## Post-Review Socratic Revision Coaching
 
-**Trigger condition**: After Stage 3 or Stage 3' completion, Decision = Minor/Major Revision
+**Trigger condition**: After Stage 3 completion with Decision = Minor/Major Revision (both route to Stage 4), OR after Stage 3' completion with Decision = Major Revision (routes to Stage 4'). A Stage 3' Minor decision does NOT trigger coaching — it routes directly to Stage 4.5 per the state machine (`Accept|Minor -> 4.5`), so there is no coaching step on that path.
 **Executor**: academic-paper-reviewer's eic_agent (Phase 2.5)
 **Purpose**: Help users understand review comments and plan revision strategy, rather than passively receiving a change list
 
@@ -596,7 +593,7 @@ Request state_tracker_agent to produce the Progress Dashboard when needed.
 
 ```
 1. Present Editorial Decision and Revision Roadmap
-2. Launch Revision Coaching — EIC follows the authoritative six-step Phase 2.5 list in academic-paper-reviewer/SKILL.md (incl. the #393 contribution framing probe); illustrative sketch only, not a separate question list:
+2. Launch Revision Coaching — the Journal-Fit Reviewer follows the authoritative six-step Phase 2.5 list in academic-paper-reviewer/WORKFLOW.md (incl. the #393 contribution framing probe); illustrative sketch only, not a separate question list:
    - "After reading the review comments, what surprised you the most?"
    - "What are the consensus issues among the five reviewers? What do you think?"
    - "The Devil's Advocate's strongest counter-argument is [X], how do you plan to respond?"
@@ -610,7 +607,7 @@ Request state_tracker_agent to produce the Progress Dashboard when needed.
 
 ```
 1. Present Re-Review results and residual issues
-2. Launch Residual Coaching (EIC guides via Socratic dialogue):
+2. Launch Residual Coaching (the Journal-Fit Reviewer guides via Socratic dialogue):
    - "What problems did the first round of revisions solve? Why are the remaining ones harder?"
    - "Is it insufficient evidence, unclear argumentation, or a structural problem?"
    - "This is the last revision opportunity — which items can be marked as study limitations?"
@@ -625,7 +622,7 @@ Request state_tracker_agent to produce the Progress Dashboard when needed.
 - First acknowledge what was done well in the revision
 - User says "just fix it" "no guidance needed" -> respect the choice, skip coaching
 - Stage 3->4 max 8 rounds, Stage 3'->4' max 5 rounds
-- Decision = Accept does not trigger coaching
+- Decision = Accept does not trigger coaching (any stage); a Stage 3' Minor decision also does not trigger coaching (routes directly to Stage 4.5)
 
 ---
 
@@ -710,16 +707,18 @@ When `academic-pipeline` mode is active, the orchestrator runs the **Cite-Time P
 
 **Idempotency:** the finalizer pass is idempotent on the join of `(literature_corpus[]` row, read-log row`)` for each slug — re-running on a resolved marker with byte-identical input evidence yields byte-identical output. The matrix is re-applied to every `<!--ref:slug ...-->` on every pass; resolution tracks the current evidence, not a sticky historical state. Concretely:
 
-- When the joined evidence (`source_acquired`, `source_verified_against_original`, derived `human_read_source`) is unchanged between passes, the marker's resolved form is byte-identical to the prior pass.
+- When the joined evidence (`source_acquired`, `source_verified_against_original`, derived `human_read_source`, and — #513 — the governing mark's `read_scope` attestation together with the citation's own `<!--anchor:<kind>:<value>-->`, since scope-aware promotion is a function of the anchor too: a revision that moves an anchor from a covered to an uncovered locator re-resolves the marker even when corpus and ledger are unchanged) is unchanged between passes, the marker's resolved form is byte-identical to the prior pass.
 - When the joined evidence changes between passes (user acquires / verifies the source, runs `/ars-mark-read <refcode>`, or runs `/ars-unmark-read <refcode>` to rescind a prior mark), the next finalizer pass re-applies the matrix from the new triple and re-emits the resolved form. Promotion (e.g. `LOW-WARN` → `ok` after `/ars-mark-read`) and demotion (e.g. `ok` → `LOW-WARN` after `/ars-unmark-read`, since spec §3.6 line 325/340 makes the most recent timestamped event win) are both possible.
 
 In other words: the resolved status is a pure function of the current input triple; user-facing remediation and rescind affordances both round-trip through the matrix.
 
-**Revision loops:** on revision loops (Stage 4 → reviewer → Stage 4 revise; or `academic-paper` Phase 6 → Phase 4 loops), the finalizer re-runs against the current draft, resolves any newly-emitted bare `<!--ref:slug-->` comments introduced in the revision pass, and re-applies the matrix to existing resolved markers per the idempotency rule above. Resolved markers **do not invalidate** in the sense that nothing about the revision-loop mechanism itself perturbs them — only a change in the joined evidence (acquire / verify / `/ars-mark-read` / `/ars-unmark-read`) can move a marker. When evidence is unchanged across a revision pass, every marker is preserved byte-identical.
+**Revision loops:** on revision loops (Stage 4 → reviewer → Stage 4 revise; or `academic-paper` Phase 6 → Phase 4 loops), the finalizer re-runs against the current draft, resolves any newly-emitted bare `<!--ref:slug-->` comments introduced in the revision pass, and re-applies the matrix to existing resolved markers per the idempotency rule above. Resolved markers **do not invalidate** in the sense that nothing about the revision-loop mechanism itself perturbs them — only a change in the joined evidence (acquire / verify / `/ars-mark-read` / `/ars-unmark-read`, or — #513 — a revision editing the citation's anchor under a partial-coverage attestation) can move a marker. When evidence is unchanged across a revision pass, every marker is preserved byte-identical.
 
 **LOW-WARN promotion:** when the user runs `/ars-mark-read <refcode>` between finalizer passes, the next pass observes `human_read_source: true` for that slug via the read-log join and resolves the marker to row 4 (`<!--ref:slug ok-->`). The finalizer does not delete the LOW-WARN entry from the per-section checklist artifact; that artifact is informational and the user clears it manually (or it falls out at the next checklist regeneration).
 
-**Hard-gate handoff:** the finalizer never blocks pipeline progress on its own. It mutates the draft in place, then the orchestrator advances to Stage 5 where `formatter_agent` carries the hard-gate refusal rule (any `[UNVERIFIED CITATION ...]` literal or any unresolved `<!--ref:slug-->` whose status is neither `ok` nor LOW-WARN-acknowledged forces a refusal at format time per spec §3.3 line 185).
+**Read-scope-aware promotion (#513).** The mark consumed by the row-3 → row-4 promotion may carry an optional `read_scope` attestation (`{level, locators[], note}`, schema `shared/contracts/passport/human_read_log.schema.json`). The governing signal follows the SAME latest-timestamped-event-wins rule as the binary case (spec §3.6): promotion is considered only when the slug's latest event overall is a mark — a latest rescind keeps row 3 regardless of any older non-rescinded marks — and the `read_scope` consulted is the one carried by that latest mark. Promotion then consults the attestation against the citation's own `<!--anchor:<kind>:<value>-->`: `level` absent or `unknown` promotes exactly as before (legacy marks impose no migration); `full_text` promotes; `abstract_only` / `toc_only` does NOT promote — the marker resolves to `<!--ref:slug LOW-WARN-PARTIAL-COVERAGE-->` (a draft-visible acknowledged-partial state, distinguishable from an unacknowledged `LOW-WARN`) and the per-section checklist entry gains an explicit coverage note (e.g. `read_scope abstract_only does not cover anchor page:12`); `sections` promotes ONLY when a `page` / `section` / `paragraph` anchor value falls unambiguously within a declared locator (locators are free text — promote on a clear containment match only; any ambiguity or no match resolves to `LOW-WARN-PARTIAL-COVERAGE` + coverage note), and `quote` anchors promote only under `full_text` or `unknown` (with partial coverage the finalizer cannot vouch that the quoted passage lies in a read section). `LOW-WARN-PARTIAL-COVERAGE` behaves as `LOW-WARN` for every downstream mechanism that keys on the base status (contamination suffixes attach the same way; severity tier unchanged; never a hard gate) — the formatter treats it as an acknowledged LOW-WARN variant and passes it with the coverage advisory surfaced. The degradation is always this retained LOW-WARN-tier state with a note — never a new severity, never below the pre-mark state. This paragraph refines WHEN row 3 promotes to row 4; the matrix rows and the join are unchanged, and the idempotency rule's evidence enumeration above explicitly includes the governing mark's attestation — a `read_scope` change between passes is an evidence change and re-resolves the marker.
+
+**Hard-gate handoff:** the finalizer never blocks pipeline progress on its own. It mutates the draft in place, then the orchestrator advances to Stage 5 where `formatter_agent` carries the hard-gate refusal rule (any `[UNVERIFIED CITATION ...]` literal or any unresolved `<!--ref:slug-->` whose status is neither `ok`, LOW-WARN-acknowledged, nor `LOW-WARN-PARTIAL-COVERAGE` (#513 acknowledged-partial — passes, never refused) forces a refusal at format time per spec §3.3 line 185).
 
 **Audit trail:** the finalizer's per-pass resolution counts (HIGH WARN / MED WARN / LOW WARN / OK / unresolved) are logged via `state_tracker` for the pipeline audit trail and surface in the Stage 4.5 integrity-check report.
 
@@ -743,7 +742,7 @@ NO-LOCATOR is MED severity (not HIGH) because the citation may still point at a 
 
 ### Contamination annotation (L3-2)
 
-After the 4-cell matrix resolves a citation to `ok` or `LOW-WARN`, the finalizer reads the entry's `contamination_signals` object from `literature_corpus[]` (if present) and appends an annotation suffix:
+After the 4-cell matrix resolves a citation to `ok` or `LOW-WARN`, the finalizer reads the entry's `contamination_signals` object from `literature_corpus[]` (if present) and appends an annotation suffix. (#513: `LOW-WARN-PARTIAL-COVERAGE` behaves as `LOW-WARN` throughout this section's — and the v3.9.0/v3.10/v3.11 extensions' — `ok`/`LOW-WARN` base-status enumerations: suffixes attach the same way, `policy_hash` stamping applies the same way, and `scripts/check_v3_10_policy.py` recognizes it as a base status.)
 
 | Base resolution | contamination_signals state | Annotated marker |
 |---|---|---|
@@ -757,6 +756,13 @@ Example: `<!--ref:smith2024 LOW-WARN CONTAMINATED-PREPRINT-->` or `<!--ref:smith
 **Advisory by default.** The contamination annotation SUFFIX does not change the gate decision: `ok CONTAMINATED-...` passes the formatter hard-gate and `LOW-WARN CONTAMINATED-...` is acknowledgeable via `/ars-mark-read <slug>` exactly like plain LOW-WARN. The suffix surfaces the signal so the user can verify the source or remove the citation. (v3.10 adds an OPT-IN terminal channel: when the passport's `terminal_policies.contamination_triangulation` is `strict` / `strict_articles_only`, a k=3 signal additionally co-emits a `TERMINAL-BLOCK` token that the formatter refuses on — see § Cite-Time Provenance Finalizer — v3.10 extension. The advisory suffix itself stays advisory; the terminal block is a separate, additional token.)
 
 The contamination annotation does NOT apply to HIGH-WARN / MED-WARN / MED-WARN-NO-LOCATOR rows — those already block at the gate and the user must address the higher-severity problem before contamination becomes relevant.
+
+### Canonical bibliographic-integrity carrier (#678)
+`literature_corpus[].bibliographic_integrity_signals[]`, validated by `shared/contracts/passport/bibliographic_integrity_signal.schema.json`, is the canonical structured carrier for new observations.
+The finalizer remains the sole terminal-policy owner. v1.0 `terminal_policy.eligible: false` is advisory-only. A v1.1 `retraction_status` row may be eligible for the explicit `terminal_policies.retraction` policy under the frozen #651 rules below.
+The finalizer writes no advisory marker token from this array; `display.marker_token` is null. A strict eligible retraction row uses the existing generic terminal-token channel, while the one legacy `CONTAMINATED-*` advisory suffix remains derived from `contamination_signals`.
+All canonical records compose as lexically sorted formatter-owned `Bibliographic Integrity Advisories` rows in `provenance_summary.md`.
+Any `finding: unresolved` or `not_checked`/`unknown`/`degraded` status is unresolved, never clean results; see `shared/bibliographic_integrity_signals.md` for the epistemic/deprecation contract.
 
 ### Updated 5-cell + annotation resolution order
 
@@ -827,7 +833,7 @@ v3.10 adds an **opt-in terminal policy layer** on top of the v3.9.0 advisory cha
 
 ### policy_hash stamp (added ONLY under a non-advisory policy)
 
-When — and ONLY when — the passport's `terminal_policies` carries at least one non-advisory CITATION-TIME key value, the finalizer appends `policy_hash=<slug>` to every marker it finalizes (so the formatter can detect a draft finalized under a stale policy). The citation-time keys are `contamination_triangulation`, `citation_existence`, and (forward) `temporal_integrity` — the marker-carrier policies; the package-level `submission_package` key (#394) NEVER participates in marker stamping and is OMITTED from the slug regardless of its value — its carrier is the #394 verifier's report file (`policy_slug` + `package_fingerprint`, the package-level analog of this stamp), so a `submission_package: strict`-only passport stamps nothing here. The slug is a **fully-encoded, human-readable canonical token** of the passport's citation-time `terminal_policies` state — NOT a computed digest (the finalizer is an LLM agent; it cannot reliably compute sha256 by hand). The slug encodes EVERY non-advisory citation-time policy key so two distinct policy configurations can never collide on one slug:
+When — and ONLY when — the passport's `terminal_policies` carries at least one non-advisory CITATION-TIME key value, the finalizer appends `policy_hash=<slug>` to every marker it finalizes (so the formatter can detect a draft finalized under a stale policy). The citation-time keys are `contamination_triangulation`, `citation_existence`, `retraction`, and (forward) `temporal_integrity` — the marker-carrier policies; the package-level `submission_package` key (#394) NEVER participates in marker stamping and is OMITTED from the slug regardless of its value — its carrier is the #394 verifier's report file (`policy_slug` + `package_fingerprint`, the package-level analog of this stamp), so a `submission_package: strict`-only passport stamps nothing here. The slug is a **fully-encoded, human-readable canonical token** of the passport's citation-time `terminal_policies` state — NOT a computed digest (the finalizer is an LLM agent; it cannot reliably compute sha256 by hand). The slug encodes EVERY non-advisory citation-time policy key so two distinct policy configurations can never collide on one slug:
 
 - **All-advisory** (absent `terminal_policies`, or every key explicitly `advisory`): NO stamp is emitted — the marker is the bare v3.9.0 shape (Invariant 7 byte-equivalence). There is no `policy_hash=advisory` sentinel; the *absence* of a stamp IS the advisory signal.
 - **Any non-advisory key present:** stamp `policy_hash=<slug>`, where `<slug>` joins each NON-ADVISORY policy key with its value as `key.value`, sorted by key name, separated by `+`. Examples:
@@ -850,7 +856,7 @@ Every finalized marker takes ONE of two shapes (the literal `TERMINAL-BLOCK` sen
     ```
 - **Terminal** (entry hit a HIGH-BLOCK under a strict policy — only reachable under a non-advisory policy, so always stamped): the advisory suffix stays in its optional slot; the terminal token sequence is ADDITIONAL:
   ```
-  <!--ref:<slug> <base-status> [<advisory-suffix>] TERMINAL-BLOCK severity=HIGH-BLOCK policy=<contamination_triangulation|temporal_integrity|citation_existence> reason=<reason-token> mode=<strict|strict_articles_only> policy_hash=<slug>-->
+  <!--ref:<slug> <base-status> [<advisory-suffix>] TERMINAL-BLOCK severity=HIGH-BLOCK policy=<contamination_triangulation|citation_existence|retraction|temporal_integrity> reason=<reason-token> mode=<strict|strict_articles_only> policy_hash=<slug>-->
   ```
 
 Where `<base-status>` ∈ {`ok`, `LOW-WARN`} (the v3.7.3 5-cell base resolution) and `[<advisory-suffix>]` is the OPTIONAL v3.9.0 contamination suffix (one token max, drawn from the v3.9.0 allowlist), present iff the entry fired an advisory signal. `reason` carries the typed payload that preserves remediation context — for contamination k=3 it is `reason=k3_all_indexes_unmatched`. The `mode=` enumeration above is the union across policies; the valid modes are **per-policy**: `contamination_triangulation` ∈ {`strict`, `strict_articles_only`}, `citation_existence` is `strict` only (no `strict_articles_only`), and `temporal_integrity` is forward-reserved advisory-only (no terminal mode wired). A `policy=citation_existence` token therefore always carries `mode=strict`.
@@ -887,9 +893,15 @@ Example (strict, ID-keyed false): `<!--ref:bogus2024 ok TERMINAL-BLOCK severity=
 
 **Recompute each pass; nothing cached (C-V6(h)).** Both the marker severity (strict terminal vs advisory) and the output gate are recomputed by the finalizer at every finalization pass — they are pure functions of the CURRENT `terminal_policies` state and the CURRENT `citation_verification_summary[]`, never cached status. Flipping `citation_existence` advisory→strict between passes re-stamps markers and re-applies the gate on the next finalize; a `resume_from_passport` / reset that re-enters finalization re-evaluates against the resumed summary. A previously-granted output (a draft that reached formatting) is never inherited across a resume without re-passing the gate under the then-current policy — there is no path where a stale certification survives a citation that resolves to `false` under `strict`. This is the same idempotency-on-current-evidence discipline as the v3.7.1 finalizer matrix above.
 
+### Retraction terminal promotion (#651)
+
+The authoritative input is a schema-valid v1.1 `bibliographic_integrity_signals[].retraction_status` row. Ignore legacy `retraction_check` for both status and policy. Detection remains visible in the formatter-owned `Bibliographic Integrity Advisories` section under every policy, and no retraction advisory suffix is added to the marker. Absent `terminal_policies.retraction` or under `advisory`, emit no terminal token.
+- Under `strict`, emit `TERMINAL-BLOCK severity=HIGH-BLOCK policy=retraction reason=retracted_reference mode=strict` only when the canonical row carries `terminal_policy.eligible: true` and `policy_key: retraction`; never promote reinstated, disputed, stale, unknown/degraded, or deterministic declared-legitimate rows. Do not recompute those conditions: validate and consume the canonical eligibility bit.
+- Include `retraction.strict` in the sorted `policy_hash` slug even when no row fires, so policy changes cannot reuse stale markers. Example: `<!--ref:smith2024 ok TERMINAL-BLOCK severity=HIGH-BLOCK policy=retraction reason=retracted_reference mode=strict policy_hash=retraction.strict-->`. The ethics agent has no independent retraction terminality; its report points to this row/finalizer result and may discuss context only as an advisory human judgment.
+
 ### Manual-entry exemption preserved
 
-Manual entries (`obtained_via: manual`) carry no `*_unmatched` fields (v3.9.0 §3.1 not-rule), so k=3 is structurally unreachable for them — no terminal promotion can fire (Invariant 8). For `citation_existence`, a manual entry's resolvers are all `skipped`, so its `lookup_verified` reduces to `unresolvable` (never `false`), and the strict citation-existence block is likewise unreachable (C-V6(f)). Preserved across all policy modes.
+Manual entries (`obtained_via: manual`) carry no `*_unmatched` fields (v3.9.0 §3.1 not-rule), so k=3 is structurally unreachable for them — no contamination terminal promotion can fire (Invariant 8). For `citation_existence`, a manual entry's resolvers are all `skipped`, so its `lookup_verified` reduces to `unresolvable` (never `false`). Retraction is deliberately different: a DOI makes the mutable-status lookup attemptable even on a manual entry; a DOI-less manual entry emits a visible unresolved v1.1 row and cannot promote.
 
 ### `/ars-mark-read` and HIGH-BLOCK
 
@@ -899,7 +911,7 @@ Manual entries (`obtained_via: manual`) carry no `*_unmatched` fields (v3.9.0 §
 
 The per-pass resolution counts gain a `terminal_blocked[]` bucket recording each ref slug promoted to a terminal block, with its `policy` / `reason` / `mode`. **Non-additive (R2-P2):** a single strict k=3 ref increments BOTH its advisory-signal count (e.g. CONTAMINATED-TRIANGULATION-UNMATCHED) AND the `terminal_blocked[]` bucket, but it remains ONE unique affected ref — any downstream aggregate "total affected refs" MUST dedupe by ref slug across the advisory and terminal buckets, NEVER sum them.
 
-**Multiple terminal policies co-emit independently (C-V6(g)).** A single ref that violates BOTH `contamination_triangulation == strict` (k=3) AND `citation_existence == strict` (`lookup_verified == false`) carries **two** `TERMINAL-BLOCK` tokens in its marker — one per `policy=` value (`policy=contamination_triangulation` and `policy=citation_existence`) — alongside the shared advisory slot. The two tokens are additive at the marker, but the ref is counted ONCE in any "total affected refs" aggregate: dedupe by ref slug across BOTH policy buckets (the same non-additive rule as above, now spanning policies). The `policy_hash` slug encodes both non-advisory keys, sorted by key name: `policy_hash=citation_existence.strict+contamination_triangulation.strict`. The formatter's generic "refuse on any unresolved `severity=HIGH-BLOCK`" rule already handles N tokens without per-policy enumeration — no per-policy refusal rule is added.
+**Multiple terminal policies co-emit independently (C-V6(g)).** A single ref may carry independent `TERMINAL-BLOCK` tokens for contamination, citation existence, and retraction, alongside the shared advisory slot. Tokens are additive, but the ref is counted ONCE in any "total affected refs" aggregate: dedupe by ref slug across all policy buckets. The `policy_hash` slug encodes every non-advisory citation-time key in lexical order (for example `citation_existence.strict+retraction.strict`). The formatter's generic "refuse on any unresolved `severity=HIGH-BLOCK`" rule already handles N tokens without per-policy enumeration.
 
 ---
 
@@ -912,9 +924,12 @@ When a revision stage dispatches `academic-paper` revision mode (Stage 3 → 4 /
 1. **Anchorize (manifest refresh):** `python scripts/ars_anchorize_draft.py <draft.md>` — idempotent, content-neutral; stamps any unlabeled blocks and regenerates `<draft>.block-manifest.json`. Run it at every round entry (including legacy pre-anchor drafts at revision-mode intake) so the manifest matches the exact text the writer is about to see.
 2. **Dispatch the writer** with the anchored draft + the block manifest + the round's Revision Roadmap in context. The writer emits the patch as `phase6_*/revision_patch_round<N>.json` plus provisional Schema 8 response items (see `draft_writer_agent.md` § Patch-Document Revision Emission).
 3. **Apply:** `python scripts/ars_apply_revision_patch.py <draft.md> <patch.json> --output <draft.rev<N>.md>` — two-phase fail-closed; the output is a NEW versioned artifact (supersession convention above) and the apply report lands beside it. The touched-ratio trigger defaults to the #424 ship decision (0.6, strict `>`); do not pass a different threshold without a recorded user decision.
+3a. **Token-conservation advisory (#570):** `python scripts/check_revision_token_conservation.py patch --patch <patch.json> --base <draft.md>` on the same patch, before the finalizer pass (append `--protected-terms "<phrase1>,<phrase2>"` from the paper's `protected_hedges` roster when one is in context, so hedge-phrase deltas are covered too). Deterministic complement to the E6 claim-strength check (#569). What it does — and does NOT — do: it emits one `ADV-REV-<n>` row for **every op whose numeric/citation/protected-term multiset changed**, each row carrying that op's own `roadmap_item_ids` verbatim. It does NOT judge whether the roadmap actually authorized the change — that authorization judgment is E6's job (it reads the same patch bundle). The `ADV-REV` row is the deterministic *signal* ("this op moved tokens; here are the items it claimed"); E6 supplies the *verdict*. Advisory only — it never blocks the apply and never re-runs the apply script's fail-closed gate (that is step 3's job); its rows join the Integrity Report advisory table and are displayed per-row at the MANDATORY checkpoint like any `ADV-*` family. A conserved patch emits no rows.
 4. **Finalizer pass:** the Cite-Time Provenance Finalizer runs on the apply OUTPUT, resolving any newly inserted bare `<!--ref:-->` markers per its shipped contract. A finalizer pass between steps 1 and 3 would legitimately mutate `<!--ref:-->` status tokens and produce spurious hash mismatches at apply — the sequencing exists to make every hash mismatch MEAN staleness, not pipeline noise.
 5. **Complete Schema 8 mechanical fields** from the apply report (§3.5 role split): `change_block_ids` per response item (including fresh insert IDs from `ops_applied[].new_block_ids` / `fresh_block_ids`), `word_count_delta`, counters. The writer's provisional items carry the judgment content; the orchestrator fills in the post-apply facts. Then the response moves to re-review with the **apply report named as a required input** alongside it.
 6. **Surface `preserved_ratio`** from the apply report's counters next to the accumulated round-trip count in the stage checkpoint line (the #389 interaction-count budget surface; advisory, one line — e.g. `round-trips: 3/9 · preserved_ratio: 0.91`).
+
+**Revision-Evidence Bundle (#569 — feeds E6).** Each revision round already writes its patch sidecar (`phase6_*/revision_patch_round<N>.json`) and its pre-round anchored draft as durable artifacts (steps 1–3). Accumulate them: the orchestrator carries the **complete chain** of `{round N: patch sidecar, pre-round anchored draft, Revision Roadmap (or FAIL-correction Issue List)}` — every round since the last integrity PASS, not just the latest — and names it in the Stage 4/4'→4.5 (and Stage 2.5/4.5 FAIL re-verification) dispatch context under this declaration. This is what makes the bundle a *declared* artifact, satisfying context hygiene: E6 (`claim_verification_protocol.md` § E6) consumes it to audit claim-strength drift per round, and #570 step 3a already ran on each patch as it landed. When no chain exists (first-pass audit, standalone run), the bundle is absent and E6 SKIPs — no reconstruction.
 
 **Integrity-correction variant (Stage 2.5 / 4.5 FAIL rounds, #89 Item 8).** A correction round follows steps 1–4 and 6 unchanged, with two destination differences. (a) **No Schema 8 response items in this round** — response items are review-round artifacts and no review round occurred; the writer maps each patch op's `roadmap_item_ids` to the integrity report's stable correction IDs instead (the `IL-<SEVERITY>-<n>` Issue List IDs, or a finding's native `EA-NNN`; see `integrity_verification_agent.md` § Issue List and `draft_writer_agent.md` § Patch-Document Revision Emission), and step 5's mechanical completion is skipped. (b) **The applied output returns to the SAME integrity gate that issued the FAIL** (Stage 2.5 or 4.5) for re-verification — never forward to review or finalization on the strength of the apply report alone; the apply report is a required input to that re-verification, not a substitute for it. The integrity gate's own caps are unchanged (max 3 correction rounds; abort after the 2nd Stage 4.5 FAIL).
 
@@ -949,6 +964,26 @@ Your options:
 Only on explicit user choice (c) does a round run as full re-emission; afterwards **re-anchorize from scratch** (new ID generation — old patches never apply across a re-emission boundary) and record `mode: full_reemission_escalated` in the round's report so provenance never pretends a patch round happened. NEVER auto-fallback to full re-emission — not on structural flags, not on apply failure. MVP granularity is per-round, binary (one confirmed restructure item ⇒ the whole round re-emits; mixed rounds are deferred forward-scope, spec §9.3).
 
 **Apply-failure path (distinct from escalation):** a Phase 1 rejection (exit 2 — stale hash, unknown target, schema failure) feeds the structured failure report back to the writer for ONE patch re-emission against the current base (retry-once, v3.6.6 convention). Second failure → escalate to the user with three options: re-anchorize + retry the round / escalated full re-emission (checkpoint above) / abort. The base draft is byte-untouched on every rejection — there is no partial apply to clean up.
+
+---
+
+## Stage 3' Re-Review Contract Dispatch (#576 Spec B)
+
+Contract-governed re-review IS the Stage 3' default. The orchestrator (the dispatching layer — per #523 it, not a fenced agent, executes API calls and runs scripts) owns the deterministic steps around the three fenced verification calls. Authority: `academic-paper-reviewer/references/re_review_mode_protocol.md` § Three-Gate Orchestration; artifacts: `shared/contracts/re_review/*.schema.json`; checker: `scripts/check_re_review_synthesis.py`.
+
+**Normative dispatch order per re-review round:**
+
+1. **Emit the input manifest** (`input_manifest.schema.json`) BEFORE Phase 1: hash-bind every Stage 4 → 3' artifact (original draft, revised draft, roadmap, letter, response letter, patches[], apply reports[], round-1 findings, round-1 config cards), each as a `present`-discriminated union with `passport:`/`path:` tagged refs and passport-sourced freshness fields; declare `cross_model_active`. `revised_manuscript` + `revision_roadmap` are hard-required — missing → surface `[RE-REVIEW-ABORT: manifest_incomplete]` at the Stage 3' checkpoint (fail closed, § abort surfacing below); every other absence follows the §11 presence policies (visible markers, never silent downgrades).
+2. **Dispatch the three gates sequentially** — Phase 1 criteria commitment (revision-blind; roadmap + letter + round-1 findings + cards only) → Phase 2A evidence verdict (adds original + revised manuscripts + patch/apply reports; Response Letter still withheld) → Phase 2B claim matching (adds the Response Letter, fenced UNTRUSTED). These are dedicated contract calls, not dispatches of the first-round `eic_agent` or `editorial_synthesizer_agent` files. The Phase 1/2A dispatch context includes the frozen Round-1 cards so each P1/P2 item is verified UNDER its §10 routed seat persona (routing changes the persona within the call, not the call count; `verified_by` records the seat) — Phase 2B is one dedicated Journal-Fit Reviewer (`EIC` wire label) / synthesizer-function integration call; the closed rules derive the candidate decision state and `scripts/check_re_review_synthesis.py` recomputes it before surfacing. Each gate's output is schema-validated + linted BEFORE the next gate is dispatched, and persisted BEFORE the next dispatch (2A verdicts are committed — no post-hoc revision channel exists). Phase 1 gets ONE lint retry with the gap hinted (revision-blind, so the hint leaks nothing); Phase 2A/2B/2B′ get NO retry — lint failure aborts (`phase2a_lint_failed` / `phase2b_lint_failed`).
+3. **Run the three post-2B passes, ORDER NORMATIVE (§6):** (i) the critical-rebuttal judgment pass on each PENDING `valid_rebuttal` upgrade (booking on `upheld`, never booking on `challenged`; not-configured → book with `single_family_disclosed`, active-but-failed → `pass_unavailable_disclosed`); then (ii) record each active-cross-model dissent adjudication together with any dissent-ONLY judge-shortcut `ReapplicationRecord` — BEFORE any divergence dispatch, because the divergence calls' `criterion_ref` selector and the coalescing rule read these adjudications; then (iii) emit each `diverges` row's `system` `ResolutionIntent` and dispatch its scoped Phase 2B′ re-application (coalesced dissent+divergence items get one fresh seat-verifier call covering both answers — never the judge's own output).
+4. **Persist the traceability sidecar, then invoke the checker — MANDATORY runtime step**, immediately after the Phase 2B artifacts are persisted and BEFORE any outcome — deferred or final — is surfaced to the user: `python scripts/check_re_review_synthesis.py --manifest <input_manifest.json> --precommitment <phase1.json> --verdict-record <phase2a.json> --traceability <sidecar.json> --roadmap <roadmap file the manifest hash-binds>` + `--letter <letter file>` iff the manifest declares the letter present + one `--apply-report <file>` per manifest `apply_reports[]` entry, in manifest order (the required-flag set is the checker's CLI contract — a flagless invocation is an argparse error, not a contract abort). On each §6 deferral-loop iteration, re-run with `--traceability` pointing at the RE-PERSISTED emission (`revision: n+1`); every other path is unchanged (the 2A artifact is immutable). Exit 0 → surface the recomputed `decision_state`; exit 1 (`synthesis_mismatch`) or exit 2 (schema/manifest invalid) → abort surfacing below. Every `decision_state` the user ever sees is checker-covered; there is no post-checker mutation path.
+5. **Deferral loop (`decision_state: user_review_required`):** surface the matrix + pending items (dissent adjudications, unresolved divergences, pending escalation approvals, G2(d) fail-closed acceptances) at the Stage 3' checkpoint. Each user answer is recorded as its typed record; any mandated scoped Phase 2B′ re-verification is dispatched and completes; the sidecar is RE-PERSISTED (`revision: n+1`, `supersedes_hash`); the checker RE-RUNS; only then does the recomputed outcome re-surface. Repeat until no pending state remains. Re-applying a criterion is a verification judgment the orchestrator never makes — an undispatchable/crashed 2B′ call is recorded as a `ReapplicationRecord` with `cannot_verify_reason: "dispatch_failed: <why>"` (a transport fact, not a judgment).
+6. **Abort surfacing:** every `[RE-REVIEW-ABORT: <reason>]` (closed set: `phase1_lint_failed`, `phase2a_lint_failed`, `phase2b_lint_failed`, `manifest_incomplete`, `manifest_hash_mismatch`, `criteria_drift`, `synthesis_mismatch`) is fail-closed — no decision is emitted; the orchestrator surfaces the abort verbatim at the Stage 3' checkpoint with the failing artifact/invariant named, and the user chooses how to proceed (fix inputs and re-run / legacy flag / abandon). Never convert an abort into a decision or a silent legacy run.
+7. **Route the outcome:** Accept/Minor → Stage 4.5 directly (Stage 3' → 4.5 handoff row — the sidecar's frozen `previously_missed`/`indeterminate` records travel as gate input); Major → coaching → Stage 4' (the new Roadmap carries any `REV-PM-<n>` forward-seed items; the sidecar rides through 4' to 4.5 via the extended Stage 4/4' → 4.5 row). `reject_recommended: true` surfaces at the checkpoint as advisory severity context (abandonment is the standing any-stage user exception, not a state-machine transition).
+
+**Producer obligations (Stage 3 side, consumed by the checker):** the Editorial Decision Letter + Revision Roadmap the synthesizer emits at Stage 3 must satisfy the machine grammar the Stage 3' checker recomputes from — the Roadmap travels as Schema 7 machine-form JSON (`items[]`, each with `id`/`priority`/`verification_criteria`/`reviewer` + transported optional fields), and the letter's per-item acceptance criteria live in a `### Required Item Details` section as `**R<n>: <title>**` blocks each carrying a single-line `- **Acceptance criteria**: <text>` bullet, `R<n>` following the Roadmap's must_fix order (the ordinal contract in `templates/editorial_decision_template.md`). A letter violating the grammar degrades the level-2 criterion layer (`[CRITERIA-LAYER-ABSENT: letter/roadmap ordinal mismatch]`) — visible, never fatal.
+
+**Legacy boundary (`ARS_RE_REVIEW_LEGACY=1`):** only under the explicit flag does Stage 3' run the pre-contract single-pass shape (one call, old template), with `[LEGACY-NO-CONTRACT]` at the top of the report. Absent the flag, a run that cannot satisfy the contract prerequisites aborts with the specific G0-class reason — NEVER a silent legacy fallback. A legacy run produces NO traceability sidecar; its absence at Stage 4.5 is a visible degradation, not a block. Standalone (non-pipeline) re-review invocations follow the same rule.
 
 ---
 

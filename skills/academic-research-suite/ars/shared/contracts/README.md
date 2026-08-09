@@ -24,13 +24,17 @@ Protocol: `academic-paper-reviewer/references/sprint_contract_protocol.md`.
 - `writer/full.json` — single-agent writer, 7 dimensions (D1 section_completeness / D2 citation_density / D3 argument_blueprint_fidelity / D4 total_word_count / D5 per_section_word_count / D6 acknowledged_limitations / D7 register_consistency), 5 failure conditions (F1 / F4 / F2 / F3 / F0). No `scoring_plan` field.
 - `evaluator/full.json` — single-agent evaluator, 5 dimensions (D1 originality / D2 methodological_rigor / D3 evidence_sufficiency / D4 argument_coherence / D5 writing_quality), 7 failure conditions (F1 / F2 / F3 / F6 / F4 / F5 / F0). Carries full `scoring_plan` + `disagreement_handling`.
 
-Both writer + evaluator templates ship under Schema 13.1 (allOf branches 11/12 require `pre_commitment_artifacts` for `writer_full` and `disagreement_handling` for `evaluator_full`; branches 5/6 pin `failure_conditions[].action` to mode-specific enums; branches 8/9 pin F0 contains to the mode's accept variant). Orchestration block lives in `academic-paper/SKILL.md` § "v3.6.6 Generator-Evaluator Contract Protocol" + the writer/evaluator agent files.
+Both writer + evaluator templates ship under Schema 13.1 (allOf branches 11/12 require `pre_commitment_artifacts` for `writer_full` and `disagreement_handling` for `evaluator_full`; branches 5/6 pin `failure_conditions[].action` to mode-specific enums; branches 8/9 pin F0 contains to the mode's accept variant). Orchestration block lives in `academic-paper/WORKFLOW.md` § "v3.6.6 Generator-Evaluator Contract Protocol" + the writer/evaluator agent files.
 
 ### Reserved reviewer modes without shipped templates
 
-`reviewer_re_review`, `reviewer_calibration`, `reviewer_guided` are in the schema enum
-but ship without templates in v3.6.2. Those modes continue to operate in their existing
-form (no contract, no hard-gate) until a follow-up patch release adds their templates.
+`reviewer_calibration` and `reviewer_guided` are in the schema enum but ship without
+templates. Those modes continue to operate in their existing form (no contract, no
+hard-gate) until a follow-up patch release adds their templates. `reviewer_re_review`
+left the Schema 13 enum with #576 Spec B: re-review is governed by the dedicated
+contract family under `re_review/` (four schemas + `scripts/check_re_review_synthesis.py`),
+not by a Schema 13 template — a contract claiming `mode: reviewer_re_review` no longer
+validates.
 
 ### How to add a new template
 
@@ -46,6 +50,12 @@ Schemas for Material Passport input ports.
 
 - `passport/literature_corpus_entry.schema.json` (v3.6.4) — Schema 9 `literature_corpus[]`
   entries produced by user-written adapters.
+- `passport/bibliographic_integrity_signal.schema.json` (#678/#651) — v1.0
+  additive signal carrier plus v1.1 authoritative retraction-status rows,
+  including resolver disagreement/reinstatement, judgment context, freshness,
+  and opt-in finalizer policy eligibility. The separate
+  `retraction_status_cache_v1` namespace and pure resolver live in
+  `scripts/retraction_status.py`.
 - `passport/rejection_log.schema.json` (v3.6.4) — adapter output companion logging
   entries that could not be included in the corpus.
 - `passport/reset_ledger_entry.schema.json` (v3.6.3) — `reset_boundary[]` ledger entries
@@ -59,6 +69,78 @@ Schemas for Material Passport input ports.
   `phase2_investigation/version_records.yaml` sidecar for academic citation version
   families (preprint -> proceedings -> journal extension). This is deliberately a
   sidecar: `literature_corpus_entry.schema.json` stays adapter-owned and unmodified.
+- `passport/human_read_log.schema.json` (#513) — the user-owned human-read ledger
+  (`<passport-stem>_human_read_log.yaml`, written by `scripts/ars_mark_read.py`),
+  including the optional #513 `read_scope` honest-coverage attestation
+  (`level`/`locators`/`note`, declaration-only). Deliberately a sidecar for the same
+  reason as above: corpus entries MUST NOT carry human-read state (v3.6.8 firm rule 3).
+  Audit/test-time validation only — the CLI stays dependency-light at runtime.
+
+## Human-subjects correspondence contract (#668)
+
+`human_subjects/committee_correspondence.schema.json` defines the standalone
+`academic-paper revision-coach` committee-correspondence variant. It binds every
+confirmed source comment to one concern record while preserving the entire UTF-8
+letter byte-for-byte, including non-comment material. The contract carries
+multi-label actions, explicit authority/provenance, optional profile enrichment,
+fixed unresolved placeholders, the #665 administrative boundary, and no model
+priority or severity.
+
+Validate a bundle with:
+
+```bash
+python scripts/check_committee_correspondence.py \
+  committee_correspondence/<source-sha12>/concern_tracker.json
+```
+
+The checker recomputes file/segment hashes, contiguous byte coverage, exact
+comment-to-concern accounting, source order, full-permutation working views, and
+response-skeleton coverage. Spec:
+`docs/design/2026-08-08-668-committee-correspondence-spec.md`.
+
+## Human-subjects authority context (#666)
+
+The `human_subjects/` authority family keeps selection explicit and separates three
+closed artifacts:
+
+- `irb_context_record.schema.json` — the author-confirmed facts plus exact,
+  axis-qualified profile and overlay pins;
+- `authority_profile_registry.schema.json` — curator-owned, versioned, bounded
+  profiles and row-local source anchors;
+- `resolved_authority_context.schema.json` — a pointer-only, deterministic
+  three-valued applicability trace and downstream gate.
+
+V1 has exactly two axes: `review_ethics` and `data_protection`. Institutional and
+funder rules are additive overlays, never a third axis; display precedence cannot
+remove, merge, or satisfy a requirement. The shipped registry demonstrates the
+same contract with bounded US 45 CFR 46, Taiwan Human Subjects Research Act, and
+GDPR research subsets. It is not a completeness, compliance, pathway, exemption,
+or authorization claim.
+
+Resolve an explicit context offline, lint the registry alone, or replay-check a
+serialized result before consuming it:
+
+```bash
+python scripts/resolve_human_subjects_authority.py \
+  --context context.json \
+  --registry shared/human_subjects_authority_registry.json \
+  --output resolved-authority-context.json
+
+python scripts/resolve_human_subjects_authority.py \
+  --registry shared/human_subjects_authority_registry.json \
+  --check-registry
+
+python scripts/resolve_human_subjects_authority.py \
+  --context context.json \
+  --registry shared/human_subjects_authority_registry.json \
+  --check-resolved resolved-authority-context.json
+```
+
+The resolver is standard-library-only, opens only named files, evaluates a closed
+Strong-Kleene predicate AST, never infers a jurisdiction, and rejects duplicate
+JSON keys and non-finite numbers. Protocol:
+`shared/references/human_subjects_authority_protocol.md`. Spec:
+`docs/design/2026-08-09-666-human-subjects-authority-contract-spec.md`.
 
 ## Audit artifact contracts (v3.6.7 Step 6)
 
@@ -80,3 +162,36 @@ orchestrator agent reads at every per-agent audit gate.
   spec §3.7 A1 / A2 / A5 / A6.
 
 Spec: `docs/design/2026-04-30-ars-v3.6.7-step-6-orchestrator-hooks-spec.md` §3.
+
+## Review target contracts (#683)
+
+The `review_target/` family keeps target selection author-owned and separates it
+from deterministic criterion resolution:
+
+- `review_target_declaration.schema.json` — the closed author-confirmed discipline,
+  exact venue/track/contribution-type (or explicit no-venue fallback), overlay,
+  selection, precedence, and as-of input;
+- `criteria_registry.schema.json` — the versioned four-part authority registry with
+  criterion provenance, applicability/exclusions, freshness, and blocking policy;
+- `review_target_context.schema.json` — the pointer-only resolved profile, three
+  independent outcome dimensions, parallel conflicts, fallback state, and stable
+  digests.
+
+`shared/review_criteria_registry.json` intentionally ships only a field-general
+baseline. It does not present remembered or synthetic journal rules as official
+venue guidance. Exact venue × track × contribution-type behavior is covered by
+synthetic fixtures.
+
+Resolve a declaration and optionally emit the Phase 0/1 Target Criteria Brief:
+
+```bash
+python scripts/resolve_review_target_context.py \
+  --context declaration.json \
+  --output review-target-context.json \
+  --brief target-criteria-brief.md
+```
+
+The resolver is standard-library-only and opens only the named context and registry
+inputs. It never reads manuscript content, infers a venue, averages interdisciplinary
+criteria, or applies adaptive numeric weights. Spec:
+`docs/design/2026-08-08-683-review-target-context-spec.md`.

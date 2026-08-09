@@ -115,7 +115,7 @@ def test_component_identity_and_release_classifier_do_not_collapse_licenses() ->
     assert verdict["release_qualification"] == "BLOCKED"
     assert verdict["reason_codes"]
     assert verdict["evidence_needed"]
-    assert use_distribution["repository_visibility"] == "private"
+    assert use_distribution["repository_visibility"] == "public"
     assert use_distribution["private_repository_is_noncommercial_evidence"] is False
     assert use_distribution["intended_use"]["status"] == "unknown"
     assert use_distribution["distribution_class"]["status"] == "unknown"

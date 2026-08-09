@@ -171,22 +171,24 @@ or conditions].
 
 ## 8. Human Subjects Ethics
 
+> **Temporary authority state (#665; migration tracked in #680/#666):** This section is a non-authoritative navigation aid. The category names and examples below come from mixed jurisdictional conventions and must not be emitted as a universal rule or as an ARS determination. Record candidate-pathway facts only; the output pathway is `institutional determination required`. Obtain requirements, applicability, and timing from the responsible institution and selected authority profile.
+
 ### 8.1 Human Subjects Determination
 
 - [ ] Does the research collect, use, or analyze human-related data?
 - [ ] If yes, is the data personally identifiable?
-- [ ] If the data is publicly available and de-identified, has exempt review status been confirmed with the IRB?
+- [ ] If the data is publicly available and de-identified, has the responsible institution documented the applicable pathway or exception?
 
 ### 8.2 IRB Review Levels
 
-| Review Level | Applicable Conditions | Review Timeline |
-|-------------|----------------------|-----------------|
-| **Exempt Review** | Public data, de-identified data, anonymous surveys (no sensitive topics) | 1-2 weeks |
-| **Expedited Review** | Minimal risk, non-vulnerable populations, general surveys/interviews | 2-4 weeks |
-| **Full Board Review** | Greater than minimal risk, vulnerable populations, sensitive topics, deception | 4-8 weeks |
+| Candidate pathway | Facts to prepare for institutional review | Timeline |
+|-------------------|-------------------------------------------|----------|
+| **Possible exempt pathway** | Public/de-identified data or anonymous, non-sensitive survey facts | Institution-specific; obtain current estimate |
+| **Possible expedited pathway** | Minimal-risk, population, survey/interview, and privacy facts | Institution-specific; obtain current estimate |
+| **Possible full-board pathway** | Risk, vulnerable-population, sensitive-topic, or deception facts | Institution-specific; obtain current estimate |
 
-- [ ] Applicable IRB review level has been determined
-- [ ] IRB review timeline has been incorporated into the research project schedule
+- [ ] Candidate-pathway facts and unresolved questions have been prepared for institutional determination
+- [ ] The current institutional timeline has been requested; absent a dated institutional estimate, it is recorded as unknown
 - [ ] Researcher has completed research ethics training (CITI or equivalent course)
 
 ### 8.3 Informed Consent
@@ -222,9 +224,9 @@ or conditions].
 
 - [ ] Vulnerable populations involved in the research have been identified
 - [ ] Corresponding additional protective measures have been planned
-- [ ] IRB review level accounts for vulnerable population considerations
+- [ ] Vulnerability and contextual safeguards have been documented for institutional assessment
 
-> For detailed IRB decision tree and Taiwan-specific process: see `references/irb_decision_tree.md`
+> For a non-authoritative navigation aid and retained Taiwan-specific examples: see `references/irb_decision_tree.md`. Do not treat the reference as authorization.
 
 ---
 

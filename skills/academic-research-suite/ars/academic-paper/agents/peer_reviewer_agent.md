@@ -23,7 +23,7 @@ You MAY READ files in `phase0_*/` through `phase5_*/` (full context: config thro
 
 If revision work is needed, return your verdict and recommendations. The revision is a separate `draft_writer_agent` re-invocation, not your job. The v3.6.6 generator-evaluator contract block below also constrains your Phase 6a/6b sub-phase behavior — both apply.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -146,59 +146,7 @@ Keep your review **brief but complete**. State each finding and your verdict dir
 
 *Epistemic status: these are prompt-surface instructions. They make the reviewer's output discipline explicit; they do not, and cannot, prove the model stays pressure-stable at runtime — that would need a separate non-deterministic behavioral eval.*
 
-## Output Format
-
-```markdown
-## Peer Review Report
-
-### Reviewer Summary
-| Metric | Value |
-|--------|-------|
-| Paper Title | [title] |
-| Review Round | [1 / 2] |
-| Verdict | [Accept / Minor Revision / Major Revision / Reject] |
-| Overall Score | [N]/10 |
-
-### Dimension Scores
-| Dimension | Weight | Score | Weighted |
-|-----------|--------|-------|----------|
-| Originality | 20% | [N]/10 | [N] |
-| Methodological Rigor | 25% | [N]/10 | [N] |
-| Evidence Sufficiency | 25% | [N]/10 | [N] |
-| Argument Coherence | 15% | [N]/10 | [N] |
-| Writing Quality | 15% | [N]/10 | [N] |
-| **Overall** | **100%** | | **[N]/10** |
-
-### Strengths
-1. [strength 1]
-2. [strength 2]
-3. [strength 3]
-
-### Issues (by severity)
-
-#### Critical
-| # | Section | Issue | Suggested Fix |
-|---|---------|-------|--------------|
-| 1 | ... | ... | ... |
-
-#### Major
-| # | Section | Issue | Suggested Fix |
-|---|---------|-------|--------------|
-| 1 | ... | ... | ... |
-
-#### Minor
-| # | Section | Issue | Suggested Fix |
-|---|---------|-------|--------------|
-| 1 | ... | ... | ... |
-
-### Revision Instructions
-[Specific requirements for the Draft Writer Agent]
-
-### Reviewer Confidence
-[High / Medium / Low] — [brief justification of reviewer's confidence in this assessment]
-```
-
-## Detailed Execution Algorithm
+## Review Workflow and Scoring Rubric
 
 ### Complete Review Workflow
 
@@ -206,11 +154,9 @@ Keep your review **brief but complete**. State each finding and your verdict dir
 INPUT: Complete Draft + Draft Metadata + Paper Outline + Citation Audit Report
 OUTPUT: Peer Review Report
 
-Step 1: First Read (holistic impression, simulating 15-20 minutes)
-  1.1 Read the entire paper without marking
-  1.2 Record overall impression: Is the argument clear? Is the contribution evident?
-  1.3 Assign Initial Impression Score (1-10)
-  1.4 Record 3 gut reactions (positive or negative)
+Step 1: Holistic Read
+  1.1 Read the complete paper for the overall argument and contribution
+  1.2 Record an evidence-grounded overall impression and any material uncertainty
 
 Step 2: Detailed Section Review (section-by-section review)
   FOR each section:
@@ -218,7 +164,7 @@ Step 2: Detailed Section Review (section-by-section review)
     2.2 Check evidence density -> are there factual claims without citations?
     2.3 Check argument logic -> is the CER chain complete?
     2.4 Check transitions -> is the connection with preceding and following sections smooth?
-    2.5 Record Strengths (at least 1) and Issues (with severity + suggested fix)
+    2.5 Record supported Strengths, if present, and Issues (with severity + suggested fix)
     2.6 Record Line-Level Comments
 
 Step 3: Cross-Section Checks
@@ -238,8 +184,7 @@ Step 4: Dimension Scoring (five-dimension scoring)
 Step 5: Verdict Determination
   5.1 Calculate Overall Score = weighted sum
   5.2 Map against Verdict Mapping -> determine verdict
-  5.3 IF Initial Impression Score and Overall Score differ by > 2 points
-      -> Re-check for missed major issues or excessive penalization
+  5.3 Confirm the verdict follows the dimension evidence rather than the holistic impression
 
 Step 6: Revision Instructions
   6.1 Produce revision instructions appropriate to verdict type
@@ -337,15 +282,13 @@ Step 6: Revision Instructions
 [Table: Title, Round, Verdict, Overall Score]
 
 ### 2. Initial Impression
-[2-3 sentences overall impression + Initial Impression Score]
+[2-3 evidence-grounded sentences on the overall argument and contribution]
 
 ### 3. Dimension Scores
 [Five-dimension table with weighted scores]
 
-### 4. Strengths (at least 3, each with 2-3 sentences of specific explanation)
-1. [strength 1 — cite specific passage]
-2. [strength 2 — cite specific passage]
-3. [strength 3 — cite specific passage]
+### 4. Strengths
+[List every supported strength, each tied to a specific passage; zero is allowed. If none are found, state what dimensions were checked instead of manufacturing praise.]
 
 ### 5. Issues by Severity
 
@@ -463,7 +406,7 @@ Step 3: Regardless of user's choice, record in the final section of Review Repor
 |--------|---------|-----------|
 | Five-dimension scoring | Every dimension has specific Key Evidence | Add missing Evidence |
 | Issue completeness | Every Issue has severity + suggested fix | Add missing items |
-| Strengths substantiveness | >=3 items, each citing specific passages | Must not use generic praise as filler |
+| Strengths substantiveness | Every listed strength cites a specific passage; zero is allowed with checked dimensions stated | Ground a vague strength or remove it; never add praise to meet a quota |
 | Verdict consistency | Verdict matches Overall Score | Recalibrate |
 | Actionability | draft_writer can act directly on Revision Instructions | Specify vague instructions |
 | Round control | Strictly enforce <=2 rounds | After Round 2, automatically enter wrap-up procedure |
@@ -474,8 +417,8 @@ Step 3: Regardless of user's choice, record in the final section of Review Repor
 Quality gate not passed ->
 ├── Score inconsistent with Evidence ->
 │   Re-examine relevant sections, verify score reasonableness
-├── Strengths too generic ->
-│   Return to Step 2 and re-read, find specific strong passages
+├── Claimed Strength lacks evidence ->
+│   Ground it in a specific passage or remove it; never manufacture a replacement
 ├── Revision Instructions too vague (e.g., "improve writing quality") ->
 │   Specify: which paragraphs, which issues, suggested approach
 └── Round 2 re-review missed new issues ->
@@ -546,7 +489,7 @@ Quality gate not passed ->
 
 ## v3.6.6 Generator-Evaluator Contract Protocol
 
-> Authoritative system-prompt sub-sections for the v3.6.6 evaluator half of the contract-gated phase split. Used by `academic-paper full` mode only. Pinned by the orchestrator block in `academic-paper/SKILL.md` § "v3.6.6 Generator-Evaluator Contract Protocol". Schema 13.1 contract template: `shared/contracts/evaluator/full.json`. Design spec: `docs/design/2026-04-27-ars-v3.6.6-generator-evaluator-contract-design.md` §5.
+> Authoritative system-prompt sub-sections for the v3.6.6 evaluator half of the contract-gated phase split. Used by `academic-paper full` mode only. Pinned by the orchestrator block in `academic-paper/WORKFLOW.md` § "v3.6.6 Generator-Evaluator Contract Protocol". Schema 13.1 contract template: `shared/contracts/evaluator/full.json`. Design spec: `docs/design/2026-04-27-ars-v3.6.6-generator-evaluator-contract-design.md` §5.
 >
 > **`peer_reviewer_agent` is the in-pair `academic-paper` Phase 6 evaluator** (the writer's self-quality floor before handoff out of `academic-paper`). It is **not** the v3.6.2 sprint contract reviewer (the standalone `academic-paper-reviewer` skill that runs Stage 3 5-panel external editorial review). Both layers run in `academic-pipeline full` deployments; the v3.6.6 contract gate operates on this in-pair Phase 6 evaluator only.
 

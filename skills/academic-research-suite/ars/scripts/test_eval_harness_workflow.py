@@ -15,13 +15,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "eval-harness.yml"
-CODEX_FIXTURE_PATH = (
-    REPO_ROOT.parent / "codex" / "tests" / "fixtures" / "upstream-eval-harness.yml"
-)
-WORKFLOW_PATH = (
-    UPSTREAM_WORKFLOW_PATH if UPSTREAM_WORKFLOW_PATH.is_file() else CODEX_FIXTURE_PATH
-)
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "eval-harness.yml"
 
 
 class _NoDuplicateKeyLoader(yaml.SafeLoader):
@@ -128,6 +122,16 @@ def test_harness_step_computes_failed_tasks(workflow):
     assert "scripts._eval_threshold_gate" in body
     assert "failed_tasks=" in body
     assert "GITHUB_OUTPUT" in body
+
+
+def test_comment_built_by_renderer_module(workflow):
+    steps = _steps(workflow)
+    run_step = next(s for s in steps if s.get("id") == "run")
+    body = run_step["run"]
+    # The PR comment body is rendered by the unit-tested display module (not a
+    # raw `cat` of the report into a fenced block).
+    assert "scripts.render_eval_comment" in body
+    assert "eval_comment.md" in body
 
 
 def test_workflow_has_no_inline_python_heredoc(raw):
