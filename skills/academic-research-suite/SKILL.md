@@ -80,7 +80,13 @@ submission deadline, or wants to learn/apply a current conference template:
 5. Label official requirements separately from ARW editorial recommendations
    and project-specific venue-fit inference. Never present a learned paper
    structure, section allocation, or target recommendation as an official rule.
-6. If a date is absent from the current official page, report
+6. For editorial conflicts, apply any audited
+   `style_learning.editorial_precedence` declared by the active annual profile:
+   official target-venue requirements > topic-matched full-text accepted-paper
+   audit > generic cross-venue heuristic. This precedence may choose a more
+   specific writing, figure, or table pattern, but it never overrides an
+   official format, anonymity, ethics, or submission rule.
+7. If a date is absent from the current official page, report
    `not_announced`; do not infer it from a previous year or a shared cycle.
 
 The bundled 2026-2027 registry currently covers the October 2026 ARR cycle,
