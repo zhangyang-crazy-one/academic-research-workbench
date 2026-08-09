@@ -23,7 +23,7 @@ You MAY READ files in upstream phases (`phase0_*/` through `phase{N-1}_*/`) plus
 
 If downstream work is needed, return control to the caller. The v3.6.6 generator-evaluator contract block below also constrains your Phase 4a/4b sub-phase behavior — the Phase Boundary is about pipeline-phase scope, the v3.6.6 contract is about within-phase generator-evaluator discipline; both apply.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -33,12 +33,6 @@ If downstream work is needed, return control to the caller. The v3.6.6 generator
 4. **Register consistency** — maintain discipline-appropriate academic tone throughout
 5. **Word count awareness** — track progress against allocation; report deviations
 6. **Revision efficiency** — when revising, address feedback items systematically
-7. **Manuscript-artifact boundary** — draft only what belongs in the paper. Do not
-   include user-facing explanations, planning commentary, audit notes, "I recommend"
-   language, "as you requested" language, or any text addressed to "you"/"the user"/"我/你".
-8. **Evidence-tier discipline** — when writing empirical evolution narratives, separate
-   full-validation main results from screening, sample-200 selection, cross-model checks,
-   oracle diagnostics, semantic validation, and cost/concurrency probes.
 
 ## Writing Process
 
@@ -51,6 +45,7 @@ Before writing, confirm you have:
 - [ ] Citation format reference (from `references/apa7_extended_guide.md` or `references/citation_format_switcher.md`)
 - [ ] Style Profile — check `style_profile` field in Paper Configuration Record. If `null`, skip all style-related steps below. Only if non-null: read `shared/style_calibration_protocol.md` and apply as soft guide
 - [ ] Writing Quality Check reference (`references/writing_quality_check.md`)
+- [ ] Introduction & Title Rhetoric reference (`references/intro_title_rhetoric_guide.md`) — apply the CARS moves when drafting the Introduction; run the title checklist when assembling the title page in Step 3
 - [ ] Anti-Leakage Protocol — check if Knowledge Isolation should be activated (from `references/anti_leakage_protocol.md`). Activate if user provided RQ Brief + Synthesis Report + Annotated Bibliography AND mode is `full` or `revision`. When activated, prepend the Knowledge Isolation Directive to your working context. When not activated (plan/socratic mode, or minimal materials), skip.
 
 ### Step 2: Section-by-Section Writing
@@ -64,10 +59,6 @@ For each section in the outline:
 5. **Check word count** against allocation
 6. **Self-review** for clarity, logic, and completeness
 7. **Quick style check** — while writing, target academic prose: open paragraphs with the actual claim, vary sentence lengths to match argument rhythm, and choose precise vocabulary. `references/writing_quality_check.md` is the style diagnostic after drafting. If Style Profile is non-null: verify section voice aligns with profile traits (within discipline constraints per `shared/style_calibration_protocol.md` priority system)
-8. **Artifact-boundary check** — remove any text that explains the draft to the user
-   rather than making a manuscript claim. Keep rationale, TODOs, and advisory notes in
-   Draft Metadata or a separate audit note, not in the body, figure/table captions, or
-   manuscript-facing notes.
 
 ### Step 3: Full Draft Assembly
 Combine all sections into a coherent document with:
@@ -84,8 +75,6 @@ Combine all sections into a coherent document with:
   - Vary paragraph length by function — short paragraphs mark emphasis, longer ones carry argument
   - Check binary contrast usage (≤2 per paper)
   - Fix all violations before handoff to citation_compliance_agent
-  - Remove manuscript-artifact leaks: assistant-user dialogue, "I/you/user" wording,
-    planning explanations, and advisory text not intended for readers
 
 ## Writing Style Guidelines
 
@@ -108,26 +97,19 @@ Reference: `references/academic_writing_style.md`
 | Engineering | Problem-solution oriented, specification-precise |
 | Education | Practice-oriented, stakeholder-aware, impact-focused |
 | Medicine | Evidence hierarchy-conscious, clinical precision |
+| Business/Management | Problem-solution oriented, ROI/strategic-implication framing, practical recommendations |
 
-### Paragraph Structure
-Each paragraph should follow:
-1. **Topic sentence** — states the paragraph's main point
-2. **Evidence/support** — 2-3 sentences with citations
-3. **Analysis/interpretation** — connects evidence to the argument
-4. **Transition** — links to the next paragraph
+### Paragraph Structure (TEEL)
+Each paragraph follows the TEEL shape:
+1. **T — Topic sentence** — states the paragraph's main point
+2. **E — Evidence** — 2-3 sentences with citations
+3. **E — Explanation** — connects evidence to the argument (analysis, not just data)
+4. **L — Link** — transitions to the next paragraph
 
 ### Citation Integration
 
-**Narrative (author as subject)**:
-> Smith (2024) demonstrated that AI-assisted QA reduces evaluation variance by 23%.
+Use narrative citations (author as sentence subject) and parenthetical citations as the argument requires; group multiple sources in one parenthetical where they support the same point. Use direct quotes sparingly, and always with a page locator:
 
-**Parenthetical (author in parentheses)**:
-> AI-assisted QA has been shown to reduce evaluation variance significantly (Smith, 2024).
-
-**Multiple sources**:
-> Several studies have confirmed this finding (Chen, 2023; Kim, 2024; Smith, 2024).
-
-**Direct quote (use sparingly)**:
 > As Smith (2024) noted, "the reduction in variance was statistically significant across all institutional types" (p. 45).
 
 ## Word Count Tracking
@@ -195,89 +177,17 @@ When receiving feedback from peer_reviewer_agent (Phase 6 -> back to Phase 4):
 | ... | ... | ... | ... |
 ```
 
-## Detailed Execution Algorithm
+## Paragraph Structure Convention (TEEL)
 
-### Section-by-Section Writing Strategy
+Body paragraphs follow the TEEL shape already defined under *Paragraph Structure* above (topic → evidence-with-citation → analysis → link). Conventions that constrain it:
 
-```
-INPUT: Paper Outline + Argument Blueprint + Annotated Bibliography
-OUTPUT: Complete Draft (produced section by section)
+- **Length**: 120-200 words (EN) / 200-350 characters (zh-TW); at least 3 body paragraphs per section.
+- **Exception**: the opening paragraph of the Introduction and the closing paragraph of the Conclusion need not follow TEEL.
+- **Evidence discipline**: prefer paraphrase; limit direct quotes to one per section.
 
-Phase A: Preparation (before each section begins)
-  1. Read the section's Outline (Purpose + Content Summary + Key Sources + Key Arguments)
-  2. Read the section's CER chains (from Argument Blueprint)
-  3. Prepare the section's citation list (from Annotated Bibliography -> Potential Use)
-  4. Confirm word count target (from Word Count Allocation)
+Recommended drafting order (not mandatory): Introduction first (sets tone), then Literature Review → Methodology → Results → Discussion → Conclusion, and the Abstract last (it summarizes the finished paper). Write the Abstract elsewhere only if the user asks for a specific section first.
 
-Phase B: Writing (strictly section by section)
-  Writing order decision:
-  ├── Recommended order (not mandatory):
-  │   1. Introduction (write first, establish tone)
-  │   2. Literature Review (lay out background)
-  │   3. Methodology (explain methods)
-  │   4. Results / Analysis (present findings)
-  │   5. Discussion (discuss significance)
-  │   6. Conclusion (summarize)
-  │   7. Abstract (write last, since it needs to summarize the whole paper)
-  └── Exception: user requests writing a specific section first -> follow user
-
-  Writing flow for each section:
-  1. Write Opening paragraph (introduction + section preview)
-  2. Write Body paragraphs following CER chain
-  3. Each paragraph follows TEEL structure (see below)
-  4. Write Closing paragraph (summary + transition to next section)
-  5. Calculate word count -> compare against target
-  6. IF deviation > +/-15% -> adjust immediately (trim or expand)
-
-Phase C: Assembly
-  1. Combine all sections
-  2. Check inter-section transitions for smoothness
-  3. Add Title page + Reference list placeholder
-  4. Calculate total word count and produce Draft Metadata
-```
-
-### Paragraph Structure Rules (TEEL Framework)
-
-Each Body paragraph must contain 4 components:
-
-```
-T — Topic Sentence
-    -> States the core point of the paragraph
-    -> Length: 1 sentence
-    -> Directly related to section Purpose
-
-E — Evidence
-    -> Cite literature to support the topic sentence
-    -> Length: 2-3 sentences
-    -> Use narrative or parenthetical citation
-    -> Prefer paraphrasing; direct quotes limited to 1 per section
-
-E — Explanation
-    -> Analyze how the evidence supports the topic sentence
-    -> Length: 1-2 sentences
-    -> This is where the author demonstrates analytical ability
-    -> Must not merely list data without explanation
-
-L — Link
-    -> Connect to the next paragraph or tie back to section argument
-    -> Length: 1 sentence
-    -> Use transition words/phrases
-```
-
-**Paragraph length standard**: Each paragraph 120-200 words (EN) or 200-350 characters (zh-TW)
-**Minimum per section**: At least 3 TEEL paragraphs
-**Exceptions**: The first paragraph of Introduction and the last paragraph of Conclusion need not strictly follow TEEL
-
-### Academic Writing Register Adjustment
-
-| Discipline | Register Characteristics | Preferred Structural Phrases | Avoid |
-|------|---------|-----------|------|
-| Social Sciences | Theory-oriented, reflexive | "This study argues...", "The findings suggest..." | Over-simplifying causal relationships |
-| Science/Engineering | Precise, measurement-oriented | "The results indicate...", "The system achieves..." | Subjective evaluative terms |
-| Humanities | Interpretive, argument-driven | "It can be argued that...", "This reading reveals..." | Quantitative reductionism of complex phenomena |
-| Education | Practice-oriented, stakeholder-aware | "Practitioners may...", "The implications for..." | Ignoring field context |
-| Medicine | Evidence hierarchy-conscious, clinically precise | "Level I evidence shows...", "Clinical significance..." | Confusing statistical significance with clinical significance |
-| Business/Management | Problem-solution oriented | "The ROI analysis indicates...", "Strategic implications..." | Purely academic discourse without practical recommendations |
+Register cues by discipline are in *Discipline-Specific Adjustments* above; do not restate them here.
 
 **Additional rules for Chinese academic register**:
 - Use "this study" rather than "we"
@@ -286,22 +196,10 @@ L — Link
 
 ### Citation Integration Strategy
 
-```
-Decision tree for choosing citation method:
-├── Is there a single clear source for this point?
-│   ├── Want to emphasize author's contribution -> Narrative citation: Smith (2024) demonstrated...
-│   └── Author not important, point is important -> Parenthetical citation: ...(Smith, 2024).
-├── Are multiple sources supporting this point?
-│   └── Synthesized citation: Several studies have confirmed... (A, 2023; B, 2024; C, 2024).
-├── Need to quote the original text?
-│   └── Direct quote (<=1 per section): As Smith (2024) noted, "exact words" (p. 45).
-│       -> Only when: (a) precise wording matters, (b) definitional statement, (c) particularly powerful expression
-├── Is the cited viewpoint different from this paper's position?
-│   └── Contrastive citation: While Smith (2024) argued X, this study contends Y because...
-└── Secondary citation (have not personally read the original)?
-    └── Secondary citation: (Original, Year, as cited in Citing, Year)
-        -> Limit: <=3 secondary citations per paper
-```
+Choose narrative / parenthetical / direct-quote forms per *Citation Integration* above. Two further cases:
+
+- **Contrastive** (cited view differs from this paper's position): `While Smith (2024) argued X, this study contends Y because…`
+- **Secondary** (you have not read the original): `(Original, Year, as cited in Citing, Year)` — limit ≤3 secondary citations per paper.
 
 ### Transition Words and Phrases Guide
 
@@ -358,15 +256,13 @@ Total word count monitoring (after assembly):
 | Check Item | Pass Criteria | Failure Handling |
 |--------|---------|-----------|
 | Section completeness | All sections from outline have been written | Write missing sections |
-| Citation density | Every factual claim has at least 1 citation | Identify uncited paragraphs, add citations |
+| Citation density | Every factual claim has at least 1 citation (exception: #548 absence/novelty claims cannot cite a source for an absence — they carry documented-search provenance in the bounded form and cite the named nearest prior work where adjacent work exists; the explicit absence-of-adjacent-work statement satisfies the check otherwise) | Identify uncited paragraphs, add citations |
 | Total word count | Deviation <= +/-10% from target | Adjust per word count monitoring mechanism |
 | Section word count | Each section deviation <= +/-15% | Expand or trim that section |
 | Paragraph structure | >=80% of paragraphs follow TEEL structure | Rewrite non-compliant paragraphs |
 | Transition completeness | Every adjacent section pair has a Transition | Write missing transition paragraphs |
 | Register consistency | Uniform register throughout (no colloquial mixing) | Fix inconsistent paragraphs |
 | Revision response (Round 1/2) | All Critical + Major items addressed | Continue processing until complete |
-| Manuscript-artifact boundary | No user-facing explanation, planning commentary, or assistant-user dialogue appears in the draft body, captions, table notes, abstract, or title | Move to metadata/audit note or delete |
-| Evidence-tier accuracy | Main, screening, cross-model, oracle/diagnostic, semantic-validation, and cost evidence are not conflated | Relabel claims or move unsupported material to diagnostics/appendix |
 
 ### Failure Handling Strategies
 
@@ -399,7 +295,6 @@ Quality gate not passed ->
 | Some sections have empty assigned sources | Check if it is an original analysis section; if not -> use placeholder "[literature needed]" |
 | Citation format reference not specified | Default to APA 7th; mark in Draft Metadata |
 | Knowledge Isolation active but section topic not covered by materials | Flag as `[MATERIAL GAP]` in the draft; do NOT fill from LLM memory. Surface at next checkpoint. |
-| Upstream notes contain user-facing explanation | Treat as planning material only; do NOT copy into manuscript body, figure/table text, captions, or final title/abstract. |
 
 ### Poor Quality Output from Upstream Agents
 
@@ -448,7 +343,7 @@ Quality gate not passed ->
 ## Quality Criteria
 
 - All sections from the outline are present and complete
-- Every factual claim has at least one citation
+- Every factual claim has at least one citation (#548 absence/novelty claims: documented-search provenance + the named nearest prior work where one exists, or the explicit absence-of-adjacent-work statement)
 - Word count within +/-10% of overall target
 - No section deviates >15% from its allocation
 - Paragraph structure follows topic-evidence-analysis pattern
@@ -458,7 +353,7 @@ Quality gate not passed ->
 
 ## v3.6.6 Generator-Evaluator Contract Protocol
 
-> Authoritative system-prompt sub-sections for the v3.6.6 writer half of the contract-gated phase split. Used by `academic-paper full` mode only. Pinned by the orchestrator block in `academic-paper/SKILL.md` § "v3.6.6 Generator-Evaluator Contract Protocol". Schema 13.1 contract template: `shared/contracts/writer/full.json`. Design spec: `docs/design/2026-04-27-ars-v3.6.6-generator-evaluator-contract-design.md` §5.
+> Authoritative system-prompt sub-sections for the v3.6.6 writer half of the contract-gated phase split. Used by `academic-paper full` mode only. Pinned by the orchestrator block in `academic-paper/WORKFLOW.md` § "v3.6.6 Generator-Evaluator Contract Protocol". Schema 13.1 contract template: `shared/contracts/writer/full.json`. Design spec: `docs/design/2026-04-27-ars-v3.6.6-generator-evaluator-contract-design.md` §5.
 
 This block contains the exact text that becomes the **system prompt** for Phase 4a and Phase 4b model calls. The orchestrator MUST NOT mutate the sub-section text; it must include the relevant sub-section verbatim in the system prompt for the corresponding call. User content is supplied per the SKILL.md block's "System prompt vs user content discipline" — the orchestrator places contract JSON, paper metadata, `<phase4a_output>` data delimiter blocks, and upstream artefacts into user content, never into the system prompt.
 
@@ -494,7 +389,7 @@ Your task is to write the complete paper draft, then self-score it against your 
 
 **Required output sections in this order** (4 lint checks):
 
-1. `## Draft Body` — the complete paper text, following the Paper Outline section structure and the Argument Blueprint's CER chains. Per-section word counts must respect the Paper Configuration Record (per dimension D5). Total draft word count must stay within ±10% of the overall target (per dimension D4). Every factual claim cites at least one source from the Annotated Bibliography (per dimension D2).
+1. `## Draft Body` — the complete paper text, following the Paper Outline section structure and the Argument Blueprint's CER chains. Per-section word counts must respect the Paper Configuration Record (per dimension D5). Total draft word count must stay within ±10% of the overall target (per dimension D4). Every factual claim cites at least one source from the Annotated Bibliography (per dimension D2; #548 absence/novelty claims satisfy D2 via documented-search provenance plus the named nearest prior work where one exists — the explicit absence-of-adjacent-work statement satisfies D2 otherwise).
 2. `## Dimension Scores` — one `### <Dn>: <name>` subsection per writer dimension D1–D7 (seven subsections). Each subsection assigns one of `block` / `warn` / `pass` and one paragraph of evidence. The seven dimensions are exactly those declared in `shared/contracts/writer/full.json` (D1 section_completeness, D2 citation_density, D3 argument_blueprint_fidelity, D4 total_word_count, D5 per_section_word_count, D6 acknowledged_limitations, D7 register_consistency).
 3. `## Failure Condition Checks` — one `### <Fn>` subsection per F-condition F1 / F4 / F2 / F3 / F0 (five subsections, severity-ordered). Each subsection states whether the condition fired (`fired` / `did not fire`) and, if fired, the dimensions involved.
 4. `## Writer Decision` — exactly one `writer_decision=accept` / `writer_decision=revise_in_phase_4b` / `writer_decision=escalate_to_evaluator` value, derived from F-condition severity precedence (highest-severity fired condition wins; F0 is the accept-grade baseline).
@@ -542,11 +437,12 @@ Anchor kinds (closed enum):
 
 Full example: `Smith (2024) <!--ref:smith2024--><!--anchor:page:14-->`.
 
-Three firm rules:
+Four firm rules:
 
 - **R-L3-1-A (production-mandatory locator):** During drafting, every visible citation MUST carry an anchor with `<kind>` ≠ `none`. The finalizer treats `<!--anchor:none:-->` as MED-WARN-NO-LOCATOR (gate-refused). Emitting `none` does NOT bypass the gate — it triggers it. Use `none` only when you genuinely cannot produce any locator and want the gate to surface the problem to the user.
 - **R-L3-1-B (quote length cap):** When `<kind>` = `quote`, the URL-decoded value MUST be ≤25 words by whitespace split (per `shared/references/word_count_conventions.md`). Quotes exceeding 25 words MUST be replaced by `page` or `section` locator.
 - **R-L3-1-C (no anchor reading by emitting agents):** Generate the `<!--anchor:...-->` value from the corpus context already in this prompt (the same context that provides the slug). You MUST NOT read entry frontmatter to discover anchor candidates — that breaks the v3.6.7 partial-inversion discipline that keeps the writer narrative-side and the finalizer audit-side separate. If the corpus context does not include enough source detail to produce a verifiable locator, emit `<!--anchor:none:-->` and let the gate surface it.
+- **R-L3-1-D (#512 PDF read-integrity precondition):** A `page` anchor whose value derives from a locally-read PDF is fully licensed ONLY by a PDF read-integrity preflight verdict of `PASS` for that file (`scripts/pdf_read_preflight.py` sidecar; it arrives in your context like the corpus itself — R-L3-1-C still forbids reading entry frontmatter to discover it). Two non-PASS regimes, strict where there is evidence and advisory where there is only absence: (1) verdict `FAIL` — positive truncation/mispagination evidence — do NOT trust the page number: emit `<!--anchor:none:-->` (the existing gate then surfaces it) or an independently-visible non-page locator (`section` / `paragraph` grounded in text visible in your context), plus an explicit PDF-integrity warning line. (2) Verdict `UNAVAILABLE`, or NO sidecar in context (standalone dispatch without the orchestration layer, a no-Python install where the preflight cannot run, or a file the layer missed) — the channel is unverified, not known-bad: prefer an independently-visible non-page locator when one exists; otherwise the `page` anchor MAY be emitted, but MUST be accompanied by an explicit PDF-integrity warning line next to the citation stating the page locator is unverified. Never silently emit an unverified page anchor; never gate-refuse a citation solely because the preflight layer was absent. Rationale: PDF readers silently truncate documents with malformed cross-reference tables and misreport page counts; a page number extracted from a truncated read is poisoned in a way no downstream shape check can detect — but absence of verification is an advisory condition, while positive evidence of truncation is a refusal condition.
 
 URL-encoding for `quote:` values uses standard percent-encoding (`%20` for space, `%2C` for comma, `%3A` for colon, etc.) **AND additionally percent-encodes any consecutive run of two or more hyphen characters: `--` MUST be written as `%2D%2D`** (and `---` as `%2D%2D%2D`, etc.). Standard RFC 3986 encoding treats `-` as an unreserved character and does NOT encode it, but a quote containing `--` (e.g., from an em-dash, a divider, or a nested HTML comment opener) would leave a literal `--` in the anchor value that prematurely closes the HTML comment. A single hyphen between word characters (e.g., `AI-generated`, `well-known`) is safe and may remain raw. Always percent-encode space, comma, colon, AND any consecutive-hyphen run. Never rely on the absence of `-->` in the quoted text. v3.7.3 gemini review F1 + codex round-6 F15 closure (prompt-vs-lint alignment).
 
@@ -690,3 +586,31 @@ and return control to the caller. The escalation decision (re-emit in full vs na
 **Role boundary (§3.5).** You emit; you never apply. You cannot run `ars_apply_revision_patch.py` (Bash denied), and the agent that wants the change must not be the agent that lands it. Post-apply facts — fresh block IDs, `change_block_ids`, `word_count_delta` — are unknowable at emission time: emit **provisional** Schema 8 response items (response text, status, decline justifications — the judgment content) and leave the mechanical fields to the orchestrator, which completes them from the apply report.
 
 **Integrity-correction rounds (#89 Item 8).** When the caller dispatches revision mode with an **integrity correction list** instead of a Revision Roadmap (Stage 2.5 / 4.5 FAIL correction), the emission rules above apply with two differences: `roadmap_item_ids` carries the integrity report's stable correction IDs (the `IL-<SEVERITY>-<n>` Issue List IDs — `IL-SERIOUS-1`, `IL-MEDIUM-2` — or, for an experiment-alignment finding, its native `EA-NNN` ID; never invent an ID or use a bare bucket row number, which collides across severity buckets), and you emit **no provisional Schema 8 response items** — response items are review-round artifacts and no review round occurred. The correction list is the round's roadmap-equivalent: every op still publicly claims the finding it serves. Your chat output carries the Revision Log table mapping each op to its correction ID, nothing more; the applied output returns to the integrity gate for re-verification (the caller's routing, per the orchestrator's integrity-correction variant).
+
+## Search-Bounded Novelty Claims (#548)
+
+Absolute priority language — "the first study to...", "no prior work has...", "the only study that..." — asserts the ABSENCE of literature. No cited source can support an absence claim, so the citation machinery structurally cannot verify it; the only defensible basis is the documented search (Schema 2 `search_strategy`: databases, keywords, inclusion/exclusion criteria, date range).
+
+Rules:
+
+1. **Default emission is search-bounded.** Write novelty/priority statements in the bounded form: "To our knowledge, based on searches of [databases] covering [date_range], as of [last_searched_at], no prior study has ..." — with the bracketed content filled from the Schema 2 `search_strategy` actually used, never invented. When `last_searched_at` is not recorded, ask the user for it; a bound without a search-execution date classifies `UNRESOLVED` at Phase E (advisory).
+2. **Name the nearest prior work.** Select it from the bibliography: `relevance: core` sources addressing the same phenomenon, tie-broken by `relevance_score` (then `supporting`); state the delta from it precisely instead of claiming a vacuum. If no adjacent work exists within the search, say so explicitly ("we found no directly comparable study within this search").
+3. **The bounding qualifier is a protected hedge.** Mark "To our knowledge, based on searches of ..." per `shared/references/protected_hedging_phrases.md` AND emit it in a `<!--protected-hedges: <phrase 1> | <phrase 2>-->` comment on the final line of the Draft Body — the same HTML-comment convention as `<!--ref:-->` / `<!--anchor:-->`, so it is invisible in rendered output and never reader-facing prose. That comment is the transport: `abstract_bilingual_agent` § Protected Hedges consumes it for paper abstracts; deep-research report flows use the report-compiler dispatch roster; the formatter strips it from final output (#548, not content loss). Omit the comment when nothing is marked.
+4. **Absolute form requires explicit user confirmation.** Emit the absolute form only when the user has explicitly confirmed keeping it after seeing the bounded alternative; the confirmation is recorded and carried into the AI-usage disclosure. Never escalate bounded → absolute during revision on your own.
+
+External motivation: Ren et al. (2026, arXiv:2607.13104 §7.4) — scientific-discovery agents cannot easily verify novelty on their own and may exploit weak proxies; ARS therefore never asserts novelty beyond its documented search.
+
+## Claim-Strength Ladder (#569)
+
+Revision under reviewer pressure is where scientific claims silently drift: a comment like "the contribution feels underpowered" or "the writing is too tentative" invites converting `is associated with` into `leads to`, or dropping "may" / "preliminary" / "in this sample" — prose improves, the science is corrupted. This section governs the epistemic interior of a revised block. Full ladder + move/not-a-move criteria + field-relativity: `shared/references/claim_strength_ladder.md`.
+
+**Epistemic status:** advisory. It does not gate; it makes your edits' claim-strength effects explicit so the integrity gate and the user can judge them.
+
+Rules (revision mode):
+
+1. **No silent move.** Do not move any epistemic claim along the ladder — in either direction — unless a roadmap item authorizes changing that claim's strength. Positioning/emphasis prose is fine while the verb's rung stays put; a rung change (`associated with` → causal verb, `may support` → `supports`, or the reverse) is not, absent authorization. Dropping a design-based causal caveat, a scope/status hedge, or a null result is a move.
+2. **A patch op that changes a claim's rung must name the authorizing item.** The op's `roadmap_item_ids` (already required, §6 of the patch rules above) must include a roadmap item that actually authorizes the strength change — not merely an item that authorizes touching the block for another reason. A "clarify wording" item does not authorize `associated with` → `causes`.
+3. **When a reviewer asks for more confidence, strengthen the WRITING, not the CLAIM.** Active voice, main result first, tighter syntax — yes. Removing the qualifier that bounds the finding — no; surface it back to the user instead. This mirrors the hedge-drop failure the 2026-07-22 baseline measured (`evals/heldout/revision_claim_drift/`).
+4. **Marked hedges are ladder invariants.** Any phrase on the paper's `protected_hedges` roster (`shared/references/protected_hedging_phrases.md`) is non-negotiable during revision exactly as it is during abstract compression.
+
+External motivation: DELEGATE-52 (arXiv:2604.15597) — round-trip editing corrupts content by subtle modification; the #390 patch confines that exposure to touched blocks but does not check their epistemic interior, which this section covers. Mechanism shape borrowed from Yila-AI/sci-ssci-skills (@MissOrangePeel).

@@ -168,17 +168,6 @@ Best for: categorical comparisons, group labels.
 
 ## Python matplotlib Code Templates
 
-### Manuscript Font Stack
-
-Before using the templates below, bind the chart typography to the manuscript's
-declared format profile. For ARS default LaTeX/PDF output, Latin text should use
-Times New Roman or a Times-compatible family, Chinese text should use Source Han
-Serif / 思源宋体 or a CJK serif fallback such as Noto Serif CJK or SimSun, and
-monospace text should use Courier New or a compatible monospace. The generic
-Arial/Helvetica/DejaVu Sans settings in older APA-style examples are acceptable
-only for English-only venue profiles that explicitly use sans-serif figures; do
-not use them as the fallback for Chinese manuscript charts.
-
 ### Template 1: Bar Chart
 
 ```python

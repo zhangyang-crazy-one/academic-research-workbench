@@ -1,11 +1,11 @@
 # Academic Research Skills for Claude Code
 
-[![Version](https://img.shields.io/badge/version-v3.13.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.13.0)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20696614.svg)](https://doi.org/10.5281/zenodo.20696614)
+[![Version](https://img.shields.io/badge/version-v3.19.0-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.19.0)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20696614-blue)](https://doi.org/10.5281/zenodo.20696614)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Sponsor](https://img.shields.io/badge/sponsor-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/crucify020v)
 
-[English](README.md) | [繁體中文版](README.zh-TW.md) | [日本語版](README.ja-JP.md)
+[English](README.md) | [繁體中文版](README.zh-TW.md) | [日本語版](README.ja-JP.md) | [한국어](README.ko-KR.md)
 
 一套完整的学术研究 Claude Code 技能包，涵盖从研究到论文出版的全流程。
 
@@ -59,7 +59,11 @@ v3.3 的灵感来自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 
 **验证可用：** 运行 `/ars-plan` 并描述你正在写的论文，ARS 会用苏格拉底式对话帮你规划章节结构。如果想做单次测试，可以运行 `/ars-lit-review "你的主题"`。
 
-**👉 [docs/SETUP.md](docs/SETUP.md)** — 完整指南：安装 Claude Code、设置 API key、选用的 Pandoc/tectonic（DOCX/PDF）、跨模型验证（`ARS_CROSS_MODEL`），以及五种安装方式（Plugin、项目 skills、全局 skills、claude.ai Project、repo clone）。
+**👉 [docs/SETUP.md](docs/SETUP.md)** — 完整指南：安装 Claude Code、设置 API key、选用的 Pandoc/tectonic（DOCX/PDF）、跨模型验证（`ARS_CROSS_MODEL`），以及六种安装方式（Plugin、项目 skills、全局 skills、claude.ai Project、repo clone、Claude Science 导入）。
+
+**使用 Claude Science？** 四个 skill 可直接导入：**Skills → Import from GitHub**，粘贴 `https://github.com/Imbad0202/academic-research-skills`，点 **Preview**，再点 **Import 4 skills**（需本 repo v3.14.0+——导入器读取 marketplace manifest 中显式声明的 skill 路径）。导入是一次性快照：ARS 更新后需重新导入。导入的 skill 承载 ARS 方法论（研究／写作／评审协议）；Claude Code 专属机制——slash commands、hooks、subagent 编排——不会转移。详见 [docs/SETUP.md](docs/SETUP.md) Method 5。
+
+**使用 Pi？** 运行 `pi install git:github.com/Imbad0202/academic-research-skills` 安装仓库内的社区维护 wrapper。它继续以原始 ARS 内容为准，并记录 Pi 在编排和 hooks 方面的限制。详见 [`pi/README.md`](pi/README.md)。
 
 **用 Codex CLI？** 请安装姐妹版：[`Imbad0202/academic-research-skills-codex`](https://github.com/Imbad0202/academic-research-skills-codex)。同一套 workflow 内容，Codex 原生打包为单一 `$academic-research-suite` skill，提供 `ars-*` 别名。
 
@@ -78,13 +82,15 @@ v3.3 的灵感来自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 
 - **Deep Research** — 13 个 Agent 的研究团队，支持苏格拉底引导、PRISMA 系统性回顾、意图检测、对话健康度监控、可选跨模型 DA、Semantic Scholar API 验证。
 - **Academic Paper** — 12 个 Agent 的论文撰写团队，含风格校准、写作质量检查、LaTeX 输出强化、可视化、修订教练、引用格式转换、反泄露协议、VLM 图表验证。
-- **Academic Paper Reviewer** — 7 个 Agent 的多视角同行评审，0-100 质量量表（主编 + 3 位动态审查者 + 魔鬼代言人），含让步门槛协议、攻击强度保持、可选跨模型 DA critique / calibration、R&R 追溯矩阵、只读约束。
+- **Academic Paper Reviewer** — 7 个 Agent 的多视角同行评审，0-100 质量量表（Journal-Fit Reviewer + 3 位动态审查者 + 魔鬼代言人），含让步门槛协议、攻击强度保持、可选跨模型 DA critique / calibration、R&R 追溯矩阵、只读约束。
 - **Academic Pipeline** — 10 阶段全流程调度器，含自适应 checkpoint、主张验证、材料护照、可选 `repro_lock`、可选跨模型学术诚信验证、中途强化机制、分数轨迹追踪。
 - **数据访问层级标注**（v3.3.2+）— 每个 skill 声明 `data_access_level`（`raw` / `redacted` / `verified_only`），由 `scripts/check_data_access_level.py` 强制执行。设计灵感来自 Anthropic 的 automated-w2s-researcher（2026）。详见 [`shared/ground_truth_isolation_pattern.md`](shared/ground_truth_isolation_pattern.md)。
 - **任务类型标注**（v3.3.2+）— 每个 skill 声明 `task_type`（`open-ended` 或 `outcome-gradable`）。目前 ARS 所有 skills 皆为 `open-ended`。
 - **Benchmark 报告 Schema**（v3.3.5+）— JSON Schema + lint script，要求诚实的 benchmark 比较报告。详见 [`shared/benchmark_report_pattern.md`](shared/benchmark_report_pattern.md)。
 - **Artifact 可复现性 Lockfile**（v3.3.5+）— Material Passport 添加可选 `repro_lock` 子区块。**是配置文档化，不是重播保证** — LLM 输出不是逐字节可复现。详见 [`shared/artifact_reproducibility_pattern.md`](shared/artifact_reproducibility_pattern.md)。
 - **实验来源凭证登录**（#260）— Material Passport 可选的 `experiment_provenance[]` 记录研究者在**外部**跑过的实验（ARS 从不执行实验），论文主张通过 `claim_intent_manifest.planned_experiment_ids[]` 与之 join。诚信 gate（Stage 2.5/4.5）逐条比对实验支撑型主张与登录凭证 — `ALIGNED` / `OVERSTATED` / `NOT_SUPPORTED_BY_PROVENANCE` / `PROVENANCE_INSUFFICIENT` — **但不判定实验本身是否正确**。fail-closed 的 `experiment_intake_declaration` 让「有没有跑实验」成为 Stage 1 明确决定。详见 [`shared/handoff_schemas.md`](shared/handoff_schemas.md)。
+
+**诚信与验证边界：**ARS 检查的是论文与所报告的研究过程，包括引用是否存在、主张与来源是否一致、所述方法、已登记实验结果与论文主张的一致性、图表忠实度，以及报告／流程／提交包的一致性；部分检查采用抽样或由 LLM 判断。ARS **不能**证明程序确实执行、原始数据真实，或结果可复现；如果捏造内容被前后一致地报告，仍可能通过这些检查。详见 [POSITIONING.md〈Integrity checks and the empirical-work boundary〉](POSITIONING.md#integrity-checks-and-the-empirical-work-boundary)。
 
 ---
 
@@ -100,7 +106,7 @@ v3.3 的灵感来自 [**PaperOrchestra**](https://arxiv.org/abs/2604.05018)（So
 | [完稿论文（中文）](examples/showcase/full_paper_zh_apa7.pdf) | 中文版，APA 7.0 |
 | [学术诚信报告 — 审稿前](examples/showcase/integrity_report_stage2.5.pdf) | Stage 2.5：发现 15 个虚构引用 + 3 个统计错误 |
 | [学术诚信报告 — 最终](examples/showcase/integrity_report_stage4.5.pdf) | Stage 4.5：确认零回归 |
-| [同行评审第一轮](examples/showcase/stage3_review_report.pdf) | 主编 + 3 审查者 + 魔鬼代言人 |
+| [同行评审第一轮](examples/showcase/stage3_review_report.pdf) | Journal-Fit Reviewer + 3 审查者 + 魔鬼代言人 |
 | [再审](examples/showcase/stage3prime_rereview_report.pdf) | 修订后验证审查 |
 | [同行评审第二轮](examples/showcase/stage3_review_report_r2.pdf) | 跟踪审查 |
 | [回复审查意见](examples/showcase/response_to_reviewers_r2.pdf) | 逐点回复 |
@@ -179,7 +185,7 @@ ARS Stage 2 写作      →  用验证过的实验结果撰写论文
 #### Academic Paper Reviewer（论文审查，6 种模式）
 
 ```
-"审查这篇论文"                                → full mode（主编 + R1/R2/R3 + 魔鬼代言人）
+"审查这篇论文"                                → full mode（Journal-Fit Reviewer + R1/R2/R3 + 魔鬼代言人）
 "快速评估这篇论文"                            → quick mode（快速评估）
 "引导我改进这篇论文"                          → guided mode（引导改进）
 "检查研究方法"                                → methodology-focus mode（方法论聚焦）
@@ -240,9 +246,9 @@ ARS Stage 2 写作      →  用验证过的实验结果撰写论文
 
 ### Academic Paper Reviewer (v1.10.0)
 
-7 个 Agent 的多视角审查，搭配 **0-100 质量量表**。模式：full、re-review、quick、methodology-focus、guided、calibration。**决策对照：** ≥80 接受、65-79 小修、50-64 大修、<50 退稿。第一轮审查团队 vs. 精简再审团队的分界：见 ARCHITECTURE.md §3 Stage 3 / Stage 3'。
+7 个 Agent 的多视角审查，搭配 **0-100 质量量表**。模式：full、re-review、quick、methodology-focus、guided、calibration。**决策对照：** ≥80 接受、65-79 小修、50-64 大修、<50 退稿。第一轮审查面板 vs. 契约治理再审调度的分界：见 ARCHITECTURE.md §3 Stage 3 / Stage 3'。
 
-### Academic Pipeline (v3.13.0)
+### Academic Pipeline (v3.19.0)
 
 10 阶段调度器，含学术诚信验证、两阶段审查、苏格拉底指导、协作质量评估。Pipeline 保证：每个阶段都需用户确认 checkpoint；学术诚信验证（Stage 2.5 + 4.5）不可跳过；R&R 追溯矩阵（Schema 11）独立验证作者修订主张。v3.4 添加 Compliance Agent（PRISMA-trAIce + RAISE）于 Stage 2.5 / 4.5。v3.5 添加 **协作深度观察员**（`collaboration_depth_agent`，仅咨询性质、永不阻挡流程）于每一次 FULL/SLIM checkpoint 与 pipeline 完成时。MANDATORY 学术诚信闸门（2.5 / 4.5）明确跳过观察员，避免稀释合规检查。理论基础：Wang & Zhang (2026), IJETHE 23:11。逐阶段矩阵（agent、产出物、闸门）：见 ARCHITECTURE.md §3。
 
@@ -302,9 +308,35 @@ https://github.com/Imbad0202/academic-research-skills
 
 **[xpfo-go](https://github.com/xpfo-go)**（xpfo）— 贡献者。翻译了简体中文版 README（[`README.zh-CN.md`](README.zh-CN.md)）（[PR #181](https://github.com/Imbad0202/academic-research-skills/pull/181)）。
 
+**[ktao732084-arch](https://github.com/ktao732084-arch)** — 贡献者。扩展了 `academic-paper` 披露系统，新增九个医学出版政策目标、按目标收集必需事实的流程，以及 fail-closed 的独立披露渲染（[Issue #596](https://github.com/Imbad0202/academic-research-skills/issues/596)、[PR #599](https://github.com/Imbad0202/academic-research-skills/pull/599)）；扩充 EQUATOR 临床报告参考，加入 CARE、STARD 和 TRIPOD+AI 的精简指引，以及 fail-closed 的研究设计路由流程（[Issue #594](https://github.com/Imbad0202/academic-research-skills/issues/594)、[PR #601](https://github.com/Imbad0202/academic-research-skills/pull/601)）；并设计及贡献独立的中文文献解析器、API 协议和合成传输 fixture 测试套件（[Issue #595](https://github.com/Imbad0202/academic-research-skills/issues/595)、[PR #600](https://github.com/Imbad0202/academic-research-skills/pull/600)）。
+
 ---
 
 ## 更新纪录
+
+### v3.19.0（2026-07-22）— 修订轮次的主张漂移防护、PDF 读取完整性预检、read-scope 诚实覆盖标记
+
+> **新增**：三个 advisory-or-opt-in 的完整性层加一个 launcher 修复。**修订轮次主张漂移防护（#569/#570）**：一条主张强度阶梯（`is associated with < predicts < causes`，未经授权的 roadmap 项目不得静默移动）接进修订草拟与新的 advisory Phase E6，外加一支确定性的数值/引注 token 守恒检查器——两者合起来补上 #390 honest-claim 残余的认知面与 token 面（被改动的 block 内部原本没有完整性检查）。先在当前前沿模型测量 baseline（`evals/heldout/revision_claim_drift/`），机制形状出处归功 [Yila-AI/sci-ssci-skills](https://github.com/Yila-AI/sci-ssci-skills)。**PDF 读取完整性预检（#512）**：三信号的页数交叉检查，让被截断／页码错位的 PDF 读取无法产生一个看似有效的 `page` 锚点。**read_scope 诚实覆盖标记（#513）**：在人工读取台账上可选地声明诚实覆盖范围（`full_text` / `sections` / `abstract_only` / `toc_only`），让 finalizer 的引用晋升具备 read-scope 意识。**launcher watchdog 修复（#545）**：移除一个会让每次正常 PreToolUse write-scope-guard 调用卡满整个 wall-clock 上限的 pipe 停滞。套件 → v3.19.0；底层三个 skill 版本不变。
+
+### v3.18.0（2026-07-18）— 自我改进 survey 整合
+
+> **新增**：由 Ren et al.（2026，arXiv:2607.13104）驱动的八项质量机制——子问题范围绑定＋Phase E 范围一致性 advisory（#547）、有界化 novelty 主张＋E5 分类（#548，均 advisory-only、在 MANDATORY 检查点逐行显示）；Stage 2.5 风险分层 claim 查核（HIGH-IMPACT 全查＋随机哨兵，#549）；引用查验 gate 接通缓存层＋时效 advisory＋opt-in 实时重验（#541）；同意制跨模型评审席（五席面板一席换底座，#540）与复审裁判独立性＋Judge Record（#539）；路由/关卡措辞稳健性测试集 v0.1（#550，并补齐 reviewer skill 缺失的中文触发词）；survey 本身列为第三个 human-in-the-loop 文献锚点（#542）。另有一项独立于 survey 轨的功能：#544 SessionStart 更新提醒——plugin 安装落后 main 时提示 `/plugin update`（`ARS_UPDATE_CHECK=0` 可关闭）。`academic-pipeline` 随套件升至 v3.18.0；其余三个 skill 版本不变。
+
+### v3.17.0（2026-07-16）— Pipeline 边界语义、跨模型交接信封、可执行 panel checker
+
+> **修复：**收敛 #528 两个未明确定义的 pipeline 边界 — Stage 5「finalize 前一律 MANDATORY」现在只指定唯一一个 checkpoint（Stage 4.5 通过与 Stage 5 派工之间的入口闸门），Stage 6 新增终止确认词汇（`finish`/`end`/`done`/`confirm`）与明确的婉拒路径；五个 pipeline 表面现在都加上全文件 sha256 内容锁（#529），日后任何 prompt 表面漂移都会挡 CI，直到同一个 commit 更新哈希值。盲测 checkpoint 传输移到派工层（#523）— 原本 Bucket A 的 checkpoint 拥有者被要求自行执行跨模型传输，但这在 runtime Bash deny 下无法执行；现在改由派工层负责传输调用。**新增：**canonical `[CROSS-MODEL-HANDOFF v1]` 信封 + 标准化 Python 文法（#527）取代原本纯文字约束的拥有者→派工者→拥有者传输路径，把一致/分歧/格式错误结果的路由钉死在全部三个 checkpoint 拥有者上。#514 工具白名单的防漂移锁（#524，74 个 mutation test）挡住「对 agent 本体与其镜像同步修改、悄悄加回 Bash」的漂移路径。可执行的 sprint-contract panel checker（#510）从原始产出物重新算出 v3.6.2 的两层决策，并抓到多数决公式的一个转录错误。机器可读的降级注册表（#511 Part A）把套件内每个优雅降级机制都列成索引，另加引用验证闸门的 hermetic transport-fixture 集成测试（#511 Part B），对四个解析器 client 端到端跑过检入版的合成 API 响应。`academic-pipeline` 跟随套件版本至 v3.17.0；其余三个 skill 版本不变。
+
+### v3.16.0（2026-07-12）— 模型分层、跨模型闸门强化、WP 提示语锐化
+
+> **新增：**可选模型分层（#517）— 新 `ARS_MODEL_TIERING` 开关含两个方向（`economy` 让 13 个执行型 agent 以低于 session 模型一档派工、下限 Opus 级；`quality-boost` 让完整性闸门与最终审查面的判断型 agent 升到前沿档）；未设置时逐字节等同旧行为，冻结的 39-agent 分类由新 manifest + lint 钉死。跨模型闸门强化（#518）— 风险分层抽验（HIGH-IMPACT 参考文献在两道闸门 100% 验证）、两个不可逆决策点（设计冻结 + 最终编辑决定）的盲测分歧检查、验证模型 id 状态白名单、升格 bakeoff 协议；原规划的通用第 6 位审查者确定退役、非延期。GPT-5.6 Sol 列为暂定跨模型验证者并增设明确 reasoning-effort 控制（#515）。devCharlotte 提案的韩文触发词 + 路由边界 fixture（#452/#509）。论文写作端新增 CARS 导论修辞 + 标题设计参考文件（#500）。**变更：**WP 研究问题提示语经名词替换测试泛化到 20 壳表之外（#501）并锐化豁免条款、抓到装饰型标题壳（#505）— held-out 漏判率 0.34–0.38 → 0.094、误触 0/16 维持；审查者校准协议记载 LLM 评审偏宽方向（FARS 锚点，#484）；OpenAlex API key 认证 + 预算感知 429 处理 + arXiv ToU 对齐退避（#495/#496）。**文档：**THIRD_PARTY.md 社区目录（#497/#498）。`academic-pipeline` 跟随套件版本至 v3.16.0；其余三个 skill 版本不变。
+
+### v3.15.0（2026-07-04）— 发版闸门强化、prompt 债务清理第二轮、防漂移锁
+
+> 以发版纪律与质量卫生为主的版本；skill 行为无变更。**新增：**三道 CI 闸门 — CHANGELOG-covers-merges tag 前闸门（#483）、版本一致性 invariant 9-11 加 tag 时重跑闸门（#487）、把 SessionStart announce 清单钉到实际 16 个指令清单的 command-invariants 闸门（#486）— 以及两道防漂移锁：Phase Boundary enforcement 句在全部 23 个 Bucket A agent 区块逐字钉死、SETUP 跨模型示例与 canonical 型号表互相钉死（#491 → #492）。**变更：**prompt 债务清理第二轮深扫第一轮延后的 17 个 agent（#489 → #490）：修正两个 socratic_mentor 的活矛盾（过期的 15 轮劝退规则 vs 文档明载的典型 20-30 轮）、修正全仓库 29 处过期的 enforcement 状态句、修剪 7 个 agent 的 few-shot 与重复流程脚手架 — 经 4 批并行稽核 + 独立 codex 跨模型挑战验证；稽核报告在 `audits/`。**修复：**DOI 徽章改由 shields.io 提供（#482）。`academic-pipeline` 跟随套件版本至 v3.15.0；其他三个 skill 版本不变。
+
+### v3.14.0（2026-07-02）— Claude Science 可导入性、eval comment 呈现、prompt 债务清理
+
+> 一个以可移植性与打磨为主的 release，skill 行为无变更。**新增：** Claude Science 可导入性——marketplace manifest 显式声明 skill 路径，让无法穿越 symlink `skills/` 目录的 GitHub-API 导入器（Claude Science「Import from GitHub」、Windows checkout）能找到全部四个 skill；已在 Claude Science 端到端验证，README + SETUP 新增导入指南（#480）。eval-harness 的 PR comment 改为一行结论 + 逐任务表格、原始 JSON 折叠进 `<details>`，取代裸贴整份报告——仅显示层，gate 逻辑字节不变（#479）。**变更：** 依 2026-07 harness-retirement 审计，自四个写作面 agent 移除过期的 writing-harness scaffold（#476/#477 → #478，净 −111 行 prompt）；remind-don't-block 的 Platform Port Reminder 在 PR 新增顶层目录时提示 platform-ports 政策（#473）。**文档：** devCharlotte 母语审校的韩文 README（#469/#471）；GitHub Copilot repository instructions（#465）；建议 auto permission mode 取代 Skip Permissions（#464）。累积于 `[Unreleased]` 的 16 条积压条目（代码均在 v3.13.0 tag 前已上——diff/patch revision mode #390、submission-package verifier #394、eval gold sets #215/#216 等）并入版本记录；详见 `CHANGELOG.md`。`academic-pipeline` 随 suite 至 v3.14.0；其余三个 skill 版本不变。
 
 ### v3.13.0（2026-06-18）— Hook 可移植性、provider-agnostic 验证、guard 正确性
 
@@ -543,7 +575,7 @@ v3.5.1 添加 Socratic Mentor 的选用式诚实探测（设置 `ARS_SOCRATIC_RE
 
 - **7 类 AI 研究失败模式检查清单** — 在 Stage 2.5/4.5 阻断管线：检测实现错误、幻觉实验结果、取巧特征依赖、错误包装为发现、方法伪造、框架锁定。扩充现有 5 类引用幻觉分类。
 - **Reviewer 校准模式**（academic-paper-reviewer v1.8）— opt-in 的 FNR/FPR/balanced accuracy 测量，用户提供 gold set。5 次集成、跨模型默认打开、session 内强制附加信心披露。
-- **AI 使用声明模式**（academic-paper v2.9）— 针对特定期刊/会议的 AI 使用声明生成器。v1 涵盖 ICLR、NeurIPS、Nature、Science、ACL、EMNLP。
+- **AI 使用披露模式**（academic-paper v2.9）— 默认期刊路径返回 `REQUIRED`、`ACTION_ONLY`、`NOT_REQUIRED` 或 `UNKNOWN` 适用性结果，并在无法渲染时显式返回类型化停止状态；政策锚点路径使用独立的锚点渲染契约。v1 涵盖 ICLR、NeurIPS、Nature、Science、ACL、EMNLP。（后续扩充：v2 数据库（#596）新增 9 个医学出版政策目标 — ICMJE、NEJM、The Lancet、JAMA、BMJ、PLOS、Frontiers，以及数据库首批两个中文政策目标：出版社级的中华护理杂志社条目和期刊级的国际眼科杂志条目。）
 - **提前停止机制**（academic-pipeline v3.1）— 收敛检查 + pipeline 开始时的 token 预算透明化。
 - **忠实度-原创性模式光谱** — 按 Lu 2026 Fig 1c 分类所有 3 个 skill 的模式。
 - 新版本：academic-paper v2.9、academic-paper-reviewer v1.8、academic-pipeline v3.1

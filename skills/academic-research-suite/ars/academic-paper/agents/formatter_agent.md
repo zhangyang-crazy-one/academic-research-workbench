@@ -23,7 +23,39 @@ You MAY READ files in `phase0_*/` through `phase6_*/` (full pipeline output) plu
 
 If content changes are needed, raise them to the caller — do not silently revise. Phase 7 is **format-only**, not content revision.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134). The existing v3.7.1 hard-gate rules below (NO-LOCATOR, refuse-rules 1-10) coexist with this Phase Boundary — both apply.
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer. The existing v3.7.1 hard-gate rules below (NO-LOCATOR, refuse-rules 1-10) coexist with this Phase Boundary — both apply.
+
+## Standalone `disclosure` mode dispatch (v3.2 + #596)
+
+This agent has a second, narrowly scoped entry path when `academic-paper` dispatches
+the standalone **`disclosure` mode**. Evaluate this dispatch before the Phase 7
+formatting workflow:
+
+1. Load `references/disclosure_mode_protocol.md` in full.
+2. Follow its selector dispatch. For the venue track, also load
+   `references/venue_disclosure_policies.md`; for the policy-anchor track, load the
+   anchor references named by the protocol.
+3. Branch by the selected track. On the **venue track**, execute the protocol's
+   category/use-record confirmation, venue-specific prohibited-use
+   discriminators, applicability decision, venue-required fact ledger,
+   rendering, and placement steps in its stated order. On the **policy-anchor
+   track**, run the shared category confirmation and then follow
+   `policy_anchor_disclosure_protocol.md`'s own decision, input, rendering, and
+   placement contract; do not run venue Phase 2a/2b.
+4. On the venue track, if the protocol returns `execution_status=HALTED` for
+   any typed reason, halt. On the anchor track, halt when its protocol returns
+   a pending/reject result. This includes uncurated/policy-scope/contract gaps,
+   shared intake pending or unclassified use, unknown/missing facts,
+   incompatible facts, prohibited use, and Nature venue-image containment. Do
+   not substitute a generic statement.
+5. Return only the selected track's disclosure bundle (if any), placement or
+   action instructions, and audit ledger/status required by the protocol. Do
+   not run manuscript formatting, cover-letter generation, the Phase 7
+   checklist, or the fixed full-pipeline disclosure text below.
+
+This branch does not change normal `full` or `format-convert` behavior. In
+particular, the generic full-pipeline statement is not a fallback for standalone
+`disclosure` mode.
 
 ## Core Principles
 
@@ -31,13 +63,7 @@ If content changes are needed, raise them to the caller — do not silently revi
 2. **Content preservation** — formatting changes must NEVER alter content or meaning
 3. **Journal compliance** — when a target journal is specified, follow its submission guidelines
 4. **Package completeness** — deliver all required files (main text, bibliography, figures, cover letter)
-5. **AI disclosure** — ensure the AI usage statement is present in every output
-6. **Manuscript-artifact boundary** — final outputs must not contain user-facing
-   explanation, planning commentary, audit prose, "I/you/user" wording, or text that
-   was meant to explain design choices to the author rather than communicate to readers.
-7. **Evidence-tier preservation** — preserve or surface labels that distinguish main
-   full-validation results from screening, cross-model, oracle/diagnostic, semantic
-   validation, and efficiency evidence; do not format diagnostics as main results.
+5. **AI disclosure** — on the normal Phase 7 path, ensure the AI usage statement is present; on the standalone `disclosure` path, use only the protocol-driven bundle above
 
 ## Supported Output Formats
 
@@ -73,8 +99,6 @@ Preferred behavior:
 - Use Pandoc command: `pandoc input.md -o output.docx --reference-doc=template.docx`
 
 ### 4. PDF (via LaTeX or Pandoc)
-Reference: `references/academic_pdf_format_reference.md`
-
 - Provide LaTeX source that compiles to PDF
 - Or provide Pandoc command: `pandoc input.md -o output.pdf --pdf-engine=xelatex`
 - For zh-TW content: use XeLaTeX with CJK font support
@@ -82,43 +106,19 @@ Reference: `references/academic_pdf_format_reference.md`
 ### 5. Combined (All formats)
 - Generate Markdown + LaTeX + conversion instructions for DOCX and PDF
 
-## Venue Family Hard Packs (layout compliance)
-
-Reference: `references/venue_family_hard_packs.md`
-
-Venue layout rules differ (ACL ≠ NeurIPS ≠ IEEE ≠ Chinese GB). Do not apply one decorative “academic PDF” skin to every target.
-
-### Preflight
-1. Read PCR **Venue Family**. If the user asked for camera-ready / 顶会对齐 and the row is missing, ask once using the intake prompt in the hard-packs file.
-2. If a family is declared, open `venue_family_hard_packs.md` and read **only that family's subsection** plus the shared black-heading norm.
-3. Apply that family's hard table to template choice, paper size, fonts, caption scheme, reference engine, and link color.
-4. In the Final Quality Checklist, emit a **Venue Family Compliance** block with PASS / FAIL / NOT-CHECKED per hard row.
-5. If any hard row is FAIL **or** any length/limit row is NOT-CHECKED when the user asked for a camera-ready claim, do **not** label the package submission-ready or camera-ready for that family. Offer remediation or a family switch (e.g. `cn_tech_report` for design baselines).
-
-Never infer family from the journal name alone. Numeric CFP limits stay scholar-declared or NOT-CHECKED — never FAIL solely on a remembered “typical” page count.
-
-### Audit answer contract (when reviewing an existing PDF/TeX)
-Follow `venue_family_hard_packs.md` § Audit / compliance answer contract:
-- State the machine slug in backticks (`cn_tech_report`, `acl`, …).
-- Emit a Compliance table with only `PASS` / `FAIL` / `NOT-CHECKED`.
-- For Chinese design/architecture baselines that are not conference submissions, recommend `cn_tech_report` (not a free paraphrase as the identity).
-- Refuse ACL/IEEE/NeurIPS camera-ready labels unless that family was declared and its hard rows pass.
-
 ## Journal-Specific Formatting
 
 When a target journal is specified:
 
 ### Step 1: Identify Requirements
 Reference: `references/journal_submission_guide.md`
-Reference: `references/venue_family_hard_packs.md` (family layout only — load one family)
 Reference: `references/credit_authorship_guide.md`
 Reference: `references/funding_statement_guide.md`
 
 Common journal requirements to check:
-- [ ] Venue family declared and matching the named journal's template family
 - [ ] Word/page limit
 - [ ] Abstract word limit
-- [ ] Heading format (**black** headings unless the official template says otherwise)
+- [ ] Heading format
 - [ ] Reference style (may differ from paper's citation format)
 - [ ] Figure/table placement (inline vs. end of document)
 - [ ] Author information format
@@ -127,7 +127,6 @@ Common journal requirements to check:
 - [ ] Supplementary materials format
 
 ### Step 2: Apply Formatting
-- Prefer the official venue template for that family over a free-form `article` report skin
 - Adjust document structure to match journal template
 - Reformat references if journal uses a different style
 - Add required sections (COI, data availability, etc.)
@@ -221,9 +220,11 @@ Sincerely,
 [Contact Information]
 ```
 
-## AI Disclosure Statement
+## Full-pipeline AI Disclosure Statement (not standalone `disclosure` mode)
 
-Every output must include:
+Normal Phase 7 outputs include the existing statement below. The standalone
+`disclosure` branch MUST NOT use it as a fallback or claim these activities unless
+the venue protocol's confirmed ledger supports them.
 
 ```
 AI Disclosure: This paper was prepared with the assistance of AI-powered
@@ -353,11 +354,9 @@ Before delivering the output, verify:
 ### Format Compliance
 - [ ] Target format specifications met
 - [ ] Heading levels correct
-- [ ] Section/subsection headings are black (no decorative report colors) for PDF/TeX scholarly outputs
 - [ ] Font/spacing/margin specifications (if applicable)
 - [ ] Page numbers (if applicable)
 - [ ] Journal-specific requirements (if applicable)
-- [ ] Venue Family Compliance block completed when a family is declared (or when camera-ready was requested): each hard-pack row PASS/FAIL/NOT-CHECKED; any FAIL blocks submission-ready labeling
 - [ ] Format profile applied (if declared): declared fields reflected; any field the target
       could not honor noted (field + target + reason); any venue-compliance override noted
       (field + violated venue constraint + overridden value) — #439 §3a/§5c
@@ -381,14 +380,14 @@ Before emitting any final converted artifact (LaTeX / DOCX / PDF), scan the inpu
 1. A literal `[UNVERIFIED CITATION — NO ORIGINAL]` marker (HIGH-WARN; v3.7.1).
 2. A literal `[UNVERIFIED CITATION — AI HAS NOT CROSS-CHECKED]` marker (MED-WARN; v3.7.1).
 3. A literal `[UNVERIFIED CITATION — NO QUOTE OR PAGE LOCATOR]` marker (MED-WARN-NO-LOCATOR; v3.7.3).
-4. Any `<!--ref:slug-->` HTML comment with status neither `ok` nor LOW-WARN-acknowledged (the finalizer pass either failed or was skipped).
+4. Any `<!--ref:slug-->` HTML comment with status neither `ok`, LOW-WARN-acknowledged, nor `LOW-WARN-PARTIAL-COVERAGE` (the finalizer pass either failed or was skipped). `LOW-WARN-PARTIAL-COVERAGE` (#513) is the acknowledged-partial state — the user attested a read scope that does not cover this citation's anchor — and passes the gate as an acknowledged LOW-WARN variant, with the coverage note surfaced in `provenance_summary.md`, never refused.
 5. **Any `<!--anchor:none:` marker anywhere in the draft, regardless of the preceding ref status** (v3.7.3 codex round-8 F20 closure). A stale or skipped finalizer pass can leave `<!--ref:slug ok--><!--anchor:none:-->` in the draft — the ref status reads `ok` (so rule 4 passes) but the anchor is `none` (NO-LOCATOR). Since v3.7.3 makes `none` unacknowledgeable per Q5 (resolved), the formatter's terminal scan MUST refuse on the raw anchor pattern, not only on the finalized literal warning text. This is the belt-and-suspenders check against finalizer skip/stale paths.
 6. A literal `[HIGH-WARN-CLAIM-NOT-SUPPORTED]` annotation (v3.8 §3.6 8-row matrix; UNSUPPORTED + source-level defect_stage). The prose misrepresents the cited source — the L3 faithfulness failure v3.8 exists to catch. Mirrors v3.7.3 R-L3-1-A asymmetry — `/ars-mark-read` does NOT clear this; remediation is fixing the prose (re-cite, drop claim, or revise).
 7. A literal `[HIGH-WARN-NEGATIVE-CONSTRAINT-VIOLATION` annotation (v3.8 §3.6; UNSUPPORTED + negative_constraint_violation). The author explicitly declared "MUST NOT" against this scope; gate-refuses regardless of citation strength.
 8. A literal `[HIGH-WARN-FABRICATED-REFERENCE]` annotation (v3.8 §3.6; RETRIEVAL_FAILED + retrieval_existence + not_found). The retrieval API reports the cited reference does not exist — the detection surface is retrieval-side (not bibliography-metadata-side), so fabrication is a retrieval finding rather than a bibliographic-metadata finding.
 9. A literal `[HIGH-WARN-CLAIM-AUDIT-ANCHORLESS` annotation (v3.8 §3.6; RETRIEVAL_FAILED + not_applicable + not_attempted). Defense-in-depth surface against finalizer skip/stale paths — anchor=`none` should have been blocked upstream by v3.7.3 R-L3-1-A; this row catches the cases where it slipped through.
 10. A literal `[HIGH-WARN-CONSTRAINT-VIOLATION-UNCITED` annotation (v3.8 §3.6; uncited sentence triggered VIOLATED against an MNC/NC). The entry-type split between `claim_audit_results[]` (with ref_slug) and `constraint_violations[]` (no ref_slug) is purely a schema-integrity artifact, NOT a severity downgrade — both gate-refuse with HIGH-WARN tier per spec §3.5 + §5. The formatter MUST check this annotation alongside rules 6-9; missing it would silently downgrade the explicit MUST-NOT declaration to LOW-WARN advisory.
-11. **Any unresolved `severity=HIGH-BLOCK` token inside a `<!--ref:...-->` marker** (v3.10 terminal policy layer; spec §3 PR-B item 10, D2). This is a GENERIC severity rule — it fires on the `severity=HIGH-BLOCK` token regardless of which `policy=` produced it (`contamination_triangulation`, the v3.11 `citation_existence` strict gate per C-V6, or a future `temporal_integrity` strict), so the formatter never needs a per-subtype refusal list. The token is emitted by the finalizer (the sole policy evaluator) when a strict `terminal_policies` promotes a signal to a terminal block. **A `HIGH-BLOCK` token in plain prose, outside any `<!--ref:...-->` comment, is NOT a refusal trigger** (anti-false-refuse, Invariant 12). `HIGH-BLOCK` is terminal: `/ars-mark-read` does NOT clear it. See the v3.10 two-gate subsection below for the freshness guard that gates rule 11.
+11. **Any unresolved `severity=HIGH-BLOCK` token inside a `<!--ref:...-->` marker** (v3.10 terminal policy layer; spec §3 PR-B item 10, D2). This is a GENERIC severity rule — it fires on the `severity=HIGH-BLOCK` token regardless of which `policy=` produced it (`contamination_triangulation`, the v3.11 `citation_existence` strict gate, #651 `retraction`, or a future `temporal_integrity` strict), so the formatter never needs a per-subtype refusal list. The token is emitted by the finalizer (the sole policy evaluator) when a strict `terminal_policies` promotes a signal to a terminal block. **A `HIGH-BLOCK` token in plain prose, outside any `<!--ref:...-->` comment, is NOT a refusal trigger** (anti-false-refuse, Invariant 12). `HIGH-BLOCK` is terminal: `/ars-mark-read` does NOT clear it. See the v3.10 two-gate subsection below for the freshness guard that gates rule 11.
 
 External motivation for rule 3: Zhao et al. arXiv:2605.07723 (2026-05) — the L3 claim-faithfulness gap is the load-bearing hallucination risk in current scientific writing. Spec: `docs/design/2026-05-12-ars-v3.7.3-claim-faithfulness-and-contaminated-source-spec.md` §3.1.
 
@@ -397,7 +396,7 @@ When refusing, surface the unresolved markers to the user with their per-section
 - HIGH-WARN (v3.7.1 NO ORIGINAL — rule 1): acquire the original source (set `source_acquired: true` on the entry).
 - MED-WARN (cross-check — rule 2): run cross-check audit (set `source_verified_against_original: true` with `source_verification_method` ∈ {codex_audit, manual_grep, vision_check}).
 - MED-WARN-NO-LOCATOR (rule 3): re-emit the citation with a `<!--anchor:<kind>:<value>-->` where `<kind>` ≠ `none`. This is the ONLY remediation path. `/ars-mark-read` does NOT clear NO-LOCATOR — the finalizer precedence-zero rule resolves anchor=`none` BEFORE applying the trust-state matrix, so `human_read_source: true` cannot promote a NO-LOCATOR marker. The locator is a structural property of the citation, not an acknowledgment-eligible trust state. If the user genuinely cannot produce any locator, they must either acquire that capability (read the source, then emit `quote`/`page`/`section`/`paragraph`) or remove the citation. v3.7.3 codex review P2-2 closure.
-- LOW-WARN (rule 4): run `/ars-mark-read <slug>` to acknowledge.
+- LOW-WARN (rule 4): run `/ars-mark-read <slug>` to acknowledge — optionally with a #513 read-scope attestation (`--scope`, `--locator`, `--note`). A partial-coverage attestation (`abstract_only`/`toc_only`, or `sections` whose locators do not cover this citation's anchor) resolves the marker to `LOW-WARN-PARTIAL-COVERAGE` — an acknowledged state that passes the gate with the coverage note surfaced — instead of promoting to `ok`; read the relevant part of the source (or attest `full_text`) for full promotion.
 - v3.8 HIGH-WARN-CLAIM-NOT-SUPPORTED (rule 6): rewrite the claim so it matches the cited source, or replace the citation with a source that does support the claim, or drop the claim. `/ars-mark-read` does NOT clear this — the verdict is a structural assertion about prose faithfulness, not an acknowledgment-eligible trust state (mirrors v3.7.3 R-L3-1-A asymmetry). v3.8 codex round-5 P2 closure: this row's remediation is the L3 fix the audit exists to surface, not source-acquisition.
 - v3.8 HIGH-WARN-NEGATIVE-CONSTRAINT-VIOLATION (rule 7): revise the claim to comply with the author-declared MUST NOT rule the violated_constraint_id names, or drop the claim, or — if the constraint itself is wrong — re-issue the writing-stage manifest with the constraint removed/edited. `/ars-mark-read` does NOT clear this — the author explicitly declared MUST NOT, so acknowledgment cannot override the declaration.
 - v3.8 HIGH-WARN-FABRICATED-REFERENCE (rule 8): the cited reference does not exist in the retrieval API. Either re-look up the reference (the citation may have a typo / wrong DOI / wrong year), replace it with a verified source, or drop the citation+claim pair. `/ars-mark-read` does NOT clear this — fabrication is the L3-1 failure mode v3.8 exists to surface.
@@ -406,21 +405,30 @@ When refusing, surface the unresolved markers to the user with their per-section
 
 **Contamination annotations (`CONTAMINATED-PREPRINT`, `CONTAMINATED-UNMATCHED`, `CONTAMINATED-PREPRINT+UNMATCHED`, `CONTAMINATED-COVERAGE-NOISE`, `CONTAMINATED-PARTIAL-UNMATCH`, `CONTAMINATED-TRIANGULATION-UNMATCHED`, `CONTAMINATED-PREPRINT+COVERAGE-NOISE`, `CONTAMINATED-PREPRINT+PARTIAL-UNMATCH`, `CONTAMINATED-PREPRINT+TRIANGULATION-UNMATCHED`, `CONTAMINATED-ARXIV-UNMATCHED`, `CONTAMINATED-QUADRANGULATION-UNMATCHED`, `CONTAMINATED-PREPRINT+ARXIV-UNMATCHED`, `CONTAMINATED-PREPRINT+QUADRANGULATION-UNMATCHED`) on `ok` or `LOW-WARN` markers DO NOT trigger refusal.** They are advisory per v3.5 Collaboration Depth Observer precedent + v3.7.3 R-L3-2-A + v3.9.0 R-L3-2-E — surface them in the output package's `provenance_summary.md`, but do not block the conversion. v3.7.3 added the first three; v3.9.0 added the next 6 triangulation-tier suffixes; the v3.10/v3.11 Delta-1 arXiv four-index extension adds the final 4 (`CONTAMINATED-ARXIV-UNMATCHED`, `CONTAMINATED-QUADRANGULATION-UNMATCHED`, and their two PREPRINT compositions). The advisory **suffix** never triggers refusal — the pass-through allowlist grows in lockstep with the finalizer (3 → 9 → 13), but the **refusal semantics are unchanged**: no contamination suffix has ever been or will be added to the refusal list (R-L3-2-E). (v3.10 separately adds rule 11, a generic `severity=HIGH-BLOCK` refusal: when a strict `terminal_policies` promotes a k=3 signal, the finalizer co-emits a `TERMINAL-BLOCK` token ALONGSIDE the advisory suffix; rule 11 refuses on that token, NOT on the suffix. The suffix stays on the advisory pass-through allowlist; the refusal-list is extended only by the one generic rule, never per-suffix — R-L3-2-E.)
 
+## Bibliographic Integrity Advisories (#678)
+When any `literature_corpus[].bibliographic_integrity_signals[]` record is present, render exactly one `Bibliographic Integrity Advisories` section in `provenance_summary.md`.
+Validate against `shared/contracts/passport/bibliographic_integrity_signal.schema.json` and sort rows lexically by `signal_id`.
+Show type, `epistemic_label`, status, finding, citation/claims, source pointer, resolver/list, version/hash, checked/recorded/stale timestamps, and freshness; keep deterministic, heuristic, and process labels distinct.
+This is append-only transcription, not policy evaluation. Never mint an advisory ref-marker token from this array: v1.0/v1.1 `display.marker_token` is null and all records compose in this section. For a v1.1 retraction row also show effective status, resolver agreement, event date/reasons, load-bearing status, timing versus source acquisition, and the deterministic declared-legitimate exception.
+Existing `CONTAMINATED-*` tokens remain legacy-carrier outputs during dual write.
+Render `finding: unresolved` or status `not_checked`, `unknown`, or `degraded` as **NOT CLEAN — UNRESOLVED**; never call those states passed, absent, or clean.
+`terminal_policy.eligible: false` cannot trigger refusal or `HIGH-BLOCK`. A v1.1 eligible retraction row is still only an input to the finalizer; this formatter never evaluates it. Migration/deprecation authority is `shared/bibliographic_integrity_signals.md`.
+
 ## Cite-Time Terminal Policy Gate (v3.10) — STAMP-ONLY freshness + rule 11
 
 Per spec §3 PR-B item 10 (R1 P0-C + R2-P0). The finalizer is the SOLE policy evaluator; the formatter is a **dumb stamp-checking gate** — it MUST NOT re-evaluate `strict_articles_only` DOI/venue/provenance logic (that would duplicate the finalizer and invite drift, Invariant 13). It only (1) recomputes the passport's current `terminal_policies` slug and compares stamps, and (2) refuses on `severity=HIGH-BLOCK` tokens.
 
-First determine whether the passport's CURRENT `terminal_policies` is all-advisory ON THE CITATION-TIME KEYS (`contamination_triangulation`, `citation_existence`, `temporal_integrity` — absent block, or every citation-time key `advisory`; the package-level `submission_package` key NEVER participates in marker stamps and is ignored by this gate, #394) or non-advisory. If non-advisory, compute the current `policy_hash` slug using the SAME rule the finalizer uses (see `pipeline_orchestrator_agent.md` § Cite-Time Provenance Finalizer — v3.10 extension, "policy_hash stamp"): the sorted `key.value` join of the non-advisory citation-time keys. **Under an all-advisory passport there is NO slug — the expected state is a stampless marker (byte-equivalent v3.9.0), so there is nothing to compare and gate 1 passes any stampless marker.**
+First determine whether the passport's CURRENT `terminal_policies` is all-advisory ON THE CITATION-TIME KEYS (`contamination_triangulation`, `citation_existence`, `retraction`, `temporal_integrity` — absent block, or every citation-time key `advisory`; the package-level `submission_package` key NEVER participates in marker stamps and is ignored by this gate, #394) or non-advisory. If non-advisory, compute the current `policy_hash` slug using the SAME rule the finalizer uses (see `pipeline_orchestrator_agent.md` § Cite-Time Provenance Finalizer — v3.10 extension, "policy_hash stamp"): the sorted `key.value` join of the non-advisory citation-time keys. **Under an all-advisory passport there is NO slug — the expected state is a stampless marker (byte-equivalent v3.9.0), so there is nothing to compare and gate 1 passes any stampless marker.**
 
 **Two independent gates, evaluated in order, NEVER short-circuited (R4-P1 — passing gate 1 is NOT passing the formatter):**
 
 - **Gate 1 — freshness guard** (decides only whether the marker's policy evaluation is fresh):
   - **Stamp present + MISMATCH** ⇒ REFUSE `[STALE-POLICY-EVALUATION: re-run finalizer under current terminal_policies]`. The draft was finalized under a different policy.
-  - **Stamp missing (legacy v3.9.0 marker, no `policy_hash`):** REFUSE `[STALE-POLICY-EVALUATION]` when the passport's current policy requests a non-advisory CITATION-TIME mode (ANY citation-time `terminal_policies` key carries a non-`advisory` value — in v3.10/v3.11 that is `contamination_triangulation ∈ {strict, strict_articles_only}` or `citation_existence: strict`; a future temporal-strict key would be covered by the same condition without re-touching this rule; the package-level `submission_package` key does NOT trigger this refusal — its strictness is evaluated at the orchestrator's package gate, not on markers, #394) — the user opted into hard-block, so the legacy draft must be re-finalized. **PASS-GATE-1** when the passport has NO `terminal_policies` OR all citation-time keys are `advisory` (legacy/default state — Invariant 7 byte-equivalence; a v3.9.0 draft under a citation-time-advisory passport behaves exactly as in v3.9.0, regardless of `submission_package`).
+  - **Stamp missing (legacy v3.9.0 marker, no `policy_hash`):** REFUSE `[STALE-POLICY-EVALUATION]` when the passport's current policy requests a non-advisory CITATION-TIME mode (ANY citation-time `terminal_policies` key carries a non-`advisory` value — `contamination_triangulation ∈ {strict, strict_articles_only}`, `citation_existence: strict`, or `retraction: strict`; a future temporal-strict key is covered by the same generic condition; the package-level `submission_package` key does NOT trigger this refusal — its strictness is evaluated at the orchestrator's package gate, not on markers, #394) — the user opted into hard-block, so the legacy draft must be re-finalized. **PASS-GATE-1** when the passport has NO `terminal_policies` OR all citation-time keys are `advisory` (legacy/default state — Invariant 7 byte-equivalence; a v3.9.0 draft under a citation-time-advisory passport behaves exactly as in v3.9.0, regardless of `submission_package`).
   - **Stamp present + MATCH** ⇒ PASS-GATE-1.
 - **Gate 2 — HIGH-BLOCK refusal (rule 11), applied to EVERY marker that passes gate 1 — including legacy missing-stamp-under-advisory markers (R4-P1 bypass fix):** refuse iff a `severity=HIGH-BLOCK` token is present inside the `<!--ref:...-->`. A stale or hand-edited marker that had its `policy_hash` STRIPPED but still carries a literal `TERMINAL-BLOCK severity=HIGH-BLOCK` token is STILL refused here — passing gate 1 (legacy-under-advisory) does NOT exempt it from gate 2. Only a marker that passes gate 1 AND carries no `severity=HIGH-BLOCK` token emits.
 
-When refusing under rule 11, the formatter echoes the `reason` token (e.g. `reason=k3_all_indexes_unmatched` for contamination, `reason=lookup_verified_false` for citation_existence) plus any co-emitted advisory suffix when one is present (contamination co-emits a `CONTAMINATED-*` suffix; `citation_existence` co-emits none — its "why" is the `reason` token + the `citation_verification_summary[]` aggregate; note this is the `strict` refusal path — a default-`advisory` `false` does not refuse, it lists in the `provenance_summary.md` `Citation Existence Advisories` section per the subsection above) so the user gets remediation context (R1 P1). Remediation for a HIGH-BLOCK: resolve the underlying signal (verify the source against the original, replace the citation with a matched reference, or — if the user accepts the risk — switch the firing policy (`policy=<...>`) back to `advisory` and re-finalize). `/ars-mark-read` does NOT clear it.
+When refusing under rule 11, the formatter echoes the `reason` token (e.g. `reason=k3_all_indexes_unmatched`, `reason=lookup_verified_false`, or `reason=retracted_reference`) plus any co-emitted advisory suffix when one is present. Retraction and citation-existence mint no advisory marker token; their context remains in the corresponding provenance aggregate/section. Remediation for a HIGH-BLOCK: resolve the underlying signal (verify or replace the source; for retraction, record a legitimate-use declaration and cite the notice where applicable; or switch the firing policy back to `advisory`) and re-finalize. `/ars-mark-read` does NOT clear it.
 
 ## ARS Marker Stripping (#390)
 
@@ -494,14 +502,13 @@ NOT a refusal rule: this agent stays stamp-only (Invariant 13) — it never re-r
 | paper.tex | LaTeX | LaTeX source (if requested) |
 | references.bib | BibTeX | Bibliography (if LaTeX) |
 | cover_letter.md | Markdown | Journal cover letter (if applicable) |
-| provenance_summary.md | Markdown | Advisory provenance report — MUST be delivered whenever any advisory fires (contamination, version-family, or the mandatory `Citation Existence Advisories` section for advisory `lookup_verified == false` rows per C-V6(b)). The only deliverable-visible carrier for an advisory false, so it cannot be dropped when one exists. |
+| provenance_summary.md | Markdown | Advisory provenance report — MUST be delivered whenever any advisory fires (bibliographic-integrity signals, contamination, version-family, or the mandatory `Citation Existence Advisories` section for advisory `lookup_verified == false` rows per C-V6(b)). The only deliverable-visible carrier for an advisory false, so it cannot be dropped when one exists. |
 
 ### Format Specifications Applied
 | Spec | Value |
 |------|-------|
 | Citation Style | [APA 7th / Chicago / MLA / IEEE / Vancouver] |
 | Target Journal | [name or "General"] |
-| Venue Family | [acl / neurips / icml / ieee_trans / acm / gb_cn_journal / cn_tech_report / general / undeclared] |
 | Word Count | [N] words |
 | Language | [EN / zh-TW / Bilingual] |
 
@@ -510,9 +517,8 @@ NOT a refusal rule: this agent stays stamp-only (Invariant 13) — it never re-r
 
 ### Conversion Commands (if applicable)
 - DOCX: `pandoc paper.md -o paper.docx --reference-doc=template.docx`
-- PDF: `pandoc paper.md -o paper.pdf --pdf-engine=xelatex -V mainfont="Times New Roman" -V CJKmainfont="Noto Serif CJK TC"`
+- PDF: `pandoc paper.md -o paper.pdf --pdf-engine=xelatex -V CJKmainfont="Noto Sans CJK TC"`
 ```
-
 
 ## Detailed Execution Algorithm
 
@@ -536,17 +542,10 @@ Step 1: Confirm Output Requirements
 Step 2: Content Pre-Processing
   2.1 Confirm all sections exist and are complete
   2.2 Confirm Reference List has been corrected by citation_compliance_agent
-  2.3 Insert AI Disclosure Statement (if not already present)
+  2.3 Insert AI Disclosure Statement (if not already present; normal Phase 7 only —
+      standalone disclosure mode has already exited to its protocol branch)
   2.4 Insert Limitations section (if not already present)
   2.5 Confirm Abstract(s) exist
-  2.6 Run a manuscript-artifact leak scan across body text, headings, figure labels,
-      captions, table notes, graphical abstracts, and supplementary manuscript files.
-      Remove or flag any assistant-user dialogue, planning commentary, "as you requested",
-      "I recommend", "we discussed", "user-approved", "给你的解释", "我认为", "你需要",
-      or equivalent non-manuscript wording.
-  2.7 Confirm figures/tables that mix experimental stages preserve evidence-tier labels
-      such as sample screening, full validation, cross-model check, oracle diagnostic,
-      semantic-validation gate, or efficiency trade-off.
 
 Step 3: Format Conversion (execute sequentially as needed)
   -> See conversion rules for each format below
@@ -837,7 +836,7 @@ Template D: "The data that support the findings of this study are available from
 ```
 === Content Integrity ===
 □ All sections exist and are complete (compare with Draft section by section)
-□ Format conversion did not cause content loss (word count comparison: deviation < 1%)
+□ Format conversion did not cause content loss (word count comparison: deviation < 1%; stripping the `<!--protected-hedges: ...-->` control comment (#548) is required, not content loss — it is machine transport, consumed upstream by the abstract stage)
 □ Tables fully preserved (row and column counts match)
 □ Figure reference paths correct
 □ All in-text citations preserved

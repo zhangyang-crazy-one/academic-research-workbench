@@ -113,7 +113,7 @@ def check_relative_markdown_links(rel_path: str) -> None:
 def check_mode_registry() -> None:
     rel_path = "MODE_REGISTRY.md"
     text = read(rel_path)
-    expect_contains(rel_path, "Last updated: v3.13.0 (2026-06-18)")
+    expect_contains(rel_path, "Last updated: v3.19.0 (2026-07-22)")
     for heading in (
         "## deep-research (8 modes)",
         "## academic-paper (11 modes)",
@@ -130,7 +130,7 @@ def check_claude_md() -> None:
         return
     expect_contains(rel_path, "integrity check (Stage 2.5)")
     expect_contains(rel_path, "final integrity check (Stage 4.5)")
-    expect_contains(rel_path, "**Suite version**: 3.13.0")
+    expect_contains(rel_path, "**Suite version**: 3.19.0")
     for forbidden in (
         "6th independent reviewer",
         "Peer review gains 6th independent reviewer",
@@ -141,15 +141,15 @@ def check_claude_md() -> None:
 # All four skills carry the same frontmatter (`version` / `last_updated`) + Version-Info-table
 # (`| Skill Version |` / `| Last Updated |`) pair. Pre-#377 only the reviewer was policed.
 _SKILL_VERSION_PATHS = (
-    "academic-pipeline/SKILL.md",
-    "academic-paper/SKILL.md",
-    "academic-paper-reviewer/SKILL.md",
-    "deep-research/SKILL.md",
+    "academic-pipeline/WORKFLOW.md",
+    "academic-paper/WORKFLOW.md",
+    "academic-paper-reviewer/WORKFLOW.md",
+    "deep-research/WORKFLOW.md",
 )
 
 # The single skill whose `version` tracks the suite version. The other three move independently,
 # so only this one's date is sanity-checked against the release (CHANGELOG) in #377(b).
-_SUITE_SKILL_PATH = "academic-pipeline/SKILL.md"
+_SUITE_SKILL_PATH = "academic-pipeline/WORKFLOW.md"
 
 
 def _parse_skill_version_block(rel_path: str) -> tuple[str, str, str, str] | None:
@@ -211,7 +211,7 @@ def check_suite_skill_date_sanity() -> None:
     """#377(b): the suite-tracking skill's `last_updated` must NOT predate the latest CHANGELOG
     entry date — a release that bumps the suite version but forgets the date fails here.
 
-    Scope is deliberately narrow: only `academic-pipeline/SKILL.md` (the suite-tracking skill) is
+    Scope is deliberately narrow: only `academic-pipeline/WORKFLOW.md` (the suite-tracking skill) is
     date-checked. `academic-paper` / `academic-paper-reviewer` / `deep-research` version
     independently and legitimately keep their own earlier last-change dates, so forcing
     release-date alignment on them would be wrong (#377 out-of-scope)."""
@@ -242,7 +242,7 @@ def check_suite_skill_date_sanity() -> None:
 
 def check_pipeline_docs() -> None:
     for rel_path in (
-        "academic-pipeline/SKILL.md",
+        "academic-pipeline/WORKFLOW.md",
         "academic-pipeline/agents/pipeline_orchestrator_agent.md",
     ):
         rel_path = entry_path(rel_path)
@@ -343,8 +343,8 @@ def check_readme_sections() -> None:
     rel_path = "README.md"
     text = read(rel_path)
 
-    expect_contains(rel_path, "version-v3.13.0-blue")
-    expect_contains(rel_path, "releases/tag/v3.13.0")
+    expect_contains(rel_path, "version-v3.19.0-blue")
+    expect_contains(rel_path, "releases/tag/v3.19.0")
     expect_contains(rel_path, "### v3.12.0 (2026-06-08)")
     expect_contains(rel_path, "### v3.11.1 (2026-06-06)")
     expect_contains(rel_path, "### v3.11.0 (2026-06-04)")
@@ -377,7 +377,7 @@ def check_readme_sections() -> None:
         "### Deep Research (v2.11.0)",
         "### Academic Paper (v3.2.0)",
         "### Academic Paper Reviewer (v1.10.0)",
-        "### Academic Pipeline (v3.13.0)",
+        "### Academic Pipeline (v3.19.0)",
     ):
         if heading not in text:
             fail(f"{rel_path}: missing heading {heading!r}")
@@ -426,8 +426,8 @@ def check_readme_ja_sections() -> None:
     rel_path = "README.ja-JP.md"
     text = read(rel_path)
 
-    expect_contains(rel_path, "version-v3.13.0-blue")
-    expect_contains(rel_path, "releases/tag/v3.13.0")
+    expect_contains(rel_path, "version-v3.19.0-blue")
+    expect_contains(rel_path, "releases/tag/v3.19.0")
     expect_contains(rel_path, "### v3.12.0 (2026-06-08)")
     expect_contains(rel_path, "### v3.11.1 (2026-06-06)")
     expect_contains(rel_path, "### v3.11.0 (2026-06-04)")
@@ -461,7 +461,7 @@ def check_readme_ja_sections() -> None:
         "### Deep Research（v2.11.0）",
         "### Academic Paper（v3.2.0）",
         "### Academic Paper Reviewer（v1.10.0）",
-        "### Academic Pipeline（v3.13.0）",
+        "### Academic Pipeline（v3.19.0）",
     ):
         if heading not in text:
             fail(f"{rel_path}: missing heading {heading!r}")
@@ -481,6 +481,71 @@ def check_readme_ja_sections() -> None:
     check_relative_markdown_links(rel_path)
 
 
+def check_readme_ko_sections() -> None:
+    """Symmetric coverage of README.ko-KR.md added with Korean localization.
+
+    Korean typography uses ASCII parentheses, so the release-block headings match
+    the English / ja-JP convention verbatim (NOT the full-width zh-CN/zh-TW form).
+    Localized mode headings use ASCII parens + "N개 모드"; skill-detail headings
+    reuse the English ASCII-paren form. Mode-section inner-content guards are
+    deliberately omitted here, mirroring check_readme_ja_sections — the #171
+    schema-driven refactor will fold the locales together, so an extract_section
+    mirror added now would be discarded by it.
+    """
+    rel_path = "README.ko-KR.md"
+    text = read(rel_path)
+
+    expect_contains(rel_path, "version-v3.19.0-blue")
+    expect_contains(rel_path, "releases/tag/v3.19.0")
+    expect_contains(rel_path, "### v3.18.0 (2026-07-18)")
+    expect_contains(rel_path, "### v3.12.0 (2026-06-08)")
+    expect_contains(rel_path, "### v3.11.1 (2026-06-06)")
+    expect_contains(rel_path, "### v3.11.0 (2026-06-04)")
+    expect_contains(rel_path, "### v3.10.0 (2026-06-01)")
+    expect_contains(rel_path, "### v3.9.4.2 (2026-05-19)")
+    expect_contains(rel_path, "### v3.9.4.1 (2026-05-19)")
+    expect_contains(rel_path, "### v3.9.4 (2026-05-18)")
+    expect_contains(rel_path, "### v3.9.1 (2026-05-18)")
+    expect_contains(rel_path, "### v3.9.0 (2026-05-17)")
+    expect_contains(rel_path, "### v3.8.0 (2026-05-16)")
+    expect_contains(rel_path, "### v3.7.0 (2026-05-05)")
+    expect_contains(rel_path, "### v3.6.8 (2026-05-03)")
+    expect_contains(rel_path, "### v3.6.7 (2026-04-30)")
+    expect_contains(rel_path, "### v3.6.5 (2026-04-27)")
+    expect_contains(rel_path, "### v3.6.4 (2026-04-25)")
+    expect_contains(rel_path, "### v3.6.3 (2026-04-23)")
+    expect_contains(rel_path, "### v3.6.2 (2026-04-23)")
+    expect_contains(rel_path, "### v3.5.1 (2026-04-22)")
+    expect_contains(rel_path, "### v3.5.0 (2026-04-21)")
+    expect_contains(rel_path, "### v3.4.0 (2026-04-20)")
+    expect_contains(rel_path, "### v3.3.6 (2026-04-15)")
+    expect_contains(rel_path, "### v3.3.5 (2026-04-15)")
+    expect_contains(rel_path, "### v3.3.4 (2026-04-15)")
+    expect_contains(rel_path, "### v3.3.3 (2026-04-15)")
+    expect_contains(rel_path, "### v3.3.2 (2026-04-15)")
+    for heading in (
+        "#### Deep Research (8개 모드)",
+        "#### Academic Paper (11개 모드)",
+        "#### Academic Paper Reviewer (6개 모드)",
+        "#### Academic Pipeline (오케스트레이터)",
+        "### Deep Research (v2.11.0)",
+        "### Academic Paper (v3.2.0)",
+        "### Academic Paper Reviewer (v1.10.0)",
+        "### Academic Pipeline (v3.19.0)",
+    ):
+        if heading not in text:
+            fail(f"{rel_path}: missing heading {heading!r}")
+
+    for forbidden in (
+        "6th independent reviewer",
+        "Peer review gains 6th independent reviewer",
+    ):
+        expect_absent(rel_path, forbidden)
+
+    expect_contains(rel_path, "DOCX (가능한 경우 Pandoc 경유)")
+    check_relative_markdown_links(rel_path)
+
+
 ZH_README_CONFIGS = (
     {
         "rel_path": "README.zh-TW.md",
@@ -491,7 +556,7 @@ ZH_README_CONFIGS = (
             "### Deep Research (v2.11.0)",
             "### Academic Paper (v3.2.0)",
             "### Academic Paper Reviewer (v1.10.0)",
-            "### Academic Pipeline (v3.13.0)",
+            "### Academic Pipeline (v3.19.0)",
         ),
         "paper_start": "#### Academic Paper（學術論文撰寫，11 種模式）",
         "reviewer_start": "#### Academic Paper Reviewer（論文審查，6 種模式）",
@@ -508,7 +573,7 @@ ZH_README_CONFIGS = (
             "### Deep Research (v2.11.0)",
             "### Academic Paper (v3.2.0)",
             "### Academic Paper Reviewer (v1.10.0)",
-            "### Academic Pipeline (v3.13.0)",
+            "### Academic Pipeline (v3.19.0)",
         ),
         "paper_start": "#### Academic Paper（学术论文撰写，11 种模式）",
         "reviewer_start": "#### Academic Paper Reviewer（论文审查，6 种模式）",
@@ -524,8 +589,8 @@ def check_readme_zh_sections() -> None:
         rel_path = config["rel_path"]
         text = read(rel_path)
 
-        expect_contains(rel_path, "version-v3.13.0-blue")
-        expect_contains(rel_path, "releases/tag/v3.13.0")
+        expect_contains(rel_path, "version-v3.19.0-blue")
+        expect_contains(rel_path, "releases/tag/v3.19.0")
         expect_contains(rel_path, "### v3.12.0（2026-06-08）")
         expect_contains(rel_path, "### v3.11.1（2026-06-06）")
         expect_contains(rel_path, "### v3.11.0（2026-06-04）")
@@ -612,7 +677,7 @@ def check_setup_docs() -> None:
 
 def check_docx_contract() -> None:
     expect_contains(
-        entry_path("academic-paper/SKILL.md"),
+        entry_path("academic-paper/WORKFLOW.md"),
         "LaTeX/DOCX-via-Pandoc/PDF output",
     )
     expect_contains(
@@ -624,7 +689,7 @@ def check_docx_contract() -> None:
         "If Pandoc is unavailable, provide complete markdown + DOCX conversion instructions",
     )
     expect_contains(
-        entry_path("academic-pipeline/SKILL.md"),
+        entry_path("academic-pipeline/WORKFLOW.md"),
         "DOCX via Pandoc when available, otherwise conversion instructions",
     )
     expect_contains(
@@ -632,7 +697,7 @@ def check_docx_contract() -> None:
         "DOCX via Pandoc when available (otherwise instructions)",
     )
     for rel_path in (
-        "academic-pipeline/SKILL.md",
+        "academic-pipeline/WORKFLOW.md",
         "academic-pipeline/agents/pipeline_orchestrator_agent.md",
     ):
         rel_path = entry_path(rel_path)
@@ -674,7 +739,7 @@ def check_rebuttal_audit_guard() -> None:
     pipeline stage; if the suppression language is ever dropped, the mode would
     silently re-introduce the false-certification risk it was designed to avoid.
     """
-    logical_rel_path = "academic-paper/SKILL.md"
+    logical_rel_path = "academic-paper/WORKFLOW.md"
     try:
         rel_path = logical_rel_path
         text = read(logical_rel_path)
@@ -709,6 +774,7 @@ def main() -> int:
     check_readme_sections()
     check_readme_zh_sections()
     check_readme_ja_sections()
+    check_readme_ko_sections()
     check_setup_docs()
     check_docx_contract()
     check_reference_docs()

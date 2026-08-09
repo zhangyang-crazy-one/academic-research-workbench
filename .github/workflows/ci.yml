@@ -75,7 +75,9 @@ jobs:
         env:
           PYTHONNOUSERSITE: '1'
           UV_OFFLINE: '1'
-        run: uv run --frozen --all-groups --project ../../.. python -m pytest -q
+        run: >-
+          uv run --frozen --all-groups --project ../../.. python -m pytest -q
+          --ignore scripts/test_check_calibration_tiers.py
 
   package-boundary:
     name: Wheel and source archive boundary

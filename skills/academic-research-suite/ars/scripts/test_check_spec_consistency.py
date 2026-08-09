@@ -87,6 +87,78 @@ def _write_ja_readme(root: Path, version: str) -> None:
     )
 
 
+# Minimal ko-KR README capturing the version-bearing surfaces check_readme_ko_sections
+# polices: badge, release tag link, the same release-block list as the other locales,
+# four localized mode headings ("N개 모드" with ASCII parens — Korean typographic norm
+# matching English/ja, NOT the full-width zh form), four skill-detail headings (English
+# ASCII-paren form reused verbatim), and the Korean DOCX line.
+KO_README_TEMPLATE = """\
+# Academic Research Skills
+
+[![Version](https://img.shields.io/badge/version-v{ver}-blue)](https://github.com/Imbad0202/academic-research-skills/releases/tag/v{ver})
+
+## 빠른 시작
+
+#### Deep Research (8개 모드)
+- outline-only 모드
+- abstract-only 모드
+- disclosure 모드
+- review 모드
+
+#### Academic Paper (11개 모드)
+
+#### Academic Paper Reviewer (6개 모드)
+- calibration 모드
+
+#### Academic Pipeline (오케스트레이터)
+
+### Deep Research (v2.11.0)
+### Academic Paper (v3.2.0)
+### Academic Paper Reviewer (v1.10.0)
+### Academic Pipeline (v{ver})
+
+### 지원되는 출력 형식
+
+- DOCX (가능한 경우 Pandoc 경유)
+
+## 변경 이력
+
+### v3.19.0 (2026-07-22) — current release
+### v3.18.0 (2026-07-18) — prior minor
+### v3.12.0 (2026-06-08) — prior release
+### v3.11.1 (2026-06-06) — prior patch
+### v3.11.0 (2026-06-04) — prior patch
+### v3.10.0 (2026-06-01) — prior minor
+### v3.9.4.2 (2026-05-19) — CI discipline hotfix
+### v3.9.4.1 (2026-05-19) — previous hotfix
+### v3.9.4 (2026-05-18) — temporal verification
+### v3.9.1 (2026-05-18) — client hardening
+### v3.9.0 (2026-05-17) — triangulation
+### v3.8.0 (2026-05-16) — L3 audit
+### v3.7.0 (2026-05-05) — plugin packaging
+### v3.6.8 (2026-05-03) — generator-evaluator
+### v3.6.7 (2026-04-30) — pattern protection
+### v3.6.5 (2026-04-27) — corpus consumer
+### v3.6.4 (2026-04-25) — corpus input port
+### v3.6.3 (2026-04-23) — passport reset
+### v3.6.2 (2026-04-23) — reviewer sprint
+### v3.5.1 (2026-04-22) — reading-check probe
+### v3.5.0 (2026-04-21) — collaboration depth
+### v3.4.0 (2026-04-20) — compliance agent
+### v3.3.6 (2026-04-15) — README streamlining
+### v3.3.5 (2026-04-15)
+### v3.3.4 (2026-04-15) — changelog sync
+### v3.3.3 (2026-04-15) — release prep
+### v3.3.2 (2026-04-15) — data access levels
+"""
+
+
+def _write_ko_readme(root: Path, version: str) -> None:
+    (root / "README.ko-KR.md").write_text(
+        KO_README_TEMPLATE.format(ver=version), encoding="utf-8"
+    )
+
+
 # Minimal zh-CN README capturing the version-bearing surfaces the lint needs
 # to police via ZH_README_CONFIGS[1]: badge, release tag link, the same
 # release-block list as zh-TW, four Simplified-Chinese localized mode
@@ -240,7 +312,7 @@ class TestReadmeJaSections(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             csc.ROOT = root
-            _write_ja_readme(root, version="3.13.0")
+            _write_ja_readme(root, version="3.19.0")
 
             csc.check_readme_ja_sections()
 
@@ -260,18 +332,108 @@ class TestReadmeJaSections(unittest.TestCase):
             # Write the "current" v3.9.4.2 release block but downgrade only
             # the badge and tag link to v3.9.4.0. This is the realistic shape
             # of drift when one place gets forgotten during a release.
-            stale = JA_README_TEMPLATE.format(ver="3.13.0").replace(
-                "version-v3.13.0-blue", "version-v3.9.4.0-blue"
+            stale = JA_README_TEMPLATE.format(ver="3.19.0").replace(
+                "version-v3.19.0-blue", "version-v3.9.4.0-blue"
             ).replace(
-                "releases/tag/v3.13.0", "releases/tag/v3.9.4.0"
+                "releases/tag/v3.19.0", "releases/tag/v3.9.4.0"
             )
             (root / "README.ja-JP.md").write_text(stale, encoding="utf-8")
 
             csc.check_readme_ja_sections()
 
             self.assertTrue(
-                any("README.ja-JP.md" in e and "v3.13.0" in e for e in csc.ERRORS),
+                any("README.ja-JP.md" in e and "v3.19.0" in e for e in csc.ERRORS),
                 msg=f"expected ja-JP drift error in: {csc.ERRORS!r}",
+            )
+
+
+class TestReadmeKoSections(unittest.TestCase):
+    def setUp(self) -> None:
+        # check_spec_consistency uses module-level ROOT and ERRORS. Reset and
+        # restore around each test so state does not leak between cases.
+        self._orig_root = csc.ROOT
+        self._orig_errors = list(csc.ERRORS)
+        csc.ERRORS.clear()
+
+    def tearDown(self) -> None:
+        csc.ROOT = self._orig_root
+        csc.ERRORS.clear()
+        csc.ERRORS.extend(self._orig_errors)
+
+    def test_aligned_ko_readme_passes(self) -> None:
+        """A README.ko-KR.md whose badge / tag link / release headings / Korean
+        mode + skill headings all agree with the suite version must pass."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csc.ROOT = root
+            _write_ko_readme(root, version="3.19.0")
+
+            csc.check_readme_ko_sections()
+
+            self.assertEqual(
+                csc.ERRORS, [],
+                msg=f"unexpected errors on aligned ko fixture: {csc.ERRORS!r}",
+            )
+
+    def test_stale_ko_badge_fails(self) -> None:
+        """Symmetric to the ja drift regression: a stale badge / tag link on
+        README.ko-KR.md must surface the drift rather than silently passing."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csc.ROOT = root
+            stale = KO_README_TEMPLATE.format(ver="3.19.0").replace(
+                "version-v3.19.0-blue", "version-v3.9.4.0-blue"
+            ).replace(
+                "releases/tag/v3.19.0", "releases/tag/v3.9.4.0"
+            )
+            (root / "README.ko-KR.md").write_text(stale, encoding="utf-8")
+
+            csc.check_readme_ko_sections()
+
+            self.assertTrue(
+                any("README.ko-KR.md" in e and "v3.19.0" in e for e in csc.ERRORS),
+                msg=f"expected ko-KR drift error in: {csc.ERRORS!r}",
+            )
+
+    def test_missing_korean_mode_heading_fails(self) -> None:
+        """If a localized mode heading is dropped (e.g. the "N개 모드" form is
+        accidentally written in the English "(8 modes)" shape), the lint must
+        catch it — proving the heading checks are load-bearing, not vacuous."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csc.ROOT = root
+            broken = KO_README_TEMPLATE.format(ver="3.19.0").replace(
+                "#### Deep Research (8개 모드)", "#### Deep Research (8 modes)"
+            )
+            (root / "README.ko-KR.md").write_text(broken, encoding="utf-8")
+
+            csc.check_readme_ko_sections()
+
+            self.assertTrue(
+                any("README.ko-KR.md" in e and "8개 모드" in e for e in csc.ERRORS),
+                msg=f"expected missing-heading error in: {csc.ERRORS!r}",
+            )
+
+    def test_full_width_korean_changelog_parentheses_fail(self) -> None:
+        """Korean changelog headings use ASCII parentheses, not full-width forms."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csc.ROOT = root
+            broken = KO_README_TEMPLATE.format(ver="3.19.0").replace(
+                "### v3.18.0 (2026-07-18)",
+                "### v3.18.0（2026-07-18）",
+            )
+            (root / "README.ko-KR.md").write_text(broken, encoding="utf-8")
+
+            csc.check_readme_ko_sections()
+
+            self.assertTrue(
+                any(
+                    "README.ko-KR.md" in e
+                    and "### v3.18.0 (2026-07-18)" in e
+                    for e in csc.ERRORS
+                ),
+                msg=f"expected Korean parenthesis-style error in: {csc.ERRORS!r}",
             )
 
 
@@ -296,8 +458,8 @@ class TestReadmeZhSections(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             csc.ROOT = root
-            _write_zh_tw_readme(root, version="3.13.0")
-            _write_zh_cn_readme(root, version="3.13.0")
+            _write_zh_tw_readme(root, version="3.19.0")
+            _write_zh_cn_readme(root, version="3.19.0")
 
             csc.check_readme_zh_sections()
 
@@ -313,18 +475,18 @@ class TestReadmeZhSections(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             csc.ROOT = root
-            _write_zh_tw_readme(root, version="3.13.0")
-            stale = ZH_CN_README_TEMPLATE.format(ver="3.13.0").replace(
-                "version-v3.13.0-blue", "version-v3.9.4.0-blue"
+            _write_zh_tw_readme(root, version="3.19.0")
+            stale = ZH_CN_README_TEMPLATE.format(ver="3.19.0").replace(
+                "version-v3.19.0-blue", "version-v3.9.4.0-blue"
             ).replace(
-                "releases/tag/v3.13.0", "releases/tag/v3.9.4.0"
+                "releases/tag/v3.19.0", "releases/tag/v3.9.4.0"
             )
             (root / "README.zh-CN.md").write_text(stale, encoding="utf-8")
 
             csc.check_readme_zh_sections()
 
             self.assertTrue(
-                any("README.zh-CN.md" in e and "v3.13.0" in e for e in csc.ERRORS),
+                any("README.zh-CN.md" in e and "v3.19.0" in e for e in csc.ERRORS),
                 msg=f"expected zh-CN drift error in: {csc.ERRORS!r}",
             )
 
@@ -560,7 +722,7 @@ def _write_skill_fixtures(root: Path, overrides: dict | None = None) -> None:
         fields = {"fm_ver": ver, "fm_date": date, "tbl_ver": ver, "tbl_date": date}
         fields.update(overrides.get(skill, {}))
         (root / skill).mkdir(parents=True, exist_ok=True)
-        (root / skill / "SKILL.md").write_text(
+        (root / skill / "WORKFLOW.md").write_text(
             SKILL_TEMPLATE.format(name=skill, **fields), encoding="utf-8"
         )
 
@@ -607,7 +769,7 @@ class TestSkillVersionTableConsistency(unittest.TestCase):
 
             self.assertTrue(
                 any(
-                    "academic-pipeline/SKILL.md" in e and "2026-06-08" in e and "2026-06-01" in e
+                    "academic-pipeline/WORKFLOW.md" in e and "2026-06-08" in e and "2026-06-01" in e
                     for e in csc.ERRORS
                 ),
                 msg=f"expected frontmatter↔table date drift error in: {csc.ERRORS!r}",
@@ -627,7 +789,7 @@ class TestSkillVersionTableConsistency(unittest.TestCase):
 
             self.assertTrue(
                 any(
-                    "deep-research/SKILL.md" in e and "2.9.4" in e and "2.9.3" in e
+                    "deep-research/WORKFLOW.md" in e and "2.9.4" in e and "2.9.3" in e
                     for e in csc.ERRORS
                 ),
                 msg=f"expected frontmatter↔table version drift error in: {csc.ERRORS!r}",
@@ -640,7 +802,7 @@ class TestSkillVersionTableConsistency(unittest.TestCase):
             root = Path(tmp)
             csc.ROOT = root
             _write_skill_fixtures(root)
-            (root / "academic-paper" / "SKILL.md").write_text(
+            (root / "academic-paper" / "WORKFLOW.md").write_text(
                 '---\nname: academic-paper\nmetadata:\n  version: "3.2.0"\n'
                 '  last_updated: "2026-06-01"\n---\n\nNo version table here.\n',
                 encoding="utf-8",
@@ -649,13 +811,13 @@ class TestSkillVersionTableConsistency(unittest.TestCase):
             csc.check_skill_version_blocks()
 
             self.assertTrue(
-                any("academic-paper/SKILL.md" in e and "Version Info" in e for e in csc.ERRORS),
+                any("academic-paper/WORKFLOW.md" in e and "Version Info" in e for e in csc.ERRORS),
                 msg=f"expected missing-table-rows error in: {csc.ERRORS!r}",
             )
 
 
 # Minimal CHANGELOG whose latest entry date is the parameter; the suite-date-sanity check
-# compares academic-pipeline/SKILL.md last_updated against this. Two prior entries so the
+# compares academic-pipeline/WORKFLOW.md last_updated against this. Two prior entries so the
 # "latest" selection (first `## [X.Y.Z]` after [Unreleased]) is exercised, not just sole-entry.
 CHANGELOG_TEMPLATE = """\
 # Changelog
@@ -688,7 +850,7 @@ def _write_date_sanity_fixtures(
 
 
 class TestSuiteSkillDateSanity(unittest.TestCase):
-    """#377(b): academic-pipeline/SKILL.md last_updated must be >= the latest CHANGELOG entry
+    """#377(b): academic-pipeline/WORKFLOW.md last_updated must be >= the latest CHANGELOG entry
     date. The other three SKILL.md version independently and are NOT date-policed here."""
 
     def setUp(self) -> None:
@@ -746,7 +908,7 @@ class TestSuiteSkillDateSanity(unittest.TestCase):
 
             self.assertTrue(
                 any(
-                    "academic-pipeline/SKILL.md" in e
+                    "academic-pipeline/WORKFLOW.md" in e
                     and "2026-06-01" in e
                     and "2026-06-08" in e
                     for e in csc.ERRORS
@@ -784,11 +946,11 @@ class TestSuiteSkillDateSanity(unittest.TestCase):
 
                 # Repoint the constant at academic-paper → its early date is now the policed one.
                 csc.ERRORS.clear()
-                csc._SUITE_SKILL_PATH = "academic-paper/SKILL.md"
+                csc._SUITE_SKILL_PATH = "academic-paper/WORKFLOW.md"
                 csc.check_suite_skill_date_sanity()
                 self.assertTrue(
                     any(
-                        "academic-paper/SKILL.md" in e and "2026-06-01" in e and "2026-06-08" in e
+                        "academic-paper/WORKFLOW.md" in e and "2026-06-01" in e and "2026-06-08" in e
                         for e in csc.ERRORS
                     ),
                     msg=f"repointed suite path must police academic-paper's early date: {csc.ERRORS!r}",
@@ -807,7 +969,7 @@ class TestSuiteSkillDateSanity(unittest.TestCase):
                 root, changelog_date="2026-06-08", pipeline_date="2026-06-08"
             )
             # Strip the suite SKILL's Version-Info table rows so it fails to parse.
-            pipeline_skill = root / "academic-pipeline" / "SKILL.md"
+            pipeline_skill = root / "academic-pipeline" / "WORKFLOW.md"
             text = pipeline_skill.read_text(encoding="utf-8")
             pipeline_skill.write_text(
                 text.replace("| Skill Version | 3.12.0 |", "").replace(
@@ -819,7 +981,7 @@ class TestSuiteSkillDateSanity(unittest.TestCase):
             csc.check_skill_version_blocks()
             csc.check_suite_skill_date_sanity()
 
-            pipeline_errors = [e for e in csc.ERRORS if "academic-pipeline/SKILL.md" in e]
+            pipeline_errors = [e for e in csc.ERRORS if "academic-pipeline/WORKFLOW.md" in e]
             self.assertEqual(
                 len(pipeline_errors), 1,
                 msg=f"expected exactly one pipeline error, got {len(pipeline_errors)}: {pipeline_errors!r}",
@@ -844,7 +1006,7 @@ class RebuttalAuditGuardTest(unittest.TestCase):
         orig_read = csc.read
         csc.ERRORS.clear()
         try:
-            csc.read = lambda rel: skill_text if rel == "academic-paper/SKILL.md" else orig_read(rel)
+            csc.read = lambda rel: skill_text if rel == "academic-paper/WORKFLOW.md" else orig_read(rel)
             csc.check_rebuttal_audit_guard()
             return list(csc.ERRORS)
         finally:

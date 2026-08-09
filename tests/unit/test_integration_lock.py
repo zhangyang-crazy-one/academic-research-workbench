@@ -40,8 +40,8 @@ from arw.integration_lock import (
 )
 
 
-ARS_COMMIT = "c22c17eed8a5753aa60681be9734919f2e2f5b42"
-EXPERIMENT_COMMIT = "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26"
+ARS_COMMIT = "8cc7f8f4cccda721646d9df590b42721c93cba31"
+EXPERIMENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -138,15 +138,15 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             _component(
                 "academic-research-skills",
                 ARS_COMMIT,
-                "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
-                "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+                "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
+                "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
                 "https://github.com/Imbad0202/academic-research-skills.git",
             ),
             _component(
                 "experiment-agent",
                 EXPERIMENT_COMMIT,
-                "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
-                "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+                "166734509cf5057e48a7f81ecce9e44573610636",
+                "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
                 "https://github.com/Imbad0202/experiment-agent.git",
             ),
             _component(
@@ -210,7 +210,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             "intended_use": {"status": "unknown"},
             "distribution_class": {"status": "unknown"},
             "accountable_approval": {"status": "missing"},
-            "repository_visibility": "private",
+            "repository_visibility": "public",
             "private_repository_is_noncommercial_evidence": False,
             "permission_references": [],
             "evidence_hashes": [
@@ -238,13 +238,13 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         },
     )
 
-    _write(external / "VERSION", "0.1.20\n")
+    _write(external / "VERSION", "0.1.26\n")
     _write(
         external / "SKILL.md",
         "---\n"
         "name: academic-research-suite\n"
         "metadata:\n"
-        "  version: \"0.1.20\"\n"
+        "  version: \"0.1.26\"\n"
         "---\n"
         "# ARS\n",
     )
@@ -252,7 +252,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         external / "manifest.json",
         {
             "name": "academic-research-suite",
-            "adapter_version": "0.1.20",
+            "adapter_version": "0.1.26",
             "source_repositories": [
                 {
                     "name": "academic-research-skills",
@@ -518,7 +518,7 @@ def test_exact_external_integration_lock_round_trips_and_retains_legal_block(
     integration_fixture: dict[str, Path],
 ) -> None:
     lock = _build(integration_fixture)
-    assert lock.ars.adapter_version == "0.1.20"
+    assert lock.ars.adapter_version == "0.1.26"
     assert lock.ars.bundled is True
     assert lock.ars.source_repositories[0].commit == ARS_COMMIT
     assert lock.file_base.commit == FILE_BASE_COMMIT

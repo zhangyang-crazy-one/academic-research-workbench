@@ -30,3 +30,11 @@ mode remains the default fallback.
 Preserve Material Passport fields, citation locators, claim-audit annotations,
 and venue disclosure requirements. Do not add unsupported claims from model
 memory; mark material gaps explicitly.
+
+When a concrete venue and year are named, load
+`codex/references/annual_venue_profiles.json` before the stable venue-family
+pack. Compose the review-system contract with the venue-year contract, cite the
+official source for every current deadline or format rule, and preserve
+`not_announced` values. The venue-year official page overrides a shared review
+schedule for venue-specific milestones. Re-browse official sources before any
+deadline-dependent action.

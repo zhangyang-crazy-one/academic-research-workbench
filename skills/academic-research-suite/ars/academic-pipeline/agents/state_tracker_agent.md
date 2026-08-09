@@ -25,11 +25,11 @@ The State Tracker is the **single source of truth** for pipeline state. No other
 
 ### Dialogue log references (v3.3.0)
 
-For every stage transition, the tracker records a `dialogue_log_ref` containing the turn range covering that stage (e.g. `turns #47..#91`). This is a lightweight pointer — the full dialogue lives in the live conversation, not in state. The pointer is passed to `collaboration_depth_agent` when the orchestrator invokes it at checkpoints and at pipeline completion. Turn-range entries are immutable once a stage closes.
+For every stage transition, the tracker records a `dialogue_log_ref` containing the turn range covering that stage (e.g. `turns #47..#91`). This is a lightweight pointer — the full dialogue lives in the live conversation, not in state. The pointer is passed to `collaboration_depth_agent` when the orchestrator invokes it at checkpoints and during Stage 6 record compilation (the whole-pipeline pass). Turn-range entries are immutable once a stage closes.
 
 ### `collaboration_depth_history[]`
 
-Append-only list. Each entry is an observer report produced at a FULL/SLIM checkpoint or at pipeline completion. Entries never gate state transitions — they are stored for the final Process Record's "Collaboration Depth Trajectory" chapter only. The tracker must reject any write request that attempts to turn observer output into a blocking condition.
+Append-only list. Each entry is an observer report produced at a FULL/SLIM checkpoint or during Stage 6 record compilation (the whole-pipeline pass). Entries never gate state transitions — they are stored for the final Process Record's "Collaboration Depth Trajectory" chapter only. The tracker must reject any write request that attempts to turn observer output into a blocking condition.
 
 ### State Update Protocol
 
@@ -92,21 +92,7 @@ Every material artifact produced by the pipeline carries a version label. These 
       "team_notes": null,
       "dialogue_log_ref": "turns #3..#15"
     },
-    "2": {
-      "name": "WRITE",
-      "skill": "academic-paper",
-      "status": "completed",
-      "mode": "plan -> full",
-      "outputs": ["Paper Draft (5,200 words, IMRaD)"],
-      "started_at": "conversation turn #16",
-      "completed_at": "conversation turn #28",
-      "checkpoint_confirmed": true,
-      "checkpoint_type": "FULL",
-      "schema_validated": true,
-      "assigned_to": null,
-      "approval_gate": false,
-      "team_notes": null
-    },
+    "2": { "name": "WRITE", "skill": "academic-paper", "status": "completed", "mode": "plan -> full", "outputs": ["Paper Draft (5,200 words, IMRaD)"], "...": "same standard fields as stage \"1\"" },
     "2.5": {
       "name": "INTEGRITY",
       "agent": "integrity_verification_agent",
@@ -131,7 +117,7 @@ Every material artifact produced by the pipeline carries a version label. These 
       "skill": "academic-paper-reviewer",
       "status": "completed",
       "mode": "full",
-      "outputs": ["5 Review Reports (EIC + R1 + R2 + R3 + Devil's Advocate)", "Editorial Decision: Major Revision", "Revision Roadmap (5 items)"],
+      "outputs": ["5 Review Reports (Journal-Fit Reviewer + R1 + R2 + R3 + Devil's Advocate)", "Editorial Decision: Major Revision", "Revision Roadmap (5 items)"],
       "decision": "major_revision",
       "started_at": "conversation turn #32",
       "completed_at": "conversation turn #36",
@@ -160,22 +146,7 @@ Every material artifact produced by the pipeline carries a version label. These 
       "approval_gate": false,
       "team_notes": null
     },
-    "3p": {
-      "name": "RE-REVIEW",
-      "skill": "academic-paper-reviewer",
-      "status": "completed",
-      "mode": "re-review",
-      "outputs": ["Re-Review Report", "Editorial Decision: Accept"],
-      "decision": "accept",
-      "started_at": "conversation turn #43",
-      "completed_at": "conversation turn #45",
-      "checkpoint_confirmed": true,
-      "checkpoint_type": "MANDATORY",
-      "schema_validated": true,
-      "assigned_to": null,
-      "approval_gate": true,
-      "team_notes": null
-    },
+    "3p": { "name": "RE-REVIEW", "skill": "academic-paper-reviewer", "status": "completed", "mode": "re-review", "decision": "accept", "outputs": ["Re-Review Report", "Editorial Decision: Accept"], "...": "same standard fields as stage \"3\"" },
     "4p": {
       "name": "RE-REVISE",
       "skill": "academic-paper",
@@ -214,6 +185,21 @@ Every material artifact produced by the pipeline carries a version label. These 
     "5": {
       "name": "FINALIZE",
       "skill": "academic-paper",
+      "status": "pending",
+      "mode": null,
+      "outputs": [],
+      "started_at": null,
+      "completed_at": null,
+      "checkpoint_confirmed": false,
+      "checkpoint_type": null,
+      "schema_validated": false,
+      "assigned_to": null,
+      "approval_gate": true,
+      "team_notes": null
+    },
+    "6": {
+      "name": "PROCESS SUMMARY",
+      "skill": "academic-pipeline",
       "status": "pending",
       "mode": null,
       "outputs": [],
@@ -316,7 +302,7 @@ Update the specified stage's status.
 
 | Parameter | Description |
 |-----------|------------|
-| stage_id | "1", "2", "2.5", "3", "4", "3p", "4p", "4.5", "5" |
+| stage_id | "1", "2", "2.5", "3", "4", "3p", "4p", "4.5", "5", "6" |
 | status | "pending", "in_progress", "completed", "skipped", "blocked" |
 | details | mode, outputs, decision, verdict, and other additional information |
 
@@ -324,6 +310,7 @@ Update the specified stage's status.
 - Status can only advance (pending -> in_progress -> completed), cannot regress
 - Exception: Stage 2.5 and 4.5 FAIL retries are legal (status remains in_progress)
 - Skipped status means the user skipped this stage (Stage 2.5 and 4.5 cannot be skipped)
+- Stage 6 terminal semantics (#528): on the terminal acknowledgement, `update_stage("6", "completed", outputs)` then `update_pipeline_state("completed")`; if the user declines Stage 6 at the Stage 5 completion checkpoint, `update_stage("6", "skipped", {reason: "user declined Stage 6"})` then `update_pipeline_state("completed")`. See `../references/pipeline_state_machine.md` § Stage 6 terminal semantics
 
 ### 2. update_pipeline_state(state)
 
@@ -380,14 +367,15 @@ Check whether prerequisite materials for entering the specified stage are availa
 | Target Stage | Required Materials | Recommended Materials |
 |-------------|-------------------|----------------------|
 | Stage 1 | None (can start from scratch) | User-provided topic/direction |
-| Stage 2 | None (but Stage 1 output recommended) | RQ Brief, Bibliography, Synthesis |
+| Stage 2 | None (but Stage 1 output recommended) | RQ Brief, Methodology Blueprint, Bibliography, Synthesis |
 | Stage 2.5 | Paper Draft | -- |
 | Stage 3 | **Verified Paper Draft + Integrity Report (Pre)** | -- |
 | Stage 4 | Review Reports + Revision Roadmap | Paper Draft |
-| Stage 3' | Revised Draft | Response to Reviewers |
+| Stage 3' | Revised Draft + Round-1 Revision Roadmap (re-review mode — the default Stage 3'; not required when the user explicitly requests a fresh full review instead, e.g. the mid-entry quick→full path) | Original (pre-revision) Draft (#576 §11 presence policy — the Phase 2A comparison base; absent → every new issue `indeterminate`, MADE_WORSE partly unevaluable, visible markers); Response to Reviewers; Editorial Decision Letter (#539 Judge Record input); Round-1 review findings (Schema 6 reports — #576 §4 level-3 criterion layer); apply report(s) + the paired revision patch/diff files (#390/#576 §11 — reports without their paired patches is `manifest_incomplete` at dispatch, so warn when one is present without the other); Round-1 Reviewer Configuration Cards (re-review mode only — a fresh full review regenerates configuration via field_analyst by definition, no missing-material warning) |
 | Stage 4' | Re-Review Report (Decision: Major) | Revised Draft |
 | Stage 4.5 | Revised Draft or Re-Revised Draft | -- |
 | Stage 5 | **Integrity Report (Final) — verdict: PASS** | -- |
+| Stage 6 | None (Final Paper already delivered at Stage 5) | Pipeline state history + dialogue_log_ref ranges |
 
 **Return format:**
 ```
@@ -403,7 +391,7 @@ Append a Collaboration Depth Observer report (added in v3.3.0, behind `measures:
 
 | Parameter | Description |
 |-----------|-------------|
-| stage_id | Stage the observer scored, or `"pipeline"` for the whole-pipeline pass at completion |
+| stage_id | Stage the observer scored, or `"pipeline"` for the whole-pipeline pass during Stage 6 record compilation |
 | checkpoint_type | "FULL", "SLIM", or "pipeline_completion" (MANDATORY checkpoints MUST NOT call this function) |
 | report | Object with `timestamp`, `dialogue_log_ref`, `zone`, `scores`, `cross_model_divergence`, and always `advisory_only: true` |
 

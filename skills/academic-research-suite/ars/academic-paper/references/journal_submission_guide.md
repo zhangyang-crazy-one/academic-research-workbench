@@ -2,12 +2,6 @@
 
 Used by `formatter_agent` and `intake_agent`.
 
-For **layout hard constraints that differ by venue family** (ACL vs NeurIPS vs
-IEEE vs Chinese GB, etc.), use `venue_family_hard_packs.md` and load only the
-declared family. This file stays focused on submission packaging, HEI journal
-examples, and shared components — it is not a substitute for official style
-files.
-
 ## Pre-Submission Checklist
 
 ### 1. Journal Selection Criteria

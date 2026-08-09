@@ -23,7 +23,7 @@ You MAY READ files in `phase1_*/` (Research Question Brief, Methodology Blueprin
 
 If downstream work is needed (synthesis, drafting, review), return control to the caller with a recommendation. Do not execute. This is non-negotiable even if the user's prompt suggests they want full pipeline output — they should route through `pipeline_orchestrator_agent` or invoke each phase agent explicitly.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -374,11 +374,37 @@ v3.9.0 extends contamination_signals from single-index (Semantic Scholar) to thr
 
 **Per-API degradation:** each lookup follows the omit-on-failure pattern from its protocol doc. If S2 returns 429-after-retries or 5xx, omit `semantic_scholar_unmatched` (per v3.7.3 §3.2). Same for OpenAlex (omit `openalex_unmatched`) and Crossref (omit `crossref_unmatched`). Absence ≠ false per R-L3-2-C. Other indexes proceed independently.
 
+**Omission reason-provenance (#511 Part A):** every field omitted BECAUSE OF API degradation is recorded in the entry's optional `contamination_signal_omissions` object with reason `api_degraded` (e.g. `contamination_signal_omissions: {openalex_unmatched: "api_degraded"}`) — otherwise a degraded lookup is indistinguishable from "never computed". Record ONLY degradation-caused omissions: the manual exemption is derivable from `obtained_via='manual'` (and the schema forbids the object on manual entries), so it is never recorded. A signal key never appears in both `contamination_signals` and `contamination_signal_omissions` (schema-enforced mutual exclusion). When no lookup degraded, omit the object entirely. Schema: `shared/contracts/passport/literature_corpus_entry.schema.json`; registry row: `contamination_signal_api_degradation` in `shared/contracts/degradation_registry.json`.
+
 **Manual entry exemption:** `obtained_via='manual'` skips all three lookup checks; the entry exits ingest with the three `*_unmatched` fields absent. `preprint_post_llm_inflection` IS still computed (pure heuristic, no lookup) — v3.7.3 asymmetry preserved per v3.9.0 spec §3.1.
 
 **Per-entry ingest log:** emit one line summarizing which indexes were queried, which matched, and which were degraded. Log format: `[CORPUS INGEST] <citation_key>: s2=<state>, openalex=<state>, crossref=<state>` where each state is `matched` / `unmatched` / `degraded` / `skipped(manual)`.
 
 **v3.9.0 R-L3-2-D constraint:** OpenAlex `primary_location.source.type` and Crossref `type` fields, even when returned by matched entries, MUST NOT be used to derive any classification (venue_type, scope category, hard-block eligibility) within v3.9.0. v3.10 will introduce adapter-declared `venue_type` with explicit provenance.
+
+## Retraction Status Production (#651)
+
+For every entry carrying a DOI, retain OpenAlex `is_retracted` and Crossref
+`updated-by`/`update-to` metadata from the same matched records and pass the
+normalized envelopes to `scripts/retraction_status.py`. Append its schema-valid
+v1.1 row to `bibliographic_integrity_signals[]`. Do not write or update legacy
+`retraction_check`; that field is read-only process-attestation compatibility.
+
+This path differs intentionally from contamination matching:
+
+- a manual entry with a DOI is checked because user curation cannot freeze a
+  mutable retraction status;
+- any DOI-less entry, including manual, gets an explicit unresolved
+  `not_checked` row; never title-match retractions;
+- resolver degradation/disagreement, reinstatement, missing dates/reasons and
+  stale cache state stay explicit;
+- use `source_acquisition_date` for timing, never adapter `obtained_at`;
+- never evaluate `terminal_policies.retraction` here. The finalizer is the sole
+  policy owner.
+
+Use `RetractionStatusCache`'s separate `retraction_status_cache_v1` namespace.
+A row over 30 days old requires live revalidation before it can be strict
+eligible. Browser fallback must not be used to evade API limits.
 
 ## APA 7.0 Quick Reference
 
@@ -401,6 +427,7 @@ Reference: `references/apa7_style_guide.md`
 **Keywords**: ...
 **Boolean**: ...
 **Date Range**: ...
+**Last Searched**: [ISO date the search was executed — Schema 2 `last_searched_at` (#548)]
 **Inclusion Criteria**: ...
 **Exclusion Criteria**: ...
 **Coverage Distribution Advisory**:
