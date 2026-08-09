@@ -1,7 +1,7 @@
 {
   "components": [
     {
-      "git_tree": "571a3ae0fa5316340f34febf9b467807dc6b3739",
+      "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
       "id": "academic-research-skills",
       "legal_inputs": [
         {
@@ -22,11 +22,11 @@
           "spdx": "CC-BY-NC-4.0"
         }
       ],
-      "revision": "5d9b1f288457a3b2b2f1df1e915c883e36ea9a58",
+      "revision": "8cc7f8f4cccda721646d9df590b42721c93cba31",
       "source_path": "vendor/sources/academic-research-skills",
-      "tree_sha256": "4fef363197878e5ace5dfe807c5cedcb43437b1984e6b3cc85bcc327ba5171bd",
+      "tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
       "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "version": "0.1.25"
+      "version": "0.1.26"
     },
     {
       "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
@@ -1067,7 +1067,7 @@
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "8f0872e7e5da9ef20446b516f0485ae1db3e6d8db22391249a4e3064cfdaaa6e"
+    "sha256": "30b91cda7c3a7ba554388a500e18433e62e3020232dca75948e4e08cdfabf7ca"
   },
   "schema_version": "1.0.0"
 }

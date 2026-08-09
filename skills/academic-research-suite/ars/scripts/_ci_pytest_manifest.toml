@@ -405,6 +405,10 @@ id = "666-human-subjects-authority"
 path = "scripts/test_resolve_human_subjects_authority.py"
 
 [[pytest]]
+id = "680-human-subjects-reference-migration"
+path = "scripts/test_check_human_subjects_reference_migration.py"
+
+[[pytest]]
 id = "678-bibliographic-integrity-signals"
 path = "scripts/test_check_bibliographic_integrity_signals.py"
 
@@ -419,3 +423,11 @@ path = "scripts/test_check_committee_correspondence.py"
 [[pytest]]
 id = "683-review-target-context"
 path = "scripts/test_resolve_review_target_context.py"
+
+[[pytest]]
+id = "656-shared-evidence-row-contract"
+path = "scripts/test_evidence_rows.py"
+
+[[pytest]]
+id = "656-evidence-row-integration"
+path = "scripts/test_check_evidence_row_integration.py"

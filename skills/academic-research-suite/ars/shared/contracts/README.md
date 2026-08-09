@@ -76,6 +76,127 @@ Schemas for Material Passport input ports.
   reason as above: corpus entries MUST NOT carry human-read state (v3.6.8 firm rule 3).
   Audit/test-time validation only — the CLI stays dependency-light at runtime.
 
+## Shared evidence rows (#656)
+
+`shared/contracts/evidence/evidence_row.schema.json` defines the closed
+`evidence-row/1.0` carrier for evidence shown at human-adjudication checkpoints.
+V1 has one consumer discriminator, `surface: phase_e_claim_verification`: the
+Stage 2.5/4.5 Phase E Claim Verification Report persists
+one row per `(claim_id, ref_slug, anchor)` at Integrity Report
+`phases.E_claims.evidence_rows[]`. The array is additive: a positively identified
+pre-#656 report may omit it and, only with `--allow-legacy-absence`, renders
+exactly `LEGACY — EVIDENCE ROWS UNAVAILABLE`; missing shape alone is not legacy
+proof and never means that evidence was checked. The opt-in Stage 4→5
+`claim_audit_results[]` contract is a separate lifecycle and is unchanged.
+
+The one evidence-state vocabulary is:
+
+- `verified_exact_match` — a once-decoded writer `quote` anchor matched the
+  exact session-held source string;
+- `agent_extracted` — a `page`/`section` passage selected by the auditing agent,
+  also exact-substring checked, but labeled non-authoritative because passage
+  selection is agent judgment;
+- `unconfirmed_anchor` — session source was present but the writer's decoded
+  quote did not match it;
+- `not_checked`, `source_missing`, `access_failed`, `retrieval_failed`, and
+  `anchorless` — explicit empty states. V1 maps `paragraph` to `not_checked` and
+  `none`/a missing marker to `anchorless`.
+
+These states describe excerpt provenance/availability only. They never compute
+or change the independent Phase E `verdict`, issue severity/count, or PASS/FAIL
+decision. Viewing a row is not reading the source: the runtime never reads or
+writes `human_read_log`, never invokes `/ars-mark-read`, and never affects
+LOW-WARN/read-scope promotion.
+
+`scripts/evidence_rows.py` is the standard-library-only normative runtime:
+
+```python
+strict_percent_decode(value)
+build(row, session_source_or_none, *, extracted_text=None,
+      failure_state=None, cached_row=None)
+validate(row, session_source_or_none=None)
+paginate(rows, page=1, page_size=25)
+render_markdown(rows, page=1, page_size=25, *, session_sources=None)
+render_html(rows, page=1, page_size=25, *, session_sources=None)
+```
+
+The decoder is strict UTF-8 and runs exactly once (`+` is not a space;
+`%2520` becomes the literal `%20`). Positive excerpts must be an exact
+contiguous substring of the explicitly supplied session source. Quote anchors
+and excerpts are each capped at 25 words by whitespace split and 1000 Unicode
+code points. `source_content_sha256` hashes the exact session source encoded as
+UTF-8 with no Unicode, whitespace, or newline normalization;
+`source_artifact_sha256` hashes optional raw artifact bytes and never substitutes
+for the content hash. UTF-8 byte offsets bind an excerpt to the content hash.
+`row_sha256` covers canonical JSON for the complete row except the digest field
+itself. It is an unkeyed integrity checksum, not a signature or independent
+proof of provenance. Source-bound trust is established by replaying the row
+against explicitly supplied session source text. Direct Python
+`validate(row)` without its optional source argument checks only closed shape,
+cross-fields, and self-contained integrity; it does not prove source provenance.
+
+Cache keys bind schema/surface, claim and citation identity, source-content
+hash, decoded anchor, resulting state, and (for `page`/`section`) the candidate
+excerpt hash. A key match is replay-validated against the current session
+source before reuse. Hits preserve the original excerpt and `captured_at`, then
+set `cache.status: hit` and recompute `row_sha256`. Claim/source/content/candidate
+drift is a miss. A corrupt candidate is ignored and rebuilt from current explicit
+inputs; it is never returned as a hit. Current explicit failure states win without
+reading cached evidence; failure/empty states are never cached.
+
+Renderers are pure functions over persisted rows plus the explicit in-memory
+`session_sources` mapping supplied by their caller. Every source-bound row must
+have a matching `ref_slug → exact source text` entry and is replay-validated
+before anything is displayed; missing or drifting text fails closed. Empty-state
+rows need no source map. The renderer does not accept or follow a source pointer,
+URL, DOI, retrieval client, model, cache, or read ledger. Integrity validation
+checks the stored encoded/decoded-anchor relationship; display does not decode or
+alter the stored anchor again. Markdown and HTML external strings are rendered
+inert, including percent-decoded markup, table delimiters, bare URLs/email,
+newlines, all Unicode `Cc`/`Cf` controls, and U+2028/U+2029. A render page contains
+at most 25 rows, preserves document order, reports total/page bounds and
+deterministic previous/next/explicit-page navigation, and never silently
+truncates. There is intentionally no `--all`; any number of persisted rows
+remains accessible by page.
+
+For any Integrity Report wrapper with `evidence_rows` present, the adapter
+requires integer `E_claims.checked` and `E_claims.verified`; it checks that unique
+evidence `claim_id` count equals `checked`, unique `VERIFIED` claim count equals
+`verified`, and every row sharing a claim ID carries the same claim object and
+claim-level verdict. Thus `checked > 0` with an empty present array fails. Raw
+single-row and row-array inputs remain valid standalone runtime inputs. Only an
+absent `evidence_rows` field is legacy-compatible. Exact omission
+of a selected `(claim_id, ref_slug, anchor)` tuple cannot be proved from this
+wrapper alone because the E1 selected-tuple registry is not machine-carried here;
+the current producer must enforce that completeness before handoff.
+
+Rows containing an excerpt or decoded quote anchor default to
+`session_only`/`not_assessed`. Only an explicit user declaration may set the
+paired `user_confirmed_shareable`/`user_declared_authorized` values. The length
+limit is data minimization, not a licence, copyright exception, or publication
+right; exported reports must retain the row handling label/caveat or strip the
+external text.
+
+Validate persisted rows or render exactly one page. On both CLI commands, any
+source-bound row requires replay from an explicit `ref_slug → source text` JSON
+map:
+
+```bash
+python scripts/evidence_rows.py validate evidence-rows.json \
+  --source-map session-sources.json
+
+python scripts/evidence_rows.py render evidence-rows.json \
+  --format markdown --page 1 --page-size 25 \
+  --source-map session-sources.json
+```
+
+`--source-map` is required whenever either CLI command receives a document with
+a source-bound state; it is the only extra file the command opens. Missing
+`evidence_rows` is a render failure by default. A positively identified pre-#656
+Integrity Report renders the exact fixed legacy label with exit 0 only when the
+caller adds `--allow-legacy-absence`; `validate` always rejects the absence.
+Current producers may never use the compatibility flag.
+
 ## Human-subjects correspondence contract (#668)
 
 `human_subjects/committee_correspondence.schema.json` defines the standalone

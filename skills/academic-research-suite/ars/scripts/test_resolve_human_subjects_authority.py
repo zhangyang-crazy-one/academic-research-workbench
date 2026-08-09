@@ -1207,7 +1207,7 @@ def test_cli_reads_only_named_inputs_not_sibling_manuscript(tmp_path: Path) -> N
 def test_665_and_668_adjacent_contract_bytes_remain_pinned() -> None:
     expected = {
         "scripts/check_human_subjects_output_contract.py":
-            "f16271bf0a2c86df65d87213f64717769ef18a189cf274665b84e71186d0d88c",
+            "902ae7ed6d1be0f0629b028edc2184b8fa0ca18db0dcb4a1354fba09c90103be",
         "shared/contracts/human_subjects/committee_correspondence.schema.json":
             "302ffff93ca62445afa5f2979540aa24cea7875dc81f2ba2b770208e174b2931",
         "scripts/fixtures/committee_correspondence/16fd83f6aec7/concern_tracker.json":

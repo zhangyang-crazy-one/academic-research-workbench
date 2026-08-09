@@ -5,13 +5,15 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
-- Upstream revision: `5d9b1f288457a3b2b2f1df1e915c883e36ea9a58`
+- Upstream revision: `8cc7f8f4cccda721646d9df590b42721c93cba31`
 - Upstream suite version: `v3.19.0` plus post-tag `main` updates through 2026-08-09
-- Adapter version: `0.1.25`
+- Adapter version: `0.1.26`
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot; upstream commit identities remain pinned in `manifest.json`.
 - Codex path overlay: vendored workflow entrypoints use `WORKFLOW.md`; upstream checks that address Claude `SKILL.md` entrypoints are translated and their byte-level locks are repinned to the adapted files.
 - Venue overlay: the Codex adapter adds a source-audited annual profile registry for the October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027. Official venue-year rules remain normative; accepted-paper patterns are explicitly non-normative editorial evidence.
+- Evidence-row integration: the post-v3.19 Phase E shared evidence-row schema, validator, paginated renderer, and producer/consumer contracts are vendored from upstream. The Codex overlay preserves deterministic rendering and the explicitly degraded legacy-absence state without deriving evidence at display time.
+- Human-subjects reference migration: the #680 reference update and its #666 authority-resolver boundary are vendored from upstream; Codex-local checks address the renamed `deep-research/WORKFLOW.md` entrypoint and retain the fail-closed unresolved state.
 - Staging boundary: raw upstream evaluation transcripts under `ars/evals/heldout/*/runs/` remain source-and-test-only and are excluded from installed plugins. Public contracts, schemas, fixtures, and measurement summaries remain bundled.
 - Legal projection: the integration lock records the repository's actual `public` visibility without treating visibility as non-commercial permission; intended use, distribution class, approval, and CC BY-NC permission remain unresolved release blockers.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.

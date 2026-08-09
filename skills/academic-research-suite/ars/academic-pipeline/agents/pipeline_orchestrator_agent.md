@@ -295,6 +295,13 @@ Verification result: [PASS / PASS WITH NOTES / FAIL]
 - Claim verification: [X/X] verified [PASS/ISSUES]
 - Advisory rows (#547/#548/#541, non-gating): [none / N rows, listed below]
 
+[Phase E evidence: insert only the requested deterministic page rendered from
+the persisted `phases.E_claims.evidence_rows[]` array, plus previous/next and
+explicit-page navigation. Only when provenance positively identifies a
+pre-#656 report without that field, use `--allow-legacy-absence` and insert
+`LEGACY — EVIDENCE ROWS UNAVAILABLE`; do not infer legacy from omission or
+present claim counts as excerpts or successful evidence.]
+
 [If FAIL: list correction items with severity]
 
 [If advisory rows exist: list every `ADV-*-<n>` row (any advisory family — E4 scope, E5 novelty, E6 claim-strength drift, REV token-conservation, CACHE staleness, and any later-added family) with its ID and content, then ask the user per row — proceed open (default) or the family's second option (E4 accept-with-justification / E5 confirm-absolute / E6 accept-the-change / REV accept-the-token-change or (if a genuine content error) send back as a revision instruction / CACHE note the invalidate option) — and record each response in this checkpoint dialogue. Advisory rows never block continuation.]
@@ -307,6 +314,54 @@ This checkpoint requires your explicit confirmation.
 Continue?
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+##### Phase E Evidence-Row Rendering (#656)
+
+At every Stage 2.5 and Stage 4.5 MANDATORY checkpoint, consume the existing
+Integrity Report's `phases.E_claims.evidence_rows[]` by pointer. Each current V1
+row MUST validate against
+`shared/contracts/evidence/evidence_row.schema.json` with
+`schema_version: evidence-row/1.0` and
+`surface: phase_e_claim_verification`.
+
+Use `scripts/evidence_rows.py` to validate, paginate, and render the persisted
+rows, passing the explicit in-memory `ref_slug -> exact session-held source
+text` map for source-bound replay. The default and maximum page size are 25. At the initial checkpoint render
+page 1 unless the user requested another valid page; on each interaction render
+only the requested page and provide deterministic previous/next and explicit-
+page navigation. Never concatenate all pages into one checkpoint output. There
+is no total row cap and no `--all` mode; never truncate, deduplicate, reorder, or
+replace a multi-source claim's distinct `(claim_id, ref_slug, anchor)` rows with
+a single source cell.
+
+This step performs no display-time retrieval, ambient
+filesystem/network/API/model call, extraction, state derivation, or cache
+lookup. It replay-validates source-bound rows against only the explicit source
+map; missing replay text is a render failure. Replay may recompute the strict
+once-decode and hashes, but it never decodes stored display text again or
+changes the row. Do not ask the orchestrator model to reconstruct rows or
+manually escape external text; insert the runtime renderer's output verbatim as
+inert data.
+
+A positively identified pre-#656 report with no `evidence_rows` may be rendered
+with explicit `--allow-legacy-absence`, displaying exactly
+`LEGACY — EVIDENCE ROWS UNAVAILABLE`. Missing shape alone is not legacy proof;
+without the flag render fails. This is an explicit degraded/non-success evidence
+state: it does not manufacture excerpts, treat claim counts as evidence, or
+retroactively alter that report's historical Phase E verdict. A current producer
+always persists the field (`[]` only when no tuple was selected), may never use
+the compatibility flag, and omission or a missing selected row is a contract
+failure that does not advance through the checkpoint until a conforming report
+is supplied.
+The runtime also requires distinct row claim count to equal `E_claims.checked`,
+distinct `VERIFIED` claim count to equal `E_claims.verified`, and repeated rows
+for one claim to agree on claim metadata and verdict. Compare the exact tuple
+set with the E1 Claim Registry before rendering.
+
+Evidence-row display does not recalculate or replace Phase E verdicts,
+severity, issue counts, PASS / PASS WITH NOTES / FAIL, correction routing, or
+the existing integrity gate. It also does not mark any source as human-read and
+does not write or infer `human_read_log` state.
 
 ### Checkpoint Confirmation Semantics
 

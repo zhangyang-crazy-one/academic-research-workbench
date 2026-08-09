@@ -40,9 +40,9 @@ from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
 
 
-EXPECTED_ARS_ADAPTER_VERSION = "0.1.25"
+EXPECTED_ARS_ADAPTER_VERSION = "0.1.26"
 EXPECTED_CODEX_CLI_VERSION = "codex-cli 0.144.4"
-EXPECTED_ARS_UPSTREAM_COMMIT = "5d9b1f288457a3b2b2f1df1e915c883e36ea9a58"
+EXPECTED_ARS_UPSTREAM_COMMIT = "8cc7f8f4cccda721646d9df590b42721c93cba31"
 EXPECTED_EXPERIMENT_AGENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 EXPECTED_FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
 EXPECTED_UPSTREAM_URLS = {
@@ -52,8 +52,8 @@ EXPECTED_UPSTREAM_URLS = {
 EXPECTED_SOURCE_IDENTITIES = {
     "academic-research-skills": {
         "commit": EXPECTED_ARS_UPSTREAM_COMMIT,
-        "git_tree": "571a3ae0fa5316340f34febf9b467807dc6b3739",
-        "source_tree_sha256": "4fef363197878e5ace5dfe807c5cedcb43437b1984e6b3cc85bcc327ba5171bd",
+        "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
+        "source_tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
     },
     "experiment-agent": {
         "commit": EXPECTED_EXPERIMENT_AGENT_COMMIT,
@@ -208,7 +208,7 @@ class ARSBinding(LockModel):
     dependency_model: Literal["bundled-pinned-adapter"]
     bundled: Literal[True]
     adapter_name: Literal["academic-research-suite"]
-    adapter_version: Literal["0.1.25"]
+    adapter_version: Literal["0.1.26"]
     adapter_tree_sha256: Sha256
     upstream_content_tree_sha256: Sha256
     manifest: FileBinding
@@ -1008,7 +1008,7 @@ def _validate_bundled_ars(
             dependency_model="bundled-pinned-adapter",
             bundled=True,
             adapter_name="academic-research-suite",
-            adapter_version="0.1.25",
+            adapter_version="0.1.26",
             adapter_tree_sha256=_tree_sha256(root, ignore_runtime_caches=True),
             upstream_content_tree_sha256=_tree_sha256(
                 ars_root, ignore_runtime_caches=True

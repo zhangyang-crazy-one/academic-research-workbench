@@ -81,7 +81,7 @@ patch_source = Path(sys.argv[4]).resolve() if sys.argv[4] else None
 manifest_path = project_root / "vendor/source-manifest.json"
 expected_patch_sha256 = "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
 expected_components = {
-    "academic-research-skills": "5d9b1f288457a3b2b2f1df1e915c883e36ea9a58",
+    "academic-research-skills": "8cc7f8f4cccda721646d9df590b42721c93cba31",
     "experiment-agent": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
     "file-base": "ee68144af5453addda995a27cce8142999f318fb",
 }

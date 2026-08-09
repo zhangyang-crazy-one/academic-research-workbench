@@ -20,7 +20,7 @@
           "type": "string"
         },
         "adapter_version": {
-          "const": "0.1.25",
+          "const": "0.1.26",
           "title": "Adapter Version",
           "type": "string"
         },

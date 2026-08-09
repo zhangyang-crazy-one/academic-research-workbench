@@ -21,8 +21,8 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
-The bundled adapter is version `0.1.25`. It tracks
-`academic-research-skills@5d9b1f288457a3b2b2f1df1e915c883e36ea9a58`
+The bundled adapter is version `0.1.26`. It tracks
+`academic-research-skills@8cc7f8f4cccda721646d9df590b42721c93cba31`
 (ARS v3.19.0 plus post-tag `main` updates through 2026-08-09) and
 `experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
 The Codex overlay also provides a source-audited annual venue registry for the
@@ -73,8 +73,11 @@ serial qualification receipt when present.
 
 ### Development checkout
 
-Requirements are Python `>=3.13,<3.15`, `uv==0.11.28`, and (for the exact
-host qualification path) Codex CLI `0.144.4`.
+Requirements are Python `>=3.13,<3.15`, `uv>=0.11.28`, and (for the exact
+host qualification path) Codex CLI `0.144.4`. The `uv` declaration is a
+minimum compatible tool version; resolved Python dependencies remain pinned
+by `uv.lock`, while source commits, artifact digests, schemas, and qualified
+host identities remain exact reproducibility locks.
 
 ```bash
 git clone <repository-url> academic-research-workbench

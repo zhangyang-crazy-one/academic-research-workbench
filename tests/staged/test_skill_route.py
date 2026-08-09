@@ -160,7 +160,7 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     assert set(route) == ROUTE_KEYS
     assert route["workflow_family"]
     assert route["execution_mode"]
-    assert route["source_adapter_version"] == "0.1.25"
+    assert route["source_adapter_version"] == "0.1.26"
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
     assert route["integration_status"] == "BLOCKED"
