@@ -8,10 +8,11 @@ projections.
 ## ARS integration boundary
 
 ARW uses the current locally maintained and reshaped Academic Research Suite
-(ARS) adapter as an explicit external integration input. The adapter is not
-bundled into the staged ARW plugin: `ARW_ARS_ROOT` must point to the exact,
-lock-bound installation (adapter version, upstream identities, and content
-digests). A missing, symlinked, drifting, or implicitly discovered ARS root is
+(ARS) adapter as a bundled plugin skill at
+`skills/academic-research-suite/`. The staged package carries the exact
+modified router, workflows, references, Codex profile metadata, and adapter
+manifest. The integration lock binds the bundled adapter version, upstream
+source identities, and content digests; missing or drifting bundled content is
 blocked. This repository's wording does not assert public fork ownership,
 redistribution permission, or a license grant for ARS content.
 
@@ -20,8 +21,33 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
+### Personal non-commercial research use
+
+The maintainer's intended use of this repository is personal, non-commercial
+academic research. In the CC BY-NC 4.0 license, “NonCommercial” means a use
+that is not primarily intended for or directed toward commercial advantage or
+monetary compensation ([license text](https://creativecommons.org/licenses/by-nc/4.0/legalcode),
+[Creative Commons FAQ](https://creativecommons.org/faq/)). This project-use
+statement is not a relicensing of the ARS-derived material and is not legal
+advice. It does not authorize commercial use, imply endorsement, or remove the
+obligation to preserve attribution, license notices, and modification notices
+when sharing ARS-derived material. Commercial use or a materially different
+distribution context requires separate permission from the applicable rights
+holder.
+
+The source repository is public for this declared personal research purpose.
+The qualified-plugin and tagged-release workflows remain fail-closed and
+continue to require their machine-verifiable evidence; a README statement
+alone does not turn an unqualified stage into a release artifact.
+
 The Science Workbench paper AST/export remains a v2/deferred boundary; ARW
 does not claim to replace a complete research-to-paper workflow.
+
+The files-first MCP is ARW's modified `DeusData/codebase-memory-mcp` adapter.
+The installed launcher retains the upstream-compatible `file-base` command
+name; `vendor/mcp-manifest.json` records its exact source commit, ordered ARW
+patches, patched-tree digest, binary digest, protocol, and bounded capability
+profile.
 
 ## Qualification status
 
@@ -36,8 +62,9 @@ serial qualification receipt when present.
 
 ### Development checkout
 
-Requirements are Python `>=3.13,<3.15`, `uv==0.11.28`, and (for the exact
-host qualification path) Codex CLI `0.144.4`.
+Requirements are Python `>=3.13`, `uv>=0.11.28`, and Codex CLI
+`>=0.144.4`. Each Codex binary/version tuple still needs its own fresh host
+canary before it can be placed in an integration lock.
 
 ```bash
 git clone <repository-url> academic-research-workbench
@@ -54,23 +81,83 @@ ignored snapshots under `vendor/sources/`:
 ./scripts/verify-sources --inputs-only
 ```
 
-Set `ARW_ARS_ROOT` to the separately installed, exact ARS adapter before using
-the integration route. An absent or drifting external adapter is intentionally
-reported as blocked; ARW does not silently clone or substitute ARS.
+The native `file-base` binary is a separately qualified, modified
+`codebase-memory-mcp` data-plane artifact. A clean checkout cannot skip the
+pre-vendor license receipt: if the retained receipt or its source archives are
+absent, `verify-sources` must fail closed. When those local qualification
+inputs are present, build it through the denied-network evidence boundary:
+
+```bash
+mkdir -p build/evidence/local-native
+./scripts/offline-exec \
+  --evidence-root build/evidence/local-native \
+  ./scripts/build-file-base --clean --run-upstream-tests
+```
+
+The ARS skill is staged with ARW; no silent clone or second installation is
+used. A clean stage/install verification is required before the route can pass.
 
 ### Staged Codex plugin
 
 Use a qualified staged package produced by the staging workflow for
-installation. The Codex host flow is:
+installation. A source checkout does not contain a prebuilt `marketplace/`
+directory; create one from the immutable stage explicitly. The stage must
+carry `supply-chain/integration-lock.json`; an unlocked stage is diagnostic
+only and cannot qualify the route:
 
 ```bash
-codex plugin marketplace add ./marketplace --json
-codex plugin add academic-research-workbench@<marketplace-name> --json
+./scripts/stage-plugin --clean --stage-root build/stage/bootstrap
 ```
+
+This bootstrap stage is only the deterministic input for host qualification;
+do not install it. For host qualification, use
+`./scripts/smoke-staged-plugin` so the marketplace, fresh homes, hook trust,
+and installed inventory are isolated and recorded together.
 
 The staging and smoke scripts record the exact stage identity, installed
 inventory, hook definition, MCP launcher, and version tuple. Do not install
 from a dirty source checkout when making a qualification claim.
+
+For a repeatable final stage, first run
+`scripts/qualify-codex-host` against the deterministic bootstrap stage and
+retain its redacted `canary.json`. Then bind that exact evidence to the stage
+with the fail-closed helper (the launcher/native paths are part of the lock):
+
+```bash
+./scripts/qualify-codex-host \
+  --stage-root build/stage/bootstrap \
+  --evidence-root build/evidence/host-canary \
+  --work-root build/qualification-work \
+  --credential-source "$CODEX_HOME" \
+  --codex-launcher "$(command -v codex)"
+./scripts/prepare-qualified-stage \
+  --host-canary-evidence build/evidence/host-canary/canary.json \
+  --codex-launcher /usr/local/sbin/codex \
+  --codex-native-binary /path/to/exact/native/codex \
+  --stage-root build/stage/qualified \
+  --evidence-root build/evidence/qualified
+```
+
+Only after that command succeeds, create and install the qualified marketplace
+copy:
+
+```bash
+./scripts/create-marketplace --stage-root build/stage/qualified
+codex plugin marketplace add ./build/marketplace --json
+codex plugin add academic-research-workbench@arw-local --json
+```
+
+`create-marketplace` copies the exact staged tree and writes the local
+marketplace manifest. Do not install an unlocked bootstrap stage.
+
+The helper never fabricates a canary or silently upgrades a missing lock. A
+qualified stage still reports `release_qualification: BLOCKED` until the
+retained CC BY-NC intended-use, distribution, accountable-approval, and
+permission evidence is resolved. If host canary evidence is not supplied,
+`bin/arw route --json` remains blocked with
+`integration_inputs_incomplete` by design; supplying the exact retained
+`ARW_HOST_CANARY_EVIDENCE` makes the verifier recompute the lock and can return
+`integration_status: PASS` on the same host.
 
 ## Release boundary
 

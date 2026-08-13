@@ -48,6 +48,7 @@ class ReviewerIdentity:
     host_agent_id: str
     isolated: bool = True
     role_ids: tuple[str, ...] = ()
+    identity_receipt_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.worker_identity_id or not self.host_agent_id:
@@ -58,6 +59,11 @@ class ReviewerIdentity:
         if len(roles) != len(set(roles)):
             raise ValueError("identity role IDs must be unique")
         object.__setattr__(self, "role_ids", roles)
+        if self.identity_receipt_sha256 is not None and (
+            len(self.identity_receipt_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in self.identity_receipt_sha256)
+        ):
+            raise ValueError("identity receipt must be a lowercase SHA-256 digest")
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +117,7 @@ class PanelAssignment:
     role_id: str
     worker_identity_id: str
     host_agent_id: str
+    identity_receipt_sha256: str
     subject_sha256: str
     rubric_sha256: str
     acceptance_key: tuple[int, int, str]
@@ -162,6 +169,7 @@ class PanelAssignment:
             role_id=self.role_id,
             worker_identity_id=reviewer_identity.worker_identity_id,
             host_agent_id=reviewer_identity.host_agent_id,
+            identity_receipt_sha256=reviewer_identity.identity_receipt_sha256 or "0" * 64,
             subject_sha256=self.subject_sha256,
             rubric_sha256=self.rubric_sha256,
             acceptance_key=(round_number, self.acceptance_key[1], assignment_id),
@@ -330,6 +338,7 @@ class PanelPlan:
     limitations: tuple[str, ...]
     policy_sha256: str
     accepted_report_sha256: tuple[str, ...] = ()
+    manifest_sha256: str | None = None
 
     @property
     def formal_success(self) -> bool:
@@ -407,6 +416,11 @@ def _coerce_identity(value: ReviewerIdentity | Mapping[str, object]) -> Reviewer
             host_agent_id=str(value["host_agent_id"]),
             isolated=isolated,
             role_ids=tuple(str(item) for item in value.get("role_ids", ())),
+            identity_receipt_sha256=(
+                str(value["identity_receipt_sha256"])
+                if value.get("identity_receipt_sha256") is not None
+                else None
+            ),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError("identity mapping must prove worker, host, and isolation") from error
@@ -510,6 +524,8 @@ class FormalPanelPolicy:
                 continue
             if not identity.isolated:
                 blockers.append(f"isolation proof missing for {role}")
+            if identity.identity_receipt_sha256 is None:
+                blockers.append(f"retained identity receipt missing for {role}")
             if _identity_has_conflict(identity, role):
                 blockers.append(f"role conflict for {role}")
 
@@ -519,6 +535,8 @@ class FormalPanelPolicy:
         else:
             if not synth.isolated:
                 blockers.append("synthesis isolation proof is missing")
+            if synth.identity_receipt_sha256 is None:
+                blockers.append("synthesis retained identity receipt is missing")
             if synth.worker_identity_id in worker_ids:
                 blockers.append("editorial synthesizer worker identity is reused")
             if synth.host_agent_id in host_ids:
@@ -570,6 +588,7 @@ class FormalPanelPolicy:
             role_id=SYNTHESIS_ROLE,
             worker_identity_id=synth.worker_identity_id,
             host_agent_id=synth.host_agent_id,
+            identity_receipt_sha256=synth.identity_receipt_sha256 or "0" * 64,
             subject_sha256=subject_sha256,
             rubric_sha256=rubric_sha256,
             acceptance_key=(1, 0, synthesis_id),
@@ -634,6 +653,7 @@ class FormalPanelPolicy:
             role_id=role_id,
             worker_identity_id=identity.worker_identity_id,
             host_agent_id=identity.host_agent_id,
+            identity_receipt_sha256=identity.identity_receipt_sha256 or "0" * 64,
             subject_sha256=subject_sha256,
             rubric_sha256=rubric_sha256,
             acceptance_key=(0, ordinal, assignment_id),
@@ -823,6 +843,7 @@ class FormalPanelPolicy:
             role_id=synth_assignment.role_id,
             worker_identity_id=synth_assignment.worker_identity_id,
             host_agent_id=synth_assignment.host_agent_id,
+            identity_receipt_sha256=synth_assignment.identity_receipt_sha256,
             subject_sha256=synth_assignment.subject_sha256,
             rubric_sha256=synth_assignment.rubric_sha256,
             acceptance_key=synth_assignment.acceptance_key,

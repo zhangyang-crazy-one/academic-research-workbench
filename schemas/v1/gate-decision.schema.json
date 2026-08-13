@@ -87,6 +87,11 @@
           "title": "Prior Verdict Sha256",
           "type": "string"
         },
+        "authority_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authority Sha256",
+          "type": "string"
+        },
         "supersedes_decision_id": {
           "anyOf": [
             {
@@ -98,6 +103,29 @@
             }
           ],
           "title": "Supersedes Decision Id"
+        },
+        "blocker_action": {
+          "default": "none",
+          "enum": [
+            "none",
+            "release",
+            "restore"
+          ],
+          "title": "Blocker Action",
+          "type": "string"
+        },
+        "blocker_code": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocker Code"
         },
         "verdict_rewrite": {
           "const": false,
@@ -119,6 +147,7 @@
         "scope",
         "rationale",
         "prior_verdict_sha256",
+        "authority_sha256",
         "supersedes_decision_id"
       ],
       "title": "HumanDecisionRecord",

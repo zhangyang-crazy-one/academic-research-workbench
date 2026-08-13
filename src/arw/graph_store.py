@@ -84,6 +84,9 @@ class GraphStore:
         self.generations = self.root_control / "generations"
         self.receipts = self.root_control / "receipts"
         self.selected_path = self.root_control / "selected-generation.json"
+        # Generations are immutable and content addressed; verified results are
+        # memoized by generation_id and invalidated by file size + mtime_ns.
+        self._verified_generations: dict[str, tuple[int, int, int, int]] = {}
 
     def _generation_id(self) -> str:
         return f"graph-generation-{uuid.uuid4().hex[:16]}"
@@ -303,14 +306,52 @@ class GraphStore:
             manifest_digest = hashlib.sha256(manifest_raw).hexdigest()
             if manifest_digest != pointer.get("manifest_sha256") or manifest.generation_id != generation_id or manifest.status != "closed":
                 raise GraphStoreError("projection_corrupt", "selected graph manifest binding is invalid")
-            if manifest.database_sha256 != _sha256(database_path):
-                raise GraphStoreError("projection_corrupt", "selected graph database digest mismatch")
-            self._validate_counts(database_path, manifest)
+            self._verify_generation(database_path, manifest_path, manifest)
             return SelectedGraphGeneration(generation_id, root, manifest_path, database_path, manifest)
         except GraphStoreError:
             raise
         except (OSError, UnicodeError, ValueError, ValidationError, sqlite3.Error) as error:
             raise GraphStoreError("projection_corrupt", f"selected graph generation is invalid: {error}") from error
+
+    def _verify_generation(
+        self,
+        database_path: Path,
+        manifest_path: Path,
+        manifest: GraphProjectionManifest,
+    ) -> None:
+        """Verify database integrity once per immutable content-addressed generation.
+
+        The full-database digest, integrity check, and count scans are skipped on
+        repeat queries while the generation files are unchanged (same size and
+        mtime_ns).  Any stat failure is treated as a cache miss and falls back to
+        the full pre-cache verification path.
+        """
+        key = manifest.generation_id
+        try:
+            database_stat = database_path.stat()
+            manifest_stat = manifest_path.stat()
+        except OSError:
+            database_stat = None
+            manifest_stat = None
+        if database_stat is not None and manifest_stat is not None:
+            cached = self._verified_generations.get(key)
+            if cached is not None and cached == (
+                database_stat.st_size,
+                database_stat.st_mtime_ns,
+                manifest_stat.st_size,
+                manifest_stat.st_mtime_ns,
+            ):
+                return
+        if manifest.database_sha256 != _sha256(database_path):
+            raise GraphStoreError("projection_corrupt", "selected graph database digest mismatch")
+        self._validate_counts(database_path, manifest)
+        if database_stat is not None and manifest_stat is not None:
+            self._verified_generations[key] = (
+                database_stat.st_size,
+                database_stat.st_mtime_ns,
+                manifest_stat.st_size,
+                manifest_stat.st_mtime_ns,
+            )
 
     @staticmethod
     def _validate_counts(database_path: Path, manifest: GraphProjectionManifest) -> None:

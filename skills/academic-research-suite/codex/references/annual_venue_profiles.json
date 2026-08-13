@@ -1,0 +1,505 @@
+{
+  "schema_version": "1.0",
+  "verified_on": "2026-08-09",
+  "refresh_policy": {
+    "always_recheck_before_submission": true,
+    "max_age_days_for_planning": 14,
+    "stale_behavior": "Mark time-sensitive facts stale and browse the official source; never silently reuse an old deadline."
+  },
+  "source_precedence": [
+    "official_venue_year_page",
+    "official_review_system_page",
+    "official_publisher_or_template_repository",
+    "stable_venue_family_pack",
+    "secondary_index"
+  ],
+  "conflict_policy": {
+    "rule": "A more specific official source overrides a less specific source for the same fact.",
+    "required_action": "Retain both source records, use the venue-year value, and disclose the conflict or update status.",
+    "example": "COLING 2027's official venue page supplies its commitment date; the ARR cycle-end date is not a substitute."
+  },
+  "sources": {
+    "arr-dates": {
+      "title": "ACL Rolling Review: Dates and Venues",
+      "url": "https://aclrollingreview.org/dates",
+      "authority": "official_review_system",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "arr-cfp": {
+      "title": "ACL Rolling Review: Call for Papers",
+      "url": "https://aclrollingreview.org/cfp",
+      "authority": "official_review_system",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "arr-authors": {
+      "title": "ACL Rolling Review: Authors Guidelines",
+      "url": "https://aclrollingreview.org/authors",
+      "authority": "official_review_system",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "acl-style-files": {
+      "title": "Official ACL style files",
+      "url": "https://github.com/acl-org/acl-style-files",
+      "authority": "official_template_repository",
+      "access_level": "open_repository",
+      "accessed_on": "2026-08-08"
+    },
+    "coling-2027-home": {
+      "title": "COLING 2027 official website",
+      "url": "https://2027.coling-iccl.org/",
+      "authority": "official_venue_year",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "naacl-2027-home": {
+      "title": "NAACL 2027 official website",
+      "url": "https://2027.naacl.org/",
+      "authority": "official_venue_year",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "ecir-2027-full-cfp": {
+      "title": "ECIR 2027 Call for Full Papers",
+      "url": "https://www.ecir2027.co.uk/call-for-full-papers",
+      "authority": "official_venue_year",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "springer-lncs-guidelines": {
+      "title": "Springer LNCS conference proceedings guidelines",
+      "url": "https://www.springer.com/gp/computer-science/lncs/conference-proceedings-guidelines",
+      "authority": "official_publisher",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "ccf-2026-directory": {
+      "title": "Seventh CCF Recommended International Conferences and Journals Directory announcement",
+      "url": "https://www.ccf.org.cn/Academic_Evaluation/By_category/",
+      "authority": "official_ranking_body",
+      "access_level": "open_announcement",
+      "accessed_on": "2026-08-08"
+    },
+    "ucas-ccf-2026-pdf": {
+      "title": "UCAS institutional mirror of the CCF 2026 directory PDF",
+      "url": "https://ai.ucas.ac.cn/index.php/zh-cn/jxjy/fzpy1/7675-ccf-2026",
+      "authority": "institutional_mirror",
+      "access_level": "open_attachment_index",
+      "accessed_on": "2026-08-08"
+    },
+    "ccf-2026-search-index": {
+      "title": "Searchable secondary index of the CCF 2026 directory",
+      "url": "https://niehewang.github.io/ccf-2026.html",
+      "authority": "secondary_index",
+      "access_level": "open_full_page",
+      "accessed_on": "2026-08-08"
+    },
+    "coling-2025-cycleoie": {
+      "title": "CycleOIE: A Low-Resource Training Framework For Open Information Extraction",
+      "url": "https://aclanthology.org/2025.coling-main.227/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "coling-2025-ood-control": {
+      "title": "Controlling Out-of-Domain Gaps in LLMs for Genre Classification and Generated Text Detection",
+      "url": "https://aclanthology.org/2025.coling-main.224/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "naacl-2025-track-sql": {
+      "title": "Track-SQL: Enhancing Generative Language Models with Dual-Extractive Modules for Schema and Context Tracking in Multi-turn Text-to-SQL",
+      "url": "https://aclanthology.org/2025.naacl-long.536/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "naacl-2025-soft-syntax-ee": {
+      "title": "Soft Syntactic Reinforcement for Neural Event Extraction",
+      "url": "https://aclanthology.org/2025.naacl-long.479/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    }
+  },
+  "review_systems": [
+    {
+      "id": "arr-2026-october",
+      "kind": "review_system",
+      "name": "ACL Rolling Review October 2026 cycle",
+      "milestones": {
+        "submission": {
+          "date": "2026-10-12",
+          "time": "23:59",
+          "timezone": "AoE (UTC-12)",
+          "status": "confirmed",
+          "source_id": "arr-dates"
+        },
+        "cycle_end": {
+          "date": "2026-12-20",
+          "time": null,
+          "timezone": null,
+          "status": "confirmed",
+          "source_id": "arr-dates"
+        }
+      },
+      "submission_platform": "OpenReview",
+      "format_contract": {
+        "mode": "direct",
+        "template_family": "ACL",
+        "template_source_id": "acl-style-files",
+        "latex_entrypoints": {
+          "pdf_latex": "acl_latex.tex",
+          "xelatex_or_lualatex": "acl_lualatex.tex"
+        },
+        "style_mutation_allowed": false,
+        "paper_types": {
+          "long": {
+            "content_pages": 8,
+            "references": "unlimited"
+          },
+          "short": {
+            "content_pages": 4,
+            "references": "unlimited"
+          }
+        },
+        "anonymity": "two_way_anonymized",
+        "required_sections": [
+          "Limitations"
+        ],
+        "optional_sections_after_conclusion": [
+          "Ethical considerations"
+        ],
+        "appendices": {
+          "count_toward_content_limit": false,
+          "position": "after_references",
+          "double_column_required": true,
+          "reviewer_obligation": "not_required_to_consider"
+        }
+      },
+      "hard_gates": [
+        "Use the official ACL style without modifying the style files.",
+        "Long and short papers may contain at most 8 and 4 content pages respectively.",
+        "Include a dedicated Limitations section after the conclusion and before references.",
+        "Remove author names and affiliations and anonymize supplementary materials and repository links.",
+        "Do not use download-tracking file-host links in anonymized supplementary material.",
+        "Do not submit the paper elsewhere while it is under ARR review.",
+        "Every author must complete reviewer registration within 48 hours after the submission deadline.",
+        "Keep appendices in the official double-column format and do not hide claim-critical material there."
+      ],
+      "source_ids": [
+        "arr-dates",
+        "arr-cfp",
+        "arr-authors",
+        "acl-style-files"
+      ]
+    }
+  ],
+  "venues": [
+    {
+      "id": "coling-2027",
+      "kind": "publication_venue",
+      "name": "The 32nd International Conference on Computational Linguistics",
+      "short_name": "COLING 2027",
+      "review_system_id": "arr-2026-october",
+      "milestones": {
+        "arr_submission": {
+          "date": "2026-10-12",
+          "time": "23:59",
+          "timezone": "AoE (UTC-12)",
+          "status": "confirmed",
+          "source_id": "coling-2027-home"
+        },
+        "commitment": {
+          "date": "2026-12-23",
+          "time": "23:59",
+          "timezone": "AoE (UTC-12)",
+          "status": "confirmed",
+          "source_id": "coling-2027-home"
+        },
+        "notification": {
+          "date": "2027-02-10",
+          "time": "23:59",
+          "timezone": "AoE (UTC-12)",
+          "status": "confirmed",
+          "source_id": "coling-2027-home"
+        },
+        "conference_start": {
+          "date": "2027-05-09",
+          "time": null,
+          "timezone": "Macau local time",
+          "status": "confirmed",
+          "source_id": "coling-2027-home"
+        },
+        "conference_end": {
+          "date": "2027-05-14",
+          "time": null,
+          "timezone": "Macau local time",
+          "status": "confirmed",
+          "source_id": "coling-2027-home"
+        }
+      },
+      "location": "Macau, China",
+      "format_contract": {
+        "mode": "inherit",
+        "review_system_id": "arr-2026-october"
+      },
+      "scope_tags": [
+        "computational_linguistics",
+        "natural_language_processing",
+        "information_extraction",
+        "resources_and_evaluation",
+        "nlp_engineering_experiment"
+      ],
+      "ranking_context": {
+        "system": "CCF 2026",
+        "category": "B",
+        "applies_to": "full_or_regular_paper",
+        "verification_note": "The CCF announcement and mirrored directory are the authority; the searchable secondary index was used to cross-check the COLING row.",
+        "source_ids": [
+          "ccf-2026-directory",
+          "ucas-ccf-2026-pdf",
+          "ccf-2026-search-index"
+        ]
+      },
+      "source_ids": [
+        "coling-2027-home"
+      ]
+    },
+    {
+      "id": "naacl-2027",
+      "kind": "publication_venue",
+      "name": "The 2027 Annual Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics",
+      "short_name": "NAACL 2027",
+      "review_system_id": "arr-2026-october",
+      "milestones": {
+        "arr_submission": {
+          "date": "2026-10-12",
+          "time": "23:59",
+          "timezone": "AoE (UTC-12)",
+          "status": "confirmed",
+          "source_id": "naacl-2027-home"
+        },
+        "commitment": {
+          "date": null,
+          "time": null,
+          "timezone": null,
+          "status": "not_announced",
+          "source_id": "naacl-2027-home"
+        },
+        "notification": {
+          "date": null,
+          "time": null,
+          "timezone": null,
+          "status": "not_announced",
+          "source_id": "naacl-2027-home"
+        },
+        "conference_start": {
+          "date": "2027-06-01",
+          "time": null,
+          "timezone": "San Francisco local time",
+          "status": "confirmed",
+          "source_id": "naacl-2027-home"
+        },
+        "conference_end": {
+          "date": "2027-06-05",
+          "time": null,
+          "timezone": "San Francisco local time",
+          "status": "confirmed",
+          "source_id": "naacl-2027-home"
+        }
+      },
+      "location": "San Francisco, California, United States",
+      "format_contract": {
+        "mode": "inherit",
+        "review_system_id": "arr-2026-october"
+      },
+      "scope_tags": [
+        "computational_linguistics",
+        "natural_language_processing",
+        "information_extraction",
+        "resources_and_evaluation",
+        "nlp_engineering_experiment"
+      ],
+      "ranking_context": {
+        "system": "CCF 2026",
+        "category": "B",
+        "applies_to": "full_or_regular_paper",
+        "verification_note": "The CCF announcement and mirrored directory are the authority; the searchable secondary index was used to cross-check the NAACL row.",
+        "source_ids": [
+          "ccf-2026-directory",
+          "ucas-ccf-2026-pdf",
+          "ccf-2026-search-index"
+        ]
+      },
+      "source_ids": [
+        "naacl-2027-home"
+      ]
+    },
+    {
+      "id": "ecir-2027-full",
+      "kind": "publication_venue",
+      "name": "European Conference on Information Retrieval 2027, Full Paper Track",
+      "short_name": "ECIR 2027 Full Papers",
+      "review_system_id": null,
+      "milestones": {
+        "abstract_submission": {
+          "date": "2026-09-21",
+          "time": "23:59",
+          "timezone": "GMT",
+          "status": "confirmed",
+          "source_id": "ecir-2027-full-cfp"
+        },
+        "paper_submission": {
+          "date": "2026-10-05",
+          "time": "23:59",
+          "timezone": "GMT",
+          "status": "confirmed",
+          "source_id": "ecir-2027-full-cfp"
+        },
+        "notification": {
+          "date": "2026-12-07",
+          "time": null,
+          "timezone": null,
+          "status": "confirmed",
+          "source_id": "ecir-2027-full-cfp"
+        },
+        "conference_start": {
+          "date": "2027-03-21",
+          "time": null,
+          "timezone": "Southampton local time",
+          "status": "confirmed",
+          "source_id": "ecir-2027-full-cfp"
+        },
+        "conference_end": {
+          "date": "2027-03-25",
+          "time": null,
+          "timezone": "Southampton local time",
+          "status": "confirmed",
+          "source_id": "ecir-2027-full-cfp"
+        }
+      },
+      "location": "Southampton, England, United Kingdom",
+      "submission_platform": "EasyChair",
+      "format_contract": {
+        "mode": "direct",
+        "template_family": "Springer LNCS",
+        "template_source_id": "springer-lncs-guidelines",
+        "accepted_authoring_formats": [
+          "LaTeX",
+          "Word"
+        ],
+        "paper_types": {
+          "full": {
+            "content_pages_including_appendices": 12,
+            "references": "unlimited"
+          }
+        },
+        "anonymity": "double_blind",
+        "language": "English",
+        "appendices": {
+          "count_toward_content_limit": true,
+          "position": "before_references"
+        }
+      },
+      "hard_gates": [
+        "Submit a representative title and abstract by the abstract deadline.",
+        "Use the Springer LNCS proceedings template.",
+        "Keep the full paper, including appendices, within 12 pages; references are unlimited.",
+        "Use double-blind anonymization.",
+        "An accepted paper must be presented in person by a registered author."
+      ],
+      "scope_tags": [
+        "information_retrieval",
+        "retrieval_augmented_generation",
+        "llm_for_retrieval",
+        "agentic_ir_workflows",
+        "retrieval_evaluation"
+      ],
+      "source_ids": [
+        "ecir-2027-full-cfp",
+        "springer-lncs-guidelines"
+      ]
+    }
+  ],
+  "project_routing": {
+    "profile_id": "cn-llm4o-zero-shot-feasibility",
+    "claim_type": "adapter_inference_from_official_scope_and_current_project_evidence",
+    "primary": {
+      "venue_id": "coling-2027",
+      "fit": "recommended",
+      "reason": "The paper's core contribution is Chinese NLP information extraction and evaluation under predefined schemas; COLING's scope and the ARR contribution types directly accommodate information extraction, resources/evaluation, and NLP engineering experiments."
+    },
+    "same_cycle_alternative": {
+      "venue_id": "naacl-2027",
+      "fit": "plausible_but_more_competitive_positioning_needed",
+      "reason": "It uses the same October ARR submission and ACL format, but the manuscript should make the methodological and generalization contribution especially crisp rather than read as a domain-only engineering report."
+    },
+    "conditional_backup": {
+      "venue_id": "ecir-2027-full",
+      "fit": "conditional_reframe_only",
+      "reason": "Use only if the paper is substantively reframed around retrieval, RAG, ontology-backed search, or retrieval evaluation; the present ontology-recognition study alone is not an IR paper."
+    },
+    "do_not_conflate": [
+      "An ARR submission is not yet a commitment to COLING or NAACL.",
+      "ARR cycle end is not automatically a venue commitment deadline.",
+      "A short paper is not interchangeable with a full or regular paper for institutional ranking rules."
+    ]
+  },
+  "style_learning": {
+    "status": "non_normative_editorial_inference",
+    "sample_scope": "Four accepted 2025 COLING/NAACL papers selected for proximity to information extraction, schema-conditioned modules, prompt transfer, and evaluation design.",
+    "anti_overfit_rule": "Use only patterns shared across exemplars and justified by the current paper's argument; never copy wording or treat one paper's section order as a venue requirement.",
+    "exemplars": [
+      {
+        "source_id": "coling-2025-cycleoie",
+        "observed_patterns": [
+          "Frames a concrete resource constraint before introducing the method.",
+          "Separates dataset construction, method, main results, and mechanism analysis.",
+          "Places dataset statistics in an early table and full prompts in the appendix.",
+          "States limitations after the conclusion."
+        ]
+      },
+      {
+        "source_id": "coling-2025-ood-control",
+        "observed_patterns": [
+          "Defines the transfer boundary and controlled comparison before reporting gains.",
+          "Ablates prompt components and checks robustness to prompt paraphrases.",
+          "Uses a matched baseline and a significance test for paired predictions.",
+          "Names language, prompt sensitivity, black-box model drift, and reproducibility limits."
+        ]
+      },
+      {
+        "source_id": "naacl-2025-track-sql",
+        "observed_patterns": [
+          "Gives each module a functional name tied to one failure mode.",
+          "Uses an early system overview figure and module-specific ablations.",
+          "Extends ablation analysis across difficulty, interaction conditions, and model backbones.",
+          "Moves extra ablations, case studies, and cost analysis to the appendix."
+        ]
+      },
+      {
+        "source_id": "naacl-2025-soft-syntax-ee",
+        "observed_patterns": [
+          "Defines datasets, splits, metrics, and compared systems before interpreting results.",
+          "Tests the method on both sentence-level and document-level event extraction.",
+          "Reports precision, recall, and F1 where extraction boundary choices matter.",
+          "States which untested mechanisms and structures limit generalization."
+        ]
+      }
+    ],
+    "consensus_argument_slots": [
+      "Abstract: problem boundary, precise gap, named method, evaluation scope, key result, bounded implication.",
+      "Introduction: motivating failure, why existing work is insufficient, method intuition, explicit contributions.",
+      "Task and method: formal inputs/outputs and allowed information, then modules named by function and connected to failure modes.",
+      "Experiments: datasets and evidence tiers, matched baselines, metrics and uncertainty, reproducibility settings.",
+      "Results: main comparison first, then module ablations, transfer or robustness checks, and error/boundary analysis.",
+      "Robustness: use semantically equivalent prompt rephrasings and, where feasible, multiple models or domains to distinguish a reusable design principle from lucky wording.",
+      "Conclusion and Limitations: restate only supported feasibility claims and disclose deployment, language, dataset, provider, and reproducibility boundaries.",
+      "Appendix: exact prompts and schema cards, additional per-dataset results, cases, cost, and run manifests; never exile evidence essential to the main claim."
+    ]
+  }
+}

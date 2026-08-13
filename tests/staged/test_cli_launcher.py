@@ -72,7 +72,8 @@ def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> N
         "runtime_identity": health["runtime_identity"],
         "status": "ok",
     }
-    assert health["python"].split(".")[:2] in (["3", "13"], ["3", "14"])
+    major, minor = (int(value) for value in health["python"].split(".")[:2])
+    assert (major, minor) >= (3, 13)
     assert len(health["runtime_identity"]) == 64
 
     runtime_commands = (

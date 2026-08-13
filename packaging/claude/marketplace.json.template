@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "arw-claude-local",
+  "description": "Local Claude Code marketplace for Academic Research Workbench",
+  "owner": {
+    "name": "Academic Research Workbench contributors"
+  },
+  "plugins": [
+    {
+      "name": "academic-research-workbench",
+      "description": "Headless, reproducible, and auditable academic research workflows for Claude Code (skills, hooks, MCP, and ARW control plane).",
+      "author": {
+        "name": "Academic Research Workbench contributors"
+      },
+      "source": "./plugins/academic-research-workbench",
+      "category": "productivity",
+      "keywords": [
+        "academic-research",
+        "audit",
+        "reproducibility"
+      ]
+    }
+  ]
+}

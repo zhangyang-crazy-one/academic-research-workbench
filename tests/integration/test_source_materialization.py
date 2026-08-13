@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 import os
 import subprocess
@@ -89,6 +91,23 @@ def test_exact_snapshots_patch_and_canonical_license_paths_are_materialized() ->
     assert patches[2]["path"] == "vendor/patches/file-base/0003-phase3-generation-builder.patch"
     assert patches[2]["sha256"] == PHASE3_PATCH_SHA256
     assert _sha256(REPOSITORY_ROOT / patches[2]["path"]) == PHASE3_PATCH_SHA256
+
+
+def test_materializer_tree_digest_uses_the_manifest_wire_encoding() -> None:
+    """The online materializer must agree with the offline verifier byte-for-byte."""
+
+    loader = importlib.machinery.SourceFileLoader(
+        "arw_materialize_sources", str(REPOSITORY_ROOT / "scripts/materialize-sources")
+    )
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+
+    manifest = _manifest()
+    for component in manifest["components"]:
+        source = REPOSITORY_ROOT / component["source_path"]
+        assert module.tree_digest(source) == component["tree_sha256"]
 
 
 def test_network_denied_verification_retains_namespace_and_syscall_evidence(tmp_path: Path) -> None:

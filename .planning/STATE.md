@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-07-16T03:56:16.071Z
-last_activity: 2026-07-16
+last_updated: 2026-08-12T10:23:08+08:00
+last_activity: 2026-08-12 -- Completed quick task 260812-d7w: added and packaged the ARW LaTeX/PDF layout-export gate
 progress:
   total_phases: 8
   completed_phases: 8
@@ -79,6 +79,10 @@ Progress: [██████████] 100%
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 4: Phase 4 Qualification Closure, ARS Integration Lock, and Installed Host Verification (URGENT)
+
+### Quick Tasks Completed
+
+- 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
 
 ### Decisions
 

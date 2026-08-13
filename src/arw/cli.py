@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import json
 import os
+import shutil
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -195,7 +197,6 @@ def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--integration-lock", type=Path)
     parser.add_argument("--stage-root", type=Path)
-    parser.add_argument("--ars-root", type=Path)
     parser.add_argument("--codex-launcher", type=Path)
     parser.add_argument("--codex-native-binary", type=Path)
     parser.add_argument("--host-canary-evidence", type=Path)
@@ -271,15 +272,66 @@ def _write_rejection(error: Exception) -> None:
 
 def _installed_route_from_environment():
     from arw.contracts import installed_route
+    from arw.integration_lock import discover_codex_native_binary
 
+    plugin_root = Path(
+        os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])
+    ).resolve()
+    # A staged plugin carries the lock as a runtime input. Discovering that
+    # path is safe, but it never constitutes qualification: the exact host
+    # tuple and retained canary below remain mandatory and are verified from
+    # bytes on every route request.
+    lock_default = plugin_root / "supply-chain/integration-lock.json"
+    canary_default_candidates = (
+        plugin_root / "supply-chain/host-canary/canary.json",
+        plugin_root / "supply-chain/host-canary.json",
+    )
+    canary_default = next((path for path in canary_default_candidates if path.is_file()), None)
+    launcher_default: str | None = None
+    if lock_default.is_file():
+        try:
+            lock_payload = json.loads(lock_default.read_text(encoding="utf-8"))
+            invoked = (
+                lock_payload.get("codex_host", {})
+                .get("launcher", {})
+                .get("invoked_path")
+            )
+            if isinstance(invoked, str) and Path(invoked).is_file() and os.access(invoked, os.X_OK):
+                launcher_default = invoked
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, AttributeError):
+            launcher_default = None
+        if launcher_default is None:
+            launcher_default = shutil.which("codex")
+    native_default: str | None = None
+    if launcher_default:
+        try:
+            native_default = str(
+                discover_codex_native_binary(Path(launcher_default))
+            )
+        except (OSError, ValueError):
+            native_default = None
     names = {
         "lock": "ARW_INTEGRATION_LOCK",
-        "ars": "ARW_ARS_ROOT",
         "launcher": "ARW_CODEX_LAUNCHER",
         "native": "ARW_CODEX_NATIVE_BINARY",
         "canary": "ARW_HOST_CANARY_EVIDENCE",
     }
-    values = {key: os.environ.get(name) for key, name in names.items()}
+    defaults = {
+        "lock": str(lock_default) if lock_default.is_file() else None,
+        "launcher": launcher_default,
+        "native": native_default,
+        "canary": str(canary_default) if canary_default is not None else None,
+    }
+    values = {
+        key: os.environ.get(name) or defaults[key]
+        for key, name in names.items()
+    }
+    # Installed qualification inputs travel with the plugin. Prefer them over
+    # leftover ARW_* from a prior qualify session (foreign-runtime canaries /
+    # bin-vs-sbin launcher drift), which would otherwise false-BLOCK route.
+    for key in ("lock", "canary", "launcher", "native"):
+        if defaults[key] is not None:
+            values[key] = defaults[key]
     if not any(values.values()):
         return installed_route()
     if not all(values.values()):
@@ -289,8 +341,7 @@ def _installed_route_from_environment():
     try:
         verification = load_and_verify_integration_lock(
             Path(values["lock"]),
-            stage_root=Path(os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])),
-            external_ars_root=Path(values["ars"]),
+            stage_root=plugin_root,
             codex_launcher=Path(values["launcher"]),
             codex_native_binary=Path(values["native"]),
             host_canary_evidence=Path(values["canary"]),
@@ -388,7 +439,6 @@ def _verified_dispatch_adapter(
             args, "integration_lock", "ARW_INTEGRATION_LOCK"
         ),
         "stage": _path_argument_or_environment(args, "stage_root", "ARW_PLUGIN_ROOT"),
-        "ars": _path_argument_or_environment(args, "ars_root", "ARW_ARS_ROOT"),
         "launcher": _path_argument_or_environment(
             args, "codex_launcher", "ARW_CODEX_LAUNCHER"
         ),
@@ -405,7 +455,6 @@ def _verified_dispatch_adapter(
         verification = load_and_verify_integration_lock(
             integration_paths["lock"],  # type: ignore[arg-type]
             stage_root=integration_paths["stage"],  # type: ignore[arg-type]
-            external_ars_root=integration_paths["ars"],  # type: ignore[arg-type]
             codex_launcher=integration_paths["launcher"],  # type: ignore[arg-type]
             codex_native_binary=integration_paths["native"],  # type: ignore[arg-type]
             host_canary_evidence=integration_paths["canary"],  # type: ignore[arg-type]
@@ -978,9 +1027,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         ReducerError,
         OrchestrationError,
         ValidationError,
+        OSError,
     ) as error:
         if args.command == "status" and args.json_output:
             _write_rejection(error)
+        elif isinstance(error, OSError):
+            print(
+                "arw: canonical-error: runtime event may already be committed to "
+                f"the ledger; retry is safe: {error}",
+                file=sys.stderr,
+            )
         else:
             print(f"arw: canonical-error: {error}", file=sys.stderr)
         return 65

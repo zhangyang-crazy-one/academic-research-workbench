@@ -30,9 +30,12 @@ PHASE4_SCHEMA_NAMES: tuple[str, ...] = (
     "assignment.schema.json",
     "worker-proposal.schema.json",
     "review-finding-matrix.schema.json",
+    "panel-manifest.schema.json",
     "gate-decision.schema.json",
     "hook-observation.schema.json",
     "host-qualification.schema.json",
+    "host-identity-receipt.schema.json",
+    "human-authority.schema.json",
     "phase4-evaluation-verdict.schema.json",
 )
 
@@ -703,21 +706,206 @@ class ReviewFinding(StrictModel):
         return _require_unique(value, "finding hash bindings")
 
 
+class HostIdentityReceipt(StrictModel):
+    """Parent-accepted host identity/mapping/isolation evidence."""
+
+    schema_version: Literal["arw.host-identity-receipt.v1"]
+    receipt_id: StableRuntimeId
+    role_id: StableRuntimeId
+    worker_identity_id: StableRuntimeId
+    host_agent_id: Annotated[str, Field(min_length=1, max_length=256)]
+    transport: Literal["isolated_codex_exec", "native_in_session_subagent"]
+    codex_version: Annotated[str, StringConstraints(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
+    assignment_mapping_proven: bool
+    isolation_proven: bool
+    peer_isolation_proven: bool
+    credential_isolation_proven: bool
+    observed_at: UtcTimestamp
+    evidence_sha256: Annotated[
+        tuple[Sha256, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=64)
+    ]
+
+    @field_validator("evidence_sha256")
+    @classmethod
+    def identity_evidence_is_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _require_unique(value, "host identity evidence hashes")
+
+    @model_validator(mode="after")
+    def formal_identity_claim_is_complete(self) -> Self:
+        if not (
+            self.assignment_mapping_proven
+            and self.isolation_proven
+            and self.peer_isolation_proven
+            and self.credential_isolation_proven
+        ):
+            raise ValueError("formal host identity receipt requires every retained proof")
+        return self
+
+    @property
+    def receipt_sha256(self) -> str:
+        return sha256_hex(canonical_orchestration_model_bytes(self))
+
+
+class PanelSeat(StrictModel):
+    assignment_id: StableRuntimeId
+    attempt_id: StableRuntimeId
+    role_id: StableRuntimeId
+    worker_identity_id: StableRuntimeId
+    host_agent_id: Annotated[str, Field(min_length=1, max_length=256)]
+    identity_receipt_sha256: Sha256
+    acceptance_key: Annotated[
+        tuple[Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId],
+        BeforeValidator(_freeze_json_array),
+    ]
+    blind_envelope_sha256: Sha256
+    required: bool
+    round_number: Annotated[int, Field(ge=1, le=2)]
+    synthesizer: bool = False
+
+    @model_validator(mode="after")
+    def seat_binding_is_exact(self) -> Self:
+        if self.acceptance_key[2] != self.assignment_id:
+            raise ValueError("panel seat acceptance key must bind assignment_id")
+        if self.synthesizer != (self.role_id == "editorial_synthesizer"):
+            raise ValueError("only the editorial synthesizer seat may synthesize")
+        return self
+
+
+class PanelManifest(StrictModel):
+    schema_version: Literal["arw.panel-manifest.v1"]
+    panel_id: StableRuntimeId
+    subject_sha256: Sha256
+    rubric_sha256: Sha256
+    policy_sha256: Sha256
+    execution_mode: Literal["native_profile", "assignment_injected_subagent", "blocked"]
+    status: Literal["ready", "blocked"]
+    reviewer_seats: Annotated[
+        tuple[PanelSeat, ...], BeforeValidator(_freeze_json_array), Field(max_length=64)
+    ]
+    synthesizer_seat: PanelSeat | None
+    required_report_roles: Annotated[
+        tuple[StableRuntimeId, ...], BeforeValidator(_freeze_json_array), Field(max_length=16)
+    ]
+    blockers: Annotated[
+        tuple[Annotated[str, Field(min_length=1, max_length=1024)], ...],
+        BeforeValidator(_freeze_json_array),
+        Field(max_length=64),
+    ]
+    limitations: Annotated[
+        tuple[Annotated[str, Field(min_length=1, max_length=1024)], ...],
+        BeforeValidator(_freeze_json_array),
+        Field(max_length=64),
+    ]
+
+    @model_validator(mode="after")
+    def panel_manifest_is_complete(self) -> Self:
+        roles = tuple(seat.role_id for seat in self.reviewer_seats)
+        if self.status == "ready":
+            if set(roles) != FORMAL_REVIEW_ROLE_IDS or len(roles) != len(set(roles)):
+                raise ValueError("ready panel requires exactly the four formal reviewer roles")
+            if self.synthesizer_seat is None:
+                raise ValueError("ready panel requires a separate synthesizer seat")
+            worker_ids = {seat.worker_identity_id for seat in self.reviewer_seats}
+            host_ids = {seat.host_agent_id for seat in self.reviewer_seats}
+            if (
+                len(worker_ids) != len(self.reviewer_seats)
+                or len(host_ids) != len(self.reviewer_seats)
+                or self.synthesizer_seat.worker_identity_id in worker_ids
+                or self.synthesizer_seat.host_agent_id in host_ids
+            ):
+                raise ValueError("panel seats and synthesizer must be identity-separated")
+            if self.blockers:
+                raise ValueError("ready panel cannot carry blockers")
+        elif self.reviewer_seats or self.synthesizer_seat is not None or not self.blockers:
+            raise ValueError("blocked panel must retain blockers and no dispatchable seats")
+        if tuple(sorted(self.required_report_roles)) != tuple(sorted(FORMAL_REVIEW_ROLE_IDS)):
+            raise ValueError("panel manifest must require the locked four-role report set")
+        return self
+
+    @property
+    def manifest_sha256(self) -> str:
+        return sha256_hex(canonical_orchestration_model_bytes(self))
+
+
+class HumanAuthority(StrictModel):
+    """Parent-validated authentication/authorization envelope."""
+
+    schema_version: Literal["arw.human-authority.v1"]
+    authority_id: StableRuntimeId
+    authenticated_actor_id: ActorId
+    accountable_role: Literal["operator", "review_authority", "access_authority"]
+    validated_by_actor_id: ActorId
+    allowed_decision_kinds: Annotated[
+        tuple[StableRuntimeId, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=16)
+    ]
+    allowed_gate_ids: Annotated[
+        tuple[StableRuntimeId, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=32)
+    ]
+    allowed_scopes: Annotated[
+        tuple[Annotated[str, Field(min_length=1, max_length=256)], ...],
+        BeforeValidator(_freeze_json_array),
+        Field(min_length=1, max_length=32),
+    ]
+    authenticated_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    evidence_sha256: Annotated[
+        tuple[Sha256, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=64)
+    ]
+
+    @field_validator(
+        "allowed_decision_kinds", "allowed_gate_ids", "allowed_scopes", "evidence_sha256"
+    )
+    @classmethod
+    def authority_values_are_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _require_unique(value, "human authority bindings")
+
+    @model_validator(mode="after")
+    def authority_window_is_ordered(self) -> Self:
+        if self.expires_at <= self.authenticated_at:
+            raise ValueError("human authority expiry must follow authentication")
+        return self
+
+    @property
+    def authority_sha256(self) -> str:
+        return sha256_hex(canonical_orchestration_model_bytes(self))
+
+
 class ReviewReport(StrictModel):
     report_id: StableRuntimeId
+    panel_manifest_sha256: Sha256
+    assignment_id: StableRuntimeId
+    attempt_id: StableRuntimeId
+    identity_receipt_sha256: Sha256
     role_id: StableRuntimeId
     worker_identity_id: StableRuntimeId
     host_agent_id: Annotated[str, Field(min_length=1, max_length=256)]
     subject_sha256: Sha256
     rubric_sha256: Sha256
-    report_sha256: Sha256
+    report_sha256: Sha256 | None = None
     findings: Annotated[
         tuple[ReviewFinding, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=128)
     ]
 
+    @model_validator(mode="after")
+    def report_hash_is_parent_derivable(self) -> Self:
+        expected = review_report_body_sha256(self)
+        if self.report_sha256 is not None and self.report_sha256 != expected:
+            raise ValueError("review report hash is not derived from canonical report body")
+        object.__setattr__(self, "report_sha256", expected)
+        return self
+
+
+def review_report_body_sha256(report: ReviewReport) -> str:
+    """Hash the canonical report body without trusting its digest field."""
+
+    body = report.model_dump(mode="json", exclude={"report_sha256"})
+    return sha256_hex(canonical_json_bytes(body))
+
 
 class ReviewSynthesis(StrictModel):
     synthesis_id: StableRuntimeId
+    panel_manifest_sha256: Sha256
+    identity_receipt_sha256: Sha256
     worker_identity_id: StableRuntimeId
     host_agent_id: Annotated[str, Field(min_length=1, max_length=256)]
     source_report_sha256: Annotated[
@@ -741,6 +929,7 @@ class ReviewSynthesis(StrictModel):
 class ReviewFindingMatrix(StrictModel):
     schema_version: Literal["arw.review-finding-matrix.v1"]
     panel_id: StableRuntimeId
+    panel_manifest_sha256: Sha256
     subject_sha256: Sha256
     rubric_sha256: Sha256
     reports: Annotated[
@@ -771,6 +960,26 @@ class ReviewFindingMatrix(StrictModel):
         report_hashes = {report.report_sha256 for report in self.reports}
         if set(self.synthesis.source_report_sha256) != report_hashes:
             raise ValueError("synthesis must bind every accepted first-round report")
+        if self.synthesis.panel_manifest_sha256 != self.panel_manifest_sha256 or any(
+            report.panel_manifest_sha256 != self.panel_manifest_sha256
+            for report in self.reports
+        ):
+            raise ValueError("reports and synthesis must bind one canonical panel manifest")
+        synthesis_findings = tuple(self.synthesis.findings)
+        for report in self.reports:
+            for finding in report.findings:
+                if not any(
+                    candidate.finding_id == finding.finding_id
+                    and candidate.evidence_sha256 == finding.evidence_sha256
+                    and candidate.severity == finding.severity
+                    and candidate.confidence == finding.confidence
+                    and candidate.classification == finding.classification
+                    and candidate.resolution == finding.resolution
+                    and candidate.rationale == finding.rationale
+                    and report.report_sha256 in candidate.source_report_sha256
+                    for candidate in synthesis_findings
+                ):
+                    raise ValueError("synthesis omitted or altered a reviewer finding/dissent")
         unresolved_critical = any(
             finding.resolution == "unresolved"
             and (finding.severity == "critical" or finding.classification == "DA-critical")
@@ -806,7 +1015,10 @@ class HumanDecisionRecord(StrictModel):
     scope: Annotated[str, Field(min_length=1, max_length=256)]
     rationale: Annotated[str, Field(min_length=1, max_length=4096)]
     prior_verdict_sha256: Sha256
+    authority_sha256: Sha256
     supersedes_decision_id: StableRuntimeId | None
+    blocker_action: Literal["none", "release", "restore"] = "none"
+    blocker_code: StableRuntimeId | None = None
     verdict_rewrite: Literal[False] = False
 
     @field_validator("evidence_sha256")
@@ -825,6 +1037,10 @@ class HumanDecisionRecord(StrictModel):
     def correction_has_explicit_predecessor(self) -> Self:
         if self.decision_kind == "correction" and self.supersedes_decision_id is None:
             raise ValueError("corrections must explicitly supersede a prior decision")
+        if self.blocker_action == "none" and self.blocker_code is not None:
+            raise ValueError("blocker_code requires an explicit blocker action")
+        if self.blocker_action != "none" and self.blocker_code is None:
+            raise ValueError("blocker actions require one exact blocker_code")
         return self
 
 
@@ -942,9 +1158,12 @@ PHASE4_SCHEMA_MODELS = (
     ImmutableAssignment,
     WorkerProposal,
     ReviewFindingMatrix,
+    PanelManifest,
     GateDecision,
     HookObservation,
     HostQualification,
+    HostIdentityReceipt,
+    HumanAuthority,
     Phase4EvaluationVerdict,
 )
 

@@ -113,3 +113,24 @@ The following deferred ideas are intentionally absent from every plan and test: 
 2. If the host path is unavailable, retain its schema-valid BLOCKED verdict and exit 77; do not reinterpret it as technical PASS.
 3. Run `UV_OFFLINE=1 ./scripts/verify-phase-4 --evidence-root build/evidence/phase-04 --prepare-human-review`, then complete Plan P04-09-T01's independent assessor/adjudicator review.
 4. Set `execution_verified: true` only after steps 1 and 3 have retained their required evidence and a lawful append-only human decision or explicit BLOCKED outcome exists.
+
+## 2026-07-15 Qualification Closure Reconciliation
+
+The stale pre-04.1 command examples above are superseded by the retained,
+resource-bounded verifier evidence below. Commands were run serially so staged
+installation probes do not accumulate their peak memory.
+
+| Area | Retained evidence | Result |
+|---|---|---|
+| ARS/ARW/file-base/Codex/hook integration lock | `build/evidence/phase-04.1-host-canary-20260715e/integration-lock.json` | PASS; digest `b84c888a6d4716efe5419e37ddf99ed2f2af8a6ed05924fc435e0554a11e372d` |
+| Exact locked stage and inventory/SBOM/build identity | `build/tmp/qualification-stage-final-20260715e/`, `commands/stage/exit.json` | PASS |
+| Codex 0.144.4 three fresh HOME canary and hook parity | `build/evidence/phase-04.1-host-canary-20260715e/{canary,evidence-bundle}.json` | PASS |
+| Parent lifecycle, replay, panel, gates, human authority | `commands/full-pytest/exit.json`, `commands/durable-runtime/exit.json`, Phase 4 integration exits | PASS |
+| Staged families and exact route | `commands/staged-*/exit.json` | PASS |
+| Phase 1/2/3 regression verifiers | `commands/phase-{1,2,3}-regression/exit.json` | PASS |
+| Parent-only 48-case corpus | `corpus/evaluation-summary.json` and case digests | PASS |
+| Technical parent verdict | `build/evidence/phase-04.1-verifier-final-20260715f/verdict.json` | PASS |
+| P04-09 human assessor/adjudicator | `review-packet/manifest.json` exists; attestations absent | BLOCKED checkpoint |
+| SUP-04/CC BY-NC intended-use/distribution/approval/permission | license/use-distribution evidence | BLOCKED release gate |
+
+Paper AST/export and full research-to-paper workflow remain explicitly v2.

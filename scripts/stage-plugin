@@ -107,12 +107,13 @@ provided_lock = Path(sys.argv[3]) if sys.argv[3] else None
 sys.path.insert(0, str(project_root / "src"))
 
 from arw.integration_lock import (  # noqa: E402
-    EXPECTED_CODEX_CLI_VERSION,
+    CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
+    is_supported_codex_cli_version,
     observe_hook_definition,
     observe_stage_identity,
 )
@@ -147,10 +148,10 @@ def canonical_lock(path: Path) -> tuple[bytes, IntegrationLock]:
 
 
 def verify_local_lock(lock: IntegrationLock) -> None:
-    if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+    if not is_supported_codex_cli_version(lock.codex_host.cli_version):
         raise SystemExit(
             "integration lock records an unsupported Codex CLI; "
-            "exact codex-cli 0.144.4 evidence is required"
+            f"stable codex-cli {CODEX_CLI_VERSION_REQUIREMENT} evidence is required"
         )
     observed_arw = _validate_arw_runtime(stage_root)
     if lock.arw_runtime != observed_arw:
@@ -319,12 +320,26 @@ copy_as() {
   install -D -m "$mode" -- "$source" "$TEMP_STAGE/$destination_relative"
 }
 
+copy_tree() {
+  local relative_root="$1"
+  local source_root="$PROJECT_ROOT/$relative_root"
+  [[ -d "$source_root" && ! -L "$source_root" ]] \
+    || fail "allowlisted source tree is unsafe or missing: $relative_root" 66
+  while IFS= read -r -d '' source; do
+    local relative="${source#"$PROJECT_ROOT/"}"
+    local mode=0644
+    [[ -x "$source" ]] && mode=0755
+    copy_file "$relative" "$mode"
+  done < <(find "$source_root" -type f ! -path '*/.pytest_cache/*' ! -path '*/__pycache__/*' ! -name '*.pyc' -print0 | sort -z)
+}
+
 copy_file ".python-version"
 copy_file "pyproject.toml"
 copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
+copy_tree "skills/academic-research-suite"
 copy_file "hooks/hooks.json"
 copy_file "hooks/arw_hook.py" 0755
 copy_file "docs/runtime/durable-provenance.md"
@@ -382,6 +397,7 @@ copy_file "SBOM.cdx.json"
 copy_file "supply-chain/use-distribution.json"
 copy_file "supply-chain/license-verdict.json"
 copy_file "vendor/source-manifest.json"
+copy_file "vendor/mcp-manifest.json"
 copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
 copy_file "vendor/patches/file-base/0002-phase1-confined-read.patch"
 copy_file "vendor/patches/file-base/0003-phase3-generation-builder.patch"
@@ -408,9 +424,10 @@ sys.path.insert(0, str(project_root / "src"))
 
 from arw.canonical import strict_json_loads  # noqa: E402
 from arw.integration_lock import (  # noqa: E402
-    EXPECTED_CODEX_CLI_VERSION,
+    CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     integration_lock_bytes,
+    is_supported_codex_cli_version,
 )
 
 
@@ -435,10 +452,10 @@ try:
     lock = IntegrationLock.model_validate_json(raw, strict=True)
 except (UnicodeError, ValueError) as error:
     raise SystemExit(f"integration lock is invalid: {error}") from error
-if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+if not is_supported_codex_cli_version(lock.codex_host.cli_version):
     raise SystemExit(
         "integration lock records an unsupported Codex CLI; "
-        "exact codex-cli 0.144.4 evidence is required"
+        f"stable codex-cli {CODEX_CLI_VERSION_REQUIREMENT} evidence is required"
     )
 if raw != integration_lock_bytes(lock):
     raise SystemExit("integration lock bytes are not canonical JSON")
@@ -622,7 +639,7 @@ identity = {
     "platform_claim": "linux",
     "plugin": {"name": plugin["name"], "version": plugin["version"]},
     "runtime": {
-        "python_requires": ">=3.13,<3.15",
+        "python_requires": ">=3.13",
         "build_interpreter": platform.python_version(),
     },
     "components": [
@@ -726,12 +743,13 @@ stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
 from arw.integration_lock import (  # noqa: E402
-    EXPECTED_CODEX_CLI_VERSION,
+    CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
+    is_supported_codex_cli_version,
     observe_hook_definition,
     observe_stage_identity,
 )
@@ -745,10 +763,10 @@ except (UnicodeError, ValueError) as error:
     raise SystemExit(f"staged integration lock is invalid: {error}") from error
 if raw != integration_lock_bytes(lock):
     raise SystemExit("staged integration lock bytes are not canonical JSON")
-if lock.codex_host.cli_version != EXPECTED_CODEX_CLI_VERSION:
+if not is_supported_codex_cli_version(lock.codex_host.cli_version):
     raise SystemExit(
         "staged integration lock records an unsupported Codex CLI; "
-        "exact codex-cli 0.144.4 evidence is required"
+        f"stable codex-cli {CODEX_CLI_VERSION_REQUIREMENT} evidence is required"
     )
 
 observed_arw = _validate_arw_runtime(stage_root)
@@ -906,6 +924,7 @@ static_files = {
     "vendor/python/wheelhouse/requirements-installed.txt",
     "vendor/python/wheelhouse/requirements-runtime.txt",
     "vendor/source-manifest.json",
+    "vendor/mcp-manifest.json",
     "vendor/patches/file-base/0001-file-base-server-name.patch",
     "vendor/patches/file-base/0002-phase1-confined-read.patch",
     "vendor/patches/file-base/0003-phase3-generation-builder.patch",
@@ -941,6 +960,14 @@ phase5_schema_names = {
     "graph-query-result.schema.json",
 }
 static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
+ars_source = project_root / "skills/academic-research-suite"
+if not ars_source.is_dir() or ars_source.is_symlink():
+    raise SystemExit("bundled ARS source tree is missing or unsafe")
+for path in ars_source.rglob("*"):
+    if path.is_symlink():
+        raise SystemExit(f"bundled ARS source contains a symlink: {path.relative_to(project_root)}")
+    if path.is_file() and ".pytest_cache" not in path.parts and "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}:
+        static_files.add(path.relative_to(project_root).as_posix())
 lock_relative = "supply-chain/integration-lock.json"
 if (stage_root / lock_relative).is_file():
     static_files.add(lock_relative)
@@ -1024,7 +1051,7 @@ for relative, record in payloads.items():
 
 
 def inventory_source(relative: str) -> str:
-    if relative == "vendor/source-manifest.json":
+    if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
         return "source-manifest"
     if relative.startswith("vendor/python/wheelhouse/") or relative in {"uv.lock", ".python-version"}:
         return "wheelhouse"

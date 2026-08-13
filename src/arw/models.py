@@ -206,8 +206,8 @@ class RecoveryReceipt(StrictModel):
     segment_relative_path: str
     original_segment_sha256: Sha256
     original_segment_byte_count: Annotated[int, Field(ge=1)]
-    accepted_byte_end: Annotated[int, Field(ge=1)]
-    fault_offset: Annotated[int, Field(ge=1)]
+    accepted_byte_end: Annotated[int, Field(ge=0)]
+    fault_offset: Annotated[int, Field(ge=0)]
     fault_class: RecoveryFaultClass
     quarantine_raw_path: str
     quarantine_raw_sha256: Sha256

@@ -1,19 +1,14 @@
 .venv/
 .file-base/
+.codebase-memory/
 build/
 .evidence/
 __pycache__/
 *.py[cod]
-
-# Pinned third-party source snapshots are materialized locally, never committed.
 vendor/sources/
 vendor/.materialize.tmp.*/
-
-# GSD/planning scratch is not a release payload. Existing tracked planning
-# records remain historical project files; new quick-task material stays local.
 .planning/
-
-# Local credentials, tokens, certificates, and host state.
+/AGENTS.md
 .env
 .env.*
 !.env.example

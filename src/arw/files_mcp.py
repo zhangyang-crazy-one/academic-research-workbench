@@ -125,7 +125,11 @@ def _read_live(root: Path, relative_path: str, *, deadline: float) -> _LiveFile:
     if _sensitive(relative_path):
         raise LiveReadError("sensitive_path", "sensitive path names are not readable")
     parts = PurePosixPath(relative_path).parts
-    if not parts or any(part in {"", ".", ".."} for part in parts):
+    if (
+        PurePosixPath(relative_path).is_absolute()
+        or not parts
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
         raise LiveReadError("path_traversal", "path is not a normalized relative path")
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | nofollow
@@ -642,7 +646,12 @@ class FilesMcpServer:
         )
         entries: list[FileListEntry] = []
         for record in records[offset : offset + request.max_files]:
-            generation_file = self.generation_by_id[record.file_id]
+            generation_file = self.generation_by_id.get(record.file_id)
+            if generation_file is None:
+                raise ToolError(
+                    "manifest_mismatch",
+                    "identity record references a file absent from the generation manifest",
+                )
             live: _LiveFile | None
             try:
                 live = _read_live(
@@ -787,8 +796,22 @@ class FilesMcpServer:
                 raise CursorError("cursor_position_invalid", "read cursor position is invalid")
 
         if request.byte_range is not None:
+            if position > len(live.body):
+                return self._read_denied(
+                    request,
+                    "denied",
+                    "position_out_of_range",
+                    "byte range start is beyond the file size",
+                )
             end = min(len(live.body), position + request.byte_range.max_bytes)
             content = base64.b64encode(live.body[position:end]).decode("ascii")
+            if len(content) > CONTRACT_LIMITS["read_bytes"]:
+                return self._read_denied(
+                    request,
+                    "budget_exceeded",
+                    "read_bytes_exceeded",
+                    "byte result exceeds the byte ceiling",
+                )
             truncated = end < len(live.body)
             next_position = {"offset": end}
             encoding = "bytes"

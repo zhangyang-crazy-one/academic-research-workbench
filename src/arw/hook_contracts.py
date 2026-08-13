@@ -8,7 +8,9 @@ field and reject such fields at the wire boundary.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Annotated, Literal, Self
 
 from pydantic import BeforeValidator, Field, ValidationError, model_validator
@@ -46,6 +48,9 @@ HOOK_STATUSES: tuple[HookStatus, ...] = (
     "timeout",
     "failed",
 )
+CONFIGURED_HOOK_NAMES: tuple[HookName, ...] = ("SessionStart", "SubagentStop", "Stop")
+MAX_HOOK_INPUT_BYTES = 16 * 1024
+MAX_HOOK_OUTPUT_BYTES = 32 * 1024
 PARITY_SURFACES: tuple[ParitySurface, ...] = (
     "runtime",
     "mcp",
@@ -85,6 +90,106 @@ def _freeze_array(value: object) -> tuple[object, ...]:
     raise ValueError("contract arrays must be JSON arrays")
 
 
+class CodexReceiptControl(StrictModel):
+    """One parent-owned control echoed by the observational host adapter."""
+
+    surface: ParitySurface
+    parent_enforced: Literal[True]
+    hook_bypass_safe: Literal[True]
+
+
+class CodexHookReceipt(StrictModel):
+    """Redacted receipt emitted by the installed official-wire hook adapter."""
+
+    schema_version: Literal["arw.codex-hook-observation.v1"]
+    authority: Literal["observational"]
+    hook_event_name: Literal["SessionStart", "SubagentStop", "Stop"]
+    input_sha256: Sha256
+    hook_definition_sha256: Sha256
+    plugin_root_sha256: Sha256
+    session_id_sha256: Sha256
+    turn_id_sha256: Sha256 | None
+    subject_id_sha256: Sha256 | None
+    agent_type_sha256: Sha256 | None
+    model_sha256: Sha256
+    cwd_sha256: Sha256
+    permission_mode: Literal[
+        "default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"
+    ]
+    source: Literal["startup", "resume", "clear", "compact"] | None
+    stop_hook_active: bool | None
+    status: Literal["observed"]
+    redacted_error_code: None
+    parent_controls: Annotated[
+        tuple[CodexReceiptControl, ...],
+        BeforeValidator(_freeze_array),
+        Field(min_length=5, max_length=5),
+    ]
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def receipt_is_derived_and_non_authoritative(self) -> Self:
+        if tuple(control.surface for control in self.parent_controls) != PARITY_SURFACES:
+            raise HookContractError("Codex hook receipt controls are incomplete or reordered")
+        unsigned = self.model_dump(mode="json", exclude={"receipt_sha256"})
+        expected = hashlib.sha256(canonical_json_bytes(unsigned)).hexdigest()
+        if self.receipt_sha256 != expected:
+            raise HookContractError("Codex hook receipt hash is not derived from canonical bytes")
+        return self
+
+    def to_orchestration_observation(self) -> CanonicalHookObservation:
+        """Project a verified receipt; trust remains bound by the integration lock."""
+
+        subject = self.subject_id_sha256 or self.turn_id_sha256 or self.session_id_sha256
+        return CanonicalHookObservation(
+            schema_version="arw.hook-observation.v1",
+            hook_name=self.hook_event_name,
+            hook_definition_sha256=self.hook_definition_sha256,
+            target_id=f"hook-target.{subject[:32]}",
+            status="trusted_enabled",
+            observation_sha256=self.receipt_sha256,
+            redacted_error_code=None,
+            idempotency_key=f"hook-receipt.{self.receipt_sha256[:32]}",
+            continuation_requested=False,
+            continuation_count=0,
+        )
+
+
+def load_codex_hook_receipt(
+    path: Path,
+    *,
+    receipt_root: Path,
+    expected_hook_definition_sha256: str,
+) -> CodexHookReceipt:
+    """Load one retained official-host receipt through a bounded exact boundary."""
+
+    try:
+        root = receipt_root.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise HookContractError("Codex hook receipt is outside its retained root") from error
+    if receipt_root.is_symlink() or not root.is_dir() or path.is_symlink() or not resolved.is_file():
+        raise HookContractError("Codex hook receipt path is unsafe")
+    try:
+        raw = resolved.read_bytes()
+    except OSError as error:
+        raise HookContractError("Codex hook receipt is unreadable") from error
+    if not raw or len(raw) > MAX_HOOK_OUTPUT_BYTES:
+        raise HookContractError("Codex hook receipt exceeds the bounded size")
+    try:
+        receipt = CodexHookReceipt.model_validate_json(raw, strict=True)
+    except (ValueError, ValidationError) as error:
+        raise HookContractError(f"invalid Codex hook receipt: {error}") from error
+    if raw != canonical_json_bytes(receipt.model_dump(mode="json")):
+        raise HookContractError("Codex hook receipt bytes are not canonical")
+    if resolved.name != f"{receipt.receipt_sha256}.json":
+        raise HookContractError("Codex hook receipt filename is not content addressed")
+    if receipt.hook_definition_sha256 != expected_hook_definition_sha256:
+        raise HookContractError("Codex hook receipt binds another hook definition")
+    return receipt
+
+
 def _contains_privileged_field(value: object) -> str | None:
     if isinstance(value, Mapping):
         for key, child in value.items():
@@ -101,6 +206,29 @@ def _contains_privileged_field(value: object) -> str | None:
     return None
 
 
+def _wire_size(raw: bytes | str) -> int:
+    if isinstance(raw, bytes):
+        return len(raw)
+    if isinstance(raw, str):
+        return len(raw.encode("utf-8"))
+    raise TypeError("hook wire value must be bytes or str")
+
+
+def _load_wire_mapping(raw: bytes | str, *, limit: int, label: str) -> Mapping[str, object]:
+    if _wire_size(raw) > limit:
+        raise HookContractError(f"{label} exceeds the bounded wire size")
+    try:
+        payload = strict_json_loads(raw)
+    except (TypeError, ValueError) as error:
+        raise HookContractError(f"malformed {label} JSON: {error}") from error
+    if not isinstance(payload, Mapping):
+        raise HookContractError(f"{label} must be a JSON object")
+    forbidden = _contains_privileged_field(payload)
+    if forbidden is not None:
+        raise HookContractError(f"privileged hook field rejected: {forbidden}")
+    return payload
+
+
 class HookInvocation(StrictModel):
     """Parent-provided identity and bounded input metadata for one hook call."""
 
@@ -111,6 +239,22 @@ class HookInvocation(StrictModel):
     hook_definition_sha256: Sha256
     input_sha256: Sha256
     timeout_seconds: Annotated[float, Field(gt=0, le=30)]
+
+    @classmethod
+    def from_wire(cls, raw: bytes | str) -> Self:
+        """Parse one bounded parent invocation without accepting authority fields."""
+
+        payload = _load_wire_mapping(raw, limit=MAX_HOOK_INPUT_BYTES, label="hook invocation")
+        try:
+            return cls.model_validate(payload)
+        except (TypeError, ValueError, ValidationError) as error:
+            raise HookContractError(f"invalid hook invocation: {error}") from error
+
+    def to_wire(self) -> bytes:
+        wire = canonical_json_bytes(self.model_dump(mode="json"))
+        if len(wire) > MAX_HOOK_OUTPUT_BYTES:
+            raise HookContractError("hook invocation exceeds the bounded wire size")
+        return wire
 
 
 class ParentParityControl(StrictModel):
@@ -230,22 +374,17 @@ class HookObservation(StrictModel):
 
     @classmethod
     def from_wire(cls, raw: bytes | str) -> Self:
-        try:
-            payload = strict_json_loads(raw)
-        except (TypeError, ValueError) as error:
-            raise HookContractError(f"malformed hook JSON: {error}") from error
-        if not isinstance(payload, Mapping):
-            raise HookContractError("hook observation must be a JSON object")
-        forbidden = _contains_privileged_field(payload)
-        if forbidden is not None:
-            raise HookContractError(f"privileged hook field rejected: {forbidden}")
+        payload = _load_wire_mapping(raw, limit=MAX_HOOK_OUTPUT_BYTES, label="hook observation")
         try:
             return cls.model_validate(payload)
         except (TypeError, ValueError, ValidationError) as error:
             raise HookContractError(f"invalid hook observation: {error}") from error
 
     def to_wire(self) -> bytes:
-        return canonical_json_bytes(self.model_dump(mode="json"))
+        wire = canonical_json_bytes(self.model_dump(mode="json"))
+        if len(wire) > MAX_HOOK_OUTPUT_BYTES:
+            raise HookContractError("hook observation exceeds the bounded wire size")
+        return wire
 
     def to_orchestration_observation(self) -> CanonicalHookObservation:
         """Project only the allowed observation fields into the Phase 4 record."""

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Academic Research Suite"
+  short_description: "ARS papers, audits, source checks, and academic figures"
+  brand_color: "#2563EB"
+  default_prompt: "Use $academic-research-suite to design a non-boxed academic main figure for my research paper."
+
+policy:
+  allow_implicit_invocation: true

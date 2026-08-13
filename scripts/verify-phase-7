@@ -24,6 +24,13 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from arw.integration_lock import (  # noqa: E402
+    CODEX_CLI_VERSION_REQUIREMENT,
+    is_supported_codex_cli_version,
+)
+
 EVIDENCE_BASE = (PROJECT_ROOT / "build/evidence").resolve()
 DEFAULT_EVIDENCE_ROOT = EVIDENCE_BASE / "phase-07"
 PHASE5_ROOT = PROJECT_ROOT / "build/evidence/phase-05"
@@ -121,7 +128,6 @@ SAFE_ENVIRONMENT = frozenset(
         "LC_ALL",
         "TZ",
         "PYTHONPATH",
-        "ARW_ARS_ROOT",
         "ARW_PLUGIN_ROOT",
         "ARW_INTEGRATION_LOCK",
         "ARW_HOST_CANARY_EVIDENCE",
@@ -785,17 +791,31 @@ def validate_stage_and_inputs(stage: Path, lock: Path, canary: Path) -> Validate
         raise VerificationError("stage-qualification: integration lock is not technical PASS")
     if lock_data.get("release_qualification") != "BLOCKED":
         raise VerificationError("stage-qualification: legal release boundary was cleared")
-    if lock_data.get("codex_host", {}).get("cli_version") != "codex-cli 0.144.4":
-        raise VerificationError("host-qualification: exact Codex CLI 0.144.4 is not bound")
+    cli_version = lock_data.get("codex_host", {}).get("cli_version")
+    if not isinstance(cli_version, str) or not is_supported_codex_cli_version(cli_version):
+        raise VerificationError(
+            "host-qualification: stable Codex CLI "
+            f"{CODEX_CLI_VERSION_REQUIREMENT} is not bound"
+        )
     if canary_data.get("live_hook_execution") != "observed" or canary_data.get("secret_material_retained") is not False:
         raise VerificationError("host-qualification: hook/secret hygiene receipt is incomplete")
     staged_paths = {path.relative_to(stage).as_posix() for path in stage.rglob("*") if path.is_file()}
-    if any(path == "skills/academic-research-suite" or path.startswith("skills/academic-research-suite/") for path in staged_paths):
-        raise VerificationError("stage-qualification: bundled ARS source leaked into stage")
-    required = ("hooks/arw_hook.py", "hooks/hooks.json", "SBOM.cdx.json", "share/arw/build-identity.json", "supply-chain/stage-inventory.json")
+    required = (
+        "hooks/arw_hook.py",
+        "hooks/hooks.json",
+        "SBOM.cdx.json",
+        "share/arw/build-identity.json",
+        "supply-chain/stage-inventory.json",
+        "skills/academic-research-suite/SKILL.md",
+        "skills/academic-research-suite/manifest.json",
+        "skills/academic-research-suite/VERSION",
+        "vendor/mcp-manifest.json",
+    )
     missing = [relative for relative in required if not (stage / relative).is_file()]
     if missing:
         raise VerificationError(f"stage-qualification: required artifact missing: {missing}")
+    if not any(path.startswith("skills/academic-research-suite/ars/") for path in staged_paths):
+        raise VerificationError("stage-qualification: bundled ARS content tree is empty")
     return ValidatedStageSummary(
         stage_sha256=digest_bytes(canonical(sorted((p.relative_to(stage).as_posix(), digest_file(p)) for p in stage.rglob("*") if p.is_file() and not p.is_symlink()))),
         integration_lock_sha256=digest_file(lock),

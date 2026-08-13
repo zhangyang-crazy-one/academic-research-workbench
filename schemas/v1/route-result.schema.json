@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/route-result.schema.json",
   "additionalProperties": false,
   "description": "Read-only routing decision exposed by the installed skill.",
   "properties": {
@@ -14,18 +15,72 @@
       "type": "string"
     },
     "execution_mode": {
-      "const": "inline-role-prompts",
+      "enum": [
+        "inline-role-prompts",
+        "blocked"
+      ],
       "title": "Execution Mode",
       "type": "string"
     },
     "source_adapter_version": {
-      "const": "0.1.19",
+      "const": "0.1.20",
       "title": "Source Adapter Version",
       "type": "string"
+    },
+    "source_dependency_model": {
+      "const": "bundled-pinned-adapter",
+      "title": "Source Dependency Model",
+      "type": "string"
+    },
+    "source_bundled": {
+      "const": true,
+      "title": "Source Bundled",
+      "type": "boolean"
+    },
+    "integration_status": {
+      "enum": [
+        "PASS",
+        "BLOCKED"
+      ],
+      "title": "Integration Status",
+      "type": "string"
+    },
+    "integration_lock_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Integration Lock Sha256"
+    },
+    "release_qualification": {
+      "const": "BLOCKED",
+      "title": "Release Qualification",
+      "type": "string"
+    },
+    "reason_codes": {
+      "items": {
+        "enum": [
+          "integration_lock_not_verified",
+          "integration_inputs_incomplete",
+          "integration_lock_invalid_or_drifted"
+        ],
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
     },
     "experiment_execution": {
       "const": "disabled",
       "title": "Experiment Execution",
+      "type": "string"
+    },
+    "paper_ast_export": {
+      "const": "deferred-v2",
+      "title": "Paper Ast Export",
       "type": "string"
     }
   },
@@ -34,7 +89,14 @@
     "workflow_family",
     "execution_mode",
     "source_adapter_version",
-    "experiment_execution"
+    "source_dependency_model",
+    "source_bundled",
+    "integration_status",
+    "integration_lock_sha256",
+    "release_qualification",
+    "reason_codes",
+    "experiment_execution",
+    "paper_ast_export"
   ],
   "title": "RouteResult",
   "type": "object"

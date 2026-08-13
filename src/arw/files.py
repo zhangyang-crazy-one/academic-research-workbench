@@ -155,7 +155,11 @@ class FilesAdminService:
             raise FilesAdminError("root_missing", f"registered root is unavailable: {error}") from error
         if not resolved.is_dir():
             raise FilesAdminError("root_not_directory", "registered root must be a directory")
-        if self.control_root == resolved or self.control_root.is_relative_to(resolved):
+        if (
+            self.control_root == resolved
+            or self.control_root.is_relative_to(resolved)
+            or resolved.is_relative_to(self.control_root)
+        ):
             raise FilesAdminError("control_inside_root", "control state cannot be stored under a research root")
         home = Path.home().resolve()
         if resolved in {Path("/"), home}:
@@ -253,12 +257,20 @@ class FilesAdminService:
         failpoint: Callable[[str], None],
     ) -> FileAdminReceipt:
         root = self.load_root(root_id)
+        live_root = Path(root.canonical_path)
+        if (
+            live_root.is_symlink()
+            or not live_root.is_dir()
+            or live_root.resolve(strict=True) != live_root
+        ):
+            raise FilesAdminError("root_unsafe", "registered root is no longer a real canonical directory")
         control = self.root_control_path(root_id)
         generation_id = self._id_factory("generation")
         attempt_id = self._id_factory("attempt")
         started_at = self._clock()
         candidate = control / "generations" / f".building-{generation_id}"
         final = self.generation_path(root_id, generation_id)
+        pointer_committed = False
         candidate.mkdir()
         previous = self._selected_or_none(root_id)
         previous_manifest = self._identity_or_none(root_id, previous)
@@ -361,8 +373,6 @@ class FilesAdminService:
             )
             validate_generation_for_promotion(manifest, receipt)
             failpoint("before_promote")
-            os.replace(candidate, final)
-            _fsync_directory(final.parent)
             pointer = SelectedGeneration(
                 schema_version="1.0.0",
                 root_id=root_id,
@@ -370,13 +380,30 @@ class FilesAdminService:
                 generation_manifest_sha256=receipt.generation_manifest_sha256,
                 selected_at=self._clock(),
             )
-            _write_atomic(control / "selected-generation.json", canonical_json_bytes(pointer.model_dump(mode="json")))
+            pointer_bytes = canonical_json_bytes(pointer.model_dump(mode="json"))
+            # Stage the pointer before the generation directory is promoted so
+            # the pointer rename is the single atomic commit point: a crash or
+            # write failure can no longer leave an orphan generation behind
+            # while a blocked receipt claims nothing was selected.
+            pointer_temporary = control / f".selected-generation.{generation_id}.tmp"
+            with pointer_temporary.open("xb") as handle:
+                handle.write(pointer_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(candidate, final)
+            _fsync_directory(final.parent)
+            os.replace(pointer_temporary, control / "selected-generation.json")
+            pointer_committed = True
+            _fsync_directory(control)
             self._write_receipt(control, receipt)
             return receipt
         except Exception as error:
             candidate_exists = candidate.exists()
             if candidate_exists:
                 shutil.rmtree(candidate)
+            (control / f".selected-generation.{generation_id}.tmp").unlink(missing_ok=True)
+            if not pointer_committed and final.is_dir() and not final.is_symlink():
+                shutil.rmtree(final)
             code = error.code if isinstance(error, (FilesAdminError, FileContractError)) else "generation_failed"
             blocked = FileAdminReceipt(
                 schema_version="1.0.0",

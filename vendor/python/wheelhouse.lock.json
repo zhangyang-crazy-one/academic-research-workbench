@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
-  "python": ">=3.13,<3.15",
+  "python": ">=3.13",
   "platform_claim": "linux-x86_64",
   "registry": "https://pypi.org/simple",
   "uv_lock": {
     "path": "uv.lock",
-    "sha256": "69314b27ce227b2e747ebbf5f4a6f67629ad628342a3f1060e8a2384e1cf34b5"
+    "sha256": "923c59076e6ab54b838f21a6ec822f70bc50ef2c361f78b3ede96cf160d37caa"
   },
   "runtime_requirements": {
     "path": "vendor/python/wheelhouse/requirements-runtime.txt",
-    "sha256": "14ccb2acee0ae28ca89d34bc4ea8998f7ec29697e640f4d7e9d74e78f178ec00"
+    "sha256": "9d205fd064692f98da4ea36a2fa8f7ff3495e20b29ceee500b8e95a7711f302c"
   },
   "first_party_wheel": {
     "source": "built-from-clean-stage-inputs",

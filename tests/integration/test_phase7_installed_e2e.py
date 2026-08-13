@@ -1,9 +1,8 @@
-"""Phase 7 installed-package and external ARS qualification probes.
+"""Phase 7 installed-package and bundled ARS qualification probes.
 
 The test deliberately executes the copied stage from a directory outside the
-checkout.  The local ARS adapter remains an explicit external input and only
-bounded route evidence is retained; no workflow transcript or source text is
-copied into the installed package or the qualification receipt.
+checkout. The modified local ARS adapter is copied into the installed package;
+only bounded route evidence is retained in receipts.
 """
 
 from __future__ import annotations
@@ -31,6 +30,7 @@ from arw.graph_models import GraphProjectionReceipt
 from arw.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
+    discover_codex_native_binary,
     observe_hook_definition,
     observe_stage_identity,
 )
@@ -49,21 +49,37 @@ from arw.orchestration_models import (
 )
 
 from .test_orchestration_lifecycle import _run as _init_run
+from tests.qualification_support import discover_bundled_qualification
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-ARS_ROOT = Path(
-    os.environ.get(
-        "ARW_ARS_ROOT", "/home/zhangyangrui/.codex/skills/academic-research-suite"
-    )
-).resolve()
 PLUGIN_NAME = "academic-research-workbench"
-LOCK_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/integration-lock.json"
-CANARY_PATH = REPOSITORY_ROOT / "build/evidence/phase-07/host-canary/canary.json"
-CODEX_LAUNCHER = Path("/usr/local/sbin/codex")
+def _retained_bundled_qualification() -> tuple[Path, Path, Path | None]:
+    """Select only a lock/canary/stage tuple whose bytes are still bound.
+
+    Discovery is content-addressed and host-verified (see
+    ``tests.qualification_support``), so a Codex upgrade is handled by
+    re-qualifying the host rather than hand-editing this candidate list.
+    """
+
+    discovered = discover_bundled_qualification()
+    if discovered is not None:
+        stage_root, lock_path, canary_path = discovered
+        return lock_path, canary_path, stage_root
+    return (
+        REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix/integration-lock.json",
+        REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix/canary.json",
+        None,
+    )
+
+
+LOCK_PATH, CANARY_PATH, RETAINED_STAGE = _retained_bundled_qualification()
+CODEX_LAUNCHER = Path(
+    os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex"
+)
 CODEX_NATIVE = Path(
-    "/usr/local/lib/node_modules/@openai/codex/node_modules/"
-    "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+    os.environ.get("ARW_CODEX_NATIVE_BINARY")
+    or discover_codex_native_binary(CODEX_LAUNCHER)
 )
 
 
@@ -106,9 +122,6 @@ def _publish_once(path: Path, payload: object) -> Path:
 def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     """Build one exact stage and copy it into a source-hidden marketplace."""
 
-    assert ARS_ROOT.is_dir() and not ARS_ROOT.is_symlink(), (
-        "ARW_ARS_ROOT must point at the explicit local ARS adapter"
-    )
     outside = tmp_path / "outside-working-directory"
     outside.mkdir()
     stage = tmp_path / "stage" / PLUGIN_NAME
@@ -129,8 +142,14 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     # matching host canary; that must remain a qualification failure rather
     # than silently weakening the lock. Clean environments still exercise the
     # normal stage-plugin path below.
-    retained_stage = REPOSITORY_ROOT / "build/stage/phase-07-qualified"
-    if retained_stage.is_dir() and LOCK_PATH.is_file() and CANARY_PATH.is_file():
+    retained_stage = RETAINED_STAGE
+    if (
+        retained_stage is not None
+        and retained_stage.is_dir()
+        and (retained_stage / "skills/academic-research-suite/SKILL.md").is_file()
+        and LOCK_PATH.is_file()
+        and CANARY_PATH.is_file()
+    ):
         shutil.copytree(retained_stage, stage)
     else:
         stage_command = [
@@ -146,7 +165,8 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
 
     marketplace_root = tmp_path / "marketplace/plugins" / PLUGIN_NAME
     shutil.copytree(stage, marketplace_root)
-    assert not (marketplace_root / "skills/academic-research-suite").exists()
+    assert (marketplace_root / "skills/academic-research-suite/SKILL.md").is_file()
+    assert (marketplace_root / "skills/academic-research-suite/manifest.json").is_file()
     assert not any(
         path.is_symlink() for path in marketplace_root.rglob("*")
     )
@@ -165,7 +185,6 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         "HOME": str(run_root / "home"),
         "CODEX_HOME": str(run_root / "codex-home"),
         "PYTHONPATH": str(tmp_path / "source-checkout-must-not-be-imported"),
-        "ARW_ARS_ROOT": str(ARS_ROOT),
         "ARW_PLUGIN_ROOT": str(installed),
     }
     if (installed / "supply-chain/integration-lock.json").is_file():
@@ -187,8 +206,8 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     route = json.loads(result.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
-    assert route["source_dependency_model"] == "external-exact-installation"
-    assert route["source_bundled"] is False
+    assert route["source_dependency_model"] == "bundled-pinned-adapter"
+    assert route["source_bundled"] is True
     assert route["paper_ast_export"] == "deferred-v2"
     if (installed / "supply-chain/integration-lock.json").is_file():
         assert route["integration_status"] == "PASS"
@@ -196,9 +215,9 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         assert route["reason_codes"] == []
     else:
         assert route["integration_status"] == "BLOCKED"
-        assert route["reason_codes"] == ["integration_inputs_incomplete"]
+        assert route["reason_codes"] == ["integration_lock_not_verified"]
 
-    workflow = ARS_ROOT / "ars/academic-pipeline/WORKFLOW.md"
+    workflow = installed / "skills/academic-research-suite/ars/academic-pipeline/WORKFLOW.md"
     assert workflow.is_file() and not workflow.is_symlink()
     fixture_input = canonical_json_bytes(
         {"fixture": "phase7-installed-ars-route", "claim": "bounded"}
@@ -208,13 +227,13 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     # only.  Full workflow text, credentials, and absolute roots never enter
     # the receipt.
     ars_evidence = {
-        "schema_version": "arw.external-ars-route-evidence.v1",
+        "schema_version": "arw.bundled-ars-route-evidence.v1",
         "workflow": "academic-pipeline",
         "adapter_version": EXPECTED_ARS_ADAPTER_VERSION,
-        "dependency_model": "external-exact-installation",
-        "bundled": False,
+        "dependency_model": "bundled-pinned-adapter",
+        "bundled": True,
         "workflow_sha256": _digest(workflow),
-        "adapter_tree_sha256": _tree_sha256(ARS_ROOT, ignore_runtime_caches=True),
+        "adapter_tree_sha256": _tree_sha256(installed / "skills/academic-research-suite", ignore_runtime_caches=True),
         "input_sha256": hashlib.sha256(fixture_input).hexdigest(),
         "output_sha256": hashlib.sha256(route_output).hexdigest(),
         "command_summary": ["academic-pipeline", "route"],
@@ -226,7 +245,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     ars_path.write_bytes(canonical_json_bytes(ars_evidence))
     retained = ars_path.read_bytes()
     assert str(REPOSITORY_ROOT).encode() not in retained
-    assert str(ARS_ROOT).encode() not in retained
+    assert str(installed).encode() not in retained
     assert b"auth.json" not in retained
     assert b"OPENAI_API_KEY" not in retained
 
@@ -252,7 +271,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     )
 
 
-def test_installed_route_rejects_implicit_external_ars_root(
+def test_installed_route_requires_qualification_lock(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
 ) -> None:
@@ -271,9 +290,9 @@ def test_installed_route_rejects_implicit_external_ars_root(
     assert result.returncode == 0, result.stderr
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
-    assert route["reason_codes"] == ["integration_lock_not_verified"]
-    assert route["source_dependency_model"] == "external-exact-installation"
-    assert route["source_bundled"] is False
+    assert route["reason_codes"] == ["integration_inputs_incomplete"]
+    assert route["source_dependency_model"] == "bundled-pinned-adapter"
+    assert route["source_bundled"] is True
 
 
 def _lifecycle(decision: EvidenceAccessDecision, kind: str) -> LifecycleEvidenceRecord:
@@ -569,12 +588,15 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     installed, outside, environment = installed_stage
+    if not (installed / "supply-chain/integration-lock.json").is_file() or not (
+        LOCK_PATH.is_file() and CANARY_PATH.is_file()
+    ):
+        pytest.skip("retained exact bundled host qualification evidence is absent")
     run_root, _ = _init_run(tmp_path)
     command_environment = {
         **environment,
         "HOME": str(tmp_path / "journey-home"),
         "CODEX_HOME": str(tmp_path / "journey-codex-home"),
-        "ARW_ARS_ROOT": str(ARS_ROOT),
         "ARW_PLUGIN_ROOT": str(installed),
         "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
         "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
@@ -586,8 +608,8 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
     route = json.loads(route_run.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
-    assert route["source_bundled"] is False
-    assert route["source_dependency_model"] == "external-exact-installation"
+    assert route["source_bundled"] is True
+    assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["integration_status"] == "PASS"
 
     # The fsync fault occurs after the canonical claim/checkpoint event is

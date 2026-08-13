@@ -212,6 +212,10 @@ def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                 "staged_sha256": digest(destination),
             }
         )
+        if component_id == "academic-research-skills":
+            bundled_license = PROJECT_ROOT / "skills/academic-research-suite/ars/LICENSE"
+            if bundled_license.is_file() and digest(bundled_license) != declared["sha256"]:
+                fail("bundled ARS license bytes do not match the pinned source license")
     return records
 
 
@@ -312,6 +316,20 @@ def generate_sbom(
             "name": artifact["path"],
             "version": "1",
             "hashes": [{"alg": "SHA-256", "content": artifact["sha256"]}],
+        }
+    for relative in (
+        "hooks/hooks.json",
+        "hooks/arw_hook.py",
+        "schemas/v1/integration-lock.schema.json",
+        "vendor/mcp-manifest.json",
+    ):
+        path = PROJECT_ROOT / relative
+        components[f"artifact:{relative}"] = {
+            "type": "file",
+            "bom-ref": f"artifact:{relative}",
+            "name": relative,
+            "version": "1",
+            "hashes": [{"alg": "SHA-256", "content": digest(path)}],
         }
     file_base = next(item for item in manifest["components"] if item["id"] == "file-base")
     for legal_input in file_base["legal_inputs"]:

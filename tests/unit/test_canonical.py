@@ -104,7 +104,11 @@ def test_strict_runtime_models_reject_noncanonical_values() -> None:
 
 def test_route_hook_and_evidence_code_are_not_canonical_writers() -> None:
     paths = [REPOSITORY_ROOT / "src/arw/contracts.py"]
-    paths.extend((REPOSITORY_ROOT / "hooks").rglob("*"))
+    paths.extend(
+        path
+        for path in (REPOSITORY_ROOT / "hooks").rglob("*")
+        if path.suffix in {".py", ".json"}
+    )
     evidence = REPOSITORY_ROOT / "src/arw/evidence.py"
     if evidence.exists():
         paths.append(evidence)

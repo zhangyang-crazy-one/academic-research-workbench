@@ -1,23 +1,30 @@
 # Modifications and Source Partitioning
 
-Academic Research Workbench preserves each upstream source identity and records local changes as ordered, digest-bound patch inputs.
+Academic Research Workbench preserves each upstream source identity and records
+the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
 - Upstream revision: `c22c17eed8a5753aa60681be9734919f2e2f5b42`
 - Adapter version: `0.1.20`
-- Materialized source: `vendor/sources/academic-research-skills`
-- Local source modifications: none; the snapshot is bundled unchanged.
+- Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
+- Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
 
 ## experiment-agent
 
 - Upstream revision: `9b063fa895eaf1f63ac99ac03f924f8d31aa8d26`
-- Materialized source: `vendor/sources/experiment-agent`
-- Local source modifications: none; the snapshot is bundled unchanged.
+- Bundled adapter component: `skills/academic-research-suite/ars/`
+- Local source modifications: the bundled adapter integrates the pinned experiment-agent material into the reshaped local ARS skill; upstream commit identity remains pinned in `manifest.json`.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
 
 ## file-base
+
+ARW's MCP is the locally modified `codebase-memory-mcp` adapter. The runtime
+launcher keeps the upstream-compatible `file-base` name, while
+`vendor/mcp-manifest.json` is the canonical machine-readable identity for the
+upstream commit, patched tree, ordered ARW patch series, protocol, binary, and
+capability profile. It is not an unpinned external MCP dependency.
 
 - Upstream revision: `ee68144af5453addda995a27cce8142999f318fb`
 - Materialized source: `vendor/sources/file-base`

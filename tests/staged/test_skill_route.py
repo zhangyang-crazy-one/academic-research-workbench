@@ -17,7 +17,14 @@ ROUTE_KEYS = {
     "workflow_family",
     "execution_mode",
     "source_adapter_version",
+    "source_dependency_model",
+    "source_bundled",
+    "integration_status",
+    "integration_lock_sha256",
+    "release_qualification",
+    "reason_codes",
     "experiment_execution",
+    "paper_ast_export",
 }
 
 
@@ -54,15 +61,20 @@ def installed_route_evidence(
     retained_final = retained_evidence / "plugin/route/final.json"
     if retained_final.is_file():
         final = json.loads(retained_final.read_text())
+        final_attempt = retained_evidence / "plugin/route/attempts" / final["attempt"]
         classification = json.loads(
-            (
-                retained_evidence
-                / "plugin/route/attempts"
-                / final["attempt"]
-                / "classification.json"
-            ).read_text()
+            (final_attempt / "classification.json").read_text()
         )
-        if classification["classification"] == "pass":
+        if (
+            classification["classification"] == "pass"
+            and classification.get("hook_status") == "automation-bypass-executed"
+            and classification.get("hook_receipt_count", 0) >= 1
+            and any(
+                command.get("successful")
+                for command in classification.get("installed_command_evidence", [])
+            )
+            and (final_attempt / "hook/evidence.json").is_file()
+        ):
             return retained_evidence, subprocess.CompletedProcess([], 0, "retained PASS", "")
 
     root = tmp_path_factory.getbasetemp() / "installed-route-shared"
@@ -84,6 +96,18 @@ def installed_route_evidence(
         "UV_OFFLINE": "1",
         "ARW_CODEX_AUTH_FILE": str(_operator_auth_file()),
     }
+    # Preserve only host transport configuration needed to reach the Codex
+    # service. The smoke script never serializes these values into evidence.
+    for name in (
+        "ALL_PROXY",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    ):
+        if value := os.environ.get(name):
+            environment[name] = value
 
     staged = _run(
         [
@@ -136,8 +160,16 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     assert set(route) == ROUTE_KEYS
     assert route["workflow_family"]
     assert route["execution_mode"]
-    assert route["source_adapter_version"] == "0.1.19"
+    assert route["source_adapter_version"] == "0.1.20"
+    assert route["source_dependency_model"] == "bundled-pinned-adapter"
+    assert route["source_bundled"] is True
+    assert route["integration_status"] == "BLOCKED"
+    assert route["execution_mode"] == "blocked"
+    assert route["integration_lock_sha256"] is None
+    assert route["release_qualification"] == "BLOCKED"
+    assert route["reason_codes"] == ["integration_lock_not_verified"]
     assert route["experiment_execution"] == "disabled"
+    assert route["paper_ast_export"] == "deferred-v2"
     assert direct == route
 
     attempts = sorted((evidence / "plugin/route/attempts").glob("*/classification.json"))
@@ -154,14 +186,39 @@ def test_fresh_installed_skill_returns_schema_valid_route(
 
     command = json.loads((final_attempt / "command.json").read_text())
     assert command["cwd"] == "<isolated-working-directory>"
+    assert "--dangerously-bypass-hook-trust" in command["argv"]
     assert command["environment"] == {
         "CODEX_HOME": "<isolated-codex-home>",
         "HOME": "<isolated-home>",
         "PIP_NO_INDEX": "1",
         "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": "unset",
+        "TMPDIR": "<isolated-temporary-directory>",
         "tool_network_access": "disabled",
     }
+
+    classification = json.loads((final_attempt / "classification.json").read_text())
+    assert classification["hook_status"] == "automation-bypass-executed"
+    assert classification["hook_trust_mode"] == "automation-bypass"
+    assert classification["hook_receipt_count"] >= 1
+    assert "SessionStart" in classification["hook_receipt_events"]
+    assert len(classification["hook_definition_sha256"]) == 64
+    successful_commands = [
+        command
+        for command in classification["installed_command_evidence"]
+        if command["successful"]
+    ]
+    assert len(successful_commands) == 1
+    assert successful_commands[0]["exit_code"] == 0
+    assert successful_commands[0]["status"] == "completed"
+    hook_evidence = json.loads((final_attempt / "hook/evidence.json").read_text())
+    assert hook_evidence["authority"] == "none"
+    assert hook_evidence["trust_mode"] == "automation-bypass"
+    assert hook_evidence["valid"] is True
+    assert hook_evidence["definition_sha256"] == classification["hook_definition_sha256"]
+    receipt_files = tuple((final_attempt / "hook/receipts").glob("*.json"))
+    assert len(receipt_files) == hook_evidence["receipt_count"]
+    assert all(path.stem in hook_evidence["receipt_sha256"] for path in receipt_files)
 
     identity = json.loads((evidence / "plugin/installed-identity.json").read_text())
     assert identity["stage_sha256"] == identity["installed_sha256"]

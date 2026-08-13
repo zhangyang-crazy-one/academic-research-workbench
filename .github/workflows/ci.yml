@@ -32,10 +32,17 @@ jobs:
           enable-cache: true
       - name: Sync locked development environment
         run: uv sync --frozen --all-groups
-      - name: Materialize and verify pinned source inputs
+      - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
-          ./scripts/verify-sources --inputs-only
+      - name: Verify source manifest wire digests
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: >-
+          uv run pytest -q
+          tests/integration/test_source_materialization.py::test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
+          tests/integration/test_source_materialization.py::test_materializer_tree_digest_uses_the_manifest_wire_encoding
       - name: Run non-host contract and provenance tests
         env:
           PYTHONNOUSERSITE: '1'
@@ -44,8 +51,23 @@ jobs:
           uv run pytest -q
           tests/unit
           tests/schema
-          tests/integration/test_license_gate.py
           tests/unit/test_integration_lock.py
+      - name: Run Phase 4 lifecycle and hook regression tests
+        env:
+          PYTHONNOUSERSITE: '1'
+          UV_OFFLINE: '1'
+        run: >-
+          uv run pytest -q
+          tests/unit/test_hook_contracts.py
+          tests/unit/test_orchestration_models.py
+          tests/unit/test_orchestration_cli.py
+          tests/unit/test_scheduler.py
+          tests/integration/test_human_gates.py
+          tests/integration/test_orchestration_hook_parity.py
+          tests/integration/test_orchestration_lifecycle.py
+          tests/integration/test_orchestration_panels.py
+          tests/integration/test_orchestration_replay.py
+          tests/integration/test_phase4_verifier.py
 
   package-boundary:
     name: Wheel and source archive boundary
@@ -60,6 +82,27 @@ jobs:
           version: '0.11.28'
           enable-cache: true
       - run: uv sync --frozen --all-groups
+      - name: Verify publish surface before building artifacts
+        run: |
+          test -f src/arw/orchestration.py
+          test -f hooks/arw_hook.py
+          test -x scripts/prepare-qualified-stage
+          test -x scripts/create-marketplace
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          hooks = json.loads(Path('hooks/hooks.json').read_text())
+          commands = [
+              item['command']
+              for groups in hooks['hooks'].values()
+              for matcher in groups
+              for item in matcher['hooks']
+          ]
+          assert commands, 'no lifecycle hooks configured'
+          assert all('${PLUGIN_ROOT}' in command for command in commands), commands
+          assert any('arw_hook.py' in command for command in commands), commands
+          PY
       - name: Build wheel and inspect payload
         run: |
           uv build --out-dir dist

@@ -569,7 +569,8 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
     path = directory / f"{dossier_sha256}.json"
     if path.is_symlink() or not path.is_file():
         raise AuditDossierError("audit dossier is missing or unsafe")
-    raw = strict_json_loads(path.read_bytes())
+    raw_bytes = path.read_bytes()
+    raw = strict_json_loads(raw_bytes)
     try:
         is_pass = (
             isinstance(raw, Mapping)
@@ -613,7 +614,7 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
             dossier = seal_audit_dossier(raw)
     except (OSError, UnicodeError, ValueError) as error:
         raise AuditDossierError(f"audit dossier is invalid: {error}") from error
-    if dossier.dossier_sha256 != dossier_sha256 or path.read_bytes() != dossier.canonical_bytes():
+    if dossier.dossier_sha256 != dossier_sha256 or raw_bytes != dossier.canonical_bytes():
         raise AuditDossierError("audit dossier is not canonically addressed")
     return dossier
 

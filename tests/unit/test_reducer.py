@@ -65,7 +65,7 @@ def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
     )
 
 
-def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, status: str = "active"):
+def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, status: str = "prepared"):
     from arw.orchestration_models import AttemptDescriptor
 
     return AttemptDescriptor.model_validate(
@@ -79,7 +79,7 @@ def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, sta
             "retry_reason": None,
             "retry_eligible": False,
             "continuation_count": 0,
-            "host_agent_id": "host-agent-001",
+            "host_agent_id": None,
             "cancellation_deadline_at": None,
         }
     )
@@ -97,7 +97,7 @@ def _phase4_proposal(assignment, attempt):
             "attempt_id": attempt.attempt_id,
             "role_id": assignment.role_id,
             "worker_identity_id": assignment.worker_identity_id,
-            "host_agent_id": attempt.host_agent_id,
+            "host_agent_id": attempt.host_agent_id or "host-agent-001",
             "execution_mode": assignment.execution_mode,
             "execution_provenance": assignment.execution_provenance,
             "independence_eligible": assignment.independence_eligible,

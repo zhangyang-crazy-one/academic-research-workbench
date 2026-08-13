@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_NAME="academic-research-workbench"
+STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
+CLAUDE_STAGE_ROOT="$PROJECT_ROOT/build/claude-stage/$PLUGIN_NAME"
+MARKETPLACE_ROOT="$PROJECT_ROOT/build/claude-marketplace"
+RUN_STAGE=0
+
+usage() {
+  cat <<'EOF'
+Usage: create-claude-marketplace [options]
+
+Transform a Codex-staged Academic Research Workbench plugin into a Claude Code
+plugin layout and local marketplace (skills + commands + hooks + MCP + bin/arw).
+
+Options:
+  --stage-root PATH          Codex stage input (default: build/stage/academic-research-workbench)
+  --claude-stage-root PATH   Claude plugin output (default: build/claude-stage/...)
+  --marketplace-root PATH    Claude marketplace output (default: build/claude-marketplace)
+  --stage                    Run scripts/stage-plugin --clean before transforming
+  --help                     Show this help
+
+Install (Claude Code):
+  /plugin marketplace add <repo>/build/claude-marketplace
+  /plugin install academic-research-workbench@arw-claude-local
+
+Notes:
+  - ARW hooks remain observational only (never gate/provenance authority).
+  - ARS PreToolUse guard is optional hardening with graceful pass-through.
+  - Does not claim Codex isolated_codex_exec host parity.
+EOF
+}
+
+fail() {
+  printf 'create-claude-marketplace: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stage-root)
+      [[ $# -ge 2 ]] || fail "--stage-root requires a path" 64
+      STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --claude-stage-root)
+      [[ $# -ge 2 ]] || fail "--claude-stage-root requires a path" 64
+      CLAUDE_STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --marketplace-root)
+      [[ $# -ge 2 ]] || fail "--marketplace-root requires a path" 64
+      MARKETPLACE_ROOT="$2"
+      shift 2
+      ;;
+    --stage)
+      RUN_STAGE=1
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1" 64
+      ;;
+  esac
+done
+
+STAGE_ROOT="$(realpath -m -- "$STAGE_ROOT")"
+CLAUDE_STAGE_ROOT="$(realpath -m -- "$CLAUDE_STAGE_ROOT")"
+MARKETPLACE_ROOT="$(realpath -m -- "$MARKETPLACE_ROOT")"
+
+[[ "$STAGE_ROOT" != "$PROJECT_ROOT" && "$STAGE_ROOT" != / ]] \
+  || fail "refusing unsafe stage root" 64
+[[ "$CLAUDE_STAGE_ROOT" != "$PROJECT_ROOT" && "$CLAUDE_STAGE_ROOT" != / ]] \
+  || fail "refusing unsafe claude stage root" 64
+[[ "$MARKETPLACE_ROOT" != "$PROJECT_ROOT" && "$MARKETPLACE_ROOT" != / ]] \
+  || fail "refusing unsafe marketplace root" 64
+[[ "$CLAUDE_STAGE_ROOT" != "$STAGE_ROOT" ]] \
+  || fail "claude stage root must differ from Codex stage root" 64
+[[ "$MARKETPLACE_ROOT" != "$STAGE_ROOT" ]] \
+  || fail "marketplace root must differ from Codex stage root" 64
+
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+
+if [[ "$RUN_STAGE" -eq 1 ]]; then
+  "$PROJECT_ROOT/scripts/stage-plugin" --clean --stage-root "$STAGE_ROOT"
+fi
+
+[[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] \
+  || fail "staged plugin is missing; run scripts/stage-plugin or pass --stage" 66
+[[ -f "$STAGE_ROOT/.codex-plugin/plugin.json" ]] \
+  || fail "staged plugin Codex manifest is missing" 66
+[[ -f "$PROJECT_ROOT/packaging/claude/plugin.json" ]] \
+  || fail "packaging/claude templates are missing" 66
+[[ -f "$PROJECT_ROOT/hooks/arw_hook_claude.py" ]] \
+  || fail "hooks/arw_hook_claude.py is missing" 66
+
+"$PYTHON" "$PROJECT_ROOT/packaging/claude/build_claude_plugin.py" \
+  --project-root "$PROJECT_ROOT" \
+  --stage-root "$STAGE_ROOT" \
+  --claude-stage-root "$CLAUDE_STAGE_ROOT" \
+  --marketplace-root "$MARKETPLACE_ROOT"
+
+printf '\nclaude-stage=%s\nmarketplace=%s\n' "$CLAUDE_STAGE_ROOT" "$MARKETPLACE_ROOT"
+printf 'install:\n  /plugin marketplace add %s\n  /plugin install %s@arw-claude-local\n' \
+  "$MARKETPLACE_ROOT" "$PLUGIN_NAME"

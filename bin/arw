@@ -48,29 +48,33 @@ LOCK_PATH="$PLUGIN_ROOT/vendor/python/wheelhouse.lock.json"
 WHEELHOUSE_DIR="$PLUGIN_ROOT/vendor/python/wheelhouse"
 
 select_python() {
-  local candidate
+  local candidate resolved
   if [[ -n "${ARW_PYTHON:-}" ]]; then
     candidate="$(command -v -- "$ARW_PYTHON" 2>/dev/null || true)"
     [[ -n "$candidate" ]] || fail "interpreter-not-found" "ARW_PYTHON is not executable" 78
+    if ! "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+      fail "incompatible-interpreter" "ARW_PYTHON must be Python >=3.13" 78
+    fi
     printf '%s\n' "$candidate"
     return
   fi
 
-  for candidate in python3.14 python3.13 python3; do
-    if command -v -- "$candidate" >/dev/null 2>&1; then
-      command -v -- "$candidate"
+  for candidate in python3.15 python3.14 python3.13 python3 python; do
+    resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+      printf '%s\n' "$resolved"
       return
     fi
   done
-  fail "interpreter-not-found" "Python >=3.13,<3.15 is required" 78
+  fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
 
 PYTHON="$(select_python)"
 PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
   || fail "interpreter-failed" "selected Python could not report its version" 78
 
-if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if (3, 13) <= sys.version_info[:2] < (3, 15) else 1)'; then
-  fail "incompatible-interpreter" "requires Python >=3.13,<3.15; got $PYTHON_VERSION" 78
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+  fail "incompatible-interpreter" "requires Python >=3.13; got $PYTHON_VERSION" 78
 fi
 
 unset PYTHONPATH PYTHONHOME
@@ -215,6 +219,10 @@ sys.stdout.write("\n")
 PY
     ;;
   route)
+    # Keep the staged lock discoverable while remaining fail-closed. Host
+    # canary evidence is intentionally not fabricated or inferred here; the
+    # Python verifier requires the retained exact evidence and rejects drift.
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     exec "$RUNTIME_PYTHON" -m arw.cli route "$@"
     ;;
   version)

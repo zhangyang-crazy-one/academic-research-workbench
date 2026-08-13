@@ -2,9 +2,18 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON="$(command -v python3.14 || command -v python3.13 || true)"
+PYTHON=""
+for candidate in "${ARW_PYTHON:-}" python3.15 python3.14 python3.13 python3 python; do
+  [[ -n "$candidate" ]] || continue
+  resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+  [[ -n "$resolved" ]] || continue
+  if "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+    PYTHON="$resolved"
+    break
+  fi
+done
 if [[ -z "$PYTHON" ]]; then
-  printf 'smoke-staged-plugin: Python >=3.13,<3.15 is required\n' >&2
+  printf 'smoke-staged-plugin: Python >=3.13 is required\n' >&2
   exit 78
 fi
 
@@ -37,10 +46,77 @@ PRIVATE_PATH = re.compile(
     r"\.(?:db|sqlite3?|pem|key)$",
     re.IGNORECASE,
 )
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+HOOK_EVENTS = ("SessionStart", "SubagentStop", "Stop")
+HOOK_CONTROL_SURFACES = ("runtime", "mcp", "integrity", "gate", "provenance")
+HOOK_RECEIPT_KEYS = {
+    "agent_type_sha256",
+    "authority",
+    "cwd_sha256",
+    "hook_definition_sha256",
+    "hook_event_name",
+    "input_sha256",
+    "model_sha256",
+    "parent_controls",
+    "permission_mode",
+    "plugin_root_sha256",
+    "receipt_sha256",
+    "redacted_error_code",
+    "schema_version",
+    "session_id_sha256",
+    "source",
+    "status",
+    "stop_hook_active",
+    "subject_id_sha256",
+    "turn_id_sha256",
+}
 
 
 class CanaryDefect(RuntimeError):
     pass
+
+
+class _DuplicateJsonKey(ValueError):
+    pass
+
+
+def reject_json_constant(token: str) -> None:
+    raise ValueError(token)
+
+
+def strict_json_object(raw: bytes, *, label: str) -> dict[str, object]:
+    def object_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise _DuplicateJsonKey(key)
+            result[key] = value
+        return result
+
+    try:
+        payload = json.loads(
+            raw,
+            parse_constant=reject_json_constant,
+            object_pairs_hook=object_pairs,
+        )
+    except (_DuplicateJsonKey, UnicodeDecodeError, ValueError) as error:
+        raise CanaryDefect(f"{label} is not strict JSON: {error}") from error
+    if not isinstance(payload, dict):
+        raise CanaryDefect(f"{label} is not a JSON object")
+    return payload
+
+
+def canonical_json_bytes(payload: object) -> bytes:
+    return (
+        json.dumps(
+            payload,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,10 +190,32 @@ def file_inventory(root: Path) -> tuple[list[str], dict[str, str], str]:
 
 
 def command_environment(home: Path, codex_home: Path) -> dict[str, str]:
+    # The installed Codex package may expose only its canonical Node launcher
+    # (the system `codex` shim is not guaranteed to survive host cleanup).
+    # Materialize a per-canary command shim so all recorded probes exercise the
+    # exact installed host without mutating PATH or relying on a caller alias.
+    configured = os.environ.get("ARW_CODEX_EXECUTABLE")
+    discovered = configured or shutil.which("codex")
+    if not discovered:
+        raise CanaryDefect(
+            "Codex launcher is unavailable; set ARW_CODEX_EXECUTABLE or install codex on PATH"
+        )
+    launcher = Path(discovered).resolve()
+    if not launcher.is_file():
+        raise CanaryDefect(f"Codex launcher is unavailable: {launcher}")
+    shim = home.parent / "codex"
+    command = (
+        f"exec /usr/bin/node {launcher.as_posix()} \"$@\"\n"
+        if launcher.suffix == ".js"
+        else f"exec {launcher.as_posix()} \"$@\"\n"
+    )
+    shim.write_text("#!/bin/sh\n" + command, encoding="utf-8")
+    shim.chmod(0o700)
     environment = {
-        "PATH": os.environ["PATH"],
+        "PATH": f"{home.parent}:{os.environ.get('PATH', '')}",
         "HOME": str(home),
         "CODEX_HOME": str(codex_home),
+        "TMPDIR": "/tmp",
         "PYTHONNOUSERSITE": "1",
         "PIP_NO_INDEX": "1",
     }
@@ -173,6 +271,7 @@ def write_command(
         "PIP_NO_INDEX": "1",
         "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": "unset",
+        "TMPDIR": "<isolated-temporary-directory>",
     }
     if tool_network_access is not None:
         environment["tool_network_access"] = tool_network_access
@@ -225,6 +324,9 @@ def bwrap_prefix(fresh_root: Path, unrelated_cwd: Path, *, offline: bool) -> lis
         str(PROJECT_ROOT),
         "--tmpfs",
         "/tmp",
+        "--chmod",
+        "1777",
+        "/tmp",
         "--bind",
         str(fresh_root),
         str(fresh_root),
@@ -234,6 +336,53 @@ def bwrap_prefix(fresh_root: Path, unrelated_cwd: Path, *, offline: bool) -> lis
     if offline:
         command.insert(1, "--unshare-net")
     return command
+
+
+def inspect_installed_hook_definition(installed_root: Path) -> dict[str, object]:
+    components: list[bytes] = []
+    file_digests: dict[str, str] = {}
+    for relative in ("hooks/hooks.json", "hooks/arw_hook.py"):
+        path = installed_root / relative
+        try:
+            resolved = path.resolve(strict=True)
+            resolved.relative_to(installed_root)
+            raw = resolved.read_bytes()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise CanaryDefect(f"installed hook definition is unsafe: {relative}") from error
+        if path.is_symlink() or not resolved.is_file() or not raw or len(raw) > 256 * 1024:
+            raise CanaryDefect(f"installed hook definition is invalid: {relative}")
+        file_digests[relative] = hashlib.sha256(raw).hexdigest()
+        components.extend((relative.encode("utf-8"), b"\0", raw, b"\0"))
+
+    hooks_path = installed_root / "hooks/hooks.json"
+    hooks = strict_json_object(hooks_path.read_bytes(), label="installed hooks.json")
+    configured = hooks.get("hooks")
+    if not isinstance(configured, dict) or set(configured) != set(HOOK_EVENTS):
+        raise CanaryDefect("installed hooks.json does not configure the exact lifecycle events")
+    commands: dict[str, str] = {}
+    for event in HOOK_EVENTS:
+        groups = configured.get(event)
+        try:
+            handler = groups[0]["hooks"][0]
+            command = handler["command"]
+        except (IndexError, KeyError, TypeError) as error:
+            raise CanaryDefect(f"installed {event} hook definition is malformed") from error
+        if (
+            not isinstance(command, str)
+            or "${PLUGIN_ROOT}/hooks/arw_hook.py" not in command
+            or "CODEX_PLUGIN_ROOT" in command
+        ):
+            raise CanaryDefect(f"installed {event} hook does not use official PLUGIN_ROOT")
+        commands[event] = command
+    definition_sha256 = hashlib.sha256(b"".join(components)).hexdigest()
+    return {
+        "authority": "observational-only",
+        "commands": commands,
+        "definition_sha256": definition_sha256,
+        "events": list(HOOK_EVENTS),
+        "files": file_digests,
+        "receipt_contract": "arw.codex-hook-observation.v1",
+    }
 
 
 def install_exact_stage(
@@ -341,12 +490,15 @@ def install_exact_stage(
         "stage_sha256": stage_sha,
     }
     write_json(evidence / "plugin/installed-identity.json", identity)
+    hook_definition = inspect_installed_hook_definition(installed_root)
+    write_json(evidence / "plugin/hook-definition.json", hook_definition)
     return {
         "home": home,
         "codex_home": codex_home,
         "environment": environment,
         "fresh_root": fresh_root,
         "identity": identity,
+        "hook_definition": hook_definition,
         "installed_root": installed_root,
         "unrelated_cwd": unrelated_cwd,
     }
@@ -381,6 +533,9 @@ def offline_installed_command(
         "--setenv",
         "PIP_NO_INDEX",
         "1",
+        "--setenv",
+        "TMPDIR",
+        "/tmp",
         str(installed_root / "bin/arw"),
         *arguments,
     ]
@@ -610,6 +765,9 @@ def run_mcp(args: argparse.Namespace) -> int:
         "CODEX_HOME",
         str(installed["codex_home"]),
         "--setenv",
+        "TMPDIR",
+        "/tmp",
+        "--setenv",
         "CBM_ALLOWED_ROOT",
         str(fixture_root),
         "--setenv",
@@ -732,19 +890,215 @@ def run_version(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_events_invoked_route(stdout: str) -> bool:
+def route_command_evidence(stdout: str) -> list[dict[str, object]]:
+    evidence: list[dict[str, object]] = []
     for line in stdout.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if event.get("type") != "item.completed":
+            continue
         item = event.get("item")
         if not isinstance(item, dict) or item.get("type") != "command_execution":
             continue
         command = str(item.get("command", ""))
-        if "bin/arw" in command and re.search(r"route\s+--json", command):
-            return True
-    return False
+        launcher_mentioned = "bin/arw" in command
+        route_mentioned = re.search(r"route\s+--json", command) is not None
+        if not launcher_mentioned or not route_mentioned:
+            continue
+        output = str(item.get("aggregated_output", ""))
+        exit_code = item.get("exit_code")
+        status = item.get("status")
+        evidence.append(
+            {
+                "command_sha256": hashlib.sha256(command.encode("utf-8")).hexdigest(),
+                "event_id": item.get("id"),
+                "exit_code": exit_code,
+                "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+                "route_arguments_mentioned": True,
+                "route_launcher_mentioned": True,
+                "status": status,
+                "successful": exit_code == 0 and status == "completed",
+            }
+        )
+    return evidence
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and SHA256_PATTERN.fullmatch(value) is not None
+
+
+def _sha256_or_none(value: object) -> bool:
+    return value is None or _is_sha256(value)
+
+
+def validate_hook_receipt(
+    path: Path,
+    *,
+    receipt_root: Path,
+    installed_root: Path,
+    expected_definition_sha256: str,
+) -> dict[str, object]:
+    try:
+        root = receipt_root.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root)
+        raw = resolved.read_bytes()
+    except (OSError, RuntimeError, ValueError) as error:
+        raise CanaryDefect("installed hook receipt escaped its plugin data root") from error
+    if (
+        receipt_root.is_symlink()
+        or path.is_symlink()
+        or not root.is_dir()
+        or not resolved.is_file()
+        or not raw
+        or len(raw) > 32 * 1024
+    ):
+        raise CanaryDefect("installed hook receipt path or size is unsafe")
+    receipt = strict_json_object(raw, label="installed Codex hook receipt")
+    if set(receipt) != HOOK_RECEIPT_KEYS:
+        raise CanaryDefect("installed Codex hook receipt fields drifted")
+    if raw != canonical_json_bytes(receipt):
+        raise CanaryDefect("installed Codex hook receipt bytes are not canonical")
+
+    receipt_sha256 = receipt.get("receipt_sha256")
+    unsigned = dict(receipt)
+    unsigned.pop("receipt_sha256", None)
+    expected_receipt_sha256 = hashlib.sha256(canonical_json_bytes(unsigned)).hexdigest()
+    if (
+        receipt_sha256 != expected_receipt_sha256
+        or resolved.name != f"{expected_receipt_sha256}.json"
+    ):
+        raise CanaryDefect("installed Codex hook receipt is not content addressed")
+    if receipt.get("schema_version") != "arw.codex-hook-observation.v1":
+        raise CanaryDefect("installed Codex hook receipt contract drifted")
+    if receipt.get("authority") != "observational" or receipt.get("status") != "observed":
+        raise CanaryDefect("installed Codex hook receipt claimed authority")
+    if receipt.get("redacted_error_code") is not None:
+        raise CanaryDefect("installed Codex hook receipt reported an adapter error")
+    if receipt.get("hook_event_name") not in HOOK_EVENTS:
+        raise CanaryDefect("installed Codex hook receipt event is unsupported")
+    if receipt.get("hook_definition_sha256") != expected_definition_sha256:
+        raise CanaryDefect("installed Codex hook receipt binds another definition")
+    installed_root_sha256 = hashlib.sha256(
+        str(installed_root.resolve()).encode("utf-8")
+    ).hexdigest()
+    if receipt.get("plugin_root_sha256") != installed_root_sha256:
+        raise CanaryDefect("installed Codex hook receipt binds another plugin root")
+    for field in (
+        "cwd_sha256",
+        "input_sha256",
+        "model_sha256",
+        "plugin_root_sha256",
+        "session_id_sha256",
+    ):
+        if not _is_sha256(receipt.get(field)):
+            raise CanaryDefect(f"installed Codex hook receipt has an invalid {field}")
+    for field in (
+        "agent_type_sha256",
+        "subject_id_sha256",
+        "turn_id_sha256",
+    ):
+        if not _sha256_or_none(receipt.get(field)):
+            raise CanaryDefect(f"installed Codex hook receipt has an invalid {field}")
+    event = receipt["hook_event_name"]
+    if event == "SessionStart":
+        if (
+            receipt.get("source") not in {"startup", "resume", "clear", "compact"}
+            or receipt.get("turn_id_sha256") is not None
+            or receipt.get("subject_id_sha256") is not None
+            or receipt.get("agent_type_sha256") is not None
+            or receipt.get("stop_hook_active") is not None
+        ):
+            raise CanaryDefect("installed SessionStart receipt fields are inconsistent")
+    elif event == "SubagentStop":
+        if (
+            not _is_sha256(receipt.get("turn_id_sha256"))
+            or not _is_sha256(receipt.get("subject_id_sha256"))
+            or not _is_sha256(receipt.get("agent_type_sha256"))
+            or receipt.get("source") is not None
+            or type(receipt.get("stop_hook_active")) is not bool
+        ):
+            raise CanaryDefect("installed SubagentStop receipt fields are inconsistent")
+    elif (
+        not _is_sha256(receipt.get("turn_id_sha256"))
+        or receipt.get("subject_id_sha256") is not None
+        or receipt.get("agent_type_sha256") is not None
+        or receipt.get("source") is not None
+        or type(receipt.get("stop_hook_active")) is not bool
+    ):
+        raise CanaryDefect("installed Stop receipt fields are inconsistent")
+    if receipt.get("permission_mode") not in {
+        "default",
+        "acceptEdits",
+        "plan",
+        "dontAsk",
+        "bypassPermissions",
+    }:
+        raise CanaryDefect("installed Codex hook receipt permission mode drifted")
+    controls = receipt.get("parent_controls")
+    expected_controls = [
+        {"surface": surface, "parent_enforced": True, "hook_bypass_safe": True}
+        for surface in HOOK_CONTROL_SURFACES
+    ]
+    if controls != expected_controls:
+        raise CanaryDefect("installed Codex hook receipt changed parent-owned controls")
+    return receipt
+
+
+def collect_hook_evidence(
+    installed: dict[str, Any],
+    evidence_dir: Path,
+    *,
+    trust_mode: str,
+) -> dict[str, object]:
+    definition = installed["hook_definition"]
+    definition_sha256 = str(definition["definition_sha256"])
+    data_root: Path = installed["codex_home"] / "plugins/data"
+    receipt_roots = sorted(data_root.glob("*/hook-observations/v1"))
+    summary: dict[str, object] = {
+        "authority": "none",
+        "definition_sha256": definition_sha256,
+        "receipt_contract": definition["receipt_contract"],
+        "receipt_count": 0,
+        "receipt_events": [],
+        "receipt_sha256": [],
+        "trust_mode": trust_mode,
+        "valid": True,
+    }
+    try:
+        if len(receipt_roots) > 1:
+            raise CanaryDefect("multiple plugin hook receipt roots were discovered")
+        receipts: list[dict[str, object]] = []
+        if receipt_roots:
+            receipt_root = receipt_roots[0]
+            paths = sorted(receipt_root.glob("*.json"))
+            if len(paths) > 16:
+                raise CanaryDefect("installed hook emitted too many receipts")
+            retained = evidence_dir / "receipts"
+            retained.mkdir(parents=True, exist_ok=True)
+            for path in paths:
+                receipt = validate_hook_receipt(
+                    path,
+                    receipt_root=receipt_root,
+                    installed_root=installed["installed_root"],
+                    expected_definition_sha256=definition_sha256,
+                )
+                receipts.append(receipt)
+                shutil.copyfile(path, retained / path.name)
+        summary["receipt_count"] = len(receipts)
+        summary["receipt_events"] = sorted(
+            {str(receipt["hook_event_name"]) for receipt in receipts}
+        )
+        summary["receipt_sha256"] = sorted(
+            str(receipt["receipt_sha256"]) for receipt in receipts
+        )
+    except CanaryDefect as error:
+        summary["error"] = str(error)
+        summary["valid"] = False
+    write_json(evidence_dir / "evidence.json", summary)
+    return summary
 
 
 def next_attempt_number(evidence_root: Path) -> int:
@@ -763,37 +1117,62 @@ def classify_attempt(
     host: subprocess.CompletedProcess[str],
     direct_result: dict[str, object],
     host_result_path: Path,
+    hook_evidence: dict[str, object],
+    *,
+    hook_trust_mode: str,
 ) -> dict[str, object]:
     streams = f"{host.stdout}\n{host.stderr}"
-    hook_status = (
-        "executed"
-        if "ARW_OBSERVATIONAL_HOOK" in streams
-        else "discovered-untrusted-skipped"
-    )
+    command_evidence = route_command_evidence(host.stdout)
+    invoked = any(record["successful"] for record in command_evidence)
+    receipt_count = int(hook_evidence.get("receipt_count", 0))
+    receipt_events = hook_evidence.get("receipt_events", [])
+    if receipt_count and hook_trust_mode == "automation-bypass":
+        hook_status = "automation-bypass-executed"
+    elif receipt_count and hook_trust_mode == "persisted-trust":
+        hook_status = "persisted-trusted-executed"
+    elif hook_trust_mode == "automation-bypass":
+        hook_status = "automation-bypass-no-receipt"
+    else:
+        hook_status = "persisted-trust-not-proven"
     if AUTH_PATTERN.search(streams):
         classification = "authentication-required"
         reason = "Codex host reported an explicit authentication failure"
         route_result = None
-        invoked = False
     else:
         try:
             route_result = json.loads(host_result_path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError):
             route_result = None
-        invoked = command_events_invoked_route(host.stdout)
-        if host.returncode == 0 and route_result == direct_result and invoked:
+        if not hook_evidence.get("valid"):
+            classification = "non-authentication-defect"
+            reason = f"installed hook evidence was invalid: {hook_evidence.get('error')}"
+        elif hook_trust_mode == "automation-bypass" and (
+            receipt_count < 1 or "SessionStart" not in receipt_events
+        ):
+            classification = "non-authentication-defect"
+            reason = "automation hook bypass did not retain a valid SessionStart receipt"
+        elif host.returncode == 0 and route_result == direct_result and invoked:
             classification = "pass"
-            reason = "fresh installed host invoked the installed skill route"
+            reason = (
+                "fresh installed host invoked the installed skill route and retained "
+                "non-authoritative hook evidence"
+            )
         else:
             classification = "non-authentication-defect"
             reason = (
-                "host route did not return the direct installed route or lacked installed command evidence"
+                "host route did not return the direct installed route or lacked "
+                "installed command evidence"
             )
     return {
         "attempt": attempt,
         "classification": classification,
+        "hook_definition_sha256": hook_evidence.get("definition_sha256"),
+        "hook_receipt_count": receipt_count,
+        "hook_receipt_events": receipt_events,
         "hook_status": hook_status,
+        "hook_trust_mode": hook_trust_mode,
         "host_status": host.returncode,
+        "installed_command_evidence": command_evidence,
         "installed_identity_sha256": installed["identity"]["installed_sha256"],
         "installed_skill_invoked": invoked,
         "reason": reason,
@@ -817,6 +1196,7 @@ def run_host_route(
             "codex",
             "exec",
             "--ephemeral",
+            "--dangerously-bypass-hook-trust",
             "--ignore-rules",
             "--skip-git-repo-check",
             "--sandbox",
@@ -831,8 +1211,10 @@ def run_host_route(
             (
                 "This is an execution canary. Use the shell tool: locate the installed "
                 "academic-research-workbench SKILL.md under $CODEX_HOME/plugins/cache, read it, "
-                "derive that installed plugin root, and execute its bin/arw route --json "
-                "command exactly once. Return the command's raw JSON unchanged. A response "
+                "then derive the plugin root exactly two parent directories above SKILL.md "
+                "(skill directory -> skills directory -> plugin root), and execute that root's "
+                "bin/arw route --json command exactly once. Return the command's raw JSON "
+                "unchanged. A response "
                 "without a command_execution event is invalid; do not answer from memory, "
                 "schema constants, or repository source."
             ),
@@ -844,6 +1226,7 @@ def run_host_route(
             "codex",
             "exec",
             "--ephemeral",
+            "--dangerously-bypass-hook-trust",
             "--sandbox",
             "read-only",
             "<installed-skill-route-prompt>",
@@ -907,10 +1290,20 @@ def finalize_route(
             "installed_skill_invoked": True,
         },
         "hooks": {
+            "authority": "none",
             "canonical_write": False,
             "contract": "default-plugin-hooks-file",
+            "definition_sha256": classification["hook_definition_sha256"],
             "mode": "observational-read-only",
+            "receipt_contract": "arw.codex-hook-observation.v1",
+            "receipt_count": classification["hook_receipt_count"],
+            "receipt_events": classification["hook_receipt_events"],
             "status": classification["hook_status"],
+            "trust": (
+                "automation-bypass-not-persisted"
+                if classification["hook_trust_mode"] == "automation-bypass"
+                else "persisted-trust"
+            ),
         },
         "custom_agents": {
             "plugin_distribution": "unproven",
@@ -924,7 +1317,14 @@ def finalize_route(
             {
                 "attempt": record["attempt"],
                 "classification": record["classification"],
+                "hook_receipt_count": record.get("hook_receipt_count", 0),
+                "hook_status": record["hook_status"],
                 "installed_identity_sha256": record["installed_identity_sha256"],
+                "successful_installed_commands": sum(
+                    1
+                    for command in record.get("installed_command_evidence", [])
+                    if command.get("successful")
+                ),
                 "reason": record["reason"],
             }
             for record in attempt_records
@@ -1091,12 +1491,20 @@ def run_route(args: argparse.Namespace) -> int:
             host = run_host_route(installed, attempt_dir)
         finally:
             (installed["codex_home"] / "auth.json").unlink(missing_ok=True)
+        hook_trust_mode = "automation-bypass"
+        hook_evidence = collect_hook_evidence(
+            installed,
+            attempt_dir / "hook",
+            trust_mode=hook_trust_mode,
+        )
         classification = classify_attempt(
             attempt,
             installed,
             host,
             direct_result,
             attempt_dir / "host-result.json",
+            hook_evidence,
+            hook_trust_mode=hook_trust_mode,
         )
         write_json(attempt_dir / "classification.json", classification)
         last_reason = str(classification["reason"])

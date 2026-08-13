@@ -119,6 +119,7 @@ def project_canonical_records(
             raw_edges.append((edge, entity_id, target, evidence_digest))
 
     node_ids = {node.entity_id for node in nodes}
+    source_digests = {node.entity_id: node.source_digest for node in nodes}
     graph_edges: list[GraphEdge] = []
     for raw, source_id, target_id, evidence_digest in raw_edges:
         if target_id not in node_ids:
@@ -134,7 +135,7 @@ def project_canonical_records(
                     from_entity_id=source_id,
                     to_entity_id=target_id,
                     evidence_digest=evidence_digest,
-                    source_digest=_require_digest(raw.get("source_digest", next(node.source_digest for node in nodes if node.entity_id == source_id)), "edge.source_digest"),
+                    source_digest=_require_digest(raw.get("source_digest", source_digests[source_id]), "edge.source_digest"),
                     supersession_state=raw.get("supersession_state", "active"),
                     ledger_watermark=edge_watermark,
                     attributes=dict(raw.get("attributes", {})),

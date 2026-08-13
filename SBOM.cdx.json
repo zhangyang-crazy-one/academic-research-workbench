@@ -73,7 +73,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c47ad15db702f592364152ad47ef9cbd7a6fb196d99a2ed3b36489111e1314a7"
+          "content": "e46e33e9f3db3f03050878f1a19f3be86bb032c15b354afd909460722f4073eb"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -113,6 +113,18 @@
         }
       ],
       "name": "schemas/v1/source-manifest.schema.json",
+      "type": "file",
+      "version": "1"
+    },
+    {
+      "bom-ref": "artifact:vendor/mcp-manifest.json",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4302f4db1acdbe7f57a247712af9fea2b7cd0361fca9dc4af5e1e0be1bc1ad03"
+        }
+      ],
+      "name": "vendor/mcp-manifest.json",
       "type": "file",
       "version": "1"
     },
@@ -2313,7 +2325,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9cd8355a2bf04a3ff91a3883bcb7dad6265859926c5e5b6988c6bbdd35ef528c"
+          "content": "e782b4bd5359f210c05492ad9c836cccfc393fc75573cb4ac3cb9f6dc49922d0"
         }
       ],
       "licenses": [
@@ -2928,7 +2940,7 @@
       ],
       "name": "academic-research-skills",
       "type": "library",
-      "version": "0.1.19"
+      "version": "0.1.20"
     },
     {
       "bom-ref": "source:experiment-agent",

@@ -16,6 +16,10 @@ Return the command's JSON result unchanged. It must declare the ARS workflow fam
 execution mode, source adapter version, and disabled experiment status. Do not infer a
 different family, mode, domain ontology, or experiment permission outside that result.
 
+The modified Academic Research Suite is bundled at
+`<installed-plugin-root>/skills/academic-research-suite/`; use that exact router and
+its workflow files for ARS tasks. Do not substitute an external ARS installation.
+
 This installed skill is the canonical model-invocable route. Plugin-native custom-agent
 distribution is unproven; when delegation is later requested, use native Codex subagents
 with immutable assignment-injected ARS role instructions. The companion hook is

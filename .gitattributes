@@ -1,4 +1,5 @@
 # Keep project planning and local qualification material out of source archives.
+/AGENTS.md export-ignore
 .planning export-ignore
 .evidence export-ignore
 build export-ignore

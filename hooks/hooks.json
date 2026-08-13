@@ -2,16 +2,42 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "printf '%s\\n' 'ARW_OBSERVATIONAL_HOOK: invoke the installed academic-research-workbench skill; hooks do not authorize actions or write canonical state.'",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/arw_hook.py\"",
+            "timeout": 10,
             "statusMessage": "Loading observational workbench routing context"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/arw_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the bounded subagent observation"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/arw_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the bounded parent continuation"
           }
         ]
       }
     ]
   }
 }
-

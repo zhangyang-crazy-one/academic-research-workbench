@@ -428,10 +428,7 @@ class ClaimCapabilityDecision:
 def _decision(value: EvidenceAccessDecision | Mapping[str, Any] | None) -> EvidenceAccessDecision | None:
     if value is None:
         return None
-    try:
-        return seal_evidence_access_decision(value)
-    except EvidenceAccessError:
-        return None
+    return seal_evidence_access_decision(value)
 
 
 def _access_blocker(decision: EvidenceAccessDecision | None) -> tuple[list[str], list[str]]:
@@ -469,11 +466,15 @@ def _fresh_integrity(
     return [], []
 
 
-def _fresh_until(value: str | None, now: datetime | str | None) -> bool:
+def _fresh_until(
+    value: str | None, now: datetime | str | None, *, observed_at: str | None = None
+) -> bool:
     if value is None:
         return False
     try:
         current = _coerce_utc(now)
+        if observed_at is not None and _parse_utc(observed_at) > current:
+            return False
         return current <= _parse_utc(value)
     except (TypeError, ValueError):
         return False
@@ -544,7 +545,9 @@ def _lifecycle_record(
             return None
         if record.input_sha256 != tuple(sorted(set(input_sha256))):
             return None
-        if record.verdict != "PASS" or not _fresh_until(record.fresh_until, now):
+        if record.verdict != "PASS" or not _fresh_until(
+            record.fresh_until, now, observed_at=record.observed_at
+        ):
             return None
         return record
     except Exception:
@@ -573,6 +576,8 @@ def _lifecycle_block_reason(
             return "lifecycle_receipt_input_mismatch"
         if record.verdict != "PASS":
             return "lifecycle_receipt_not_pass"
+        if _parse_utc(record.observed_at) > _coerce_utc(now):
+            return "lifecycle_receipt_not_yet_observed"
         if not _fresh_until(record.fresh_until, now):
             return "lifecycle_receipt_stale"
     except Exception:
@@ -607,7 +612,12 @@ def evaluate_claim_capability(
 
     if capability not in CLAIM_CAPABILITIES:
         raise ValueError(f"unknown claim capability: {capability}")
-    decision = _decision(access_decision)
+    try:
+        decision = _decision(access_decision)
+    except EvidenceAccessError:
+        return ClaimCapabilityDecision(
+            capability, "BLOCKED", ("access_decision_invalid",), ("evidence-access-decision",)
+        )
     reasons, replacements = _access_blocker(decision)
     scope = decision.scope if decision else ""
     if caller_claims:

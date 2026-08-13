@@ -1,0 +1,48 @@
+{
+  "schema_version": "arw.mcp-integration-manifest.v1",
+  "name": "codebase-memory-mcp",
+  "arw_component_id": "file-base",
+  "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
+  "upstream_commit": "ee68144af5453addda995a27cce8142999f318fb",
+  "upstream_git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
+  "upstream_source_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+  "patched_source_tree_sha256": "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1",
+  "source_materialization": "vendor/sources/file-base",
+  "binary": {
+    "path": ".file-base/bin/file-base",
+    "staged_path": "libexec/file-base-mcp",
+    "sha256": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
+  },
+  "patches": [
+    {
+      "order": 1,
+      "path": "vendor/patches/file-base/0001-file-base-server-name.patch",
+      "sha256": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+    },
+    {
+      "order": 2,
+      "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
+      "sha256": "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029"
+    },
+    {
+      "order": 3,
+      "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
+      "sha256": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+    },
+    {
+      "order": 4,
+      "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
+      "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
+    }
+  ],
+  "protocol": "MCP-2025-11-25-stdio",
+  "capabilities": [
+    "bounded-list-files",
+    "confined-read-file",
+    "bounded-search-files",
+    "outline-and-context",
+    "parent-only-generation-builder",
+    "research-graph-projection"
+  ],
+  "license": "MIT"
+}

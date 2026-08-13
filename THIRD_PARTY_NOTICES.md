@@ -1,7 +1,7 @@
 # Academic Research Workbench Third-Party Notices
 The collective plugin has mixed licensing. Component identities remain separate.
 ## Source components
-- `academic-research-skills` `0.1.19` — `CC-BY-NC-4.0`; source `vendor/sources/academic-research-skills`.
+- `academic-research-skills` `0.1.20` — `CC-BY-NC-4.0`; source `vendor/sources/academic-research-skills`.
 - `experiment-agent` `pinned` — `CC-BY-NC-4.0`; source `vendor/sources/experiment-agent`.
 - `file-base` `v0.9.0-2-gee68144` — `MIT`; source `vendor/sources/file-base`.
 

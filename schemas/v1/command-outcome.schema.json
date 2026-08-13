@@ -50,6 +50,12 @@
         "deterministic_commit_cursor": {"anyOf": [{"prefixItems": [{"minimum": 0, "type": "integer"}, {"minimum": 0, "type": "integer"}, {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}], "items": false, "type": "array"}, {"type": "null"}]},
         "panel_reports": {"items": {}, "type": "array"},
         "panel_syntheses": {"items": {}, "type": "array"},
+        "panel_manifests": {"items": {}, "type": "array"},
+        "host_identity_receipts": {"items": {}, "type": "array"},
+        "human_authorities": {"items": {}, "type": "array"},
+        "blocker_release_history": {"items": {}, "type": "array"},
+        "canonical_event_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
+        "accepted_evidence_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
         "hook_observations": {"items": {}, "type": "array"},
         "gates": {"items": {}, "type": "array"},
         "human_decision_history": {"items": {}, "type": "array"},
@@ -57,7 +63,7 @@
         "reducer_version": {"const": "1.0.0", "type": "string"},
         "schema_version": {"const": "1.0.0", "type": "string"}
       },
-      "required": ["run_id", "workflow_definition_id", "stage", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "recovery_health", "blockers", "pending_human_decisions", "active_attempts", "legal_next_transitions", "accepted_artifact_manifest_sha256", "accepted_passport_sha256", "consumed_passport_sha256", "execution_mode", "execution_provenance", "role_catalog_sha256", "policy_sha256", "dag_sha256", "assignments", "assignment_revisions", "attempts", "proposals", "accepted_proposal_sha256", "rejected_proposal_sha256", "deterministic_commit_cursor", "panel_reports", "panel_syntheses", "hook_observations", "gates", "human_decision_history", "status", "reducer_version", "schema_version"],
+      "required": ["run_id", "workflow_definition_id", "stage", "accepted_revision", "ledger_head_sha256", "current_passport_sha256", "recovery_health", "blockers", "pending_human_decisions", "active_attempts", "legal_next_transitions", "accepted_artifact_manifest_sha256", "accepted_passport_sha256", "consumed_passport_sha256", "execution_mode", "execution_provenance", "role_catalog_sha256", "policy_sha256", "dag_sha256", "assignments", "assignment_revisions", "attempts", "proposals", "accepted_proposal_sha256", "rejected_proposal_sha256", "deterministic_commit_cursor", "panel_reports", "panel_syntheses", "panel_manifests", "host_identity_receipts", "human_authorities", "blocker_release_history", "canonical_event_sha256", "accepted_evidence_sha256", "hook_observations", "gates", "human_decision_history", "status", "reducer_version", "schema_version"],
       "type": "object"
     },
     "blocker": {
@@ -82,7 +88,18 @@
     },
     "attempt": {
       "additionalProperties": false,
-      "properties": {"attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, "base_revision": {"minimum": 0, "type": "integer"}, "consumed_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"}},
+      "properties": {
+        "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "base_revision": {"minimum": 0, "type": "integer"},
+        "consumed_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "type": "array"},
+        "assignment_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]},
+        "assignment_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+        "attempt_number": {"minimum": 1, "type": "integer"},
+        "status": {"type": "string"},
+        "proposal_nonce": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]},
+        "host_agent_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "proposal_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]}
+      },
       "required": ["attempt_id", "base_revision", "consumed_sha256"],
       "type": "object"
     }

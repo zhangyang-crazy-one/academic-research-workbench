@@ -1,23 +1,23 @@
 [build-system]
-requires = ["hatchling==1.31.0"]
+requires = ["hatchling>=1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "academic-research-workbench"
 version = "0.1.0"
 description = "Headless, auditable research-workflow control plane for Codex."
-requires-python = ">=3.13,<3.15"
+requires-python = ">=3.13"
 dependencies = [
-  "jsonschema==4.26.0",
-  "portalocker==3.2.0",
-  "pydantic==2.13.4",
+  "jsonschema>=4.26.0",
+  "portalocker>=3.2.0",
+  "pydantic>=2.13.4",
 ]
 
 [dependency-groups]
 dev = [
-  "hatchling==1.31.0",
-  "PyYAML==6.0.3",
-  "pytest==9.1.1",
+  "hatchling>=1.31.0",
+  "PyYAML>=6.0.3",
+  "pytest>=9.1.1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -32,4 +32,4 @@ markers = [
 
 [tool.uv]
 package = true
-required-version = "==0.11.28"
+required-version = ">=0.11.28"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import signal
 from datetime import UTC, datetime
@@ -72,6 +73,29 @@ from arw.workflows import (
     require_workflow,
 )
 
+_logger = logging.getLogger("arw.runtime")
+
+
+def _discard_orphan(root: Path, relative: str, digest: str | None) -> None:
+    """Remove one unreferenced content-addressed manifest after a failed accept.
+
+    The writer lock is held for the whole ``_execute`` transaction, so the
+    digest can only name a file installed by the current attempt or by a
+    previously failed attempt; no accepted event can reference it.
+    """
+
+    if digest is None:
+        return
+    try:
+        (root / relative / f"{digest}.json").unlink(missing_ok=True)
+    except OSError as error:
+        _logger.warning(
+            "could not remove orphaned manifest %s/%s.json: %s",
+            relative,
+            digest,
+            error,
+        )
+
 
 class CommandOutcome(StrictModel):
     accepted: bool
@@ -129,6 +153,7 @@ class RuntimeCommandService:
         payload_factory,
         prevalidate=None,
         after_append=None,
+        rollback=None,
         now: datetime | None = None,
     ) -> CommandOutcome:
         effective_now = now or datetime.strptime(
@@ -209,14 +234,22 @@ class RuntimeCommandService:
                     now=effective_now,
                 )
             except (ReducerError, WorkflowDefinitionError) as error:
+                if rollback is not None:
+                    rollback()
                 return self._rejection(state, "invalid-command", str(error))
-            event, appended = append_runtime_event_unlocked(root, replayed, candidate)
+            try:
+                event, appended = append_runtime_event_unlocked(root, replayed, candidate)
+            except JournalError:
+                if rollback is not None:
+                    rollback()
+                raise
             accepted_state = reduce_events(
                 appended.workflow_definition_id,
                 appended.events,
                 now=effective_now,
             )
             if accepted_state != reduced:
+                # The event is durable here, so the candidate's manifest must stay.
                 raise JournalError("post-append reducer state differs from validated candidate")
             if after_append is not None:
                 after_append(accepted_state, event)
@@ -470,6 +503,11 @@ class RuntimeCommandService:
             digest_holder["value"] = installed.stem
             return None
 
+        def rollback():
+            _discard_orphan(
+                self.run_root, "manifests/artifacts/sha256", digest_holder.get("value")
+            )
+
         return self._execute(
             request,
             event_type="artifact.accepted",
@@ -480,6 +518,7 @@ class RuntimeCommandService:
                 artifact_sha256=request.content_sha256,
                 attempt_id=request.attempt_id,
             ),
+            rollback=rollback,
         )
 
     def create_checkpoint(self, request: CheckpointRequest) -> CommandOutcome:
@@ -544,18 +583,29 @@ class RuntimeCommandService:
             digest_holder["value"] = installed.stem
             return None
 
-        def after_append(state, _event):
+        def rollback():
+            _discard_orphan(self.run_root, "passports/sha256", digest_holder.get("value"))
+
+        def after_append(state, event):
             if os.environ.get("ARW_TEST_FAILPOINT") == "post-passport-event-pre-pointer-sigkill":
                 os.kill(os.getpid(), signal.SIGKILL)
-            write_passport_pointer(
-                self.run_root,
-                PassportPointer(
-                    run_id=state.run_id,
-                    passport_sha256=digest_holder["value"],
-                    accepted_revision=state.accepted_revision,
-                    ledger_head_sha256=state.ledger_head_sha256,
-                ),
-            )
+            try:
+                write_passport_pointer(
+                    self.run_root,
+                    PassportPointer(
+                        run_id=state.run_id,
+                        passport_sha256=digest_holder["value"],
+                        accepted_revision=state.accepted_revision,
+                        ledger_head_sha256=state.ledger_head_sha256,
+                    ),
+                )
+            except OSError as error:
+                _logger.warning(
+                    "passport.accepted event %s committed but Passport pointer "
+                    "could not be written: %s",
+                    event.event_id,
+                    error,
+                )
 
         return self._execute(
             request,
@@ -571,6 +621,7 @@ class RuntimeCommandService:
                 fresh_until=request.fresh_until,
             ),
             after_append=after_append,
+            rollback=rollback,
         )
 
     def resume(self, request: ResumeRequest) -> CommandOutcome:

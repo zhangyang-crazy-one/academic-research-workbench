@@ -463,7 +463,7 @@ class ProvenanceIngestResult:
 
 def seal_experiment_provenance(value: Mapping[str, Any] | ExperimentProvenance) -> ExperimentProvenance:
     if isinstance(value, ExperimentProvenance):
-        value = value.model_dump(mode="json")
+        return value
     try:
         return ExperimentProvenance.model_validate(value)
     except Exception as error:
@@ -587,6 +587,10 @@ def evaluate_controlled_execution_policy(
     """Pure fail-closed gate evaluation; this function never executes a process."""
 
     checked = seal_experiment_provenance(provenance)
+    # The configuration/artifacts digests are derived properties; compute them
+    # once instead of re-hashing canonical bytes on every receipt kind check.
+    checked_configuration_sha256 = checked.configuration_sha256
+    checked_artifacts_sha256 = checked.artifacts_sha256
     current = datetime.now(UTC) if now is None else (_parse_utc(now) if isinstance(now, str) else now.astimezone(UTC))
     reasons: list[str] = []
     replacements: list[str] = []
@@ -617,9 +621,9 @@ def evaluate_controlled_execution_policy(
             reasons.append(f"{kind}_not_pass")
         if receipt.subject_sha256 != checked.provenance_sha256:
             reasons.append(f"{kind}_subject_mismatch")
-        if receipt.configuration_sha256 != checked.configuration_sha256:
+        if receipt.configuration_sha256 != checked_configuration_sha256:
             reasons.append(f"{kind}_configuration_mismatch")
-        if receipt.artifacts_sha256 != checked.artifacts_sha256:
+        if receipt.artifacts_sha256 != checked_artifacts_sha256:
             reasons.append(f"{kind}_artifacts_mismatch")
         if _parse_utc(receipt.valid_until) <= current:
             reasons.append(f"{kind}_stale")

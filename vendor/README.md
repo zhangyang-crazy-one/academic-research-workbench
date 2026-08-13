@@ -17,3 +17,10 @@ checks their Git-tree and content-tree hashes, and atomically creates the local
 
 Do not add `vendor/sources/` back to Git. Commit source-manifest changes,
 patches, license notices, and SBOM updates instead.
+
+`mcp-manifest.json` is intentionally small and committed. It names the
+modified upstream `DeusData/codebase-memory-mcp` integration, binds the exact
+source and four-patch series to the staged `file-base` binary, and records the
+MCP protocol/capability profile. The 1.3 GiB `vendor/sources/file-base`
+materialization remains ignored; it is reproducible from the pinned source
+manifest and patches.

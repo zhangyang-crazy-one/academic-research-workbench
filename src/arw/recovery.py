@@ -253,7 +253,7 @@ def validate_recovery_boundary(
     if damaged.fault_offset is None or damaged.fault_class is None:
         raise RecoveryError("recovery boundary has no classified damaged segment")
     receipt = load_recovery_receipt(root, payload.recovery_id)
-    receipt_path = root / f"quarantine/{payload.recovery_id}/receipt.json"
+    receipt_path = _safe_file(root, f"quarantine/{payload.recovery_id}/receipt.json")
     receipt_bytes = receipt_path.read_bytes()
     expected_raw_path = f"quarantine/{payload.recovery_id}/segment.raw"
     raw_path = _safe_file(root, expected_raw_path)
@@ -276,7 +276,7 @@ def validate_recovery_boundary(
         receipt.fault_class == damaged.fault_class,
         receipt.quarantine_raw_path == expected_raw_path,
         receipt.quarantine_raw_sha256 == sha256_hex(raw),
-        raw == (root / damaged.relative_path).read_bytes(),
+        raw == _safe_file(root, damaged.relative_path).read_bytes(),
         receipt.prior_valid_revision == event.expected_revision,
         receipt.prior_valid_head_sha256 == event.prev_event_sha256,
         receipt.operator_id == event.actor_id,
