@@ -276,6 +276,11 @@ def test_installed_route_requires_qualification_lock(
     tmp_path: Path,
 ) -> None:
     installed, outside, environment = installed_stage
+    # Qualified stages now bundle their lock; simulate a lock-less install
+    # to prove route still fails closed instead of degrading to PASS.
+    lock_file = installed / "supply-chain/integration-lock.json"
+    if lock_file.is_file():
+        lock_file.unlink()
     command_environment = {
         **environment,
         "HOME": str(tmp_path / "home"),

@@ -98,6 +98,14 @@ Before WebSearch-based verification, run a batch S2 API check on ALL references.
 | `DOI_MISMATCH` | Flag as SERIOUS — possible DOI Misdirection (Compound Deception Pattern #5) |
 | `API_UNAVAILABLE` | Skip A0, proceed to A1 for all references |
 
+#### A0.5 Cache Staleness Advisory (#541 — advisory-only)
+
+The executable layer is the verification gate itself (#541 closed the Delta-2 forward-decl): `verification_gate.verify_citation` / `verify_passport` run cache-through by default and stamp `cache_age_days` + `cache_stale_advisory` (threshold `ARS_CACHE_STALE_ADVISORY_DAYS`, default 30, `0` disables) on every summary row that was served from cache. Read those fields off the summaries: for each row flagged `cache_stale_advisory`, emit an advisory row with stable ID `ADV-CACHE-<n>` (citation_key, cache age in days, threshold, re-verified-live?) into the Integrity Report's advisory table — the same advisory-row semantics as E4/E5: not an issue, never gates, displayed with per-row options at the MANDATORY checkpoint (proceed open is the default; the user may run `/ars-cache-invalidate <citation_key>` to force a live re-verification next run).
+
+**Opt-in live re-verification (`ARS_CACHE_REVALIDATE=1`)**: the gate re-verifies stale cached rows live (per-row bypass, then re-population) instead of serving them — the session-native, executable form of the survey's scheduled re-validation. Cost scales with the stale-row count. Default off = advisory-only.
+
+**Invalidation cascade (unconditional)**: after ANY re-validation (manual invalidate + re-verify, or the opt-in path above), the affected citation's verification summary row is regenerated and Phase E audit verdicts for claims citing that reference re-run at this gate before the report is emitted — unconditionally, not only when a change is detected (no baseline diff exists to condition on). Framing note: Ren et al. (2026, arXiv:2607.13104 §6.2.3) names scheduled review-and-attenuation as a core memory-update pattern and staleness as the signature failure mode of integrated external knowledge; applying it to the citation cache is ARS's design inference.
+
 A0 is additive — it does not replace A1. The audit trail must record both A0 and A1 results.
 
 #### A1. Existence Check
@@ -458,16 +466,16 @@ Scan the paper for all quantitative/factual claims:
 2. Identify all categorical assertions ("X is the largest...", "Y was the first to...")
 3. Identify all trend claims ("increasing", "declining", "stable")
 4. Identify all causal claims ("X causes Y", "X leads to Y")
-5. For each claim, record: claim text, cited source(s), paper section, page/line
+5. Assign every claim a stable claim_id. Record: claim text, cited source(s) by ref_slug, each source's writer anchor, paper section, page/line, selection tier (#549 — Mode 1: HIGH-IMPACT / RANDOM / TOP-UP / NOT-SELECTED; Mode 2: ALL)
 
 Output: Claim Registry table
 ```
 
 #### E2. Source Tracing
 ```
-For each claim in the registry:
+For each selected claim (Mode 1: the #549 stratified selection — HIGH-IMPACT / RANDOM / TOP-UP tiers; Mode 2: the whole registry):
 1. Locate the specific passage in the cited source that supports the claim
-2. Use WebSearch + DOI lookup to find the original source text
+2. Use WebSearch + DOI lookup to find the original source text during verification. Before building an evidence row, hold that exact source text explicitly in the current session; the builder and renderer never follow a URL, DOI, source_pointer, or path
 3. If source is behind paywall, note as UNVERIFIABLE_ACCESS
 
 Priority:
@@ -488,6 +496,44 @@ Compare claim text vs source text:
 Flag any discrepancies with verdict.
 ```
 
+#### E3.1. Persisted Evidence Rows (#656)
+
+For every selected tuple, use `scripts/evidence_rows.py` to build and validate
+one persisted row against
+`shared/contracts/evidence/evidence_row.schema.json`. The generic contract is
+`schema_version: evidence-row/1.0`; V1 uses
+`surface: phase_e_claim_verification`. Call the runtime's `build(...)` and
+`validate(...)` APIs with the exact session-held source text (or the explicit
+absence/failure state). Never hand-author hashes, excerpt provenance, cache
+replay, or a parallel row vocabulary.
+
+Persist one row per `(claim_id, ref_slug, anchor)` tuple in
+`phases.E_claims.evidence_rows[]`. A claim citing multiple sources emits
+multiple rows; an anchorless selected tuple emits its explicit empty-state row.
+Do not emit rows for `NOT-SELECTED` registry entries. Preserve document order
+and the full array: there is no total row cap, deduplication, reordering, or
+silent truncation. Evidence-row counts do not replace the existing distinct-
+claim counts.
+
+Before emitting the report, require the number of distinct row `claim_id`
+values to equal `E_claims.checked`, the number of distinct claims with verdict
+`VERIFIED` to equal `E_claims.verified`, and every row sharing a `claim_id` to
+repeat the same claim object and verdict. Also compare the complete tuple set
+against the E1 Claim Registry; the runtime count checks do not replace that
+selection audit.
+
+Only explicit session-held source text can support an excerpt. Missing,
+anchorless, access-failed, retrieval-failed, unchecked, or mismatched evidence
+must remain in the runtime-selected empty/unconfirmed state; never fabricate an
+excerpt and never promote excerpt provenance from the Phase E claim verdict.
+Persist the validated row object, not rendered Markdown or HTML.
+
+This carrier is evidentiary display metadata only. It does not change the
+verdict taxonomy below, severity, issue counts, PASS / PASS WITH NOTES / FAIL
+gate, or correction routing. Building, validating, caching, persisting, or
+rendering the rows does not mark a source as human-read and does not write or
+infer `human_read_log` state.
+
 #### Claim Verdict Taxonomy
 ```
 | Verdict              | Severity | Definition                                               |
@@ -499,11 +545,28 @@ Flag any discrepancies with verdict.
 | UNVERIFIABLE_ACCESS  | MEDIUM   | Source exists but full text not accessible                |
 ```
 
-#### Sampling Strategy
+#### Sampling Strategy (#549 — risk-stratified)
 ```
-- Mode 1 (pre-review): 30% random sample of claims (minimum 10 claims)
-- Mode 2 (final-check): 100% of claims
+- Mode 1 (pre-review) — risk-stratified (#549, mirroring the #518 reference-verification tiers):
+  - HIGH-IMPACT claims — verify 100%, no cap. A claim is high-impact if it is: (a) a headline conclusion (abstract- or conclusions-level), (b) numerical (statistic, effect size, percentage, threshold), (c) causal, (d) methods-critical, or (e) disputed (already carrying a contradiction disclosure or reviewer split). Same definition family as `shared/cross_model_verification.md` step 2.
+  - RANDOM sentinel — 10% of the non-high-impact remainder, rounded up (minimum 3, maximum 10; fewer than 3 in the remainder → all of it), preserving unbiased drift detection.
+  - Floor: if the two tiers together select fewer than min(10, total claims), top up at random from the remainder; a paper with fewer than 10 claims total is audited in full (preserves the pre-#549 minimum).
+  - Record each claim's tier in the Claim Registry (`HIGH-IMPACT` / `RANDOM` / `TOP-UP` for selected claims; `NOT-SELECTED` for the rest) so coverage is inspectable. Cost scales with the count of high-impact claims — a results-dense paper approaches 100% coverage at Stage 2.5, which is the point: consequential distortions surface BEFORE the review stage instead of at the Stage 4.5 backstop.
+- Mode 2 (final-check): 100% of claims (unchanged)
 ```
+See `references/claim_verification_protocol.md` § Sampling Strategy (authority).
+
+#### E4. Scope-Conformance Advisory (#547)
+
+See `references/claim_verification_protocol.md` § E4 (authority). Inputs from the dispatch context: RQ Brief `scope` (required — skip with `[E4-SKIPPED: no scope context]` only when IT is unavailable, never guess one) plus optional `sub_question_bindings` and section→sub-question map (absent → compare every section against the full parent `scope`; a fallback, not a skip). During E3, compare each audited claim's population / timeframe / geography / domain against the section's EFFECTIVE scope (named `inherits` axes → their values; omitted axes → parent `scope`; approved deviations replace their axis, so approved extensions are never re-flagged). Emit advisory `SCOPE-BROADENED` rows with stable IDs `ADV-E4-<n>`. Advisory-only, never in the gate's issue count; checkpoint options: proceed open (default) or accept with justification. No reword route is defined and no downstream agent carries an obligation — the rows are visible wherever the Integrity Report travels, and a user-requested reword is an ordinary revision instruction citing the ADV-E4 ID; rows still open at Stage 4.5 remain recorded in the Final Integrity Report deliverable.
+
+#### E5. Novelty-Claim Classification (#548)
+
+See `references/claim_verification_protocol.md` § E5 (authority). E1 category-2 primacy assertions ("Y was the first to...") assert the absence of literature — E2/E3 cannot trace a source for an absence. Classify each against the documented Schema 2 `search_strategy`: `SUPPORTED_WITHIN_SEARCH` (search-bounded wording whose databases + date range match the documented search exactly AND `last_searched_at` recorded, nearest prior work acknowledged or its absence stated) or `UNRESOLVED` (absolute wording, mismatched bound, missing `last_searched_at`, or no documented search). Never "globally verified". Advisory-only, stable IDs `ADV-E5-<n>`, rows are not issues and may remain open on PASS; checkpoint options per row: proceed open (default) / user explicitly confirms the absolute form — both recorded in the checkpoint conversation, not in a report field. No reword route is defined and no downstream agent carries an obligation: a requested bounded reword is an ordinary revision instruction citing the ADV-E5 ID (rows are visible wherever the Integrity Report travels); rows still open at Stage 4.5 remain recorded in the Final Integrity Report deliverable.
+
+#### E6. Claim-Strength Drift (#569) — revision rounds only
+
+See `references/claim_verification_protocol.md` § E6 (authority). Runs ONLY when a prior draft of the same block-anchored paper exists (a revision-round Stage 4.5 or 2.5 re-verification); on a first-pass audit skip with `[E6-SKIPPED: no prior draft]`. This is the epistemic complement to the deterministic `scripts/check_revision_token_conservation.py` (#570): that script conserves numeric/citation tokens; E6 checks whether a touched claim's strength moved along the ladder (`shared/references/claim_strength_ladder.md`). For each claim whose block was touched this round, compare its rung and its load-bearing hedges / null results / limitations / causal caveats against the prior draft; a move (either direction, or a dropped qualifier) that no roadmap item authorized as a *strength change* is flagged `STRENGTH-DRIFTED` with stable ID `ADV-E6-<n>` (claim location, prior rung → current rung or dropped qualifier, the roadmap items the op claimed, direction). Advisory-only, not in the gate's issue count, may remain open on PASS; checkpoint options per row: proceed open (default) / accept the change with a justifying note — both recorded in the checkpoint conversation. No reword route, no downstream obligation; a requested restoration is an ordinary revision instruction citing the ADV-E6 ID; rows still open at Stage 4.5 remain recorded in the Final Integrity Report deliverable.
 
 ---
 
@@ -512,10 +575,10 @@ Flag any discrepancies with verdict.
 ### Mode 1: Initial Verification (Stage 2.5 — Pre-Review Integrity)
 
 **Goal**: Catch all integrity issues before submission for review
-- Execute Phase A (all) + Phase B (30%+ spot-check) + Phase C (all) + **Phase D (30%+ spot-check)** + **Phase E (30% claim spot-check)**
+- Execute Phase A (all) + Phase B (30%+ spot-check) + Phase C (all) + **Phase D (30%+ spot-check)** + **Phase E (risk-stratified claim check, #549)**
 - Phase D executes D1 (paragraph-level originality check, sampling rate >= 30%) + D2 (self-plagiarism check, if author name provided)
-- Phase E executes E1 (claim extraction) + E2 (source tracing) + E3 (cross-referencing) on a 30% random sample of claims (minimum 10 claims)
-- **Phase C4 (#260): the D7 declaration-anchored anti-skip runs on the passport (not sampled — it is a single passport-level check); experiment_alignment_results[] rows are produced for the sampled experiment-backed claims (>= 30%, mirroring the claim spot-check).**
+- Phase E executes E1 (claim extraction) on ALL claims, then E2 (source tracing) + E3 (cross-referencing) on the #549 risk-stratified selection: 100% of HIGH-IMPACT claims + a 10% RANDOM sentinel of the remainder, topped up to min(10, total claims) — fewer than 10 claims total → audit all
+- **Phase C4 (#260): the D7 declaration-anchored anti-skip runs on the passport (not sampled — it is a single passport-level check); experiment_alignment_results[] rows are produced for the sampled experiment-backed claims (>= 30% — C4's own rate; the general claim check is #549 risk-stratified, no longer a flat 30%).**
 - Issues found -> produce correction list -> fix -> re-verify corrected items
 - **Must PASS to proceed to Stage 3 (REVIEW)**
 
@@ -530,6 +593,7 @@ Flag any discrepancies with verdict.
 - **Phase C4 (Experiment Provenance & Claim Alignment, #260) runs the D7 declaration-anchored anti-skip on every passport and produces `experiment_alignment_results[]` for EVERY experiment-backed claim (full, not sampled, at Stage 4.5).** A treated-as-post-#260 passport with the `experiment_intake_declaration` absent is a **FAIL** (even a literature-only run needs `{status: no_experiments_declared}`); a passport referencing experiment results but omitting `experiment_provenance[]` is a **FAIL**, not the legacy advisory case. The full per-condition severity map + the four FAIL conditions are in Phase C4 above.
 - Special focus: Citations, data, and claims added or modified during the revision process
 - ADDITIONALLY: Compare with Stage 2.5 verification results to confirm all previous issues are resolved (this is a supplementary check, not a replacement for fresh verification)
+- **Input (#576 §8): the Stage 3' traceability sidecar's frozen `previously_missed` AND `indeterminate` new-issue records** — forwarded on both routes (Stage 3' → 4.5 direct on Accept/Minor; through 4' with the roadmap on Major). Consume BOTH attributions as integrity-check input, not just cargo: on the no-original-manuscript path EVERY new issue is `indeterminate`, so consuming only `previously_missed` would ignore the whole set. Each record is assessed during the relevant phase (a previously-missed citation problem joins Phase A/B scope; a previously-missed data/claim problem joins Phase C/E scope) and its disposition appears in the report. A contract-mode Stage 3' that ran with no sidecar forwarded is a visible degradation to note (a `[LEGACY-NO-CONTRACT]` legacy run legitimately produces none — note it, never block on it)
 - **Must PASS with zero issues to proceed to Stage 5 (FINALIZE)**
 
 ---
@@ -588,7 +652,7 @@ The following patterns are PROHIBITED in integrity reports:
 | Internal Consistency | -- | Pass/Fail | X inconsistencies |
 | Originality Check (D1) | X (spot-check Z%) | X | X (CLOSE_MATCH / VERBATIM) |
 | Self-Plagiarism (D2) | X | X | X |
-| Claim Verification (E) | X (spot-check Z%) | X | X (MAJOR_DISTORTION / UNVERIFIABLE) |
+| Claim Verification (E) | X of [registry total] (Mode 1: #549 tiers — HIGH-IMPACT: X, RANDOM: X, TOP-UP: X; NOT-SELECTED: X. Mode 2: ALL: X) | X | X (MAJOR_DISTORTION / UNVERIFIABLE) |
 
 ## Phase D: Originality Verification Results
 
@@ -609,6 +673,55 @@ The following patterns are PROHIBITED in integrity reports:
 | MAJOR_DISTORTION | X | X% |
 | UNVERIFIABLE | X | X% |
 | UNVERIFIABLE_ACCESS | X | X% |
+
+**Persisted Phase E evidence rows (#656)** — retain the complete ordered
+`phases.E_claims.evidence_rows[]` array with `scripts/evidence_rows.py` only.
+Use its validated persisted rows, the explicit in-memory session source map,
+and `paginate(...)` / `render_markdown(...)` APIs. Every source-bound row must replay
+against that map before display. The default and maximum page size are 25. Render only the requested page
+with deterministic previous/next or explicit-page navigation; never concatenate
+all pages into one report view. There is no total row cap and no `--all` mode.
+Do not manually reproduce the table or ask a model to reformat it.
+
+The report-rendering step performs no display-time retrieval,
+ambient filesystem/network/API/model call, extraction, state derivation, or
+cache lookup. Replay may recompute the strict once-decode and hashes, but it
+never decodes stored display text again or changes the row. If a consumed report
+is positively identified as pre-#656 and lacks the field, the consumer may use
+explicit `--allow-legacy-absence` and display
+`LEGACY — EVIDENCE ROWS UNAVAILABLE`; missing shape alone is not legacy proof,
+absence is not successful evidence, and claim counts are not excerpts. This
+current producer always persists the field (`[]` only when no tuple was
+selected); it may never use the compatibility flag, and omission or a missing selected row stops
+with a contract failure. Distinct row claim count must equal `E_claims.checked`,
+distinct `VERIFIED` claim count must equal `E_claims.verified`, and repeated
+rows for one claim must agree on claim metadata and verdict. Neither condition
+retroactively changes a historical verdict or the gate criteria below.
+
+**Scope-conformance advisory (#547)** — advisory-only, not counted in verdicts or the gate decision:
+
+| ID | Claim location | Effective scope | Drafted scope | Broadened axis |
+|----|---------------|-----------------|---------------|----------------|
+
+**Novelty-claim classification (#548)** — advisory-only, not counted in verdicts or the gate decision:
+
+| ID | Claim location | Claim wording | Classification | Nearest prior work / recommended bounded rewording |
+|----|---------------|--------------|----------------|---------------------------------------------------|
+
+**Cache staleness advisory (#541)** — advisory-only, not counted in verdicts or the gate decision:
+
+| ID | Citation key | Cache age (days) | Threshold | Re-verified live? |
+|----|-------------|------------------|-----------|-------------------|
+
+**Claim-strength drift advisory (#569, revision rounds)** — advisory-only, not counted in verdicts or the gate decision; empty / `[E6-SKIPPED: no revision evidence]` on a first-pass audit:
+
+| ID | Round | Claim location | Prior rung → current rung (or dropped qualifier) | Roadmap items the op claimed | Direction |
+|----|-------|----------------|--------------------------------------------------|------------------------------|-----------|
+
+**Token-conservation advisory (#570, revision rounds)** — the deterministic `ADV-REV-<n>` signal from `scripts/check_revision_token_conservation.py` (see `pipeline_orchestrator_agent.md` step 3a); advisory-only, not counted in verdicts, empty when every patch op conserved its numeric/citation/protected-term tokens:
+
+| ID | Op / block | Numeric delta | Citation delta | Protected-term delta | Roadmap items the op claimed |
+|----|-----------|---------------|----------------|----------------------|------------------------------|
 
 ## Issue List (Sorted by Severity)
 
@@ -665,12 +778,16 @@ When the environment variable `ARS_CROSS_MODEL` is set, this agent enables cross
 **Consent gate (required before any upload):** When `ARS_CROSS_MODEL` is set, do not send the sampled references automatically. First ask for explicit user consent (if not already granted in this session) and identify the external provider, model, and content class (citation/reference metadata drawn from the user's manuscript) that would be sent. If consent is not granted, log `[CROSS-MODEL-SKIPPED]` and continue with single-model verification. The environment variable alone is not consent to upload user-derived material. See `shared/cross_model_verification.md` for the consent boundary.
 
 **Summary of behavior when enabled (and consent granted):**
-- After Phase A completes, randomly sample 30% of references (min 5, max 15; if total < 5, sample all)
+- After Phase A completes, select references by **risk stratification** (#518; replaces the pre-#518 uniform random 30%). Four tiers; a reference qualifying for more than one gets the highest tier that applies (`HIGH-IMPACT` > `NEW-CHANGED` > `CONTROL`/`RANDOM`) and is verified once:
+  - **HIGH-IMPACT — verify 100%, no cap (both gates):** every reference supporting a headline conclusion, a numerical claim, a causal claim, a methods-critical claim, or a disputed claim (contradiction disclosure / reviewer split). Classify at selection time and record the tier per reference.
+  - **RANDOM (Stage 2.5 only) — the non-high-impact remainder:** 10% sample, rounded up (min 3, max 10; if the remainder < 3, sample all of it).
+  - **NEW-CHANGED (Stage 4.5 only) — verify 100%, no cap:** every reference supporting a claim that is new or changed since Stage 2.5, whatever its impact class.
+  - **CONTROL (Stage 4.5 only) — the unchanged, non-high-impact remainder:** 10% sample, rounded up (min 3, max 10; fewer than 3 → all) to catch silent drift. CONTROL replaces RANDOM at the final gate.
 - Send **one API call per reference** (not a batch) to the cross-model for independent verification — the cross-model does NOT see Claude's result, and the call patterns enable the provider's web-search/grounding tool so "search the web to confirm" is actually executable
 - Each cross-model verdict is one of `VERIFIED` / `MISMATCH` / `NOT_FOUND` / `NOT_SEARCHED`. A `VERIFIED` with no supporting source URL/DOI, or a **successful (2xx)** response that carries no grounding evidence, is treated as `NOT_SEARCHED` (a non-2xx response is a transport error, not `NOT_SEARCHED` — see Graceful degradation)
 - Disagreements (Claude `VERIFIED` vs cross-model `NOT_FOUND` / `MISMATCH`) → `[CROSS-MODEL-DISAGREEMENT]` → prioritized for human review
 - `NOT_SEARCHED` / ungrounded results **never count as agreement** with a Claude `VERIFIED`: count them separately and surface them for re-run or human review — an ungrounded cross-model verdict carries no evidence and must not be laundered into a confirmation
-- Add "Cross-Model Verification Results" section to the integrity report (with the per-reference Source column and a `NOT_SEARCHED` count)
+- Add "Cross-Model Verification Results" section to the integrity report (with the per-reference Tier and Source columns and a `NOT_SEARCHED` count)
 
 **When not enabled:** Standard single-model verification. No behavioral change.
 
@@ -682,9 +799,9 @@ When the environment variable `ARS_CROSS_MODEL` is set, this agent enables cross
 
 | Dimension | Requirement |
 |-----------|------------|
-| Coverage | References 100%, statistical data 100%, citation context >= 30% (initial) / 100% (final), originality >= 30% (initial) / >= 50% (final), claim verification >= 30% (initial) / 100% (final) |
+| Coverage | References 100%, statistical data 100%, citation context >= 30% (initial) / 100% (final), originality >= 30% (initial) / >= 50% (final), claim verification #549 risk-stratified (initial: 100% HIGH-IMPACT + 10% random sentinel, min(10, total)) / 100% (final) |
 | Accuracy | Every determination must be supported by WebSearch evidence |
 | Transparency | Audit Trail fully documented, available for third-party review |
 | Efficiency | Do existence batch checks first, then deep investigation on NOT_FOUND / MISMATCH items |
 | No overstepping | Do not make paper quality judgments, only factual verification |
-| Cross-model (optional) | When `ARS_CROSS_MODEL` is set, 30% sample (min 5, max 15) cross-verified by second model, **one grounded API call per reference**; ungrounded (`NOT_SEARCHED`) verdicts never count as agreement |
+| Cross-model (optional) | When `ARS_CROSS_MODEL` is set, risk-stratified selection (HIGH-IMPACT 100% uncapped; Stage 2.5 adds a 10% RANDOM remainder sample, min 3 / max 10; Stage 4.5 instead adds NEW-CHANGED 100% uncapped + a 10% CONTROL sample of the unchanged remainder, min 3 / max 10; one tier per reference, highest wins) cross-verified by second model, **one grounded API call per reference**; ungrounded (`NOT_SEARCHED`) verdicts never count as agreement |

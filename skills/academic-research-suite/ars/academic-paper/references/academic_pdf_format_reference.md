@@ -27,19 +27,6 @@ input is a Markdown report rather than a complete journal manuscript.
   ACL/IEEE/GB scholarly norms. If a venue family is declared, follow
   `venue_family_hard_packs.md` for that family only.
 
-## Paragraph Indentation Rules
-
-- Inspect the official class/style before changing paragraph indentation. Note
-  the effective `\parindent`, `\parskip`, and the class policy for the first
-  paragraph after a heading.
-- Preserve the venue default globally. If a deliberately parallel summary or
-  conclusion block should share one visual treatment, apply a local
-  `\noindent` only to the exceptional paragraph; do not zero the document-wide
-  `\parindent` to fix a single mismatch.
-- Review indentation in the rendered PDF, not only in source. A heading-adjacent
-  first paragraph can be unindented by the class while the next paragraph uses
-  the normal indent, even when the two source paragraphs look symmetric.
-
 ## Table Rules
 
 - Use `booktabs` and `longtable`.
@@ -92,22 +79,8 @@ pandoc report.academic.md \
 
 - `pdfinfo` succeeds and reports the expected page size.
 - `pdftotext` extracts the title, table of contents, headings, and body text.
-- Embedded-font status is checked with `pdffonts` or an equivalent tool.
-- Every page is rendered to PNG (or equivalent) and reviewed through a contact
-  sheet; suspicious pages are inspected separately at readable zoom.
-- Two-column output is checked for the declaration order of `figure*`, `table*`,
-  and float barriers. No barrier may strand a pending double-column float.
-- Main overview figures/tables may span both columns when their labels require
-  it. Other assets must retain their existing content and aspect ratio while
-  being fitted to one column; do not redraw an asset merely to change its span.
-- Reject unexplained empty columns or large avoidable gaps on interior pages,
-  detached captions, overlap/cropping, section-orphaned floats, and inconsistent
-  indentation among deliberately parallel paragraphs. Terminal bibliography
-  whitespace is evaluated separately.
+- At least one formula page and one table page are visually inspected from a
+  rendered PNG preview.
 - The build log contains no fatal LaTeX errors. Overfull warnings should be
   reviewed; long unbreakable identifiers may remain if changing them would alter
-  reported method names. PDF annotation warnings must also be reviewed; prefer
-  claim-local citation splitting to globally disabling hyperlinks.
-- Delivery evidence records page count, page size, font embedding, text
-  extraction, compile-log findings, rendered-page coverage, and accepted
-  warnings. A compiler exit code alone is not a camera-ready verdict.
+  reported method names.

@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS = REPO_ROOT / "shared/contracts/passport"
 
 BIBLIOGRAPHY_AGENT_PATH = REPO_ROOT / "deep-research/agents/bibliography_agent.md"
-BIBLIOGRAPHY_AGENT_SHA256 = "4d8bee0615ca2045af805b1cdae2566b349827a3c17a2f494c601631632db70c"  # #272 guidance-layer baseline; F2 ownership guard per spec §3.4 + §3.6. The #272 guidance layer inlined the retrieved-content instruction/data standing principle into Core Principles; NO M6 citation-provenance / M5 version-family / temporal logic added, so the ownership invariant the hash protects is intact. (Previous baseline 3c2b91d… was the post-v3.10-PR-B state.)
+BIBLIOGRAPHY_AGENT_SHA256 = "1e4f4bed354fdacdf11d36cda4f69b135477af876f77f88e3a9104971d3d4933"  # #651 baseline: added DOI-keyed retraction-status production only; NO temporal/M6/M5 logic touched, ownership invariant intact. Previous accepted #548/#511 baseline recorded the Last Searched and omission-provenance additions under the same rule.
 
 
 def _validate(yaml_path: Path, schema_path: Path) -> list[str]:

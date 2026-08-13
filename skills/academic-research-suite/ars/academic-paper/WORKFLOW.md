@@ -1,9 +1,9 @@
 ---
 name: academic-paper
-description: "12-agent academic paper writing pipeline. 11 modes (full/plan/outline/revision/revision-coach/abstract/lit-review/format-convert/citation-check/disclosure/rebuttal-audit). 6 paper types, 5 citation formats, bilingual abstracts, LaTeX/DOCX-via-Pandoc/PDF output. Style Calibration + Writing Quality Check + Anti-Patterns with IRON RULE markers. Triggers: write paper, academic paper, guide my paper, parse reviews, audit my rebuttal, check my response draft, AI disclosure, 寫論文, 學術論文, 引導我寫論文, 審查意見, 評估回覆."
+description: "12-agent academic paper writing pipeline. 11 modes (full/plan/outline/revision/revision-coach/abstract/lit-review/format-convert/citation-check/disclosure/rebuttal-audit). 6 paper types, 5 citation formats, bilingual abstracts, LaTeX/DOCX-via-Pandoc/PDF output. Style Calibration + Writing Quality Check + Anti-Patterns with IRON RULE markers. Triggers: write paper, academic paper, guide my paper, parse reviews, audit my rebuttal, check my response draft, AI disclosure, 寫論文, 學術論文, 引導我寫論文, 審查意見, 評估回覆, 논문 작성, 초록 작성, 논문 수정, 논문 계획을 도와줘, 심사 의견 반영, 답변서 점검, AI 사용 고지."
 metadata:
   version: "3.2.0"
-  last_updated: "2026-06-01"
+  last_updated: "2026-07-11"
   status: active
   data_access_level: redacted
   task_type: open-ended
@@ -44,20 +44,17 @@ Write a paper on the impact of declining birth rates on private university manag
 7. Peer review — five-dimension scoring, revision suggestions
 8. Output formatting — LaTeX/DOCX (via Pandoc)/PDF/Markdown
 
-For LaTeX/PDF output, Step 8 includes the formatter agent's **LaTeX Layout
-Export Gate**: inspect class-level paragraph policy, audit two-column starred
-float/barrier order, render every page, and reject unexplained interior blank
-columns or large avoidable gaps. Compilation alone does not pass formatting.
-
 ---
 
 ## Trigger Conditions
 
 ### Trigger Keywords
 
-**English**: write paper, academic paper, paper outline, write abstract, revise paper, literature review paper, check citations, convert to LaTeX, convert format, format paper, conference paper, journal article, thesis chapter, research paper, guide my paper, help me plan my paper, step by step paper, draft manuscript, write methodology, write discussion, main figure, main table, graphical abstract, visual abstract, overview figure, teaser figure, method figure, parse reviews, revision roadmap, help me with my revision, I got reviewer comments, convert citations
+**English**: write paper, academic paper, paper outline, write abstract, revise paper, literature review paper, check citations, convert to LaTeX, convert format, format paper, conference paper, journal article, thesis chapter, research paper, guide my paper, help me plan my paper, step by step paper, draft manuscript, write methodology, write discussion, parse reviews, revision roadmap, help me with my revision, I got reviewer comments, convert citations
 
-**繁體中文**: 寫論文, 學術論文, 論文大綱, 寫摘要, 修改論文, 文獻回顧論文, 檢查引用, 轉 LaTeX, 轉換格式, 研討會論文, 期刊文章, 學位論文, 研究論文, 引導我寫論文, 幫我規劃論文, 逐步寫論文, 寫方法論, 寫討論, 主圖, 主表, 圖文摘要, 圖形摘要, 方法總覽圖, 研究框架圖, 審查意見, 修訂路線圖, 幫我修改, 我收到審查意見, 轉換引用格式
+**繁體中文**: 寫論文, 學術論文, 論文大綱, 寫摘要, 修改論文, 文獻回顧論文, 檢查引用, 轉 LaTeX, 轉換格式, 研討會論文, 期刊文章, 學位論文, 研究論文, 引導我寫論文, 幫我規劃論文, 逐步寫論文, 寫方法論, 寫討論, 審查意見, 修訂路線圖, 幫我修改, 我收到審查意見, 轉換引用格式
+
+**한국어**: 논문 작성, 논문 초안, 논문 개요, 초록 작성, 논문 수정, 인용 확인, 인용 형식 검사, LaTeX 변환, 서식 변환, 학위논문 작성, 학술지 논문 작성, 학회 논문 작성, 논문 계획을 도와줘, 단계별로 논문 쓰기, 심사 의견을 받았어, 심사 의견 반영, 답변서 점검, AI 사용 고지
 
 ### Plan Mode Activation
 
@@ -99,10 +96,10 @@ Activate `plan` mode when the user wants guidance, step-by-step planning, or exp
 | 6 | `citation_compliance_agent` | Citation format verification, reference list completeness, DOI checking | Phase 5a |
 | 7 | `abstract_bilingual_agent` | Bilingual abstract (zh-TW + EN), 5-7 keywords each | Phase 5b |
 | 8 | `peer_reviewer_agent` | Simulated double-blind review, five-dimension scoring, revision suggestions (max 2 rounds) | Phase 6 |
-| 9 | `formatter_agent` | Convert to LaTeX/DOCX (via Pandoc)/PDF/Markdown, journal formatting, venue-family hard-pack compliance, cover letter, citation format conversion (APA 7 / Chicago / MLA / IEEE / Vancouver) | Phase 7 |
+| 9 | `formatter_agent` | Convert to LaTeX/DOCX (via Pandoc)/PDF/Markdown, journal formatting, cover letter, citation format conversion (APA 7 / Chicago / MLA / IEEE / Vancouver) | Phase 7 |
 | 10 | `socratic_mentor_agent` | Plan mode Socratic mentor: chapter-by-chapter guidance, convergence criteria (4 signals), question taxonomy (4 types), INSIGHT extraction | Plan Step 0-3 |
-| 11 | `visualization_agent` | Parse paper claims, data, and structure to design main figures/main tables/graphical abstracts, then generate publication-quality figure code (Python matplotlib / R ggplot2) with APA 7.0 formatting, colorblind-safe palettes, and LaTeX integration where appropriate | Phase 4 / Phase 7 |
-| 12 | `revision_coach_agent` | Parse unstructured reviewer comments into structured Revision Roadmap; classify, map, and prioritize comments; works standalone without prior pipeline execution | Revision-Coach mode |
+| 11 | `visualization_agent` | Parse paper data and generate publication-quality figure code (Python matplotlib / R ggplot2) with APA 7.0 formatting, colorblind-safe palettes, and LaTeX integration | Phase 4 / Phase 7 |
+| 12 | `revision_coach_agent` | Parse unstructured reviewer comments into a Revision Roadmap, or explicitly identified real-committee comments into the separate #668 source-accounted concern tracker; works standalone | Revision-Coach mode |
 
 ---
 
@@ -112,13 +109,7 @@ Activate `plan` mode when the user wants guidance, step-by-step planning, or exp
 LaTeX (.tex + .bib), DOCX (via Pandoc), PDF (via LaTeX or Pandoc), Markdown.
 
 ### Figures
-When the paper needs a main figure, main table, graphical abstract, visual abstract, overview figure, teaser figure, method figure, or quantitative result figure, the `visualization_agent` first applies `references/main_figure_table_standards.md` to decide whether the artifact should communicate the paper's central methodology, core claim, evidence map, or a specific dataset/result. Quantitative charts then use Python (matplotlib/seaborn) or R (ggplot2) with APA 7.0 formatting and colorblind-safe palettes. Figures are delivered as a figure/table concept brief, caption, traceable evidence mapping, runnable code when applicable, and LaTeX `\includegraphics` integration code. See `references/statistical_visualization_standards.md` for chart type decision trees and code templates.
-
-If the user explicitly asks for a strict academic SVG box, framework, workflow,
-research-content, or evidence-chain diagram, apply
-`references/academic_svg_box_diagram_standards.md` to that artifact. Do not use
-that reference for statistical charts, mechanism illustrations, or general
-infographics without the same explicit box-diagram choice.
+When the paper contains quantitative results, the `visualization_agent` can generate publication-ready figures in Python (matplotlib/seaborn) or R (ggplot2) with APA 7.0 formatting and colorblind-safe palettes. Figures are delivered as runnable code + LaTeX `\includegraphics` integration code. See `references/statistical_visualization_standards.md` for chart type decision trees and code templates.
 
 ### Citation Formats
 APA 7.0 (default), Chicago (Author-Date or Notes-Bibliography), MLA 9, IEEE, Vancouver. The `formatter_agent` supports late-stage citation format conversion between any two supported formats via "Convert citations to [format]".
@@ -167,7 +158,7 @@ Multi-phase agents (Bucket B: `argument_builder` P3+Plan, `visualization` P4+P7)
 
 Routing into Mode B requires explicit user signal — `/ars-<mode>` slash command or `[direct-mode]` prefix. Ambiguous cross-phase input defaults to clarification per `.claude/CLAUDE.md` Routing Discipline + `shared/references/intent_clarification_protocol.md`.
 
-**Enforcement (v3.9.2):** prompt-level via Phase Boundary blocks on Bucket A agents + advisory verifier (`scripts/check_pipeline_integrity.py`). Deterministic PreToolUse hook + multi-phase envelope deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** Phase Boundary blocks on Bucket A agents + advisory verifier (`scripts/check_pipeline_integrity.py`) + a deterministic PreToolUse write-scope guard in hook-enabled runtimes (#134 rescope, PR #294). Multi-phase envelope remains forward-scope (#134 Slices 3-5).
 
 ## v3.6.6 Generator-Evaluator Contract Protocol
 
@@ -192,7 +183,7 @@ For each `academic-paper full` invocation, Phase 4 + Phase 6 expand from two sin
    - Lint: 3 structural checks (see § "Phase 4a / 6a output lint" below).
 2. **Phase 4b — writer paper-visible drafting + self-scoring.**
    - System prompt: `### Phase 4b — Writer paper-visible drafting + self-scoring` sub-section in the same agent file.
-   - User content: `writer_full` contract JSON (re-injected) + Phase 4a output wrapped in `<phase4a_output>...</phase4a_output>` data delimiter + upstream drafting artefacts (Paper Configuration Record, Paper Outline, Argument Blueprint, Annotated Bibliography, optional Style Profile, optional Knowledge Isolation Directive).
+   - User content: `writer_full` contract JSON (re-injected) + Phase 4a output wrapped in `<phase4a_output>...</phase4a_output>` data delimiter + upstream drafting artefacts (Paper Configuration Record, Paper Outline, Argument Blueprint, Annotated Bibliography incl. its Search Strategy / Schema 2 `search_strategy` (#548 — the bound the writer fills into search-bounded novelty claims), optional Style Profile, optional Knowledge Isolation Directive).
    - Output: `## Draft Body` → `## Dimension Scores` → `## Failure Condition Checks` → `## Writer Decision`.
    - Lint: 4 structural checks (see § "Phase 4b / 6b output lint" below).
 3. **Phase 6a — evaluator paper-blind pre-commitment.**
@@ -284,9 +275,11 @@ See `references/mode_selection_guide.md` for details.
 | `format-convert` | "Convert to LaTeX" / "Convert citations to [format]" | 9 only | Formatted document; includes citation format conversion (APA 7 / Chicago / MLA / IEEE / Vancouver) |
 | `citation-check` | "Check citations" | 6 only | Citation error report |
 | `plan` | "guide my paper" / "help me plan my paper" | 1->10->3->4 | Chapter Plan + INSIGHT Collection |
-| `revision-coach` | "parse reviews" / "revision roadmap" / "I got reviewer comments" / "should we push back" / "conference rebuttal" / "grant panel response" | 12 only | Revision Roadmap + optional Tracking Template + Response Letter Skeleton (covers pushback/disagreement posture + journal / conference / grant-panel / transfer-after-review scopes) |
-| **`disclosure`** (v3.2) | **"AI disclosure for Nature" / "generate AI usage statement"** | **9 only** | **Venue-specific AI-usage disclosure paragraph(s) + placement instructions** |
+| `revision-coach` | "parse reviews" / "revision roadmap" / "I got reviewer comments" / "should we push back" / "conference rebuttal" / "grant panel response" / explicitly identified real committee correspondence | 12 only | Peer-review path: Revision Roadmap + optional Tracking Template + Response Letter Skeleton. Committee path: separate #668 concern tracker + placeholder response skeleton; no Schema 11, priority, severity, or determination. |
+| **`disclosure`** (v3.2) | **"AI disclosure for Nature" / "generate AI usage statement"** | **9 only** | **Default venue path: `REQUIRED` / `ACTION_ONLY` / `NOT_REQUIRED` / `UNKNOWN` applicability plus typed halt status; policy-anchor path: anchor-specific render** |
 | **`rebuttal-audit`** | **"audit my response" / "check my rebuttal" / "did I miss any reviewer comment"** (requires BOTH reviewer comments AND an existing rebuttal draft) | **12 only (parse-only)** | **Rebuttal QA report: per-comment coverage + gaps + risk flags. No new response generated; advisory only. Does NOT emit Schema 11 / Material Passport / verified status.** |
+
+**Disclosure dispatch contract:** when mode=`disclosure`, agent 9 takes its standalone branch and MUST load `references/disclosure_mode_protocol.md` before producing text. It does not run normal Phase 7 formatting or substitute the generic full-pipeline AI statement; the protocol selects the venue database or policy-anchor path and owns all halt/render decisions.
 
 ### Quick Mode Selection Guide
 
@@ -297,16 +290,23 @@ See `references/mode_selection_guide.md` for details.
 | Just need an outline | `outline-only` | balanced |
 | Have a draft, received review feedback | `revision` | fidelity |
 | Have unstructured reviewer comments | `revision-coach` | balanced |
+| Have comments from a real committee/institutional review office to track | `revision-coach` committee-correspondence variant | fidelity |
 | Just need an abstract | `abstract-only` | fidelity |
 | Need to check/fix citations | `citation-check` | fidelity |
 | Need to convert format (LaTeX, DOCX) or citation style | `format-convert` | fidelity |
 | Want a systematic literature review paper | `lit-review` | fidelity |
-| Need a venue-specific AI-usage disclosure statement for submission | `disclosure` | fidelity |
+| Need a venue-specific AI-usage disclosure bundle for submission | `disclosure` | fidelity |
 | Have a written rebuttal draft to QA against reviewer comments | `rebuttal-audit` | fidelity |
 
 **Spectrum** (v3.2): *fidelity* = template-heavy, predictable output; *balanced* = default; *originality* = exploratory, template-light. See `shared/mode_spectrum.md` for the full cross-skill spectrum table.
 
 Not sure? Start with `plan` — it will guide you step by step. `disclosure` is a finishing step — run it after the paper is drafted, targeting the venue you plan to submit to.
+
+**Committee-correspondence routing:** use the `revision-coach` variant only when the
+user explicitly identifies a real committee/institutional review office. Load
+`references/committee_correspondence_protocol.md`; do not infer official authority
+from tone. The separate artifact is a source-accounted drafting aid and never enters
+peer-review Schema 11.
 
 ### Mode Selection Logic
 
@@ -355,7 +355,7 @@ Socratic mode that guides users through paper planning one chapter at a time. Bu
 
 ## Handoff Protocol: deep-research -> academic-paper
 
-`intake_agent` automatically detects deep-research materials (RQ Brief / Bibliography / Synthesis / INSIGHT Collection) and skips redundant steps. See `deep-research/SKILL.md` Handoff Protocol for the complete handoff material format.
+`intake_agent` automatically detects deep-research materials (RQ Brief / Bibliography / Synthesis / INSIGHT Collection) and skips redundant steps. See `deep-research/WORKFLOW.md` Handoff Protocol for the complete handoff material format.
 
 ---
 
@@ -378,13 +378,13 @@ See `references/failure_paths.md` for details. Quick reference:
 
 ## Full Academic Pipeline
 
-See `academic-pipeline/SKILL.md` for the complete workflow.
+See `academic-pipeline/WORKFLOW.md` for the complete workflow.
 
 ---
 
 ## Phase 0: Configuration Interview
 
-See `agents/intake_agent.md` for the complete field definitions of the Phase 0 configuration interview. The interview covers 9 core items: paper type, discipline, target journal, citation format, output format, language, abstract, word count, and existing materials — plus co-authors, funding, optional style calibration, the domain evidence profile (Step 12), and the citation-verification level (Step 13, #392: mark only by default / strict opt-in, seeding `terminal_policies.citation_existence`). Outputs a Paper Configuration Record, awaiting user confirmation.
+See `agents/intake_agent.md` for the complete field definitions of the Phase 0 configuration interview. The interview covers 9 core items: paper type, discipline, target journal, citation format, output format, language, abstract, word count, and existing materials — plus co-authors, funding, optional style calibration, the domain evidence profile (Step 12), the citation-verification level (Step 13, #392), and the independent retraction policy (Step 14, #651). Both citation policies are mark-only by default with explicit strict opt-in, seeding `terminal_policies.citation_existence` and `terminal_policies.retraction` respectively. Outputs a Paper Configuration Record, awaiting user confirmation.
 
 ---
 
@@ -392,15 +392,17 @@ See `agents/intake_agent.md` for the complete field definitions of the Phase 0 c
 
 **Agent definitions**: `agents/{agent_name}.md` — one file per agent (12 total, matching Agent Team table above).
 
-**References** in `references/` include:
+**References** (28 files in `references/`):
 - Citation: `apa7_extended_guide`, `apa7_chinese_citation_guide`, `citation_format_switcher`
 - Writing: `academic_writing_style`, `writing_quality_check`, `writing_judgment_framework`
-- Structure: `paper_structure_patterns` (6 types), `abstract_writing_guide`
-- Domain: `hei_domain_glossary` (bilingual), `journal_submission_guide`, `venue_family_hard_packs`, `latex_template_reference`
+- Structure: `paper_structure_patterns` (6 types), `abstract_writing_guide`, `intro_title_rhetoric_guide` (CARS moves + title checklist)
+- Domain: `hei_domain_glossary` (bilingual), `journal_submission_guide`, `latex_template_reference`, `domain_evidence_profiles` (advisory screening profiles)
 - Process: `failure_paths` (12 scenarios), `mode_selection_guide` (11 modes), `plan_mode_protocol`, `workflow_phase_details`, `revision_patch_protocol` (#390 Mode B commands + marker lifecycle)
-- Visualization: `main_figure_table_standards` (main figure/main table/graphical abstract protocol), `statistical_visualization_standards`
-- Ethics: `credit_authorship_guide` (CRediT 14 roles), `funding_statement_guide`
-- Disclosure (v3.2): `disclosure_mode_protocol` (venue-specific AI-usage statement generation), `venue_disclosure_policies` (v1 database: ICLR, NeurIPS, Nature, Science, ACL, EMNLP)
+- Ethics: `credit_authorship_guide` (CRediT 14 roles), `funding_statement_guide`, `statistical_visualization_standards`
+- Disclosure (v3.2): `disclosure_mode_protocol` (default venue applicability/status bundle: `REQUIRED`, `ACTION_ONLY`, `NOT_REQUIRED`, `UNKNOWN`, plus typed halts; separate policy-anchor rendering), `venue_disclosure_policies` (v2 database: ICLR, NeurIPS, Nature, Science, ACL, EMNLP, plus medical-publishing policy targets — ICMJE, NEJM, The Lancet, JAMA, BMJ, PLOS, Frontiers, publisher-wide Chinese Nursing Journals Publishing House 中华护理杂志社, journal-level International Eye Science 国际眼科杂志)
+- Integrity (v3.3): `anti_leakage_protocol` (knowledge isolation), `vlm_figure_verification` (optional VLM figure check)
+- Policy anchors (#108): `policy_anchor_table`, `policy_anchor_disclosure_protocol`
+- Meta: `changelog` (version history)
 - Also: `deep-research/references/apa7_style_guide.md` (base reference, extended here)
 
 **Templates** (11 files in `templates/`): `imrad`, `literature_review`, `case_study`, `theoretical_paper`, `policy_brief`, `conference_paper`, `latex_article_template.tex`, `bilingual_abstract`, `credit_statement`, `funding_statement`, `revision_tracking` (4 status types).
@@ -429,7 +431,7 @@ Explicit prohibitions to prevent common failure modes:
 ## Quality Standards
 
 ### Writing Quality
-1. **Every claim must have a citation** or be supported by the paper's own data
+1. **Every claim must have a citation** or be supported by the paper's own data — or, for #548 absence/novelty claims, carry documented-search provenance plus the named nearest prior work where one exists (the explicit absence-of-adjacent-work statement suffices otherwise; no source can cite an absence)
 2. **Zero citation orphans** — in-text citations <-> reference list must perfectly match
 3. **Consistent register** — academic tone appropriate for the discipline
 4. **Logical flow** — clear transitions between paragraphs and sections
@@ -454,7 +456,7 @@ Explicit prohibitions to prevent common failure modes:
 
 ### Mandatory Inclusions
 ⚠️ **IRON RULE**: Every paper MUST include: Data Availability Statement, Ethics Declaration, Author Contributions (CRediT), Conflict of Interest Statement, Funding Acknowledgment.
-17. **AI disclosure statement** — every paper must include a statement on AI tool usage
+17. **AI-use reporting** — normal `full` / `format-convert` flows include the existing generic AI tool-usage statement; standalone `disclosure` mode instead follows the selected venue applicability/status or policy-anchor rendering contract
 18. **Limitations section** — explicitly discuss study limitations
 19. **Ethics statement** — when applicable (human subjects, sensitive data)
 
@@ -478,12 +480,23 @@ academic-paper + academic-paper-reviewer -> Peer review -> revision loop
 
 ---
 
+## Model Tiering (#517, optional)
+
+When `ARS_MODEL_TIERING` is set, the dispatching session routes this skill's agents per `shared/model_tiering.md` (canonical: the full 39-agent judgment/execution table + rules). Compact rule:
+
+- **Unset (default):** every agent inherits the session model — byte-equivalent pre-#517 behavior.
+- **`economy`** (frontier-tier session): execution-type agents dispatch ONE tier below the session model — floor Opus-class, never lower; judgment-type agents stay on the session model. No-op at or below the floor (announce once).
+- **`quality-boost`** (below-frontier session): judgment-type agents at the checkpoint surfaces (Stage 2.5/4.5 gates; the opt-in Stage 4→5 claim–ref audit; final review) jump UP to the frontier tier (however many tiers away — not a single increment); nothing is ever downgraded. No-op at the frontier (announce once).
+- Unknown values → warn once, behave as unset. Tiers are relative positions, never hard-pinned model ids. When a direction is active, route repeated same-stage calls to the SAME worker so its prompt cache accumulates; unset means dispatch shapes stay byte-equivalent too.
+
+---
+
 ## Version Info
 
 | Item | Content |
 |------|---------|
 | Skill Version | 3.2.0 |
-| Last Updated | 2026-06-01 |
+| Last Updated | 2026-07-11 |
 | Maintainer | Cheng-I Wu |
 | Dependent Skills | deep-research v1.0+ (upstream), academic-paper-reviewer v1.0+ (downstream) |
 

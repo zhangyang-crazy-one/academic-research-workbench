@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static quality gates for the ARS Codex full-runtime adapter."""
+"""Static quality gates for the ARS-Codex full-runtime adapter."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ PLUGIN_ROOT_CANDIDATE = SUITE_ROOT.parents[1]
 PLUGIN_ROOT = (
     PLUGIN_ROOT_CANDIDATE
     if (PLUGIN_ROOT_CANDIDATE / ".codex-plugin" / "plugin.json").is_file()
-    else SUITE_ROOT.parents[1] / "plugins" / "academic-research-skills"
+    else SUITE_ROOT.parents[1] / "plugins" / "ars-codex"
 )
 FULL_RUNTIME_MANIFEST = CODEX_ROOT / "full-runtime-manifest.json"
 PACKAGE_MANIFEST = SUITE_ROOT / "manifest.json"
@@ -182,6 +182,23 @@ def check_desktop_plugin_bundle() -> list[str]:
 
     _require(plugin_manifest.is_file(), f"Desktop plugin manifest missing: {plugin_manifest}")
     manifest = _json(plugin_manifest)
+    plugin_identity = (
+        manifest.get("name"),
+        manifest.get("interface", {}).get("displayName"),
+    )
+    supported_identities = {
+        ("ars-codex", "ARS-Codex"),
+        ("academic-research-workbench", "Academic Research Workbench"),
+    }
+    _require(
+        plugin_identity in supported_identities,
+        "Desktop plugin must identify as ARS-Codex or Academic Research Workbench",
+    )
+    if manifest.get("name") == "ars-codex":
+        _require(
+            PLUGIN_ROOT.name == manifest.get("name"),
+            "standalone ARS-Codex plugin directory must match plugin manifest name",
+        )
     _require(manifest.get("skills") == "./skills/", "Desktop plugin manifest must point at ./skills/")
     _require(plugin_skills.exists(), f"Desktop plugin skills path missing: {plugin_skills}")
     _require(plugin_skills.is_dir(), "Desktop plugin skills path must be a directory")
@@ -189,6 +206,24 @@ def check_desktop_plugin_bundle() -> list[str]:
     _require(suite_entry.is_dir(), "Desktop plugin bundle must include academic-research-suite")
     _require(skill_md.is_file(), "Desktop plugin bundle academic-research-suite is missing SKILL.md")
     _require(package_manifest.is_file(), "Desktop plugin bundle academic-research-suite is missing manifest.json")
+
+    marketplace_path = SUITE_ROOT.parents[1] / ".agents" / "plugins" / "marketplace.json"
+    if marketplace_path.is_file():
+        marketplace = _json(marketplace_path)
+        _require(marketplace.get("name") == "ars-codex", "repo marketplace name must be ars-codex")
+        _require(
+            marketplace.get("interface", {}).get("displayName") == "ARS-Codex",
+            "repo marketplace display name must be ARS-Codex",
+        )
+        entries = [entry for entry in marketplace.get("plugins", []) if entry.get("name") == "ars-codex"]
+        _require(len(entries) == 1, "repo marketplace must contain exactly one ars-codex entry")
+        source = entries[0].get("source", {})
+        _require(source.get("source") == "local", "ars-codex marketplace source must be local")
+        _require(source.get("path") == "./plugins/ars-codex", "ars-codex marketplace path is incorrect")
+        policy = entries[0].get("policy", {})
+        _require(policy.get("installation") == "AVAILABLE", "ars-codex must be available to install")
+        _require(policy.get("authentication") == "ON_INSTALL", "ars-codex auth policy must be ON_INSTALL")
+        _require(entries[0].get("category") == "Research", "ars-codex marketplace category must be Research")
 
     symlinks = sorted(
         str(path.relative_to(PLUGIN_ROOT))
@@ -200,6 +235,7 @@ def check_desktop_plugin_bundle() -> list[str]:
         "Desktop plugin bundle must not contain symlinks: " + ", ".join(symlinks[:20]),
     )
     return [
+        f"Desktop plugin identity is valid: {manifest['name']}",
         "Desktop plugin bundle uses a materialized skills directory",
         "academic-research-suite is bundled without symlinks",
     ]

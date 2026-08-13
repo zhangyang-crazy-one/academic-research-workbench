@@ -1,4 +1,4 @@
-# ARS Codex Full-Runtime Adapter
+# ARS-Codex Full-Runtime Adapter
 
 This directory is the Codex-only runtime adapter for
 `academic-research-suite`. Vendored upstream content remains under `ars/`; do
@@ -55,6 +55,11 @@ must report that degraded behavior.
   October 2026 target brief; `scripts/validate_venue_profiles.py` rejects
   unsourced or silently invented deadlines.
 
+Upstream held-out evaluation contracts, schemas, fixtures, and measurement
+summaries remain available in the source checkout. Raw artifacts below
+`ars/evals/heldout/*/runs/` are intentionally omitted from staged plugins so
+runtime packages do not carry evaluation transcripts or private-path classes.
+
 ## Agent-Team Semantics
 
 The adapter cannot promise byte-for-byte Claude Code Agent Team behavior.
@@ -66,6 +71,25 @@ Instead it provides an explicit Codex orchestration contract:
 - pipeline orchestration stops at requested checkpoints;
 - Codex model routing uses the active model while preserving upstream
   `opus`/`sonnet` hints as metadata;
+- ARS v3.19 retains model tiering as advisory metadata; it is applied only
+  when a Codex runtime provides explicit per-dispatch model selection;
+- canonical cross-model handoffs are validated and transported by the
+  dispatching context, not by least-privilege owner roles;
+- the fixed Reviewer 2 substrate swap and Priority-1 re-review judge pass run
+  only after explicit provider configuration and content consent;
+- citation-cache staleness remains advisory-only, while live re-validation is
+  opt-in and surfaced in the route plan;
+- local PDFs use the v3.19 read-integrity preflight before page anchors are
+  trusted; `UNAVAILABLE` remains explicit when pypdf or a trustworthy parse is
+  unavailable;
+- optional human-read scope attestations remain user-owned and preserve
+  partial-coverage status;
+- revision rounds retain the claim-strength ladder and deterministic
+  token-conservation advisory checks;
+- the v3.17 panel, degradation-registry, tools-allowlist, and pipeline-boundary
+  validators remain available as vendored quality gates;
+- the upstream v3.18 SessionStart update reminder is vendored but not executed
+  by the Codex hook pack;
 - inline mode remains available and is the default.
 
 ## Verification
@@ -85,4 +109,12 @@ cd skills/academic-research-suite/ars
 python3 -m pytest scripts/test_codex_router_policy.py
 python3 scripts/check_passport_reset_contract.py
 python3 scripts/check_v3_9_2_phase_boundary.py
+python3 scripts/check_cross_model_handoff_contract.py
+python3 scripts/check_degradation_registry.py
+python3 scripts/check_pipeline_boundary_semantics.py
+python3 scripts/check_tools_allowlist.py
+python3 -m pytest scripts/test_verification_cache.py scripts/test_verification_gate.py
+python3 -m pytest scripts/test_ars_update_check.py
+python3 -m pytest scripts/test_pdf_read_preflight.py scripts/test_ars_mark_read.py
+python3 -m pytest scripts/test_check_revision_token_conservation.py
 ```

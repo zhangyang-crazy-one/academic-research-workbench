@@ -96,9 +96,44 @@
       "access_level": "open_full_page",
       "accessed_on": "2026-08-08"
     },
+    "coling-2025-zero-shot-ontology": {
+      "title": "Zero-Shot Entailment Learning for Ontology-Based Biomedical Annotation Without Explicit Mentions",
+      "url": "https://aclanthology.org/2025.coling-main.542/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "coling-2025-b2nerd": {
+      "title": "Beyond Boundaries: Learning a Universal Entity Taxonomy across Datasets and Languages for Open NER",
+      "url": "https://aclanthology.org/2025.coling-main.725/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "coling-2025-gaef": {
+      "title": "Generation-Augmented and Embedding Fusion in Document-Level Event Argument Extraction",
+      "url": "https://aclanthology.org/2025.coling-main.274/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
     "coling-2025-cycleoie": {
       "title": "CycleOIE: A Low-Resource Training Framework For Open Information Extraction",
       "url": "https://aclanthology.org/2025.coling-main.227/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "coling-2025-kgpcl": {
+      "title": "Knowledge Graph Pooling and Unpooling for Concept Abstraction",
+      "url": "https://aclanthology.org/2025.coling-main.359/",
+      "authority": "official_published_paper",
+      "access_level": "open_full_text",
+      "accessed_on": "2026-08-09"
+    },
+    "coling-2025-kg-trick": {
+      "title": "KG-TRICK: Unifying Textual and Relational Information Completion of Knowledge for Multilingual Knowledge Graphs",
+      "url": "https://aclanthology.org/2025.coling-main.611/",
       "authority": "official_published_paper",
       "access_level": "open_full_text",
       "accessed_on": "2026-08-09"
@@ -451,11 +486,60 @@
   },
   "style_learning": {
     "status": "non_normative_editorial_inference",
-    "sample_scope": "Four accepted 2025 COLING/NAACL papers selected for proximity to information extraction, schema-conditioned modules, prompt transfer, and evaluation design.",
+    "sample_scope": "Nine accepted 2025 COLING/NAACL papers selected for proximity to ontology-constrained information extraction, schema alignment, event roles, knowledge-graph abstraction, prompt transfer, and evaluation design; the six papers in the project-specific COLING audit were inspected from official full-text PDFs figure by figure and table by table.",
     "anti_overfit_rule": "Use only patterns shared across exemplars and justified by the current paper's argument; never copy wording or treat one paper's section order as a venue requirement.",
+    "editorial_precedence": [
+      "official_target_venue_requirements",
+      "topic_matched_full_text_accepted_paper_audit",
+      "generic_cross_venue_heuristic"
+    ],
+    "conflict_scope": "This precedence resolves editorial structure, figure, and table choices only. It never overrides an official venue, review-system, ethics, anonymity, or formatting requirement.",
+    "direct_vs_adjacent": {
+      "direct_exemplars": [
+        "coling-2025-zero-shot-ontology",
+        "coling-2025-b2nerd",
+        "coling-2025-gaef"
+      ],
+      "adjacent_not_direct_baselines": [
+        "coling-2025-kgpcl",
+        "coling-2025-kg-trick"
+      ],
+      "rule": "Use the direct exemplars for task framing, method narrative, figure sequence, and experiment structure. Use adjacent knowledge-graph papers only for terminology and presentation patterns unless dataset, information access, schema, task, and metric are genuinely comparable."
+    },
     "exemplars": [
       {
+        "source_id": "coling-2025-zero-shot-ontology",
+        "role": "direct_writing_and_method_exemplar",
+        "observed_patterns": [
+          "Uses Figure 1 for a realistic task example and a later figure for the method rather than forcing both jobs into one overloaded visual.",
+          "Separates fully unseen from partially seen labels in the main results.",
+          "Reports component ablation and a distinct robustness evaluation.",
+          "Bounds zero-shot claims by the information available at inference time."
+        ]
+      },
+      {
+        "source_id": "coling-2025-b2nerd",
+        "role": "direct_writing_and_method_exemplar",
+        "observed_patterns": [
+          "Quantifies the evidence scale in the abstract and introduction instead of relying on qualitative novelty language.",
+          "Uses a functional data-and-method figure in which each operation repairs a named taxonomy failure.",
+          "Groups English, Chinese, out-of-domain, and multilingual settings instead of collapsing them into one average.",
+          "Reports repeated-run means, module-removal deltas, and scaling or perturbation evidence."
+        ]
+      },
+      {
+        "source_id": "coling-2025-gaef",
+        "role": "direct_writing_and_method_exemplar",
+        "observed_patterns": [
+          "Introduces the event-role failure through a concrete example before presenting the architecture.",
+          "Maps each named module to one previously stated failure mode and carries a running example through the method figure.",
+          "Reports precision, recall, and F1, then follows the main table with module ablation and low-resource analysis.",
+          "Uses functional boxes and arrows without reducing the figure to generic software architecture."
+        ]
+      },
+      {
         "source_id": "coling-2025-cycleoie",
+        "role": "supporting_exemplar",
         "observed_patterns": [
           "Frames a concrete resource constraint before introducing the method.",
           "Separates dataset construction, method, main results, and mechanism analysis.",
@@ -464,7 +548,24 @@
         ]
       },
       {
+        "source_id": "coling-2025-kgpcl",
+        "role": "adjacent_presentation_only_not_baseline",
+        "observed_patterns": [
+          "Provides useful concept-abstraction terminology, layered method presentation, ablation, and mechanism visualization.",
+          "Does not define the same ontology-constrained extraction task and must not be presented as a direct numeric baseline."
+        ]
+      },
+      {
+        "source_id": "coling-2025-kg-trick",
+        "role": "adjacent_presentation_only_not_baseline",
+        "observed_patterns": [
+          "Uses clean multilingual task framing and language- and frequency-stratified result tables.",
+          "Supports presentation and related-work framing but is not a direct baseline for ontology-constrained event extraction."
+        ]
+      },
+      {
         "source_id": "coling-2025-ood-control",
+        "role": "supporting_exemplar",
         "observed_patterns": [
           "Defines the transfer boundary and controlled comparison before reporting gains.",
           "Ablates prompt components and checks robustness to prompt paraphrases.",
@@ -474,6 +575,7 @@
       },
       {
         "source_id": "naacl-2025-track-sql",
+        "role": "supporting_exemplar",
         "observed_patterns": [
           "Gives each module a functional name tied to one failure mode.",
           "Uses an early system overview figure and module-specific ablations.",
@@ -483,6 +585,7 @@
       },
       {
         "source_id": "naacl-2025-soft-syntax-ee",
+        "role": "supporting_exemplar",
         "observed_patterns": [
           "Defines datasets, splits, metrics, and compared systems before interpreting results.",
           "Tests the method on both sentence-level and document-level event extraction.",
@@ -492,14 +595,48 @@
       }
     ],
     "consensus_argument_slots": [
-      "Abstract: problem boundary, precise gap, named method, evaluation scope, key result, bounded implication.",
-      "Introduction: motivating failure, why existing work is insufficient, method intuition, explicit contributions.",
+      "Abstract: task value, precise failure condition, task reformulation or method idea, two or three functional modules, datasets and metrics with a numeric headline, then a bounded generalization or resource implication.",
+      "Introduction: task definition plus a realistic example, two or three prior-method categories with one testable limitation each, one module mapped to each limitation, an early numeric result, then three contributions covering problem, mechanism, and evidence.",
       "Task and method: formal inputs/outputs and allowed information, then modules named by function and connected to failure modes.",
-      "Experiments: datasets and evidence tiers, matched baselines, metrics and uncertainty, reproducibility settings.",
-      "Results: main comparison first, then module ablations, transfer or robustness checks, and error/boundary analysis.",
+      "Experiments: separate fully unseen, partially seen, and cross-domain settings; use matched-information baselines, precision/recall/F1 where boundaries matter, repeated runs or confidence intervals, and reproducibility settings.",
+      "Results: main comparison first, then module ablations with local module metrics and direct deltas, schema perturbations, transfer checks, no-evidence rejection or hallucination analysis, and error slices.",
       "Robustness: use semantically equivalent prompt rephrasings and, where feasible, multiple models or domains to distinguish a reusable design principle from lucky wording.",
       "Conclusion and Limitations: restate only supported feasibility claims and disclose deployment, language, dataset, provider, and reproducibility boundaries.",
       "Appendix: exact prompts and schema cards, additional per-dataset results, cases, cost, and run manifests; never exile evidence essential to the main claim."
-    ]
+    ],
+    "artifact_contract": {
+      "default_figure_sequence": [
+        "Figure 1: a realistic task and leakage-boundary example showing source text, evidence, candidate or neighboring schemas, allowed and forbidden information, and the target structured output.",
+        "Figure 2: a functional method chain that carries the same running example through evidence grounding, schema alignment, role-constrained extraction, and an auditable output or rejection path."
+      ],
+      "combined_figure_exception": "Use one combined multi-panel Figure 1 only under material page pressure or when the protocol boundary itself is the central contribution; a single overloaded first figure is not the default.",
+      "functional_box_arrow_rule": "Functional boxes and arrows are permitted for a method figure when every box names an intellectual operation, maps to a stated failure mode, and exposes the transformation of a concrete running example; reject generic software or platform architecture.",
+      "evidence_link_rule": "The evidence anchor may be distributed across the Figure 1 to Figure 2 to main-table sequence. Figure 1 does not need an embedded result metric when it already establishes the task and information boundary.",
+      "table_density_rule": "Four to eight rows and four to six columns is a readability heuristic, not a hard cap. Grouped multilingual, out-of-domain, unseen-label, or multi-setting matrices may be wider when headers, panels, and notes preserve readability.",
+      "main_result_settings": [
+        "fully_unseen_labels",
+        "partially_seen_labels",
+        "cross_domain"
+      ],
+      "main_result_requirements": [
+        "matched_information_baselines",
+        "explicit_evidence_and_schema_access",
+        "precision_recall_f1_where_boundary_choices_matter",
+        "repeated_runs_variance_or_confidence_intervals"
+      ],
+      "ablation_requirements": [
+        "remove_each_named_module",
+        "report_end_to_end_delta",
+        "report_local_metric_for_each_module"
+      ],
+      "robustness_and_error_requirements": [
+        "schema_label_renaming",
+        "definition_paraphrase",
+        "schema_order_randomization",
+        "cross_domain_or_cross_model_repeat",
+        "no_evidence_rejection_accuracy_and_hallucination_rate",
+        "error_slices_for_implicit_evidence_schema_ambiguity_role_confusion_and_no_evidence_hallucination"
+      ]
+    }
   }
 }

@@ -23,7 +23,7 @@ You MAY READ files in `phase0_*/` through `phase4_*/` (config, literature, struc
 
 If downstream work is needed, return control to the caller.
 
-**Enforcement (v3.9.2):** prompt-level only. Advisory verifier (`scripts/check_pipeline_integrity.py`) can detect violations post-hoc. Deterministic PreToolUse hook deferred to v3.10 active conductor (#134).
+**Enforcement (v3.9.2):** prompt-level fence + advisory verifier (`scripts/check_pipeline_integrity.py`). Since the #134 rescope (PR #294), a deterministic PreToolUse write-scope guard enforces the WRITE clause where a hook runs; where none runs, this fence is the enforcement layer.
 
 ## Core Principles
 
@@ -119,19 +119,16 @@ Green flags for independent writing:
 - Chinese abstract may group or reorder minor details
 - Both abstracts stand alone as complete summaries
 
+## Protected Hedges (#548 + v3.6.7 roster)
+
+Consume the draft's closing `<!--protected-hedges: ...-->` comment (the #548 transport, emitted by `draft_writer_agent` on the final line of the Draft Body), plus any dispatch-context roster per `shared/references/protected_hedging_phrases.md`. Every listed hedge — including the #548 search-bounded novelty qualifier ("To our knowledge, based on searches of...") — MUST be preserved wherever the abstract states the corresponding claim, in both languages. A draft with no such comment (pre-#548) carries no obligation. Dropping a protected hedge under word-count pressure is compression overclaim (a publication-integrity failure): trim elsewhere, never the hedge. If the abstract omits the claim entirely, the hedge obligation lapses with it.
+
 ## Common Errors to Avoid
 
-### English Abstract
-- Starting with "This paper..." (vary openings)
-- Vague findings ("results were significant")
-- Including methodology details that don't matter for the abstract
-- Using abbreviations without definition (in abstract, always define)
+Distinct from the Independence Verification red flags above (which check English↔Chinese independence); these are per-language writing-quality points:
 
-### Chinese Abstract
-- Translation tone (directly translating English grammar)
-- Overuse of passive voice (Chinese prefers active voice)
-- Overly long subordinate clauses (Chinese prefers short sentences)
-- Inconsistent academic terminology (using different translations for the same concept)
+- **English**: vary openings (not every abstract starts "This paper..."); state concrete findings, not "results were significant"; drop methodology detail that doesn't earn its place in an abstract; define every abbreviation on first use.
+- **Chinese**: prefer active voice over passive (Chinese reads more naturally active); prefer short sentences over long subordinate clauses; keep academic terminology consistent (one translation per concept). (Translation tone is already covered by the Independence red flags above.)
 
 ## Output Format
 

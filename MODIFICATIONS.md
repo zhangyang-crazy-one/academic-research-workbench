@@ -5,15 +5,22 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
-- Upstream revision: `c22c17eed8a5753aa60681be9734919f2e2f5b42`
-- Adapter version: `0.1.20`
+- Upstream revision: `8cc7f8f4cccda721646d9df590b42721c93cba31`
+- Upstream suite version: `v3.19.0` plus post-tag `main` updates through 2026-08-09
+- Adapter version: `0.1.26`
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
+- Codex path overlay: vendored workflow entrypoints use `WORKFLOW.md`; upstream checks that address Claude `SKILL.md` entrypoints are translated and their byte-level locks are repinned to the adapted files.
+- Venue overlay: the Codex adapter adds a source-audited annual profile registry for the October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027. Official venue-year rules remain normative; accepted-paper patterns are explicitly non-normative editorial evidence.
+- Evidence-row integration: the post-v3.19 Phase E shared evidence-row schema, validator, paginated renderer, and producer/consumer contracts are vendored from upstream. The Codex overlay preserves deterministic rendering and the explicitly degraded legacy-absence state without deriving evidence at display time.
+- Human-subjects reference migration: the #680 reference update and its #666 authority-resolver boundary are vendored from upstream; Codex-local checks address the renamed `deep-research/WORKFLOW.md` entrypoint and retain the fail-closed unresolved state.
+- Staging boundary: raw upstream evaluation transcripts under `ars/evals/heldout/*/runs/` remain source-and-test-only and are excluded from installed plugins. Public contracts, schemas, fixtures, and measurement summaries remain bundled.
+- Legal projection: the integration lock records the repository's actual `public` visibility without treating visibility as non-commercial permission; intended use, distribution class, approval, and CC BY-NC permission remain unresolved release blockers.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.
 
 ## experiment-agent
 
-- Upstream revision: `9b063fa895eaf1f63ac99ac03f924f8d31aa8d26`
+- Upstream revision: `e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (`v1.1.0`)
 - Bundled adapter component: `skills/academic-research-suite/ars/`
 - Local source modifications: the bundled adapter integrates the pinned experiment-agent material into the reshaped local ARS skill; upstream commit identity remains pinned in `manifest.json`.
 - License: CC BY-NC 4.0. Attribution and modification-marking duties remain in force.

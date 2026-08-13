@@ -133,15 +133,6 @@ Default: IMRaD (for empirical research) or Literature Review (for synthesis topi
 - If yes, note journal name for formatting agent
 - If no, skip (use generic academic format)
 
-**Venue-family follow-up (layout hard packs — optional but required before any “camera-ready / 符合某顶会” claim):** ask the scholar to pick exactly one family. Do **not** infer the family from the journal name string. Example: Target Journal = `NeurIPS` does **not** auto-set Venue Family = `neurips`; still ask once and wait for the exact slug.
-
-> “投稿/排版族选哪个？`acl` / `neurips` / `icml` / `ieee_trans` / `acm` / `gb_cn_journal` / `cn_tech_report` / `general`。只记录你的选择，不从期刊名自动猜测。”
-
-- Store the chosen value in the PCR **Venue Family** row as the **exact slug** (e.g. `neurips`, `cn_tech_report`) — not a free paraphrase.
-- If skipped: omit the row (treat as undeclared/`general` for compliance claims). Never invent ACL/IEEE compliance.
-- When formatting or auditing PDF/TeX later, load **only** `references/venue_family_hard_packs.md` for that one family — not every family.
-- **Plan mode is exempt** unless the scholar explicitly asks about camera-ready layout.
-
 **Venue-profile follow-up (v3.12, #394 — optional, only when a target journal was named):** offer to record the venue's submission limits as a venue profile, consumed by the deterministic submission-package verifier (`scripts/verify_submission_package.py --venue-profile`):
 
 > "Do you want to record the venue's declared limits (word limit, abstract limit, keyword range, required sections, reference ceiling, blind-review model)? I will only record values you state — I never look up or infer limits from the journal name. Without a profile, the venue-limits checks report NOT-CHECKED instead of guessing."
@@ -266,7 +257,7 @@ The domain evidence profile lets the scholar tell `literature_strategist_agent` 
 - The stored **effective** value MUST be one of the 4 ship-ready enum values.
 - **Request/effective coherence:** if the request is ship-ready, the stored effective value MUST equal it. If the request is reserved, the stored effective value MUST be `unknown_user_defined` and you MUST surface the reserved-fallback advisory. No other combination is valid (you may never silently store, e.g., a `general_social_science` request as an effective `cs_ml`).
 
-**Phase-1-fully-skipped carve-out (no placebo prompt) — narrow, explicit trigger only.** The profile's only consumer is `literature_strategist_agent` (Phase 1). The carve-out applies **only when `literature_strategist_agent` will not run at all** — i.e. the scholar explicitly skips the literature phase entirely (`academic-paper/SKILL.md:139` "User can skip Phase 1 if providing own sources"), e.g. a mid-entry start with a finished draft where no literature screening will occur. On that explicit signal, do NOT prompt; record `unknown_user_defined` + a one-line `[NO-PROFILE-NEUTRAL]` advisory ("this run skips literature screening entirely, so a domain evidence profile would have no consumer; to apply one, run Phase 1").
+**Phase-1-fully-skipped carve-out (no placebo prompt) — narrow, explicit trigger only.** The profile's only consumer is `literature_strategist_agent` (Phase 1). The carve-out applies **only when `literature_strategist_agent` will not run at all** — i.e. the scholar explicitly skips the literature phase entirely (`academic-paper/WORKFLOW.md:139` "User can skip Phase 1 if providing own sources"), e.g. a mid-entry start with a finished draft where no literature screening will occur. On that explicit signal, do NOT prompt; record `unknown_user_defined` + a one-line `[NO-PROFILE-NEUTRAL]` advisory ("this run skips literature screening entirely, so a domain evidence profile would have no consumer; to apply one, run Phase 1").
 **Critical distinction:** a `deep-research → academic-paper` handoff carrying a bibliography does **NOT** trigger this carve-out — that handoff still runs `literature_strategist_agent`, which "goes directly to Phase B (full-text assessment), skipping Phase A" search, so the profile DOES have a live consumer. In that case **prompt Step 12 normally**.
 **Default when ambiguous: prompt Step 12** (assume the consumer runs) — under-prompting silently drops a usable profile, which is worse than one extra question.
 
@@ -288,6 +279,24 @@ The v3.11 deterministic citation-existence gate (#182) always *detects* unverifi
 
 **No default change anywhere** — a scholar who skips the question gets exactly today's behavior. **Plan mode is exempt** (the simplified plan-mode intake does not run Step 13, mirroring Step 12).
 
+### Step 14: Retraction Terminal Policy (#651)
+
+Retraction detection is unconditional and remains visible in Bibliographic
+Integrity Advisories. Ask whether a current, undisputed retracted-reference
+row should only be marked or should block finalization:
+
+> "Retracted-reference policy: **mark only** (default — show the resolver
+> evidence and judgment context) / **strict** (block finalization for a current,
+> undisputed retraction unless an explicit legitimate-use declaration is paired
+> with a cited retraction notice)."
+
+- `strict` writes `terminal_policies.retraction: strict`; intake records the
+  choice but never evaluates a row.
+- `mark only` or no answer writes no passport key because absence is advisory.
+- Do not bundle this choice with citation existence. A source can exist and be
+  retracted; the two policies are independent and may co-emit terminal tokens.
+- Plan mode is exempt, matching Steps 12–13.
+
 ## Output Format
 
 ### Paper Configuration Record
@@ -302,7 +311,6 @@ The v3.11 deterministic citation-existence gate (#182) always *detects* unverifi
 | **Paper Type** | [IMRaD / Literature Review / Theoretical / Case Study / Policy Brief / Conference] |
 | **Discipline** | [discipline + sub-field] |
 | **Target Journal** | [journal name or "General"] |
-| **Venue Family** | [acl / neurips / icml / ieee_trans / acm / gb_cn_journal / cn_tech_report / general — ROW OMITTED if skipped] |
 | **Venue Profile** | [path to declared venue_profile YAML / absent if the Step 3 follow-up was skipped] |
 | **Citation Format** | [APA 7th / Chicago 17th / MLA 9th / IEEE / Vancouver] |
 | **Output Format** | [Markdown / LaTeX / DOCX / PDF / Combined] |
@@ -316,6 +324,7 @@ The v3.11 deterministic citation-existence gate (#182) always *detects* unverifi
 | **Style Profile** | [attached / null] |
 | **Domain Evidence Profile** | [effective_value, or `unknown_user_defined (requested: <reserved>)` for a reserved fallback, or absent if Step 12 not run] |
 | **Citation Verification** | [strict / advisory (mark only, default), or absent if Step 13 not run] |
+| **Retraction Policy** | [strict / advisory (mark only, default), or absent if Step 14 not run] |
 | **Operational Mode** | [full / outline-only / revision / abstract-only / lit-review / format-convert / citation-check] |
 
 ### Notes
@@ -344,7 +353,7 @@ For `plan` mode, only the simplified 3-question interview is needed.
 
 ## Quality Criteria
 
-- All 13 parameters must be populated (journal can be "General"; co_authors can be "single-author"; funding can be "no funding"; style_profile can be "null")
+- All applicable core parameters and the two independent citation-policy rows must be populated (journal can be "General"; co_authors can be "single-author"; funding can be "no funding"; style_profile can be "null")
 - Word count must be realistic for paper type
 - Citation format must match discipline conventions (warn if mismatch)
 - User must explicitly confirm before pipeline proceeds

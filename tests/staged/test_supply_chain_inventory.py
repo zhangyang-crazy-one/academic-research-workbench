@@ -11,6 +11,7 @@ import pytest
 from arw.canonical import canonical_json_bytes
 from arw.integration_lock import (
     IntegrationLock,
+    _tree_sha256,
     _validate_arw_runtime,
     _validate_file_base,
     _validate_license,
@@ -156,7 +157,7 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
             "dependency_model": "bundled-pinned-adapter",
             "bundled": True,
             "adapter_name": "academic-research-suite",
-            "adapter_version": "0.1.20",
+            "adapter_version": "0.1.26",
             "adapter_tree_sha256": repeated("a"),
             "upstream_content_tree_sha256": repeated("b"),
             "manifest": binding("manifest.json"),
@@ -166,16 +167,16 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
                 {
                     "component_id": "academic-research-skills",
                     "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-                    "commit": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
-                    "git_tree": "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
-                    "source_tree_sha256": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+                    "commit": "8cc7f8f4cccda721646d9df590b42721c93cba31",
+                    "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
+                    "source_tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
                 },
                 {
                     "component_id": "experiment-agent",
                     "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
-                    "commit": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
-                    "git_tree": "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
-                    "source_tree_sha256": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+                    "commit": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
+                    "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
+                    "source_tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
                 },
             ],
         },
@@ -236,6 +237,11 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         "artifact:hooks/arw_hook.py",
         "artifact:schemas/v1/integration-lock.schema.json",
         "artifact:vendor/mcp-manifest.json",
+        "artifact:skills/academic-research-suite",
+        "artifact:skills/academic-research-suite/ars",
+        "artifact:skills/academic-research-suite/SKILL.md",
+        "artifact:skills/academic-research-suite/manifest.json",
+        "artifact:skills/academic-research-suite/VERSION",
     }
     assert expected_refs <= set(components)
     for item in source_manifest["patches"]:
@@ -256,6 +262,16 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         assert components[f"artifact:{relative}"]["hashes"] == [
             {"alg": "SHA-256", "content": _sha256(REPOSITORY_ROOT / relative)}
         ]
+    suite_root = REPOSITORY_ROOT / "skills/academic-research-suite"
+    assert components["artifact:skills/academic-research-suite"]["hashes"] == [
+        {"alg": "SHA-256", "content": _tree_sha256(suite_root, ignore_runtime_caches=True)}
+    ]
+    assert components["artifact:skills/academic-research-suite/ars"]["hashes"] == [
+        {
+            "alg": "SHA-256",
+            "content": _tree_sha256(suite_root / "ars", ignore_runtime_caches=True),
+        }
+    ]
 
 
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:

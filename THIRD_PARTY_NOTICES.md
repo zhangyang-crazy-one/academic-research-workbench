@@ -1,9 +1,10 @@
 # Academic Research Workbench Third-Party Notices
 The collective plugin has mixed licensing. Component identities remain separate.
 ## Source components
-- `academic-research-skills` `0.1.20` — `CC-BY-NC-4.0`; source `vendor/sources/academic-research-skills`.
-- `experiment-agent` `pinned` — `CC-BY-NC-4.0`; source `vendor/sources/experiment-agent`.
-- `file-base` `v0.9.0-2-gee68144` — `MIT`; source `vendor/sources/file-base`.
+- `academic-research-skills` `0.1.26` — `CC-BY-NC-4.0`; bundled adapter source `skills/academic-research-suite/ars/`.
+- `experiment-agent` `1.1.0` — `CC-BY-NC-4.0`; bundled and reshaped inside `skills/academic-research-suite/ars/`.
+- `codebase-memory-mcp` (ARW `file-base` adapter) `v0.9.0-2-gee68144` — `MIT`;
+  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.
 
 ## Ordered local patches
 - `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`.
@@ -10864,4 +10865,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-

@@ -10,11 +10,11 @@ EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/pre-vendor-license"
 RECEIPT_PATH = EVIDENCE_ROOT / "receipt.json"
 EXPECTED_PINS = {
     "academic-research-skills": {
-        "revision": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
+        "revision": "8cc7f8f4cccda721646d9df590b42721c93cba31",
         "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
     },
     "experiment-agent": {
-        "revision": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
+        "revision": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
         "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
     },
     "file-base": {

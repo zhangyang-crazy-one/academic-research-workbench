@@ -90,12 +90,8 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 | References | ACL BibTeX / natbib; prefer DOI or Anthology URL |
 | Review mode | Review: anonymized + line numbers; Final: author block, usually no page numbers |
 | Links | Dark blue `#000099`, not underlined/boxed |
-| Float span | Dominant overview figure/table may use `figure*`/`table*`; secondary assets should preserve content and fit proportionally to one column |
-| Float scheduling | Audit source order and barriers; no pending double-column float may be stranded by an early `\FloatBarrier` |
-| Render audit | Render every page and inspect a contact sheet; interior blank columns, large avoidable gaps, detached captions, overlap/crop, or section-orphaned floats are FAIL |
-| Paragraphs | Preserve ACL class indentation behavior; use only local exceptions for deliberately parallel blocks and verify them in the rendered PDF |
 
-**FAIL if:** single-column report layout sold as ACL camera-ready; colored section titles; missing ACL template; fabricated page limit; compiler-only validation; or an unexplained interior blank column caused by queued starred floats/barriers.
+**FAIL if:** single-column report layout sold as ACL camera-ready; colored section titles; missing ACL template; fabricated page limit.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "components": [
     {
-      "git_tree": "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
+      "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
       "id": "academic-research-skills",
       "legal_inputs": [
         {
@@ -22,14 +22,14 @@
           "spdx": "CC-BY-NC-4.0"
         }
       ],
-      "revision": "c22c17eed8a5753aa60681be9734919f2e2f5b42",
+      "revision": "8cc7f8f4cccda721646d9df590b42721c93cba31",
       "source_path": "vendor/sources/academic-research-skills",
-      "tree_sha256": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+      "tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
       "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "version": "0.1.20"
+      "version": "0.1.26"
     },
     {
-      "git_tree": "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
+      "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
       "id": "experiment-agent",
       "legal_inputs": [
         {
@@ -45,11 +45,11 @@
           "spdx": "CC-BY-NC-4.0"
         }
       ],
-      "revision": "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26",
+      "revision": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
       "source_path": "vendor/sources/experiment-agent",
-      "tree_sha256": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+      "tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
       "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
-      "version": "pinned"
+      "version": "1.1.0"
     },
     {
       "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
@@ -1016,11 +1016,11 @@
   "locks": [
     {
       "path": "uv.lock",
-      "sha256": "923c59076e6ab54b838f21a6ec822f70bc50ef2c361f78b3ede96cf160d37caa"
+      "sha256": "8862006f5623ee7de34cb2d0bcdb29b7de82e8f1191a2c9a32af73dc8a2fbec0"
     },
     {
       "path": "vendor/python/wheelhouse.lock.json",
-      "sha256": "d462a173849ea4ccc47ae8f65380ad38da295ef09ccf77daf5edb97b1fb86a74"
+      "sha256": "35c5069d988c4d653b365e75b76b9a989a3e414b47e205806b612d55f220e5f5"
     }
   ],
   "native_test_suites": [
@@ -1067,7 +1067,7 @@
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "6c107e43de558dd09f09792605920a033ee60ad149cf03950629feb66eaa29a2"
+    "sha256": "d65ccdc740cc3185a6c43a717b776df8693b9d8769534d827dd7748605b92a21"
   },
   "schema_version": "1.0.0"
 }

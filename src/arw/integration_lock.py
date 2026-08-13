@@ -40,14 +40,16 @@ from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
 
 
-EXPECTED_ARS_ADAPTER_VERSION = "0.1.20"
+EXPECTED_ARS_ADAPTER_VERSION = "0.1.26"
 MINIMUM_CODEX_CLI_VERSION = (0, 144, 4)
 CODEX_CLI_VERSION_REQUIREMENT = ">=0.144.4"
 _CODEX_CLI_STABLE_VERSION_RE = re.compile(
     r"^codex-cli (?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)(?:\+[0-9A-Za-z.-]+)?$"
 )
-EXPECTED_ARS_UPSTREAM_COMMIT = "c22c17eed8a5753aa60681be9734919f2e2f5b42"
-EXPECTED_EXPERIMENT_AGENT_COMMIT = "9b063fa895eaf1f63ac99ac03f924f8d31aa8d26"
+EXPECTED_CODEX_CLI_VERSION = "codex-cli 0.144.4"
+EXPECTED_ARS_UPSTREAM_COMMIT = "8cc7f8f4cccda721646d9df590b42721c93cba31"
+EXPECTED_EXPERIMENT_AGENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
+
 EXPECTED_FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
 EXPECTED_UPSTREAM_URLS = {
     "academic-research-skills": "https://github.com/Imbad0202/academic-research-skills.git",
@@ -56,13 +58,13 @@ EXPECTED_UPSTREAM_URLS = {
 EXPECTED_SOURCE_IDENTITIES = {
     "academic-research-skills": {
         "commit": EXPECTED_ARS_UPSTREAM_COMMIT,
-        "git_tree": "4a2a7b8472d1ab1d04affc98e9754699ab44aa42",
-        "source_tree_sha256": "648ffc194c4261ccab0b98da5220ee092c7c0c2634204384b46f1cd64d32056d",
+        "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
+        "source_tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
     },
     "experiment-agent": {
         "commit": EXPECTED_EXPERIMENT_AGENT_COMMIT,
-        "git_tree": "fb69a53f9b7a0dad51313acbefd6e9dce5766440",
-        "source_tree_sha256": "50f4b1a5acfefecda071646dbc7f7ed3cf8006c445b72737ad2b05b780de2a82",
+        "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
+        "source_tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
     },
     "file-base": {
         "commit": EXPECTED_FILE_BASE_COMMIT,
@@ -216,7 +218,7 @@ class ARSBinding(LockModel):
     dependency_model: Literal["bundled-pinned-adapter"]
     bundled: Literal[True]
     adapter_name: Literal["academic-research-suite"]
-    adapter_version: Literal["0.1.20"]
+    adapter_version: Literal["0.1.26"]
     adapter_tree_sha256: Sha256
     upstream_content_tree_sha256: Sha256
     manifest: FileBinding
@@ -566,7 +568,7 @@ class UseDistributionPolicyProjection(LockModel):
     schema_version: Literal["arw.use-distribution-policy-projection.v1"]
     source_path: Literal["supply-chain/use-distribution.json"]
     declaration_schema_version: Literal["1.0.0"]
-    repository_visibility: Literal["private"]
+    repository_visibility: Literal["public"]
     intended_use_status: Literal["unknown"]
     distribution_class_status: Literal["unknown"]
     accountable_approval_status: Literal["missing"]
@@ -1068,7 +1070,7 @@ def _validate_bundled_ars(
             dependency_model="bundled-pinned-adapter",
             bundled=True,
             adapter_name="academic-research-suite",
-            adapter_version="0.1.20",
+            adapter_version="0.1.26",
             adapter_tree_sha256=_tree_sha256(root, ignore_runtime_caches=True),
             upstream_content_tree_sha256=_tree_sha256(
                 ars_root, ignore_runtime_caches=True
@@ -1474,7 +1476,7 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         )
     if (
         use_distribution.get("schema_version") != "1.0.0"
-        or use_distribution.get("repository_visibility") != "private"
+        or use_distribution.get("repository_visibility") != "public"
         or use_distribution.get("permission_references") != []
         or use_distribution.get("private_repository_is_noncommercial_evidence")
         is not False
@@ -1512,7 +1514,7 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         schema_version="arw.use-distribution-policy-projection.v1",
         source_path=use_path,
         declaration_schema_version="1.0.0",
-        repository_visibility="private",
+        repository_visibility="public",
         intended_use_status="unknown",
         distribution_class_status="unknown",
         accountable_approval_status="missing",

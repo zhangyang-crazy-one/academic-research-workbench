@@ -6,9 +6,9 @@ EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/pre-vendor-license"
 CLEAN=0
 
 ARS_URL="https://github.com/Imbad0202/academic-research-skills.git"
-ARS_REV="c22c17eed8a5753aa60681be9734919f2e2f5b42"
+ARS_REV="8cc7f8f4cccda721646d9df590b42721c93cba31"
 EXPERIMENT_URL="https://github.com/Imbad0202/experiment-agent.git"
-EXPERIMENT_REV="9b063fa895eaf1f63ac99ac03f924f8d31aa8d26"
+EXPERIMENT_REV="e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 FILE_BASE_URL="https://github.com/DeusData/codebase-memory-mcp.git"
 FILE_BASE_REV="ee68144af5453addda995a27cce8142999f318fb"
 
@@ -63,7 +63,13 @@ EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
 
 if [[ -e "$EVIDENCE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "evidence root exists; pass --clean" 73
-  rm -rf -- "$EVIDENCE_ROOT"
+  if [[ "${ARW_SKIP_CLONE:-0}" == "1" ]]; then
+    # Skip-clone mode reuses pre-downloaded upstream archives; clean
+    # only the derived outputs so the archives survive --clean.
+    rm -rf -- "$EVIDENCE_ROOT/commands" "$EVIDENCE_ROOT/generated"
+  else
+    rm -rf -- "$EVIDENCE_ROOT"
+  fi
 fi
 mkdir -p "$EVIDENCE_ROOT/commands" "$EVIDENCE_ROOT/generated" "$EVIDENCE_ROOT/source-archives"
 
@@ -97,9 +103,22 @@ clone_exact() {
   local url="$2"
   local revision="$3"
   local destination="$WORK_SOURCES/$component"
-  git init -q "$destination"
-  git -C "$destination" remote add origin "$url"
-  git -C "$destination" fetch -q --depth=1 --no-tags origin "$revision"
+  # Fetch retries: upstream clones travel over an intermittently reset
+  # network path (TLS unexpected-eof mid-packfile).  Each attempt starts
+  # from a fresh init so a half-written object store can never survive
+  # into the archive step.
+  local attempt
+  for attempt in $(seq 1 15); do
+    rm -rf "$destination"
+    git init -q "$destination"
+    git -C "$destination" remote add origin "$url"
+    if git -C "$destination" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 \
+        fetch -q --depth=1 --no-tags origin "$revision"; then
+      break
+    fi
+    [[ $attempt -lt 15 ]] || fail "$component fetch failed after retries" 65
+    sleep 3
+  done
   git -C "$destination" checkout -q --detach FETCH_HEAD
   [[ "$(git -C "$destination" rev-parse HEAD)" == "$revision" ]] \
     || fail "$component revision mismatch" 65
@@ -111,9 +130,30 @@ clone_exact() {
   observe_absence "during:fetch-$component"
 }
 
-clone_exact "academic-research-skills" "$ARS_URL" "$ARS_REV"
-clone_exact "experiment-agent" "$EXPERIMENT_URL" "$EXPERIMENT_REV"
-clone_exact "file-base" "$FILE_BASE_URL" "$FILE_BASE_REV"
+if [[ "${ARW_SKIP_CLONE:-0}" == "1" ]]; then
+  # Reuse pre-downloaded upstream archives (network-restricted builds):
+  # unpack each archive into the work sources exactly as clone_exact would
+  # have left them.  The archive bytes are GitHub's git-archive output, so
+  # the tar contents are equivalent to the local ``git archive`` step.
+  for component in academic-research-skills experiment-agent file-base; do
+    archive="$EVIDENCE_ROOT/source-archives/$component.tar"
+    [[ -s "$archive" ]] || fail "$component archive missing for skip-clone mode" 65
+    mkdir -p "$WORK_SOURCES/$component"
+    tar -xf "$archive" -C "$WORK_SOURCES/$component" --strip-components=1
+    # Materialize a single-commit repository around the unpacked archive so
+    # the downstream ``git rev-parse HEAD^{tree}`` / ``git status`` evidence
+    # rows behave exactly as they do after clone_exact.
+    git -C "$WORK_SOURCES/$component" init -q
+    git -C "$WORK_SOURCES/$component" add -A
+    git -C "$WORK_SOURCES/$component" \
+      -c user.email=arw-pre-vendor@localhost -c user.name="ARW pre-vendor" \
+      commit -q -m "skip-clone archive materialization"
+  done
+else
+  clone_exact "academic-research-skills" "$ARS_URL" "$ARS_REV"
+  clone_exact "experiment-agent" "$EXPERIMENT_URL" "$EXPERIMENT_REV"
+  clone_exact "file-base" "$FILE_BASE_URL" "$FILE_BASE_REV"
+fi
 
 [[ "$(sha256sum "$WORK_SOURCES/academic-research-skills/LICENSE" | awk '{print $1}')" == \
   "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c" ]] \
@@ -266,8 +306,8 @@ def git_value(root: Path, *args: str) -> str:
 
 
 component_specs = [
-    ("academic-research-skills", "0.1.20", ars_url, ars_revision),
-    ("experiment-agent", "pinned", experiment_url, experiment_revision),
+    ("academic-research-skills", "0.1.26", ars_url, ars_revision),
+    ("experiment-agent", "1.1.0", experiment_url, experiment_revision),
     ("file-base", "v0.9.0-2-gee68144", file_base_url, file_base_revision),
 ]
 components = []

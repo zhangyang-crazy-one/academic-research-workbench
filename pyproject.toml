@@ -19,6 +19,12 @@ dev = [
   "PyYAML>=6.0.3",
   "pytest>=9.1.1",
 ]
+ars-test = [
+  "defusedxml",
+  "jsonschema[format]>=4.17",
+  "pypdf",
+  "ruamel-yaml>=0.17",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arw"]

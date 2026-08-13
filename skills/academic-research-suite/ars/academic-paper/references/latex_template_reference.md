@@ -106,39 +106,6 @@ writing tools. All content was reviewed and verified by the author(s).
 \end{document}
 ```
 
-## Paragraph And Two-Column Float Discipline
-
-Before adding layout overrides, inspect the official class/style. Record its
-effective `\parindent`, `\parskip`, and first-paragraph-after-heading behavior.
-Keep those defaults global. A local `\noindent` is appropriate only when an
-exceptional paragraph must align with a deliberately parallel block; changing
-`\parindent` for the whole manuscript is not a valid repair for one paragraph.
-
-In two-column templates, choose a float's span from its communicative role and
-legibility, then schedule it separately:
-
-```latex
-% Dominant overview: span both columns only when column-width text is illegible.
-\begin{figure*}[t]
-  \centering
-  \includegraphics[width=\textwidth]{overview.pdf}
-  \caption{...}
-\end{figure*}
-
-% Secondary asset: preserve the original asset and fit it proportionally.
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{analysis.pdf}
-  \caption{...}
-\end{figure}
-```
-
-Inventory every `figure`, `figure*`, `table`, `table*`, and `\FloatBarrier` in
-source order. Do not issue a barrier while an earlier double-column float is
-still queued: LaTeX may otherwise end a page after one column and create a large
-interior gap. After any scheduling change, rebuild and visually inspect every
-downstream page. A successful compile is not proof of correct float placement.
-
 ## APA 7.0 Template (`apa7` Class) — Preferred for APA Output
 
 When APA 7.0 format is requested, use the `apa7` document class instead of `article`. This ensures correct running heads, title page layout, and heading levels.

@@ -98,6 +98,12 @@ def test_post_materialization_gate_preserves_native_toolchain_and_receipt(tmp_pa
         assert (evidence_root / command["stderr_path"]).is_file()
     assert (evidence_root / "generated/THIRD_PARTY_NOTICES.md").is_file()
     assert (evidence_root / "raw/native-invocations.log").is_file()
+    assert not (REPOSITORY_ROOT / "THIRD_PARTY_NOTICES.md").read_bytes().endswith(
+        b"\n\n"
+    )
+    notices = (REPOSITORY_ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "bundled adapter source `skills/academic-research-suite/ars/`" in notices
+    assert "identity `vendor/mcp-manifest.json`" in notices
 
 
 def test_component_identity_and_release_classifier_do_not_collapse_licenses() -> None:
@@ -109,7 +115,7 @@ def test_component_identity_and_release_classifier_do_not_collapse_licenses() ->
     assert verdict["release_qualification"] == "BLOCKED"
     assert verdict["reason_codes"]
     assert verdict["evidence_needed"]
-    assert use_distribution["repository_visibility"] == "private"
+    assert use_distribution["repository_visibility"] == "public"
     assert use_distribution["private_repository_is_noncommercial_evidence"] is False
     assert use_distribution["intended_use"]["status"] == "unknown"
     assert use_distribution["distribution_class"]["status"] == "unknown"

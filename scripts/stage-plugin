@@ -330,7 +330,14 @@ copy_tree() {
     local mode=0644
     [[ -x "$source" ]] && mode=0755
     copy_file "$relative" "$mode"
-  done < <(find "$source_root" -type f ! -path '*/.pytest_cache/*' ! -path '*/__pycache__/*' ! -name '*.pyc' -print0 | sort -z)
+  done < <(
+    find "$source_root" -type f \
+      ! -path '*/.pytest_cache/*' \
+      ! -path '*/__pycache__/*' \
+      ! -path '*/ars/evals/heldout/*/runs/*' \
+      ! -name '*.pyc' \
+      -print0 | sort -z
+  )
 }
 
 copy_file ".python-version"
@@ -967,7 +974,11 @@ for path in ars_source.rglob("*"):
     if path.is_symlink():
         raise SystemExit(f"bundled ARS source contains a symlink: {path.relative_to(project_root)}")
     if path.is_file() and ".pytest_cache" not in path.parts and "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}:
-        static_files.add(path.relative_to(project_root).as_posix())
+        relative = path.relative_to(project_root).as_posix()
+        staged_relative = f"/{relative}"
+        if "/ars/evals/heldout/" in staged_relative and "/runs/" in staged_relative:
+            continue
+        static_files.add(relative)
 lock_relative = "supply-chain/integration-lock.json"
 if (stage_root / lock_relative).is_file():
     static_files.add(lock_relative)

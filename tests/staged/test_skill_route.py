@@ -160,7 +160,7 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     assert set(route) == ROUTE_KEYS
     assert route["workflow_family"]
     assert route["execution_mode"]
-    assert route["source_adapter_version"] == "0.1.20"
+    assert route["source_adapter_version"] == "0.1.26"
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
     assert route["integration_status"] == "BLOCKED"
@@ -223,4 +223,4 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     identity = json.loads((evidence / "plugin/installed-identity.json").read_text())
     assert identity["stage_sha256"] == identity["installed_sha256"]
     assert len(identity["stage_sha256"]) == 64
-    assert identity["installed_manifest_version"].startswith("0.1.0+codex.")
+    assert identity["installed_manifest_version"] == "0.1.0"
