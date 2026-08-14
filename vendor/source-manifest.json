@@ -1016,11 +1016,11 @@
   "locks": [
     {
       "path": "uv.lock",
-      "sha256": "8862006f5623ee7de34cb2d0bcdb29b7de82e8f1191a2c9a32af73dc8a2fbec0"
+      "sha256": "95e73db07fb488e1a69d9a1df8ea3e9898b71a09102ff38ca766a1aba89257ec"
     },
     {
       "path": "vendor/python/wheelhouse.lock.json",
-      "sha256": "35c5069d988c4d653b365e75b76b9a989a3e414b47e205806b612d55f220e5f5"
+      "sha256": "23ad79791e6564c6d105b9051ad86b30a07603e97c1f861353573dd951a88838"
     }
   ],
   "native_test_suites": [

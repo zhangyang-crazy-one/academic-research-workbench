@@ -13,7 +13,7 @@
   "schema_version": "1.0.0",
   "uv_lock": {
     "path": "uv.lock",
-    "sha256": "8862006f5623ee7de34cb2d0bcdb29b7de82e8f1191a2c9a32af73dc8a2fbec0"
+    "sha256": "95e73db07fb488e1a69d9a1df8ea3e9898b71a09102ff38ca766a1aba89257ec"
   },
   "wheels": [
     {
