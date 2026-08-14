@@ -14,6 +14,8 @@ Commands:
                  Prepare or dispatch parent-owned Phase 4 assignments.
   orchestration-panel/orchestration-gate/orchestration-hook/orchestration-recover
                  Record Phase 4 panel, gate, hook, and recovery evidence.
+  storm          Run the opt-in STORM deep-research pipeline (needs the
+                 optional knowledge-storm dependency group).
   init/append/replay/status and Phase 2 runtime commands are forwarded to arw.cli.
   help           Show this help text.
 EOF
@@ -36,7 +38,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|_files-mcp|_graph-mcp|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|_files-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;

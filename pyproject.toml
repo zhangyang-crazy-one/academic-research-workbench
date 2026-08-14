@@ -25,6 +25,11 @@ ars-test = [
   "pypdf",
   "ruamel-yaml>=0.17",
 ]
+storm = [
+    "knowledge-storm>=1.1",
+    "sentence-transformers>=3.4",
+    "tavily-python>=0.7.27",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arw"]

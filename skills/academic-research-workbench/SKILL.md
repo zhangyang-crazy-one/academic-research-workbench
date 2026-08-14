@@ -32,3 +32,26 @@ capability and exposes only `list_files`, `read_file`, `search_files`,
 `get_outline`, and `get_context`. Treat stale metadata as a request for an
 explicit parent sync; never infer permission to crawl, extract, rebuild, repair,
 or broaden the configured root from an agent query.
+For local research files, the installed MCP receives one parent-supplied root
+capability and exposes only `list_files`, `read_file`, `search_files`,
+`get_outline`, and `get_context`. Treat stale metadata as a request for an
+explicit parent sync; never infer permission to crawl, extract, rebuild, repair,
+or broaden the configured root from an agent query.
+
+## Optional deep research (STORM)
+
+When the user explicitly asks for an experiment-planning pass, deep thinking, or a
+survey-style literature synthesis, you may offer the opt-in STORM pipeline:
+
+```bash
+"<installed-plugin-root>/bin/arw" storm --topic "<topic>" --output-dir <dir>
+```
+
+STORM performs retrieval-grounded multi-perspective research and writes a
+citation-backed draft article plus an `arw-storm-receipt.json` audit receipt into
+`<output-dir>/<topic>/`. It is never part of the default route, does not touch the
+run ledger, and requires the operator to have model credentials available
+(`GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`, or explicit `--api-key`/`--api-base`)
+and a retriever key (`TAVILY_API_KEY`, or pass `--retriever duckduckgo` for the
+keyless fallback). Run it only when the user consents; treat its output as
+pre-writing research material, never as canonical experiment evidence.

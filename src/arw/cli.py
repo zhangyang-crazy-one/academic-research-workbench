@@ -52,6 +52,46 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Write the strict version-report contract as JSON.",
     )
+    storm = subparsers.add_parser(
+        "storm",
+        help="Run the opt-in STORM deep-research pipeline (experiments / deep thinking).",
+    )
+    storm.add_argument("--topic", required=True, help="Research topic for STORM.")
+    storm.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("build/storm"),
+        help="Directory for STORM artifacts (default: build/storm).",
+    )
+    storm.add_argument(
+        "--model",
+        default=None,
+        help="LiteLLM model id, e.g. openai/gemini-2.5-flash.",
+    )
+    storm.add_argument("--api-key", default=None, help="Model API key (default: GEMINI_API_KEY).")
+    storm.add_argument(
+        "--api-base", default=None, help="OpenAI-compatible API base (default: GOOGLE_GEMINI_BASE_URL)."
+    )
+    storm.add_argument(
+        "--retriever", choices=["tavily", "duckduckgo"], default="tavily",
+        help="Search retriever (default: tavily; duckduckgo needs no key).",
+    )
+    storm.add_argument("--max-conv-turn", type=int, default=4)
+    storm.add_argument("--max-perspective", type=int, default=5)
+    storm.add_argument("--search-top-k", type=int, default=5)
+    storm.add_argument("--retrieve-top-k", type=int, default=5)
+    storm.add_argument("--max-thread-num", type=int, default=3)
+    storm.add_argument(
+        "--do-research", action=argparse.BooleanOptionalAction, default=True
+    )
+    storm.add_argument(
+        "--do-generate-outline", action=argparse.BooleanOptionalAction, default=True
+    )
+    storm.add_argument(
+        "--do-generate-article", action=argparse.BooleanOptionalAction, default=True
+    )
+    storm.add_argument("--do-polish-article", action="store_true")
+    storm.add_argument("--remove-duplicate", action="store_true")
     init = subparsers.add_parser(
         "init",
         help="Initialize an immutable run manifest and first canonical event.",
@@ -633,6 +673,39 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "identity": identity,
             }
         )
+        return 0
+    if args.command == "storm":
+        from arw.storm import StormConfig, StormRunError, run_storm_research
+
+        config_kwargs: dict[str, object] = {
+            "topic": args.topic,
+            "output_dir": Path(args.output_dir),
+            "retriever": args.retriever,
+        }
+        if args.model is not None:
+            config_kwargs["model"] = args.model
+        if args.api_key is not None:
+            config_kwargs["api_key"] = args.api_key
+        if args.api_base is not None:
+            config_kwargs["api_base"] = args.api_base
+        config = StormConfig(**config_kwargs,
+            max_conv_turn=args.max_conv_turn,
+            max_perspective=args.max_perspective,
+            search_top_k=args.search_top_k,
+            retrieve_top_k=args.retrieve_top_k,
+            max_thread_num=args.max_thread_num,
+            do_research=args.do_research,
+            do_generate_outline=args.do_generate_outline,
+            do_generate_article=args.do_generate_article,
+            do_polish_article=args.do_polish_article,
+            remove_duplicate=args.remove_duplicate,
+        )
+        try:
+            receipt = run_storm_research(config)
+        except StormRunError as error:
+            print(f"arw: storm-error: {error}", file=sys.stderr)
+            return 65
+        _write_json(receipt.model_dump(mode="json"))
         return 0
     if args.command == "files":
         from arw.file_models import ExtractionRegistration
