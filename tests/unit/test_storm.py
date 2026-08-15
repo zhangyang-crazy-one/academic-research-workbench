@@ -68,6 +68,14 @@ def _install_fake_storm_modules() -> None:
 
         def __init__(self, engine_args: object, *args: object, **kwargs: object) -> None:
             self.engine_args = engine_args
+            self.lm_cost = {
+                "run_knowledge_curation_module": {
+                    "openai/gemini-2.5-flash": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                    }
+                }
+            }
 
         def run(self, **kwargs: object) -> None:
             FakeRunner.last_topic = kwargs.get("topic")
@@ -142,7 +150,9 @@ def test_run_storm_research_writes_receipt_with_mocked_storm(
 
     from arw.storm import run_storm_research
 
-    config = StormConfig(topic="Deep RL", output_dir=tmp_path / "storm")
+    config = StormConfig(
+        topic="Deep RL", output_dir=tmp_path / "storm", backend="litellm"
+    )
     receipt = run_storm_research(config)
 
     assert receipt.model == "openai/gemini-2.5-flash"
@@ -165,7 +175,44 @@ def test_run_storm_research_duckduckgo_needs_no_tavily_key(
     from arw.storm import run_storm_research
 
     config = StormConfig(
-        topic="Deep RL", output_dir=tmp_path / "storm", retriever="duckduckgo"
+        topic="Deep RL",
+        output_dir=tmp_path / "storm",
+        retriever="duckduckgo",
+        backend="litellm",
     )
     receipt = run_storm_research(config)
     assert receipt.retriever == "duckduckgo"
+
+
+def test_session_backend_resolves_current_session_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Session backend uses the current agent session's model config."""
+    from arw.storm import SessionModelConfig
+
+    monkeypatch.setattr(
+        "arw.storm.resolve_session_model",
+        lambda: SessionModelConfig(
+            provider="openai-codex", model="gpt-5.6-terra", access_token="tok"
+        ),
+    )
+    from arw.storm import _build_lm_configs, StormConfig
+
+    lm_configs, effective_model = _build_lm_configs(
+        StormConfig(topic="t", output_dir=tmp_path / "storm", backend="session")
+    )
+    assert effective_model == "gpt-5.6-terra"
+    assert lm_configs.conv_simulator_lm.model == "gpt-5.6-terra"
+    assert lm_configs.conv_simulator_lm.access_token == "tok"
+
+
+def test_session_backend_fails_closed_without_credential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("arw.storm.resolve_session_model", lambda: None)
+    from arw.storm import _build_lm_configs, StormConfig, StormRunError
+
+    with pytest.raises(StormRunError, match="no session model credential"):
+        _build_lm_configs(
+            StormConfig(topic="t", output_dir=tmp_path / "storm", backend="session")
+        )

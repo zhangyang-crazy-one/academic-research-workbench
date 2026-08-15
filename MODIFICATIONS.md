@@ -29,7 +29,7 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 - Upstream: <https://github.com/stanford-oval/storm> (`knowledge-storm` >= 1.1, `tavily-python`).
 - Role: optional deep-research pipeline for experiment planning and deep-thinking passes, exposed as the `arw storm` command. Never part of the default route; writes only into an operator-chosen output directory and emits an `arw-storm-run-receipt.v1` audit receipt.
-- Model access: LiteLLM over any OpenAI-compatible endpoint (defaults to `GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`). Retrieval defaults to Tavily with a keyless DuckDuckGo fallback.
+- Model access: session-first. The default backend reuses the current agent session's model (pi/Codex OAuth over the ChatGPT backend Responses API, e.g. `gpt-5.6-terra`); `--backend litellm` switches to any OpenAI-compatible endpoint (`--api-key`/`--api-base`, or the GEMINI environment pair). Retrieval defaults to Tavily with a keyless DuckDuckGo fallback.
 - Installation: optional `storm` dependency group; the installed plugin's offline runtime reports a fail-closed message when the group is absent.
 
 ## file-base

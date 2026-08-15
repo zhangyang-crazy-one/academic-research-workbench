@@ -49,9 +49,10 @@ survey-style literature synthesis, you may offer the opt-in STORM pipeline:
 
 STORM performs retrieval-grounded multi-perspective research and writes a
 citation-backed draft article plus an `arw-storm-receipt.json` audit receipt into
-`<output-dir>/<topic>/`. It is never part of the default route, does not touch the
-run ledger, and requires the operator to have model credentials available
-(`GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`, or explicit `--api-key`/`--api-base`)
-and a retriever key (`TAVILY_API_KEY`, or pass `--retriever duckduckgo` for the
-keyless fallback). Run it only when the user consents; treat its output as
-pre-writing research material, never as canonical experiment evidence.
+`<output-dir>/<topic>/`. It is never part of the default route and does not touch
+the run ledger. By default it reuses the model the current agent session is
+configured to use (`--backend session`, the pi/Codex session credential); pass
+`--backend litellm` with `--api-key`/`--api-base` to use any OpenAI-compatible
+endpoint instead. Retrieval needs `TAVILY_API_KEY` (or `--retriever duckduckgo`
+for the keyless fallback). Run it only when the user consents; treat its output
+as pre-writing research material, never as canonical experiment evidence.

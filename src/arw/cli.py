@@ -64,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for STORM artifacts (default: build/storm).",
     )
     storm.add_argument(
+        "--backend",
+        choices=["session", "litellm"],
+        default="session",
+        help="Model backend: session (current agent session model) or litellm "
+        "(explicit OpenAI-compatible endpoint).",
+    )
+    storm.add_argument(
         "--model",
         default=None,
         help="LiteLLM model id, e.g. openai/gemini-2.5-flash.",
@@ -680,6 +687,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config_kwargs: dict[str, object] = {
             "topic": args.topic,
             "output_dir": Path(args.output_dir),
+            "backend": args.backend,
             "retriever": args.retriever,
         }
         if args.model is not None:

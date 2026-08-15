@@ -6,16 +6,21 @@ opt-in command for experiment planning and deep-thinking passes: it is never
 part of the default route, never touches the run ledger, and only writes into
 an operator-chosen output directory.
 
-Model access is delegated to LiteLLM (``knowledge-storm`` >= 1.1), so any
-OpenAI-compatible endpoint works.  Keys are read from the environment or the
-CLI and are never persisted.  Retrieval defaults to Tavily (official STORM
-retriever) with DuckDuckGo as a keyless fallback.
+Model access follows the session-first rule: by default STORM reuses the
+model the current agent session is configured to use (pi/Codex OAuth over the
+ChatGPT backend Responses API).  An explicit ``--api-base``/``--api-key`` (or
+the GEMINI environment pair) switches to the LiteLLM path for any
+OpenAI-compatible endpoint.  Keys are read from session files or the
+environment and are never persisted.  Retrieval defaults to Tavily (official
+STORM retriever) with DuckDuckGo as a keyless fallback.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -23,7 +28,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 RETRIEVERS = Literal["tavily", "duckduckgo"]
-_DEFAULT_MODEL = "openai/gemini-2.5-flash"
+BACKENDS = Literal["session", "litellm"]
+_DEFAULT_LITELLM_MODEL = "openai/gemini-2.5-flash"
+_CODEX_BACKEND = "https://chatgpt.com/backend-api/codex"
 
 
 class StormRunError(RuntimeError):
@@ -35,7 +42,8 @@ class StormConfig(BaseModel):
 
     topic: str = Field(min_length=1, max_length=500)
     output_dir: Path
-    model: str = _DEFAULT_MODEL
+    backend: BACKENDS = "session"
+    model: str = _DEFAULT_LITELLM_MODEL
     api_key: str | None = None
     api_base: str | None = None
     retriever: RETRIEVERS = "tavily"
@@ -83,6 +91,7 @@ class StormRunReceipt(BaseModel):
     schema_version: Literal["arw.storm-run-receipt.v1"]
     topic: str
     topic_directory: str
+    backend: str
     model: str
     retriever: str
     started_at: str
@@ -97,14 +106,253 @@ def sanitize_topic(topic: str) -> str:
     return topic or "unnamed_topic"
 
 
+class SessionModelConfig(BaseModel):
+    """The model the current agent session is configured to use."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    provider: str
+    model: str
+    access_token: str
+
+
+def resolve_session_model() -> SessionModelConfig | None:
+    """Discover the current agent session's model configuration.
+
+    Reads pi's session settings (default provider/model) and its OAuth
+    credential store, then falls back to the Codex CLI credential store.
+    Returns ``None`` when no session credential is available.
+    """
+
+    for settings_path, auth_path, provider_priority in (
+        (Path.home() / ".pi/agent/settings.json", Path.home() / ".pi/agent/auth.json", ("openai-codex",)),
+        (Path.home() / ".codex/settings.json", Path.home() / ".codex/auth.json", ()),
+    ):
+        if not settings_path.is_file() or not auth_path.is_file():
+            continue
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            auth = json.loads(auth_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        provider = settings.get("defaultProvider")
+        model = settings.get("defaultModel") or ""
+        if not provider or not model:
+            continue
+        entry = auth.get(provider, {})
+        if isinstance(entry, dict):
+            if entry.get("type") == "oauth" and entry.get("access"):
+                return SessionModelConfig(
+                    provider=provider, model=model, access_token=entry["access"]
+                )
+            if entry.get("type") == "api_key" and entry.get("key"):
+                return SessionModelConfig(
+                    provider=provider, model=model, access_token=entry["key"]
+                )
+    return None
+
+
+class CodexResponsesLM:
+    """STORM-compatible LM backed by the ChatGPT backend Responses API.
+
+    Implements the ``knowledge_storm`` LM protocol (``__call__`` returning a
+    list of output strings, ``get_usage_and_reset``, ``history``) so STORM's
+    pipeline can run on the exact model the current session is using.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        access_token: str,
+        *,
+        temperature: float = 1.0,
+        max_tokens: int = 500,
+        cache: bool = True,
+        **kwargs: object,
+    ) -> None:
+        self.model = model
+        self.access_token = access_token
+        self.cache = cache
+        self.kwargs = dict(temperature=temperature, max_tokens=max_tokens, **kwargs)
+        self.history: list[dict[str, object]] = []
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self._last_usage_tokens = 0
+        self._lock = threading.Lock()
+
+    def __call__(
+        self, prompt: str | None = None, messages: list[dict[str, str]] | None = None, **kwargs: object
+    ) -> list[str]:
+        import httpx
+
+        if messages is None:
+            messages = [{"role": "user", "content": prompt or ""}]
+        input_items = [
+            {"type": "message", "role": m.get("role", "user"), "content": [{"type": "input_text", "text": str(m.get("content", ""))}]}
+            for m in messages
+        ]
+        # The ChatGPT backend Responses endpoint only accepts the minimal
+        # parameter set; temperature / max_output_tokens are rejected, so the
+        # model defaults govern both.
+        body = {
+            "model": self.model,
+            "input": input_items,
+            "stream": True,
+            "store": False,
+        }
+
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                text = self._complete(body)
+                break
+            except (httpx.HTTPError, StormRunError) as error:
+                last_error = error
+                if attempt < 2:
+                    import time as _time
+
+                    _time.sleep(1.5 * (attempt + 1))
+        else:
+            raise StormRunError(
+                f"session model backend failed after retries: {last_error}"
+            ) from last_error
+        usage_tokens = self._last_usage_tokens
+        with self._lock:
+            self.prompt_tokens += max(usage_tokens // 2, 0)
+            self.completion_tokens += usage_tokens
+            self.history.append(
+                {
+                    "prompt": prompt,
+                    "messages": messages,
+                    "outputs": [text],
+                    "usage": {"total_tokens": usage_tokens},
+                }
+            )
+        return [text]
+
+    def _complete(self, body: dict[str, object]) -> str:
+        import httpx
+
+        text_parts: list[str] = []
+        usage_tokens = 0
+        with httpx.Client(timeout=600) as client:
+            with client.stream(
+                "POST",
+                f"{_CODEX_BACKEND}/responses",
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Content-Type": "application/json",
+                    "Origin": "https://chatgpt.com",
+                    "User-Agent": "Mozilla/5.0",
+                },
+            ) as response:
+                if response.status_code != 200:
+                    detail = next(response.iter_text()).strip()[:300]
+                    raise StormRunError(
+                        f"session model backend rejected the request "
+                        f"(status {response.status_code}): {detail}"
+                    )
+                event_type = None
+                for line in response.iter_lines():
+                    if line.startswith("event: "):
+                        event_type = line[len("event: ") :]
+                    elif line.startswith("data: ") and event_type is not None:
+                        event_data = line[len("data: ") :]
+                        if event_type == "response.output_text.delta":
+                            try:
+                                text_parts.append(json.loads(event_data).get("delta", ""))
+                            except ValueError:
+                                pass
+                        elif event_type == "response.completed":
+                            try:
+                                payload = json.loads(event_data)
+                                resp = payload.get("response", {}) or {}
+                                usage = resp.get("usage") or {}
+                                usage_tokens = int(usage.get("total_tokens") or 0)
+                                # Fallback: some responses carry the full text
+                                # only in the completed output items.
+                                for item in resp.get("output", []) or []:
+                                    if item.get("type") == "message":
+                                        for part in item.get("content", []) or []:
+                                            if part.get("type") == "output_text":
+                                                text_parts.append(part.get("text", ""))
+                            except (ValueError, TypeError):
+                                pass
+                        event_type = None
+        self._last_usage_tokens = usage_tokens
+        text = "".join(text_parts)
+        if not text.strip():
+            raise StormRunError(
+                "session model backend returned an empty response"
+            )
+        return text
+
+    def get_usage_and_reset(self) -> dict[str, dict[str, int]]:
+        with self._lock:
+            usage = {
+                self.model: {
+                    "prompt_tokens": self.prompt_tokens,
+                    "completion_tokens": self.completion_tokens,
+                }
+            }
+            self.prompt_tokens = 0
+            self.completion_tokens = 0
+        return usage
+
+    def inspect_history(self, n: int = 1) -> None:  # pragma: no cover - debug helper
+        for entry in self.history[-n:]:
+            print(entry)
+
+
+def _build_lm_configs(config: StormConfig):
+    from knowledge_storm import STORMWikiLMConfigs
+
+    lm_configs = STORMWikiLMConfigs()
+
+    if config.backend == "session":
+        session = resolve_session_model()
+        if session is None:
+            raise StormRunError(
+                "no session model credential found (checked ~/.pi/agent/auth.json "
+                "and ~/.codex/auth.json); pass --backend litellm with --api-key/--api-base"
+            )
+        model = config.model if config.model != _DEFAULT_LITELLM_MODEL else session.model
+
+        def make_lm(max_tokens: int) -> CodexResponsesLM:
+            return CodexResponsesLM(
+                model=model, access_token=session.access_token, max_tokens=max_tokens
+            )
+
+        lm_configs.set_conv_simulator_lm(make_lm(500))
+        lm_configs.set_question_asker_lm(make_lm(500))
+        lm_configs.set_outline_gen_lm(make_lm(400))
+        lm_configs.set_article_gen_lm(make_lm(700))
+        lm_configs.set_article_polish_lm(make_lm(4000))
+        return lm_configs, model
+
+    from knowledge_storm.lm import LitellmModel
+
+    api_key = config.resolve_api_key("model")
+    api_base = config.resolve_api_base()
+    lm_kwargs: dict[str, object] = {"api_key": api_key, "temperature": 1.0, "top_p": 0.9}
+    if api_base:
+        lm_kwargs["api_base"] = api_base
+    lm_configs.set_conv_simulator_lm(LitellmModel(model=config.model, max_tokens=500, **lm_kwargs))
+    lm_configs.set_question_asker_lm(LitellmModel(model=config.model, max_tokens=500, **lm_kwargs))
+    lm_configs.set_outline_gen_lm(LitellmModel(model=config.model, max_tokens=400, **lm_kwargs))
+    lm_configs.set_article_gen_lm(LitellmModel(model=config.model, max_tokens=700, **lm_kwargs))
+    lm_configs.set_article_polish_lm(LitellmModel(model=config.model, max_tokens=4000, **lm_kwargs))
+    return lm_configs, config.model
+
+
 def run_storm_research(config: StormConfig) -> StormRunReceipt:
     """Run the STORM wiki pipeline and return an ARW audit receipt."""
     if not config.do_research and not config.do_generate_outline and not config.do_generate_article:
         raise StormRunError("at least one pipeline stage must be enabled")
 
     try:
-        from knowledge_storm import STORMWikiLMConfigs, STORMWikiRunner, STORMWikiRunnerArguments
-        from knowledge_storm.lm import LitellmModel
+        from knowledge_storm import STORMWikiRunner, STORMWikiRunnerArguments
         from knowledge_storm.rm import DuckDuckGoSearchRM, TavilySearchRM
     except ImportError as error:
         raise StormRunError(
@@ -113,19 +361,7 @@ def run_storm_research(config: StormConfig) -> StormRunReceipt:
             "install the plugin's optional storm dependency group"
         ) from error
 
-    api_key = config.resolve_api_key("model")
-    api_base = config.resolve_api_base()
-
-    lm_kwargs: dict[str, object] = {"api_key": api_key, "temperature": 1.0, "top_p": 0.9}
-    if api_base:
-        lm_kwargs["api_base"] = api_base
-
-    lm_configs = STORMWikiLMConfigs()
-    lm_configs.set_conv_simulator_lm(LitellmModel(model=config.model, max_tokens=500, **lm_kwargs))
-    lm_configs.set_question_asker_lm(LitellmModel(model=config.model, max_tokens=500, **lm_kwargs))
-    lm_configs.set_outline_gen_lm(LitellmModel(model=config.model, max_tokens=400, **lm_kwargs))
-    lm_configs.set_article_gen_lm(LitellmModel(model=config.model, max_tokens=700, **lm_kwargs))
-    lm_configs.set_article_polish_lm(LitellmModel(model=config.model, max_tokens=4000, **lm_kwargs))
+    lm_configs, effective_model = _build_lm_configs(config)
 
     engine_args = STORMWikiRunnerArguments(
         output_dir=str(config.output_dir),
@@ -158,30 +394,30 @@ def run_storm_research(config: StormConfig) -> StormRunReceipt:
         remove_duplicate=config.remove_duplicate,
     )
     runner.post_run()
-    summary = runner.summary()
+    # STORM accumulates per-module token usage in lm_cost during run();
+    # aggregate it here instead of resetting the LMs (which summary()
+    # itself prints from lm_cost).
+    usage: dict[str, dict[str, int]] = {}
+    for module_cost in runner.lm_cost.values():
+        for model_name, tokens in module_cost.items():
+            entry = usage.setdefault(
+                model_name, {"prompt_tokens": 0, "completion_tokens": 0}
+            )
+            entry["prompt_tokens"] += int(tokens.get("prompt_tokens", 0))
+            entry["completion_tokens"] += int(tokens.get("completion_tokens", 0))
+    runner.summary()
     finished_at = datetime.now(UTC).isoformat()
 
     topic_directory = config.output_dir / sanitize_topic(config.topic)
     artifacts = sorted(
         path.name for path in topic_directory.iterdir() if path.is_file()
     )
-
-    usage: dict[str, dict[str, int]] = {}
-    for lm in (
-        lm_configs.conv_simulator_lm,
-        lm_configs.question_asker_lm,
-        lm_configs.outline_gen_lm,
-        lm_configs.article_gen_lm,
-        lm_configs.article_polish_lm,
-    ):
-        if lm is not None:
-            usage.update(lm.get_usage_and_reset())
-
     receipt = StormRunReceipt(
         schema_version="arw.storm-run-receipt.v1",
         topic=config.topic,
         topic_directory=sanitize_topic(config.topic),
-        model=config.model,
+        backend=config.backend,
+        model=effective_model,
         retriever=config.retriever,
         started_at=started_at,
         finished_at=finished_at,
