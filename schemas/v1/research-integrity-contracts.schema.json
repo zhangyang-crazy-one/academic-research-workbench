@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-integrity-contracts.schema.json",
+  "title": "ARW Research Integrity Contracts",
+  "description": "Read-only diagnostic and evidence documents. Hooks remain observational; the parent alone owns canonical state, evidence admission, retries, provenance, gates, ArtifactAcceptanceRequest, ArtifactManifest, and accepted Material Passport hashes.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/IntegrationDiagnosticReport"
+    }
+  ],
+  "discriminator": {
+    "propertyName": "schema_version",
+    "mapping": {
+      "arw.integration-diagnostic.v1": "#/$defs/IntegrationDiagnosticReport"
+    }
+  },
+  "$defs": {
+    "IntegrationDiagnosticLayer": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "One bounded, read-only observation of the exact integration boundary.",
+      "properties": {
+        "name": {
+          "enum": [
+            "inputs",
+            "lock_document",
+            "staged_arw",
+            "ars_bundle",
+            "file_base",
+            "codex_host",
+            "hook_definition",
+            "hook_execution_evidence",
+            "legal_state",
+            "exact_lock"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "NOT_EVALUATED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "integration_inputs_incomplete",
+                "lock_document_invalid",
+                "lock_document_noncanonical",
+                "staged_arw_drift",
+                "ars_bundle_drift",
+                "file_base_drift",
+                "codex_host_drift",
+                "hook_definition_drift",
+                "hook_execution_evidence_drift",
+                "legal_state_drift",
+                "exact_lock_drift"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason Code"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "enum": [
+                "required integration inputs are absent or unsafe",
+                "integration lock is invalid strict JSON",
+                "integration lock bytes are not canonical JSON",
+                "staged ARW runtime differs from the lock",
+                "bundled ARS bytes differ from the lock",
+                "file-base bytes or patch evidence differ from the lock",
+                "Codex host tuple differs from the lock",
+                "root hook definition differs from the lock",
+                "retained hook evidence differs from the lock",
+                "legal policy differs from the qualified blocked state",
+                "complete exact integration verification failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detail"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Sha256"
+        },
+        "observed_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Sha256"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "reason_code",
+        "detail",
+        "expected_sha256",
+        "observed_sha256"
+      ],
+      "title": "IntegrationDiagnosticLayer",
+      "type": "object"
+    },
+    "IntegrationDiagnosticReport": {
+      "additionalProperties": false,
+      "description": "Safe diagnostic projection; only exact verification may produce PASS.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.integration-diagnostic.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "technical_qualification": {
+          "enum": [
+            "PASS",
+            "BLOCKED"
+          ],
+          "title": "Technical Qualification",
+          "type": "string"
+        },
+        "release_qualification": {
+          "const": "BLOCKED",
+          "title": "Release Qualification",
+          "type": "string"
+        },
+        "experiment_execution": {
+          "const": "disabled",
+          "title": "Experiment Execution",
+          "type": "string"
+        },
+        "integration_lock_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Integration Lock Sha256"
+        },
+        "reason_codes": {
+          "items": {
+            "enum": [
+              "integration_inputs_incomplete",
+              "lock_document_invalid",
+              "lock_document_noncanonical",
+              "staged_arw_drift",
+              "ars_bundle_drift",
+              "file_base_drift",
+              "codex_host_drift",
+              "hook_definition_drift",
+              "hook_execution_evidence_drift",
+              "legal_state_drift",
+              "exact_lock_drift"
+            ],
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/IntegrationDiagnosticLayer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "technical_qualification",
+        "release_qualification",
+        "experiment_execution",
+        "integration_lock_sha256",
+        "reason_codes",
+        "layers"
+      ],
+      "title": "ARW Integration Diagnostic",
+      "type": "object"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -10,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+import arw.cli as cli_module
+import arw.integration_lock as integration_lock_module
 from arw.canonical import canonical_json_bytes
 from arw.hook_contracts import (
     PARITY_SURFACES,
@@ -29,6 +32,7 @@ from arw.integration_lock import (
     IntegrationLockError,
     IsolationProof,
     build_integration_lock,
+    diagnose_integration_lock,
     integration_lock_bytes,
     integration_lock_schema_document,
     is_supported_codex_cli_version,
@@ -1093,3 +1097,195 @@ def test_checked_in_integration_lock_schema_matches_model_projection() -> None:
         (root / "schemas/v1/integration-lock.schema.json").read_text(encoding="utf-8")
     )
     assert checked == integration_lock_schema_document()
+
+
+def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
+    integration_fixture: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hasattr(integration_lock_module, "diagnose_integration_lock"), (
+        "the read-only layered integration diagnostic API is missing"
+    )
+    assert hasattr(cli_module, "_installed_route_diagnostics_from_environment"), (
+        "route diagnostics do not share installed input discovery"
+    )
+
+    lock = _build(integration_fixture)
+    integration_fixture["lock"].write_text(
+        json.dumps(lock.model_dump(mode="json"), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(integration_fixture["stage"]))
+    monkeypatch.setenv("ARW_INTEGRATION_LOCK", str(integration_fixture["lock"]))
+    monkeypatch.setenv("ARW_CODEX_LAUNCHER", str(integration_fixture["launcher"]))
+    monkeypatch.setenv(
+        "ARW_CODEX_NATIVE_BINARY", str(integration_fixture["native"])
+    )
+    monkeypatch.setenv(
+        "ARW_HOST_CANARY_EVIDENCE", str(integration_fixture["canary"])
+    )
+
+    exit_code = cli_module.main(["route", "--diagnostics", "--json"])
+    report = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 65
+    assert report["schema_version"] == "arw.integration-diagnostic.v1"
+    assert report["status"] == "BLOCKED"
+    layers = {layer["name"]: layer for layer in report["layers"]}
+    assert layers["inputs"]["status"] == "PASS"
+    assert layers["lock_document"]["status"] == "BLOCKED"
+    assert layers["lock_document"]["reason_code"] == "lock_document_noncanonical"
+    assert all(
+        layer["status"] == "NOT_EVALUATED"
+        for layer in report["layers"][2:]
+    )
+
+
+def test_root_hook_supply_chain_gate_rejects_digest_substitution(
+    tmp_path: Path,
+) -> None:
+    gate_path = (
+        REPOSITORY_ROOT
+        / "skills/academic-research-suite/codex/scripts/ars_codex_quality_gates.py"
+    )
+    spec = importlib.util.spec_from_file_location("ars_codex_quality_gates", gate_path)
+    assert spec and spec.loader
+    gates = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gates)
+    assert hasattr(gates, "check_root_hook_supply_chain"), (
+        "the root hook definition has no direct SBOM gate"
+    )
+
+    plugin_root = tmp_path / "plugin"
+    shutil.copytree(REPOSITORY_ROOT / "hooks", plugin_root / "hooks")
+    sbom = json.loads((REPOSITORY_ROOT / "SBOM.cdx.json").read_text(encoding="utf-8"))
+    nested_digest = hashlib.sha256(
+        (
+            REPOSITORY_ROOT
+            / "skills/academic-research-suite/codex/hooks/hooks.json"
+        ).read_bytes()
+    ).hexdigest()
+    component = next(
+        item for item in sbom["components"] if item.get("name") == "hooks/hooks.json"
+    )
+    component["hashes"] = [{"alg": "SHA-256", "content": nested_digest}]
+    (plugin_root / "SBOM.cdx.json").write_text(
+        json.dumps(sbom, indent=2) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(gates.GateFailure, match="hooks/hooks.json.*digest"):
+        gates.check_root_hook_supply_chain(plugin_root)
+
+
+def _diagnose_fixture(
+    integration_fixture: dict[str, Path],
+):
+    return diagnose_integration_lock(
+        integration_fixture["lock"],
+        stage_root=integration_fixture["stage"],
+        codex_launcher=integration_fixture["launcher"],
+        codex_native_binary=integration_fixture["native"],
+        host_canary_evidence=integration_fixture["canary"],
+    )
+
+
+def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
+    integration_fixture: dict[str, Path],
+) -> None:
+    from arw.schema_registry import validate_instance
+
+    lock = _build(integration_fixture)
+    expected = write_integration_lock(integration_fixture["lock"], lock)
+    report = _diagnose_fixture(integration_fixture)
+
+    assert report.status == "PASS"
+    assert report.integration_lock_sha256 == expected
+    assert [layer.name for layer in report.layers] == [
+        "inputs",
+        "lock_document",
+        "staged_arw",
+        "ars_bundle",
+        "file_base",
+        "codex_host",
+        "hook_definition",
+        "hook_execution_evidence",
+        "legal_state",
+        "exact_lock",
+    ]
+    assert all(layer.status == "PASS" for layer in report.layers)
+    assert report.release_qualification == "BLOCKED"
+    assert report.experiment_execution == "disabled"
+    validate_instance(
+        "research-integrity-contracts.schema.json",
+        report.model_dump(mode="json"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_layer", "expected_reason"),
+    [
+        ("staged-arw", "staged_arw", "staged_arw_drift"),
+        ("ars", "ars_bundle", "ars_bundle_drift"),
+        ("file-base", "file_base", "file_base_drift"),
+        ("host", "codex_host", "codex_host_drift"),
+        ("hook-definition", "hook_definition", "hook_definition_drift"),
+        (
+            "hook-evidence",
+            "hook_execution_evidence",
+            "hook_execution_evidence_drift",
+        ),
+        ("legal", "legal_state", "legal_state_drift"),
+    ],
+)
+def test_diagnostic_stops_at_the_first_exact_drift_layer(
+    integration_fixture: dict[str, Path],
+    mutation: str,
+    expected_layer: str,
+    expected_reason: str,
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    if mutation == "staged-arw":
+        target = (
+            integration_fixture["stage"]
+            / "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
+        )
+        target.write_bytes(target.read_bytes() + b"drift")
+    elif mutation == "ars":
+        target = (
+            integration_fixture["external"] / "ars/academic-pipeline/WORKFLOW.md"
+        )
+        target.write_bytes(target.read_bytes() + b"drift")
+    elif mutation == "file-base":
+        target = integration_fixture["stage"] / "libexec/file-base-mcp"
+        target.write_bytes(target.read_bytes() + b"drift")
+    elif mutation == "host":
+        target = integration_fixture["native"]
+        mode = target.stat().st_mode
+        target.write_bytes(target.read_bytes() + b"\n# drift\n")
+        target.chmod(mode)
+    elif mutation == "hook-definition":
+        target = integration_fixture["stage"] / "hooks/hooks.json"
+        target.write_bytes(target.read_bytes() + b" ")
+    elif mutation == "hook-evidence":
+        target = integration_fixture["canary"]
+        target.write_bytes(target.read_bytes() + b" ")
+    else:
+        target = integration_fixture["stage"] / "supply-chain/use-distribution.json"
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        payload["intended_use"] = {"status": "commercial"}
+        _json(target, payload)
+
+    report = _diagnose_fixture(integration_fixture)
+    blocked_index = next(
+        index for index, layer in enumerate(report.layers) if layer.status == "BLOCKED"
+    )
+    assert report.layers[blocked_index].name == expected_layer
+    assert report.layers[blocked_index].reason_code == expected_reason
+    assert all(
+        layer.status == "NOT_EVALUATED"
+        for layer in report.layers[blocked_index + 1 :]
+    )
+    serialized = canonical_json_bytes(report.model_dump(mode="json")).decode("utf-8")
+    assert str(integration_fixture["stage"]) not in serialized

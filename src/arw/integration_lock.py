@@ -634,6 +634,134 @@ class IntegrationVerification(LockModel):
     release_qualification: Literal["BLOCKED"]
 
 
+DiagnosticLayerName = Literal[
+    "inputs",
+    "lock_document",
+    "staged_arw",
+    "ars_bundle",
+    "file_base",
+    "codex_host",
+    "hook_definition",
+    "hook_execution_evidence",
+    "legal_state",
+    "exact_lock",
+]
+DiagnosticReasonCode = Literal[
+    "integration_inputs_incomplete",
+    "lock_document_invalid",
+    "lock_document_noncanonical",
+    "staged_arw_drift",
+    "ars_bundle_drift",
+    "file_base_drift",
+    "codex_host_drift",
+    "hook_definition_drift",
+    "hook_execution_evidence_drift",
+    "legal_state_drift",
+    "exact_lock_drift",
+]
+DiagnosticDetail = Literal[
+    "required integration inputs are absent or unsafe",
+    "integration lock is invalid strict JSON",
+    "integration lock bytes are not canonical JSON",
+    "staged ARW runtime differs from the lock",
+    "bundled ARS bytes differ from the lock",
+    "file-base bytes or patch evidence differ from the lock",
+    "Codex host tuple differs from the lock",
+    "root hook definition differs from the lock",
+    "retained hook evidence differs from the lock",
+    "legal policy differs from the qualified blocked state",
+    "complete exact integration verification failed",
+]
+
+DIAGNOSTIC_LAYER_ORDER: tuple[DiagnosticLayerName, ...] = (
+    "inputs",
+    "lock_document",
+    "staged_arw",
+    "ars_bundle",
+    "file_base",
+    "codex_host",
+    "hook_definition",
+    "hook_execution_evidence",
+    "legal_state",
+    "exact_lock",
+)
+
+
+class IntegrationDiagnosticLayer(LockModel):
+    """One bounded, read-only observation of the exact integration boundary."""
+
+    name: DiagnosticLayerName
+    status: Literal["PASS", "BLOCKED", "NOT_EVALUATED"]
+    reason_code: DiagnosticReasonCode | None
+    detail: DiagnosticDetail | None
+    expected_sha256: Sha256 | None
+    observed_sha256: Sha256 | None
+
+    @model_validator(mode="after")
+    def status_fields_are_consistent(self) -> Self:
+        if self.status == "BLOCKED":
+            if self.reason_code is None or self.detail is None:
+                raise ValueError("blocked diagnostic layers require a closed reason")
+        elif any(value is not None for value in (self.reason_code, self.detail)):
+            raise ValueError("non-blocked diagnostic layers cannot carry a reason")
+        if self.status == "NOT_EVALUATED" and any(
+            value is not None
+            for value in (self.expected_sha256, self.observed_sha256)
+        ):
+            raise ValueError("unevaluated diagnostic layers cannot carry digests")
+        return self
+
+
+class IntegrationDiagnosticReport(LockModel):
+    """Safe diagnostic projection; only exact verification may produce PASS."""
+
+    schema_version: Literal["arw.integration-diagnostic.v1"]
+    status: Literal["PASS", "BLOCKED"]
+    technical_qualification: Literal["PASS", "BLOCKED"]
+    release_qualification: Literal["BLOCKED"]
+    experiment_execution: Literal["disabled"]
+    integration_lock_sha256: Sha256 | None
+    reason_codes: tuple[DiagnosticReasonCode, ...] = Field(max_length=1)
+    layers: tuple[IntegrationDiagnosticLayer, ...] = Field(
+        min_length=len(DIAGNOSTIC_LAYER_ORDER),
+        max_length=len(DIAGNOSTIC_LAYER_ORDER),
+    )
+
+    @model_validator(mode="after")
+    def layer_order_and_status_are_exact(self) -> Self:
+        if tuple(layer.name for layer in self.layers) != DIAGNOSTIC_LAYER_ORDER:
+            raise ValueError("integration diagnostic layers are incomplete or reordered")
+        blocked = [
+            index for index, layer in enumerate(self.layers) if layer.status == "BLOCKED"
+        ]
+        if self.status == "PASS":
+            if (
+                self.technical_qualification != "PASS"
+                or self.integration_lock_sha256 is None
+                or self.reason_codes
+                or any(layer.status != "PASS" for layer in self.layers)
+            ):
+                raise ValueError("diagnostic PASS requires complete exact verification")
+            return self
+        if (
+            self.technical_qualification != "BLOCKED"
+            or self.integration_lock_sha256 is not None
+            or len(blocked) != 1
+        ):
+            raise ValueError("blocked diagnostics require one first failing layer")
+        first = blocked[0]
+        if any(layer.status != "PASS" for layer in self.layers[:first]):
+            raise ValueError("layers before the first failure must pass")
+        if any(
+            layer.status != "NOT_EVALUATED"
+            for layer in self.layers[first + 1 :]
+        ):
+            raise ValueError("layers after the first failure must not be evaluated")
+        if self.reason_codes != (self.layers[first].reason_code,):
+            raise ValueError("report reason must equal the blocked layer reason")
+        return self
+
+
 def _digest(path: Path) -> str:
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -1680,6 +1808,359 @@ def load_and_verify_integration_lock(
     )
 
 
+def _diagnostic_digest(value: BaseModel) -> str:
+    return hashlib.sha256(
+        canonical_json_bytes(value.model_dump(mode="json"))
+    ).hexdigest()
+
+
+def _passed_diagnostic_layer(
+    name: DiagnosticLayerName,
+    *,
+    expected_sha256: str | None = None,
+    observed_sha256: str | None = None,
+) -> IntegrationDiagnosticLayer:
+    return IntegrationDiagnosticLayer(
+        name=name,
+        status="PASS",
+        reason_code=None,
+        detail=None,
+        expected_sha256=expected_sha256,
+        observed_sha256=observed_sha256,
+    )
+
+
+def _blocked_diagnostic_report(
+    layers: list[IntegrationDiagnosticLayer],
+    *,
+    name: DiagnosticLayerName,
+    reason_code: DiagnosticReasonCode,
+    detail: DiagnosticDetail,
+    expected_sha256: str | None = None,
+    observed_sha256: str | None = None,
+) -> IntegrationDiagnosticReport:
+    layers.append(
+        IntegrationDiagnosticLayer(
+            name=name,
+            status="BLOCKED",
+            reason_code=reason_code,
+            detail=detail,
+            expected_sha256=expected_sha256,
+            observed_sha256=observed_sha256,
+        )
+    )
+    layers.extend(
+        IntegrationDiagnosticLayer(
+            name=remaining,
+            status="NOT_EVALUATED",
+            reason_code=None,
+            detail=None,
+            expected_sha256=None,
+            observed_sha256=None,
+        )
+        for remaining in DIAGNOSTIC_LAYER_ORDER[len(layers) :]
+    )
+    return IntegrationDiagnosticReport(
+        schema_version="arw.integration-diagnostic.v1",
+        status="BLOCKED",
+        technical_qualification="BLOCKED",
+        release_qualification="BLOCKED",
+        experiment_execution="disabled",
+        integration_lock_sha256=None,
+        reason_codes=(reason_code,),
+        layers=tuple(layers),
+    )
+
+
+def diagnose_integration_lock(
+    path: Path | None,
+    *,
+    stage_root: Path | None,
+    codex_launcher: Path | None,
+    codex_native_binary: Path | None,
+    host_canary_evidence: Path | None,
+) -> IntegrationDiagnosticReport:
+    """Explain exact integration verification without gaining admission authority.
+
+    Every layer is a bounded observation of the same validators used by
+    :func:`load_and_verify_integration_lock`.  Only that complete final call can
+    produce technical PASS; partial observations never create an
+    :class:`IntegrationVerification` or mutate parent-owned state.
+    """
+
+    layers: list[IntegrationDiagnosticLayer] = []
+    file_inputs = (path, codex_launcher, codex_native_binary, host_canary_evidence)
+    if (
+        stage_root is None
+        or stage_root.is_symlink()
+        or not stage_root.is_dir()
+        or any(
+            item is None or item.is_symlink() or not item.is_file()
+            for item in file_inputs
+        )
+    ):
+        return _blocked_diagnostic_report(
+            layers,
+            name="inputs",
+            reason_code="integration_inputs_incomplete",
+            detail="required integration inputs are absent or unsafe",
+        )
+    layers.append(_passed_diagnostic_layer("inputs"))
+    assert path is not None
+    assert codex_launcher is not None
+    assert codex_native_binary is not None
+    assert host_canary_evidence is not None
+
+    try:
+        raw_lock = path.read_bytes()
+        lock = IntegrationLock.model_validate_json(raw_lock, strict=True)
+    except (OSError, UnicodeError, ValueError, ValidationError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="lock_document",
+            reason_code="lock_document_invalid",
+            detail="integration lock is invalid strict JSON",
+        )
+    observed_lock_sha256 = hashlib.sha256(raw_lock).hexdigest()
+    expected_lock_bytes = integration_lock_bytes(lock)
+    expected_lock_sha256 = hashlib.sha256(expected_lock_bytes).hexdigest()
+    if raw_lock != expected_lock_bytes:
+        return _blocked_diagnostic_report(
+            layers,
+            name="lock_document",
+            reason_code="lock_document_noncanonical",
+            detail="integration lock bytes are not canonical JSON",
+            expected_sha256=expected_lock_sha256,
+            observed_sha256=observed_lock_sha256,
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "lock_document",
+            expected_sha256=expected_lock_sha256,
+            observed_sha256=observed_lock_sha256,
+        )
+    )
+
+    expected_arw = _diagnostic_digest(lock.arw_runtime)
+    try:
+        observed_arw_model = _validate_arw_runtime(stage_root)
+        observed_arw = _diagnostic_digest(observed_arw_model)
+        if observed_arw_model != lock.arw_runtime:
+            raise IntegrationLockError("staged ARW differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="staged_arw",
+            reason_code="staged_arw_drift",
+            detail="staged ARW runtime differs from the lock",
+            expected_sha256=expected_arw,
+            observed_sha256=locals().get("observed_arw"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "staged_arw",
+            expected_sha256=expected_arw,
+            observed_sha256=observed_arw,
+        )
+    )
+
+    expected_ars = _diagnostic_digest(lock.ars)
+    try:
+        source_manifest = _read_object(
+            _regular_file_under(stage_root, "vendor/source-manifest.json"),
+            label="source manifest",
+        )
+        observed_ars_model = _validate_bundled_ars(stage_root, source_manifest)
+        observed_ars = _diagnostic_digest(observed_ars_model)
+        if observed_ars_model != lock.ars:
+            raise IntegrationLockError("bundled ARS differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="ars_bundle",
+            reason_code="ars_bundle_drift",
+            detail="bundled ARS bytes differ from the lock",
+            expected_sha256=expected_ars,
+            observed_sha256=locals().get("observed_ars"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "ars_bundle",
+            expected_sha256=expected_ars,
+            observed_sha256=observed_ars,
+        )
+    )
+
+    expected_file_base = _diagnostic_digest(lock.file_base)
+    try:
+        observed_file_base_model = _validate_file_base(stage_root, source_manifest)
+        observed_file_base = _diagnostic_digest(observed_file_base_model)
+        if observed_file_base_model != lock.file_base:
+            raise IntegrationLockError("file-base differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="file_base",
+            reason_code="file_base_drift",
+            detail="file-base bytes or patch evidence differ from the lock",
+            expected_sha256=expected_file_base,
+            observed_sha256=locals().get("observed_file_base"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "file_base",
+            expected_sha256=expected_file_base,
+            observed_sha256=observed_file_base,
+        )
+    )
+
+    expected_host = _diagnostic_digest(lock.codex_host)
+    try:
+        observed_host_model = observe_codex_host(
+            codex_launcher, codex_native_binary
+        )
+        if not is_supported_codex_cli_version(observed_host_model.cli_version):
+            raise IntegrationLockError("unsupported Codex host")
+        observed_host = _diagnostic_digest(observed_host_model)
+        if observed_host_model != lock.codex_host:
+            raise IntegrationLockError("Codex host differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="codex_host",
+            reason_code="codex_host_drift",
+            detail="Codex host tuple differs from the lock",
+            expected_sha256=expected_host,
+            observed_sha256=locals().get("observed_host"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "codex_host",
+            expected_sha256=expected_host,
+            observed_sha256=observed_host,
+        )
+    )
+
+    try:
+        observed_config, observed_handler, observed_definition = observe_hook_definition(
+            stage_root
+        )
+        if (
+            observed_config != lock.hook.config
+            or observed_handler != lock.hook.handler
+            or observed_definition != lock.hook.definition_sha256
+        ):
+            raise IntegrationLockError("root hook definition differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="hook_definition",
+            reason_code="hook_definition_drift",
+            detail="root hook definition differs from the lock",
+            expected_sha256=lock.hook.definition_sha256,
+            observed_sha256=locals().get("observed_definition"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "hook_definition",
+            expected_sha256=lock.hook.definition_sha256,
+            observed_sha256=observed_definition,
+        )
+    )
+
+    expected_hook = _diagnostic_digest(lock.hook)
+    try:
+        observed_hook_model = _validate_hook(
+            stage_root,
+            host_canary_evidence,
+            observed_host_model,
+            observed_arw_model,
+        )
+        observed_hook = _diagnostic_digest(observed_hook_model)
+        if observed_hook_model != lock.hook:
+            raise IntegrationLockError("hook evidence differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="hook_execution_evidence",
+            reason_code="hook_execution_evidence_drift",
+            detail="retained hook evidence differs from the lock",
+            expected_sha256=expected_hook,
+            observed_sha256=locals().get("observed_hook"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "hook_execution_evidence",
+            expected_sha256=expected_hook,
+            observed_sha256=observed_hook,
+        )
+    )
+
+    expected_legal = _diagnostic_digest(lock.license)
+    try:
+        observed_legal_model = _validate_license(stage_root)
+        observed_legal = _diagnostic_digest(observed_legal_model)
+        if observed_legal_model != lock.license:
+            raise IntegrationLockError("legal state differs")
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="legal_state",
+            reason_code="legal_state_drift",
+            detail="legal policy differs from the qualified blocked state",
+            expected_sha256=expected_legal,
+            observed_sha256=locals().get("observed_legal"),
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "legal_state",
+            expected_sha256=expected_legal,
+            observed_sha256=observed_legal,
+        )
+    )
+
+    try:
+        verification = load_and_verify_integration_lock(
+            path,
+            stage_root=stage_root,
+            codex_launcher=codex_launcher,
+            codex_native_binary=codex_native_binary,
+            host_canary_evidence=host_canary_evidence,
+        )
+    except (IntegrationLockError, OSError, ValueError):
+        return _blocked_diagnostic_report(
+            layers,
+            name="exact_lock",
+            reason_code="exact_lock_drift",
+            detail="complete exact integration verification failed",
+            expected_sha256=expected_lock_sha256,
+        )
+    layers.append(
+        _passed_diagnostic_layer(
+            "exact_lock",
+            expected_sha256=verification.integration_lock_sha256,
+            observed_sha256=verification.integration_lock_sha256,
+        )
+    )
+    return IntegrationDiagnosticReport(
+        schema_version="arw.integration-diagnostic.v1",
+        status="PASS",
+        technical_qualification="PASS",
+        release_qualification="BLOCKED",
+        experiment_execution="disabled",
+        integration_lock_sha256=verification.integration_lock_sha256,
+        reason_codes=(),
+        layers=tuple(layers),
+    )
+
+
+def integration_diagnostic_schema_document() -> dict[str, object]:
+    document = IntegrationDiagnosticReport.model_json_schema(mode="validation")
+    document["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    document["title"] = "ARW Integration Diagnostic"
+    return document
+
+
 def integration_lock_schema_document() -> dict[str, object]:
     document = IntegrationLock.model_json_schema(mode="validation")
     document["$schema"] = "https://json-schema.org/draft/2020-12/schema"
@@ -1705,6 +2186,8 @@ __all__ = (
     "FreshHomeReceipt",
     "HookParityEvidenceRecord",
     "HookStatusClassification",
+    "IntegrationDiagnosticLayer",
+    "IntegrationDiagnosticReport",
     "IntegrationLock",
     "IntegrationLockError",
     "IntegrationVerification",
@@ -1713,7 +2196,9 @@ __all__ = (
     "STAGE_IDENTITY_EXCLUDED_PATHS",
     "UseDistributionPolicyProjection",
     "build_integration_lock",
+    "diagnose_integration_lock",
     "discover_codex_native_binary",
+    "integration_diagnostic_schema_document",
     "integration_lock_bytes",
     "integration_lock_schema_document",
     "is_supported_codex_cli_version",

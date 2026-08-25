@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Write the strict route contract as JSON.",
     )
+    route.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Explain the exact read-only integration layer that blocks routing.",
+    )
     version = subparsers.add_parser(
         "version",
         help="Report the installed packaged build identity.",
@@ -317,8 +322,7 @@ def _write_rejection(error: Exception) -> None:
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
 
-def _installed_route_from_environment():
-    from arw.contracts import installed_route
+def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
     from arw.integration_lock import discover_codex_native_binary
 
     plugin_root = Path(
@@ -379,6 +383,16 @@ def _installed_route_from_environment():
     for key in ("lock", "canary", "launcher", "native"):
         if defaults[key] is not None:
             values[key] = defaults[key]
+    return plugin_root, {
+        key: Path(value) if value is not None else None
+        for key, value in values.items()
+    }
+
+
+def _installed_route_from_environment():
+    from arw.contracts import installed_route
+
+    plugin_root, values = _discover_installed_route_inputs()
     if not any(values.values()):
         return installed_route()
     if not all(values.values()):
@@ -387,15 +401,28 @@ def _installed_route_from_environment():
 
     try:
         verification = load_and_verify_integration_lock(
-            Path(values["lock"]),
+            values["lock"],
             stage_root=plugin_root,
-            codex_launcher=Path(values["launcher"]),
-            codex_native_binary=Path(values["native"]),
-            host_canary_evidence=Path(values["canary"]),
+            codex_launcher=values["launcher"],
+            codex_native_binary=values["native"],
+            host_canary_evidence=values["canary"],
         )
     except (IntegrationLockError, OSError, ValueError):
         return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
     return installed_route(verification)
+
+
+def _installed_route_diagnostics_from_environment():
+    from arw.integration_lock import diagnose_integration_lock
+
+    plugin_root, values = _discover_installed_route_inputs()
+    return diagnose_integration_lock(
+        values["lock"],
+        stage_root=plugin_root,
+        codex_launcher=values["launcher"],
+        codex_native_binary=values["native"],
+        host_canary_evidence=values["canary"],
+    )
 
 
 def _blocked_orchestration_result(command: str, *reason_codes: str) -> None:
@@ -660,6 +687,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "route":
         if not args.json_output:
             parser.error("route requires --json")
+        if args.diagnostics:
+            report = _installed_route_diagnostics_from_environment()
+            _write_json(report.model_dump(mode="json"))
+            return 0 if report.status == "PASS" else 65
         _write_json(_installed_route_from_environment().model_dump(mode="json"))
         return 0
     if args.command == "version":

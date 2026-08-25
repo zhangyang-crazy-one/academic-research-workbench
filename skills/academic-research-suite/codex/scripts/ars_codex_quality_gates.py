@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import re
@@ -25,6 +26,7 @@ PLUGIN_ROOT = (
 FULL_RUNTIME_MANIFEST = CODEX_ROOT / "full-runtime-manifest.json"
 PACKAGE_MANIFEST = SUITE_ROOT / "manifest.json"
 HOOK_PACK = CODEX_ROOT / "hooks" / "hooks.json"
+ROOT_HOOK_PATHS = ("hooks/hooks.json", "hooks/arw_hook.py")
 VENUE_PROFILES = CODEX_ROOT / "references" / "annual_venue_profiles.json"
 VENUE_PROFILE_VALIDATOR = CODEX_ROOT / "scripts" / "validate_venue_profiles.py"
 
@@ -136,6 +138,79 @@ def check_hook_safety() -> list[str]:
         for pattern in FORBIDDEN_HOOK_PATTERNS:
             _require(not re.search(pattern, command), f"unsafe hook command pattern {pattern!r}: {command}")
     return [f"{len(hooks)} hook command(s) are disabled-by-default and pass static safety checks"]
+
+
+def check_root_hook_supply_chain(plugin_root: Path | None = None) -> list[str]:
+    """Bind the installed observational root hooks directly to unique SBOM rows."""
+
+    root = (plugin_root or PLUGIN_ROOT).resolve()
+    sbom = _json(root / "SBOM.cdx.json")
+    components = sbom.get("components")
+    _require(isinstance(components, list), "SBOM components must be a list")
+    for relative in ROOT_HOOK_PATHS:
+        path = root / relative
+        _require(path.is_file() and not path.is_symlink(), f"root hook missing: {relative}")
+        observed = hashlib.sha256(path.read_bytes()).hexdigest()
+        expected_ref = f"artifact:{relative}"
+        rows = [
+            row
+            for row in components
+            if isinstance(row, dict)
+            and (row.get("name") == relative or row.get("bom-ref") == expected_ref)
+        ]
+        _require(len(rows) == 1, f"{relative} must have one unique SBOM component")
+        row = rows[0]
+        _require(
+            row.get("name") == relative
+            and row.get("bom-ref") == expected_ref
+            and row.get("type") == "file",
+            f"{relative} SBOM identity is not exact",
+        )
+        _require(
+            row.get("hashes") == [{"alg": "SHA-256", "content": observed}],
+            f"{relative} SBOM digest differs from installed root hook bytes",
+        )
+
+    pack = _json(root / "hooks/hooks.json")
+    hooks_by_event = pack.get("hooks")
+    _require(
+        isinstance(hooks_by_event, dict)
+        and set(hooks_by_event) == {"SessionStart", "SubagentStop", "Stop"},
+        "root hook pack must contain only observational lifecycle events",
+    )
+    command_count = 0
+    for event, groups in hooks_by_event.items():
+        _require(isinstance(groups, list) and groups, f"root hook event is empty: {event}")
+        for group in groups:
+            _require(isinstance(group, dict), f"root hook group is invalid: {event}")
+            commands = group.get("hooks")
+            _require(
+                isinstance(commands, list) and commands,
+                f"root hook commands are empty: {event}",
+            )
+            for command in commands:
+                command_count += 1
+                _require(
+                    isinstance(command, dict)
+                    and command.get("type") == "command"
+                    and command.get("command")
+                    == 'python3 "${PLUGIN_ROOT}/hooks/arw_hook.py"'
+                    and command.get("timeout") == 10,
+                    f"root hook command is not the bounded observational handler: {event}",
+                )
+
+    handler = (root / "hooks/arw_hook.py").read_text(encoding="utf-8")
+    for marker in (
+        '"authority": "observational"',
+        "parent_controls",
+        "admission, retries, provenance, and gates remain parent-owned",
+    ):
+        _require(marker in handler, f"root hook handler lost authority marker: {marker}")
+    _require("from arw" not in handler, "root hook handler must not import the control plane")
+    return [
+        "2 root hook files have unique exact SBOM components",
+        f"{command_count} root command(s) remain bounded and observational",
+    ]
 
 
 def check_reviewer_fixture(fixture: Path | None = None) -> list[str]:
@@ -259,6 +334,7 @@ GATES: dict[str, Callable[[], list[str]]] = {
     "manifest": check_manifest,
     "single-root-skill": check_single_root_skill,
     "hook-safety": check_hook_safety,
+    "root-hook-supply-chain": check_root_hook_supply_chain,
     "reviewer-fixture": check_reviewer_fixture,
     "upstream-lock": check_upstream_lock,
     "venue-profiles": check_venue_profiles,

@@ -16,7 +16,10 @@ from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
 from arw.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
 from arw.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
-from arw.integration_lock import integration_lock_schema_document
+from arw.integration_lock import (
+    integration_diagnostic_schema_document,
+    integration_lock_schema_document,
+)
 from arw.orchestration_models import PHASE4_SCHEMA_NAMES, generate_phase4_schema_documents
 
 
@@ -31,6 +34,8 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "version-report.schema.json",
 )
 QUALIFICATION_SCHEMA_NAMES: tuple[str, ...] = ("integration-lock.schema.json",)
+RESEARCH_INTEGRITY_SCHEMA_NAME = "research-integrity-contracts.schema.json"
+RESEARCH_INTEGRITY_SCHEMA_NAMES: tuple[str, ...] = (RESEARCH_INTEGRITY_SCHEMA_NAME,)
 AUDIT_SCHEMA_NAMES: tuple[str, ...] = (AUDIT_DOSSIER_SCHEMA_NAME,)
 SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "artifact-manifest.schema.json",
@@ -47,7 +52,40 @@ SCHEMA_NAMES: tuple[str, ...] = PHASE1_SCHEMA_NAMES + (
     "resume-request.schema.json",
     "status.schema.json",
     "transition-request.schema.json",
-) + FILE_SCHEMA_NAMES + PHASE4_SCHEMA_NAMES + PHASE5_SCHEMA_NAMES + PHASE6_SCHEMA_NAMES + QUALIFICATION_SCHEMA_NAMES + AUDIT_SCHEMA_NAMES
+) + FILE_SCHEMA_NAMES + PHASE4_SCHEMA_NAMES + PHASE5_SCHEMA_NAMES + PHASE6_SCHEMA_NAMES + QUALIFICATION_SCHEMA_NAMES + RESEARCH_INTEGRITY_SCHEMA_NAMES + AUDIT_SCHEMA_NAMES
+
+
+def research_integrity_contracts_schema_document() -> dict[str, Any]:
+    """Generate the installed discriminated research-integrity contract bundle."""
+
+    diagnostic = integration_diagnostic_schema_document()
+    definitions = dict(diagnostic.pop("$defs", {}))
+    diagnostic.pop("$schema", None)
+    definitions["IntegrationDiagnosticReport"] = diagnostic
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": (
+            "https://academic-research-workbench.local/schemas/v1/"
+            "research-integrity-contracts.schema.json"
+        ),
+        "title": "ARW Research Integrity Contracts",
+        "description": (
+            "Read-only diagnostic and evidence documents. Hooks remain observational; "
+            "the parent alone owns canonical state, evidence admission, retries, "
+            "provenance, gates, ArtifactAcceptanceRequest, ArtifactManifest, and "
+            "accepted Material Passport hashes."
+        ),
+        "oneOf": [{"$ref": "#/$defs/IntegrationDiagnosticReport"}],
+        "discriminator": {
+            "propertyName": "schema_version",
+            "mapping": {
+                "arw.integration-diagnostic.v1": (
+                    "#/$defs/IntegrationDiagnosticReport"
+                )
+            },
+        },
+        "$defs": definitions,
+    }
 
 
 def _schema_root() -> Path:
@@ -145,6 +183,12 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             raise SchemaRegistryError(
                 "integration-lock.schema.json differs from its model projection"
             )
+    if name == RESEARCH_INTEGRITY_SCHEMA_NAME:
+        generated = research_integrity_contracts_schema_document()
+        if candidate != generated:
+            raise SchemaRegistryError(
+                f"{RESEARCH_INTEGRITY_SCHEMA_NAME} differs from its model projection"
+            )
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
@@ -172,6 +216,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = phase6_documents[name]
         elif name == "integration-lock.schema.json":
             document = integration_lock_schema_document()
+        elif name == RESEARCH_INTEGRITY_SCHEMA_NAME:
+            document = research_integrity_contracts_schema_document()
         else:
             document = _load_document(name)
         rendered = _canonical_schema_bytes(document)
