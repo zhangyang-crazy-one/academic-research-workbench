@@ -276,8 +276,8 @@ def test_installed_route_requires_qualification_lock(
     tmp_path: Path,
 ) -> None:
     installed, outside, environment = installed_stage
-    # Qualified stages now bundle their lock; simulate a lock-less install
-    # to prove route still fails closed instead of degrading to PASS.
+    # Qualified stages now bundle their lock; a lock-less install has no
+    # qualification input to verify and must fail closed instead of degrading to PASS.
     lock_file = installed / "supply-chain/integration-lock.json"
     if lock_file.is_file():
         lock_file.unlink()
@@ -295,7 +295,7 @@ def test_installed_route_requires_qualification_lock(
     assert result.returncode == 0, result.stderr
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
-    assert route["reason_codes"] == ["integration_inputs_incomplete"]
+    assert route["reason_codes"] == ["integration_lock_not_verified"]
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
 

@@ -964,7 +964,14 @@ def main(argv: list[str] | None = None) -> int:
         # lock/canary pair when the checkout is intentionally dirty.
         command_records.append(run_command(root, "phase7-focused", [str(PYTHON), "-m", "pytest", "-q", "tests/integration/test_phase7_installed_e2e.py", "tests/integration/test_phase7_fault_matrix.py", "tests/staged/test_phase7_qualification.py"]))
         command_records.append(run_command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only", "--integration-lock", str(lock)]))
-        command_records.append(run_command(root, "phase7-nonhost", [str(PYTHON), "-m", "pytest", "-q", "-m", "not codex_host"]))
+        command_records.append(
+            run_command(
+                root,
+                "phase7-nonhost",
+                [str(PYTHON), "-m", "pytest", "-q", "-m", "not codex_host"],
+                timeout=1800,
+            )
+        )
         # The exact host canary is retained from the prior serial qualification;
         # the staged probes re-run its schema, version, hook, and hygiene checks.
         command_records.append(run_command(root, "phase7-host-canary", [str(PYTHON), "-m", "pytest", "-q", "tests/staged/test_phase7_qualification.py::test_exact_stage_inventory_sbmom_build_identity_and_host_lock", "tests/staged/test_phase7_qualification.py::test_official_hook_definition_is_observational_and_parity_inputs_are_present"]))

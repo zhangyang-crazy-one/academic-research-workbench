@@ -6,7 +6,7 @@ EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/pre-vendor-license"
 CLEAN=0
 
 ARS_URL="https://github.com/Imbad0202/academic-research-skills.git"
-ARS_REV="8cc7f8f4cccda721646d9df590b42721c93cba31"
+ARS_REV="127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
 EXPERIMENT_URL="https://github.com/Imbad0202/experiment-agent.git"
 EXPERIMENT_REV="e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 FILE_BASE_URL="https://github.com/DeusData/codebase-memory-mcp.git"
@@ -306,7 +306,7 @@ def git_value(root: Path, *args: str) -> str:
 
 
 component_specs = [
-    ("academic-research-skills", "0.1.26", ars_url, ars_revision),
+    ("academic-research-skills", "0.1.27", ars_url, ars_revision),
     ("experiment-agent", "1.1.0", experiment_url, experiment_revision),
     ("file-base", "v0.9.0-2-gee68144", file_base_url, file_base_revision),
 ]

@@ -157,7 +157,7 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
             "dependency_model": "bundled-pinned-adapter",
             "bundled": True,
             "adapter_name": "academic-research-suite",
-            "adapter_version": "0.1.26",
+            "adapter_version": "0.1.27",
             "adapter_tree_sha256": repeated("a"),
             "upstream_content_tree_sha256": repeated("b"),
             "manifest": binding("manifest.json"),
@@ -167,9 +167,9 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
                 {
                     "component_id": "academic-research-skills",
                     "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-                    "commit": "8cc7f8f4cccda721646d9df590b42721c93cba31",
-                    "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
-                    "source_tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
+                    "commit": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb",
+                    "git_tree": "7ce111463102462479835ce5f7c2b597d7ccfe22",
+                    "source_tree_sha256": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
                 },
                 {
                     "component_id": "experiment-agent",

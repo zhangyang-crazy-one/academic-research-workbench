@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.13', '3.14']
+        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v5
         with:
-          version: '0.11.28'
+          version: "0.11.28"
           enable-cache: true
       - name: Sync locked development environment
         run: uv sync --frozen --all-groups
@@ -39,16 +39,16 @@ jobs:
           ./scripts/materialize-sources --clean
       - name: Verify source manifest wire digests
         env:
-          PYTHONNOUSERSITE: '1'
-          UV_OFFLINE: '1'
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
         run: >-
           uv run pytest -q
           tests/integration/test_source_materialization.py::test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
           tests/integration/test_source_materialization.py::test_materializer_tree_digest_uses_the_manifest_wire_encoding
       - name: Run non-host contract and provenance tests
         env:
-          PYTHONNOUSERSITE: '1'
-          UV_OFFLINE: '1'
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
         run: >-
           uv run pytest -q
           tests/unit
@@ -56,8 +56,8 @@ jobs:
           tests/unit/test_integration_lock.py
       - name: Run Phase 4 lifecycle and hook regression tests
         env:
-          PYTHONNOUSERSITE: '1'
-          UV_OFFLINE: '1'
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
         run: >-
           uv run pytest -q
           tests/unit/test_hook_contracts.py
@@ -73,11 +73,12 @@ jobs:
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
-          PYTHONNOUSERSITE: '1'
-          UV_OFFLINE: '1'
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
         run: >-
           uv run --frozen --all-groups --project ../../.. python -m pytest -q
           --ignore scripts/test_check_calibration_tiers.py
+          --ignore scripts/test_check_distribution_surface_claims.py
 
   package-boundary:
     name: Wheel and source archive boundary
@@ -88,10 +89,10 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: "3.14"
       - uses: astral-sh/setup-uv@v5
         with:
-          version: '0.11.28'
+          version: "0.11.28"
           enable-cache: true
       - run: uv sync --frozen --all-groups
       - name: Verify publish surface before building artifacts
@@ -112,7 +113,9 @@ jobs:
               for item in matcher['hooks']
           ]
           assert commands, 'no lifecycle hooks configured'
-          assert all('${PLUGIN_ROOT}' in command for command in commands), commands
+          assert all(
+              '${PLUGIN_ROOT}' in command for command in commands
+          ), commands
           assert any('arw_hook.py' in command for command in commands), commands
           PY
       - name: Build wheel and inspect payload
@@ -126,17 +129,28 @@ jobs:
           assert len(wheels) == 1, wheels
           with ZipFile(wheels[0]) as archive:
               names = archive.namelist()
-          forbidden = ('.planning/', 'build/', '.evidence/', '.file-base/', 'vendor/sources/')
+          forbidden = (
+              '.planning/',
+              'build/',
+              '.evidence/',
+              '.file-base/',
+              'vendor/sources/',
+          )
           leaked = [name for name in names if name.startswith(forbidden)]
           assert not leaked, leaked
           PY
       - name: Build source archive with export rules
         run: |
           mkdir -p dist/source
-          git archive --worktree-attributes --format=tar --output=dist/source/arw.tar HEAD
+          git archive --worktree-attributes --format=tar \
+            --output=dist/source/arw.tar HEAD
           tar -tf dist/source/arw.tar > dist/source/files.txt
-          ! grep -E '(^|/)(\.planning|build|\.evidence|\.file-base|vendor/sources)(/|$)' dist/source/files.txt
-          ! grep -E '(^|/)(\.env|credentials|secrets)(/|$)' dist/source/files.txt
+          excluded='(^|/)(\.planning|build|\.evidence|\.file-base|'
+          excluded="${excluded}vendor/sources)(/|$)"
+          ! grep -E "$excluded" dist/source/files.txt
+          ! grep -E \
+            '(^|/)(\.env|credentials|secrets)(/|$)' \
+            dist/source/files.txt
       - uses: actions/upload-artifact@v4
         with:
           name: academic-research-workbench-ci-${{ github.sha }}

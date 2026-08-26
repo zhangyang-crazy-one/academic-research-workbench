@@ -121,6 +121,7 @@ ARS exposes a few opt-in flags. All default to OFF; setting them changes behavio
 | Flag | Since | What it does | Reference |
 |---|---|---|---|
 | `ARS_CROSS_MODEL` | v3.0 | Enable cross-model verification (see next section) | [§"Cross-model verification"](#cross-model-verification-optional) |
+| `ARS_CROSS_MODEL_TRANSPORT=codex` | #630 | Use ChatGPT subscription transport for citation-integrity calls only; all DA/reviewer/judgment paths remain API-key based | `shared/cross_model_verification.md` |
 | `ARS_SOCRATIC_READING_PROBE=1` | v3.5.1 | Activate the Socratic reading-check probe layer in `socratic_mentor_agent`. Goal-oriented intent only; fires at most once per session when user has cited a specific paper; decline logged without penalty. | `deep-research/agents/socratic_mentor_agent.md` |
 | `ARS_PASSPORT_RESET=1` | v3.6.3 | Promote every FULL checkpoint to a context-reset boundary. Required to *emit* boundary entries; **not** required to invoke `resume_from_passport=<hash>` in a fresh session. With the flag ON in `systematic-review` mode, reset is mandatory at every FULL checkpoint. | `academic-pipeline/references/passport_as_reset_boundary.md` |
 | `ARS_CROSS_MODEL_SAMPLE_INTERVAL` | v3.5.0 | Sampling interval for cross-model integrity checks (advisory) | `shared/cross_model_verification.md` |
@@ -169,6 +170,10 @@ The deterministic citation-existence gate (#182) cross-checks each reference aga
 
 The cache is single-process (SQLite WAL); concurrent multi-user access to one cache file is out of scope.
 
+For the complete picture of what leaves the machine (resolvers, optional cross-model
+calls, the update check) and every local store's lifetime and deletion path, see
+[DATA_FLOWS.md](DATA_FLOWS.md).
+
 ---
 
 ## Cross-model verification (optional)
@@ -179,13 +184,13 @@ ARS works with the inherited Claude session model alone. For higher confidence, 
 
 ```bash
 # Step 1: Set your API key (choose one or both)
-export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.5 / GPT-5.5 Pro
+export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.6 Sol / GPT-5.5
 export GOOGLE_AI_API_KEY="AIza-your-key-here"    # For Gemini 3.1 Pro
 
 # Step 2: Choose your cross-verification model
-export ARS_CROSS_MODEL="gpt-5.5"                # Recommended pair (gpt-5.5-pro = strongest reasoning, ~6x cost)
-# or: export ARS_CROSS_MODEL="gemini-3.1-pro-preview"  # Strong at factual verification
-# or: export ARS_CROSS_MODEL="gpt-5.6-sol"      # Frontier, provisional pending ARS validation (same rates as gpt-5.5)
+export ARS_CROSS_MODEL="gpt-5.6-sol"            # Current OpenAI flagship — provisional pending ARS validation (run scripts/cross_model_smoke_test.sh)
+# or: export ARS_CROSS_MODEL="gemini-3.1-pro-preview"  # Current Google flagship — validated, strong at factual verification
+# or: export ARS_CROSS_MODEL="gpt-5.5"          # Previous generation — validated (designated bakeoff baseline)
 
 # Optional: reasoning effort for OpenAI verifier calls (unset = provider default)
 # export ARS_CROSS_MODEL_REASONING_EFFORT="medium"
@@ -199,7 +204,7 @@ claude
 | Feature | Without cross-model | With cross-model |
 |---|---|---|
 | Integrity verification | Single-model 100% check | + risk-stratified verification by 2nd model: 100% of high-impact references (final gate adds 100% of new/changed-claim references) + a sampled remainder |
-| Devil's Advocate | Single-model DA | + Cross-model generates independent critique, novel findings added |
+| Devil's Advocate | Single-model DA | + Cross-model generates a blind, separately executed critique; novel findings added |
 | Peer Review | 5 reviewers (same model) | Same 5 reviewers + cross-model DA critique/calibration support |
 | Irreversible checkpoints | Single-model decision | + Blind cross-model decision at design freeze + final editorial decision; divergence escalated to you, never averaged |
 
@@ -210,6 +215,32 @@ Full pipeline adds ~$0.60-1.10 in cross-model API costs (order-of-magnitude; mea
 ### No API key? No problem
 
 Without `ARS_CROSS_MODEL` set, everything works exactly as before. The cross-model features are invisible and add zero overhead.
+
+### ChatGPT subscription transport (citation integrity only)
+
+If Codex CLI 0.147.0+ is logged in through a ChatGPT subscription, citation-integrity
+calls can use that subscription without an OpenAI API key. This does not cover
+Devil's Advocate, Reviewer 2, calibration, re-review, or checkpoint judgments.
+
+```bash
+# Citation-integrity calls only. General DA/reviewer/judgment calls remain on API transport.
+export ARS_CROSS_MODEL_TRANSPORT="codex"
+# gpt-5.6-sol is validated for THIS transport (2026-08-19 codex-transport bakeoff,
+# superiority on recall + latency — audits/bakeoff-gpt-5-6-sol-codex-2026-08-19.md).
+# gpt-5.5 remains the validated bakeoff baseline alternative.
+export ARS_CROSS_MODEL="gpt-5.6-sol"
+
+python3 scripts/cross_model_codex_transport.py detect
+# The producer sends one closed codex_citation_request/1.0 object on stdin:
+printf '%s' "$CITATION_REQUEST_JSON" | scripts/cross_model_codex_verify.sh
+```
+
+The detector honors custom `CODEX_HOME` and requires the exact subscription
+attestation `Logged in using ChatGPT`; it never prints credentials. The adapter
+uses an auth-only ephemeral home, empty working root, read-only sandbox, no local
+tools, and binds accepted source URLs to structured search results. The optional
+live smoke `scripts/cross_model_smoke_test_codex.sh` spends subscription/model/network
+capacity and is never run by CI.
 
 ---
 
@@ -223,6 +254,11 @@ Claude discovers skills at `<install-root>/<skill-name>/SKILL.md`. This repo con
 - `academic-pipeline`
 
 Do not install the whole repository as one nested skill folder under `.claude/skills/academic-research-skills/`; that buries the four `SKILL.md` files one level too deep for discovery. See Anthropic's [Claude Code Skills documentation](https://code.claude.com/docs/en/skills).
+
+The methods below differ in more than convenience: hooks, slash commands, the tools
+allowlist, subagent orchestration, and script-backed checks are each available in some
+channels and degraded or absent in others. Before relying on any of those mechanisms,
+check the per-channel map: [CONTROL_AVAILABILITY.md](CONTROL_AVAILABILITY.md).
 
 ### Method 0: Claude Code Plugin (v3.7.0+, recommended for Claude Code CLI / IDE users)
 

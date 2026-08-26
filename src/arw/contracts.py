@@ -30,7 +30,7 @@ class RouteResult(BaseModel):
     schema_version: Literal["1.0.0"]
     workflow_family: Literal["academic-pipeline"]
     execution_mode: Literal["inline-role-prompts", "blocked"]
-    source_adapter_version: Literal["0.1.26"]
+    source_adapter_version: Literal["0.1.27"]
     source_dependency_model: Literal["bundled-pinned-adapter"]
     source_bundled: Literal[True]
     integration_status: Literal["PASS", "BLOCKED"]
@@ -52,7 +52,7 @@ def installed_route(
         schema_version="1.0.0",
         workflow_family="academic-pipeline",
         execution_mode="inline-role-prompts" if verification is not None else "blocked",
-        source_adapter_version="0.1.26",
+        source_adapter_version="0.1.27",
         source_dependency_model="bundled-pinned-adapter",
         source_bundled=True,
         integration_status="PASS" if verification is not None else "BLOCKED",
