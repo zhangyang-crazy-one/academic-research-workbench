@@ -6,11 +6,13 @@ best-effort conventions. Never parses PDF content.
 Filename conventions recognized:
   - {Family}_{Year}_{title_slug}.{ext}  (underscore-separated)
   - {Family}{Year}{optional_title_slug}.{ext}  (concatenated)
+  - Unicode {Family}{separator}{Year}{separator}{title}.{ext}, where separator
+    is underscore, hyphen, period, or ASCII space
   - fallback: first capitalized Latin word before the year.
 
 Files whose filename cannot be parsed for both family and year are rejected.
-Non-Latin filenames (e.g. CJK characters) are rejected; Unicode filename
-support is a future extension opportunity.
+Unicode family tokens are accepted only when every code point is a letter,
+combining mark, documented apostrophe, or documented hyphen.
 
 Usage:
   python scripts/adapters/folder_scan.py \\
@@ -18,8 +20,10 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 # Allow running as a script: ensure repo root is importable for
@@ -38,7 +42,7 @@ from scripts.adapters._common import (  # noqa: E402
 )
 
 ADAPTER_NAME = "folder_scan.py"
-ADAPTER_VERSION = "1.1.0"
+ADAPTER_VERSION = "1.2.0"
 
 # Family_Year_title style: "Wang_2023_formative_feedback.pdf"
 RE_FAMILY_UNDERSCORE = re.compile(
@@ -51,9 +55,57 @@ RE_FAMILY_YEAR = re.compile(
 # fallback year anywhere
 RE_ANY_YEAR = re.compile(r"((?:19|20)\d{2})")
 RE_FIRST_CAPITAL = re.compile(r"\b([A-Z][A-Za-z]+)\b")
+RE_UNICODE_SEPARATED = re.compile(
+    r"^(.+?)([_\-. ])((?:19|20)\d{2})(?:([_\-. ])(.*))?\.[A-Za-z0-9]+$"
+)
+_FAMILY_PUNCTUATION = frozenset({"'", "’", "-", "‐", "‑"})
+_CITATION_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_:-]*$")
 
-# Reject entries with any non-ASCII char in the filename
-RE_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+
+def _is_unicode_family(value: str) -> bool:
+    """Return whether ``value`` satisfies the explicit safe family grammar."""
+
+    has_letter = False
+    for character in value:
+        category = unicodedata.category(character)
+        if category.startswith("L"):
+            has_letter = True
+            continue
+        if category.startswith("M") or character in _FAMILY_PUNCTUATION:
+            continue
+        return False
+    return has_letter
+
+
+def _unicode_citation_key_base(
+    *, family: str, year: int, title: str
+) -> str:
+    """Derive an ASCII base from a private NFKC copy, never display fields."""
+
+    normalized = unicodedata.normalize("NFKC", f"{family}\0{year}\0{title}")
+    token = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
+    return f"ref{year}{token}"
+
+
+def _unique_ascii_citation_key(base: str, existing: set[str]) -> str:
+    """Apply the shared adapter's a..z, aa..zz collision policy locally."""
+
+    if not _CITATION_KEY.fullmatch(base):
+        raise ValueError("Unicode citation-key base is not schema-valid ASCII")
+    if base not in existing:
+        existing.add(base)
+        return base
+    suffixes = list("abcdefghijklmnopqrstuvwxyz") + [
+        first + second
+        for first in "abcdefghijklmnopqrstuvwxyz"
+        for second in "abcdefghijklmnopqrstuvwxyz"
+    ]
+    for suffix in suffixes:
+        candidate = f"{base}{suffix}"
+        if candidate not in existing:
+            existing.add(candidate)
+            return candidate
+    raise RuntimeError("exhausted citation key suffix space")
 
 
 def parse_filename(name: str) -> dict | None:
@@ -64,9 +116,6 @@ def parse_filename(name: str) -> dict | None:
     third component — it MUST exclude the family token, otherwise
     make_citation_key would produce keys like ``chen2024chen``.
     """
-    if RE_NON_ASCII.search(name):
-        return None
-
     m = RE_FAMILY_UNDERSCORE.match(name)
     if m:
         family = m.group(1)
@@ -96,6 +145,20 @@ def parse_filename(name: str) -> dict | None:
             "title_hint": tail.replace("_", " "),
         }
 
+    m = RE_UNICODE_SEPARATED.match(name)
+    if m:
+        family = m.group(1)
+        if not _is_unicode_family(family):
+            return None
+        stem = Path(name).stem
+        tail = m.group(5) or ""
+        return {
+            "family": family,
+            "year": int(m.group(3)),
+            "title": stem,
+            "title_hint": tail,
+        }
+
     year_match = RE_ANY_YEAR.search(name)
     if year_match:
         before_year = name.split(year_match.group(1))[0]
@@ -112,8 +175,6 @@ def parse_filename(name: str) -> dict | None:
 
 def _missing_fields_for(name: str) -> list[str]:
     """Diagnostic for the rejection_log."""
-    if RE_NON_ASCII.search(name):
-        return ["authors"]
     if not RE_ANY_YEAR.search(name):
         return ["authors", "year"]
     return ["authors"]
@@ -175,12 +236,22 @@ def main() -> int:
             })
             continue
 
-        citation_key = make_citation_key(
-            family=parsed["family"],
-            year=parsed["year"],
-            title_hint=parsed["title_hint"],
-            existing=existing_keys,
-        )
+        if parsed["family"].isascii():
+            citation_key = make_citation_key(
+                family=parsed["family"],
+                year=parsed["year"],
+                title_hint=parsed["title_hint"],
+                existing=existing_keys,
+            )
+        else:
+            citation_key = _unique_ascii_citation_key(
+                _unicode_citation_key_base(
+                    family=parsed["family"],
+                    year=parsed["year"],
+                    title=parsed["title"],
+                ),
+                existing_keys,
+            )
         entries.append({
             "citation_key": citation_key,
             "title": parsed["title"],

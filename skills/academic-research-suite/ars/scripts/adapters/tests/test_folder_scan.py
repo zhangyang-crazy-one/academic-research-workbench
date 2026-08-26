@@ -1,5 +1,7 @@
 """Tests for scripts/adapters/folder_scan.py."""
+import importlib.util
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -25,8 +27,171 @@ def _run(*args, cwd=None):
     )
 
 
+def _load_adapter_module():
+    spec = importlib.util.spec_from_file_location("folder_scan_adapter", ADAPTER)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_adapter_exists():
     assert ADAPTER.exists()
+
+
+def test_cjk_family_year_filename_is_accepted_with_original_display_text(
+    tmp_path, load_yaml
+):
+    source = tmp_path / "cjk"
+    source.mkdir()
+    (source / "中文檔名_2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert entries, "CJK family/year filename was rejected instead of accepted"
+    entry = entries[0]
+    assert entry["authors"] == [{"family": "中文檔名"}]
+    assert entry["title"] == "中文檔名_2024"
+    assert entry["year"] == 2024
+    assert entry["citation_key"].startswith("ref2024")
+    import json
+    import jsonschema
+
+    schema = json.loads(
+        (
+            REPO_ROOT
+            / "shared/contracts/passport/literature_corpus_entry.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    jsonschema.validate(entry, schema)
+
+
+def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> None:
+    adapter = _load_adapter_module()
+    assert hasattr(adapter, "_is_unicode_family"), (
+        "the explicit Unicode family-token security grammar is missing"
+    )
+    assert adapter._is_unicode_family("张三") is True
+    assert adapter._is_unicode_family("O’Neil") is True
+    for unsafe in (
+        "",
+        "张\u200b三",
+        "张 三",
+        "🙂",
+        "张🙂",
+        "张\ue000三",
+        "张\ud800三",
+    ):
+        assert adapter._is_unicode_family(unsafe) is False
+
+
+def test_unicode_citekey_nfkc_equivalence_distinction_and_collision_suffixes() -> None:
+    adapter = _load_adapter_module()
+    composed = adapter._unicode_citation_key_base(
+        family="é", year=2024, title="é_2024_étude"
+    )
+    decomposed = adapter._unicode_citation_key_base(
+        family="e\u0301", year=2024, title="e\u0301_2024_e\u0301tude"
+    )
+    assert composed == decomposed
+    assert composed != adapter._unicode_citation_key_base(
+        family="李", year=2024, title="李_2024_研究"
+    )
+    assert re.fullmatch(r"[A-Za-z][A-Za-z0-9_:-]*", composed)
+
+    existing = set()
+    assert adapter._unique_ascii_citation_key(composed, existing) == composed
+    assert adapter._unique_ascii_citation_key(composed, existing) == f"{composed}a"
+
+
+def test_documented_unicode_separators_and_malformed_families(tmp_path, load_yaml):
+    source = tmp_path / "unicode"
+    source.mkdir()
+    accepted = (
+        "张_2024_研究.pdf",
+        "李-2024-研究.pdf",
+        "欧阳.2023.研究.pdf",
+        "赵 2022 研究.pdf",
+    )
+    rejected = (
+        "张\u200b三_2024_研究.pdf",
+        "🙂_2024_研究.pdf",
+        "张🙂_2024_研究.pdf",
+        "张_研究.pdf",
+    )
+    for name in accepted + rejected:
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert {entry["title"] for entry in entries} == {
+        Path(name).stem for name in accepted
+    }
+    assert {entry["authors"][0]["family"] for entry in entries} == {
+        "张",
+        "李",
+        "欧阳",
+        "赵",
+    }
+    keys = [entry["citation_key"] for entry in entries]
+    assert len(keys) == len(set(keys)) == 4
+    assert all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_:-]*", key) for key in keys)
+    rejected_rows = load_yaml(rejection_out)["rejected"]
+    assert {row["source"] for row in rejected_rows} == set(rejected)
+
+
+def test_nfkc_equivalent_filenames_share_base_without_losing_display_text(
+    tmp_path, load_yaml
+):
+    source = tmp_path / "nfkc"
+    source.mkdir()
+    names = ("é_2024_étude.pdf", "e\u0301_2024_e\u0301tude.pdf")
+    for name in names:
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    adapter = _load_adapter_module()
+    base = adapter._unicode_citation_key_base(
+        family="é", year=2024, title="é_2024_étude"
+    )
+    assert {entry["citation_key"] for entry in entries} == {base, f"{base}a"}
+    assert {entry["authors"][0]["family"] for entry in entries} == {
+        "é",
+        "e\u0301",
+    }
+    assert {entry["title"] for entry in entries} == {
+        "é_2024_étude",
+        "e\u0301_2024_e\u0301tude",
+    }
 
 
 def test_happy_path(tmp_path, load_yaml, clean_timestamps):
