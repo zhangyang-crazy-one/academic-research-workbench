@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "55ddba8974ce740b3079adc20cbfc1c772f173dd2823a840072c9f0b4207501e"
+          "content": "b1cf1aa1ea4390eaecc461481ba4229df766e1d14a09b688d670030f94323b4f"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -133,7 +133,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4e8461a8458c8f37b313b8bdf5e19e86c2d77e0def26cc7c7a2ed29201c7ccab"
+          "content": "6b451546dbbb045aef407b05e11870b042cc87f7633becaeae2cf7ffc0ab7995"
         }
       ],
       "name": "skills/academic-research-suite/SKILL.md",
@@ -157,7 +157,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "20f2a74a95ae89c821c8b3c6705f62f8d40c6f89d4d6d210b701c657c3d309df"
+          "content": "90627c6943c28982f22ca1d3f6aefe37b6c635dd379f20226a9e5b3ec5585e41"
         }
       ],
       "name": "skills/academic-research-suite/ars",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9ca8dfb6f0df8bd5db94679c0e37b051522ca75369940ce78b6234adac882658"
+          "content": "a722be129452fe8f2b6c3b3738a454b5561df28be2bfbc74d63521b801387624"
         }
       ],
       "licenses": [

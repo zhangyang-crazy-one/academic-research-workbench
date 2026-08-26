@@ -69,10 +69,12 @@ Apply these unless the family row explicitly overrides:
 - Figure/table captions are scholarly labels, not chat with the author.
 - Do not claim “meets ACL/IEEE/…” unless that family was declared and its checklist passes.
 
+<!-- markdownlint-disable MD060 -->
 | Shared layout gate | Hard expectation |
 |--------------------|------------------|
 | Float scheduling | Preserve callout/source order; do not place a barrier ahead of a pending starred two-column float. |
 | Render audit | Compile, render every page, and inspect a contact sheet; compiler-only validation cannot support a camera-ready claim. |
+<!-- markdownlint-enable MD060 -->
 
 Hyperlinks: ACL allows dark blue `#000099`. IEEE camera-ready often prefers black body links — follow the family row.
 
@@ -208,7 +210,7 @@ For design/architecture baselines (like Tow-Towers reports), **not** a substitut
 
 ## Formatter preflight (minimal)
 
-```
+```text
 IF Venue Family declared:
   load only that subsection
   apply hard table to TeX/PDF/DOCX choices

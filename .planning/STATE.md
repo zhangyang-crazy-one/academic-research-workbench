@@ -149,10 +149,10 @@ None yet.
 
 ## Deferred Items
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| v2 | Desktop UI, domain packs, team coordination, and telemetry | Deferred | v1.0 roadmap |
-| v1.x/v2 | Publication AST/export and additional ingestion/connectors | Deferred | v1.0 roadmap |
+| Category | Item                                                       | Status   | Deferred At  |
+| -------- | ---------------------------------------------------------- | -------- | ------------ |
+| v2       | Desktop UI, domain packs, team coordination, and telemetry | Deferred | v1.0 roadmap |
+| v1.x/v2  | Publication AST/export and additional ingestion/connectors | Deferred | v1.0 roadmap |
 
 ## Session Continuity
 

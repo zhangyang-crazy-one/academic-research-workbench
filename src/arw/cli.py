@@ -18,7 +18,6 @@ from pydantic import BaseModel, ValidationError
 
 from arw.canonical import canonical_json_bytes, strict_json_loads
 
-
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
 
 
@@ -75,12 +74,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="LiteLLM model id, e.g. openai/gemini-2.5-flash.",
     )
-    storm.add_argument("--api-key", default=None, help="Model API key (default: GEMINI_API_KEY).")
     storm.add_argument(
-        "--api-base", default=None, help="OpenAI-compatible API base (default: GOOGLE_GEMINI_BASE_URL)."
+        "--api-key", default=None, help="Model API key (default: GEMINI_API_KEY)."
     )
     storm.add_argument(
-        "--retriever", choices=["tavily", "duckduckgo"], default="tavily",
+        "--api-base",
+        default=None,
+        help="OpenAI-compatible API base (default: GOOGLE_GEMINI_BASE_URL).",
+    )
+    storm.add_argument(
+        "--retriever",
+        choices=["tavily", "duckduckgo"],
+        default="tavily",
         help="Search retriever (default: tavily; duckduckgo needs no key).",
     )
     storm.add_argument("--max-conv-turn", type=int, default=4)
@@ -279,8 +284,10 @@ def _load_object(path: Path, *, label: str) -> dict[str, object]:
 
 
 def _is_sha256_text(value: object) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(
-        character in "0123456789abcdef" for character in value
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
     )
 
 
@@ -333,7 +340,9 @@ def _installed_route_from_environment():
         plugin_root / "supply-chain/host-canary/canary.json",
         plugin_root / "supply-chain/host-canary.json",
     )
-    canary_default = next((path for path in canary_default_candidates if path.is_file()), None)
+    canary_default = next(
+        (path for path in canary_default_candidates if path.is_file()), None
+    )
     launcher_default: str | None = None
     if lock_default.is_file():
         try:
@@ -343,7 +352,11 @@ def _installed_route_from_environment():
                 .get("launcher", {})
                 .get("invoked_path")
             )
-            if isinstance(invoked, str) and Path(invoked).is_file() and os.access(invoked, os.X_OK):
+            if (
+                isinstance(invoked, str)
+                and Path(invoked).is_file()
+                and os.access(invoked, os.X_OK)
+            ):
                 launcher_default = invoked
         except (OSError, UnicodeError, json.JSONDecodeError, TypeError, AttributeError):
             launcher_default = None
@@ -352,9 +365,7 @@ def _installed_route_from_environment():
     native_default: str | None = None
     if launcher_default:
         try:
-            native_default = str(
-                discover_codex_native_binary(Path(launcher_default))
-            )
+            native_default = str(discover_codex_native_binary(Path(launcher_default)))
         except (OSError, ValueError):
             native_default = None
     names = {
@@ -369,29 +380,38 @@ def _installed_route_from_environment():
         "native": native_default,
         "canary": str(canary_default) if canary_default is not None else None,
     }
-    values = {
-        key: os.environ.get(name) or defaults[key]
-        for key, name in names.items()
-    }
+    values = {key: os.environ.get(name) or defaults[key] for key, name in names.items()}
     # Installed qualification inputs travel with the plugin. Prefer them over
     # leftover ARW_* from a prior qualify session (foreign-runtime canaries /
     # bin-vs-sbin launcher drift), which would otherwise false-BLOCK route.
     for key in ("lock", "canary", "launcher", "native"):
         if defaults[key] is not None:
             values[key] = defaults[key]
-    if not any(values.values()):
+    lock_value = values["lock"]
+    launcher_value = values["launcher"]
+    native_value = values["native"]
+    canary_value = values["canary"]
+    if not any((lock_value, launcher_value, native_value, canary_value)):
         return installed_route()
-    if not all(values.values()):
+    if (
+        lock_value is None
+        or launcher_value is None
+        or native_value is None
+        or canary_value is None
+    ):
         return installed_route(blocked_reason="integration_inputs_incomplete")
-    from arw.integration_lock import IntegrationLockError, load_and_verify_integration_lock
+    from arw.integration_lock import (
+        IntegrationLockError,
+        load_and_verify_integration_lock,
+    )
 
     try:
         verification = load_and_verify_integration_lock(
-            Path(values["lock"]),
+            Path(lock_value),
             stage_root=plugin_root,
-            codex_launcher=Path(values["launcher"]),
-            codex_native_binary=Path(values["native"]),
-            host_canary_evidence=Path(values["canary"]),
+            codex_launcher=Path(launcher_value),
+            codex_native_binary=Path(native_value),
+            host_canary_evidence=Path(canary_value),
         )
     except (IntegrationLockError, OSError, ValueError):
         return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
@@ -537,11 +557,12 @@ def _verified_dispatch_adapter(
         return None, verification, ("host_evidence_invalid_or_drifted",)
     if set(manifest) != {"schema_version", "integration_lock_sha256", "assignments"}:
         return None, verification, ("host_evidence_invalid_or_drifted",)
+    assignment_rows = manifest.get("assignments")
     if (
         manifest.get("schema_version") != "arw.codex-exec-dispatch-evidence.v1"
         or manifest.get("integration_lock_sha256")
         != verification.integration_lock_sha256
-        or not isinstance(manifest.get("assignments"), list)
+        or not isinstance(assignment_rows, list)
     ):
         return None, verification, ("host_evidence_invalid_or_drifted",)
 
@@ -555,7 +576,7 @@ def _verified_dispatch_adapter(
         "permission_digest",
     }
     try:
-        for raw_row in manifest["assignments"]:
+        for raw_row in assignment_rows:
             if not isinstance(raw_row, dict) or set(raw_row) != expected_row_keys:
                 raise CLIInputError("host evidence assignment row is invalid")
             if any(not isinstance(raw_row[key], str) for key in expected_row_keys):
@@ -609,7 +630,9 @@ def _rehydrate_prepared_run(service: Any) -> Any:
             state.execution_mode,
         )
     ):
-        raise OrchestrationError("canonical run has no complete prepared orchestration intent")
+        raise OrchestrationError(
+            "canonical run has no complete prepared orchestration intent"
+        )
     assignments = tuple(item.assignment for item in state.assignments)
     if not assignments:
         raise OrchestrationError("canonical run has no prepared assignments")
@@ -623,7 +646,9 @@ def _rehydrate_prepared_run(service: Any) -> Any:
     )
 
 
-def _dispatch_report_json(report: Any, integration_lock_sha256: str) -> dict[str, object]:
+def _dispatch_report_json(
+    report: Any, integration_lock_sha256: str
+) -> dict[str, object]:
     return {
         "schema_version": "arw.orchestration-command-result.v1",
         "command": "orchestration-dispatch",
@@ -684,7 +709,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "storm":
         from arw.storm import StormConfig, StormRunError, run_storm_research
 
-        config_kwargs: dict[str, object] = {
+        config_kwargs: dict[str, Any] = {
             "topic": args.topic,
             "output_dir": Path(args.output_dir),
             "backend": args.backend,
@@ -696,7 +721,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_kwargs["api_key"] = args.api_key
         if args.api_base is not None:
             config_kwargs["api_base"] = args.api_base
-        config = StormConfig(**config_kwargs,
+        config = StormConfig(
+            **config_kwargs,
             max_conv_turn=args.max_conv_turn,
             max_perspective=args.max_perspective,
             search_top_k=args.search_top_k,
@@ -856,7 +882,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if len(assignments) != len(raw_assignments):
                     raise ValueError("every assignment entry must be a JSON object")
             except (OSError, UnicodeError, ValueError, TypeError) as error:
-                raise JournalError(f"assignments are missing or invalid: {error}") from error
+                raise JournalError(
+                    f"assignments are missing or invalid: {error}"
+                ) from error
             prepared = OrchestrationService(
                 args.run_root,
                 adapter=_blocked_execution_adapter(),
@@ -869,7 +897,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(
                 {
                     "accepted_revision": prepared.state.accepted_revision,
-                    "assignment_ids": [item.assignment_id for item in prepared.assignments],
+                    "assignment_ids": [
+                        item.assignment_id for item in prepared.assignments
+                    ],
                     "dag_sha256": prepared.dag_sha256,
                     "execution_mode": prepared.execution_mode,
                     "ledger_head_sha256": prepared.state.ledger_head_sha256,
@@ -933,9 +963,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not qualification.formal_independence:
                     qualification_reasons.extend(qualification.reason_codes)
                 qualification_reasons.extend(
-                    reason
-                    for reason, proven in required_proofs.items()
-                    if not proven
+                    reason for reason, proven in required_proofs.items() if not proven
                 )
                 if qualification.execution_mode != prepared.execution_mode:
                     qualification_reasons.append("prepared_execution_mode_mismatch")
@@ -954,7 +982,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     verification.integration_lock_sha256,  # type: ignore[union-attr]
                 )
             )
-            return 0 if all(item.status == "completed" for item in report.outcomes) else 65
+            return (
+                0 if all(item.status == "completed" for item in report.outcomes) else 65
+            )
         if args.command == "orchestration-panel":
             request = _load_request(args.request, RuntimeCommandRequest)
             panel_request = _load_object(args.panel, label="panel request")
@@ -967,6 +997,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "synthesizer_identity",
                 "execution_mode",
             }
+            raw_reviewer_identities = panel_request.get("reviewer_identities")
             if (
                 set(panel_request) != expected_keys
                 or panel_request.get("schema_version") != "arw.cli-panel-request.v1"
@@ -974,17 +1005,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or not panel_request["panel_id"]
                 or not _is_sha256_text(panel_request.get("subject_sha256"))
                 or not _is_sha256_text(panel_request.get("rubric_sha256"))
-                or not isinstance(panel_request.get("reviewer_identities"), dict)
+                or not isinstance(raw_reviewer_identities, dict)
                 or panel_request.get("execution_mode")
                 not in {"native_profile", "assignment_injected_subagent"}
             ):
-                raise CLIInputError("panel request does not match the strict CLI contract")
+                raise CLIInputError(
+                    "panel request does not match the strict CLI contract"
+                )
             reviewer_identities: dict[str, dict[str, str]] = {}
-            for role_id, identity_reference in panel_request[
-                "reviewer_identities"
-            ].items():
+            for role_id, identity_reference in raw_reviewer_identities.items():
                 if not isinstance(role_id, str) or not role_id:
-                    raise CLIInputError("panel reviewer role IDs must be non-empty strings")
+                    raise CLIInputError(
+                        "panel reviewer role IDs must be non-empty strings"
+                    )
                 reviewer_identities[role_id] = _identity_receipt_reference(
                     identity_reference,
                     label=f"panel reviewer {role_id}",
@@ -1091,7 +1124,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command in runtime_commands:
             model, method_name = runtime_commands[args.command]
             request = _load_request(args.request, model)
-            service = RuntimeCommandService(args.run_root, lock_timeout=args.lock_timeout)
+            service = RuntimeCommandService(
+                args.run_root, lock_timeout=args.lock_timeout
+            )
             outcome = getattr(service, method_name)(request)
             _write_json(outcome.model_dump(mode="json"))
             return 0 if outcome.accepted else 65

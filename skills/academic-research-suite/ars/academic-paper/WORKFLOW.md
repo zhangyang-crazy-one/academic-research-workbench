@@ -28,11 +28,11 @@ A general-purpose academic paper writing tool — 12-agent pipeline covering all
 
 **Minimal command:**
 
-```
+```text
 Write a paper on the impact of AI on higher education quality assurance
 ```
 
-```
+```text
 Write a paper on the impact of declining birth rates on private university management strategies
 ```
 
@@ -135,7 +135,7 @@ APA 7.0 (default), Chicago (Author-Date or Notes-Bibliography), MLA 9, IEEE, Van
 
 ## Orchestration Workflow (8 Phases)
 
-```
+```text
 Phase 0: CONFIG        -> [intake_agent]              -> Paper Configuration Record
 Phase 1: RESEARCH      -> [literature_strategist]      -> Search Strategy + Source Corpus
 Phase 2: ARCHITECTURE  -> [structure_architect]        -> Paper Outline + Evidence Map
@@ -494,21 +494,23 @@ Explicit prohibitions to prevent common failure modes:
 
 ### Bilingual Abstract Quality
 
-6. **Independent writing** — zh-TW and EN abstracts are independently composed, NOT mechanical translations
+1. **Independent writing** — zh-TW and EN abstracts are independently composed, NOT mechanical translations
 2. **Structural alignment** — both abstracts cover the same key points in the same order
 3. **Keywords** — 5-7 per language, reflecting the paper's core concepts
 4. **Word count** — EN: 150-300 words; zh-TW: 300-500 characters
 
 ### Citation Quality
- 1. **Format compliance** — 100% adherence to selected citation style
- 2. ⚠️ IRON RULE: **DOI inclusion** — every source with a DOI must include it; every citation must be verified via DOI or WebSearch
- 3. **Currency** — flag sources older than 10 years (unless seminal works)
- 4. **Self-citation ratio** — flag if >15%
+
+1. **Format compliance** — 100% adherence to selected citation style
+2. ⚠️ IRON RULE: **DOI inclusion** — every source with a DOI must include it; every citation must be verified via DOI or WebSearch
+3. **Currency** — flag sources older than 10 years (unless seminal works)
+4. **Self-citation ratio** — flag if >15%
 
 ### Peer Review
- 1. **Five criterion-bound dimensions** — Originality, Methodological Rigor, Evidence Sufficiency, Argument Coherence, and Writing Quality; report categorical judgements with evidence and no numerical aggregation
- 2. **Actionable feedback** — every criticism must include a specific suggestion
- 3. **Max 2 revision rounds** — unresolved items become Acknowledged Limitations
+
+1. **Five criterion-bound dimensions** — Originality, Methodological Rigor, Evidence Sufficiency, Argument Coherence, and Writing Quality; report categorical judgements with evidence and no numerical aggregation
+2. **Actionable feedback** — every criticism must include a specific suggestion
+3. **Max 2 revision rounds** — unresolved items become Acknowledged Limitations
 
 ### Mandatory Inclusions
 
@@ -527,7 +529,7 @@ Follows the user's language. Academic terminology is kept in English. Bilingual 
 
 ## Integration with Other Skills
 
-```
+```text
 academic-paper + tw-hei-intelligence  -> Evidence-based HEI paper with real MOE data
 academic-paper + deep-research        -> Deep research phase -> paper writing phase (auto-handoff)
 academic-paper + report-to-website    -> Interactive web version of the paper
