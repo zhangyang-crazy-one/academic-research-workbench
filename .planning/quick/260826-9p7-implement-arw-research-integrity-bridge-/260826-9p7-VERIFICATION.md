@@ -1,27 +1,31 @@
 ---
 phase: quick-260826-9p7-research-integrity-bridge
 quick_task: 260826-9p7
-verified: 2026-08-26T14:26:15Z
+verified: 2026-08-26T15:33:48Z
 status: passed
 score: 6/6 must-haves verified
 overrides_applied: 0
 re_verification:
-  previous_status: gaps_found
-  previous_score: 4/6
+  previous_status: passed
+  previous_score: 6/6
   gaps_closed:
     - "The bridge now rejects authoritative-ARS-schema-invalid literature entries, including malformed arXiv IDs, explicit nulls, missing required fields, unknown fields, invalid patterns, and all sampled cross-field rules."
     - "The technical-provenance declaration now carries the exact final SBOM digest, and validate-only rejects stale digests even after an attacker rebinds build identity and inventory rows."
   gaps_remaining: []
   regressions: []
+incremental_commits_verified:
+  - df7bcfb
+  - 7a8ed97
+  - c986e8f
 ---
 
 # Quick Task 260826-9p7 Verification Report
 
 **Goal:** Implement the research-integrity bridge and close the diagnosed installation/adapter defects in one reviewable feature PR.
 
-**Verified:** 2026-08-26T14:26:15Z
+**Verified:** 2026-08-26T15:33:48Z
 **Status:** `passed`
-**Re-verification:** Yes — after gap closure in `c986552`
+**Re-verification:** Yes — after gap closure and final incremental commits through `c986e8f`
 
 ## Goal Achievement
 
@@ -32,11 +36,40 @@ re_verification:
 | 1 | Operators can distinguish the planned integration failures, and diagnostics cannot bypass the final exact verifier. | ✓ VERIFIED | Ten closed layers remain defined in `src/arw/integration_lock.py`; a verifier-injected final exact-verifier rejection still produced `BLOCKED/exact_lock_drift` after nine PASS layers. Plain and diagnostic route contracts remain fail-closed. |
 | 2 | A strict ARS literature entry becomes a deterministic source -> span -> claim digest chain through installed schemas. | ✓ VERIFIED | `research_source_from_ars_entry` now applies the authoritative arXiv pattern, explicit-null boundary and all bundled-schema cross-field invariants before building a source manifest (`src/arw/research_integrity.py:37-71,141-278,414-437`). Required/pattern/additionalProperties/allOf probes reject at both the bundled ARS validator and bridge. Source/span/link builders still recompute canonical upstream digests and whole-chain validation rejects replacement. |
 | 3 | Unicode/CJK filenames preserve display text and emit deterministic, collision-safe ASCII citekeys without Latin regression. | ✓ VERIFIED | The unchanged Task 3 implementation retains explicit Unicode family grammar, private NFKC hashing, ASCII collision suffixes and exact display text. All folder-adapter tests passed in the 180-test relevant regression. |
-| 4 | Technical and legal qualification remain independent; experiments stay disabled and unresolved legal blockers remain BLOCKED. | ✓ VERIFIED | Plain route and diagnostics independently emitted `release_qualification=BLOCKED` and `experiment_execution=disabled`; `license-verdict.json` retains all four unresolved blockers. Commit `c986552` adds no legal approval, experiment enablement or canonical writer. |
-| 5 | Root hooks are directly supply-chain gated, nested hooks cannot substitute, and hooks remain observational with parent-only canonical authority. | ✓ VERIFIED | All eight ARS gates pass, including exact root-hook SBOM binding. Root hook digests remain `4836bd8c...` and `ab94f35f...`; the fix commit does not touch hooks or introduce ArtifactAcceptance, Passport, ledger, retry, provenance or gate authority. |
-| 6 | Stage/schema/SBOM/provenance metadata is exact and self-consistent. | ✓ VERIFIED | Actual and declared SBOM SHA-256 are both `1733c35df39190c7dadd9e92aedbe3b8b47bd84e2b65231081c99a6372272627`. Source freshness tests pass; a stale SBOM digest with rebound build identity/inventory is rejected by `stage-plugin --validate-only`; a fresh isolated stage builds and validates. |
+| 4 | Technical and legal qualification remain independent; experiments stay disabled and unresolved legal blockers remain BLOCKED. | ✓ VERIFIED | Plain route and diagnostics independently emitted `release_qualification=BLOCKED` and `experiment_execution=disabled`; `license-verdict.json` retains all four unresolved blockers. The three incremental commits add no legal approval, experiment enablement or canonical writer. |
+| 5 | Root hooks are directly supply-chain gated, nested hooks cannot substitute, and hooks remain observational with parent-only canonical authority. | ✓ VERIFIED | All eight ARS gates pass, including exact root-hook SBOM binding. Root hook digests remain `4836bd8c...` and `ab94f35f...`; none of `df7bcfb`, `7a8ed97` or `c986e8f` touches hooks or introduces ArtifactAcceptance, Passport, ledger, retry, provenance or gate authority. |
+| 6 | Stage/schema/SBOM/provenance metadata is exact and self-consistent. | ✓ VERIFIED | ARS suite/ars tree hashes are exactly `245a7461...` / `e7773ba5...`; actual and declared SBOM SHA-256 are both `c164145701bbd174da4842322f38d36b5716092402e5aa287af59530a1ae1137`. Source freshness, quality gates and a fresh isolated stage all pass. |
 
 **Score:** 6/6 truths verified
+
+## Final Incremental Commit Verification
+
+### `df7bcfb`: Fresh Pytest Basetemp
+
+`tests/conftest.py` now removes only the run-specific `build/pytest-tmp` tree and then creates its parent before assigning `config.option.basetemp`. An independent invocation replaced `TEST_TMP_BASE` with a never-created `<temp>/fresh-checkout/build/pytest-tmp`; `pytest_configure` created `<temp>/fresh-checkout/build` and assigned the expected basetemp without error. This closes the fresh-checkout startup failure without weakening test cleanup or changing test evidence bytes.
+
+### `7a8ed97`: Python 3.13/3.14 Matrix Interpreter
+
+The Python job has one authoritative matrix value at both interpreter-selection boundaries:
+
+- `uv sync --frozen --all-groups --python "${{ matrix.python-version }}"` creates the job-local environment with the `actions/setup-python` interpreter.
+- Job-wide `UV_PYTHON: ${{ matrix.python-version }}` is inherited by all four later `uv run` commands, including the ARS working-directory invocation.
+
+`uv run --help` confirms `UV_PYTHON` is the environment form of `--python`; a local control with `UV_PYTHON=/usr/bin/python3.14` ran under Python 3.14.6. The Python job contains no hard-coded `3.14.6` or `.python-version` read, so a fresh 3.13 job is no longer redirected to the repository pin.
+
+### `c986e8f`: Five-Document Layout Export Contract
+
+The five synchronized documents contain operational rules rather than isolated marker strings:
+
+| Document | Substantive Contract |
+|---|---|
+| `academic-paper/WORKFLOW.md` | Phase 7 must apply paragraph, proportional-asset, float-order and all-page render checks; compilation alone cannot support camera-ready status. |
+| `agents/formatter_agent.md` | Concrete prohibitions and actions for global `parindent`, proportional asset fitting, one/two-column float choice, pending starred floats and PNG contact-sheet review. |
+| `academic_pdf_format_reference.md` | Class-aware indentation, local exceptions, source-order scheduling, barrier timing and every-page inspection. |
+| `latex_template_reference.md` | Official-class indentation, non-destructive figure fitting, `figure*` selection, callout ownership and legal barrier placement. |
+| `venue_family_hard_packs.md` | Hard expectations for source-order float scheduling and compiler-insufficient render audit. |
+
+The two-line workflow label is a stable audit identifier, but it is not the sole content: the same section immediately imposes the Phase 7 and camera-ready gates. The mutation suite passes and proves removal of a substantive formatter rule or a synchronized document fails closed.
 
 ## Gap Closure Verification
 
@@ -103,6 +136,11 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 | Relevant feature regression | Integration lock, research integrity, schema drift, supply chain, ARS full-runtime gates and folder adapter | `180 passed in 190.39s` | ✓ PASS |
 | Static ARS gates | `ars_codex_quality_gates.py all --json` | All eight gates PASS | ✓ PASS |
 | Isolated exact stage | Fresh `--clean`, then `--validate-only` | `stage ready`; `stage valid` | ✓ PASS |
+| Fresh-checkout basetemp | Invoke exact `pytest_configure` with a missing `<temp>/fresh-checkout/build` parent | Parent created and basetemp assigned | ✓ PASS |
+| CI matrix pin | Parse workflow; inspect sync and all four `uv run` consumers; confirm uv maps `UV_PYTHON` to `--python` | 3.13/3.14 matrix value reaches sync and every run | ✓ PASS |
+| Layout export contract | `test_check_layout_export_contract.py` plus semantic inspection of all five additions | `3 passed`; every surface carries actionable rules | ✓ PASS |
+| Final incremental regression | Layout contract, provenance freshness, bridge and folder adapter | `82 passed in 3.66s` | ✓ PASS |
+| Final ARS/SBOM freshness | Independently recompute both ARS tree hashes and declaration SBOM hash | All exact; fresh stage validates | ✓ PASS |
 | Legal/execution invariants | Plain and diagnostic route probes | BLOCKED release and disabled experiments | ✓ PASS |
 | Syntax/hygiene | `bash -n`, Python compilation, `git diff --check` | Exit 0 | ✓ PASS |
 
@@ -132,14 +170,15 @@ No requirement IDs are declared in the quick-task PLAN frontmatter. The six obse
 
 ## Anti-Patterns
 
-No `TBD`, `FIXME` or `XXX` marker, placeholder implementation, install-cache edit, alternate canonical writer, legal approval, or experiment enablement was introduced by `c986552`.
+No `TBD`, `FIXME` or `XXX` marker, placeholder implementation, install-cache edit, alternate canonical writer, legal approval, or experiment enablement was introduced by the three final incremental commits. The layout markers are embedded in prescriptive contract sections, not detached string fixtures.
 
 ## Commit and Diff Integrity
 
 - Original task commits remain `50d76b6`, `819b1ce`, and `1058967`.
 - Gap closure is one atomic commit: `c986552 fix(integrity): close schema and provenance gaps`.
-- The fix modifies exactly five relevant files and deletes nothing.
-- Final `origin/main...HEAD` contains four commits and 18 implementation files.
+- Final incremental fixes are `df7bcfb` (fresh basetemp + matrix sync), `7a8ed97` (job-wide matrix pin), and `c986e8f` (layout contract + provenance refresh); their file ownership is disjoint except the intentional two-step CI workflow edit.
+- `c986e8f` updates exactly five contract documents plus the enclosing/ARS SBOM tree rows and fresh use-distribution SBOM digest; it deletes nothing.
+- Final `origin/main...HEAD` contains seven implementation/fix commits plus `4282002` (verification-artifact commit): eight commits and 29 changed files including PLAN/SUMMARY/STATE/VERIFICATION artifacts.
 - `git diff --check origin/main...HEAD` passes; tracked worktree was clean before this report update.
 
 ## Remaining Risks
@@ -150,9 +189,9 @@ No `TBD`, `FIXME` or `XXX` marker, placeholder implementation, install-cache edi
 
 ## Final Assessment
 
-Both previously blocking gaps are closed with executable negative tests and runtime gates. No regression attributable to `c986552` was found. All must-haves are verified and the quick-task goal is achieved.
+Both previously blocking gaps remain closed with executable negative tests and runtime gates. The final CI and layout-contract commits close their targeted fresh-checkout/matrix/synchronization failures without changing authority, legal status or execution policy. No new gap was found; all must-haves remain verified and the quick-task goal is achieved.
 
 ---
 
-_Verified: 2026-08-26T14:26:15Z_
+_Verified: 2026-08-26T15:33:48Z_
 _Verifier: independent GSD quick-task verifier_

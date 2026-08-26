@@ -83,7 +83,7 @@ Progress: [██████████] 100%
 ### Quick Tasks Completed
 
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
-- [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, and safe CJK filename ingestion. Independent re-verification passed 6/6 must-haves at code commit `c986552`; release remains legally BLOCKED.
+- [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
 
 ### Decisions
 
