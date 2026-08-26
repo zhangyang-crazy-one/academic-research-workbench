@@ -106,6 +106,18 @@ writing tools. All content was reviewed and verified by the author(s).
 \end{document}
 ```
 
+## Paragraph And Two-Column Float Discipline
+
+- Keep paragraph indentation under the document class or official venue style;
+  use local `\noindent` exceptions rather than a global zero-indent override.
+- For figures, preserve the original asset and fit it proportionally within the
+  selected one-column or two-column width; never rewrite or stretch source data.
+- Use `figure*` only when a wide scholarly panel genuinely needs both columns.
+  Preserve source order and record which callout owns each float.
+- Do not issue a barrier while an earlier double-column float is pending. A
+  `\FloatBarrier` may be introduced only after preceding starred floats have a
+  legal placement opportunity and the rendered-page audit confirms the order.
+
 ## APA 7.0 Template (`apa7` Class) — Preferred for APA Output
 
 When APA 7.0 format is requested, use the `apa7` document class instead of `article`. This ensures correct running heads, title page layout, and heading levels.

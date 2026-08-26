@@ -27,6 +27,22 @@ input is a Markdown report rather than a complete journal manuscript.
   ACL/IEEE/GB scholarly norms. If a venue family is declared, follow
   `venue_family_hard_packs.md` for that family only.
 
+## Paragraph Indentation Rules
+
+- Preserve the selected document class or venue template's paragraph behavior.
+  Do not impose a report-wide zero indent merely to imitate web or slide layout.
+- Keep abstract and post-heading exceptions local; body paragraphs retain the
+  class-aware first-line indent unless the authoritative template says otherwise.
+- When adjusting TeX headers, do not set global `\parindent=0`.
+
+## Float Scheduling And Render Audit
+
+- Preserve source order when one-column and starred two-column floats interact.
+- No barrier may strand a pending double-column float; delay `\FloatBarrier`
+  until all earlier wide floats have a legal placement opportunity.
+- Every page is rendered to PNG after a successful compile. Assemble a full-page
+  contact sheet and inspect all pages, not only the title, formula, or table page.
+
 ## Table Rules
 
 - Use `booktabs` and `longtable`.
