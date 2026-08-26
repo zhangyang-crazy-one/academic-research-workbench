@@ -123,6 +123,84 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_technical_provenance(
+    sbom: dict[str, object], qualification_lock_ref: str | None
+) -> None:
+    declaration_relative = "supply-chain/use-distribution.json"
+    try:
+        declaration = json.loads(
+            (stage_root / declaration_relative).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"technical provenance declaration is invalid: {error}"
+        ) from error
+    rows = declaration.get("evidence_hashes") if isinstance(declaration, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit("technical provenance declaration has no evidence hashes")
+    paths: list[str] = []
+    for record in rows:
+        if not isinstance(record, dict) or set(record) != {
+            "path",
+            "purpose",
+            "sha256",
+        }:
+            raise SystemExit("technical provenance record is malformed")
+        relative = record.get("path")
+        declared = record.get("sha256")
+        candidate = Path(relative) if isinstance(relative, str) else Path("/")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or candidate.is_absolute()
+            or candidate.as_posix() != relative
+            or ".." in candidate.parts
+            or relative == declaration_relative
+        ):
+            raise SystemExit("technical provenance path is unsafe or self-referential")
+        if record.get("purpose") != "technical-provenance-only":
+            raise SystemExit(f"technical provenance purpose mismatch: {relative}")
+        if (
+            not isinstance(declared, str)
+            or re.fullmatch(r"[0-9a-f]{64}", declared) is None
+        ):
+            raise SystemExit(f"technical provenance digest is malformed: {relative}")
+        target = stage_root / candidate
+        if not target.is_file() or target.is_symlink():
+            raise SystemExit(f"technical provenance target is missing or unsafe: {relative}")
+        observed = digest(target)
+        if relative == "SBOM.cdx.json" and qualification_lock_ref is not None:
+            base_sbom = dict(sbom)
+            components = base_sbom.get("components")
+            if not isinstance(components, list):
+                raise SystemExit("staged SBOM components are malformed")
+            base_sbom["components"] = [
+                component
+                for component in components
+                if isinstance(component, dict)
+                and component.get("bom-ref") != qualification_lock_ref
+            ]
+            base_bytes = (
+                json.dumps(base_sbom, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            observed = hashlib.sha256(base_bytes).hexdigest()
+        if declared != observed:
+            raise SystemExit(f"technical provenance digest mismatch: {relative}")
+        paths.append(relative)
+    if len(paths) != len(set(paths)):
+        raise SystemExit("technical provenance declaration contains duplicate paths")
+    components = sbom.get("components")
+    if isinstance(components, list) and any(
+        isinstance(component, dict)
+        and (
+            component.get("bom-ref") == f"artifact:{declaration_relative}"
+            or component.get("name") == declaration_relative
+        )
+        for component in components
+    ):
+        raise SystemExit("technical provenance contains an SBOM self-reference cycle")
+
+
 def canonical_lock(path: Path) -> tuple[bytes, IntegrationLock]:
     try:
         flags = os.O_RDONLY | os.O_CLOEXEC
@@ -257,6 +335,7 @@ if has_lock:
         raise SystemExit("staged SBOM does not bind the exact integration lock")
 elif lock_ref in components:
     raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+verify_technical_provenance(sbom, lock_ref if has_lock else None)
 
 payload_rows = identity.get("staged_payloads", [])
 if not isinstance(payload_rows, list) or not all(
@@ -826,6 +905,84 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_technical_provenance(
+    sbom: dict[str, object], qualification_lock_ref: str | None
+) -> None:
+    declaration_relative = "supply-chain/use-distribution.json"
+    try:
+        declaration = json.loads(
+            (stage_root / declaration_relative).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"technical provenance declaration is invalid: {error}"
+        ) from error
+    rows = declaration.get("evidence_hashes") if isinstance(declaration, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit("technical provenance declaration has no evidence hashes")
+    paths: list[str] = []
+    for record in rows:
+        if not isinstance(record, dict) or set(record) != {
+            "path",
+            "purpose",
+            "sha256",
+        }:
+            raise SystemExit("technical provenance record is malformed")
+        relative = record.get("path")
+        declared = record.get("sha256")
+        candidate = Path(relative) if isinstance(relative, str) else Path("/")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or candidate.is_absolute()
+            or candidate.as_posix() != relative
+            or ".." in candidate.parts
+            or relative == declaration_relative
+        ):
+            raise SystemExit("technical provenance path is unsafe or self-referential")
+        if record.get("purpose") != "technical-provenance-only":
+            raise SystemExit(f"technical provenance purpose mismatch: {relative}")
+        if (
+            not isinstance(declared, str)
+            or re.fullmatch(r"[0-9a-f]{64}", declared) is None
+        ):
+            raise SystemExit(f"technical provenance digest is malformed: {relative}")
+        target = stage_root / candidate
+        if not target.is_file() or target.is_symlink():
+            raise SystemExit(f"technical provenance target is missing or unsafe: {relative}")
+        observed = digest(target)
+        if relative == "SBOM.cdx.json" and qualification_lock_ref is not None:
+            base_sbom = dict(sbom)
+            components = base_sbom.get("components")
+            if not isinstance(components, list):
+                raise SystemExit("staged SBOM components are malformed")
+            base_sbom["components"] = [
+                component
+                for component in components
+                if isinstance(component, dict)
+                and component.get("bom-ref") != qualification_lock_ref
+            ]
+            base_bytes = (
+                json.dumps(base_sbom, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            observed = hashlib.sha256(base_bytes).hexdigest()
+        if declared != observed:
+            raise SystemExit(f"technical provenance digest mismatch: {relative}")
+        paths.append(relative)
+    if len(paths) != len(set(paths)):
+        raise SystemExit("technical provenance declaration contains duplicate paths")
+    components = sbom.get("components")
+    if isinstance(components, list) and any(
+        isinstance(component, dict)
+        and (
+            component.get("bom-ref") == f"artifact:{declaration_relative}"
+            or component.get("name") == declaration_relative
+        )
+        for component in components
+    ):
+        raise SystemExit("technical provenance contains an SBOM self-reference cycle")
+
+
 if digest(project_root / source_lock["uv_lock"]["path"]) != source_lock["uv_lock"]["sha256"]:
     raise SystemExit("uv.lock does not match the wheelhouse lock")
 
@@ -1046,6 +1203,7 @@ if has_lock:
         raise SystemExit("staged SBOM does not bind the exact integration lock")
 elif lock_ref in components:
     raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+verify_technical_provenance(sbom, lock_ref if has_lock else None)
 payload_rows = identity.get("staged_payloads", [])
 if not isinstance(payload_rows, list) or not all(
     isinstance(item, dict) and isinstance(item.get("path"), str)

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 import arw.research_integrity as research_integrity
@@ -27,16 +28,35 @@ SOURCE_SHA256 = hashlib.sha256(b"exact source bytes").hexdigest()
 EXTRACTION_SHA256 = hashlib.sha256(b"extraction registration").hexdigest()
 TEXT_SHA256 = hashlib.sha256("证据片段".encode("utf-8")).hexdigest()
 CLAIM_SHA256 = hashlib.sha256(b"canonical claim document").hexdigest()
+ARS_ENTRY_SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "skills/academic-research-suite/ars/shared/contracts/passport/"
+        "literature_corpus_entry.schema.json"
+    ).read_text(encoding="utf-8")
+)
+ARS_ENTRY_VALIDATOR = Draft202012Validator(ARS_ENTRY_SCHEMA)
 
 
-def _source():
+def _bridge(entry: dict[str, object]):
     return research_integrity.research_source_from_ars_entry(
-        ARS_ENTRY,
+        entry,
         source_id="source.paper-001",
         source_sha256=SOURCE_SHA256,
         imported_at="2026-08-26T01:03:00Z",
         imported_by="parent.runtime",
     )
+
+
+def _assert_authoritative_rejection_is_enforced(entry: dict[str, object]) -> None:
+    errors = tuple(ARS_ENTRY_VALIDATOR.iter_errors(entry))
+    assert errors, "test case must be rejected by the authoritative ARS schema"
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge(entry)
+
+
+def _source():
+    return _bridge(ARS_ENTRY)
 
 
 def _span(source):
@@ -143,6 +163,165 @@ def test_source_builder_rejects_missing_digest_and_malformed_bibliography() -> N
             imported_at="2026-08-26T01:03:00Z",
             imported_by="parent.runtime",
         )
+
+
+@pytest.mark.parametrize(
+    "invalid_update",
+    (
+        {"arxiv_id": "not-an-arxiv-id"},
+        {"venue": None},
+    ),
+)
+def test_source_bridge_fails_closed_when_authoritative_ars_schema_rejects(
+    invalid_update: dict[str, object],
+) -> None:
+    _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "venue",
+        "doi",
+        "arxiv_id",
+        "tags",
+        "obtained_via",
+        "obtained_at",
+        "adapter_name",
+        "adapter_version",
+        "abstract",
+        "user_notes",
+        "source_acquired",
+        "source_acquisition_date",
+        "source_acquisition_path",
+        "source_verified_against_original",
+        "source_verification_method",
+        "description_source",
+        "contamination_signals_backfilled_at",
+        "contamination_signals",
+        "venue_type",
+        "venue_type_provenance",
+        "venue_type_source",
+        "contamination_signal_omissions",
+        "bibliographic_integrity_signals",
+    ),
+)
+def test_bridge_rejects_explicit_null_for_every_nonnullable_optional_field(
+    field: str,
+) -> None:
+    _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, field: None})
+
+
+@pytest.mark.parametrize(
+    "invalid_update",
+    (
+        {"citation_key": "1bad-key"},
+        {"doi": "doi:10.1234/example"},
+        {"arxiv_id": "2401/12345"},
+        {"description_source": "bibliography_latest"},
+        {"authors": [{"family": "Chen", "given": None}]},
+        {"contamination_signals": {"openalex_unmatched": None}},
+        {"contamination_signal_omissions": {"openalex_unmatched": None}},
+    ),
+)
+def test_bridge_enforces_authoritative_patterns_formats_and_nested_null_rules(
+    invalid_update: dict[str, object],
+) -> None:
+    _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
+
+
+@pytest.mark.parametrize(
+    "required_field",
+    ("citation_key", "title", "authors", "year", "source_pointer"),
+)
+def test_bridge_enforces_every_authoritative_required_field(required_field: str) -> None:
+    entry = dict(ARS_ENTRY)
+    del entry[required_field]
+    _assert_authoritative_rejection_is_enforced(entry)
+
+
+@pytest.mark.parametrize(
+    "invalid_update",
+    (
+        {
+            "source_verified_against_original": True,
+            "source_verification_method": "codex_audit",
+        },
+        {
+            "source_verified_against_original": True,
+            "source_acquired": True,
+            "source_verification_method": "none",
+        },
+        {"source_acquired": False, "description_last_audit": None},
+        {
+            "year": 2023,
+            "contamination_signals": {"preprint_post_llm_inflection": True},
+        },
+        {
+            "obtained_via": "manual",
+            "contamination_signals": {"openalex_unmatched": False},
+        },
+        {"venue_type": "journal-article"},
+        {"venue_type_provenance": "adapter_declared"},
+        {
+            "venue_type": "unknown",
+            "venue_type_provenance": "adapter_declared",
+        },
+        {
+            "venue_type": "journal-article",
+            "venue_type_provenance": "trusted_source_declared",
+        },
+        {
+            "obtained_via": "manual",
+            "contamination_signal_omissions": {
+                "semantic_scholar_unmatched": "api_degraded"
+            },
+        },
+        {
+            "contamination_signals": {"crossref_unmatched": False},
+            "contamination_signal_omissions": {
+                "crossref_unmatched": "api_degraded"
+            },
+        },
+        {
+            "contamination_signal_omissions": {"arxiv_unmatched": "api_degraded"}
+        },
+    ),
+)
+def test_bridge_enforces_every_authoritative_cross_field_rule(
+    invalid_update: dict[str, object],
+) -> None:
+    _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
+
+
+@pytest.mark.parametrize(
+    "valid_update",
+    (
+        {
+            "source_verified_against_original": True,
+            "source_acquired": True,
+            "source_verification_method": "codex_audit",
+        },
+        {
+            "source_acquired": True,
+            "description_last_audit": None,
+        },
+        {
+            "venue_type": "journal-article",
+            "venue_type_provenance": "unknown",
+        },
+        {
+            "obtained_via": "manual",
+            "contamination_signals": {"preprint_post_llm_inflection": True},
+        },
+    ),
+)
+def test_bridge_preserves_authoritative_valid_boundary_cases(
+    valid_update: dict[str, object],
+) -> None:
+    entry = {**ARS_ENTRY, **valid_update}
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    _bridge(entry)
 
 
 def test_claim_builder_canonicalizes_unique_span_digests_and_rejects_duplicates() -> None:

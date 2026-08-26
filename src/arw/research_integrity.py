@@ -34,6 +34,41 @@ CitationKey = Annotated[
 ]
 BoundedText = Annotated[str, StringConstraints(min_length=1, max_length=8192)]
 AdapterIdentity = Annotated[str, StringConstraints(min_length=1, max_length=256)]
+ArxivId = Annotated[
+    str,
+    StringConstraints(
+        pattern=(
+            r"^([A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)*/\d{7}"
+            r"(v[1-9]\d*)?|\d{4}\.\d{4,5}(v[1-9]\d*)?)$"
+        ),
+    ),
+]
+_LOOKUP_SIGNAL_FIELDS = frozenset(
+    {
+        "semantic_scholar_unmatched",
+        "openalex_unmatched",
+        "crossref_unmatched",
+        "arxiv_unmatched",
+    }
+)
+
+
+def _reject_explicit_nulls(
+    value: Any,
+    *,
+    document: str,
+    allowed: frozenset[str] = frozenset(),
+) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    rejected = sorted(
+        key for key, item in value.items() if item is None and key not in allowed
+    )
+    if rejected:
+        raise ValueError(
+            f"{document} fields do not permit explicit null: {', '.join(rejected)}"
+        )
+    return value
 
 
 class ResearchIntegrityError(ValueError):
@@ -59,6 +94,11 @@ class CSLPersonalName(StrictModel):
     static_ordering: str | bool | None = Field(default=None, alias="static-ordering")
     parse_names: str | bool | None = Field(default=None, alias="parse-names")
 
+    @model_validator(mode="before")
+    @classmethod
+    def explicit_nulls_are_forbidden(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(value, document="CSL personal name")
+
 
 class CSLLiteralName(StrictModel):
     literal: BoundedText
@@ -74,12 +114,22 @@ class ContaminationSignals(StrictModel):
     crossref_unmatched: bool | None = None
     arxiv_unmatched: bool | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def explicit_nulls_are_forbidden(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(value, document="contamination signals")
+
 
 class ContaminationSignalOmissions(StrictModel):
     semantic_scholar_unmatched: Literal["api_degraded"] | None = None
     openalex_unmatched: Literal["api_degraded"] | None = None
     crossref_unmatched: Literal["api_degraded"] | None = None
     arxiv_unmatched: Literal["api_degraded"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def explicit_nulls_are_forbidden(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(value, document="contamination signal omissions")
 
     @model_validator(mode="after")
     def at_least_one_reason(self) -> Self:
@@ -101,7 +151,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
         str,
         StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
     ] | None = None
-    arxiv_id: Annotated[str, StringConstraints(min_length=1, max_length=256)] | None = None
+    arxiv_id: ArxivId | None = None
     tags: list[BoundedText] | None = Field(default=None, max_length=256)
     obtained_via: Literal[
         "zotero-api",
@@ -158,6 +208,15 @@ class ARSLiteratureCorpusEntry(StrictModel):
         default=None, max_length=256
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def explicit_nulls_match_authoritative_schema(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(
+            value,
+            document="ARS literature entry",
+            allowed=frozenset({"description_last_audit"}),
+        )
+
     @field_validator("source_pointer")
     @classmethod
     def source_pointer_is_bounded_text(cls, value: str) -> str:
@@ -172,11 +231,41 @@ class ARSLiteratureCorpusEntry(StrictModel):
         if self.source_verified_against_original is True and (
             self.source_acquired is not True
             or self.source_verification_method in {None, "none"}
-            or self.source_acquisition_path is None
         ):
             raise ValueError("verified source metadata lacks acquired-source evidence")
         if self.source_acquired is False and self.description_last_audit != "none":
             raise ValueError("unacquired sources require description_last_audit=none")
+        signal_fields = (
+            self.contamination_signals.model_fields_set
+            if self.contamination_signals is not None
+            else set()
+        )
+        omission_fields = (
+            self.contamination_signal_omissions.model_fields_set
+            if self.contamination_signal_omissions is not None
+            else set()
+        )
+        if (
+            self.contamination_signals is not None
+            and self.contamination_signals.preprint_post_llm_inflection is True
+            and self.year < 2024
+        ):
+            raise ValueError("post-LLM-inflection preprint signal requires year >= 2024")
+        if self.obtained_via == "manual" and signal_fields & _LOOKUP_SIGNAL_FIELDS:
+            raise ValueError("manual entries cannot carry lookup contamination signals")
+        if (
+            self.obtained_via == "manual"
+            and self.contamination_signal_omissions is not None
+        ):
+            raise ValueError("manual entries cannot carry lookup omission reasons")
+        overlapping_signals = signal_fields & omission_fields
+        if overlapping_signals:
+            raise ValueError(
+                "computed and omitted contamination signals overlap: "
+                + ", ".join(sorted(overlapping_signals))
+            )
+        if "arxiv_unmatched" in omission_fields and self.arxiv_id is None:
+            raise ValueError("arxiv_unmatched omission requires arxiv_id")
         if (self.venue_type is None) != (self.venue_type_provenance is None):
             raise ValueError("venue type and provenance must be provided together")
         if self.venue_type == "unknown" and self.venue_type_provenance != "unknown":

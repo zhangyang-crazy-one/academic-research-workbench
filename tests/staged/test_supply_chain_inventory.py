@@ -274,6 +274,60 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
     ]
 
 
+def test_use_distribution_technical_provenance_hashes_are_fresh() -> None:
+    declaration = _load(REPOSITORY_ROOT / "supply-chain/use-distribution.json")
+    evidence = declaration["evidence_hashes"]
+    assert isinstance(evidence, list)
+    evidence_paths = [record["path"] for record in evidence]
+    assert len(evidence_paths) == len(set(evidence_paths))
+    assert "supply-chain/use-distribution.json" not in evidence_paths
+    for record in evidence:
+        assert record["purpose"] == "technical-provenance-only"
+        evidence_path = REPOSITORY_ROOT / record["path"]
+        assert evidence_path.is_file(), f"missing technical provenance: {record['path']}"
+        assert record["sha256"] == _sha256(evidence_path), (
+            f"stale technical provenance digest: {record['path']}"
+        )
+    sbom = _load(REPOSITORY_ROOT / "SBOM.cdx.json")
+    component_refs = {item["bom-ref"] for item in sbom["components"]}
+    assert "artifact:supply-chain/use-distribution.json" not in component_refs
+
+
+def test_validate_only_rejects_rebound_stale_technical_provenance(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "stale-provenance" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    declaration_path = stage_root / "supply-chain/use-distribution.json"
+    declaration = _load(declaration_path)
+    sbom_record = next(
+        record
+        for record in declaration["evidence_hashes"]
+        if record["path"] == "SBOM.cdx.json"
+    )
+    sbom_record["sha256"] = "0" * 64
+    _write_pretty(declaration_path, declaration)
+
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
+        declaration_path
+    )
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(
+        stage_root,
+        "supply-chain/use-distribution.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "technical provenance digest mismatch: SBOM.cdx.json" in validated.stderr
+
+
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _stage(stage_root)
