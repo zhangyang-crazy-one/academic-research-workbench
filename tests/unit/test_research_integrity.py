@@ -282,11 +282,13 @@ def test_date_time_validation_does_not_depend_on_optional_format_extra(
 
 
 def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -> None:
+    valid_signal = json.loads(json.dumps(VALID_BIBLIOGRAPHIC_SIGNAL))
+    valid_signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]
     valid_entry = {
         **ARS_ENTRY,
-        "bibliographic_integrity_signals": [VALID_BIBLIOGRAPHIC_SIGNAL],
+        "bibliographic_integrity_signals": [valid_signal],
     }
-    assert ARS_SIGNAL_VALIDATOR.is_valid(VALID_BIBLIOGRAPHIC_SIGNAL)
+    assert ARS_SIGNAL_VALIDATOR.is_valid(valid_signal)
     source = _bridge(valid_entry)
     assert (
         source.bibliographic_sha256
@@ -300,6 +302,33 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
             {
                 **ARS_ENTRY,
                 "bibliographic_integrity_signals": [invalid_signal],
+            }
+        )
+
+    with pytest.raises(ValueError, match="targets a different citation key"):
+        _bridge(
+            {
+                **ARS_ENTRY,
+                "bibliographic_integrity_signals": [VALID_BIBLIOGRAPHIC_SIGNAL],
+            }
+        )
+    with pytest.raises(ValueError, match="signal IDs must be unique"):
+        _bridge(
+            {
+                **ARS_ENTRY,
+                "bibliographic_integrity_signals": [valid_signal, valid_signal],
+            }
+        )
+
+
+def test_bridge_rejects_lookup_index_as_trusted_venue_source() -> None:
+    with pytest.raises(ValueError, match="lookup index"):
+        _bridge(
+            {
+                **ARS_ENTRY,
+                "venue_type": "journal-article",
+                "venue_type_provenance": "trusted_source_declared",
+                "venue_type_source": "OpenAlex",
             }
         )
 
@@ -574,6 +603,17 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
         validate_instance(
             "research-integrity-contracts.schema.json", invalid_acquisition
         )
+
+    for field, invalid_value in (
+        ("doi", "not-a-doi"),
+        ("arxiv_id", "2401/12345"),
+    ):
+        invalid_identifier = source.model_dump(mode="json")
+        invalid_identifier[field] = invalid_value
+        with pytest.raises(ValueError, match="instance validation failed"):
+            validate_instance(
+                "research-integrity-contracts.schema.json", invalid_identifier
+            )
 
 
 def test_bridge_exposes_no_parent_writer_or_hook_authority() -> None:

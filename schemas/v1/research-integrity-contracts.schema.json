@@ -567,6 +567,7 @@
           "anyOf": [
             {
               "maxLength": 2048,
+              "pattern": "^10\\.[0-9]{4,9}/[^\\s]+$",
               "type": "string"
             },
             {
@@ -578,7 +579,7 @@
         "arxiv_id": {
           "anyOf": [
             {
-              "maxLength": 256,
+              "pattern": "^([A-Za-z][A-Za-z0-9-]*(\\.[A-Za-z0-9-]+)*/\\d{7}(v[1-9]\\d*)?|\\d{4}\\.\\d{4,5}(v[1-9]\\d*)?)$",
               "type": "string"
             },
             {

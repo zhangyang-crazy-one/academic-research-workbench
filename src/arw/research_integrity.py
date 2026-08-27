@@ -40,6 +40,10 @@ CitationKey = Annotated[
 ]
 BoundedText = Annotated[str, StringConstraints(min_length=1, max_length=8192)]
 AdapterIdentity = Annotated[str, StringConstraints(min_length=1, max_length=256)]
+Doi = Annotated[
+    str,
+    StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
+]
 ObtainedVia = Literal[
     "zotero-api",
     "zotero-bbt-export",
@@ -64,6 +68,11 @@ _LOOKUP_SIGNAL_FIELDS = frozenset(
         "crossref_unmatched",
         "arxiv_unmatched",
     }
+)
+_LOOKUP_INDEX_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:openalex|crossref|semantic[-_\s]+scholar)"
+    r"(?![A-Za-z0-9])",
+    re.IGNORECASE,
 )
 
 _ARS_PASSPORT_SCHEMA_RELATIVE = Path(
@@ -238,13 +247,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     year: Annotated[int, Field(ge=1000, le=2100)]
     source_pointer: BoundedText
     venue: BoundedText | None = None
-    doi: (
-        Annotated[
-            str,
-            StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
-        ]
-        | None
-    ) = None
+    doi: Doi | None = None
     arxiv_id: ArxivId | None = None
     tags: list[BoundedText] | None = Field(default=None, max_length=256)
     obtained_via: ObtainedVia | None = None
@@ -399,6 +402,21 @@ class ARSLiteratureCorpusEntry(StrictModel):
                 "computed and omitted contamination signals overlap: "
                 + ", ".join(sorted(overlapping_signals))
             )
+        signal_ids: list[str] = []
+        for signal in self.bibliographic_integrity_signals or ():
+            signal_id = signal.get("signal_id")
+            if isinstance(signal_id, str):
+                signal_ids.append(signal_id)
+            subject = signal.get("subject")
+            signal_citation = (
+                subject.get("citation_key") if isinstance(subject, dict) else None
+            )
+            if signal_citation != self.citation_key:
+                raise ValueError(
+                    "bibliographic integrity signal targets a different citation key"
+                )
+        if len(signal_ids) != len(set(signal_ids)):
+            raise ValueError("bibliographic integrity signal IDs must be unique")
         if "arxiv_unmatched" in omission_fields and self.arxiv_id is None:
             raise ValueError("arxiv_unmatched omission requires arxiv_id")
         if (self.venue_type is None) != (self.venue_type_provenance is None):
@@ -410,6 +428,12 @@ class ARSLiteratureCorpusEntry(StrictModel):
             and self.venue_type_source is None
         ):
             raise ValueError("trusted venue provenance requires its named source")
+        if (
+            self.venue_type_provenance == "trusted_source_declared"
+            and self.venue_type_source is not None
+            and _LOOKUP_INDEX_RE.search(self.venue_type_source)
+        ):
+            raise ValueError("trusted venue source cannot name a lookup index")
         return self
 
 
@@ -423,8 +447,8 @@ class ResearchSourceManifest(StrictModel):
     authors: tuple[CSLName, ...] = Field(min_length=1, max_length=256)
     year: Annotated[int, Field(ge=1000, le=2100)]
     venue: BoundedText | None
-    doi: Annotated[str, StringConstraints(max_length=2048)] | None
-    arxiv_id: Annotated[str, StringConstraints(max_length=256)] | None
+    doi: Doi | None
+    arxiv_id: ArxivId | None
     source_pointer: BoundedText
     source_sha256: Sha256
     bibliographic_sha256: Sha256
