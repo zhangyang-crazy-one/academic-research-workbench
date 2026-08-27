@@ -1265,6 +1265,14 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
             "research-integrity-contracts.schema.json", blocked_after_prior_passes
         )
 
+    prior_lock = blocked_after_prior_passes["layers"][1]
+    prior_lock["observed_sha256"] = prior_lock["expected_sha256"]
+    blocked_layer["observed_sha256"] = blocked_layer["expected_sha256"]
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", blocked_after_prior_passes
+        )
+
     blocked = diagnose_integration_lock(
         None,
         stage_root=None,
@@ -1277,6 +1285,16 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
     blocked["layers"][0]["detail"] = (
         "legal policy differs from the qualified blocked state"
     )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance("research-integrity-contracts.schema.json", blocked)
+
+    blocked["reason_codes"] = ["integration_inputs_incomplete"]
+    blocked["layers"][0]["reason_code"] = "integration_inputs_incomplete"
+    blocked["layers"][0]["detail"] = (
+        "required integration inputs are absent or unsafe"
+    )
+    blocked["layers"][0]["expected_sha256"] = "a" * 64
+    blocked["layers"][0]["observed_sha256"] = "a" * 64
     with pytest.raises(ValueError, match="semantic validation failed"):
         validate_instance("research-integrity-contracts.schema.json", blocked)
 

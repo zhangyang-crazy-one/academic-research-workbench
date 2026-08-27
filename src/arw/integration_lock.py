@@ -774,6 +774,17 @@ class IntegrationDiagnosticLayer(LockModel):
                 raise ValueError(
                     "blocked diagnostic layer reason and detail do not match its name"
                 )
+            digests = (self.expected_sha256, self.observed_sha256)
+            if self.name == "inputs" and any(
+                value is not None for value in digests
+            ):
+                raise ValueError("blocked input diagnostics cannot carry digests")
+            if (
+                self.expected_sha256 is not None
+                and self.observed_sha256 is not None
+                and self.expected_sha256 == self.observed_sha256
+            ):
+                raise ValueError("blocked diagnostic layer digests must show drift")
         elif any(value is not None for value in (self.reason_code, self.detail)):
             raise ValueError("non-blocked diagnostic layers cannot carry a reason")
         if self.status == "NOT_EVALUATED" and any(
