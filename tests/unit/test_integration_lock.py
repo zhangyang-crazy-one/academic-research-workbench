@@ -220,6 +220,8 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         "patches": patches,
     }
     _json(stage / "vendor/source-manifest.json", source_manifest)
+    _json(stage / "SBOM.cdx.json", {"components": []})
+    _write(stage / "THIRD_PARTY_NOTICES.md", "fixture notices\n")
     _json(
         stage / "vendor/mcp-manifest.json",
         {
@@ -279,10 +281,15 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             "permission_references": [],
             "evidence_hashes": [
                 {
-                    "path": "SBOM.cdx.json",
+                    "path": relative,
                     "purpose": "technical-provenance-only",
-                    "sha256": "1" * 64,
+                    "sha256": _digest(stage / relative),
                 }
+                for relative in (
+                    "vendor/source-manifest.json",
+                    "SBOM.cdx.json",
+                    "THIRD_PARTY_NOTICES.md",
+                )
             ],
         },
     )
@@ -1053,21 +1060,31 @@ def test_observed_definition_digest_matches_real_hook_receipt(tmp_path: Path) ->
     assert observed == expected == receipt["hook_definition_sha256"]
 
 
-def test_use_distribution_technical_hashes_do_not_create_a_lock_cycle(
-    integration_fixture: dict[str, Path],
+@pytest.mark.parametrize("mutation", ("drop-sbom", "stale-sbom"))
+def test_use_distribution_technical_hash_drift_fails_live_verification(
+    integration_fixture: dict[str, Path], mutation: str
 ) -> None:
-    before = _build(integration_fixture)
+    _build(integration_fixture)
     stage_before = observe_stage_identity(integration_fixture["stage"])
     path = integration_fixture["stage"] / "supply-chain/use-distribution.json"
     declaration = json.loads(path.read_text(encoding="utf-8"))
-    declaration["evidence_hashes"][0]["sha256"] = "9" * 64
+    if mutation == "drop-sbom":
+        declaration["evidence_hashes"] = [
+            row
+            for row in declaration["evidence_hashes"]
+            if row["path"] != "SBOM.cdx.json"
+        ]
+    else:
+        sbom_row = next(
+            row
+            for row in declaration["evidence_hashes"]
+            if row["path"] == "SBOM.cdx.json"
+        )
+        sbom_row["sha256"] = "9" * 64
     _json(path, declaration)
-    after = _build(integration_fixture)
+    with pytest.raises(IntegrationLockError, match="technical provenance"):
+        _build(integration_fixture)
     assert observe_stage_identity(integration_fixture["stage"]) == stage_before
-    assert integration_lock_bytes(after) == integration_lock_bytes(before)
-    assert after.license.use_distribution_policy_sha256 == (
-        before.license.use_distribution_policy_sha256
-    )
 
 
 @pytest.mark.parametrize(

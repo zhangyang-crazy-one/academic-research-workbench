@@ -106,6 +106,13 @@ STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
         "supply-chain/use-distribution.json",
     }
 )
+EXPECTED_TECHNICAL_PROVENANCE_PATHS = frozenset(
+    {
+        "vendor/source-manifest.json",
+        "SBOM.cdx.json",
+        "THIRD_PARTY_NOTICES.md",
+    }
+)
 STAGE_IDENTITY_EXCLUDED_PREFIXES = ("supply-chain/host-canary/",)
 LegalBlocker = Literal[
     "INTENDED_USE_UNKNOWN",
@@ -1747,6 +1754,34 @@ def _validate_hook(
     )
 
 
+def _technical_provenance_digest(stage_root: Path, relative: str) -> str:
+    target = _regular_file_under(stage_root, relative)
+    if relative != "SBOM.cdx.json":
+        return _digest(target)
+    sbom = _read_object(target, label="technical provenance SBOM")
+    components = sbom.get("components")
+    if not isinstance(components, list) or not all(
+        isinstance(component, dict) for component in components
+    ):
+        raise IntegrationLockError("technical provenance SBOM components are malformed")
+    lock_ref = "artifact:supply-chain/integration-lock.json"
+    lock_components = [
+        component for component in components if component.get("bom-ref") == lock_ref
+    ]
+    if len(lock_components) > 1:
+        raise IntegrationLockError("technical provenance SBOM repeats the lock component")
+    if not lock_components:
+        return _digest(target)
+    base_sbom = dict(sbom)
+    base_sbom["components"] = [
+        component for component in components if component.get("bom-ref") != lock_ref
+    ]
+    base_bytes = (json.dumps(base_sbom, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+    return hashlib.sha256(base_bytes).hexdigest()
+
+
 def _validate_license(stage_root: Path) -> LicenseBinding:
     verdict_binding = FileBinding.from_path(
         stage_root, "supply-chain/license-verdict.json"
@@ -1832,6 +1867,16 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
                 "use and distribution evidence hash is malformed"
             )
         seen_evidence_paths.add(path)
+        if path not in EXPECTED_TECHNICAL_PROVENANCE_PATHS:
+            raise IntegrationLockError(
+                "technical provenance path set contains an unexpected entry"
+            )
+        if digest != _technical_provenance_digest(stage_root, path):
+            raise IntegrationLockError(
+                f"technical provenance digest mismatch: {path}"
+            )
+    if seen_evidence_paths != EXPECTED_TECHNICAL_PROVENANCE_PATHS:
+        raise IntegrationLockError("technical provenance path set is incomplete")
 
     policy = UseDistributionPolicyProjection(
         schema_version="arw.use-distribution-policy-projection.v1",
