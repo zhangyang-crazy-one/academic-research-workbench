@@ -1242,6 +1242,29 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
             "research-integrity-contracts.schema.json", unbound_exact_lock
         )
 
+    blocked_after_prior_passes = report.model_dump(mode="json")
+    blocked_after_prior_passes["status"] = "BLOCKED"
+    blocked_after_prior_passes["technical_qualification"] = "BLOCKED"
+    blocked_after_prior_passes["integration_lock_sha256"] = None
+    blocked_after_prior_passes["reason_codes"] = ["legal_state_drift"]
+    blocked_layer = blocked_after_prior_passes["layers"][8]
+    blocked_layer["status"] = "BLOCKED"
+    blocked_layer["reason_code"] = "legal_state_drift"
+    blocked_layer["detail"] = (
+        "legal policy differs from the qualified blocked state"
+    )
+    final_layer = blocked_after_prior_passes["layers"][9]
+    final_layer["status"] = "NOT_EVALUATED"
+    final_layer["reason_code"] = None
+    final_layer["detail"] = None
+    final_layer["expected_sha256"] = None
+    final_layer["observed_sha256"] = None
+    blocked_after_prior_passes["layers"][1]["observed_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", blocked_after_prior_passes
+        )
+
     blocked = diagnose_integration_lock(
         None,
         stage_root=None,

@@ -464,6 +464,13 @@ class ResearchSourceManifest(StrictModel):
     imported_at: UtcTimestamp
     imported_by: ActorId
 
+    @field_validator("imported_at")
+    @classmethod
+    def imported_at_is_valid_utc_date_time(cls, value: str) -> str:
+        if not _is_rfc3339_date_time(value):
+            raise ValueError("imported_at must be a valid UTC date-time")
+        return value
+
     @field_serializer("authors")
     def serialize_authors_without_nulls(
         self, authors: tuple[CSLName, ...]

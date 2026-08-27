@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -283,7 +284,7 @@ def test_date_time_validation_does_not_depend_on_optional_format_extra(
 
 
 def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -> None:
-    valid_signal = json.loads(json.dumps(VALID_BIBLIOGRAPHIC_SIGNAL))
+    valid_signal = deepcopy(VALID_BIBLIOGRAPHIC_SIGNAL)
     valid_signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]
     valid_entry = {
         **ARS_ENTRY,
@@ -562,7 +563,7 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
     evidence_digests_schema = checked["$defs"]["ClaimEvidenceLink"]["properties"][
         "evidence_span_sha256"
     ]
-    assert evidence_digests_schema["uniqueItems"] is True
+    assert evidence_digests_schema["uniqueItems"]
 
     source = _source()
     span = _span(source)
@@ -610,6 +611,17 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
     with pytest.raises(ValueError, match="instance validation failed"):
         validate_instance(
             "research-integrity-contracts.schema.json", invalid_acquisition
+        )
+
+    impossible_import = source.model_dump(mode="json")
+    impossible_import["imported_at"] = "2026-99-99T99:99:99Z"
+    with pytest.raises(ValidationError, match="date-time"):
+        research_integrity.ResearchSourceManifest.model_validate_json(
+            canonical_json_bytes(impossible_import), strict=True
+        )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", impossible_import
         )
 
     for field, invalid_value in (
