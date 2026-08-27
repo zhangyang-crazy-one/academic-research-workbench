@@ -106,9 +106,7 @@ STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
         "supply-chain/use-distribution.json",
     }
 )
-STAGE_IDENTITY_EXCLUDED_PREFIXES = (
-    "supply-chain/host-canary/",
-)
+STAGE_IDENTITY_EXCLUDED_PREFIXES = ("supply-chain/host-canary/",)
 LegalBlocker = Literal[
     "INTENDED_USE_UNKNOWN",
     "DISTRIBUTION_CLASS_UNKNOWN",
@@ -127,9 +125,7 @@ GitObjectId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
 EvidenceId = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 ]
-MappingId = Annotated[
-    str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{2,95}$")
-]
+MappingId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{2,95}$")]
 
 
 class IntegrationLockError(RuntimeError):
@@ -237,7 +233,9 @@ class ARSBinding(LockModel):
         ):
             raise ValueError("ARS source repositories must use the canonical order")
         commits = {item.component_id: item.commit for item in self.source_repositories}
-        urls = {item.component_id: item.upstream_url for item in self.source_repositories}
+        urls = {
+            item.component_id: item.upstream_url for item in self.source_repositories
+        }
         if commits["academic-research-skills"] != EXPECTED_ARS_UPSTREAM_COMMIT:
             raise ValueError("ARS upstream commit is not the qualified revision")
         if commits["experiment-agent"] != EXPECTED_EXPERIMENT_AGENT_COMMIT:
@@ -295,7 +293,9 @@ class FileBaseBinding(LockModel):
             range(1, len(self.ordered_patches) + 1)
         ):
             raise ValueError("file-base patch order must be contiguous")
-        if len({item.path for item in self.ordered_patches}) != len(self.ordered_patches):
+        if len({item.path for item in self.ordered_patches}) != len(
+            self.ordered_patches
+        ):
             raise ValueError("file-base patch paths must be unique")
         observed = tuple(
             (item.order, item.path, item.sha256) for item in self.ordered_patches
@@ -344,7 +344,9 @@ class CodexHostBinding(LockModel):
     @model_validator(mode="after")
     def tuple_hash_is_derived(self) -> Self:
         if self.tuple_sha256 != _host_tuple_sha256(self):
-            raise ValueError("Codex host tuple hash is not derived from canonical fields")
+            raise ValueError(
+                "Codex host tuple hash is not derived from canonical fields"
+            )
         return self
 
 
@@ -494,11 +496,18 @@ class CodexHostEvidenceBundle(LockModel):
             for item in self.hook_status_classifications
         )
         if observed != expected:
-            raise ValueError("hook status classification matrix is incomplete or reordered")
-        if len({item.evidence.sha256 for item in self.hook_status_classifications}) != 5:
+            raise ValueError(
+                "hook status classification matrix is incomplete or reordered"
+            )
+        if (
+            len({item.evidence.sha256 for item in self.hook_status_classifications})
+            != 5
+        ):
             raise ValueError("hook status classifications require distinct evidence")
         if len({item.evidence.path for item in self.hook_status_classifications}) != 5:
-            raise ValueError("hook status classifications require distinct evidence paths")
+            raise ValueError(
+                "hook status classifications require distinct evidence paths"
+            )
         if len({item.path for item in self.fresh_home_receipts}) != 3:
             raise ValueError("bundle must retain three distinct fresh-home receipts")
         return self
@@ -551,11 +560,15 @@ class CodexHostCanaryEvidence(LockModel):
     @model_validator(mode="after")
     def fresh_homes_are_distinct(self) -> Self:
         if len({item.path for item in self.fresh_home_receipts}) != 3:
-            raise ValueError("the Codex canary must retain three distinct fresh-home receipts")
+            raise ValueError(
+                "the Codex canary must retain three distinct fresh-home receipts"
+            )
         if self.evidence_bundle.path in {
             item.path for item in self.fresh_home_receipts
         }:
-            raise ValueError("evidence bundle must be separate from fresh-home receipts")
+            raise ValueError(
+                "evidence bundle must be separate from fresh-home receipts"
+            )
         return self
 
 
@@ -599,7 +612,9 @@ class LicenseBinding(LockModel):
     @model_validator(mode="after")
     def exact_legal_blockers(self) -> Self:
         if self.reason_codes != EXPECTED_LEGAL_BLOCKERS:
-            raise ValueError("license blockers must retain the exact SUP-04 evidence gaps")
+            raise ValueError(
+                "license blockers must retain the exact SUP-04 evidence gaps"
+            )
         expected = hashlib.sha256(
             canonical_json_bytes(self.use_distribution_policy.model_dump(mode="json"))
         ).hexdigest()
@@ -708,8 +723,7 @@ class IntegrationDiagnosticLayer(LockModel):
         elif any(value is not None for value in (self.reason_code, self.detail)):
             raise ValueError("non-blocked diagnostic layers cannot carry a reason")
         if self.status == "NOT_EVALUATED" and any(
-            value is not None
-            for value in (self.expected_sha256, self.observed_sha256)
+            value is not None for value in (self.expected_sha256, self.observed_sha256)
         ):
             raise ValueError("unevaluated diagnostic layers cannot carry digests")
         return self
@@ -733,9 +747,13 @@ class IntegrationDiagnosticReport(LockModel):
     @model_validator(mode="after")
     def layer_order_and_status_are_exact(self) -> Self:
         if tuple(layer.name for layer in self.layers) != DIAGNOSTIC_LAYER_ORDER:
-            raise ValueError("integration diagnostic layers are incomplete or reordered")
+            raise ValueError(
+                "integration diagnostic layers are incomplete or reordered"
+            )
         blocked = [
-            index for index, layer in enumerate(self.layers) if layer.status == "BLOCKED"
+            index
+            for index, layer in enumerate(self.layers)
+            if layer.status == "BLOCKED"
         ]
         if self.status == "PASS":
             if (
@@ -755,10 +773,7 @@ class IntegrationDiagnosticReport(LockModel):
         first = blocked[0]
         if any(layer.status != "PASS" for layer in self.layers[:first]):
             raise ValueError("layers before the first failure must pass")
-        if any(
-            layer.status != "NOT_EVALUATED"
-            for layer in self.layers[first + 1 :]
-        ):
+        if any(layer.status != "NOT_EVALUATED" for layer in self.layers[first + 1 :]):
             raise ValueError("layers after the first failure must not be evaluated")
         if self.reason_codes != (self.layers[first].reason_code,):
             raise ValueError("report reason must equal the blocked layer reason")
@@ -797,7 +812,9 @@ def _regular_file_under(root: Path, relative: str) -> Path:
         resolved = cursor.resolve(strict=True)
         mode = resolved.stat().st_mode
     except OSError as error:
-        raise IntegrationLockError(f"bound file is missing: {relative}: {error}") from error
+        raise IntegrationLockError(
+            f"bound file is missing: {relative}: {error}"
+        ) from error
     if not resolved.is_relative_to(root) or not stat.S_ISREG(mode):
         raise IntegrationLockError(f"bound path is not a regular file: {relative}")
     return resolved
@@ -807,7 +824,9 @@ def _read_object(path: Path, *, label: str) -> dict[str, object]:
     try:
         value = strict_json_loads(path.read_bytes())
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
-        raise IntegrationLockError(f"{label} is not valid strict JSON: {error}") from error
+        raise IntegrationLockError(
+            f"{label} is not valid strict JSON: {error}"
+        ) from error
     if not isinstance(value, dict):
         raise IntegrationLockError(f"{label} must be a JSON object")
     return value
@@ -858,7 +877,9 @@ def _tree_sha256(root: Path, *, ignore_runtime_caches: bool = False) -> str:
         if path.is_file():
             files.append(path)
         elif not path.is_dir():
-            raise IntegrationLockError(f"tree contains a non-file entry: {relative.as_posix()}")
+            raise IntegrationLockError(
+                f"tree contains a non-file entry: {relative.as_posix()}"
+            )
     if not files:
         raise IntegrationLockError("qualified tree is empty")
     for path in sorted(files, key=lambda item: item.relative_to(root).as_posix()):
@@ -887,7 +908,9 @@ def observe_stage_identity(stage_root: Path) -> str:
         relative = path.relative_to(stage_root).as_posix()
         if relative in STAGE_IDENTITY_EXCLUDED_PATHS:
             continue
-        if any(relative.startswith(prefix) for prefix in STAGE_IDENTITY_EXCLUDED_PREFIXES):
+        if any(
+            relative.startswith(prefix) for prefix in STAGE_IDENTITY_EXCLUDED_PREFIXES
+        ):
             continue
         if path.is_symlink():
             raise IntegrationLockError(f"stage identity rejects symlink: {relative}")
@@ -932,7 +955,9 @@ def _zip_tree_sha256(path: Path) -> tuple[str, tuple[str, ...]]:
                     or any(part in {"", ".", ".."} for part in pure.parts)
                     or name in members
                 ):
-                    raise IntegrationLockError("ARW wheel contains an unsafe or duplicate path")
+                    raise IntegrationLockError(
+                        "ARW wheel contains an unsafe or duplicate path"
+                    )
                 mode = info.external_attr >> 16
                 if stat.S_ISLNK(mode):
                     raise IntegrationLockError("ARW wheel contains a symlink")
@@ -1017,9 +1042,13 @@ def _executable(path: Path) -> ExecutableBinding:
         mode = resolved.stat().st_mode
         executable = os.access(resolved, os.X_OK)
     except OSError as error:
-        raise IntegrationLockError(f"Codex executable is unavailable: {error}") from error
+        raise IntegrationLockError(
+            f"Codex executable is unavailable: {error}"
+        ) from error
     if not stat.S_ISREG(mode) or not executable:
-        raise IntegrationLockError("Codex executable must resolve to an executable file")
+        raise IntegrationLockError(
+            "Codex executable must resolve to an executable file"
+        )
     return ExecutableBinding(
         invoked_path=str(path), resolved_path=str(resolved), sha256=_digest(resolved)
     )
@@ -1047,7 +1076,9 @@ def observe_codex_host(launcher: Path, native_binary: Path) -> CodexHostBinding:
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise IntegrationLockError(f"Codex version observation failed: {error}") from error
+        raise IntegrationLockError(
+            f"Codex version observation failed: {error}"
+        ) from error
     version = _observed_codex_cli_version(result)
     preliminary = {
         "cli_version": version,
@@ -1060,7 +1091,9 @@ def observe_codex_host(launcher: Path, native_binary: Path) -> CodexHostBinding:
     digest = hashlib.sha256(
         canonical_json_bytes(
             {
-                key: value.model_dump(mode="json") if isinstance(value, LockModel) else value
+                key: value.model_dump(mode="json")
+                if isinstance(value, LockModel)
+                else value
                 for key, value in preliminary.items()
             }
         )
@@ -1083,11 +1116,11 @@ def is_supported_codex_cli_version(value: str) -> bool:
     if match is None:
         return False
     try:
-        observed = tuple(
-            int(match.group(name)) for name in ("major", "minor", "patch")
-        )
+        observed = tuple(int(match.group(name)) for name in ("major", "minor", "patch"))
     except (TypeError, ValueError) as error:
-        raise IntegrationLockError("Codex CLI version components are invalid") from error
+        raise IntegrationLockError(
+            "Codex CLI version components are invalid"
+        ) from error
     return observed >= MINIMUM_CODEX_CLI_VERSION
 
 
@@ -1176,7 +1209,9 @@ def _source_binding(
 def _validate_bundled_ars(
     stage_root: Path, source_manifest: Mapping[str, object]
 ) -> ARSBinding:
-    root = _safe_root(stage_root / "skills/academic-research-suite", label="bundled ARS")
+    root = _safe_root(
+        stage_root / "skills/academic-research-suite", label="bundled ARS"
+    )
     manifest_binding = FileBinding.from_path(root, "manifest.json")
     version_binding = FileBinding.from_path(root, "VERSION")
     router_binding = FileBinding.from_path(root, "SKILL.md")
@@ -1184,7 +1219,9 @@ def _validate_bundled_ars(
     try:
         version = (root / "VERSION").read_text(encoding="ascii").strip()
     except (OSError, UnicodeError) as error:
-        raise IntegrationLockError(f"bundled ARS version is unreadable: {error}") from error
+        raise IntegrationLockError(
+            f"bundled ARS version is unreadable: {error}"
+        ) from error
     if (
         manifest.get("name") != "academic-research-suite"
         or manifest.get("adapter_version") != EXPECTED_ARS_ADAPTER_VERSION
@@ -1194,21 +1231,30 @@ def _validate_bundled_ars(
         raise IntegrationLockError("bundled ARS adapter version identities disagree")
     repository_rows = manifest.get("source_repositories")
     if not isinstance(repository_rows, list):
-        raise IntegrationLockError("bundled ARS source repository identities are missing")
+        raise IntegrationLockError(
+            "bundled ARS source repository identities are missing"
+        )
     bundled_commits = {
-        row.get("name"): row.get("commit") for row in repository_rows if isinstance(row, dict)
+        row.get("name"): row.get("commit")
+        for row in repository_rows
+        if isinstance(row, dict)
     }
     source_bindings = (
         _source_binding(
             _component(source_manifest, "academic-research-skills"),
             "academic-research-skills",
         ),
-        _source_binding(_component(source_manifest, "experiment-agent"), "experiment-agent"),
+        _source_binding(
+            _component(source_manifest, "experiment-agent"), "experiment-agent"
+        ),
     )
     if any(
-        bundled_commits.get(item.component_id) != item.commit for item in source_bindings
+        bundled_commits.get(item.component_id) != item.commit
+        for item in source_bindings
     ):
-        raise IntegrationLockError("bundled ARS commits do not match the pinned source identities")
+        raise IntegrationLockError(
+            "bundled ARS commits do not match the pinned source identities"
+        )
     ars_root = root / "ars"
     try:
         return ARSBinding(
@@ -1226,7 +1272,9 @@ def _validate_bundled_ars(
             source_repositories=source_bindings,
         )
     except ValidationError as error:
-        raise IntegrationLockError(f"bundled ARS identity is invalid: {error}") from error
+        raise IntegrationLockError(
+            f"bundled ARS identity is invalid: {error}"
+        ) from error
 
 
 def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
@@ -1234,7 +1282,9 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     plugin_manifest = FileBinding.from_path(stage_root, ".codex-plugin/plugin.json")
     cli_launcher = FileBinding.from_path(stage_root, "bin/arw")
     try:
-        project = tomllib.loads(_bound_file(stage_root, pyproject).read_text(encoding="utf-8"))
+        project = tomllib.loads(
+            _bound_file(stage_root, pyproject).read_text(encoding="utf-8")
+        )
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
         raise IntegrationLockError(f"staged pyproject is invalid: {error}") from error
     if project.get("project", {}).get("name") != "academic-research-workbench":
@@ -1263,10 +1313,10 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     wheel_relative = wheels[0].relative_to(stage_root).as_posix()
     wheel = FileBinding.from_path(stage_root, wheel_relative)
     wheel_tree, members = _zip_tree_sha256(wheels[0])
-    if any(
-        name.startswith(("ars/", "academic_research_suite/")) for name in members
-    ):
-        raise IntegrationLockError("ARW wheel unexpectedly includes the standalone ARS runtime")
+    if any(name.startswith(("ars/", "academic_research_suite/")) for name in members):
+        raise IntegrationLockError(
+            "ARW wheel unexpectedly includes the standalone ARS runtime"
+        )
     if "arw/integration_lock.py" not in members:
         raise IntegrationLockError("ARW wheel omits the integration-lock runtime")
     metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
@@ -1278,7 +1328,9 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         "\nName: academic-research-workbench\n" not in f"\n{metadata}"
         or "\nVersion: 0.1.0\n" not in f"\n{metadata}"
     ):
-        raise IntegrationLockError("ARW wheel metadata does not match the staged runtime")
+        raise IntegrationLockError(
+            "ARW wheel metadata does not match the staged runtime"
+        )
     return ARWRuntimeBinding(
         package="academic-research-workbench",
         version="0.1.0",
@@ -1295,7 +1347,9 @@ def _validate_file_base(
 ) -> FileBaseBinding:
     source_binding = FileBinding.from_path(stage_root, "vendor/source-manifest.json")
     mcp_manifest_binding = FileBinding.from_path(stage_root, "vendor/mcp-manifest.json")
-    evidence_binding = FileBinding.from_path(stage_root, ".file-base/build-evidence.json")
+    evidence_binding = FileBinding.from_path(
+        stage_root, ".file-base/build-evidence.json"
+    )
     binary_binding = FileBinding.from_path(stage_root, "libexec/file-base-mcp")
     component = _component(source_manifest, "file-base")
     mcp_manifest = _read_object(
@@ -1308,12 +1362,15 @@ def _validate_file_base(
         or mcp_manifest.get("upstream_url") != component.get("upstream_url")
         or mcp_manifest.get("upstream_commit") != component.get("revision")
         or mcp_manifest.get("upstream_git_tree") != component.get("git_tree")
-        or mcp_manifest.get("upstream_source_tree_sha256") != component.get("tree_sha256")
+        or mcp_manifest.get("upstream_source_tree_sha256")
+        != component.get("tree_sha256")
         or mcp_manifest.get("source_materialization") != "vendor/sources/file-base"
         or mcp_manifest.get("protocol") != "MCP-2025-11-25-stdio"
         or mcp_manifest.get("license") != "MIT"
     ):
-        raise IntegrationLockError("MCP manifest does not bind the qualified codebase-memory-mcp source")
+        raise IntegrationLockError(
+            "MCP manifest does not bind the qualified codebase-memory-mcp source"
+        )
     mcp_binary = mcp_manifest.get("binary")
     if (
         not isinstance(mcp_binary, dict)
@@ -1321,7 +1378,9 @@ def _validate_file_base(
         or mcp_binary.get("staged_path") != "libexec/file-base-mcp"
         or mcp_binary.get("sha256") != binary_binding.sha256
     ):
-        raise IntegrationLockError("MCP manifest does not bind the staged file-base binary")
+        raise IntegrationLockError(
+            "MCP manifest does not bind the staged file-base binary"
+        )
     evidence = _read_object(
         _bound_file(stage_root, evidence_binding), label="file-base build evidence"
     )
@@ -1352,13 +1411,13 @@ def _validate_file_base(
                 order=row["order"], path=row["path"], sha256=row["sha256"]
             )
         except (KeyError, ValidationError) as error:
-            raise IntegrationLockError(f"invalid file-base patch identity: {error}") from error
+            raise IntegrationLockError(
+                f"invalid file-base patch identity: {error}"
+            ) from error
         bindings.append(binding)
         patch_file = _regular_file_under(stage_root, binding.path)
         if _digest(patch_file) != binding.sha256:
-            raise IntegrationLockError(
-                f"file-base patch bytes drifted: {binding.path}"
-            )
+            raise IntegrationLockError(f"file-base patch bytes drifted: {binding.path}")
         expected_rows.append(binding.model_dump(mode="json"))
     if evidence_patches != expected_rows:
         raise IntegrationLockError("file-base build evidence patch series drift")
@@ -1472,27 +1531,28 @@ def _validate_hook(
         raise IntegrationLockError("Codex host canary must be a direct regular file")
     try:
         canary_raw = canary_path.read_bytes()
-        evidence = CodexHostCanaryEvidence.model_validate_json(
-            canary_raw, strict=True
-        )
+        evidence = CodexHostCanaryEvidence.model_validate_json(canary_raw, strict=True)
     except (OSError, UnicodeError, ValueError, ValidationError) as error:
         raise IntegrationLockError(f"Codex host canary is invalid: {error}") from error
     if canary_raw != canonical_json_bytes(evidence.model_dump(mode="json")):
         raise IntegrationLockError("Codex host canary bytes are not canonical JSON")
     canary_digest = hashlib.sha256(canary_raw).hexdigest()
     if evidence.codex_host_tuple_sha256 != host.tuple_sha256:
-        raise IntegrationLockError("Codex host canary was produced by another host tuple")
+        raise IntegrationLockError(
+            "Codex host canary was produced by another host tuple"
+        )
     if evidence.arw_runtime_sha256 != arw_runtime.wheel.sha256:
         raise IntegrationLockError("Codex host canary covered another ARW runtime")
     if evidence.hook_definition_sha256 != definition:
         raise IntegrationLockError("Codex host canary covered another hook definition")
     if evidence.stage_sha256 != observe_stage_identity(stage_root):
-        raise IntegrationLockError("Codex host canary covered another live stage identity")
-    if (
-        evidence.credential_policy_sha256
-        != EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256
-    ):
-        raise IntegrationLockError("Codex host canary credential policy is not qualified")
+        raise IntegrationLockError(
+            "Codex host canary covered another live stage identity"
+        )
+    if evidence.credential_policy_sha256 != EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256:
+        raise IntegrationLockError(
+            "Codex host canary credential policy is not qualified"
+        )
     evidence_root = _safe_root(canary_path.parent, label="Codex host evidence")
     bundle = _load_canonical_bound_model(
         evidence_root,
@@ -1501,7 +1561,9 @@ def _validate_hook(
         label="Codex host evidence bundle",
     )
     if bundle.fresh_home_receipts != evidence.fresh_home_receipts:
-        raise IntegrationLockError("canary and bundle fresh-home receipt bindings differ")
+        raise IntegrationLockError(
+            "canary and bundle fresh-home receipt bindings differ"
+        )
     expected_tuple = (
         evidence.codex_host_tuple_sha256,
         evidence.arw_runtime_sha256,
@@ -1543,7 +1605,9 @@ def _validate_hook(
         for index, binding in enumerate(evidence.fresh_home_receipts, start=1)
     )
     if tuple(receipt.home_ordinal for receipt in receipts) != (1, 2, 3):
-        raise IntegrationLockError("fresh-home receipt ordinals must be exactly 1, 2, 3")
+        raise IntegrationLockError(
+            "fresh-home receipt ordinals must be exactly 1, 2, 3"
+        )
     for receipt in receipts:
         receipt_tuple = (
             receipt.codex_host_tuple_sha256,
@@ -1592,15 +1656,21 @@ def _validate_hook(
 
 
 def _validate_license(stage_root: Path) -> LicenseBinding:
-    verdict_binding = FileBinding.from_path(stage_root, "supply-chain/license-verdict.json")
-    verdict = _read_object(_bound_file(stage_root, verdict_binding), label="license verdict")
+    verdict_binding = FileBinding.from_path(
+        stage_root, "supply-chain/license-verdict.json"
+    )
+    verdict = _read_object(
+        _bound_file(stage_root, verdict_binding), label="license verdict"
+    )
     use_path = "supply-chain/use-distribution.json"
     use_distribution = _read_object(
         _regular_file_under(stage_root, use_path),
         label="use and distribution declaration",
     )
     if verdict.get("use_distribution_path") != use_path:
-        raise IntegrationLockError("license verdict does not reference the staged use declaration")
+        raise IntegrationLockError(
+            "license verdict does not reference the staged use declaration"
+        )
     expected_keys = {
         "accountable_approval",
         "distribution_class",
@@ -1620,7 +1690,9 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         "distribution_class": {"status": "unknown"},
         "accountable_approval": {"status": "missing"},
     }
-    if any(use_distribution.get(key) != value for key, value in expected_statuses.items()):
+    if any(
+        use_distribution.get(key) != value for key, value in expected_statuses.items()
+    ):
         raise IntegrationLockError(
             "use and distribution declaration does not support the exact legal blockers"
         )
@@ -1639,11 +1711,15 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         )
     evidence_hashes = use_distribution.get("evidence_hashes")
     if not isinstance(evidence_hashes, list):
-        raise IntegrationLockError("use and distribution evidence hashes must be a list")
+        raise IntegrationLockError(
+            "use and distribution evidence hashes must be a list"
+        )
     seen_evidence_paths: set[str] = set()
     for row in evidence_hashes:
         if not isinstance(row, dict) or set(row) != {"path", "purpose", "sha256"}:
-            raise IntegrationLockError("use and distribution evidence hash is malformed")
+            raise IntegrationLockError(
+                "use and distribution evidence hash is malformed"
+            )
         path = row.get("path")
         digest = row.get("sha256")
         try:
@@ -1660,7 +1736,9 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
             or not isinstance(digest, str)
             or re.fullmatch(r"[0-9a-f]{64}", digest) is None
         ):
-            raise IntegrationLockError("use and distribution evidence hash is malformed")
+            raise IntegrationLockError(
+                "use and distribution evidence hash is malformed"
+            )
         seen_evidence_paths.add(path)
 
     policy = UseDistributionPolicyProjection(
@@ -1727,9 +1805,7 @@ def build_integration_lock(
             "Codex CLI version is unsupported; requires a stable Codex CLI "
             f"{CODEX_CLI_VERSION_REQUIREMENT} and host-specific canary evidence"
         )
-    hook = _validate_hook(
-        stage_root, host_canary_evidence, host, arw_runtime
-    )
+    hook = _validate_hook(stage_root, host_canary_evidence, host, arw_runtime)
     license_binding = _validate_license(stage_root)
     return IntegrationLock(
         schema_version="arw.integration-lock.v1",
@@ -1767,10 +1843,14 @@ def write_integration_lock(path: Path, lock: IntegrationLock) -> str:
         raise IntegrationLockError("integration lock path must not be a symlink")
     if path.exists():
         if not _direct_file_matches(path, value):
-            raise IntegrationLockError("integration lock is immutable and already differs")
+            raise IntegrationLockError(
+                "integration lock is immutable and already differs"
+            )
         return digest
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as handle:
@@ -1783,10 +1863,14 @@ def write_integration_lock(path: Path, lock: IntegrationLock) -> str:
         except FileExistsError as collision:
             if _direct_file_matches(path, value):
                 return digest
-            raise IntegrationLockError("integration lock publication collided") from collision
+            raise IntegrationLockError(
+                "integration lock publication collided"
+            ) from collision
         return digest
     except OSError as error:
-        raise IntegrationLockError(f"cannot publish integration lock: {error}") from error
+        raise IntegrationLockError(
+            f"cannot publish integration lock: {error}"
+        ) from error
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -2063,9 +2147,7 @@ def diagnose_integration_lock(
 
     expected_host = _diagnostic_digest(lock.codex_host)
     try:
-        observed_host_model = observe_codex_host(
-            codex_launcher, codex_native_binary
-        )
+        observed_host_model = observe_codex_host(codex_launcher, codex_native_binary)
         if not is_supported_codex_cli_version(observed_host_model.cli_version):
             raise IntegrationLockError("unsupported Codex host")
         observed_host = _diagnostic_digest(observed_host_model)
@@ -2089,8 +2171,8 @@ def diagnose_integration_lock(
     )
 
     try:
-        observed_config, observed_handler, observed_definition = observe_hook_definition(
-            stage_root
+        observed_config, observed_handler, observed_definition = (
+            observe_hook_definition(stage_root)
         )
         if (
             observed_config != lock.hook.config

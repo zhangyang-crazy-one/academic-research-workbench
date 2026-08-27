@@ -95,7 +95,7 @@ def test_codex_host_observation_accepts_one_stable_version_amid_diagnostics(
     _write(
         launcher,
         "#!/bin/sh\n"
-        "if [ \"${1:-}\" = \"--version\" ]; then\n"
+        'if [ "${1:-}" = "--version" ]; then\n'
         "  printf '%s\\n' 'hook: SessionStart' 'codex-cli 0.147.0' 'hook: Stop'\n"
         "  printf '%s\\n' 'non-fatal nested diagnostic' >&2\n"
         "  exit 0\n"
@@ -116,7 +116,7 @@ def test_codex_host_observation_rejects_ambiguous_version_lines(tmp_path: Path) 
     _write(
         launcher,
         "#!/bin/sh\n"
-        "if [ \"${1:-}\" = \"--version\" ]; then\n"
+        'if [ "${1:-}" = "--version" ]; then\n'
         "  printf '%s\\n' 'codex-cli 0.147.0' 'codex-cli 0.148.0'\n"
         "  exit 0\n"
         "fi\n"
@@ -149,10 +149,7 @@ def _component(
 def _make_wheel(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     metadata = (
-        "Metadata-Version: 2.4\n"
-        "Name: academic-research-workbench\n"
-        "Version: 0.1.0\n"
-        "\n"
+        "Metadata-Version: 2.4\nName: academic-research-workbench\nVersion: 0.1.0\n\n"
     )
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
         archive.writestr("arw/__init__.py", "__version__ = '0.1.0'\n")
@@ -171,9 +168,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
 
     _write(
         stage / "pyproject.toml",
-        "[project]\n"
-        "name = \"academic-research-workbench\"\n"
-        "version = \"0.1.0\"\n",
+        '[project]\nname = "academic-research-workbench"\nversion = "0.1.0"\n',
     )
     _json(
         stage / ".codex-plugin/plugin.json",
@@ -243,7 +238,11 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
                 "sha256": _digest(binary),
             },
             "patches": [
-                {"order": patch["order"], "path": patch["path"], "sha256": patch["sha256"]}
+                {
+                    "order": patch["order"],
+                    "path": patch["path"],
+                    "sha256": patch["sha256"],
+                }
                 for patch in patches
             ],
             "protocol": "MCP-2025-11-25-stdio",
@@ -309,7 +308,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         "---\n"
         "name: academic-research-suite\n"
         "metadata:\n"
-        "  version: \"0.1.26\"\n"
+        '  version: "0.1.26"\n'
         "---\n"
         "# ARS\n",
     )
@@ -334,7 +333,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     _write(
         launcher,
         "#!/bin/sh\n"
-        "if [ \"${1:-}\" = \"--version\" ]; then\n"
+        'if [ "${1:-}" = "--version" ]; then\n'
         "  printf 'codex-cli 0.144.6\\n'\n"
         "  exit 0\n"
         "fi\n"
@@ -634,7 +633,7 @@ def test_same_upstream_commit_does_not_hide_adapter_version_drift(
         ("manifest", "version identities disagree"),
         ("version", "version identities disagree"),
         ("router", "version identities disagree"),
-            ("local-only", "canary covered another live stage identity"),
+        ("local-only", "canary covered another live stage identity"),
         ("upstream-commit", "bundled ARS commits"),
     ],
 )
@@ -654,8 +653,7 @@ def test_bundled_ars_identity_mismatches_fail_closed(
     elif mutation == "router":
         _write(
             external / "SKILL.md",
-            "---\nname: academic-research-suite\nmetadata:\n"
-            "  version: \"0.1.19\"\n---\n",
+            '---\nname: academic-research-suite\nmetadata:\n  version: "0.1.19"\n---\n',
         )
     elif mutation == "local-only":
         _write(external / "ars/academic-pipeline/WORKFLOW.md", "# changed\n")
@@ -817,7 +815,9 @@ def test_evidence_bundle_must_itself_be_canonical_strict_json(
     canary = json.loads(integration_fixture["canary"].read_text(encoding="utf-8"))
     canary["evidence_bundle"]["sha256"] = _digest(bundle_path)
     integration_fixture["canary"].write_bytes(canonical_json_bytes(canary))
-    with pytest.raises(IntegrationLockError, match="bundle bytes are not canonical JSON"):
+    with pytest.raises(
+        IntegrationLockError, match="bundle bytes are not canonical JSON"
+    ):
         _build(integration_fixture)
 
 
@@ -910,7 +910,9 @@ def test_credential_policy_is_derived_from_the_exact_public_constant(
     canary["credential_policy_sha256"] = wrong
     integration_fixture["canary"].write_bytes(canonical_json_bytes(canary))
     _refresh_evidence_bindings(integration_fixture)
-    with pytest.raises(IntegrationLockError, match="credential policy is not qualified"):
+    with pytest.raises(
+        IntegrationLockError, match="credential policy is not qualified"
+    ):
         _build(integration_fixture)
 
 
@@ -1007,8 +1009,13 @@ def test_live_hook_admission_is_bypass_not_persisted_trust(
 def test_observed_definition_digest_matches_real_hook_receipt(tmp_path: Path) -> None:
     stage = tmp_path / "plugin"
     data = tmp_path / "plugin-data"
-    _write(stage / "hooks/hooks.json", (REPOSITORY_ROOT / "hooks/hooks.json").read_bytes())
-    _write(stage / "hooks/arw_hook.py", (REPOSITORY_ROOT / "hooks/arw_hook.py").read_bytes())
+    _write(
+        stage / "hooks/hooks.json", (REPOSITORY_ROOT / "hooks/hooks.json").read_bytes()
+    )
+    _write(
+        stage / "hooks/arw_hook.py",
+        (REPOSITORY_ROOT / "hooks/arw_hook.py").read_bytes(),
+    )
     payload = canonical_json_bytes(
         {
             "cwd": "/redacted-by-hook",
@@ -1127,12 +1134,8 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     monkeypatch.setenv("ARW_PLUGIN_ROOT", str(integration_fixture["stage"]))
     monkeypatch.setenv("ARW_INTEGRATION_LOCK", str(integration_fixture["lock"]))
     monkeypatch.setenv("ARW_CODEX_LAUNCHER", str(integration_fixture["launcher"]))
-    monkeypatch.setenv(
-        "ARW_CODEX_NATIVE_BINARY", str(integration_fixture["native"])
-    )
-    monkeypatch.setenv(
-        "ARW_HOST_CANARY_EVIDENCE", str(integration_fixture["canary"])
-    )
+    monkeypatch.setenv("ARW_CODEX_NATIVE_BINARY", str(integration_fixture["native"]))
+    monkeypatch.setenv("ARW_HOST_CANARY_EVIDENCE", str(integration_fixture["canary"]))
 
     exit_code = cli_module.main(["route", "--diagnostics", "--json"])
     report = json.loads(capsys.readouterr().out)
@@ -1144,10 +1147,7 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     assert layers["inputs"]["status"] == "PASS"
     assert layers["lock_document"]["status"] == "BLOCKED"
     assert layers["lock_document"]["reason_code"] == "lock_document_noncanonical"
-    assert all(
-        layer["status"] == "NOT_EVALUATED"
-        for layer in report["layers"][2:]
-    )
+    assert all(layer["status"] == "NOT_EVALUATED" for layer in report["layers"][2:])
 
 
 def test_root_hook_supply_chain_gate_rejects_digest_substitution(
@@ -1170,8 +1170,7 @@ def test_root_hook_supply_chain_gate_rejects_digest_substitution(
     sbom = json.loads((REPOSITORY_ROOT / "SBOM.cdx.json").read_text(encoding="utf-8"))
     nested_digest = hashlib.sha256(
         (
-            REPOSITORY_ROOT
-            / "skills/academic-research-suite/codex/hooks/hooks.json"
+            REPOSITORY_ROOT / "skills/academic-research-suite/codex/hooks/hooks.json"
         ).read_bytes()
     ).hexdigest()
     component = next(
@@ -1284,9 +1283,7 @@ def test_diagnostic_stops_at_the_first_exact_drift_layer(
         )
         target.write_bytes(target.read_bytes() + b"drift")
     elif mutation == "ars":
-        target = (
-            integration_fixture["external"] / "ars/academic-pipeline/WORKFLOW.md"
-        )
+        target = integration_fixture["external"] / "ars/academic-pipeline/WORKFLOW.md"
         target.write_bytes(target.read_bytes() + b"drift")
     elif mutation == "file-base":
         target = integration_fixture["stage"] / "libexec/file-base-mcp"
@@ -1315,8 +1312,7 @@ def test_diagnostic_stops_at_the_first_exact_drift_layer(
     assert report.layers[blocked_index].name == expected_layer
     assert report.layers[blocked_index].reason_code == expected_reason
     assert all(
-        layer.status == "NOT_EVALUATED"
-        for layer in report.layers[blocked_index + 1 :]
+        layer.status == "NOT_EVALUATED" for layer in report.layers[blocked_index + 1 :]
     )
     serialized = canonical_json_bytes(report.model_dump(mode="json")).decode("utf-8")
     assert str(integration_fixture["stage"]) not in serialized

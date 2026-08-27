@@ -88,13 +88,17 @@ def _ars_passport_validator(schema_path: str) -> jsonschema.Draft202012Validator
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"bundled ARS passport schema is unreadable: {path.name}") from error
+        raise ValueError(
+            f"bundled ARS passport schema is unreadable: {path.name}"
+        ) from error
     if not isinstance(document, dict):
         raise ValueError(f"bundled ARS passport schema is not an object: {path.name}")
     try:
         jsonschema.Draft202012Validator.check_schema(document)
     except jsonschema.SchemaError as error:
-        raise ValueError(f"bundled ARS passport schema is invalid: {path.name}") from error
+        raise ValueError(
+            f"bundled ARS passport schema is invalid: {path.name}"
+        ) from error
     return jsonschema.Draft202012Validator(
         document,
         format_checker=_FORMAT_CHECKER,
@@ -130,16 +134,15 @@ class ResearchIntegrityError(ValueError):
 
 
 class CSLPersonalName(StrictModel):
-
     family: BoundedText
     given: Annotated[str, StringConstraints(max_length=8192)] | None = None
     suffix: Annotated[str, StringConstraints(max_length=1024)] | None = None
-    dropping_particle: Annotated[str, StringConstraints(max_length=1024)] | None = Field(
-        default=None, alias="dropping-particle"
+    dropping_particle: Annotated[str, StringConstraints(max_length=1024)] | None = (
+        Field(default=None, alias="dropping-particle")
     )
-    non_dropping_particle: Annotated[
-        str, StringConstraints(max_length=1024)
-    ] | None = Field(default=None, alias="non-dropping-particle")
+    non_dropping_particle: Annotated[str, StringConstraints(max_length=1024)] | None = (
+        Field(default=None, alias="non-dropping-particle")
+    )
     comma_suffix: str | bool | None = Field(default=None, alias="comma-suffix")
     static_ordering: str | bool | None = Field(default=None, alias="static-ordering")
     parse_names: str | bool | None = Field(default=None, alias="parse-names")
@@ -197,20 +200,26 @@ class ARSLiteratureCorpusEntry(StrictModel):
     year: Annotated[int, Field(ge=1000, le=2100)]
     source_pointer: BoundedText
     venue: BoundedText | None = None
-    doi: Annotated[
-        str,
-        StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
-    ] | None = None
+    doi: (
+        Annotated[
+            str,
+            StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
+        ]
+        | None
+    ) = None
     arxiv_id: ArxivId | None = None
     tags: list[BoundedText] | None = Field(default=None, max_length=256)
-    obtained_via: Literal[
-        "zotero-api",
-        "zotero-bbt-export",
-        "obsidian-vault",
-        "folder-scan",
-        "manual",
-        "other",
-    ] | None = None
+    obtained_via: (
+        Literal[
+            "zotero-api",
+            "zotero-bbt-export",
+            "obsidian-vault",
+            "folder-scan",
+            "manual",
+            "other",
+        ]
+        | None
+    ) = None
     obtained_at: BoundedText | None = None
     adapter_name: AdapterIdentity | None = None
     adapter_version: AdapterIdentity | None = None
@@ -220,38 +229,47 @@ class ARSLiteratureCorpusEntry(StrictModel):
     source_acquisition_date: BoundedText | None = None
     source_acquisition_path: BoundedText | None = None
     source_verified_against_original: bool | None = None
-    source_verification_method: Literal[
-        "codex_audit", "manual_grep", "vision_check", "none"
-    ] | None = None
-    description_source: Annotated[
-        str,
-        StringConstraints(
-            pattern=r"^(original_pdf|bibliography_v[0-9]+|secondary_summary)$"
-        ),
-    ] | None = None
-    description_last_audit: Annotated[
-        str, StringConstraints(max_length=256)
-    ] | None = None
+    source_verification_method: (
+        Literal["codex_audit", "manual_grep", "vision_check", "none"] | None
+    ) = None
+    description_source: (
+        Annotated[
+            str,
+            StringConstraints(
+                pattern=r"^(original_pdf|bibliography_v[0-9]+|secondary_summary)$"
+            ),
+        ]
+        | None
+    ) = None
+    description_last_audit: Annotated[str, StringConstraints(max_length=256)] | None = (
+        None
+    )
     contamination_signals_backfilled_at: BoundedText | None = None
     contamination_signals: ContaminationSignals | None = None
-    venue_type: Literal[
-        "journal-article",
-        "conference-paper",
-        "book",
-        "chapter",
-        "dissertation",
-        "preprint",
-        "report",
-        "dataset",
-        "other",
-        "unknown",
-    ] | None = None
-    venue_type_provenance: Literal[
-        "adapter_declared",
-        "user_declared",
-        "trusted_source_declared",
-        "unknown",
-    ] | None = None
+    venue_type: (
+        Literal[
+            "journal-article",
+            "conference-paper",
+            "book",
+            "chapter",
+            "dissertation",
+            "preprint",
+            "report",
+            "dataset",
+            "other",
+            "unknown",
+        ]
+        | None
+    ) = None
+    venue_type_provenance: (
+        Literal[
+            "adapter_declared",
+            "user_declared",
+            "trusted_source_declared",
+            "unknown",
+        ]
+        | None
+    ) = None
     venue_type_source: BoundedText | None = None
     contamination_signal_omissions: ContaminationSignalOmissions | None = None
     bibliographic_integrity_signals: list[dict[str, Any]] | None = Field(
@@ -337,7 +355,9 @@ class ARSLiteratureCorpusEntry(StrictModel):
             and self.contamination_signals.preprint_post_llm_inflection
             and self.year < 2024
         ):
-            raise ValueError("post-LLM-inflection preprint signal requires year >= 2024")
+            raise ValueError(
+                "post-LLM-inflection preprint signal requires year >= 2024"
+            )
         if self.obtained_via == "manual" and signal_fields & _LOOKUP_SIGNAL_FIELDS:
             raise ValueError("manual entries cannot carry lookup contamination signals")
         if (
@@ -387,7 +407,6 @@ class ResearchSourceManifest(StrictModel):
     imported_by: ActorId
 
 
-
 class EvidenceLocator(StrictModel):
     kind: Literal["page", "line", "byte", "section"]
     start: Annotated[int, Field(ge=0, le=10_000_000)]
@@ -421,13 +440,19 @@ class ClaimEvidenceLink(StrictModel):
     claim_link_id: StableRuntimeId
     claim_id: StableRuntimeId
     claim_sha256: Sha256
-    evidence_span_sha256: tuple[Sha256, ...] = Field(min_length=1, max_length=128)
+    evidence_span_sha256: tuple[Sha256, ...] = Field(
+        min_length=1,
+        max_length=128,
+        json_schema_extra={"uniqueItems": True},
+    )
     relation: Literal["supports", "contradicts", "contextualizes"]
 
     @model_validator(mode="after")
     def evidence_digests_are_canonical(self) -> Self:
         if tuple(sorted(set(self.evidence_span_sha256))) != self.evidence_span_sha256:
-            raise ValueError("evidence span digests must be unique and canonically ordered")
+            raise ValueError(
+                "evidence span digests must be unique and canonically ordered"
+            )
         return self
 
 
@@ -436,6 +461,38 @@ ResearchIntegrityContract = Annotated[
     IntegrationDiagnosticReport | ResearchIntegrityDocument,
     Field(discriminator="schema_version"),
 ]
+
+
+@lru_cache(maxsize=1)
+def _research_integrity_contract_adapter() -> TypeAdapter[ResearchIntegrityContract]:
+    return TypeAdapter(ResearchIntegrityContract)
+
+
+def validate_research_integrity_contract_instance(instance: object) -> None:
+    """Apply semantic invariants that Draft 2020-12 cannot fully express."""
+
+    if not isinstance(instance, Mapping):
+        raise ResearchIntegrityError("research integrity contract must be an object")
+    schema_version = instance.get("schema_version")
+    adapter: TypeAdapter[Any]
+    if schema_version == "arw.integration-diagnostic.v1":
+        adapter = TypeAdapter(IntegrationDiagnosticReport)
+    elif schema_version == "arw.evidence-span.v1":
+        adapter = TypeAdapter(EvidenceSpan)
+    elif schema_version == "arw.claim-evidence-link.v1":
+        adapter = TypeAdapter(ClaimEvidenceLink)
+    elif schema_version == "arw.research-source-manifest.v1":
+        return
+    else:
+        raise ResearchIntegrityError(
+            "research integrity contract schema version is unsupported"
+        )
+    try:
+        adapter.validate_json(canonical_json_bytes(instance), strict=True)
+    except (TypeError, ValueError, ValidationError) as error:
+        raise ResearchIntegrityError(
+            f"research integrity contract semantic validation failed: {error}"
+        ) from error
 
 
 def _ars_entry_document(entry: ARSLiteratureCorpusEntry) -> dict[str, object]:
@@ -501,7 +558,9 @@ def research_source_from_ars_entry(
     try:
         validated = ARSLiteratureCorpusEntry.model_validate(dict(entry), strict=True)
     except (TypeError, ValueError, ValidationError) as error:
-        raise ResearchIntegrityError(f"ARS literature entry is invalid: {error}") from error
+        raise ResearchIntegrityError(
+            f"ARS literature entry is invalid: {error}"
+        ) from error
     try:
         return build_research_source_manifest(
             validated,
@@ -511,7 +570,9 @@ def research_source_from_ars_entry(
             imported_by=imported_by,
         )
     except (TypeError, ValueError, ValidationError) as error:
-        raise ResearchIntegrityError(f"research source identity is invalid: {error}") from error
+        raise ResearchIntegrityError(
+            f"research source identity is invalid: {error}"
+        ) from error
 
 
 def build_evidence_span(
@@ -548,7 +609,9 @@ def build_claim_evidence_link(
 
     digests = tuple(research_integrity_sha256(span) for span in evidence_spans)
     if not digests or len(digests) != len(set(digests)):
-        raise ResearchIntegrityError("claim links require unique non-empty evidence spans")
+        raise ResearchIntegrityError(
+            "claim links require unique non-empty evidence spans"
+        )
     return ClaimEvidenceLink(
         schema_version="arw.claim-evidence-link.v1",
         claim_link_id=claim_link_id,
@@ -614,13 +677,15 @@ def validate_research_integrity_chain(
             raise ResearchIntegrityError("claim evidence digests are not canonical")
         missing = set(link.evidence_span_sha256) - span_digests
         if missing:
-            raise ResearchIntegrityError("claim link references substituted evidence bytes")
+            raise ResearchIntegrityError(
+                "claim link references substituted evidence bytes"
+            )
 
 
 def research_integrity_contracts_schema_document() -> dict[str, Any]:
     """Generate the discriminated installed schema directly from strict models."""
 
-    document = TypeAdapter(ResearchIntegrityContract).json_schema(
+    document = _research_integrity_contract_adapter().json_schema(
         by_alias=False, mode="validation"
     )
     document["$schema"] = "https://json-schema.org/draft/2020-12/schema"
@@ -653,4 +718,5 @@ __all__ = (
     "research_integrity_sha256",
     "research_source_from_ars_entry",
     "validate_research_integrity_chain",
+    "validate_research_integrity_contract_instance",
 )

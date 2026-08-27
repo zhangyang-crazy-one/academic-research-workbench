@@ -278,9 +278,10 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
     }
     assert ARS_SIGNAL_VALIDATOR.is_valid(VALID_BIBLIOGRAPHIC_SIGNAL)
     source = _bridge(valid_entry)
-    assert source.bibliographic_sha256 == hashlib.sha256(
-        canonical_json_bytes(valid_entry)
-    ).hexdigest()
+    assert (
+        source.bibliographic_sha256
+        == hashlib.sha256(canonical_json_bytes(valid_entry)).hexdigest()
+    )
 
     invalid_signal = {"foo": "bar"}
     assert not ARS_SIGNAL_VALIDATOR.is_valid(invalid_signal)
@@ -297,7 +298,9 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
     "required_field",
     ("citation_key", "title", "authors", "year", "source_pointer"),
 )
-def test_bridge_enforces_every_authoritative_required_field(required_field: str) -> None:
+def test_bridge_enforces_every_authoritative_required_field(
+    required_field: str,
+) -> None:
     entry = dict(ARS_ENTRY)
     del entry[required_field]
     _assert_authoritative_rejection_is_enforced(entry)
@@ -342,13 +345,9 @@ def test_bridge_enforces_every_authoritative_required_field(required_field: str)
         },
         {
             "contamination_signals": {"crossref_unmatched": False},
-            "contamination_signal_omissions": {
-                "crossref_unmatched": "api_degraded"
-            },
+            "contamination_signal_omissions": {"crossref_unmatched": "api_degraded"},
         },
-        {
-            "contamination_signal_omissions": {"arxiv_unmatched": "api_degraded"}
-        },
+        {"contamination_signal_omissions": {"arxiv_unmatched": "api_degraded"}},
     ),
 )
 def test_bridge_enforces_every_authoritative_cross_field_rule(
@@ -387,7 +386,9 @@ def test_bridge_preserves_authoritative_valid_boundary_cases(
     _bridge(entry)
 
 
-def test_claim_builder_canonicalizes_unique_span_digests_and_rejects_duplicates() -> None:
+def test_claim_builder_canonicalizes_unique_span_digests_and_rejects_duplicates() -> (
+    None
+):
     source = _source()
     first = _span(source)
     second = research_integrity.build_evidence_span(
@@ -518,6 +519,11 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
         standalone.pop("$defs", None)
         assert checked["$defs"][model.__name__] == standalone
 
+    evidence_digests_schema = checked["$defs"]["ClaimEvidenceLink"]["properties"][
+        "evidence_span_sha256"
+    ]
+    assert evidence_digests_schema["uniqueItems"] is True
+
     source = _source()
     span = _span(source)
     link = research_integrity.build_claim_evidence_link(
@@ -532,6 +538,21 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
             "research-integrity-contracts.schema.json",
             document.model_dump(mode="json"),
         )
+
+    duplicate_evidence = link.model_dump(mode="json")
+    duplicate_evidence["evidence_span_sha256"] = [
+        link.evidence_span_sha256[0],
+        link.evidence_span_sha256[0],
+    ]
+    with pytest.raises(ValueError, match="instance validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", duplicate_evidence
+        )
+
+    unsorted_evidence = link.model_dump(mode="json")
+    unsorted_evidence["evidence_span_sha256"] = ["f" * 64, "e" * 64]
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance("research-integrity-contracts.schema.json", unsorted_evidence)
     mutated = source.model_dump(mode="json")
     mutated["unexpected"] = "rejected"
     with pytest.raises(ValueError, match="instance validation failed"):

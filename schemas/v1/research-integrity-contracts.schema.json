@@ -164,7 +164,8 @@
           "maxItems": 128,
           "minItems": 1,
           "title": "Evidence Span Sha256",
-          "type": "array"
+          "type": "array",
+          "uniqueItems": true
         },
         "relation": {
           "enum": [
