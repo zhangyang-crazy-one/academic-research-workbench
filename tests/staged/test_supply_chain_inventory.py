@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import hashlib
@@ -5,6 +6,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,7 +21,6 @@ from arw.integration_lock import (
     observe_hook_definition,
     observe_stage_identity,
 )
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -41,7 +42,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _load(path: Path) -> dict[str, object]:
+def _load(path: Path) -> dict[str, Any]:
     assert path.is_file(), f"required inventory file is absent: {path}"
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -69,7 +70,9 @@ def _stage(
     cachebuster: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment.update({"PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1", "PIP_NO_INDEX": "1"})
+    environment.update(
+        {"PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1", "PIP_NO_INDEX": "1"}
+    )
     command = [
         str(REPOSITORY_ROOT / "scripts/stage-plugin"),
         "--clean",
@@ -119,11 +122,11 @@ def _validate_stage(
 def _canonical_test_lock(stage_root: Path) -> bytes:
     """Return a model-valid qualification lock without publishing real evidence."""
 
-    repeated = lambda value: value * 64  # noqa: E731
-    binding = lambda path, value="a": {  # noqa: E731
-        "path": path,
-        "sha256": repeated(value),
-    }
+    def repeated(value: str) -> str:
+        return value * 64
+
+    def binding(path: str, value: str = "a") -> dict[str, str]:
+        return {"path": path, "sha256": repeated(value)}
     host = {
         # Phase 7 binds the retained exact host baseline; fixture locks must
         # exercise that same supported tuple rather than the prior 0.144.3
@@ -206,7 +209,9 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
         "technical_qualification": "PASS",
         "release_qualification": "BLOCKED",
     }
-    lock = IntegrationLock.model_validate_json(canonical_json_bytes(payload), strict=True)
+    lock = IntegrationLock.model_validate_json(
+        canonical_json_bytes(payload), strict=True
+    )
     return integration_lock_bytes(lock)
 
 
@@ -217,7 +222,9 @@ def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
     return _canonical_test_lock(base_stage)
 
 
-def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components() -> None:
+def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components() -> (
+    None
+):
     sbom = _load(REPOSITORY_ROOT / "SBOM.cdx.json")
     source_manifest = _load(REPOSITORY_ROOT / "vendor/source-manifest.json")
     wheelhouse = _load(REPOSITORY_ROOT / "vendor/python/wheelhouse.lock.json")
@@ -264,7 +271,10 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         ]
     suite_root = REPOSITORY_ROOT / "skills/academic-research-suite"
     assert components["artifact:skills/academic-research-suite"]["hashes"] == [
-        {"alg": "SHA-256", "content": _tree_sha256(suite_root, ignore_runtime_caches=True)}
+        {
+            "alg": "SHA-256",
+            "content": _tree_sha256(suite_root, ignore_runtime_caches=True),
+        }
     ]
     assert components["artifact:skills/academic-research-suite/ars"]["hashes"] == [
         {
@@ -280,11 +290,18 @@ def test_use_distribution_technical_provenance_hashes_are_fresh() -> None:
     assert isinstance(evidence, list)
     evidence_paths = [record["path"] for record in evidence]
     assert len(evidence_paths) == len(set(evidence_paths))
+    assert set(evidence_paths) == {
+        "vendor/source-manifest.json",
+        "SBOM.cdx.json",
+        "THIRD_PARTY_NOTICES.md",
+    }
     assert "supply-chain/use-distribution.json" not in evidence_paths
     for record in evidence:
         assert record["purpose"] == "technical-provenance-only"
         evidence_path = REPOSITORY_ROOT / record["path"]
-        assert evidence_path.is_file(), f"missing technical provenance: {record['path']}"
+        assert evidence_path.is_file(), (
+            f"missing technical provenance: {record['path']}"
+        )
         assert record["sha256"] == _sha256(evidence_path), (
             f"stale technical provenance digest: {record['path']}"
         )
@@ -313,9 +330,7 @@ def test_validate_only_rejects_rebound_stale_technical_provenance(
     identity_path = stage_root / "share/arw/build-identity.json"
     identity = _load(identity_path)
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
-    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
-        declaration_path
-    )
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(declaration_path)
     _write_pretty(identity_path, identity)
     _rebind_inventory(
         stage_root,
@@ -328,6 +343,39 @@ def test_validate_only_rejects_rebound_stale_technical_provenance(
     assert "technical provenance digest mismatch: SBOM.cdx.json" in validated.stderr
 
 
+def test_validate_only_rejects_missing_required_technical_provenance_row(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "missing-provenance" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    declaration_path = stage_root / "supply-chain/use-distribution.json"
+    declaration = _load(declaration_path)
+    declaration["evidence_hashes"] = [
+        record
+        for record in declaration["evidence_hashes"]
+        if record["path"] != "SBOM.cdx.json"
+    ]
+    _write_pretty(declaration_path, declaration)
+
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(declaration_path)
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(
+        stage_root,
+        "supply-chain/use-distribution.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "technical provenance path set mismatch" in validated.stderr
+    assert "SBOM.cdx.json" in validated.stderr
+
+
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _stage(stage_root)
@@ -338,7 +386,7 @@ def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) ->
         for path in stage_root.rglob("*")
         if path.is_file()
     }
-    assert LEGAL_FILES <= actual
+    assert actual >= LEGAL_FILES
     verdict = _load(stage_root / "supply-chain/license-verdict.json")
     assert verdict["technical_qualification"] == "PASS"
     assert verdict["release_qualification"] == "BLOCKED"
@@ -429,15 +477,14 @@ def test_optional_integration_lock_is_bound_without_changing_release_verdict(
         "share/arw/build-identity.json",
     ):
         assert covered[relative]["sha256"] == _sha256(stage_root / relative)
-    assert _load(stage_root / "supply-chain/license-verdict.json")[
-        "release_qualification"
-    ] == "BLOCKED"
+    assert (
+        _load(stage_root / "supply-chain/license-verdict.json")["release_qualification"]
+        == "BLOCKED"
+    )
 
     validated = _validate_stage(stage_root)
     assert validated.returncode == 0, validated.stderr
-    validated_against_input = _validate_stage(
-        stage_root, integration_lock=lock_path
-    )
+    validated_against_input = _validate_stage(stage_root, integration_lock=lock_path)
     assert validated_against_input.returncode == 0, validated_against_input.stderr
 
 
@@ -449,7 +496,9 @@ def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     tmp_path: Path, relative: str
 ) -> None:
     lock_path = tmp_path / "qualification-lock.json"
-    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, relative.replace("/", "-")))
+    lock_path.write_bytes(
+        _locally_bound_test_lock(tmp_path, relative.replace("/", "-"))
+    )
     stage_root = tmp_path / relative.replace("/", "-") / PLUGIN_NAME
     result = _stage(stage_root, integration_lock=lock_path)
     assert result.returncode == 0, result.stderr
