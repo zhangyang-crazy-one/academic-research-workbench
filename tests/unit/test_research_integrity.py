@@ -322,6 +322,36 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
             }
         )
 
+def test_source_manifest_round_trips_every_aliased_csl_author_field() -> None:
+    from arw.schema_registry import validate_instance
+
+    source = _bridge(
+        {
+            **ARS_ENTRY,
+            "authors": [
+                {
+                    "family": "Chen",
+                    "given": "Ming",
+                    "dropping-particle": "de",
+                    "non-dropping-particle": "van",
+                    "comma-suffix": True,
+                    "static-ordering": False,
+                    "parse-names": True,
+                }
+            ],
+        }
+    )
+    document = source.model_dump(mode="json")
+    author = document["authors"][0]
+    assert {
+        "dropping_particle",
+        "non_dropping_particle",
+        "comma_suffix",
+        "static_ordering",
+        "parse_names",
+    } <= set(author)
+    validate_instance("research-integrity-contracts.schema.json", document)
+
 
 def test_bridge_rejects_lookup_index_as_trusted_venue_source() -> None:
     with pytest.raises(ValueError, match="lookup index"):

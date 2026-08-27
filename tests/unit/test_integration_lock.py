@@ -1273,6 +1273,13 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
             "research-integrity-contracts.schema.json", blocked_after_prior_passes
         )
 
+    blocked_layer["expected_sha256"] = None
+    blocked_layer["observed_sha256"] = None
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", blocked_after_prior_passes
+        )
+
     blocked = diagnose_integration_lock(
         None,
         stage_root=None,

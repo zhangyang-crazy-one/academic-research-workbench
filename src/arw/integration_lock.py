@@ -775,13 +775,19 @@ class IntegrationDiagnosticLayer(LockModel):
                     "blocked diagnostic layer reason and detail do not match its name"
                 )
             digests = (self.expected_sha256, self.observed_sha256)
-            if self.name == "inputs" and any(
-                value is not None for value in digests
-            ):
-                raise ValueError("blocked input diagnostics cannot carry digests")
-            if (
-                self.expected_sha256 is not None
-                and self.observed_sha256 is not None
+            no_digest_reason = self.reason_code in {
+                "integration_inputs_incomplete",
+                "lock_document_invalid",
+            }
+            if no_digest_reason:
+                if any(value is not None for value in digests):
+                    raise ValueError(
+                        "blocked diagnostic reason cannot carry digests"
+                    )
+            elif self.expected_sha256 is None:
+                raise ValueError("blocked drift layer requires an expected digest")
+            elif (
+                self.observed_sha256 is not None
                 and self.expected_sha256 == self.observed_sha256
             ):
                 raise ValueError("blocked diagnostic layer digests must show drift")

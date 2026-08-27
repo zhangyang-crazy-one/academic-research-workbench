@@ -578,6 +578,9 @@ def validate_research_integrity_contract_instance(instance: object) -> None:
                 for field_name, alias in (
                     ("dropping_particle", "dropping-particle"),
                     ("non_dropping_particle", "non-dropping-particle"),
+                    ("comma_suffix", "comma-suffix"),
+                    ("static_ordering", "static-ordering"),
+                    ("parse_names", "parse-names"),
                 ):
                     if field_name in author:
                         author[alias] = author.pop(field_name)
