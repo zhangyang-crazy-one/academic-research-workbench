@@ -270,6 +270,16 @@ def test_bridge_enforces_authoritative_patterns_formats_and_nested_null_rules(
 ) -> None:
     _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
 
+def test_date_time_validation_does_not_depend_on_optional_format_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        research_integrity._FORMAT_CHECKER, "conforms", lambda *_args: True
+    )
+    _assert_authoritative_rejection_is_enforced(
+        {**ARS_ENTRY, "obtained_at": "yesterday"}
+    )
+
 
 def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -> None:
     valid_entry = {

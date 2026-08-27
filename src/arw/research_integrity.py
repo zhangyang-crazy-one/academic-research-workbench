@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
@@ -72,7 +74,35 @@ _ARS_PASSPORT_SCHEMA_NAMES = frozenset(
         "bibliographic_integrity_signal.schema.json",
     }
 )
+_RFC3339_DATE_TIME = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2})[Tt]"
+    r"(?P<hour>[01]\d|2[0-3]):(?P<minute>[0-5]\d):"
+    r"(?P<second>[0-5]\d|60)(?:\.\d+)?"
+    r"(?P<zone>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
+)
+
+
+def _is_rfc3339_date_time(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    match = _RFC3339_DATE_TIME.fullmatch(value)
+    if match is None:
+        return False
+    normalized = value[:10] + "T" + value[11:]
+    if match.group("second") == "60":
+        start, end = match.span("second")
+        normalized = normalized[:start] + "59" + normalized[end:]
+    if normalized[-1] in {"Z", "z"}:
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return True
+
+
 _FORMAT_CHECKER = jsonschema.FormatChecker()
+_FORMAT_CHECKER.checks("date-time")(_is_rfc3339_date_time)
 
 
 def _ars_passport_schema_path(name: str) -> Path:
@@ -297,7 +327,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     )
     @classmethod
     def date_times_match_authoritative_schema(cls, value: str | None) -> str | None:
-        if value is not None and not _FORMAT_CHECKER.conforms(value, "date-time"):
+        if value is not None and not _is_rfc3339_date_time(value):
             raise ValueError("ARS literature entry date-time field is invalid")
         return value
 
