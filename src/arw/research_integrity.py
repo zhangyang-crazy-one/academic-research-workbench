@@ -22,6 +22,7 @@ from pydantic import (
     StringConstraints,
     TypeAdapter,
     ValidationError,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -463,6 +464,15 @@ class ResearchSourceManifest(StrictModel):
     imported_at: UtcTimestamp
     imported_by: ActorId
 
+    @field_serializer("authors")
+    def serialize_authors_without_nulls(
+        self, authors: tuple[CSLName, ...]
+    ) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            author.model_dump(mode="json", by_alias=False, exclude_none=True)
+            for author in authors
+        )
+
     @model_validator(mode="after")
     def other_acquisition_is_attributed(self) -> Self:
         _require_other_adapter_name(self.obtained_via, self.adapter_name)
@@ -536,6 +546,7 @@ def validate_research_integrity_contract_instance(instance: object) -> None:
     if not isinstance(instance, Mapping):
         raise ResearchIntegrityError("research integrity contract must be an object")
     schema_version = instance.get("schema_version")
+    semantic_instance = instance
     adapter: TypeAdapter[Any]
     if schema_version == "arw.integration-diagnostic.v1":
         adapter = TypeAdapter(IntegrationDiagnosticReport)
@@ -545,20 +556,32 @@ def validate_research_integrity_contract_instance(instance: object) -> None:
         adapter = TypeAdapter(ClaimEvidenceLink)
     elif schema_version == "arw.research-source-manifest.v1":
         try:
-            _require_other_adapter_name(
-                instance.get("obtained_via"), instance.get("adapter_name")
-            )
-        except ValueError as error:
+            source_document = json.loads(canonical_json_bytes(instance))
+        except (TypeError, ValueError) as error:
             raise ResearchIntegrityError(
                 f"research integrity contract semantic validation failed: {error}"
             ) from error
-        return
+        if not isinstance(source_document, dict):
+            raise ResearchIntegrityError("research source manifest must be an object")
+        authors = source_document.get("authors")
+        if isinstance(authors, list):
+            for author in authors:
+                if not isinstance(author, dict):
+                    continue
+                for field_name, alias in (
+                    ("dropping_particle", "dropping-particle"),
+                    ("non_dropping_particle", "non-dropping-particle"),
+                ):
+                    if field_name in author:
+                        author[alias] = author.pop(field_name)
+        semantic_instance = source_document
+        adapter = TypeAdapter(ResearchSourceManifest)
     else:
         raise ResearchIntegrityError(
             "research integrity contract schema version is unsupported"
         )
     try:
-        adapter.validate_json(canonical_json_bytes(instance), strict=True)
+        adapter.validate_json(canonical_json_bytes(semantic_instance), strict=True)
     except (TypeError, ValueError, ValidationError) as error:
         raise ResearchIntegrityError(
             f"research integrity contract semantic validation failed: {error}"

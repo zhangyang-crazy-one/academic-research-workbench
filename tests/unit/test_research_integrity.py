@@ -579,6 +579,13 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
             document.model_dump(mode="json"),
         )
 
+    explicit_author_null = source.model_dump(mode="json")
+    explicit_author_null["authors"][0]["given"] = None
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", explicit_author_null
+        )
+
     duplicate_evidence = link.model_dump(mode="json")
     duplicate_evidence["evidence_span_sha256"] = [
         link.evidence_span_sha256[0],
