@@ -703,6 +703,55 @@ DIAGNOSTIC_LAYER_ORDER: tuple[DiagnosticLayerName, ...] = (
     "legal_state",
     "exact_lock",
 )
+DIAGNOSTIC_FAILURE_CONTRACTS: frozenset[
+    tuple[DiagnosticLayerName, DiagnosticReasonCode, DiagnosticDetail]
+] = frozenset(
+    {
+        (
+            "inputs",
+            "integration_inputs_incomplete",
+            "required integration inputs are absent or unsafe",
+        ),
+        (
+            "lock_document",
+            "lock_document_invalid",
+            "integration lock is invalid strict JSON",
+        ),
+        (
+            "lock_document",
+            "lock_document_noncanonical",
+            "integration lock bytes are not canonical JSON",
+        ),
+        ("staged_arw", "staged_arw_drift", "staged ARW runtime differs from the lock"),
+        ("ars_bundle", "ars_bundle_drift", "bundled ARS bytes differ from the lock"),
+        (
+            "file_base",
+            "file_base_drift",
+            "file-base bytes or patch evidence differ from the lock",
+        ),
+        ("codex_host", "codex_host_drift", "Codex host tuple differs from the lock"),
+        (
+            "hook_definition",
+            "hook_definition_drift",
+            "root hook definition differs from the lock",
+        ),
+        (
+            "hook_execution_evidence",
+            "hook_execution_evidence_drift",
+            "retained hook evidence differs from the lock",
+        ),
+        (
+            "legal_state",
+            "legal_state_drift",
+            "legal policy differs from the qualified blocked state",
+        ),
+        (
+            "exact_lock",
+            "exact_lock_drift",
+            "complete exact integration verification failed",
+        ),
+    }
+)
 
 
 class IntegrationDiagnosticLayer(LockModel):
@@ -720,6 +769,11 @@ class IntegrationDiagnosticLayer(LockModel):
         if self.status == "BLOCKED":
             if self.reason_code is None or self.detail is None:
                 raise ValueError("blocked diagnostic layers require a closed reason")
+            failure_contract = (self.name, self.reason_code, self.detail)
+            if failure_contract not in DIAGNOSTIC_FAILURE_CONTRACTS:
+                raise ValueError(
+                    "blocked diagnostic layer reason and detail do not match its name"
+                )
         elif any(value is not None for value in (self.reason_code, self.detail)):
             raise ValueError("non-blocked diagnostic layers cannot carry a reason")
         if self.status == "NOT_EVALUATED" and any(

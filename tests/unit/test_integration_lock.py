@@ -1228,6 +1228,21 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
         report.model_dump(mode="json"),
     )
 
+    blocked = diagnose_integration_lock(
+        None,
+        stage_root=None,
+        codex_launcher=None,
+        codex_native_binary=None,
+        host_canary_evidence=None,
+    ).model_dump(mode="json")
+    blocked["reason_codes"] = ["legal_state_drift"]
+    blocked["layers"][0]["reason_code"] = "legal_state_drift"
+    blocked["layers"][0]["detail"] = (
+        "legal policy differs from the qualified blocked state"
+    )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance("research-integrity-contracts.schema.json", blocked)
+
 
 def test_diagnostic_accepts_launcher_symlink_as_safe_input(
     integration_fixture: dict[str, Path],

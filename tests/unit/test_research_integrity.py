@@ -558,6 +558,13 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
     with pytest.raises(ValueError, match="instance validation failed"):
         validate_instance("research-integrity-contracts.schema.json", mutated)
 
+    invalid_acquisition = source.model_dump(mode="json")
+    invalid_acquisition["obtained_via"] = "unknown-importer"
+    with pytest.raises(ValueError, match="instance validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", invalid_acquisition
+        )
+
 
 def test_bridge_exposes_no_parent_writer_or_hook_authority() -> None:
     for forbidden in (

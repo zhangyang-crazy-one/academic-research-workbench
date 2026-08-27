@@ -38,6 +38,14 @@ CitationKey = Annotated[
 ]
 BoundedText = Annotated[str, StringConstraints(min_length=1, max_length=8192)]
 AdapterIdentity = Annotated[str, StringConstraints(min_length=1, max_length=256)]
+ObtainedVia = Literal[
+    "zotero-api",
+    "zotero-bbt-export",
+    "obsidian-vault",
+    "folder-scan",
+    "manual",
+    "other",
+]
 ArxivId = Annotated[
     str,
     StringConstraints(
@@ -209,17 +217,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     ) = None
     arxiv_id: ArxivId | None = None
     tags: list[BoundedText] | None = Field(default=None, max_length=256)
-    obtained_via: (
-        Literal[
-            "zotero-api",
-            "zotero-bbt-export",
-            "obsidian-vault",
-            "folder-scan",
-            "manual",
-            "other",
-        ]
-        | None
-    ) = None
+    obtained_via: ObtainedVia | None = None
     obtained_at: BoundedText | None = None
     adapter_name: AdapterIdentity | None = None
     adapter_version: AdapterIdentity | None = None
@@ -400,7 +398,7 @@ class ResearchSourceManifest(StrictModel):
     source_pointer: BoundedText
     source_sha256: Sha256
     bibliographic_sha256: Sha256
-    obtained_via: AdapterIdentity | None
+    obtained_via: ObtainedVia | None
     adapter_name: AdapterIdentity | None
     adapter_version: AdapterIdentity | None
     imported_at: UtcTimestamp
