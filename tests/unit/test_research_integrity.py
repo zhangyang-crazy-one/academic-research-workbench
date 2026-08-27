@@ -660,6 +660,17 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
             "research-integrity-contracts.schema.json", impossible_import
         )
 
+    nul_source_pointer = source.model_dump(mode="json")
+    nul_source_pointer["source_pointer"] = "file:///tmp/paper\x00.pdf"
+    with pytest.raises(ValidationError, match="NUL"):
+        research_integrity.ResearchSourceManifest.model_validate_json(
+            canonical_json_bytes(nul_source_pointer), strict=True
+        )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", nul_source_pointer
+        )
+
     for field, invalid_value in (
         ("doi", "not-a-doi"),
         ("arxiv_id", "2401/12345"),

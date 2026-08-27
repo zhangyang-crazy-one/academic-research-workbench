@@ -82,6 +82,12 @@ def _require_other_adapter_name(obtained_via: object, adapter_name: object) -> N
         raise ValueError("obtained_via=other requires adapter_name")
 
 
+def _validated_source_pointer(value: str) -> str:
+    if "\x00" in value:
+        raise ValueError("source pointer cannot contain NUL")
+    return value
+
+
 _ARS_PASSPORT_SCHEMA_RELATIVE = Path(
     "skills/academic-research-suite/ars/shared/contracts/passport"
 )
@@ -326,9 +332,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     @field_validator("source_pointer")
     @classmethod
     def source_pointer_is_bounded_text(cls, value: str) -> str:
-        if "\x00" in value:
-            raise ValueError("source pointer cannot contain NUL")
-        return value
+        return _validated_source_pointer(value)
 
     @field_validator(
         "obtained_at",
@@ -463,6 +467,11 @@ class ResearchSourceManifest(StrictModel):
     adapter_version: AdapterIdentity | None
     imported_at: UtcTimestamp
     imported_by: ActorId
+
+    @field_validator("source_pointer")
+    @classmethod
+    def source_pointer_has_no_nul(cls, value: str) -> str:
+        return _validated_source_pointer(value)
 
     @field_validator("imported_at")
     @classmethod
