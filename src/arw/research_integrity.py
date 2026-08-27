@@ -386,11 +386,6 @@ class ResearchSourceManifest(StrictModel):
     imported_at: UtcTimestamp
     imported_by: ActorId
 
-    @model_validator(mode="after")
-    def adapter_identity_is_complete(self) -> Self:
-        if (self.adapter_name is None) != (self.adapter_version is None):
-            raise ValueError("adapter name and version must be provided together")
-        return self
 
 
 class EvidenceLocator(StrictModel):
@@ -472,11 +467,6 @@ def build_research_source_manifest(
     """Build a source proposal from the exact validated in-memory ARS entry."""
 
     bibliographic_sha256 = sha256_hex(canonical_json_bytes(_ars_entry_document(entry)))
-    adapter_pair = (
-        (entry.adapter_name, entry.adapter_version)
-        if entry.adapter_name is not None and entry.adapter_version is not None
-        else (None, None)
-    )
     return ResearchSourceManifest(
         schema_version="arw.research-source-manifest.v1",
         source_id=source_id,
@@ -491,8 +481,8 @@ def build_research_source_manifest(
         source_sha256=source_sha256,
         bibliographic_sha256=bibliographic_sha256,
         obtained_via=entry.obtained_via,
-        adapter_name=adapter_pair[0],
-        adapter_version=adapter_pair[1],
+        adapter_name=entry.adapter_name,
+        adapter_version=entry.adapter_version,
         imported_at=imported_at,
         imported_by=imported_by,
     )
@@ -578,9 +568,13 @@ def validate_research_integrity_chain(
     """Recompute every supplied document digest and reject replacement or mutation."""
 
     source_map: dict[str, tuple[str, str]] = {}
+    citation_keys: set[str] = set()
     for source in sources:
         if source.source_id in source_map:
             raise ResearchIntegrityError("duplicate research source ID")
+        if source.citation_key in citation_keys:
+            raise ResearchIntegrityError("duplicate citation key")
+        citation_keys.add(source.citation_key)
         source_map[source.source_id] = (
             research_integrity_sha256(source),
             source.source_sha256,
@@ -606,10 +600,16 @@ def validate_research_integrity_chain(
         span_digests.add(span_digest)
 
     link_ids: set[str] = set()
+    claim_digests: dict[str, str] = {}
     for link in claim_links:
         if link.claim_link_id in link_ids:
             raise ResearchIntegrityError("duplicate claim-evidence link ID")
         link_ids.add(link.claim_link_id)
+        existing_claim_digest = claim_digests.get(link.claim_id)
+        if existing_claim_digest is None:
+            claim_digests[link.claim_id] = link.claim_sha256
+        elif existing_claim_digest != link.claim_sha256:
+            raise ResearchIntegrityError("conflicting claim content digest")
         if tuple(sorted(set(link.evidence_span_sha256))) != link.evidence_span_sha256:
             raise ResearchIntegrityError("claim evidence digests are not canonical")
         missing = set(link.evidence_span_sha256) - span_digests

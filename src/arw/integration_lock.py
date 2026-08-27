@@ -24,7 +24,7 @@ import tomllib
 import zipfile
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Literal, Self, TypeVar
+from typing import Annotated, Literal, Self, TypeVar, cast
 
 from pydantic import (
     BaseModel,
@@ -38,7 +38,6 @@ from pydantic import (
 
 from arw.canonical import canonical_json_bytes, strict_json_loads
 from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
-
 
 EXPECTED_ARS_ADAPTER_VERSION = "0.1.26"
 MINIMUM_CODEX_CLI_VERSION = (0, 144, 4)
@@ -110,7 +109,13 @@ STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
 STAGE_IDENTITY_EXCLUDED_PREFIXES = (
     "supply-chain/host-canary/",
 )
-EXPECTED_LEGAL_BLOCKERS = (
+LegalBlocker = Literal[
+    "INTENDED_USE_UNKNOWN",
+    "DISTRIBUTION_CLASS_UNKNOWN",
+    "ACCOUNTABLE_APPROVAL_MISSING",
+    "CC_BY_NC_PERMISSION_UNRESOLVED",
+]
+EXPECTED_LEGAL_BLOCKERS: tuple[LegalBlocker, ...] = (
     "INTENDED_USE_UNKNOWN",
     "DISTRIBUTION_CLASS_UNKNOWN",
     "ACCOUNTABLE_APPROVAL_MISSING",
@@ -179,14 +184,12 @@ EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256 = hashlib.sha256(
 
 
 def _relative_path(value: str) -> str:
+    if not value or "\x00" in value or "\\" in value:
+        raise ValueError("path must be a normalized relative POSIX path")
     path = PurePosixPath(value)
-    if (
-        not value
-        or "\x00" in value
-        or "\\" in value
-        or path.is_absolute()
-        or any(part in {"", ".", ".."} for part in path.parts)
-    ):
+    if path.is_absolute():
+        raise ValueError("path must be a normalized relative POSIX path")
+    if {"", ".", ".."}.intersection(path.parts):
         raise ValueError("path must be a normalized relative POSIX path")
     return value
 
@@ -1012,9 +1015,10 @@ def _executable(path: Path) -> ExecutableBinding:
     try:
         resolved = path.resolve(strict=True)
         mode = resolved.stat().st_mode
+        executable = os.access(resolved, os.X_OK)
     except OSError as error:
         raise IntegrationLockError(f"Codex executable is unavailable: {error}") from error
-    if not stat.S_ISREG(mode) or not os.access(resolved, os.X_OK):
+    if not stat.S_ISREG(mode) or not executable:
         raise IntegrationLockError("Codex executable must resolve to an executable file")
     return ExecutableBinding(
         invoked_path=str(path), resolved_path=str(resolved), sha256=_digest(resolved)
@@ -1078,26 +1082,36 @@ def is_supported_codex_cli_version(value: str) -> bool:
     match = _CODEX_CLI_STABLE_VERSION_RE.fullmatch(value)
     if match is None:
         return False
-    observed = tuple(int(match.group(name)) for name in ("major", "minor", "patch"))
+    try:
+        observed = tuple(
+            int(match.group(name)) for name in ("major", "minor", "patch")
+        )
+    except (TypeError, ValueError) as error:
+        raise IntegrationLockError("Codex CLI version components are invalid") from error
     return observed >= MINIMUM_CODEX_CLI_VERSION
 
 
 def discover_codex_native_binary(launcher: Path) -> Path:
     """Locate the one native binary shipped beside the installed Codex JS launcher."""
 
-    resolved = launcher.resolve(strict=True)
-    if resolved.name != "codex.js":
-        return resolved
-    package_root = resolved.parent.parent
-    candidates = tuple(
-        sorted(
-            path
-            for path in package_root.glob(
-                "node_modules/@openai/codex-*/vendor/*/bin/codex"
+    try:
+        resolved = launcher.resolve(strict=True)
+        if resolved.name != "codex.js":
+            return resolved
+        package_root = resolved.parent.parent
+        candidates = tuple(
+            sorted(
+                path
+                for path in package_root.glob(
+                    "node_modules/@openai/codex-*/vendor/*/bin/codex"
+                )
+                if path.is_file() and os.access(path, os.X_OK)
             )
-            if path.is_file() and os.access(path, os.X_OK)
         )
-    )
+    except OSError as error:
+        raise IntegrationLockError(
+            f"the installed Codex package is unavailable: {error}"
+        ) from error
     if len(candidates) != 1:
         raise IntegrationLockError(
             "the installed Codex package must expose exactly one native host binary"
@@ -1143,12 +1157,15 @@ def _source_binding(
     component_id: Literal["academic-research-skills", "experiment-agent"],
 ) -> SourceRepositoryBinding:
     try:
-        return SourceRepositoryBinding(
-            component_id=component_id,
-            upstream_url=component["upstream_url"],
-            commit=component["revision"],
-            git_tree=component["git_tree"],
-            source_tree_sha256=component["tree_sha256"],
+        return SourceRepositoryBinding.model_validate(
+            {
+                "component_id": component_id,
+                "upstream_url": component["upstream_url"],
+                "commit": component["revision"],
+                "git_tree": component["git_tree"],
+                "source_tree_sha256": component["tree_sha256"],
+            },
+            strict=True,
         )
     except (KeyError, ValidationError) as error:
         raise IntegrationLockError(
@@ -1359,16 +1376,19 @@ def _validate_file_base(
     ):
         raise IntegrationLockError("file-base binary differs from build evidence")
     try:
-        return FileBaseBinding(
-            component_id="file-base",
-            commit=component["revision"],
-            git_tree=component["git_tree"],
-            source_tree_sha256=component["tree_sha256"],
-            source_manifest=source_binding,
-            build_evidence=evidence_binding,
-            binary=binary_binding,
-            ordered_patches=tuple(bindings),
-            post_patch_tree_sha256=post_patch,
+        return FileBaseBinding.model_validate(
+            {
+                "component_id": "file-base",
+                "commit": component["revision"],
+                "git_tree": component["git_tree"],
+                "source_tree_sha256": component["tree_sha256"],
+                "source_manifest": source_binding,
+                "build_evidence": evidence_binding,
+                "binary": binary_binding,
+                "ordered_patches": tuple(bindings),
+                "post_patch_tree_sha256": post_patch,
+            },
+            strict=True,
         )
     except (KeyError, ValidationError) as error:
         raise IntegrationLockError(f"invalid file-base binding: {error}") from error
@@ -1559,8 +1579,10 @@ def _validate_hook(
         fresh_home_default_trust=evidence.fresh_home_default_trust,
         host_canary_evidence_sha256=canary_digest,
         evidence_bundle_sha256=evidence.evidence_bundle.sha256,
-        fresh_home_receipt_sha256=tuple(
-            binding.sha256 for binding in evidence.fresh_home_receipts
+        fresh_home_receipt_sha256=(
+            evidence.fresh_home_receipts[0].sha256,
+            evidence.fresh_home_receipts[1].sha256,
+            evidence.fresh_home_receipts[2].sha256,
         ),
         arw_runtime_sha256=evidence.arw_runtime_sha256,
         stage_identity_algorithm="content-tree-excluding-cycle-metadata-v1",
@@ -1602,12 +1624,15 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         raise IntegrationLockError(
             "use and distribution declaration does not support the exact legal blockers"
         )
+    private_repository_evidence = use_distribution.get(
+        "private_repository_is_noncommercial_evidence"
+    )
     if (
         use_distribution.get("schema_version") != "1.0.0"
         or use_distribution.get("repository_visibility") != "public"
         or use_distribution.get("permission_references") != []
-        or use_distribution.get("private_repository_is_noncommercial_evidence")
-        is not False
+        or not isinstance(private_repository_evidence, bool)
+        or private_repository_evidence
     ):
         raise IntegrationLockError(
             "use and distribution declaration does not support the exact legal blockers"
@@ -1652,17 +1677,27 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
     policy_sha256 = hashlib.sha256(
         canonical_json_bytes(policy.model_dump(mode="json"))
     ).hexdigest()
+    technical_qualification = verdict.get("technical_qualification")
+    release_qualification = verdict.get("release_qualification")
+    raw_reason_codes = verdict.get("reason_codes")
+    if (
+        technical_qualification != "PASS"
+        or release_qualification != "BLOCKED"
+        or raw_reason_codes != list(EXPECTED_LEGAL_BLOCKERS)
+    ):
+        raise IntegrationLockError("license verdict is not the qualified blocked state")
+    reason_codes = EXPECTED_LEGAL_BLOCKERS
     try:
         return LicenseBinding(
             verdict=verdict_binding,
             use_distribution_path=use_path,
             use_distribution_policy=policy,
             use_distribution_policy_sha256=policy_sha256,
-            technical_qualification=verdict["technical_qualification"],
-            release_qualification=verdict["release_qualification"],
-            reason_codes=tuple(verdict["reason_codes"]),
+            technical_qualification="PASS",
+            release_qualification="BLOCKED",
+            reason_codes=reason_codes,
         )
-    except (KeyError, TypeError, ValidationError) as error:
+    except ValidationError as error:
         raise IntegrationLockError(
             f"license verdict is not the qualified blocked state: {error}"
         ) from error
@@ -1714,6 +1749,15 @@ def integration_lock_bytes(lock: IntegrationLock) -> bytes:
     return canonical_json_bytes(lock.model_dump(mode="json"))
 
 
+def _direct_file_matches(path: Path, expected: bytes) -> bool:
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        return path.read_bytes() == expected
+    except OSError:
+        return False
+
+
 def write_integration_lock(path: Path, lock: IntegrationLock) -> str:
     """Write canonical lock bytes atomically without replacing different bytes."""
 
@@ -1722,7 +1766,7 @@ def write_integration_lock(path: Path, lock: IntegrationLock) -> str:
     if path.is_symlink():
         raise IntegrationLockError("integration lock path must not be a symlink")
     if path.exists():
-        if not path.is_file() or path.read_bytes() != value:
+        if not _direct_file_matches(path, value):
             raise IntegrationLockError("integration lock is immutable and already differs")
         return digest
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1736,9 +1780,10 @@ def write_integration_lock(path: Path, lock: IntegrationLock) -> str:
         os.chmod(temporary, 0o644)
         try:
             os.link(temporary, path, follow_symlinks=False)
-        except FileExistsError:
-            if path.is_symlink() or not path.is_file() or path.read_bytes() != value:
-                raise IntegrationLockError("integration lock publication collided")
+        except FileExistsError as collision:
+            if _direct_file_matches(path, value):
+                return digest
+            raise IntegrationLockError("integration lock publication collided") from collision
         return digest
     except OSError as error:
         raise IntegrationLockError(f"cannot publish integration lock: {error}") from error
@@ -1889,14 +1934,16 @@ def diagnose_integration_lock(
     """
 
     layers: list[IntegrationDiagnosticLayer] = []
-    file_inputs = (path, codex_launcher, codex_native_binary, host_canary_evidence)
+    regular_file_inputs = (path, codex_native_binary, host_canary_evidence)
     if (
         stage_root is None
         or stage_root.is_symlink()
         or not stage_root.is_dir()
+        or codex_launcher is None
+        or not codex_launcher.is_file()
         or any(
             item is None or item.is_symlink() or not item.is_file()
-            for item in file_inputs
+            for item in regular_file_inputs
         )
     ):
         return _blocked_diagnostic_report(
@@ -1906,10 +1953,10 @@ def diagnose_integration_lock(
             detail="required integration inputs are absent or unsafe",
         )
     layers.append(_passed_diagnostic_layer("inputs"))
-    assert path is not None
-    assert codex_launcher is not None
-    assert codex_native_binary is not None
-    assert host_canary_evidence is not None
+    path = cast(Path, path)
+    codex_launcher = cast(Path, codex_launcher)
+    codex_native_binary = cast(Path, codex_native_binary)
+    host_canary_evidence = cast(Path, host_canary_evidence)
 
     try:
         raw_lock = path.read_bytes()
@@ -2173,15 +2220,17 @@ def integration_lock_schema_document() -> dict[str, object]:
 
 
 __all__ = (
+    "CODEX_CLI_VERSION_REQUIREMENT",
+    "EXPECTED_CODEX_CREDENTIAL_POLICY",
+    "EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256",
+    "MINIMUM_CODEX_CLI_VERSION",
+    "STAGE_IDENTITY_EXCLUDED_PATHS",
     "ARSBinding",
     "CodexCredentialPolicy",
     "CodexHostBinding",
     "CodexHostCanaryEvidence",
     "CodexHostEvidenceBundle",
-    "CODEX_CLI_VERSION_REQUIREMENT",
     "ControlledResultChannelProof",
-    "EXPECTED_CODEX_CREDENTIAL_POLICY",
-    "EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256",
     "FileBinding",
     "FreshHomeReceipt",
     "HookParityEvidenceRecord",
@@ -2192,8 +2241,6 @@ __all__ = (
     "IntegrationLockError",
     "IntegrationVerification",
     "IsolationProof",
-    "MINIMUM_CODEX_CLI_VERSION",
-    "STAGE_IDENTITY_EXCLUDED_PATHS",
     "UseDistributionPolicyProjection",
     "build_integration_lock",
     "diagnose_integration_lock",

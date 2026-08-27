@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import hashlib
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -21,10 +23,10 @@ from arw.hook_contracts import (
     HookParityMatrix,
 )
 from arw.integration_lock import (
-    CodexHostEvidenceBundle,
-    CodexHostCanaryEvidence,
-    ControlledResultChannelProof,
     EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
+    CodexHostCanaryEvidence,
+    CodexHostEvidenceBundle,
+    ControlledResultChannelProof,
     FileBinding,
     FreshHomeReceipt,
     HookParityEvidenceRecord,
@@ -43,7 +45,6 @@ from arw.integration_lock import (
     verify_integration_lock,
     write_integration_lock,
 )
-
 
 ARS_COMMIT = "8cc7f8f4cccda721646d9df590b42721c93cba31"
 EXPERIMENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
@@ -450,13 +451,21 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
 
     classifications_list = []
     authority_digest = "6" * 64
-    for state, observation, parity_status in (
+    classification_cases: tuple[
+        tuple[
+            Literal["trusted_enabled", "disabled", "untrusted", "timeout", "failure"],
+            Literal["observed", "not_observed", "timed_out", "failed"],
+            Literal["trusted_enabled", "disabled", "untrusted", "timeout", "failed"],
+        ],
+        ...,
+    ] = (
         ("trusted_enabled", "observed", "trusted_enabled"),
         ("disabled", "not_observed", "disabled"),
         ("untrusted", "not_observed", "untrusted"),
         ("timeout", "timed_out", "timeout"),
         ("failure", "failed", "failed"),
-    ):
+    )
+    for state, observation, parity_status in classification_cases:
         parity_record = HookParityEvidenceRecord(
             schema_version="arw.hook-parity-evidence.v1",
             hook_state=state,
@@ -666,7 +675,6 @@ def test_bundled_ars_root_must_be_present_and_not_a_symlink(
     bundled = integration_fixture["external"]
     backup = bundled.parent / "ars-real"
     bundled.rename(backup)
-    missing = integration_fixture["stage"] / "skills/academic-research-suite"
     with pytest.raises(IntegrationLockError, match="bundled ARS"):
         verify_integration_lock(
             lock,
@@ -1220,6 +1228,29 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
         "research-integrity-contracts.schema.json",
         report.model_dump(mode="json"),
     )
+
+
+def test_diagnostic_accepts_launcher_symlink_as_safe_input(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    launcher = integration_fixture["launcher"]
+    launcher_link = launcher.with_name("codex-symlink")
+    launcher_link.symlink_to(launcher)
+
+    report = diagnose_integration_lock(
+        integration_fixture["lock"],
+        stage_root=integration_fixture["stage"],
+        codex_launcher=launcher_link,
+        codex_native_binary=integration_fixture["native"],
+        host_canary_evidence=integration_fixture["canary"],
+    )
+
+    assert report.layers[0].name == "inputs"
+    assert report.layers[0].status == "PASS"
+    assert report.layers[5].name == "codex_host"
+    assert report.layers[5].reason_code == "codex_host_drift"
 
 
 @pytest.mark.parametrize(

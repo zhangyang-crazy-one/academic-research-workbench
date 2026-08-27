@@ -18,7 +18,6 @@ from pydantic import BaseModel, ValidationError
 
 from arw.canonical import canonical_json_bytes, strict_json_loads
 
-
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
 
 
@@ -322,6 +321,10 @@ def _write_rejection(error: Exception) -> None:
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
 
+def _is_status_json_request(args: argparse.Namespace) -> bool:
+    return args.command == "status" and bool(args.json_output)
+
+
 def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
     from arw.integration_lock import discover_codex_native_binary
 
@@ -393,19 +396,31 @@ def _installed_route_from_environment():
     from arw.contracts import installed_route
 
     plugin_root, values = _discover_installed_route_inputs()
-    if not any(values.values()):
+    lock_path = values["lock"]
+    launcher_path = values["launcher"]
+    native_path = values["native"]
+    canary_path = values["canary"]
+    if not any((lock_path, launcher_path, native_path, canary_path)):
         return installed_route()
-    if not all(values.values()):
+    if (
+        lock_path is None
+        or launcher_path is None
+        or native_path is None
+        or canary_path is None
+    ):
         return installed_route(blocked_reason="integration_inputs_incomplete")
-    from arw.integration_lock import IntegrationLockError, load_and_verify_integration_lock
+    from arw.integration_lock import (
+        IntegrationLockError,
+        load_and_verify_integration_lock,
+    )
 
     try:
         verification = load_and_verify_integration_lock(
-            values["lock"],
+            lock_path,
             stage_root=plugin_root,
-            codex_launcher=values["launcher"],
-            codex_native_binary=values["native"],
-            host_canary_evidence=values["canary"],
+            codex_launcher=launcher_path,
+            codex_native_binary=native_path,
+            host_canary_evidence=canary_path,
         )
     except (IntegrationLockError, OSError, ValueError):
         return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
@@ -564,11 +579,12 @@ def _verified_dispatch_adapter(
         return None, verification, ("host_evidence_invalid_or_drifted",)
     if set(manifest) != {"schema_version", "integration_lock_sha256", "assignments"}:
         return None, verification, ("host_evidence_invalid_or_drifted",)
+    assignment_rows = manifest.get("assignments")
     if (
         manifest.get("schema_version") != "arw.codex-exec-dispatch-evidence.v1"
         or manifest.get("integration_lock_sha256")
         != verification.integration_lock_sha256
-        or not isinstance(manifest.get("assignments"), list)
+        or not isinstance(assignment_rows, list)
     ):
         return None, verification, ("host_evidence_invalid_or_drifted",)
 
@@ -582,7 +598,7 @@ def _verified_dispatch_adapter(
         "permission_digest",
     }
     try:
-        for raw_row in manifest["assignments"]:
+        for raw_row in assignment_rows:
             if not isinstance(raw_row, dict) or set(raw_row) != expected_row_keys:
                 raise CLIInputError("host evidence assignment row is invalid")
             if any(not isinstance(raw_row[key], str) for key in expected_row_keys):
@@ -715,7 +731,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "storm":
         from arw.storm import StormConfig, StormRunError, run_storm_research
 
-        config_kwargs: dict[str, object] = {
+        config_kwargs: dict[str, Any] = {
             "topic": args.topic,
             "output_dir": Path(args.output_dir),
             "backend": args.backend,
@@ -817,6 +833,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     from arw.reducer import ReducerError, reduce_events
     from arw.runtime import RuntimeCommandService
     from arw.status import build_status_report, render_status_text
+
+    handled_errors: tuple[type[Exception], ...] = (
+        CLIInputError,
+        JournalError,
+        ManifestError,
+        ReducerError,
+        OrchestrationError,
+        ValidationError,
+        OSError,
+    )
 
     try:
         if args.command == "init":
@@ -998,6 +1024,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "synthesizer_identity",
                 "execution_mode",
             }
+            raw_reviewer_identities = panel_request.get("reviewer_identities")
             if (
                 set(panel_request) != expected_keys
                 or panel_request.get("schema_version") != "arw.cli-panel-request.v1"
@@ -1005,15 +1032,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or not panel_request["panel_id"]
                 or not _is_sha256_text(panel_request.get("subject_sha256"))
                 or not _is_sha256_text(panel_request.get("rubric_sha256"))
-                or not isinstance(panel_request.get("reviewer_identities"), dict)
+                or not isinstance(raw_reviewer_identities, dict)
                 or panel_request.get("execution_mode")
                 not in {"native_profile", "assignment_injected_subagent"}
             ):
                 raise CLIInputError("panel request does not match the strict CLI contract")
             reviewer_identities: dict[str, dict[str, str]] = {}
-            for role_id, identity_reference in panel_request[
-                "reviewer_identities"
-            ].items():
+            for role_id, identity_reference in raw_reviewer_identities.items():
                 if not isinstance(role_id, str) or not role_id:
                     raise CLIInputError("panel reviewer role IDs must be non-empty strings")
                 reviewer_identities[role_id] = _identity_receipt_reference(
@@ -1132,18 +1157,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             ).rebuild_passport_pointer()
             _write_json(pointer.model_dump(mode="json"))
             return 0
-    except (
-        CLIInputError,
-        JournalError,
-        ManifestError,
-        ReducerError,
-        OrchestrationError,
-        ValidationError,
-        OSError,
-    ) as error:
-        if args.command == "status" and args.json_output:
+    except Exception as error:
+        if not isinstance(error, handled_errors):
+            raise
+        if _is_status_json_request(args):
             _write_rejection(error)
-        elif isinstance(error, OSError):
+            return 65
+        if isinstance(error, OSError):
             print(
                 "arw: canonical-error: runtime event may already be committed to "
                 f"the ledger; retry is safe: {error}",

@@ -13,6 +13,17 @@ from pydantic import ValidationError
 from arw import research_integrity
 from arw.canonical import canonical_json_bytes
 
+
+def _load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"test JSON fixture is unreadable: {path}") from error
+    if not isinstance(document, dict):
+        raise RuntimeError(f"test JSON fixture is not an object: {path}")
+    return document
+
+
 ARS_ENTRY = {
     "citation_key": "chen2024ai",
     "title": "人工智能辅助科研的可复现证据",
@@ -29,34 +40,28 @@ SOURCE_SHA256 = hashlib.sha256(b"exact source bytes").hexdigest()
 EXTRACTION_SHA256 = hashlib.sha256(b"extraction registration").hexdigest()
 TEXT_SHA256 = hashlib.sha256("证据片段".encode()).hexdigest()
 CLAIM_SHA256 = hashlib.sha256(b"canonical claim document").hexdigest()
-ARS_ENTRY_SCHEMA = json.loads(
-    (
-        Path(__file__).resolve().parents[2]
-        / "skills/academic-research-suite/ars/shared/contracts/passport/"
-        "literature_corpus_entry.schema.json"
-    ).read_text(encoding="utf-8")
+ARS_ENTRY_SCHEMA = _load_json_object(
+    Path(__file__).resolve().parents[2]
+    / "skills/academic-research-suite/ars/shared/contracts/passport/"
+    "literature_corpus_entry.schema.json"
 )
 ARS_ENTRY_VALIDATOR = Draft202012Validator(
     ARS_ENTRY_SCHEMA,
     format_checker=Draft202012Validator.FORMAT_CHECKER,
 )
-ARS_SIGNAL_SCHEMA = json.loads(
-    (
-        Path(__file__).resolve().parents[2]
-        / "skills/academic-research-suite/ars/shared/contracts/passport/"
-        "bibliographic_integrity_signal.schema.json"
-    ).read_text(encoding="utf-8")
+ARS_SIGNAL_SCHEMA = _load_json_object(
+    Path(__file__).resolve().parents[2]
+    / "skills/academic-research-suite/ars/shared/contracts/passport/"
+    "bibliographic_integrity_signal.schema.json"
 )
 ARS_SIGNAL_VALIDATOR = Draft202012Validator(
     ARS_SIGNAL_SCHEMA,
     format_checker=Draft202012Validator.FORMAT_CHECKER,
 )
-VALID_BIBLIOGRAPHIC_SIGNAL = json.loads(
-    (
-        Path(__file__).resolve().parents[2]
-        / "skills/academic-research-suite/ars/scripts/fixtures/"
-        "bibliographic_integrity_signals/retraction.json"
-    ).read_text(encoding="utf-8")
+VALID_BIBLIOGRAPHIC_SIGNAL = _load_json_object(
+    Path(__file__).resolve().parents[2]
+    / "skills/academic-research-suite/ars/scripts/fixtures/"
+    "bibliographic_integrity_signals/retraction.json"
 )
 
 
@@ -167,6 +172,15 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
         imported_by="parent.runtime",
     )
     assert changed_source.bibliographic_sha256 != source.bibliographic_sha256
+
+
+def test_source_builder_preserves_partial_adapter_attribution() -> None:
+    entry = {**ARS_ENTRY, "obtained_via": "other", "adapter_name": "custom-import"}
+    del entry["adapter_version"]
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    source = _bridge(entry)
+    assert source.adapter_name == "custom-import"
+    assert source.adapter_version is None
 
 
 def test_source_builder_rejects_missing_digest_and_malformed_bibliography() -> None:
@@ -451,14 +465,46 @@ def test_chain_validator_rejects_source_digest_and_span_byte_substitution() -> N
         )
 
 
+def test_chain_validator_rejects_ambiguous_source_and_claim_identities() -> None:
+    source = _source()
+    duplicate_citation = source.model_copy(
+        update={"source_id": "source.paper-002", "source_sha256": "e" * 64}
+    )
+    with pytest.raises(ValueError, match="duplicate citation key"):
+        research_integrity.validate_research_integrity_chain(
+            sources=(source, duplicate_citation),
+            evidence_spans=(),
+            claim_links=(),
+        )
+
+    span = _span(source)
+    first = research_integrity.build_claim_evidence_link(
+        (span,),
+        claim_link_id="link.claim-001",
+        claim_id="claim.paper-001",
+        claim_sha256=CLAIM_SHA256,
+        relation="supports",
+    )
+    conflicting = first.model_copy(
+        update={
+            "claim_link_id": "link.claim-002",
+            "claim_sha256": hashlib.sha256(b"substituted claim").hexdigest(),
+        }
+    )
+    with pytest.raises(ValueError, match="conflicting claim content digest"):
+        research_integrity.validate_research_integrity_chain(
+            sources=(source,),
+            evidence_spans=(span,),
+            claim_links=(first, conflicting),
+        )
+
+
 def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> None:
     from arw.schema_registry import validate_instance
 
     root = Path(__file__).resolve().parents[2]
-    checked = json.loads(
-        (root / "schemas/v1/research-integrity-contracts.schema.json").read_text(
-            encoding="utf-8"
-        )
+    checked = _load_json_object(
+        root / "schemas/v1/research-integrity-contracts.schema.json"
     )
     generated = research_integrity.research_integrity_contracts_schema_document()
     assert checked == generated
