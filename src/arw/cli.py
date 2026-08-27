@@ -334,7 +334,10 @@ def _is_status_json_request(args: argparse.Namespace) -> bool:
 
 
 def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
-    from arw.integration_lock import discover_codex_native_binary
+    from arw.integration_lock import (
+        IntegrationLockError,
+        discover_codex_native_binary,
+    )
 
     plugin_root = Path(
         os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])
@@ -374,7 +377,7 @@ def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
     if launcher_default:
         try:
             native_default = str(discover_codex_native_binary(Path(launcher_default)))
-        except (OSError, ValueError):
+        except (IntegrationLockError, OSError, ValueError):
             native_default = None
     names = {
         "lock": "ARW_INTEGRATION_LOCK",
