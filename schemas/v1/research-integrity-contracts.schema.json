@@ -53,7 +53,7 @@
           "default": null,
           "title": "Suffix"
         },
-        "dropping_particle": {
+        "dropping-particle": {
           "anyOf": [
             {
               "maxLength": 1024,
@@ -64,9 +64,9 @@
             }
           ],
           "default": null,
-          "title": "Dropping Particle"
+          "title": "Dropping-Particle"
         },
-        "non_dropping_particle": {
+        "non-dropping-particle": {
           "anyOf": [
             {
               "maxLength": 1024,
@@ -77,9 +77,9 @@
             }
           ],
           "default": null,
-          "title": "Non Dropping Particle"
+          "title": "Non-Dropping-Particle"
         },
-        "comma_suffix": {
+        "comma-suffix": {
           "anyOf": [
             {
               "type": "string"
@@ -92,9 +92,9 @@
             }
           ],
           "default": null,
-          "title": "Comma Suffix"
+          "title": "Comma-Suffix"
         },
-        "static_ordering": {
+        "static-ordering": {
           "anyOf": [
             {
               "type": "string"
@@ -107,9 +107,9 @@
             }
           ],
           "default": null,
-          "title": "Static Ordering"
+          "title": "Static-Ordering"
         },
-        "parse_names": {
+        "parse-names": {
           "anyOf": [
             {
               "type": "string"
@@ -122,7 +122,7 @@
             }
           ],
           "default": null,
-          "title": "Parse Names"
+          "title": "Parse-Names"
         }
       },
       "required": [

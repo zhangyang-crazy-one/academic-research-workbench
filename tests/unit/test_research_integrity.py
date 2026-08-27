@@ -344,13 +344,19 @@ def test_source_manifest_round_trips_every_aliased_csl_author_field() -> None:
     document = source.model_dump(mode="json")
     author = document["authors"][0]
     assert {
-        "dropping_particle",
-        "non_dropping_particle",
-        "comma_suffix",
-        "static_ordering",
-        "parse_names",
+        "dropping-particle",
+        "non-dropping-particle",
+        "comma-suffix",
+        "static-ordering",
+        "parse-names",
     } <= set(author)
     validate_instance("research-integrity-contracts.schema.json", document)
+    assert (
+        research_integrity.ResearchSourceManifest.model_validate_json(
+            research_integrity.research_integrity_bytes(source), strict=True
+        )
+        == source
+    )
 
 
 def test_bridge_rejects_lookup_index_as_trusted_venue_source() -> None:
@@ -586,7 +592,7 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
         research_integrity.EvidenceSpan,
         research_integrity.ClaimEvidenceLink,
     ):
-        standalone = model.model_json_schema(by_alias=False, mode="validation")
+        standalone = model.model_json_schema(by_alias=True, mode="validation")
         standalone.pop("$defs", None)
         assert checked["$defs"][model.__name__] == standalone
 

@@ -476,7 +476,7 @@ class ResearchSourceManifest(StrictModel):
         self, authors: tuple[CSLName, ...]
     ) -> tuple[dict[str, Any], ...]:
         return tuple(
-            author.model_dump(mode="json", by_alias=False, exclude_none=True)
+            author.model_dump(mode="json", by_alias=True, exclude_none=True)
             for author in authors
         )
 
@@ -562,29 +562,6 @@ def validate_research_integrity_contract_instance(instance: object) -> None:
     elif schema_version == "arw.claim-evidence-link.v1":
         adapter = TypeAdapter(ClaimEvidenceLink)
     elif schema_version == "arw.research-source-manifest.v1":
-        try:
-            source_document = json.loads(canonical_json_bytes(instance))
-        except (TypeError, ValueError) as error:
-            raise ResearchIntegrityError(
-                f"research integrity contract semantic validation failed: {error}"
-            ) from error
-        if not isinstance(source_document, dict):
-            raise ResearchIntegrityError("research source manifest must be an object")
-        authors = source_document.get("authors")
-        if isinstance(authors, list):
-            for author in authors:
-                if not isinstance(author, dict):
-                    continue
-                for field_name, alias in (
-                    ("dropping_particle", "dropping-particle"),
-                    ("non_dropping_particle", "non-dropping-particle"),
-                    ("comma_suffix", "comma-suffix"),
-                    ("static_ordering", "static-ordering"),
-                    ("parse_names", "parse-names"),
-                ):
-                    if field_name in author:
-                        author[alias] = author.pop(field_name)
-        semantic_instance = source_document
         adapter = TypeAdapter(ResearchSourceManifest)
     else:
         raise ResearchIntegrityError(
@@ -789,7 +766,7 @@ def research_integrity_contracts_schema_document() -> dict[str, Any]:
     """Generate the discriminated installed schema directly from strict models."""
 
     document = _research_integrity_contract_adapter().json_schema(
-        by_alias=False, mode="validation"
+        by_alias=True, mode="validation"
     )
     document["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     document["$id"] = (
