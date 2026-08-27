@@ -1,9 +1,10 @@
 """Tests for scripts/adapters/folder_scan.py."""
 import importlib.util
-from pathlib import Path
+import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = REPO_ROOT / "scripts/adapters/folder_scan.py"
@@ -16,6 +17,15 @@ EXPECTED_REJECTION = REPO_ROOT / "scripts/adapters/examples/folder_scan/expected
 # widen — their logical URIs are deterministic and broken pointers should
 # fail the golden test.
 _FOLDER_SCAN_EXTRA = {"source_pointer", "input_source"}
+
+
+def _load_json(path: Path):
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise AssertionError(f"invalid JSON fixture: {path}") from error
+    assert isinstance(document, dict)
+    return document
 
 
 def _run(*args, cwd=None):
@@ -37,6 +47,27 @@ def _load_adapter_module():
 
 def test_adapter_exists():
     assert ADAPTER.exists()
+
+def test_ascii_hyphenated_family_preserves_legacy_citation_key(
+    tmp_path, load_yaml
+):
+    source = tmp_path / "ascii-legacy"
+    source.mkdir()
+    (source / "Smith-Jones_2024_Paper.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entry = load_yaml(passport_out)["literature_corpus"][0]
+    assert entry["authors"] == [{"family": "Smith"}]
+    assert entry["citation_key"] == "smith2024"
 
 
 def test_cjk_family_year_filename_is_accepted_with_original_display_text(
@@ -64,14 +95,11 @@ def test_cjk_family_year_filename_is_accepted_with_original_display_text(
     assert entry["title"] == "中文檔名_2024"
     assert entry["year"] == 2024
     assert entry["citation_key"].startswith("ref2024")
-    import json
+
     import jsonschema
 
-    schema = json.loads(
-        (
-            REPO_ROOT
-            / "shared/contracts/passport/literature_corpus_entry.schema.json"
-        ).read_text(encoding="utf-8")
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/literature_corpus_entry.schema.json"
     )
     jsonschema.validate(entry, schema)
 
@@ -81,8 +109,8 @@ def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> Non
     assert hasattr(adapter, "_is_unicode_family"), (
         "the explicit Unicode family-token security grammar is missing"
     )
-    assert adapter._is_unicode_family("张三") is True
-    assert adapter._is_unicode_family("O’Neil") is True
+    assert adapter._is_unicode_family("张三")
+    assert adapter._is_unicode_family("O’Neil")
     for unsafe in (
         "",
         "张\u200b三",
@@ -92,7 +120,7 @@ def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> Non
         "张\ue000三",
         "张\ud800三",
     ):
-        assert adapter._is_unicode_family(unsafe) is False
+        assert not adapter._is_unicode_family(unsafe)
 
 
 def test_unicode_citekey_nfkc_equivalence_distinction_and_collision_suffixes() -> None:
@@ -364,9 +392,9 @@ def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     r_out = tmp_path / "r.yaml"
     r = _run("--input", str(inside), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
-    import json
-    import yaml
+
     import jsonschema
+    import yaml
     with p_out.open() as f:
         passport = yaml.safe_load(f)
     with r_out.open() as f:
@@ -382,8 +410,8 @@ def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     # The emitted rejection log must satisfy the rejection-log contract, not
     # just be crash-free — a non-enum reason would pass the run but break the
     # schema (Codex follow-up to #310).
-    schema = json.loads(
-        (REPO_ROOT / "shared/contracts/passport/rejection_log.schema.json").read_text()
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/rejection_log.schema.json"
     )
     jsonschema.validate(rejection, schema)
 

@@ -19,6 +19,7 @@ Usage:
       --input <dir> --passport <out.yaml> --rejection-log <out.yaml>
 """
 from __future__ import annotations
+
 import argparse
 import hashlib
 import re
@@ -26,6 +27,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
+# pi-lens-ignore: jscpd:duplicate
 # Allow running as a script: ensure repo root is importable for
 # `from scripts.adapters._common import ...`
 _THIS = Path(__file__).resolve()
@@ -33,12 +35,12 @@ _REPO_ROOT = _THIS.parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.adapters._common import (  # noqa: E402
+from scripts.adapters._common import (
     make_citation_key,
+    now_iso,
     path_to_file_uri,
     write_passport,
     write_rejection_log,
-    now_iso,
 )
 
 ADAPTER_NAME = "folder_scan.py"
@@ -60,6 +62,13 @@ RE_UNICODE_SEPARATED = re.compile(
 )
 _FAMILY_PUNCTUATION = frozenset({"'", "’", "-", "‐", "‑"})
 _CITATION_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_:-]*$")
+
+
+def _parse_year(value: str) -> int | None:
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def _is_unicode_family(value: str) -> bool:
@@ -116,10 +125,13 @@ def parse_filename(name: str) -> dict | None:
     third component — it MUST exclude the family token, otherwise
     make_citation_key would produce keys like ``chen2024chen``.
     """
+    # pi-lens-ignore: jscpd:duplicate
     m = RE_FAMILY_UNDERSCORE.match(name)
     if m:
         family = m.group(1)
-        year = int(m.group(2))
+        year = _parse_year(m.group(2))
+        if year is None:
+            return None
         tail = (m.group(3) or "").strip()
         tail_words = tail.replace("_", " ").strip()
         title = f"{family} {year} {tail_words}".strip()
@@ -130,10 +142,13 @@ def parse_filename(name: str) -> dict | None:
             "title_hint": tail_words,
         }
 
+    # pi-lens-ignore: jscpd:duplicate
     m = RE_FAMILY_YEAR.match(name)
     if m:
         family = m.group(1)
-        year = int(m.group(2))
+        year = _parse_year(m.group(2))
+        if year is None:
+            return None
         tail = (m.group(3) or "").strip()
         stem = Path(name).stem
         # Display title keeps the original stem layout (with _ → space).
@@ -146,15 +161,18 @@ def parse_filename(name: str) -> dict | None:
         }
 
     m = RE_UNICODE_SEPARATED.match(name)
-    if m:
+    if m and not m.group(1).isascii():
         family = m.group(1)
         if not _is_unicode_family(family):
             return None
         stem = Path(name).stem
         tail = m.group(5) or ""
+        year = _parse_year(m.group(3))
+        if year is None:
+            return None
         return {
             "family": family,
-            "year": int(m.group(3)),
+            "year": year,
             "title": stem,
             "title_hint": tail,
         }
@@ -164,9 +182,12 @@ def parse_filename(name: str) -> dict | None:
         before_year = name.split(year_match.group(1))[0]
         fam_match = RE_FIRST_CAPITAL.search(before_year)
         if fam_match:
+            year = _parse_year(year_match.group(1))
+            if year is None:
+                return None
             return {
                 "family": fam_match.group(1),
-                "year": int(year_match.group(1)),
+                "year": year,
                 "title": Path(name).stem.replace("_", " "),
                 "title_hint": "",
             }
@@ -182,6 +203,7 @@ def _missing_fields_for(name: str) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    # pi-lens-ignore: jscpd:duplicate
     ap.add_argument("--input", type=Path, required=True, help="Directory to scan")
     ap.add_argument("--passport", type=Path, required=True)
     ap.add_argument(
@@ -230,6 +252,7 @@ def main() -> int:
         if not parsed:
             rejected.append({
                 "source": rel_str,
+                # pi-lens-ignore: typos:unknown
                 "reason": "authors_unparseable",
                 "raw": rel_str,
                 "missing_fields": _missing_fields_for(f.name),
