@@ -1086,6 +1086,36 @@ def test_use_distribution_technical_hash_drift_fails_live_verification(
         _build(integration_fixture)
     assert observe_stage_identity(integration_fixture["stage"]) == stage_before
 
+@pytest.mark.parametrize("mutation", ("drop-component", "stale-component"))
+def test_live_sbom_requires_exact_integration_lock_component(
+    integration_fixture: dict[str, Path], mutation: str
+) -> None:
+    lock = _build(integration_fixture)
+    stage = integration_fixture["stage"]
+    live_lock = stage / "supply-chain/integration-lock.json"
+    live_lock.write_bytes(integration_lock_bytes(lock))
+    lock_ref = "artifact:supply-chain/integration-lock.json"
+    component = {
+        "bom-ref": lock_ref,
+        "hashes": [{"alg": "SHA-256", "content": _digest(live_lock)}],
+        "name": "supply-chain/integration-lock.json",
+        "type": "file",
+        "version": "1",
+    }
+    sbom_path = stage / "SBOM.cdx.json"
+    sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+    sbom["components"] = [component]
+    _json(sbom_path, sbom)
+    _build(integration_fixture)
+
+    if mutation == "drop-component":
+        sbom["components"] = []
+    else:
+        component["hashes"][0]["content"] = "0" * 64
+    _json(sbom_path, sbom)
+    with pytest.raises(IntegrationLockError, match="integration lock component"):
+        _build(integration_fixture)
+
 
 @pytest.mark.parametrize(
     ("field", "value"),

@@ -1764,13 +1764,30 @@ def _technical_provenance_digest(stage_root: Path, relative: str) -> str:
         isinstance(component, dict) for component in components
     ):
         raise IntegrationLockError("technical provenance SBOM components are malformed")
-    lock_ref = "artifact:supply-chain/integration-lock.json"
+    lock_relative = "supply-chain/integration-lock.json"
+    lock_ref = f"artifact:{lock_relative}"
     lock_components = [
         component for component in components if component.get("bom-ref") == lock_ref
     ]
-    if len(lock_components) > 1:
-        raise IntegrationLockError("technical provenance SBOM repeats the lock component")
-    if not lock_components:
+    lock_candidate = stage_root / lock_relative
+    if lock_candidate.is_symlink() or lock_candidate.exists():
+        lock_path = _regular_file_under(stage_root, lock_relative)
+        expected_component = {
+            "bom-ref": lock_ref,
+            "hashes": [{"alg": "SHA-256", "content": _digest(lock_path)}],
+            "name": lock_relative,
+            "type": "file",
+            "version": "1",
+        }
+        if lock_components != [expected_component]:
+            raise IntegrationLockError(
+                "technical provenance SBOM integration lock component is not exact"
+            )
+    else:
+        if lock_components:
+            raise IntegrationLockError(
+                "technical provenance SBOM claims an absent integration lock component"
+            )
         return _digest(target)
     base_sbom = dict(sbom)
     base_sbom["components"] = [
