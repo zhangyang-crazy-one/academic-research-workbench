@@ -1228,6 +1228,20 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
         report.model_dump(mode="json"),
     )
 
+    contradictory = report.model_dump(mode="json")
+    contradictory["layers"][1]["observed_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", contradictory
+        )
+
+    unbound_exact_lock = report.model_dump(mode="json")
+    unbound_exact_lock["integration_lock_sha256"] = "e" * 64
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", unbound_exact_lock
+        )
+
     blocked = diagnose_integration_lock(
         None,
         stage_root=None,

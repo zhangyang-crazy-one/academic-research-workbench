@@ -817,6 +817,25 @@ class IntegrationDiagnosticReport(LockModel):
                 or any(layer.status != "PASS" for layer in self.layers)
             ):
                 raise ValueError("diagnostic PASS requires complete exact verification")
+            for layer in self.layers:
+                digests = (layer.expected_sha256, layer.observed_sha256)
+                if layer.name == "inputs":
+                    if any(value is not None for value in digests):
+                        raise ValueError("diagnostic input PASS cannot carry digests")
+                elif (
+                    layer.expected_sha256 is None
+                    or layer.observed_sha256 is None
+                    or layer.expected_sha256 != layer.observed_sha256
+                ):
+                    raise ValueError("diagnostic PASS layer digests must match")
+            exact_lock = self.layers[-1]
+            if (
+                exact_lock.expected_sha256 != self.integration_lock_sha256
+                or exact_lock.observed_sha256 != self.integration_lock_sha256
+            ):
+                raise ValueError(
+                    "diagnostic exact-lock digests must bind the report lock"
+                )
             return self
         if (
             self.technical_qualification != "BLOCKED"
