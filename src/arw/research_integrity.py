@@ -75,6 +75,12 @@ _LOOKUP_INDEX_RE = re.compile(
     re.IGNORECASE,
 )
 
+
+def _require_other_adapter_name(obtained_via: object, adapter_name: object) -> None:
+    if obtained_via == "other" and not isinstance(adapter_name, str):
+        raise ValueError("obtained_via=other requires adapter_name")
+
+
 _ARS_PASSPORT_SCHEMA_RELATIVE = Path(
     "skills/academic-research-suite/ars/shared/contracts/passport"
 )
@@ -358,8 +364,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
 
     @model_validator(mode="after")
     def dependent_ars_fields_are_complete(self) -> Self:
-        if self.obtained_via == "other" and self.adapter_name is None:
-            raise ValueError("obtained_via=other requires adapter_name")
+        _require_other_adapter_name(self.obtained_via, self.adapter_name)
         if self.source_verified_against_original and (
             not self.source_acquired
             or self.source_verification_method in {None, "none"}
@@ -458,6 +463,11 @@ class ResearchSourceManifest(StrictModel):
     imported_at: UtcTimestamp
     imported_by: ActorId
 
+    @model_validator(mode="after")
+    def other_acquisition_is_attributed(self) -> Self:
+        _require_other_adapter_name(self.obtained_via, self.adapter_name)
+        return self
+
 
 class EvidenceLocator(StrictModel):
     kind: Literal["page", "line", "byte", "section"]
@@ -534,6 +544,14 @@ def validate_research_integrity_contract_instance(instance: object) -> None:
     elif schema_version == "arw.claim-evidence-link.v1":
         adapter = TypeAdapter(ClaimEvidenceLink)
     elif schema_version == "arw.research-source-manifest.v1":
+        try:
+            _require_other_adapter_name(
+                instance.get("obtained_via"), instance.get("adapter_name")
+            )
+        except ValueError as error:
+            raise ResearchIntegrityError(
+                f"research integrity contract semantic validation failed: {error}"
+            ) from error
         return
     else:
         raise ResearchIntegrityError(

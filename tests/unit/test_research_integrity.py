@@ -270,6 +270,7 @@ def test_bridge_enforces_authoritative_patterns_formats_and_nested_null_rules(
 ) -> None:
     _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
 
+
 def test_date_time_validation_does_not_depend_on_optional_format_extra(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -614,6 +615,19 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
             validate_instance(
                 "research-integrity-contracts.schema.json", invalid_identifier
             )
+
+    unattributed_other = source.model_dump(mode="json")
+    unattributed_other["authors"] = [{"family": "陈", "given": "明"}]
+    unattributed_other["obtained_via"] = "other"
+    unattributed_other["adapter_name"] = None
+    with pytest.raises(ValidationError, match="requires adapter_name"):
+        research_integrity.ResearchSourceManifest.model_validate_json(
+            canonical_json_bytes(unattributed_other), strict=True
+        )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", unattributed_other
+        )
 
 
 def test_bridge_exposes_no_parent_writer_or_hook_authority() -> None:
