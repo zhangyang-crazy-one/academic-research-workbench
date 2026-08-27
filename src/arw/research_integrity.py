@@ -7,9 +7,14 @@ or admits evidence. The parent remains the sole ``ArtifactAcceptanceRequest``
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Mapping, Sequence
+from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
+import jsonschema
 from pydantic import (
     Field,
     StringConstraints,
@@ -22,7 +27,6 @@ from pydantic import (
 from arw.canonical import canonical_json_bytes, sha256_hex
 from arw.integration_lock import IntegrationDiagnosticReport
 from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
-
 
 CitationKey = Annotated[
     str,
@@ -52,6 +56,56 @@ _LOOKUP_SIGNAL_FIELDS = frozenset(
     }
 )
 
+_ARS_PASSPORT_SCHEMA_RELATIVE = Path(
+    "skills/academic-research-suite/ars/shared/contracts/passport"
+)
+_ARS_PASSPORT_SCHEMA_NAMES = frozenset(
+    {
+        "bibliographic_integrity_signal.schema.json",
+    }
+)
+_FORMAT_CHECKER = jsonschema.FormatChecker()
+
+
+def _ars_passport_schema_path(name: str) -> Path:
+    if name not in _ARS_PASSPORT_SCHEMA_NAMES:
+        raise ValueError(f"unsupported bundled ARS passport schema: {name}")
+    plugin_root = os.environ.get("ARW_PLUGIN_ROOT")
+    root = (
+        Path(plugin_root).resolve()
+        if plugin_root
+        else Path(__file__).resolve().parents[2]
+    )
+    candidate = root / _ARS_PASSPORT_SCHEMA_RELATIVE / name
+    if candidate.is_symlink() or not candidate.is_file():
+        raise ValueError(f"bundled ARS passport schema is missing or unsafe: {name}")
+    return candidate.resolve()
+
+
+@lru_cache(maxsize=4)
+def _ars_passport_validator(schema_path: str) -> jsonschema.Draft202012Validator:
+    path = Path(schema_path)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"bundled ARS passport schema is unreadable: {path.name}") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"bundled ARS passport schema is not an object: {path.name}")
+    try:
+        jsonschema.Draft202012Validator.check_schema(document)
+    except jsonschema.SchemaError as error:
+        raise ValueError(f"bundled ARS passport schema is invalid: {path.name}") from error
+    return jsonschema.Draft202012Validator(
+        document,
+        format_checker=_FORMAT_CHECKER,
+    )
+
+
+def _validator_for_ars_passport_schema(
+    name: str,
+) -> jsonschema.Draft202012Validator:
+    return _ars_passport_validator(str(_ars_passport_schema_path(name)))
+
 
 def _reject_explicit_nulls(
     value: Any,
@@ -76,10 +130,6 @@ class ResearchIntegrityError(ValueError):
 
 
 class CSLPersonalName(StrictModel):
-    model_config = {
-        **StrictModel.model_config,
-        "validate_by_name": True,
-    }
 
     family: BoundedText
     given: Annotated[str, StringConstraints(max_length=8192)] | None = None
@@ -204,7 +254,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     ] | None = None
     venue_type_source: BoundedText | None = None
     contamination_signal_omissions: ContaminationSignalOmissions | None = None
-    bibliographic_integrity_signals: list[dict[str, object]] | None = Field(
+    bibliographic_integrity_signals: list[dict[str, Any]] | None = Field(
         default=None, max_length=256
     )
 
@@ -224,16 +274,53 @@ class ARSLiteratureCorpusEntry(StrictModel):
             raise ValueError("source pointer cannot contain NUL")
         return value
 
+    @field_validator(
+        "obtained_at",
+        "source_acquisition_date",
+        "contamination_signals_backfilled_at",
+    )
+    @classmethod
+    def date_times_match_authoritative_schema(cls, value: str | None) -> str | None:
+        if value is not None and not _FORMAT_CHECKER.conforms(value, "date-time"):
+            raise ValueError("ARS literature entry date-time field is invalid")
+        return value
+
+    @field_validator("bibliographic_integrity_signals")
+    @classmethod
+    def bibliographic_signals_match_authoritative_schema(
+        cls, value: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if value is None:
+            return value
+        validator = _validator_for_ars_passport_schema(
+            "bibliographic_integrity_signal.schema.json"
+        )
+        for index, signal in enumerate(value):
+            error = next(validator.iter_errors(signal), None)
+            if error is None:
+                continue
+            location = ".".join(str(item) for item in error.absolute_path) or "$"
+            raise ValueError(
+                "bibliographic integrity signal "
+                f"{index} violates the authoritative schema at {location} "
+                f"({error.validator})"
+            )
+        return value
+
     @model_validator(mode="after")
     def dependent_ars_fields_are_complete(self) -> Self:
         if self.obtained_via == "other" and self.adapter_name is None:
             raise ValueError("obtained_via=other requires adapter_name")
-        if self.source_verified_against_original is True and (
-            self.source_acquired is not True
+        if self.source_verified_against_original and (
+            not self.source_acquired
             or self.source_verification_method in {None, "none"}
         ):
             raise ValueError("verified source metadata lacks acquired-source evidence")
-        if self.source_acquired is False and self.description_last_audit != "none":
+        if (
+            isinstance(self.source_acquired, bool)
+            and not self.source_acquired
+            and self.description_last_audit != "none"
+        ):
             raise ValueError("unacquired sources require description_last_audit=none")
         signal_fields = (
             self.contamination_signals.model_fields_set
@@ -247,7 +334,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
         )
         if (
             self.contamination_signals is not None
-            and self.contamination_signals.preprint_post_llm_inflection is True
+            and self.contamination_signals.preprint_post_llm_inflection
             and self.year < 2024
         ):
             raise ValueError("post-LLM-inflection preprint signal requires year >= 2024")

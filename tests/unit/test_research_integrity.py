@@ -1,16 +1,17 @@
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-import arw.research_integrity as research_integrity
+from arw import research_integrity
 from arw.canonical import canonical_json_bytes
-
 
 ARS_ENTRY = {
     "citation_key": "chen2024ai",
@@ -26,7 +27,7 @@ ARS_ENTRY = {
 }
 SOURCE_SHA256 = hashlib.sha256(b"exact source bytes").hexdigest()
 EXTRACTION_SHA256 = hashlib.sha256(b"extraction registration").hexdigest()
-TEXT_SHA256 = hashlib.sha256("证据片段".encode("utf-8")).hexdigest()
+TEXT_SHA256 = hashlib.sha256("证据片段".encode()).hexdigest()
 CLAIM_SHA256 = hashlib.sha256(b"canonical claim document").hexdigest()
 ARS_ENTRY_SCHEMA = json.loads(
     (
@@ -35,7 +36,28 @@ ARS_ENTRY_SCHEMA = json.loads(
         "literature_corpus_entry.schema.json"
     ).read_text(encoding="utf-8")
 )
-ARS_ENTRY_VALIDATOR = Draft202012Validator(ARS_ENTRY_SCHEMA)
+ARS_ENTRY_VALIDATOR = Draft202012Validator(
+    ARS_ENTRY_SCHEMA,
+    format_checker=Draft202012Validator.FORMAT_CHECKER,
+)
+ARS_SIGNAL_SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "skills/academic-research-suite/ars/shared/contracts/passport/"
+        "bibliographic_integrity_signal.schema.json"
+    ).read_text(encoding="utf-8")
+)
+ARS_SIGNAL_VALIDATOR = Draft202012Validator(
+    ARS_SIGNAL_SCHEMA,
+    format_checker=Draft202012Validator.FORMAT_CHECKER,
+)
+VALID_BIBLIOGRAPHIC_SIGNAL = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "skills/academic-research-suite/ars/scripts/fixtures/"
+        "bibliographic_integrity_signals/retraction.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _bridge(entry: dict[str, object]):
@@ -48,7 +70,7 @@ def _bridge(entry: dict[str, object]):
     )
 
 
-def _assert_authoritative_rejection_is_enforced(entry: dict[str, object]) -> None:
+def _assert_authoritative_rejection_is_enforced(entry: dict[str, Any]) -> None:
     errors = tuple(ARS_ENTRY_VALIDATOR.iter_errors(entry))
     assert errors, "test case must be rejected by the authoritative ARS schema"
     with pytest.raises(ValueError, match="ARS literature entry"):
@@ -130,6 +152,7 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
 
     assert source.bibliographic_sha256 == expected_bibliographic_sha256
     assert source.title == ARS_ENTRY["title"]
+    assert isinstance(source.authors[0], research_integrity.CSLPersonalName)
     assert source.authors[0].family == "陈"
     assert source.source_pointer == ARS_ENTRY["source_pointer"]
     assert source.adapter_name == "folder_scan.py"
@@ -220,6 +243,10 @@ def test_bridge_rejects_explicit_null_for_every_nonnullable_optional_field(
         {"arxiv_id": "2401/12345"},
         {"description_source": "bibliography_latest"},
         {"authors": [{"family": "Chen", "given": None}]},
+        {"authors": [{"family": "Chen", "dropping_particle": "van"}]},
+        {"obtained_at": "yesterday"},
+        {"source_acquisition_date": "2026-08-26"},
+        {"contamination_signals_backfilled_at": "not-a-timestamp"},
         {"contamination_signals": {"openalex_unmatched": None}},
         {"contamination_signal_omissions": {"openalex_unmatched": None}},
     ),
@@ -228,6 +255,28 @@ def test_bridge_enforces_authoritative_patterns_formats_and_nested_null_rules(
     invalid_update: dict[str, object],
 ) -> None:
     _assert_authoritative_rejection_is_enforced({**ARS_ENTRY, **invalid_update})
+
+
+def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -> None:
+    valid_entry = {
+        **ARS_ENTRY,
+        "bibliographic_integrity_signals": [VALID_BIBLIOGRAPHIC_SIGNAL],
+    }
+    assert ARS_SIGNAL_VALIDATOR.is_valid(VALID_BIBLIOGRAPHIC_SIGNAL)
+    source = _bridge(valid_entry)
+    assert source.bibliographic_sha256 == hashlib.sha256(
+        canonical_json_bytes(valid_entry)
+    ).hexdigest()
+
+    invalid_signal = {"foo": "bar"}
+    assert not ARS_SIGNAL_VALIDATOR.is_valid(invalid_signal)
+    with pytest.raises(ValueError, match="bibliographic integrity signal"):
+        _bridge(
+            {
+                **ARS_ENTRY,
+                "bibliographic_integrity_signals": [invalid_signal],
+            }
+        )
 
 
 @pytest.mark.parametrize(

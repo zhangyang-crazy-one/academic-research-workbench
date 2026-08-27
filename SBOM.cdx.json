@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "245a7461137e69f7f58fcf92e9d398fb941acaa71d037efafda3e0d73c1dc0c9"
+          "content": "df552da7020e0bd55fa50b42660b74a8a5a8771cfb69c95997d3163c3b73387d"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -157,7 +157,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e7773ba5807afb44beb458e4b9973c7951ad569acb23fdb59ef77eba18233a80"
+          "content": "7ac6a1a2fc5c22c0598a96a6daafd148e8e2c60a3d18e837550214feb593759a"
         }
       ],
       "name": "skills/academic-research-suite/ars",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5e15715191d5285c6721463cf8b4831734f9e57ac25ee0085dc63c470eb9c4bd"
+          "content": "8e5aed6b7695c1ca80a69cd5512616af5b5373a5f806f1dec3fa600686aa145e"
         }
       ],
       "licenses": [
