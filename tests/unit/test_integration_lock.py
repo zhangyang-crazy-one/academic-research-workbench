@@ -1925,3 +1925,64 @@ def test_build_identity_projection_excludes_staged_payloads(
     )
 
     assert after == before
+
+
+def test_audit_manifest_gate_accepts_exact_referenced_canary_tree(
+    integration_fixture: dict[str, Path],
+) -> None:
+    stage = integration_fixture["stage"]
+    target = stage / "supply-chain/host-canary"
+    shutil.copytree(integration_fixture["canary"].parent, target)
+    staged_paths = dict(integration_fixture)
+    staged_paths["canary"] = target / integration_fixture["canary"].name
+    (stage / "share/arw/build-identity.json").unlink()
+    (stage / "supply-chain/stage-inventory.json").unlink()
+    _install_audit_manifests(stage)
+
+    lock = _build(staged_paths)
+    verification = _verify(staged_paths, lock)
+
+    assert verification.technical_qualification == "PASS"
+
+
+def test_audit_manifest_gate_rejects_unreferenced_canary_file_after_rebind(
+    integration_fixture: dict[str, Path],
+) -> None:
+    stage = integration_fixture["stage"]
+    lock = _build(integration_fixture)
+    rogue_relative = "supply-chain/host-canary/unreferenced.json"
+    rogue = stage / rogue_relative
+    rogue.parent.mkdir(parents=True)
+    rogue.write_text("{}\n", encoding="utf-8")
+
+    identity_path = stage / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity["staged_payloads"].append(
+        {"path": rogue_relative, "sha256": _digest(rogue)}
+    )
+    identity["staged_payloads"].sort(key=lambda item: item["path"])
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    inventory_path = stage / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    inventory["files"].append(rogue_relative)
+    inventory["files"].sort()
+    inventory["covered_files"].append(
+        {
+            "inventory_source": "legal",
+            "path": rogue_relative,
+            "sha256": _digest(rogue),
+        }
+    )
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/build-identity.json":
+            entry["sha256"] = _digest(identity_path)
+    inventory["covered_files"].sort(key=lambda item: item["path"])
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(IntegrationLockError, match="canary evidence set is not closed"):
+        _verify(integration_fixture, lock)

@@ -130,15 +130,39 @@ def _ars_passport_schema_path(name: str) -> Path:
     if name not in _ARS_PASSPORT_SCHEMA_NAMES:
         raise ValueError(f"unsupported bundled ARS passport schema: {name}")
     plugin_root = os.environ.get("ARW_PLUGIN_ROOT")
-    root = (
-        Path(plugin_root).resolve()
+    raw_root = (
+        Path(plugin_root).absolute()
         if plugin_root
         else Path(__file__).resolve().parents[2]
     )
-    candidate = root / _ARS_PASSPORT_SCHEMA_RELATIVE / name
-    if candidate.is_symlink() or not candidate.is_file():
-        raise ValueError(f"bundled ARS passport schema is missing or unsafe: {name}")
-    return candidate.resolve()
+    try:
+        resolved_root = raw_root.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("bundled ARS plugin root is missing or unsafe") from error
+    if raw_root.is_symlink() or not resolved_root.is_dir():
+        raise ValueError("bundled ARS plugin root is missing or unsafe")
+    candidate = raw_root / _ARS_PASSPORT_SCHEMA_RELATIVE / name
+    for ancestor in (candidate, *candidate.parents):
+        if ancestor == raw_root.parent:
+            break
+        if ancestor.is_symlink():
+            raise ValueError(
+                f"bundled ARS passport schema is missing or unsafe: {name}"
+            )
+    try:
+        resolved_candidate = candidate.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(
+            f"bundled ARS passport schema is missing or unsafe: {name}"
+        ) from error
+    if (
+        not resolved_candidate.is_relative_to(resolved_root)
+        or not resolved_candidate.is_file()
+    ):
+        raise ValueError(
+            f"bundled ARS passport schema is missing or unsafe: {name}"
+        )
+    return resolved_candidate
 
 
 @lru_cache(maxsize=4)

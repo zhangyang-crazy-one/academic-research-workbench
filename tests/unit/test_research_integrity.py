@@ -214,6 +214,37 @@ def test_source_builder_revalidates_mutated_nested_ars_entry() -> None:
         )
 
 
+def test_bundled_schema_lookup_rejects_symlink_root_and_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    relative = (
+        Path("skills/academic-research-suite/ars/shared/contracts/passport")
+        / "bibliographic_integrity_signal.schema.json"
+    )
+    real_root = tmp_path / "real-plugin"
+    schema = real_root / relative
+    schema.parent.mkdir(parents=True)
+    schema.write_text("{}\n", encoding="utf-8")
+    linked_root = tmp_path / "linked-plugin"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(linked_root))
+    with pytest.raises(ValueError, match="plugin root.*unsafe"):
+        research_integrity._ars_passport_schema_path(schema.name)
+
+    declared_root = tmp_path / "declared-plugin"
+    declared_root.mkdir()
+    external = tmp_path / "external"
+    external_schema = external / relative
+    external_schema.parent.mkdir(parents=True)
+    external_schema.write_text("{}\n", encoding="utf-8")
+    (declared_root / "skills").symlink_to(
+        external / "skills", target_is_directory=True
+    )
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(declared_root))
+    with pytest.raises(ValueError, match="schema.*unsafe"):
+        research_integrity._ars_passport_schema_path(schema.name)
+
+
 def test_source_builder_preserves_partial_adapter_attribution() -> None:
     entry = {**ARS_ENTRY, "obtained_via": "other", "adapter_name": "custom-import"}
     del entry["adapter_version"]

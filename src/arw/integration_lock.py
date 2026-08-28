@@ -2269,8 +2269,77 @@ def observe_build_identity_binding(
     return binding
 
 
+def _referenced_host_canary_paths(
+    stage_root: Path, host_canary_evidence: Path
+) -> frozenset[str]:
+    """Return the closed set of stage-excluded files reachable from the canary."""
+
+    stage_root = _safe_root(stage_root, label="stage")
+    if host_canary_evidence.is_symlink() or not host_canary_evidence.is_file():
+        raise IntegrationLockError("Codex host canary must be a direct regular file")
+    resolved_canary = host_canary_evidence.resolve()
+    if not resolved_canary.is_relative_to(stage_root):
+        return frozenset()
+    evidence_root = _safe_root(resolved_canary.parent, label="Codex host evidence")
+    try:
+        canary_raw = resolved_canary.read_bytes()
+        canary = CodexHostCanaryEvidence.model_validate_json(
+            canary_raw, strict=True
+        )
+    except (OSError, UnicodeError, ValueError, ValidationError) as error:
+        raise IntegrationLockError(f"Codex host canary is invalid: {error}") from error
+    if canary_raw != canonical_json_bytes(canary.model_dump(mode="json")):
+        raise IntegrationLockError("Codex host canary bytes are not canonical JSON")
+
+    referenced: set[str] = set()
+    excluded_prefix = "supply-chain/host-canary/"
+    excluded_single = "supply-chain/host-canary.json"
+
+    def record(path: Path) -> None:
+        relative = path.relative_to(stage_root).as_posix()
+        if relative == excluded_single or relative.startswith(excluded_prefix):
+            referenced.add(relative)
+
+    def record_binding(binding: FileBinding) -> Path:
+        path = _bound_file(evidence_root, binding)
+        if not path.is_relative_to(stage_root):
+            raise IntegrationLockError(
+                "staged Codex host evidence escapes the plugin stage"
+            )
+        record(path)
+        return path
+
+    record(resolved_canary)
+    bundle_path = record_binding(canary.evidence_bundle)
+    bundle = _load_canonical_bound_model(
+        evidence_root,
+        canary.evidence_bundle,
+        CodexHostEvidenceBundle,
+        label="Codex host evidence bundle",
+    )
+    if bundle_path != _bound_file(evidence_root, canary.evidence_bundle):
+        raise IntegrationLockError("Codex host evidence bundle path drift")
+    for receipt in canary.fresh_home_receipts:
+        record_binding(receipt)
+    for receipt in bundle.fresh_home_receipts:
+        record_binding(receipt)
+    for classification in bundle.hook_status_classifications:
+        record_binding(classification.evidence)
+        parity = _load_canonical_bound_model(
+            evidence_root,
+            classification.evidence,
+            HookParityEvidenceRecord,
+            label=f"hook parity evidence {classification.hook_state}",
+        )
+        if parity.official_hook_receipt is not None:
+            record_binding(parity.official_hook_receipt)
+    return frozenset(referenced)
+
+
 def validate_live_audit_manifests(
-    stage_root: Path, expected_build_identity: BuildIdentityBinding | None = None
+    stage_root: Path,
+    expected_build_identity: BuildIdentityBinding | None = None,
+    host_canary_evidence: Path | None = None,
 ) -> None:
     """Fail-closed gate over the live stage-inventory and build-identity manifests.
 
@@ -2299,6 +2368,24 @@ def validate_live_audit_manifests(
             )
     if not actual:
         raise IntegrationLockError("audit manifest gate requires a non-empty stage")
+    excluded_canary_paths = {
+        relative
+        for relative in actual
+        if relative == "supply-chain/host-canary.json"
+        or relative.startswith("supply-chain/host-canary/")
+    }
+    referenced_canary_paths = (
+        _referenced_host_canary_paths(stage_root, host_canary_evidence)
+        if host_canary_evidence is not None
+        else frozenset()
+    )
+    if excluded_canary_paths != referenced_canary_paths:
+        unreferenced = sorted(excluded_canary_paths - referenced_canary_paths)
+        missing = sorted(referenced_canary_paths - excluded_canary_paths)
+        raise IntegrationLockError(
+            "Codex host canary evidence set is not closed: "
+            f"unreferenced={unreferenced}; missing={missing}"
+        )
     for relative in actual:
         if _AUDIT_PRIVATE_PATH_RE.search(relative):
             raise IntegrationLockError(
@@ -2483,7 +2570,9 @@ def verify_integration_lock(
     )
     if integration_lock_bytes(observed) != integration_lock_bytes(lock):
         raise IntegrationLockError("live integration identity differs from the lock")
-    validate_live_audit_manifests(stage_root, lock.build_identity)
+    validate_live_audit_manifests(
+        stage_root, lock.build_identity, host_canary_evidence
+    )
     lock_bytes = integration_lock_bytes(lock)
     return IntegrationVerification(
         schema_version="arw.integration-verification.v1",
