@@ -15,6 +15,7 @@ from arw.integration_lock import (
     IntegrationLock,
     _tree_sha256,
     _validate_arw_runtime,
+    _validate_bundled_ars,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
@@ -151,39 +152,14 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
     observed_arw = _validate_arw_runtime(stage_root)
     source_manifest = _load(stage_root / "vendor/source-manifest.json")
     observed_file_base = _validate_file_base(stage_root, source_manifest)
+    observed_ars = _validate_bundled_ars(stage_root, source_manifest)
     observed_license = _validate_license(stage_root)
     hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
     payload = {
         "schema_version": "arw.integration-lock.v1",
         "dependency_model": "bundled-pinned-adapter",
         "arw_runtime": observed_arw.model_dump(mode="json"),
-        "ars": {
-            "dependency_model": "bundled-pinned-adapter",
-            "bundled": True,
-            "adapter_name": "academic-research-suite",
-            "adapter_version": "0.1.26",
-            "adapter_tree_sha256": repeated("a"),
-            "upstream_content_tree_sha256": repeated("b"),
-            "manifest": binding("manifest.json"),
-            "version_file": binding("VERSION"),
-            "router": binding("SKILL.md"),
-            "source_repositories": [
-                {
-                    "component_id": "academic-research-skills",
-                    "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-                    "commit": "8cc7f8f4cccda721646d9df590b42721c93cba31",
-                    "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
-                    "source_tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
-                },
-                {
-                    "component_id": "experiment-agent",
-                    "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
-                    "commit": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
-                    "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
-                    "source_tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
-                },
-            ],
-        },
+        "ars": observed_ars.model_dump(mode="json"),
         "file_base": observed_file_base.model_dump(mode="json"),
         "codex_host": host,
         "hook": {
@@ -511,6 +487,43 @@ def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     assert "digest mismatch" in validated.stderr
 
 
+def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "reformatted-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    sbom_path = stage_root / "SBOM.cdx.json"
+    sbom_path.write_text(json.dumps(_load(sbom_path)) + "\n", encoding="utf-8")
+    declaration_path = stage_root / "supply-chain/use-distribution.json"
+    declaration = _load(declaration_path)
+    sbom_row = next(
+        row
+        for row in declaration["evidence_hashes"]
+        if row["path"] == "SBOM.cdx.json"
+    )
+    sbom_row["sha256"] = _sha256(sbom_path)
+    _write_pretty(declaration_path, declaration)
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
+        declaration_path
+    )
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(
+        stage_root,
+        "SBOM.cdx.json",
+        "supply-chain/use-distribution.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "staged SBOM bytes are not canonical" in validated.stderr
+
 def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> None:
     lock_path = tmp_path / "noncanonical-lock.json"
     lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "noncanonical") + b"\n")
@@ -525,6 +538,7 @@ def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> No
     (
         ("cachebuster", "does not bind the staged ARW runtime"),
         ("stage-identity", "does not bind the staged content-tree identity"),
+        ("ars-binding", "does not bind the staged ARS bundle"),
     ),
 )
 def test_stage_rejects_live_payload_drift_against_lock(
@@ -532,9 +546,12 @@ def test_stage_rejects_live_payload_drift_against_lock(
 ) -> None:
     lock_path = tmp_path / f"{drift}-lock.json"
     lock_bytes = _locally_bound_test_lock(tmp_path, drift)
-    if drift == "stage-identity":
+    if drift in {"stage-identity", "ars-binding"}:
         payload = json.loads(lock_bytes)
-        payload["hook"]["stage_sha256"] = "0" * 64
+        if drift == "stage-identity":
+            payload["hook"]["stage_sha256"] = "0" * 64
+        else:
+            payload["ars"]["adapter_tree_sha256"] = "0" * 64
         lock_bytes = canonical_json_bytes(payload)
     lock_path.write_bytes(lock_bytes)
     stage_root = tmp_path / f"{drift}-stage" / PLUGIN_NAME
@@ -548,7 +565,16 @@ def test_stage_rejects_live_payload_drift_against_lock(
     assert expected_error in result.stderr
 
 
-def test_validate_only_recomputes_local_lock_bindings(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("drift", "expected_error"),
+    (
+        ("stage-identity", "does not bind the staged content-tree identity"),
+        ("ars-binding", "does not bind the staged ARS bundle"),
+    ),
+)
+def test_validate_only_recomputes_local_lock_bindings(
+    tmp_path: Path, drift: str, expected_error: str
+) -> None:
     lock_path = tmp_path / "qualification-lock.json"
     lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "recheck"))
     stage_root = tmp_path / "recheck-stage" / PLUGIN_NAME
@@ -557,7 +583,10 @@ def test_validate_only_recomputes_local_lock_bindings(tmp_path: Path) -> None:
 
     staged_lock = stage_root / "supply-chain/integration-lock.json"
     lock_payload = _load(staged_lock)
-    lock_payload["hook"]["stage_sha256"] = "0" * 64
+    if drift == "stage-identity":
+        lock_payload["hook"]["stage_sha256"] = "0" * 64
+    else:
+        lock_payload["ars"]["adapter_tree_sha256"] = "0" * 64
     staged_lock.write_bytes(canonical_json_bytes(lock_payload))
 
     sbom_path = stage_root / "SBOM.cdx.json"
@@ -585,31 +614,47 @@ def test_validate_only_recomputes_local_lock_bindings(tmp_path: Path) -> None:
 
     validated = _validate_stage(stage_root)
     assert validated.returncode != 0
-    assert "does not bind the staged content-tree identity" in validated.stderr
+    assert expected_error in validated.stderr
 
 
 def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None:
-    lock_path = tmp_path / "qualification-lock.json"
-    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "duplicates"))
     stage_root = tmp_path / "duplicate-stage" / PLUGIN_NAME
-    result = _stage(stage_root, integration_lock=lock_path)
+    result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
     sbom_path = stage_root / "SBOM.cdx.json"
     identity_path = stage_root / "share/arw/build-identity.json"
     inventory_path = stage_root / "supply-chain/stage-inventory.json"
+    declaration_path = stage_root / "supply-chain/use-distribution.json"
     original_sbom = sbom_path.read_bytes()
     original_identity = identity_path.read_bytes()
     original_inventory = inventory_path.read_bytes()
+    original_declaration = declaration_path.read_bytes()
 
     sbom = _load(sbom_path)
     sbom["components"].append(dict(sbom["components"][0]))
     _write_pretty(sbom_path, sbom)
+    declaration = _load(declaration_path)
+    sbom_row = next(
+        row
+        for row in declaration["evidence_hashes"]
+        if row["path"] == "SBOM.cdx.json"
+    )
+    sbom_row["sha256"] = _sha256(sbom_path)
+    _write_pretty(declaration_path, declaration)
     identity = _load(identity_path)
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
     payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
+        declaration_path
+    )
     _write_pretty(identity_path, identity)
-    _rebind_inventory(stage_root, "SBOM.cdx.json", "share/arw/build-identity.json")
+    _rebind_inventory(
+        stage_root,
+        "SBOM.cdx.json",
+        "supply-chain/use-distribution.json",
+        "share/arw/build-identity.json",
+    )
     duplicate_sbom = _validate_stage(stage_root)
     assert duplicate_sbom.returncode != 0
     assert "duplicate component references" in duplicate_sbom.stderr
@@ -617,6 +662,7 @@ def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None
     sbom_path.write_bytes(original_sbom)
     identity_path.write_bytes(original_identity)
     inventory_path.write_bytes(original_inventory)
+    declaration_path.write_bytes(original_declaration)
     identity = _load(identity_path)
     identity["staged_payloads"].append(dict(identity["staged_payloads"][0]))
     _write_pretty(identity_path, identity)

@@ -110,6 +110,7 @@ from arw.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
+    _validate_bundled_ars,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
@@ -127,6 +128,17 @@ def digest(path: Path) -> str:
 def verify_technical_provenance(
     sbom: dict[str, object], qualification_lock_ref: str | None
 ) -> None:
+    # pi-lens-ignore: jscpd:duplicate
+    sbom_path = stage_root / "SBOM.cdx.json"
+    try:
+        sbom_bytes = sbom_path.read_bytes()
+    except OSError as error:
+        raise SystemExit(f"staged SBOM is unreadable: {error}") from error
+    canonical_sbom_bytes = (
+        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if sbom_bytes != canonical_sbom_bytes:
+        raise SystemExit("staged SBOM bytes are not canonical")
     declaration_relative = "supply-chain/use-distribution.json"
     expected_paths = frozenset(
         {
@@ -254,6 +266,8 @@ def verify_local_lock(lock: IntegrationLock) -> None:
     source_manifest = json.loads(
         (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
     )
+    if lock.ars != _validate_bundled_ars(stage_root, source_manifest):
+        raise SystemExit("integration lock does not bind the staged ARS bundle")
     if lock.file_base != _validate_file_base(stage_root, source_manifest):
         raise SystemExit("integration lock does not bind the staged file-base runtime")
     # pi-lens-ignore: jscpd:duplicate
@@ -856,6 +870,7 @@ from arw.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
+    _validate_bundled_ars,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
@@ -885,6 +900,9 @@ if lock.arw_runtime != observed_arw:
 source_manifest = json.loads(
     (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
 )
+observed_ars = _validate_bundled_ars(stage_root, source_manifest)
+if lock.ars != observed_ars:
+    raise SystemExit("integration lock does not bind the staged ARS bundle")
 observed_file_base = _validate_file_base(stage_root, source_manifest)
 if lock.file_base != observed_file_base:
     raise SystemExit("integration lock does not bind the staged file-base runtime")
@@ -933,6 +951,17 @@ def digest(path: Path) -> str:
 def verify_technical_provenance(
     sbom: dict[str, object], qualification_lock_ref: str | None
 ) -> None:
+    # pi-lens-ignore: jscpd:duplicate
+    sbom_path = stage_root / "SBOM.cdx.json"
+    try:
+        sbom_bytes = sbom_path.read_bytes()
+    except OSError as error:
+        raise SystemExit(f"staged SBOM is unreadable: {error}") from error
+    canonical_sbom_bytes = (
+        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if sbom_bytes != canonical_sbom_bytes:
+        raise SystemExit("staged SBOM bytes are not canonical")
     declaration_relative = "supply-chain/use-distribution.json"
     expected_paths = frozenset(
         {
