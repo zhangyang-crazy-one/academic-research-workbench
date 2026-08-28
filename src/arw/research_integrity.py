@@ -596,11 +596,14 @@ def research_integrity_bytes(document: StrictModel) -> bytes:
 
     return canonical_json_bytes(document.model_dump(mode="json"))
 
+
 def _revalidated_contract(
     document: _ContractT, model: type[_ContractT], *, label: str
 ) -> _ContractT:
     try:
-        return model.model_validate_json(research_integrity_bytes(document), strict=True)
+        return model.model_validate_json(
+            research_integrity_bytes(document), strict=True
+        )
     except (TypeError, ValueError, ValidationError) as error:
         raise ResearchIntegrityError(f"{label} contract is invalid: {error}") from error
 

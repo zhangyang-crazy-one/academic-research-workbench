@@ -26,6 +26,7 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, Self, TypeVar, cast
 
+import jsonschema
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -114,6 +115,21 @@ EXPECTED_TECHNICAL_PROVENANCE_PATHS = frozenset(
     }
 )
 STAGE_IDENTITY_EXCLUDED_PREFIXES = ("supply-chain/host-canary/",)
+AUDIT_BUILD_IDENTITY_RELATIVE = "share/arw/build-identity.json"
+AUDIT_STAGE_INVENTORY_RELATIVE = "supply-chain/stage-inventory.json"
+AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE = "share/arw/schemas/build-identity.schema.json"
+AUDIT_STAGE_INVENTORY_REQUIRED_KEYS = frozenset(
+    {"schema_version", "files", "symlinks", "covered_files"}
+)
+# Verbatim copy of the live private-path class filter used by
+# scripts/stage-plugin (--validate-only section, lines ~287-390).  The audit
+# manifest gate and the live stage builder must agree on what is private.
+_AUDIT_PRIVATE_PATH_RE = re.compile(
+    r"(^|/)(?:\.cache|\.git|\.building[^/]*|barriers?|extractions?|generations?|receipts?|"
+    r"extracted-text|papers?|runs?|indexes?|credentials?|private|undeclared)(?:/|$)|"
+    r"\.(?:db|sqlite3?|pem|key)$",
+    re.IGNORECASE,
+)
 LegalBlocker = Literal[
     "INTENDED_USE_UNKNOWN",
     "DISTRIBUTION_CLASS_UNKNOWN",
@@ -2058,6 +2074,289 @@ def load_integration_lock(path: Path) -> IntegrationLock:
     return lock
 
 
+def _audit_inventory_source(relative: str) -> str:
+    """Recompute the canonical inventory_source label for a stage-relative path.
+
+    Mirrors the helper embedded in ``scripts/stage-plugin`` so the live audit
+    gate and the stage builder label files identically.
+    """
+
+    if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
+        return "source-manifest"
+    if relative.startswith("vendor/python/wheelhouse/") or relative in {
+        "uv.lock",
+        ".python-version",
+    }:
+        return "wheelhouse"
+    if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {  # noqa: PIE810
+        "MODIFICATIONS.md",
+        "SBOM.cdx.json",
+        "THIRD_PARTY_NOTICES.md",
+    }:
+        return "legal"
+    if relative.startswith(("schemas/", ".file-base/", "libexec/", "share/arw/")):
+        return "build"
+    return "runtime"
+
+
+def _read_pretty_sorted_json(stage_root: Path, relative: str, *, label: str) -> object:
+    """Read a stage-relative JSON document written as pretty-sorted + newline.
+
+    The audit manifests are emitted by ``scripts/stage-plugin`` with
+    ``json.dumps(..., indent=2, sort_keys=True) + "\n"``.  They are not the
+    compact canonical form used by ``canonical_json_bytes``; rejecting the
+    compact form here keeps the manifest's recomputable file set aligned with
+    its on-disk bytes.
+    """
+
+    path = _regular_file_under(stage_root, relative)
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise IntegrationLockError(
+            f"{label} is unreadable: {error}"
+        ) from error
+    try:
+        decoded = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            f"{label} is not valid strict JSON: {error}"
+        ) from error
+    expected = (json.dumps(decoded, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if raw != expected:
+        raise IntegrationLockError(
+            f"{label} bytes are not pretty-sorted canonical JSON"
+        )
+    return decoded
+
+
+def _validate_build_identity_schema(stage_root: Path) -> dict[str, object]:
+    """Validate the staged build identity against its declared JSON Schema.
+
+    The schema document itself is the staged copy at
+    ``share/arw/schemas/build-identity.schema.json``; we do not trust any
+    off-tree mirror.
+    """
+
+    schema_path = _regular_file_under(
+        stage_root, AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE
+    )
+    try:
+        schema_document = json.loads(schema_path.read_bytes())
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            "build identity schema is not valid strict JSON: "
+            f"{error}"
+        ) from error
+    if not isinstance(schema_document, dict):
+        raise IntegrationLockError("build identity schema must be a JSON object")
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema_document)
+    except jsonschema.SchemaError as error:
+        raise IntegrationLockError(
+            f"build identity schema is not a valid Draft 2020-12 schema: {error}"
+        ) from error
+    return schema_document
+
+
+def validate_live_audit_manifests(stage_root: Path) -> None:
+    """Fail-closed gate over the live stage-inventory and build-identity manifests.
+
+    The audit manifests are cycle-forming final metadata and therefore absent
+    from the staged content tree; this gate recomputes every reported set and
+    digest from the live ``stage_root`` bytes.  ``build_integration_lock`` does
+    not call this gate because the stage may be inspected before the audit
+    manifests exist; the gate runs in :func:`verify_integration_lock` after
+    the rebuilt lock bytes equal the supplied lock, before PASS is returned.
+    """
+
+    stage_root = _safe_root(stage_root, label="stage")
+    actual: set[str] = set()
+    for path in stage_root.rglob("*"):
+        if path.is_symlink():
+            relative = path.relative_to(stage_root).as_posix()
+            raise IntegrationLockError(
+                f"audit manifest gate rejects symlink: {relative}"
+            )
+        if path.is_file():
+            actual.add(path.relative_to(stage_root).as_posix())
+        elif not path.is_dir():
+            relative = path.relative_to(stage_root).as_posix()
+            raise IntegrationLockError(
+                f"audit manifest gate rejects non-file entry: {relative}"
+            )
+    if not actual:
+        raise IntegrationLockError(
+            "audit manifest gate requires a non-empty stage"
+        )
+    for relative in actual:
+        if _AUDIT_PRIVATE_PATH_RE.search(relative):
+            raise IntegrationLockError(
+                f"audit manifest gate rejects private path class: {relative}"
+            )
+    if AUDIT_STAGE_INVENTORY_RELATIVE not in actual:
+        raise IntegrationLockError(
+            "audit manifest gate requires stage inventory at "
+            f"{AUDIT_STAGE_INVENTORY_RELATIVE}"
+        )
+    if AUDIT_BUILD_IDENTITY_RELATIVE not in actual:
+        raise IntegrationLockError(
+            "audit manifest gate requires build identity at "
+            f"{AUDIT_BUILD_IDENTITY_RELATIVE}"
+        )
+
+    schema_document = _validate_build_identity_schema(stage_root)
+    identity = _read_pretty_sorted_json(
+        stage_root, AUDIT_BUILD_IDENTITY_RELATIVE, label="build identity"
+    )
+    if not isinstance(identity, dict):
+        raise IntegrationLockError("build identity must be a JSON object")
+    try:
+        jsonschema.Draft202012Validator(schema_document).validate(identity)
+    except jsonschema.ValidationError as error:
+        raise IntegrationLockError(
+            f"build identity is not schema-valid: {error.message}"
+        ) from error
+
+    inventory = _read_pretty_sorted_json(
+        stage_root, AUDIT_STAGE_INVENTORY_RELATIVE, label="stage inventory"
+    )
+    if not isinstance(inventory, dict):
+        raise IntegrationLockError("stage inventory must be a JSON object")
+    if set(inventory) != AUDIT_STAGE_INVENTORY_REQUIRED_KEYS:
+        raise IntegrationLockError(
+            "stage inventory keys do not match the qualified contract: "
+            f"{sorted(set(inventory) - AUDIT_STAGE_INVENTORY_REQUIRED_KEYS)}"
+        )
+    schema_version = inventory.get("schema_version")
+    files_field = inventory.get("files")
+    symlinks_field = inventory.get("symlinks")
+    covered_field = inventory.get("covered_files")
+    if schema_version != "1.0.0":
+        raise IntegrationLockError(
+            "stage inventory schema_version is not the qualified 1.0.0"
+        )
+    valid_files = (
+        cast(list[str], files_field)
+        if isinstance(files_field, list)
+        and all(isinstance(item, str) for item in files_field)
+        else None
+    )
+    reported_files = set(valid_files or ())
+    if valid_files is None or valid_files != sorted(actual):
+        missing = sorted(actual - reported_files)
+        extra = sorted(reported_files - actual)
+        raise IntegrationLockError(
+            f"stage inventory files set drift: missing={missing}; extra={extra}"
+        )
+    if symlinks_field != []:
+        raise IntegrationLockError(
+            "stage inventory symlinks must be an empty list"
+        )
+    if not isinstance(covered_field, list) or not all(
+        isinstance(item, dict) for item in covered_field
+    ):
+        raise IntegrationLockError("stage inventory covered_files must be a list")
+    covered_required = {"inventory_source", "path", "sha256"}
+    covered_by_path: dict[str, dict[str, object]] = {}
+    for entry in covered_field:
+        if set(entry) != covered_required:
+            raise IntegrationLockError(
+                "stage inventory covered_files entry has unexpected keys"
+            )
+        path = entry.get("path")
+        digest = entry.get("sha256")
+        source = entry.get("inventory_source")
+        if (
+            not isinstance(path, str)
+            or not isinstance(digest, str)
+            or not isinstance(source, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            raise IntegrationLockError(
+                "stage inventory covered_files entry is malformed"
+            )
+        if path in covered_by_path:
+            raise IntegrationLockError(
+                f"stage inventory covered_files duplicates path: {path}"
+            )
+        covered_by_path[path] = {
+            "path": path,
+            "sha256": digest,
+            "inventory_source": source,
+        }
+    expected_covered = actual - {AUDIT_STAGE_INVENTORY_RELATIVE}
+    if set(covered_by_path) != expected_covered:
+        missing = sorted(expected_covered - set(covered_by_path))
+        extra = sorted(set(covered_by_path) - expected_covered)
+        raise IntegrationLockError(
+            f"stage inventory covered_files coverage drift: "
+            f"missing={missing}; extra={extra}"
+        )
+    if [entry["path"] for entry in covered_field] != sorted(expected_covered):
+        raise IntegrationLockError(
+            "stage inventory covered_files order is not canonical"
+        )
+    for relative, record in covered_by_path.items():
+        actual_digest = _digest(stage_root / relative)
+        if actual_digest != record["sha256"]:
+            raise IntegrationLockError(
+                f"stage inventory coverage digest mismatch: {relative}"
+            )
+        expected_source = _audit_inventory_source(relative)
+        if record["inventory_source"] != expected_source:
+            raise IntegrationLockError(
+                f"stage inventory coverage source drift: {relative} "
+                f"reported={record['inventory_source']} computed={expected_source}"
+            )
+
+    staged_payloads = identity.get("staged_payloads")
+    if not isinstance(staged_payloads, list) or not all(
+        isinstance(item, dict) for item in staged_payloads
+    ):
+        raise IntegrationLockError(
+            "build identity staged_payloads must be a list"
+        )
+    payloads_by_path: dict[str, str] = {}
+    for entry in staged_payloads:
+        if set(entry) != {"path", "sha256"}:
+            raise IntegrationLockError(
+                "build identity staged_payloads entry has unexpected keys"
+            )
+        path = entry.get("path")
+        digest = entry.get("sha256")
+        if (
+            not isinstance(path, str)
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            raise IntegrationLockError(
+                "build identity staged_payloads entry is malformed"
+            )
+        if path in payloads_by_path:
+            raise IntegrationLockError(
+                f"build identity staged_payloads duplicates path: {path}"
+            )
+        payloads_by_path[path] = digest
+    expected_payloads = actual - {
+        AUDIT_BUILD_IDENTITY_RELATIVE,
+        AUDIT_STAGE_INVENTORY_RELATIVE,
+    }
+    if set(payloads_by_path) != expected_payloads:
+        missing = sorted(expected_payloads - set(payloads_by_path))
+        extra = sorted(set(payloads_by_path) - expected_payloads)
+        raise IntegrationLockError(
+            f"build identity staged_payloads coverage drift: "
+            f"missing={missing}; extra={extra}"
+        )
+    for relative, declared in payloads_by_path.items():
+        actual_digest = _digest(stage_root / relative)
+        if actual_digest != declared:
+            raise IntegrationLockError(
+                f"build identity staged_payload digest mismatch: {relative}"
+            )
+
+
 def verify_integration_lock(
     lock: IntegrationLock,
     *,
@@ -2076,6 +2375,7 @@ def verify_integration_lock(
     )
     if integration_lock_bytes(observed) != integration_lock_bytes(lock):
         raise IntegrationLockError("live integration identity differs from the lock")
+    validate_live_audit_manifests(stage_root)
     lock_bytes = integration_lock_bytes(lock)
     return IntegrationVerification(
         schema_version="arw.integration-verification.v1",
@@ -2504,6 +2804,7 @@ __all__ = (
     "observe_codex_host",
     "observe_hook_definition",
     "observe_stage_identity",
+    "validate_live_audit_manifests",
     "verify_integration_lock",
     "write_integration_lock",
 )

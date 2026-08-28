@@ -499,9 +499,7 @@ def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     declaration_path = stage_root / "supply-chain/use-distribution.json"
     declaration = _load(declaration_path)
     sbom_row = next(
-        row
-        for row in declaration["evidence_hashes"]
-        if row["path"] == "SBOM.cdx.json"
+        row for row in declaration["evidence_hashes"] if row["path"] == "SBOM.cdx.json"
     )
     sbom_row["sha256"] = _sha256(sbom_path)
     _write_pretty(declaration_path, declaration)
@@ -509,9 +507,7 @@ def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     identity = _load(identity_path)
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
     payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
-    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
-        declaration_path
-    )
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(declaration_path)
     _write_pretty(identity_path, identity)
     _rebind_inventory(
         stage_root,
@@ -523,6 +519,7 @@ def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     validated = _validate_stage(stage_root)
     assert validated.returncode != 0
     assert "staged SBOM bytes are not canonical" in validated.stderr
+
 
 def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> None:
     lock_path = tmp_path / "noncanonical-lock.json"
@@ -636,18 +633,14 @@ def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None
     _write_pretty(sbom_path, sbom)
     declaration = _load(declaration_path)
     sbom_row = next(
-        row
-        for row in declaration["evidence_hashes"]
-        if row["path"] == "SBOM.cdx.json"
+        row for row in declaration["evidence_hashes"] if row["path"] == "SBOM.cdx.json"
     )
     sbom_row["sha256"] = _sha256(sbom_path)
     _write_pretty(declaration_path, declaration)
     identity = _load(identity_path)
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
     payloads["SBOM.cdx.json"]["sha256"] = _sha256(sbom_path)
-    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(
-        declaration_path
-    )
+    payloads["supply-chain/use-distribution.json"]["sha256"] = _sha256(declaration_path)
     _write_pretty(identity_path, identity)
     _rebind_inventory(
         stage_root,

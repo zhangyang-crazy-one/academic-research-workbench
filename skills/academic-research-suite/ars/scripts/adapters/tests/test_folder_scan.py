@@ -460,6 +460,7 @@ def test_surrogate_filename_is_rejected_without_aborting_scan(tmp_path, load_yam
     ]
     assert surrogate_characters == []
 
+
 def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     # Symlinks escaping the scanned root can disclose files the user did not
     # intend to include, so they are rejected instead of followed.

@@ -159,6 +159,234 @@ def _make_wheel(path: Path) -> None:
         )
 
 
+def _install_audit_manifests(stage: Path) -> None:
+    """Materialize the build-identity and stage-inventory audit manifests.
+
+    Both manifests are emitted as pretty-sorted + newline JSON to match
+    ``scripts/stage-plugin``.  Every digest and set is recomputed from the
+    live stage bytes so the new ``validate_live_audit_manifests`` gate has
+    nothing to trust but the stage itself.
+    """
+
+    schema_destination = stage / "share/arw/schemas/build-identity.schema.json"
+    schema_destination.parent.mkdir(parents=True, exist_ok=True)
+    schema_destination.write_bytes(
+        (REPOSITORY_ROOT / "schemas/v1/build-identity.schema.json").read_bytes()
+    )
+    contracts_destination = stage / "share/arw/file-contracts.h"
+    contracts_destination.parent.mkdir(parents=True, exist_ok=True)
+    contracts_destination.write_text(
+        "/* synthetic test file-contracts.h */\n"
+        '#define ARW_FILES_CONTRACT_VERSION "1.0.0"\n'
+        '#define ARW_FILES_CONTRACT_SHA256 "'
+        f'{hashlib.sha256(b"contracts-stub").hexdigest()}"\n',
+        encoding="ascii",
+    )
+    source_manifest = json.loads(
+        (stage / "vendor/source-manifest.json").read_text(encoding="utf-8")
+    )
+    components = source_manifest["components"]
+    patches = source_manifest["patches"]
+    file_base_component = next(item for item in components if item["id"] == "file-base")
+    build_evidence_digest = _digest(stage / ".file-base/build-evidence.json")
+    binary_digest = _digest(stage / "libexec/file-base-mcp")
+    contracts_digest = _digest(contracts_destination)
+    patch_set_sha256 = hashlib.sha256(
+        json.dumps(
+            [
+                {key: item[key] for key in ("order", "path", "sha256")}
+                for item in patches
+            ],
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    profile_patch_sha256 = next(
+        item["sha256"] for item in patches if item["order"] == 4
+    )
+
+    def collect(relative: str) -> str:
+        return _digest(stage / relative)
+
+    wheel_path = (
+        "vendor/python/wheelhouse/"
+        "academic_research_workbench-0.1.0-py3-none-any.whl"
+    )
+    requirements_path = "vendor/python/wheelhouse/requirements-runtime.txt"
+    (stage / requirements_path).parent.mkdir(parents=True, exist_ok=True)
+    (stage / requirements_path).write_text(
+        "academic-research-workbench==0.1.0\n", encoding="utf-8"
+    )
+
+    schemas_files = [
+        {
+            "path": "share/arw/schemas/build-identity.schema.json",
+            "sha256": collect("share/arw/schemas/build-identity.schema.json"),
+        }
+    ]
+    for index in range(2, 9):
+        schemas_files.append(
+            {
+                "path": f"share/arw/schemas/phase3-stub-{index:02d}.schema.json",
+                "sha256": hashlib.sha256(f"stub-{index}".encode()).hexdigest(),
+            }
+        )
+
+    identity = {
+        "schema_version": "1.0.0",
+        "platform_claim": "linux",
+        "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
+        "runtime": {"python_requires": ">=3.13", "build_interpreter": "3.13.1"},
+        "components": [
+            {key: item[key] for key in ("id", "version", "revision", "tree_sha256")}
+            for item in components
+        ],
+        "patches": [
+            {key: item[key] for key in ("order", "path", "sha256")}
+            for item in patches
+        ],
+        "native": {
+            "binary": {"path": "libexec/file-base-mcp", "sha256": binary_digest},
+            "build_evidence": {
+                "path": ".file-base/build-evidence.json",
+                "sha256": build_evidence_digest,
+            },
+            "compile_profile": "release-o2",
+            "patched_source_tree_sha256": file_base_component["tree_sha256"],
+            "upstream_test_tree_sha256": hashlib.sha256(
+                b"fixture-upstream-test-tree"
+            ).hexdigest(),
+        },
+        "projection": {
+            "algorithm": "research-graph-projection-v1",
+            "oracle": "research-graph-normalization-v1",
+            "native_profile": "research-graph-builder-v1",
+            "patch_set_sha256": patch_set_sha256,
+            "profile_patch_sha256": profile_patch_sha256,
+            "query_profile": "arw-graph-mcp-v1",
+            "query_launcher": {
+                "path": "scripts/file-base-graph-mcp",
+                "sha256": hashlib.sha256(b"fixture-graph-mcp").hexdigest(),
+            },
+        },
+        "file_contract": {
+            "header": {"path": "share/arw/file-contracts.h", "sha256": contracts_digest},
+            "contract_sha256": contracts_digest,
+            "tokenizer_id": "unicode61-cjk-v1",
+            "ranking_version": "files-rank-v1",
+            "outline_versions": [
+                "bibtex-outline-v1",
+                "latex-outline-v1",
+                "markdown-outline-v1",
+                "source-outline-v1",
+            ],
+        },
+        "wheelhouse": {
+            "lock": {
+                "path": "vendor/python/wheelhouse.lock.json",
+                "sha256": hashlib.sha256(b"fixture-wheelhouse-lock").hexdigest(),
+            },
+            "requirements": {"path": requirements_path, "sha256": collect(requirements_path)},
+            "first_party": {"path": wheel_path, "sha256": collect(wheel_path)},
+        },
+        "schemas": {
+            "aggregate_sha256": hashlib.sha256(
+                b"\0".join(
+                    f"{entry['path']}\0{entry['sha256']}\n".encode("ascii")
+                    for entry in schemas_files
+                )
+            ).hexdigest(),
+            "files": schemas_files,
+        },
+        "evidence": {
+            "pre_vendor": {
+                "path": "build/evidence/synthetic/pre-vendor.json",
+                "sha256": hashlib.sha256(b"fixture-pre-vendor").hexdigest(),
+            },
+            "legal": {
+                "path": "build/evidence/synthetic/legal.json",
+                "sha256": hashlib.sha256(b"fixture-legal").hexdigest(),
+            },
+            "upstream": {
+                "path": "build/evidence/synthetic/upstream.json",
+                "sha256": hashlib.sha256(b"fixture-upstream").hexdigest(),
+            },
+            "asan_ubsan": {
+                "path": "build/evidence/synthetic/asan-ubsan.json",
+                "sha256": hashlib.sha256(b"fixture-asan-ubsan").hexdigest(),
+            },
+            "tsan": {
+                "path": "build/evidence/synthetic/tsan.json",
+                "sha256": hashlib.sha256(b"fixture-tsan").hexdigest(),
+            },
+        },
+    }
+    actual: set[str] = set()
+    for path in stage.rglob("*"):
+        if path.is_symlink():
+            continue
+        if path.is_file():
+            actual.add(path.relative_to(stage).as_posix())
+    staged_payloads = sorted(
+        actual
+        - {"share/arw/build-identity.json", "supply-chain/stage-inventory.json"}
+    )
+    identity["staged_payloads"] = [
+        {"path": relative, "sha256": collect(relative)} for relative in staged_payloads
+    ]
+    identity_path = stage / "share/arw/build-identity.json"
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    actual.add("share/arw/build-identity.json")
+
+    covered: list[dict[str, str]] = []
+    for relative in sorted(actual):
+        covered.append(
+            {
+                "path": relative,
+                "sha256": collect(relative),
+                "inventory_source": _fixture_inventory_source(relative),
+            }
+        )
+    inventory = {
+        "schema_version": "1.0.0",
+        "files": sorted(actual | {"supply-chain/stage-inventory.json"}),
+        "symlinks": [],
+        "covered_files": covered,
+    }
+    (stage / "supply-chain/stage-inventory.json").write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _fixture_inventory_source(relative: str) -> str:
+    """Mirror ``scripts/stage-plugin`` ``inventory_source`` for fixture files."""
+
+    if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
+        return "source-manifest"
+    if relative.startswith("vendor/python/wheelhouse/") or relative in {
+        "uv.lock",
+        ".python-version",
+    }:
+        return "wheelhouse"
+    if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {
+        "MODIFICATIONS.md",
+        "SBOM.cdx.json",
+        "THIRD_PARTY_NOTICES.md",
+    }:
+        return "legal"
+    if (
+        relative.startswith("schemas/")
+        or relative.startswith(".file-base/")
+        or relative.startswith("libexec/")
+        or relative.startswith("share/arw/")
+    ):
+        return "build"
+    return "runtime"
+
+
+
 @pytest.fixture
 def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     stage = tmp_path / "stage"
@@ -334,6 +562,8 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         },
     )
     _write(external / "ars/academic-pipeline/WORKFLOW.md", "# Pipeline\n")
+
+    _install_audit_manifests(stage)
 
     launcher = tmp_path / "host/codex"
     native = tmp_path / "host/codex-native"
@@ -1483,3 +1713,146 @@ def test_diagnostic_stops_at_the_first_exact_drift_layer(
     )
     serialized = canonical_json_bytes(report.model_dump(mode="json")).decode("utf-8")
     assert str(integration_fixture["stage"]) not in serialized
+
+
+def test_audit_manifest_gate_passes_on_synthesized_fixture(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    verification = _verify(integration_fixture, lock)
+    assert verification.technical_qualification == "PASS"
+
+
+def test_audit_manifest_gate_rejects_missing_build_identity(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    (integration_fixture["stage"] / "share/arw/build-identity.json").unlink()
+    with pytest.raises(IntegrationLockError, match="build identity"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_missing_stage_inventory(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    (integration_fixture["stage"] / "supply-chain/stage-inventory.json").unlink()
+    with pytest.raises(IntegrationLockError, match="stage inventory"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_corrupt_build_identity_bytes(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    identity = integration_fixture["stage"] / "share/arw/build-identity.json"
+    identity.write_bytes(identity.read_bytes() + b"\ndrift\n")
+    with pytest.raises(IntegrationLockError, match="build identity"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_corrupt_stage_inventory_bytes(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    inventory = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory.write_bytes(inventory.read_bytes() + b"\ndrift\n")
+    with pytest.raises(IntegrationLockError, match="stage inventory"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_inventory_coverage_digest_mismatch(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/file-contracts.h":
+            entry["sha256"] = "0" * 64
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(IntegrationLockError, match="stage inventory.*coverage"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_staged_payloads_digest_mismatch(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    identity_path = integration_fixture["stage"] / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    for entry in identity["staged_payloads"]:
+        if entry["path"] == "share/arw/file-contracts.h":
+            entry["sha256"] = "0" * 64
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/build-identity.json":
+            entry["sha256"] = _digest(identity_path)
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(IntegrationLockError, match="build identity.*staged_payload"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_rebound_staged_payloads_set(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    identity_path = integration_fixture["stage"] / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    original = identity["staged_payloads"]
+    identity["staged_payloads"] = [
+        entry for entry in original if entry["path"] != "hooks/hooks.json"
+    ]
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/build-identity.json":
+            entry["sha256"] = _digest(identity_path)
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(IntegrationLockError, match="build identity.*coverage"):
+        _verify(integration_fixture, lock)
+
+
+def test_audit_manifest_gate_rejects_inventory_source_drift(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """Inventory source labels must be recomputed from the path, not trusted.
+
+    A malicious manifest could pin a file under a benign ``inventory_source``
+    label to claim a wrong class.  The gate recomputes the label and rejects
+    the drift.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/file-contracts.h":
+            entry["inventory_source"] = "runtime"  # canonical label is build
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(IntegrationLockError, match="source drift"):
+        _verify(integration_fixture, lock)

@@ -132,9 +132,7 @@ def test_chain_validator_rejects_upstream_document_substitution() -> None:
 
 
 def test_chain_validator_revalidates_model_copy_contracts() -> None:
-    source = _source().model_copy(
-        update={"imported_at": "2026-99-99T99:99:99Z"}
-    )
+    source = _source().model_copy(update={"imported_at": "2026-99-99T99:99:99Z"})
     span = _span(source)
     link = research_integrity.build_claim_evidence_link(
         (span,),
@@ -150,6 +148,7 @@ def test_chain_validator_revalidates_model_copy_contracts() -> None:
             evidence_spans=(span,),
             claim_links=(link,),
         )
+
 
 def test_evidence_builder_recomputes_and_propagates_source_sha256() -> None:
     assert hasattr(research_integrity, "build_evidence_span"), (
@@ -194,6 +193,7 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
     )
     assert changed_source.bibliographic_sha256 != source.bibliographic_sha256
 
+
 def test_source_builder_revalidates_mutated_nested_ars_entry() -> None:
     signal = deepcopy(VALID_BIBLIOGRAPHIC_SIGNAL)
     signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]
@@ -202,9 +202,7 @@ def test_source_builder_revalidates_mutated_nested_ars_entry() -> None:
         document, strict=True
     )
     assert entry.bibliographic_integrity_signals is not None
-    entry.bibliographic_integrity_signals[0]["subject"]["citation_key"] = (
-        "mutated2026"
-    )
+    entry.bibliographic_integrity_signals[0]["subject"]["citation_key"] = "mutated2026"
 
     with pytest.raises(ValidationError, match="different citation key"):
         research_integrity.build_research_source_manifest(

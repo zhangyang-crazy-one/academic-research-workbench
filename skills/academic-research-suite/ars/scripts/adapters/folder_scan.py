@@ -86,6 +86,7 @@ def _is_unicode_family(value: str) -> bool:
         return False
     return has_letter
 
+
 def _contains_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
