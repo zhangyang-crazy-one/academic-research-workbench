@@ -792,6 +792,13 @@ class IntegrationDiagnosticLayer(LockModel):
             elif self.expected_sha256 is None:
                 raise ValueError("blocked drift layer requires an expected digest")
             elif (
+                self.reason_code == "lock_document_noncanonical"
+                and self.observed_sha256 is None
+            ):
+                raise ValueError(
+                    "noncanonical lock diagnostic requires an observed digest"
+                )
+            elif (
                 self.observed_sha256 is not None
                 and self.expected_sha256 == self.observed_sha256
             ):

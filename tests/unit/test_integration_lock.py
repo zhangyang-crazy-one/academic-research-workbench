@@ -1206,6 +1206,7 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    from arw.schema_registry import validate_instance
     assert hasattr(integration_lock_module, "diagnose_integration_lock"), (
         "the read-only layered integration diagnostic API is missing"
     )
@@ -1235,6 +1236,14 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     assert layers["lock_document"]["status"] == "BLOCKED"
     assert layers["lock_document"]["reason_code"] == "lock_document_noncanonical"
     assert all(layer["status"] == "NOT_EVALUATED" for layer in report["layers"][2:])
+    assert layers["lock_document"]["observed_sha256"] == _digest(
+        integration_fixture["lock"]
+    )
+    validate_instance("research-integrity-contracts.schema.json", report)
+
+    layers["lock_document"]["observed_sha256"] = None
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance("research-integrity-contracts.schema.json", report)
 
 
 def test_root_hook_supply_chain_gate_rejects_digest_substitution(
