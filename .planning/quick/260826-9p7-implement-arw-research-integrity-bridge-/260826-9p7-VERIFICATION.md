@@ -1,7 +1,7 @@
 ---
 phase: quick-260826-9p7-research-integrity-bridge
 quick_task: 260826-9p7
-verified: 2026-08-26T15:33:48Z
+verified: 2026-08-28T01:25:38Z
 status: passed
 score: 6/6 must-haves verified
 overrides_applied: 0
@@ -23,22 +23,22 @@ incremental_commits_verified:
 
 **Goal:** Implement the research-integrity bridge and close the diagnosed installation/adapter defects in one reviewable feature PR.
 
-**Verified:** 2026-08-26T15:33:48Z
+**Verified:** 2026-08-28T01:25:38Z
 **Status:** `passed`
-**Re-verification:** Yes — after gap closure and final incremental commits through `c986e8f`
+**Re-verification:** Yes — after all review closures and final evidence refresh on 2026-08-28
 
 ## Goal Achievement
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Operators can distinguish the planned integration failures, and diagnostics cannot bypass the final exact verifier. | ✓ VERIFIED | Ten closed layers remain defined in `src/arw/integration_lock.py`; a verifier-injected final exact-verifier rejection still produced `BLOCKED/exact_lock_drift` after nine PASS layers. Plain and diagnostic route contracts remain fail-closed. |
 | 2 | A strict ARS literature entry becomes a deterministic source -> span -> claim digest chain through installed schemas. | ✓ VERIFIED | `research_source_from_ars_entry` now applies the authoritative arXiv pattern, explicit-null boundary and all bundled-schema cross-field invariants before building a source manifest (`src/arw/research_integrity.py:37-71,141-278,414-437`). Required/pattern/additionalProperties/allOf probes reject at both the bundled ARS validator and bridge. Source/span/link builders still recompute canonical upstream digests and whole-chain validation rejects replacement. |
-| 3 | Unicode/CJK filenames preserve display text and emit deterministic, collision-safe ASCII citekeys without Latin regression. | ✓ VERIFIED | The unchanged Task 3 implementation retains explicit Unicode family grammar, private NFKC hashing, ASCII collision suffixes and exact display text. All folder-adapter tests passed in the 180-test relevant regression. |
+| 3 | Unicode/CJK filenames preserve display text and emit deterministic, collision-safe ASCII citekeys without Latin regression. | ✓ VERIFIED | The Task 3 implementation and ASCII-compatibility fix retain explicit Unicode family grammar, private NFKC hashing, ASCII collision suffixes, legacy Latin citation keys and exact display text. All 244 adapter tests passed. |
 | 4 | Technical and legal qualification remain independent; experiments stay disabled and unresolved legal blockers remain BLOCKED. | ✓ VERIFIED | Plain route and diagnostics independently emitted `release_qualification=BLOCKED` and `experiment_execution=disabled`; `license-verdict.json` retains all four unresolved blockers. The three incremental commits add no legal approval, experiment enablement or canonical writer. |
 | 5 | Root hooks are directly supply-chain gated, nested hooks cannot substitute, and hooks remain observational with parent-only canonical authority. | ✓ VERIFIED | All eight ARS gates pass, including exact root-hook SBOM binding. Root hook digests remain `4836bd8c...` and `ab94f35f...`; none of `df7bcfb`, `7a8ed97` or `c986e8f` touches hooks or introduces ArtifactAcceptance, Passport, ledger, retry, provenance or gate authority. |
-| 6 | Stage/schema/SBOM/provenance metadata is exact and self-consistent. | ✓ VERIFIED | ARS suite/ars tree hashes are exactly `245a7461...` / `e7773ba5...`; actual and declared SBOM SHA-256 are both `c164145701bbd174da4842322f38d36b5716092402e5aa287af59530a1ae1137`. Source freshness, quality gates and a fresh isolated stage all pass. |
+| 6 | Stage/schema/SBOM/provenance metadata is exact and self-consistent. | ✓ VERIFIED | ARS suite/ars tree hashes are exactly `91dcb4f9d258a30aa06cd78b89436d308a7ed1a23ab9dd7acc5470c7c96e0e3f` / `308652674c24c27cd897bf9a1de667c5a07edb854e8fa704e54c7ead6ac044c0`; actual and declared SBOM SHA-256 are both `e7009c766a0f95e6f29ceee86c79e2b4e7d894a555f94eef604c30877eabbfdd`. Source freshness, quality gates and a fresh isolated stage all pass. |
 
 **Score:** 6/6 truths verified
 
@@ -62,7 +62,7 @@ The Python job has one authoritative matrix value at both interpreter-selection 
 The five synchronized documents contain operational rules rather than isolated marker strings:
 
 | Document | Substantive Contract |
-|---|---|
+| --- | --- |
 | `academic-paper/WORKFLOW.md` | Phase 7 must apply paragraph, proportional-asset, float-order and all-page render checks; compilation alone cannot support camera-ready status. |
 | `agents/formatter_agent.md` | Concrete prohibitions and actions for global `parindent`, proportional asset fitting, one/two-column float choice, pending starred floats and PNG contact-sheet review. |
 | `academic_pdf_format_reference.md` | Class-aware indentation, local exceptions, source-order scheduling, barrier timing and every-page inspection. |
@@ -76,7 +76,7 @@ The two-line workflow label is a stable audit identifier, but it is not the sole
 ### Gap 1: Authoritative ARS Schema Strictness
 
 | Check | Result | Status |
-|---|---|---|
+| --- | --- | --- |
 | Original malformed arXiv counterexample | `arxiv_id=not-an-arxiv-id` is rejected by both authoritative schema and bridge | ✓ CLOSED |
 | Original explicit-null counterexample | `venue: null` and every non-nullable optional top-level field are rejected | ✓ CLOSED |
 | Required fields | Missing citation key, title, authors, year or source pointer is rejected | ✓ CLOSED |
@@ -90,7 +90,7 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 ### Gap 2: Technical-Provenance Freshness
 
 | Check | Result | Status |
-|---|---|---|
+| --- | --- | --- |
 | Repository freshness | Declared SBOM digest equals exact current `SBOM.cdx.json` bytes | ✓ CLOSED |
 | All evidence rows | `test_use_distribution_technical_provenance_hashes_are_fresh` recomputes every declared file digest | ✓ CLOSED |
 | Rebound stale declaration | Test mutates the staged SBOM row, then rebinds build identity and stage inventory | ✓ ATTACK CONSTRUCTED |
@@ -100,7 +100,7 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 ## Required Artifacts
 
 | Artifact | Expected | Status | Details |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `schemas/v1/research-integrity-contracts.schema.json` | Discriminated diagnostic/source/span/link schema | ✓ VERIFIED | Strict model projection, registry validation and staged installation remain byte-consistent. |
 | `src/arw/research_integrity.py` | Strict ARS entrance, pure builders and whole-chain validator | ✓ VERIFIED | 573 substantive lines; authoritative invalids fail closed, valid Unicode metadata is preserved, and no parent writer is exposed. |
 | `skills/academic-research-suite/ars/scripts/adapters/folder_scan.py` | Unicode-aware ingestion preserving display text | ✓ VERIFIED | Adapter 1.2.0 and all CJK/Latin/security regressions pass. |
@@ -110,7 +110,7 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 ## Key Link Verification
 
 | From | To | Via | Status | Details |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `bin/arw` | `src/arw/cli.py` | Locked-wheel forwarding and additive diagnostics mode | ✓ WIRED | Route behavior is unchanged by the gap fix. |
 | `src/arw/cli.py` | `src/arw/integration_lock.py` | Shared discovery plus exact final verification | ✓ WIRED | Diagnostic PASS still requires the original complete verifier. |
 | `src/arw/research_integrity.py` | ARS entry schema semantics | Equivalent input constraints exercised against the bundled validator | ✓ WIRED | No runtime schema-file read was introduced; parity is pinned by 61 bridge tests. |
@@ -121,7 +121,7 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 ## Data-Flow Trace
 
 | Artifact | Data | Source | Status |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Integration diagnostics | lock/stage/host/hook/legal observations | Existing exact validators; final verifier owns PASS | ✓ FLOWING |
 | Research-integrity bridge | validated ARS entry -> source -> span -> claim | Caller-supplied immutable documents, canonical digest helpers | ✓ FLOWING |
 | Folder adapter | Unicode/Latin filenames -> passport entries | Confined directory scan and shared writer | ✓ FLOWING |
@@ -130,7 +130,7 @@ Independent custom probe covered eight invalid classes: malformed arXiv, explici
 ## Behavioral Spot-Checks
 
 | Behavior | Command / Probe | Result | Status |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Gap-focused bridge/freshness tests | Research-integrity module plus source freshness node | `62 passed in 1.95s` | ✓ PASS |
 | Rebound stale provenance | Dedicated staged validate-only attack node | `1 passed in 9.82s` | ✓ PASS |
 | Relevant feature regression | Integration lock, research integrity, schema drift, supply chain, ARS full-runtime gates and folder adapter | `180 passed in 190.39s` | ✓ PASS |
@@ -155,7 +155,7 @@ Independent rerun:
 The failures do not identify a `c986552` regression:
 
 | Class | Count | First failing condition | Attribution |
-|---|---:|---|---|
+| --- | ---: | --- | --- |
 | Materialized vendor inputs | 3 failures + 1 setup error | `vendor/sources` or component license tree absent | Isolated checkout prerequisite absent before behavior under test |
 | Retained qualification/history evidence | 10 failures | Missing/stale Phase 1 sanitizer/license receipts or Phase 4.1/5 verdict trees | Historical evidence prerequisite absent; none of the five gap-fix files is exercised before failure |
 | System tracing | 2 failures | `offline-exec: strace is unavailable` or no verdict produced after that abort | Host tool prerequisite absent |

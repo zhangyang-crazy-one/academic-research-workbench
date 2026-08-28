@@ -1763,13 +1763,11 @@ def _technical_provenance_digest(stage_root: Path, relative: str) -> str:
         raise IntegrationLockError(
             f"technical provenance SBOM is unreadable: {error}"
         ) from error
-    canonical_sbom_bytes = (
-        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
+    canonical_sbom_bytes = (json.dumps(sbom, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
     if sbom_bytes != canonical_sbom_bytes:
-        raise IntegrationLockError(
-            "technical provenance SBOM bytes are not canonical"
-        )
+        raise IntegrationLockError("technical provenance SBOM bytes are not canonical")
     components = sbom.get("components")
     if not isinstance(components, list) or not all(
         isinstance(component, dict) for component in components
@@ -1820,9 +1818,7 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
     use_path = "supply-chain/use-distribution.json"
     use_file = _regular_file_under(stage_root, use_path)
     use_distribution_sha256 = _digest(use_file)
-    use_distribution = _read_object(
-        use_file, label="use and distribution declaration"
-    )
+    use_distribution = _read_object(use_file, label="use and distribution declaration")
     if verdict.get("use_distribution_path") != use_path:
         raise IntegrationLockError(
             "license verdict does not reference the staged use declaration"

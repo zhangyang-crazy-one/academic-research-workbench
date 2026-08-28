@@ -1127,6 +1127,7 @@ def test_live_sbom_requires_exact_integration_lock_component(
     with pytest.raises(IntegrationLockError, match=message):
         _build(integration_fixture)
 
+
 def test_original_lock_rejects_self_rebound_sbom_and_declaration(
     integration_fixture: dict[str, Path],
 ) -> None:
@@ -1147,9 +1148,7 @@ def test_original_lock_rejects_self_rebound_sbom_and_declaration(
     declaration_path = stage / "supply-chain/use-distribution.json"
     declaration = json.loads(declaration_path.read_text(encoding="utf-8"))
     sbom_row = next(
-        row
-        for row in declaration["evidence_hashes"]
-        if row["path"] == "SBOM.cdx.json"
+        row for row in declaration["evidence_hashes"] if row["path"] == "SBOM.cdx.json"
     )
     sbom_row["sha256"] = _digest(sbom_path)
     _json(declaration_path, declaration)
