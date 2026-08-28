@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, TypeVar
 
 import jsonschema
 from pydantic import (
@@ -30,6 +30,8 @@ from pydantic import (
 from arw.canonical import canonical_json_bytes, sha256_hex
 from arw.integration_lock import IntegrationDiagnosticReport
 from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+
+_ContractT = TypeVar("_ContractT", bound=StrictModel)
 
 CitationKey = Annotated[
     str,
@@ -594,6 +596,14 @@ def research_integrity_bytes(document: StrictModel) -> bytes:
 
     return canonical_json_bytes(document.model_dump(mode="json"))
 
+def _revalidated_contract(
+    document: _ContractT, model: type[_ContractT], *, label: str
+) -> _ContractT:
+    try:
+        return model.model_validate_json(research_integrity_bytes(document), strict=True)
+    except (TypeError, ValueError, ValidationError) as error:
+        raise ResearchIntegrityError(f"{label} contract is invalid: {error}") from error
+
 
 def research_integrity_sha256(document: StrictModel) -> str:
     return sha256_hex(research_integrity_bytes(document))
@@ -720,9 +730,22 @@ def validate_research_integrity_chain(
 ) -> None:
     """Recompute every supplied document digest and reject replacement or mutation."""
 
+    validated_sources = tuple(
+        _revalidated_contract(source, ResearchSourceManifest, label="research source")
+        for source in sources
+    )
+    validated_spans = tuple(
+        _revalidated_contract(span, EvidenceSpan, label="evidence span")
+        for span in evidence_spans
+    )
+    validated_links = tuple(
+        _revalidated_contract(link, ClaimEvidenceLink, label="claim-evidence link")
+        for link in claim_links
+    )
+
     source_map: dict[str, tuple[str, str]] = {}
     citation_keys: set[str] = set()
-    for source in sources:
+    for source in validated_sources:
         if source.source_id in source_map:
             raise ResearchIntegrityError("duplicate research source ID")
         if source.citation_key in citation_keys:
@@ -735,7 +758,7 @@ def validate_research_integrity_chain(
 
     span_ids: set[str] = set()
     span_digests: set[str] = set()
-    for span in evidence_spans:
+    for span in validated_spans:
         if span.evidence_span_id in span_ids:
             raise ResearchIntegrityError("duplicate evidence span ID")
         span_ids.add(span.evidence_span_id)
@@ -754,7 +777,7 @@ def validate_research_integrity_chain(
 
     link_ids: set[str] = set()
     claim_digests: dict[str, str] = {}
-    for link in claim_links:
+    for link in validated_links:
         if link.claim_link_id in link_ids:
             raise ResearchIntegrityError("duplicate claim-evidence link ID")
         link_ids.add(link.claim_link_id)

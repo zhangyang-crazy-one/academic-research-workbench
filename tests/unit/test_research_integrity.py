@@ -131,6 +131,26 @@ def test_chain_validator_rejects_upstream_document_substitution() -> None:
         )
 
 
+def test_chain_validator_revalidates_model_copy_contracts() -> None:
+    source = _source().model_copy(
+        update={"imported_at": "2026-99-99T99:99:99Z"}
+    )
+    span = _span(source)
+    link = research_integrity.build_claim_evidence_link(
+        (span,),
+        claim_link_id="link.claim-001",
+        claim_id="claim.paper-001",
+        claim_sha256=CLAIM_SHA256,
+        relation="supports",
+    )
+
+    with pytest.raises(ValueError, match="research source contract is invalid"):
+        research_integrity.validate_research_integrity_chain(
+            sources=(source,),
+            evidence_spans=(span,),
+            claim_links=(link,),
+        )
+
 def test_evidence_builder_recomputes_and_propagates_source_sha256() -> None:
     assert hasattr(research_integrity, "build_evidence_span"), (
         "the evidence builder that derives upstream digests is missing"
