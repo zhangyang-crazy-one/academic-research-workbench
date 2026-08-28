@@ -1087,9 +1087,16 @@ def test_use_distribution_technical_hash_drift_fails_live_verification(
     assert observe_stage_identity(integration_fixture["stage"]) == stage_before
 
 
-@pytest.mark.parametrize("mutation", ("drop-component", "stale-component"))
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("drop-component", "integration lock component"),
+        ("stale-component", "integration lock component"),
+        ("reformatted", "SBOM bytes"),
+    ),
+)
 def test_live_sbom_requires_exact_integration_lock_component(
-    integration_fixture: dict[str, Path], mutation: str
+    integration_fixture: dict[str, Path], mutation: str, message: str
 ) -> None:
     lock = _build(integration_fixture)
     stage = integration_fixture["stage"]
@@ -1111,10 +1118,13 @@ def test_live_sbom_requires_exact_integration_lock_component(
 
     if mutation == "drop-component":
         sbom["components"] = []
-    else:
+    elif mutation == "stale-component":
         component["hashes"][0]["content"] = "0" * 64
-    _json(sbom_path, sbom)
-    with pytest.raises(IntegrationLockError, match="integration lock component"):
+    if mutation == "reformatted":
+        sbom_path.write_text(json.dumps(sbom) + "\n", encoding="utf-8")
+    else:
+        _json(sbom_path, sbom)
+    with pytest.raises(IntegrationLockError, match=message):
         _build(integration_fixture)
 
 def test_original_lock_rejects_self_rebound_sbom_and_declaration(

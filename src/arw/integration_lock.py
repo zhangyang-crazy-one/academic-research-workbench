@@ -1757,6 +1757,19 @@ def _technical_provenance_digest(stage_root: Path, relative: str) -> str:
     if relative != "SBOM.cdx.json":
         return _digest(target)
     sbom = _read_object(target, label="technical provenance SBOM")
+    try:
+        sbom_bytes = target.read_bytes()
+    except OSError as error:
+        raise IntegrationLockError(
+            f"technical provenance SBOM is unreadable: {error}"
+        ) from error
+    canonical_sbom_bytes = (
+        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if sbom_bytes != canonical_sbom_bytes:
+        raise IntegrationLockError(
+            "technical provenance SBOM bytes are not canonical"
+        )
     components = sbom.get("components")
     if not isinstance(components, list) or not all(
         isinstance(component, dict) for component in components
