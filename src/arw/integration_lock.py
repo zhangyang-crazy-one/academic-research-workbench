@@ -2283,9 +2283,7 @@ def _referenced_host_canary_paths(
     evidence_root = _safe_root(resolved_canary.parent, label="Codex host evidence")
     try:
         canary_raw = resolved_canary.read_bytes()
-        canary = CodexHostCanaryEvidence.model_validate_json(
-            canary_raw, strict=True
-        )
+        canary = CodexHostCanaryEvidence.model_validate_json(canary_raw, strict=True)
     except (OSError, UnicodeError, ValueError, ValidationError) as error:
         raise IntegrationLockError(f"Codex host canary is invalid: {error}") from error
     if canary_raw != canonical_json_bytes(canary.model_dump(mode="json")):
@@ -2570,9 +2568,7 @@ def verify_integration_lock(
     )
     if integration_lock_bytes(observed) != integration_lock_bytes(lock):
         raise IntegrationLockError("live integration identity differs from the lock")
-    validate_live_audit_manifests(
-        stage_root, lock.build_identity, host_canary_evidence
-    )
+    validate_live_audit_manifests(stage_root, lock.build_identity, host_canary_evidence)
     lock_bytes = integration_lock_bytes(lock)
     return IntegrationVerification(
         schema_version="arw.integration-verification.v1",

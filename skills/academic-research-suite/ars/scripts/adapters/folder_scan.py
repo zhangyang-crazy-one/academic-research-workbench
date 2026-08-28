@@ -8,7 +8,12 @@ Filename conventions recognized:
   - {Family}{Year}{optional_title_slug}.{ext}  (concatenated)
   - Unicode {Family}{separator}{Year}{separator}{title}.{ext}, where separator
     is underscore, hyphen, period, or ASCII space
-  - fallback: first capitalized Latin word before the year.
+  - fallback (ASCII): first capitalized Latin word before the year.
+  - fallback (Unicode, whole-token): the complete non-ASCII token preceding
+    the year is validated against ``_is_unicode_family``; mixed-script
+    names without an explicit separator (e.g. ``张Chen2024.pdf``) land
+    here, and unsafe code points anywhere in the token cause the whole
+    filename to be rejected.
 
 Files whose filename cannot be parsed for both family and year are rejected.
 Unicode family tokens are accepted only when every code point is a letter,
@@ -187,13 +192,41 @@ def parse_filename(name: str) -> dict | None:
     year_match = RE_ANY_YEAR.search(name)
     if year_match:
         before_year = name.split(year_match.group(1))[0]
-        fam_match = RE_FIRST_CAPITAL.search(before_year)
-        if fam_match:
-            year = _parse_year(year_match.group(1))
-            if year is None:
-                return None
+        year = _parse_year(year_match.group(1))
+        if year is None:
+            return None
+        # Latin-ASCII path: keep the legacy first-capital behaviour so the
+        # ASCII legacy filenames (e.g. ``Chen2024.pdf``) stay bit-identical.
+        if before_year.isascii():
+            fam_match = RE_FIRST_CAPITAL.search(before_year)
+            if fam_match:
+                return {
+                    "family": fam_match.group(1),
+                    "year": year,
+                    "title": Path(name).stem.replace("_", " "),
+                    "title_hint": "",
+                }
+        # Unicode-aware fallback: validate the *complete* pre-year token
+        # against ``_is_unicode_family``. The earlier separator-aware
+        # regexes (``RE_FAMILY_UNDERSCORE``, ``RE_FAMILY_YEAR``,
+        # ``RE_UNICODE_SEPARATED``) only fire for purely-ASCII family
+        # tokens or names with an explicit ASCII-space-like separator, so
+        # mixed-script un-separated names such as ``张Chen2024.pdf`` end
+        # up here. Accepting only the whole-token form (rather than a
+        # safe prefix) keeps the safe-family grammar authoritative —
+        # unsafe code points like emoji (category ``So``) cannot survive
+        # by being moved into the title. Separated Unicode family
+        # grammar (``张_2024_研究.pdf``) is handled by
+        # ``RE_UNICODE_SEPARATED`` earlier in this function and is
+        # unaffected. Gating on ``not before_year.isascii()`` keeps the
+        # lowercase-ASCII rejection (e.g. ``chen2024.pdf``) intact: if
+        # the ASCII branch above did not find a capital Latin word, the
+        # whole name must be rejected rather than re-fed through the
+        # Unicode grammar (which would otherwise accept any all-letter
+        # ASCII run).
+        if not before_year.isascii() and _is_unicode_family(before_year):
             return {
-                "family": fam_match.group(1),
+                "family": before_year,
                 "year": year,
                 "title": Path(name).stem.replace("_", " "),
                 "title_hint": "",

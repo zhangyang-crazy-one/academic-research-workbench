@@ -197,14 +197,68 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
 def test_source_builder_preserves_ars_valid_large_author_lists() -> None:
     entry = {
         **ARS_ENTRY,
-        "authors": [
-            {"family": f"ConsortiumMember{index:03d}"} for index in range(257)
-        ],
+        "authors": [{"family": f"ConsortiumMember{index:03d}"} for index in range(257)],
     }
     assert ARS_ENTRY_VALIDATOR.is_valid(entry)
     source = _bridge(entry)
 
     assert len(source.authors) == 257
+    from arw.schema_registry import validate_instance
+
+    validate_instance(
+        "research-integrity-contracts.schema.json", source.model_dump(mode="json")
+    )
+
+
+def test_bridge_preserves_ars_valid_large_tag_lists() -> None:
+    """Pinned ARS ``literature_corpus_entry`` sets no ``maxItems`` on ``tags``; the
+    bridge must not impose a tighter cap than the authoritative schema."""
+
+    entry = {
+        **ARS_ENTRY,
+        "tags": [f"KB-tag-{index:03d}" for index in range(257)],
+    }
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    entry_model = research_integrity.ARSLiteratureCorpusEntry.model_validate(
+        entry, strict=True
+    )
+    assert entry_model.tags is not None and len(entry_model.tags) == 257
+    source = _bridge(entry)
+
+    assert source.bibliographic_sha256 == hashlib.sha256(
+        canonical_json_bytes(entry)
+    ).hexdigest()
+
+
+def test_bridge_preserves_ars_valid_large_signal_lists() -> None:
+    """Pinned ARS ``literature_corpus_entry`` sets no ``maxItems`` on
+    ``bibliographic_integrity_signals``; the bridge must not impose a tighter cap
+    than the authoritative schema, even with every signal individually valid."""
+
+    signals: list[dict[str, object]] = []
+    for index in range(257):
+        signal = deepcopy(VALID_BIBLIOGRAPHIC_SIGNAL)
+        signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]
+        signal["signal_id"] = (
+            f"bis:{ARS_ENTRY['citation_key']}:retraction_status_{index:03d}"
+        )
+        assert ARS_SIGNAL_VALIDATOR.is_valid(signal)
+        signals.append(signal)
+    entry = {**ARS_ENTRY, "bibliographic_integrity_signals": signals}
+
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    entry_model = research_integrity.ARSLiteratureCorpusEntry.model_validate(
+        entry, strict=True
+    )
+    assert (
+        entry_model.bibliographic_integrity_signals is not None
+        and len(entry_model.bibliographic_integrity_signals) == 257
+    )
+    source = _bridge(entry)
+
+    assert source.bibliographic_sha256 == hashlib.sha256(
+        canonical_json_bytes(entry)
+    ).hexdigest()
     from arw.schema_registry import validate_instance
 
     validate_instance(
@@ -255,9 +309,7 @@ def test_bundled_schema_lookup_rejects_symlink_root_and_ancestor(
     external_schema = external / relative
     external_schema.parent.mkdir(parents=True)
     external_schema.write_text("{}\n", encoding="utf-8")
-    (declared_root / "skills").symlink_to(
-        external / "skills", target_is_directory=True
-    )
+    (declared_root / "skills").symlink_to(external / "skills", target_is_directory=True)
     monkeypatch.setenv("ARW_PLUGIN_ROOT", str(declared_root))
     with pytest.raises(ValueError, match="schema.*unsafe"):
         research_integrity._ars_passport_schema_path(schema.name)

@@ -159,9 +159,7 @@ def _ars_passport_schema_path(name: str) -> Path:
         not resolved_candidate.is_relative_to(resolved_root)
         or not resolved_candidate.is_file()
     ):
-        raise ValueError(
-            f"bundled ARS passport schema is missing or unsafe: {name}"
-        )
+        raise ValueError(f"bundled ARS passport schema is missing or unsafe: {name}")
     return resolved_candidate
 
 
@@ -285,7 +283,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     venue: BoundedText | None = None
     doi: Doi | None = None
     arxiv_id: ArxivId | None = None
-    tags: list[BoundedText] | None = Field(default=None, max_length=256)
+    tags: list[BoundedText] | None = None
     obtained_via: ObtainedVia | None = None
     obtained_at: BoundedText | None = None
     adapter_name: AdapterIdentity | None = None
@@ -339,9 +337,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
     ) = None
     venue_type_source: BoundedText | None = None
     contamination_signal_omissions: ContaminationSignalOmissions | None = None
-    bibliographic_integrity_signals: list[dict[str, Any]] | None = Field(
-        default=None, max_length=256
-    )
+    bibliographic_integrity_signals: list[dict[str, Any]] | None = None
 
     @model_validator(mode="before")
     @classmethod

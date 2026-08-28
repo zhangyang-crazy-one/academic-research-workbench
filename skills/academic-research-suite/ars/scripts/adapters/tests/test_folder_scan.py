@@ -112,6 +112,110 @@ def test_cjk_family_year_filename_is_accepted_with_original_display_text(
     jsonschema.validate(entry, schema)
 
 
+def test_mixed_cjk_latin_family_year_filename_is_accepted(tmp_path, load_yaml):
+    """Codex comment 3879630196: the legacy Latin filename fallback must
+    accept mixed-script family tokens like ``张Chen2024.pdf`` instead of
+    silently rejecting them. The whole ``张Chen`` run is a valid Unicode
+    family per ``_is_unicode_family`` and the rest of the filename
+    grammar is unchanged."""
+    source = tmp_path / "mixed"
+    source.mkdir()
+    (source / "张Chen2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert len(entries) == 1, "mixed-script family/year filename was rejected"
+    entry = entries[0]
+    assert entry["authors"] == [{"family": "张Chen"}]
+    assert entry["year"] == 2024
+    assert entry["title"] == "张Chen2024"
+    assert entry["citation_key"].startswith("ref2024")
+    import jsonschema
+
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/literature_corpus_entry.schema.json"
+    )
+    jsonschema.validate(entry, schema)
+
+
+def test_lowercase_ascii_legacy_rejection_preserved(tmp_path, load_yaml):
+    """Regression: the Unicode whole-token fallback must only run for
+    non-ASCII inputs, so lowercase-ASCII names like ``chen2024.pdf``
+    stay rejected (as at HEAD) instead of being accepted via
+    ``_is_unicode_family`` which would otherwise treat the all-letter
+    ASCII run as a valid family."""
+    source = tmp_path / "lower"
+    source.mkdir()
+    for name in ("chen2024.pdf", "smith2024.pdf", "wang2023.pdf"):
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(passport_out)
+    rejection = load_yaml(rejection_out)
+    assert passport["literature_corpus"] == [], (
+        "lowercase-ASCII filenames must not be accepted"
+    )
+    rejected_sources = {row["source"] for row in rejection["rejected"]}
+    assert rejected_sources == {"chen2024.pdf", "smith2024.pdf", "wang2023.pdf"}
+    for row in rejection["rejected"]:
+        assert row["reason"] == "authors_unparseable"
+
+
+def test_emoji_after_latin_family_is_rejected_not_partially_accepted(
+    tmp_path, load_yaml
+):
+    """Codex comment 3879630196: the legacy Latin filename fallback must
+    REJECT ``Chen🙂2024.pdf`` instead of accepting it with the emoji
+    silently truncated out of the family token. The whole-token
+    ``_is_unicode_family`` guard means any unsafe code point (here
+    emoji, category ``So``) makes the entire filename unparseable, with
+    the reason ``authors_unparseable`` so the user can see why."""
+    source = tmp_path / "emoji"
+    source.mkdir()
+    (source / "Chen🙂2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(passport_out)
+    rejection = load_yaml(rejection_out)
+    assert passport["literature_corpus"] == [], (
+        "Chen🙂2024.pdf must not be partially accepted"
+    )
+    assert len(rejection["rejected"]) == 1
+    row = rejection["rejected"][0]
+    assert row["source"] == "Chen🙂2024.pdf"
+    assert row["reason"] == "authors_unparseable"
+    # The original emoji-bearing string is preserved verbatim in the
+    # diagnostic so the operator can see what was rejected.
+    assert "🙂" in row["raw"]
+
+
 def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> None:
     adapter = _load_adapter_module()
     assert hasattr(adapter, "_is_unicode_family"), (
