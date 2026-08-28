@@ -174,6 +174,27 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
     )
     assert changed_source.bibliographic_sha256 != source.bibliographic_sha256
 
+def test_source_builder_revalidates_mutated_nested_ars_entry() -> None:
+    signal = deepcopy(VALID_BIBLIOGRAPHIC_SIGNAL)
+    signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]
+    document = {**ARS_ENTRY, "bibliographic_integrity_signals": [signal]}
+    entry = research_integrity.ARSLiteratureCorpusEntry.model_validate(
+        document, strict=True
+    )
+    assert entry.bibliographic_integrity_signals is not None
+    entry.bibliographic_integrity_signals[0]["subject"]["citation_key"] = (
+        "mutated2026"
+    )
+
+    with pytest.raises(ValidationError, match="different citation key"):
+        research_integrity.build_research_source_manifest(
+            entry,
+            source_id="source.paper-001",
+            source_sha256=SOURCE_SHA256,
+            imported_at="2026-08-26T01:03:00Z",
+            imported_by="parent.runtime",
+        )
+
 
 def test_source_builder_preserves_partial_adapter_attribution() -> None:
     entry = {**ARS_ENTRY, "obtained_via": "other", "adapter_name": "custom-import"}

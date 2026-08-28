@@ -607,25 +607,29 @@ def build_research_source_manifest(
     imported_at: str,
     imported_by: str,
 ) -> ResearchSourceManifest:
-    """Build a source proposal from the exact validated in-memory ARS entry."""
+    """Revalidate and bind an exact copy of one in-memory ARS entry."""
 
-    bibliographic_sha256 = sha256_hex(canonical_json_bytes(_ars_entry_document(entry)))
+    validated = ARSLiteratureCorpusEntry.model_validate_json(
+        canonical_json_bytes(_ars_entry_document(entry)), strict=True
+    )
+    validated_document = _ars_entry_document(validated)
+    bibliographic_sha256 = sha256_hex(canonical_json_bytes(validated_document))
     return ResearchSourceManifest(
         schema_version="arw.research-source-manifest.v1",
         source_id=source_id,
-        citation_key=entry.citation_key,
-        title=entry.title,
-        authors=tuple(entry.authors),
-        year=entry.year,
-        venue=entry.venue,
-        doi=entry.doi,
-        arxiv_id=entry.arxiv_id,
-        source_pointer=entry.source_pointer,
+        citation_key=validated.citation_key,
+        title=validated.title,
+        authors=tuple(validated.authors),
+        year=validated.year,
+        venue=validated.venue,
+        doi=validated.doi,
+        arxiv_id=validated.arxiv_id,
+        source_pointer=validated.source_pointer,
         source_sha256=source_sha256,
         bibliographic_sha256=bibliographic_sha256,
-        obtained_via=entry.obtained_via,
-        adapter_name=entry.adapter_name,
-        adapter_version=entry.adapter_version,
+        obtained_via=validated.obtained_via,
+        adapter_name=validated.adapter_name,
+        adapter_version=validated.adapter_version,
         imported_at=imported_at,
         imported_by=imported_by,
     )
