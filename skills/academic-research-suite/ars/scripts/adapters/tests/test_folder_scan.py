@@ -1,11 +1,15 @@
+# pyright: reportMissingImports=false
 """Tests for scripts/adapters/folder_scan.py."""
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = REPO_ROOT / "scripts/adapters/folder_scan.py"
@@ -414,6 +418,47 @@ def test_mixed_valid_invalid_in_nested_tree(tmp_path):
         f"basename collisions lost: {rejected_sources}"
     )
 
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX byte filenames")
+def test_surrogate_filename_is_rejected_without_aborting_scan(tmp_path, load_yaml):
+    root = tmp_path / "surrogate"
+    root.mkdir()
+    (root / "Chen_2024_valid.pdf").touch()
+    raw_name = "张_2024_".encode() + b"\xff.pdf"
+    descriptor = os.open(
+        os.path.join(os.fsencode(root), raw_name), os.O_CREAT | os.O_WRONLY, 0o600
+    )
+    os.close(descriptor)
+    p_out = tmp_path / "p.yaml"
+    r_out = tmp_path / "r.yaml"
+
+    result = _run(
+        "--input",
+        str(root),
+        "--passport",
+        str(p_out),
+        "--rejection-log",
+        str(r_out),
+    )
+
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(p_out)
+    rejection = load_yaml(r_out)
+    assert [entry["citation_key"] for entry in passport["literature_corpus"]] == [
+        "chen2024valid"
+    ]
+    assert len(rejection["rejected"]) == 1
+    rejected = rejection["rejected"][0]
+    assert rejected["reason"] == "other"
+    assert rejected["detail"] == "filename contains undecodable bytes"
+    assert "\\udcff" in rejected["source"].lower()
+    surrogate_characters = [
+        character
+        for field in ("source", "raw")
+        for character in rejected[field]
+        if 0xD800 <= ord(character) <= 0xDFFF
+    ]
+    assert surrogate_characters == []
 
 def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     # Symlinks escaping the scanned root can disclose files the user did not

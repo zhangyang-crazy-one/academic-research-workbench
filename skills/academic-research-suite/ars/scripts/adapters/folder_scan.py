@@ -86,6 +86,13 @@ def _is_unicode_family(value: str) -> bool:
         return False
     return has_letter
 
+def _contains_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+
+
+def _surrogate_safe_text(value: str) -> str:
+    return value.encode("utf-8", errors="backslashreplace").decode("utf-8")
+
 
 def _unicode_citation_key_base(*, family: str, year: int, title: str) -> str:
     """Derive an ASCII base from a private NFKC copy, never display fields."""
@@ -231,6 +238,18 @@ def main() -> int:
             # basename if it ever does.
             rel = Path(f.name)
         rel_str = rel.as_posix()
+        if _contains_surrogate(f.name) or _contains_surrogate(rel_str):
+            safe_relative = _surrogate_safe_text(rel_str)
+            rejected.append(
+                {
+                    "source": safe_relative,
+                    "reason": "other",
+                    "detail": "filename contains undecodable bytes",
+                    "raw": safe_relative,
+                    "missing_fields": [],
+                }
+            )
+            continue
         if f.is_symlink():
             try:
                 f.resolve().relative_to(input_root)
