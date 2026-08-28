@@ -118,6 +118,21 @@ STAGE_IDENTITY_EXCLUDED_PREFIXES = ("supply-chain/host-canary/",)
 AUDIT_BUILD_IDENTITY_RELATIVE = "share/arw/build-identity.json"
 AUDIT_STAGE_INVENTORY_RELATIVE = "supply-chain/stage-inventory.json"
 AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE = "share/arw/schemas/build-identity.schema.json"
+BUILD_IDENTITY_PROJECTION_ALGORITHM = "build-identity-metadata-v1"
+BUILD_IDENTITY_PROJECTION_KEYS = (
+    "schema_version",
+    "platform_claim",
+    "plugin",
+    "runtime",
+    "components",
+    "patches",
+    "native",
+    "projection",
+    "file_contract",
+    "wheelhouse",
+    "schemas",
+    "evidence",
+)
 AUDIT_STAGE_INVENTORY_REQUIRED_KEYS = frozenset(
     {"schema_version", "files", "symlinks", "covered_files"}
 )
@@ -646,8 +661,14 @@ class LicenseBinding(LockModel):
         return self
 
 
+class BuildIdentityBinding(LockModel):
+    path: Literal["share/arw/build-identity.json"]
+    projection_algorithm: Literal["build-identity-metadata-v1"]
+    projection_sha256: Sha256
+
+
 class IntegrationLock(LockModel):
-    schema_version: Literal["arw.integration-lock.v1"]
+    schema_version: Literal["arw.integration-lock.v2"]
     dependency_model: Literal["bundled-pinned-adapter"]
     arw_runtime: ARWRuntimeBinding
     ars: ARSBinding
@@ -655,6 +676,7 @@ class IntegrationLock(LockModel):
     codex_host: CodexHostBinding
     hook: HookBinding
     license: LicenseBinding
+    build_identity: BuildIdentityBinding
     technical_qualification: Literal["PASS"]
     release_qualification: Literal["BLOCKED"]
 
@@ -1991,8 +2013,9 @@ def build_integration_lock(
         )
     hook = _validate_hook(stage_root, host_canary_evidence, host, arw_runtime)
     license_binding = _validate_license(stage_root)
+    build_identity = observe_build_identity_binding(stage_root, source_manifest)
     return IntegrationLock(
-        schema_version="arw.integration-lock.v1",
+        schema_version="arw.integration-lock.v2",
         dependency_model="bundled-pinned-adapter",
         arw_runtime=arw_runtime,
         ars=ars,
@@ -2000,6 +2023,7 @@ def build_integration_lock(
         codex_host=host,
         hook=hook,
         license=license_binding,
+        build_identity=build_identity,
         technical_qualification="PASS",
         release_qualification="BLOCKED",
     )
@@ -2088,7 +2112,7 @@ def _audit_inventory_source(relative: str) -> str:
         ".python-version",
     }:
         return "wheelhouse"
-    if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {  # noqa: PIE810
+    if relative.startswith(("LICENSES/", "supply-chain/")) or relative in {
         "MODIFICATIONS.md",
         "SBOM.cdx.json",
         "THIRD_PARTY_NOTICES.md",
@@ -2113,9 +2137,7 @@ def _read_pretty_sorted_json(stage_root: Path, relative: str, *, label: str) -> 
     try:
         raw = path.read_bytes()
     except OSError as error:
-        raise IntegrationLockError(
-            f"{label} is unreadable: {error}"
-        ) from error
+        raise IntegrationLockError(f"{label} is unreadable: {error}") from error
     try:
         decoded = json.loads(raw)
     except (UnicodeError, json.JSONDecodeError) as error:
@@ -2138,15 +2160,12 @@ def _validate_build_identity_schema(stage_root: Path) -> dict[str, object]:
     off-tree mirror.
     """
 
-    schema_path = _regular_file_under(
-        stage_root, AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE
-    )
+    schema_path = _regular_file_under(stage_root, AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE)
     try:
         schema_document = json.loads(schema_path.read_bytes())
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise IntegrationLockError(
-            "build identity schema is not valid strict JSON: "
-            f"{error}"
+            f"build identity schema is not valid strict JSON: {error}"
         ) from error
     if not isinstance(schema_document, dict):
         raise IntegrationLockError("build identity schema must be a JSON object")
@@ -2159,7 +2178,100 @@ def _validate_build_identity_schema(stage_root: Path) -> dict[str, object]:
     return schema_document
 
 
-def validate_live_audit_manifests(stage_root: Path) -> None:
+def _load_build_identity_binding(
+    stage_root: Path, source_manifest: Mapping[str, object]
+) -> tuple[BuildIdentityBinding, dict[str, object]]:
+    schema_document = _validate_build_identity_schema(stage_root)
+    identity = _read_pretty_sorted_json(
+        stage_root, AUDIT_BUILD_IDENTITY_RELATIVE, label="build identity"
+    )
+    if not isinstance(identity, dict):
+        raise IntegrationLockError("build identity must be a JSON object")
+    try:
+        jsonschema.Draft202012Validator(schema_document).validate(identity)
+    except jsonschema.ValidationError as error:
+        raise IntegrationLockError(
+            f"build identity is not schema-valid: {error.message}"
+        ) from error
+
+    try:
+        components = source_manifest["components"]
+        patches = source_manifest["patches"]
+        native_test_suites = source_manifest["native_test_suites"]
+        if (
+            not isinstance(components, list)
+            or not isinstance(patches, list)
+            or not isinstance(native_test_suites, list)
+            or not native_test_suites
+        ):
+            raise TypeError("source manifest projection fields are malformed")
+        expected_components = [
+            {
+                key: component[key]
+                for key in ("id", "version", "revision", "tree_sha256")
+            }
+            for component in components
+        ]
+        expected_patches = [
+            {key: patch[key] for key in ("order", "path", "sha256")}
+            for patch in patches
+        ]
+        ordered_patches = sorted(patches, key=lambda patch: patch["order"])
+        expected_post_tree = ordered_patches[-1]["post_tree_sha256"]
+        expected_test_tree = native_test_suites[0]["tree_sha256"]
+    except (IndexError, KeyError, TypeError) as error:
+        raise IntegrationLockError(
+            f"source manifest cannot derive build identity: {error}"
+        ) from error
+    if identity.get("components") != expected_components:
+        raise IntegrationLockError(
+            "build identity components drift from the source manifest"
+        )
+    if identity.get("patches") != expected_patches:
+        raise IntegrationLockError(
+            "build identity patches drift from the source manifest"
+        )
+    native = identity.get("native")
+    if not isinstance(native, dict):
+        raise IntegrationLockError("build identity native projection is malformed")
+    if native.get("patched_source_tree_sha256") != expected_post_tree:
+        raise IntegrationLockError(
+            "build identity native.patched_source_tree_sha256 drift"
+        )
+    if native.get("upstream_test_tree_sha256") != expected_test_tree:
+        raise IntegrationLockError(
+            "build identity native.upstream_test_tree_sha256 drift"
+        )
+
+    projection = {key: identity[key] for key in BUILD_IDENTITY_PROJECTION_KEYS}
+    projection_sha256 = hashlib.sha256(canonical_json_bytes(projection)).hexdigest()
+    return (
+        BuildIdentityBinding(
+            path=AUDIT_BUILD_IDENTITY_RELATIVE,
+            projection_algorithm=BUILD_IDENTITY_PROJECTION_ALGORITHM,
+            projection_sha256=projection_sha256,
+        ),
+        identity,
+    )
+
+
+def observe_build_identity_binding(
+    stage_root: Path, source_manifest: Mapping[str, object]
+) -> BuildIdentityBinding:
+    """Bind all build-identity metadata except cycle-forming staged_payloads."""
+
+    try:
+        binding, _ = _load_build_identity_binding(stage_root, source_manifest)
+    except IntegrationLockError as error:
+        raise IntegrationLockError(
+            f"build identity validation failed: {error}"
+        ) from error
+    return binding
+
+
+def validate_live_audit_manifests(
+    stage_root: Path, expected_build_identity: BuildIdentityBinding | None = None
+) -> None:
     """Fail-closed gate over the live stage-inventory and build-identity manifests.
 
     The audit manifests are cycle-forming final metadata and therefore absent
@@ -2186,9 +2298,7 @@ def validate_live_audit_manifests(stage_root: Path) -> None:
                 f"audit manifest gate rejects non-file entry: {relative}"
             )
     if not actual:
-        raise IntegrationLockError(
-            "audit manifest gate requires a non-empty stage"
-        )
+        raise IntegrationLockError("audit manifest gate requires a non-empty stage")
     for relative in actual:
         if _AUDIT_PRIVATE_PATH_RE.search(relative):
             raise IntegrationLockError(
@@ -2205,18 +2315,20 @@ def validate_live_audit_manifests(stage_root: Path) -> None:
             f"{AUDIT_BUILD_IDENTITY_RELATIVE}"
         )
 
-    schema_document = _validate_build_identity_schema(stage_root)
-    identity = _read_pretty_sorted_json(
-        stage_root, AUDIT_BUILD_IDENTITY_RELATIVE, label="build identity"
+    source_manifest = _read_object(
+        _regular_file_under(stage_root, "vendor/source-manifest.json"),
+        label="source manifest",
     )
-    if not isinstance(identity, dict):
-        raise IntegrationLockError("build identity must be a JSON object")
-    try:
-        jsonschema.Draft202012Validator(schema_document).validate(identity)
-    except jsonschema.ValidationError as error:
+    observed_build_identity, identity = _load_build_identity_binding(
+        stage_root, source_manifest
+    )
+    if (
+        expected_build_identity is not None
+        and observed_build_identity != expected_build_identity
+    ):
         raise IntegrationLockError(
-            f"build identity is not schema-valid: {error.message}"
-        ) from error
+            "build identity metadata projection differs from the integration lock"
+        )
 
     inventory = _read_pretty_sorted_json(
         stage_root, AUDIT_STAGE_INVENTORY_RELATIVE, label="stage inventory"
@@ -2250,9 +2362,7 @@ def validate_live_audit_manifests(stage_root: Path) -> None:
             f"stage inventory files set drift: missing={missing}; extra={extra}"
         )
     if symlinks_field != []:
-        raise IntegrationLockError(
-            "stage inventory symlinks must be an empty list"
-        )
+        raise IntegrationLockError("stage inventory symlinks must be an empty list")
     if not isinstance(covered_field, list) or not all(
         isinstance(item, dict) for item in covered_field
     ):
@@ -2314,9 +2424,7 @@ def validate_live_audit_manifests(stage_root: Path) -> None:
     if not isinstance(staged_payloads, list) or not all(
         isinstance(item, dict) for item in staged_payloads
     ):
-        raise IntegrationLockError(
-            "build identity staged_payloads must be a list"
-        )
+        raise IntegrationLockError("build identity staged_payloads must be a list")
     payloads_by_path: dict[str, str] = {}
     for entry in staged_payloads:
         if set(entry) != {"path", "sha256"}:
@@ -2375,7 +2483,7 @@ def verify_integration_lock(
     )
     if integration_lock_bytes(observed) != integration_lock_bytes(lock):
         raise IntegrationLockError("live integration identity differs from the lock")
-    validate_live_audit_manifests(stage_root)
+    validate_live_audit_manifests(stage_root, lock.build_identity)
     lock_bytes = integration_lock_bytes(lock)
     return IntegrationVerification(
         schema_version="arw.integration-verification.v1",
@@ -2776,6 +2884,7 @@ __all__ = (
     "MINIMUM_CODEX_CLI_VERSION",
     "STAGE_IDENTITY_EXCLUDED_PATHS",
     "ARSBinding",
+    "BuildIdentityBinding",
     "CodexCredentialPolicy",
     "CodexHostBinding",
     "CodexHostCanaryEvidence",
@@ -2801,6 +2910,7 @@ __all__ = (
     "is_supported_codex_cli_version",
     "load_and_verify_integration_lock",
     "load_integration_lock",
+    "observe_build_identity_binding",
     "observe_codex_host",
     "observe_hook_definition",
     "observe_stage_identity",

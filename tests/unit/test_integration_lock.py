@@ -187,7 +187,6 @@ def _install_audit_manifests(stage: Path) -> None:
     )
     components = source_manifest["components"]
     patches = source_manifest["patches"]
-    file_base_component = next(item for item in components if item["id"] == "file-base")
     build_evidence_digest = _digest(stage / ".file-base/build-evidence.json")
     binary_digest = _digest(stage / "libexec/file-base-mcp")
     contracts_digest = _digest(contracts_destination)
@@ -209,8 +208,7 @@ def _install_audit_manifests(stage: Path) -> None:
         return _digest(stage / relative)
 
     wheel_path = (
-        "vendor/python/wheelhouse/"
-        "academic_research_workbench-0.1.0-py3-none-any.whl"
+        "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
     )
     requirements_path = "vendor/python/wheelhouse/requirements-runtime.txt"
     (stage / requirements_path).parent.mkdir(parents=True, exist_ok=True)
@@ -242,8 +240,7 @@ def _install_audit_manifests(stage: Path) -> None:
             for item in components
         ],
         "patches": [
-            {key: item[key] for key in ("order", "path", "sha256")}
-            for item in patches
+            {key: item[key] for key in ("order", "path", "sha256")} for item in patches
         ],
         "native": {
             "binary": {"path": "libexec/file-base-mcp", "sha256": binary_digest},
@@ -252,10 +249,12 @@ def _install_audit_manifests(stage: Path) -> None:
                 "sha256": build_evidence_digest,
             },
             "compile_profile": "release-o2",
-            "patched_source_tree_sha256": file_base_component["tree_sha256"],
-            "upstream_test_tree_sha256": hashlib.sha256(
-                b"fixture-upstream-test-tree"
-            ).hexdigest(),
+            "patched_source_tree_sha256": sorted(
+                patches, key=lambda item: item["order"]
+            )[-1]["post_tree_sha256"],
+            "upstream_test_tree_sha256": source_manifest["native_test_suites"][0][
+                "tree_sha256"
+            ],
         },
         "projection": {
             "algorithm": "research-graph-projection-v1",
@@ -270,7 +269,10 @@ def _install_audit_manifests(stage: Path) -> None:
             },
         },
         "file_contract": {
-            "header": {"path": "share/arw/file-contracts.h", "sha256": contracts_digest},
+            "header": {
+                "path": "share/arw/file-contracts.h",
+                "sha256": contracts_digest,
+            },
             "contract_sha256": contracts_digest,
             "tokenizer_id": "unicode61-cjk-v1",
             "ranking_version": "files-rank-v1",
@@ -286,7 +288,10 @@ def _install_audit_manifests(stage: Path) -> None:
                 "path": "vendor/python/wheelhouse.lock.json",
                 "sha256": hashlib.sha256(b"fixture-wheelhouse-lock").hexdigest(),
             },
-            "requirements": {"path": requirements_path, "sha256": collect(requirements_path)},
+            "requirements": {
+                "path": requirements_path,
+                "sha256": collect(requirements_path),
+            },
             "first_party": {"path": wheel_path, "sha256": collect(wheel_path)},
         },
         "schemas": {
@@ -328,8 +333,7 @@ def _install_audit_manifests(stage: Path) -> None:
         if path.is_file():
             actual.add(path.relative_to(stage).as_posix())
     staged_payloads = sorted(
-        actual
-        - {"share/arw/build-identity.json", "supply-chain/stage-inventory.json"}
+        actual - {"share/arw/build-identity.json", "supply-chain/stage-inventory.json"}
     )
     identity["staged_payloads"] = [
         {"path": relative, "sha256": collect(relative)} for relative in staged_payloads
@@ -370,21 +374,15 @@ def _fixture_inventory_source(relative: str) -> str:
         ".python-version",
     }:
         return "wheelhouse"
-    if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {
+    if relative.startswith(("LICENSES/", "supply-chain/")) or relative in {
         "MODIFICATIONS.md",
         "SBOM.cdx.json",
         "THIRD_PARTY_NOTICES.md",
     }:
         return "legal"
-    if (
-        relative.startswith("schemas/")
-        or relative.startswith(".file-base/")
-        or relative.startswith("libexec/")
-        or relative.startswith("share/arw/")
-    ):
+    if relative.startswith(("schemas/", ".file-base/", "libexec/", "share/arw/")):
         return "build"
     return "runtime"
-
 
 
 @pytest.fixture
@@ -446,6 +444,14 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             ),
         ],
         "patches": patches,
+        "native_test_suites": [
+            {
+                "name": "fixture-upstream",
+                "tree_sha256": hashlib.sha256(
+                    b"fixture-upstream-test-tree"
+                ).hexdigest(),
+            }
+        ],
     }
     _json(stage / "vendor/source-manifest.json", source_manifest)
     _json(stage / "SBOM.cdx.json", {"components": []})
@@ -1437,6 +1443,7 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     from arw.schema_registry import validate_instance
+
     assert hasattr(integration_lock_module, "diagnose_integration_lock"), (
         "the read-only layered integration diagnostic API is missing"
     )
@@ -1856,3 +1863,65 @@ def test_audit_manifest_gate_rejects_inventory_source_drift(
     )
     with pytest.raises(IntegrationLockError, match="source drift"):
         _verify(integration_fixture, lock)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    (
+        "components_revision",
+        "native_patched_tree",
+        "evidence_digest",
+        "build_interpreter",
+    ),
+)
+def test_audit_manifest_gate_rejects_metadata_falsification(
+    integration_fixture: dict[str, Path], tamper: str
+) -> None:
+    lock = _build(integration_fixture)
+    identity_path = integration_fixture["stage"] / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    if tamper == "components_revision":
+        identity["components"][0]["revision"] = "0" * 40
+    elif tamper == "native_patched_tree":
+        identity["native"]["patched_source_tree_sha256"] = "f" * 64
+    elif tamper == "evidence_digest":
+        identity["evidence"]["pre_vendor"]["sha256"] = "1" * 64
+    else:
+        identity["runtime"]["build_interpreter"] = "3.10.0"
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == "share/arw/build-identity.json":
+            entry["sha256"] = _digest(identity_path)
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(IntegrationLockError):
+        _verify(integration_fixture, lock)
+
+
+def test_build_identity_projection_excludes_staged_payloads(
+    integration_fixture: dict[str, Path],
+) -> None:
+    stage = integration_fixture["stage"]
+    source_manifest = json.loads(
+        (stage / "vendor/source-manifest.json").read_text(encoding="utf-8")
+    )
+    before = integration_lock_module.observe_build_identity_binding(
+        stage, source_manifest
+    )
+    identity_path = stage / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity["staged_payloads"] = list(reversed(identity["staged_payloads"]))
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    after = integration_lock_module.observe_build_identity_binding(
+        stage, source_manifest
+    )
+
+    assert after == before

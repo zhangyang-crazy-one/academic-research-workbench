@@ -117,6 +117,34 @@
       "title": "ARWRuntimeBinding",
       "type": "object"
     },
+    "BuildIdentityBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "const": "share/arw/build-identity.json",
+          "title": "Path",
+          "type": "string"
+        },
+        "projection_algorithm": {
+          "const": "build-identity-metadata-v1",
+          "title": "Projection Algorithm",
+          "type": "string"
+        },
+        "projection_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Projection Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "projection_algorithm",
+        "projection_sha256"
+      ],
+      "title": "BuildIdentityBinding",
+      "type": "object"
+    },
     "CodexHostBinding": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -582,7 +610,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "arw.integration-lock.v1",
+      "const": "arw.integration-lock.v2",
       "title": "Schema Version",
       "type": "string"
     },
@@ -609,6 +637,9 @@
     "license": {
       "$ref": "#/$defs/LicenseBinding"
     },
+    "build_identity": {
+      "$ref": "#/$defs/BuildIdentityBinding"
+    },
     "technical_qualification": {
       "const": "PASS",
       "title": "Technical Qualification",
@@ -629,6 +660,7 @@
     "codex_host",
     "hook",
     "license",
+    "build_identity",
     "technical_qualification",
     "release_qualification"
   ],

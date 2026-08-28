@@ -73,7 +73,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3b686e2571ba9071067abeb10a7e632e9c638ea956a9cdd9f176ccc2b1082788"
+          "content": "a60fa9ee1ad7c27fab0739f5742600b6c631339dd4b24b9270e0176a88a9c016"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "afe47e715c3745da2ae75a33017e8518729655ee8241665fe01a13dfc542d2c5"
+          "content": "1a53d8db31329e8b4d555784af2aad6b7f7424eeb1b5131c7a6bfeade3e16553"
         }
       ],
       "licenses": [

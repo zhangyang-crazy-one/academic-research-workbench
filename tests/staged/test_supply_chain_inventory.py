@@ -19,6 +19,7 @@ from arw.integration_lock import (
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
+    observe_build_identity_binding,
     observe_hook_definition,
     observe_stage_identity,
 )
@@ -154,9 +155,12 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
     observed_file_base = _validate_file_base(stage_root, source_manifest)
     observed_ars = _validate_bundled_ars(stage_root, source_manifest)
     observed_license = _validate_license(stage_root)
+    observed_build_identity = observe_build_identity_binding(
+        stage_root, source_manifest
+    )
     hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
     payload = {
-        "schema_version": "arw.integration-lock.v1",
+        "schema_version": "arw.integration-lock.v2",
         "dependency_model": "bundled-pinned-adapter",
         "arw_runtime": observed_arw.model_dump(mode="json"),
         "ars": observed_ars.model_dump(mode="json"),
@@ -183,6 +187,7 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
             "credential_policy_sha256": repeated("f"),
         },
         "license": observed_license.model_dump(mode="json"),
+        "build_identity": observed_build_identity.model_dump(mode="json"),
         "technical_qualification": "PASS",
         "release_qualification": "BLOCKED",
     }
@@ -463,6 +468,26 @@ def test_optional_integration_lock_is_bound_without_changing_release_verdict(
     assert validated.returncode == 0, validated.stderr
     validated_against_input = _validate_stage(stage_root, integration_lock=lock_path)
     assert validated_against_input.returncode == 0, validated_against_input.stderr
+
+
+def test_validate_only_rejects_build_identity_metadata_falsification(
+    tmp_path: Path,
+) -> None:
+    lock_path = tmp_path / "metadata-lock.json"
+    lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "metadata"))
+    stage_root = tmp_path / "metadata-stage" / PLUGIN_NAME
+    result = _stage(stage_root, integration_lock=lock_path)
+    assert result.returncode == 0, result.stderr
+
+    identity_path = stage_root / "share/arw/build-identity.json"
+    identity = _load(identity_path)
+    identity["evidence"]["pre_vendor"]["sha256"] = "1" * 64
+    _write_pretty(identity_path, identity)
+    _rebind_inventory(stage_root, "share/arw/build-identity.json")
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "build-identity metadata" in validated.stderr
 
 
 @pytest.mark.parametrize(
