@@ -1,4 +1,5 @@
 """Tests for scripts/adapters/folder_scan.py."""
+
 import importlib.util
 import json
 import re
@@ -9,8 +10,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = REPO_ROOT / "scripts/adapters/folder_scan.py"
 FIXTURE_DIR = REPO_ROOT / "scripts/adapters/examples/folder_scan/input_fixture"
-EXPECTED_PASSPORT = REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_passport.yaml"
-EXPECTED_REJECTION = REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_rejection_log.yaml"
+EXPECTED_PASSPORT = (
+    REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_passport.yaml"
+)
+EXPECTED_REJECTION = (
+    REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_rejection_log.yaml"
+)
 
 # folder_scan emits machine-dependent absolute paths in source_pointer and
 # input_source; widen clean_timestamps for these tests only. T8/T9 must NOT
@@ -48,9 +53,8 @@ def _load_adapter_module():
 def test_adapter_exists():
     assert ADAPTER.exists()
 
-def test_ascii_hyphenated_family_preserves_legacy_citation_key(
-    tmp_path, load_yaml
-):
+
+def test_ascii_hyphenated_family_preserves_legacy_citation_key(tmp_path, load_yaml):
     source = tmp_path / "ascii-legacy"
     source.mkdir()
     (source / "Smith-Jones_2024_Paper.pdf").touch()
@@ -226,9 +230,12 @@ def test_happy_path(tmp_path, load_yaml, clean_timestamps):
     passport_out = tmp_path / "passport.yaml"
     rejection_out = tmp_path / "rejection_log.yaml"
     r = _run(
-        "--input", str(FIXTURE_DIR),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rejection_out),
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
     )
     assert r.returncode == 0, r.stderr
 
@@ -251,12 +258,16 @@ def test_empty_folder_emits_empty_passport(tmp_path):
     passport_out = tmp_path / "p.yaml"
     rej_out = tmp_path / "r.yaml"
     r = _run(
-        "--input", str(empty),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rej_out),
+        "--input",
+        str(empty),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rej_out),
     )
     assert r.returncode == 0
     import yaml
+
     with passport_out.open() as f:
         doc = yaml.safe_load(f)
     assert doc == {"literature_corpus": []}
@@ -264,9 +275,12 @@ def test_empty_folder_emits_empty_passport(tmp_path):
 
 def test_missing_input_dir_fails_loud(tmp_path):
     r = _run(
-        "--input", str(tmp_path / "does-not-exist"),
-        "--passport", str(tmp_path / "p.yaml"),
-        "--rejection-log", str(tmp_path / "r.yaml"),
+        "--input",
+        str(tmp_path / "does-not-exist"),
+        "--passport",
+        str(tmp_path / "p.yaml"),
+        "--rejection-log",
+        str(tmp_path / "r.yaml"),
     )
     assert r.returncode == 1
     assert "not found" in r.stderr.lower() or "exist" in r.stderr.lower()
@@ -277,8 +291,22 @@ def test_deterministic_output(tmp_path, load_yaml, clean_timestamps):
     r1_log = tmp_path / "r1.yaml"
     p2 = tmp_path / "p2.yaml"
     r2_log = tmp_path / "r2.yaml"
-    _run("--input", str(FIXTURE_DIR), "--passport", str(p1), "--rejection-log", str(r1_log))
-    _run("--input", str(FIXTURE_DIR), "--passport", str(p2), "--rejection-log", str(r2_log))
+    _run(
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(p1),
+        "--rejection-log",
+        str(r1_log),
+    )
+    _run(
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(p2),
+        "--rejection-log",
+        str(r2_log),
+    )
     assert clean_timestamps(load_yaml(p1), _FOLDER_SCAN_EXTRA) == clean_timestamps(
         load_yaml(p2), _FOLDER_SCAN_EXTRA
     )
@@ -297,12 +325,16 @@ def test_duplicate_collision_handled(tmp_path):
     passport_out = tmp_path / "p.yaml"
     rej_out = tmp_path / "r.yaml"
     r = _run(
-        "--input", str(dup_dir),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rej_out),
+        "--input",
+        str(dup_dir),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rej_out),
     )
     assert r.returncode == 0
     import yaml
+
     with passport_out.open() as f:
         doc = yaml.safe_load(f)
     keys = {e["citation_key"] for e in doc["literature_corpus"]}
@@ -320,6 +352,7 @@ def test_filename_with_spaces_produces_valid_uri(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     if doc["literature_corpus"]:
@@ -339,6 +372,7 @@ def test_chen2024_no_tail_uses_empty_title_hint(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     assert len(doc["literature_corpus"]) == 1
@@ -361,9 +395,12 @@ def test_mixed_valid_invalid_in_nested_tree(tmp_path):
     (root / "sub2" / "draft.pdf").touch()  # same basename, different subdir
     p_out = tmp_path / "p.yaml"
     r_out = tmp_path / "r.yaml"
-    r = _run("--input", str(root), "--passport", str(p_out), "--rejection-log", str(r_out))
+    r = _run(
+        "--input", str(root), "--passport", str(p_out), "--rejection-log", str(r_out)
+    )
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         passport = yaml.safe_load(f)
     with r_out.open() as f:
@@ -382,6 +419,7 @@ def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     # Symlinks escaping the scanned root can disclose files the user did not
     # intend to include, so they are rejected instead of followed.
     import os
+
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "Smith2024_real.pdf").touch()
@@ -390,23 +428,28 @@ def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     os.symlink(outside / "Smith2024_real.pdf", inside / "Smith2024_link.pdf")
     p_out = tmp_path / "p.yaml"
     r_out = tmp_path / "r.yaml"
-    r = _run("--input", str(inside), "--passport", str(p_out), "--rejection-log", str(r_out))
+    r = _run(
+        "--input", str(inside), "--passport", str(p_out), "--rejection-log", str(r_out)
+    )
     assert r.returncode == 0, r.stderr
 
     import jsonschema
     import yaml
+
     with p_out.open() as f:
         passport = yaml.safe_load(f)
     with r_out.open() as f:
         rejection = yaml.safe_load(f)
     assert passport == {"literature_corpus": []}
-    assert rejection["rejected"] == [{
-        "detail": "symlink resolves outside the input root",
-        "missing_fields": [],
-        "raw": "Smith2024_link.pdf",
-        "reason": "other",
-        "source": "Smith2024_link.pdf",
-    }]
+    assert rejection["rejected"] == [
+        {
+            "detail": "symlink resolves outside the input root",
+            "missing_fields": [],
+            "raw": "Smith2024_link.pdf",
+            "reason": "other",
+            "source": "Smith2024_link.pdf",
+        }
+    ]
     # The emitted rejection log must satisfy the rejection-log contract, not
     # just be crash-free — a non-enum reason would pass the run but break the
     # schema (Codex follow-up to #310).
@@ -427,6 +470,7 @@ def test_parseable_non_pdf_extension(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     assert len(doc["literature_corpus"]) == 1
@@ -435,15 +479,19 @@ def test_parseable_non_pdf_extension(tmp_path):
 
 # --- v3.10 venue_type always unknown/unknown (spec §3 PR-B item 13) ---
 
+
 def test_folder_scan_venue_type_always_unknown(tmp_path, load_yaml):
     """A filename scan carries no structured type → every entry is unknown/unknown,
     never inferred from the filename (R-L3-2-D)."""
     passport_out = tmp_path / "passport.yaml"
     rejection_out = tmp_path / "rejection_log.yaml"
     r = _run(
-        "--input", str(FIXTURE_DIR),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rejection_out),
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
     )
     assert r.returncode == 0, r.stderr
     got = load_yaml(passport_out)

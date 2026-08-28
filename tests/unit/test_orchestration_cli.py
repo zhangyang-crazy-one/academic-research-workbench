@@ -48,9 +48,7 @@ def test_orchestration_surface_and_public_bin_allowlist_are_exact() -> None:
     from arw.cli import build_parser
 
     parser = build_parser()
-    action = next(
-        item for item in parser._actions if item.dest == "command"
-    )
+    action = next(item for item in parser._actions if item.dest == "command")
     choices = action.choices
     assert choices is not None
     assert set(choices) >= ORCHESTRATION_COMMANDS
@@ -298,6 +296,7 @@ def test_installed_route_discovers_staged_lock_but_requires_host_canary(
     assert route["integration_lock_sha256"] is None
     assert route["reason_codes"] == ["integration_inputs_incomplete"]
 
+
 def test_installed_route_diagnostics_converts_native_discovery_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -328,9 +327,7 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
     monkeypatch.setattr(
         "arw.integration_lock.discover_codex_native_binary", fail_native_discovery
     )
-    report = cli._installed_route_diagnostics_from_environment().model_dump(
-        mode="json"
-    )
+    report = cli._installed_route_diagnostics_from_environment().model_dump(mode="json")
     assert report["status"] == "BLOCKED"
     assert report["reason_codes"] == ["integration_inputs_incomplete"]
 

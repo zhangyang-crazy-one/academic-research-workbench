@@ -18,6 +18,7 @@ Usage:
   python scripts/adapters/folder_scan.py \\
       --input <dir> --passport <out.yaml> --rejection-log <out.yaml>
 """
+
 from __future__ import annotations
 
 import argparse
@@ -86,9 +87,7 @@ def _is_unicode_family(value: str) -> bool:
     return has_letter
 
 
-def _unicode_citation_key_base(
-    *, family: str, year: int, title: str
-) -> str:
+def _unicode_citation_key_base(*, family: str, year: int, title: str) -> str:
     """Derive an ASCII base from a private NFKC copy, never display fields."""
 
     normalized = unicodedata.normalize("NFKC", f"{family}\0{year}\0{title}")
@@ -206,15 +205,11 @@ def main() -> int:
     # pi-lens-ignore: jscpd:duplicate
     ap.add_argument("--input", type=Path, required=True, help="Directory to scan")
     ap.add_argument("--passport", type=Path, required=True)
-    ap.add_argument(
-        "--rejection-log", dest="rejection_log", type=Path, required=True
-    )
+    ap.add_argument("--rejection-log", dest="rejection_log", type=Path, required=True)
     args = ap.parse_args()
 
     if not args.input.exists() or not args.input.is_dir():
-        print(
-            f"ERROR: input directory not found: {args.input}", file=sys.stderr
-        )
+        print(f"ERROR: input directory not found: {args.input}", file=sys.stderr)
         return 1
 
     entries: list[dict] = []
@@ -240,23 +235,27 @@ def main() -> int:
             try:
                 f.resolve().relative_to(input_root)
             except ValueError:
-                rejected.append({
-                    "source": rel_str,
-                    "reason": "other",
-                    "detail": "symlink resolves outside the input root",
-                    "raw": rel_str,
-                    "missing_fields": [],
-                })
+                rejected.append(
+                    {
+                        "source": rel_str,
+                        "reason": "other",
+                        "detail": "symlink resolves outside the input root",
+                        "raw": rel_str,
+                        "missing_fields": [],
+                    }
+                )
                 continue
         parsed = parse_filename(f.name)
         if not parsed:
-            rejected.append({
-                "source": rel_str,
-                # pi-lens-ignore: typos:unknown
-                "reason": "authors_unparseable",
-                "raw": rel_str,
-                "missing_fields": _missing_fields_for(f.name),
-            })
+            rejected.append(
+                {
+                    "source": rel_str,
+                    # pi-lens-ignore: typos:unknown
+                    "reason": "authors_unparseable",
+                    "raw": rel_str,
+                    "missing_fields": _missing_fields_for(f.name),
+                }
+            )
             continue
 
         if parsed["family"].isascii():
@@ -275,23 +274,25 @@ def main() -> int:
                 ),
                 existing_keys,
             )
-        entries.append({
-            "citation_key": citation_key,
-            "title": parsed["title"],
-            "authors": [{"family": parsed["family"]}],
-            "year": parsed["year"],
-            "source_pointer": path_to_file_uri(f),
-            "obtained_via": "folder-scan",
-            "obtained_at": now_iso(),
-            "adapter_name": ADAPTER_NAME,
-            "adapter_version": ADAPTER_VERSION,
-            # v3.10 (spec §3 PR-B item 13): a filename scan carries no structured
-            # source-type metadata, so venue_type is always unknown/unknown —
-            # never inferred from the filename (R-L3-2-D). Emitted as a pair to
-            # honor the schema pair invariant.
-            "venue_type": "unknown",
-            "venue_type_provenance": "unknown",
-        })
+        entries.append(
+            {
+                "citation_key": citation_key,
+                "title": parsed["title"],
+                "authors": [{"family": parsed["family"]}],
+                "year": parsed["year"],
+                "source_pointer": path_to_file_uri(f),
+                "obtained_via": "folder-scan",
+                "obtained_at": now_iso(),
+                "adapter_name": ADAPTER_NAME,
+                "adapter_version": ADAPTER_VERSION,
+                # v3.10 (spec §3 PR-B item 13): a filename scan carries no structured
+                # source-type metadata, so venue_type is always unknown/unknown —
+                # never inferred from the filename (R-L3-2-D). Emitted as a pair to
+                # honor the schema pair invariant.
+                "venue_type": "unknown",
+                "venue_type_provenance": "unknown",
+            }
+        )
 
     write_passport(args.passport, entries)
     write_rejection_log(

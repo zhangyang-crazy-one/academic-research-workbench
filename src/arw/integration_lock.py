@@ -580,12 +580,11 @@ class CodexHostCanaryEvidence(LockModel):
 
 
 class UseDistributionPolicyProjection(LockModel):
-    """Cycle-free legal meaning derived from the mutable evidence declaration.
+    """Cycle-free legal meaning derived from the evidence declaration.
 
-    Technical evidence hashes in ``use-distribution.json`` may include the
-    final SBOM, so the lock deliberately binds only these exact legal facts.
-    The final inventory and build identity remain responsible for binding the
-    declaration's raw bytes.
+    ``LicenseBinding`` separately binds the declaration's raw bytes. This
+    projection retains the exact legal facts used for release qualification
+    without treating mutable policy state as independent authority.
     """
 
     schema_version: Literal["arw.use-distribution-policy-projection.v1"]
@@ -602,6 +601,7 @@ class UseDistributionPolicyProjection(LockModel):
 class LicenseBinding(LockModel):
     verdict: FileBinding
     use_distribution_path: Literal["supply-chain/use-distribution.json"]
+    use_distribution_sha256: Sha256
     use_distribution_policy: UseDistributionPolicyProjection
     use_distribution_policy_sha256: Sha256
     technical_qualification: Literal["PASS"]
@@ -788,9 +788,7 @@ class IntegrationDiagnosticLayer(LockModel):
             }
             if no_digest_reason:
                 if any(value is not None for value in digests):
-                    raise ValueError(
-                        "blocked diagnostic reason cannot carry digests"
-                    )
+                    raise ValueError("blocked diagnostic reason cannot carry digests")
             elif self.expected_sha256 is None:
                 raise ValueError("blocked drift layer requires an expected digest")
             elif (
@@ -1807,9 +1805,10 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         _bound_file(stage_root, verdict_binding), label="license verdict"
     )
     use_path = "supply-chain/use-distribution.json"
+    use_file = _regular_file_under(stage_root, use_path)
+    use_distribution_sha256 = _digest(use_file)
     use_distribution = _read_object(
-        _regular_file_under(stage_root, use_path),
-        label="use and distribution declaration",
+        use_file, label="use and distribution declaration"
     )
     if verdict.get("use_distribution_path") != use_path:
         raise IntegrationLockError(
@@ -1889,9 +1888,7 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
                 "technical provenance path set contains an unexpected entry"
             )
         if digest != _technical_provenance_digest(stage_root, path):
-            raise IntegrationLockError(
-                f"technical provenance digest mismatch: {path}"
-            )
+            raise IntegrationLockError(f"technical provenance digest mismatch: {path}")
     if seen_evidence_paths != EXPECTED_TECHNICAL_PROVENANCE_PATHS:
         raise IntegrationLockError("technical provenance path set is incomplete")
 
@@ -1923,6 +1920,7 @@ def _validate_license(stage_root: Path) -> LicenseBinding:
         return LicenseBinding(
             verdict=verdict_binding,
             use_distribution_path=use_path,
+            use_distribution_sha256=use_distribution_sha256,
             use_distribution_policy=policy,
             use_distribution_policy_sha256=policy_sha256,
             technical_qualification="PASS",

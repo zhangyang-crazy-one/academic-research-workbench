@@ -1086,6 +1086,7 @@ def test_use_distribution_technical_hash_drift_fails_live_verification(
         _build(integration_fixture)
     assert observe_stage_identity(integration_fixture["stage"]) == stage_before
 
+
 @pytest.mark.parametrize("mutation", ("drop-component", "stale-component"))
 def test_live_sbom_requires_exact_integration_lock_component(
     integration_fixture: dict[str, Path], mutation: str
@@ -1115,6 +1116,36 @@ def test_live_sbom_requires_exact_integration_lock_component(
     _json(sbom_path, sbom)
     with pytest.raises(IntegrationLockError, match="integration lock component"):
         _build(integration_fixture)
+
+def test_original_lock_rejects_self_rebound_sbom_and_declaration(
+    integration_fixture: dict[str, Path],
+) -> None:
+    lock = _build(integration_fixture)
+    stage = integration_fixture["stage"]
+    sbom_path = stage / "SBOM.cdx.json"
+    sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+    sbom["components"].append(
+        {
+            "bom-ref": "artifact:tampered",
+            "hashes": [{"alg": "SHA-256", "content": "a" * 64}],
+            "name": "tampered",
+            "type": "file",
+            "version": "1",
+        }
+    )
+    _json(sbom_path, sbom)
+    declaration_path = stage / "supply-chain/use-distribution.json"
+    declaration = json.loads(declaration_path.read_text(encoding="utf-8"))
+    sbom_row = next(
+        row
+        for row in declaration["evidence_hashes"]
+        if row["path"] == "SBOM.cdx.json"
+    )
+    sbom_row["sha256"] = _digest(sbom_path)
+    _json(declaration_path, declaration)
+    _build(integration_fixture)
+    with pytest.raises(IntegrationLockError, match="live integration identity"):
+        _verify(integration_fixture, lock)
 
 
 @pytest.mark.parametrize(
@@ -1278,9 +1309,7 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
     contradictory = report.model_dump(mode="json")
     contradictory["layers"][1]["observed_sha256"] = "f" * 64
     with pytest.raises(ValueError, match="semantic validation failed"):
-        validate_instance(
-            "research-integrity-contracts.schema.json", contradictory
-        )
+        validate_instance("research-integrity-contracts.schema.json", contradictory)
 
     unbound_exact_lock = report.model_dump(mode="json")
     unbound_exact_lock["integration_lock_sha256"] = "e" * 64
@@ -1297,9 +1326,7 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
     blocked_layer = blocked_after_prior_passes["layers"][8]
     blocked_layer["status"] = "BLOCKED"
     blocked_layer["reason_code"] = "legal_state_drift"
-    blocked_layer["detail"] = (
-        "legal policy differs from the qualified blocked state"
-    )
+    blocked_layer["detail"] = "legal policy differs from the qualified blocked state"
     final_layer = blocked_after_prior_passes["layers"][9]
     final_layer["status"] = "NOT_EVALUATED"
     final_layer["reason_code"] = None
@@ -1344,9 +1371,7 @@ def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
 
     blocked["reason_codes"] = ["integration_inputs_incomplete"]
     blocked["layers"][0]["reason_code"] = "integration_inputs_incomplete"
-    blocked["layers"][0]["detail"] = (
-        "required integration inputs are absent or unsafe"
-    )
+    blocked["layers"][0]["detail"] = "required integration inputs are absent or unsafe"
     blocked["layers"][0]["expected_sha256"] = "a" * 64
     blocked["layers"][0]["observed_sha256"] = "a" * 64
     with pytest.raises(ValueError, match="semantic validation failed"):

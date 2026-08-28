@@ -393,6 +393,11 @@
           "title": "Use Distribution Path",
           "type": "string"
         },
+        "use_distribution_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Use Distribution Sha256",
+          "type": "string"
+        },
         "use_distribution_policy": {
           "$ref": "#/$defs/UseDistributionPolicyProjection"
         },
@@ -428,6 +433,7 @@
       "required": [
         "verdict",
         "use_distribution_path",
+        "use_distribution_sha256",
         "use_distribution_policy",
         "use_distribution_policy_sha256",
         "technical_qualification",
@@ -509,7 +515,7 @@
     "UseDistributionPolicyProjection": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "Cycle-free legal meaning derived from the mutable evidence declaration.\n\nTechnical evidence hashes in ``use-distribution.json`` may include the\nfinal SBOM, so the lock deliberately binds only these exact legal facts.\nThe final inventory and build identity remain responsible for binding the\ndeclaration's raw bytes.",
+      "description": "Cycle-free legal meaning derived from the evidence declaration.\n\n``LicenseBinding`` separately binds the declaration's raw bytes. This\nprojection retains the exact legal facts used for release qualification\nwithout treating mutable policy state as independent authority.",
       "properties": {
         "schema_version": {
           "const": "arw.use-distribution-policy-projection.v1",

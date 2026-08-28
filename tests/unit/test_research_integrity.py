@@ -322,6 +322,7 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
             }
         )
 
+
 def test_source_manifest_round_trips_every_aliased_csl_author_field() -> None:
     from arw.schema_registry import validate_instance
 
@@ -656,9 +657,7 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
             canonical_json_bytes(impossible_import), strict=True
         )
     with pytest.raises(ValueError, match="semantic validation failed"):
-        validate_instance(
-            "research-integrity-contracts.schema.json", impossible_import
-        )
+        validate_instance("research-integrity-contracts.schema.json", impossible_import)
 
     nul_source_pointer = source.model_dump(mode="json")
     nul_source_pointer["source_pointer"] = "file:///tmp/paper\x00.pdf"

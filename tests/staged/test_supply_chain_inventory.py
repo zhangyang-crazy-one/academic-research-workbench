@@ -127,6 +127,7 @@ def _canonical_test_lock(stage_root: Path) -> bytes:
 
     def binding(path: str, value: str = "a") -> dict[str, str]:
         return {"path": path, "sha256": repeated(value)}
+
     host = {
         # Phase 7 binds the retained exact host baseline; fixture locks must
         # exercise that same supported tuple rather than the prior 0.144.3
