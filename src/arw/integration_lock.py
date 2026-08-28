@@ -1768,6 +1768,9 @@ def _validate_hook(
         "host agent IDs": {item.host_agent_id for item in receipts},
         "attempt IDs": {item.expected_attempt_id for item in receipts},
         "proposal nonces": {item.expected_proposal_nonce for item in receipts},
+        "proposal digests": {
+            item.result_channel.proposal_sha256 for item in receipts
+        },
         "result-channel scopes": {
             item.result_channel.channel_scope_sha256 for item in receipts
         },

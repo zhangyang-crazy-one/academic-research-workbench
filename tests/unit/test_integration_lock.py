@@ -1087,6 +1087,27 @@ def test_three_home_and_host_identities_must_be_distinct(
         _build(integration_fixture)
 
 
+def test_distinct_proposal_nonce_but_reused_proposal_digest_is_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    root = integration_fixture["canary"].parent
+    first = json.loads((root / "fresh-home-1.json").read_text(encoding="utf-8"))
+    second_path = root / "fresh-home-2.json"
+    second = json.loads(second_path.read_text(encoding="utf-8"))
+    # Fixture already gives receipt 2 a distinct proposal nonce, so the
+    # existing "proposal nonces are not distinct" check must NOT fire here.
+    assert first["expected_proposal_nonce"] != second["expected_proposal_nonce"]
+    second["result_channel"]["proposal_sha256"] = first["result_channel"][
+        "proposal_sha256"
+    ]
+    second_path.write_bytes(canonical_json_bytes(second))
+    _refresh_evidence_bindings(integration_fixture)
+    with pytest.raises(
+        IntegrationLockError, match="proposal digests are not distinct"
+    ):
+        _build(integration_fixture)
+
+
 def test_assignment_attempt_nonce_mapping_is_exact_not_self_reported(
     integration_fixture: dict[str, Path],
 ) -> None:
