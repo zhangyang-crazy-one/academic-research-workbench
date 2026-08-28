@@ -99,7 +99,7 @@ _ARS_PASSPORT_SCHEMA_NAMES = frozenset(
 _RFC3339_DATE_TIME = re.compile(
     r"^(?P<date>\d{4}-\d{2}-\d{2})[Tt]"
     r"(?P<hour>[01]\d|2[0-3]):(?P<minute>[0-5]\d):"
-    r"(?P<second>[0-5]\d|60)(?:\.\d+)?"
+    r"(?P<second>[0-5]\d)(?:\.\d+)?"
     r"(?P<zone>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
 )
 
@@ -111,9 +111,6 @@ def _is_rfc3339_date_time(value: object) -> bool:
     if match is None:
         return False
     normalized = value[:10] + "T" + value[11:]
-    if match.group("second") == "60":
-        start, end = match.span("second")
-        normalized = normalized[:start] + "59" + normalized[end:]
     if normalized[-1] in {"Z", "z"}:
         normalized = normalized[:-1] + "+00:00"
     try:

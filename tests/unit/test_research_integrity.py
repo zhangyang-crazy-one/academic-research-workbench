@@ -659,6 +659,17 @@ def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> 
     with pytest.raises(ValueError, match="semantic validation failed"):
         validate_instance("research-integrity-contracts.schema.json", impossible_import)
 
+    impossible_leap_second = source.model_dump(mode="json")
+    impossible_leap_second["imported_at"] = "2026-01-01T12:34:60Z"
+    with pytest.raises(ValidationError, match="date-time"):
+        research_integrity.ResearchSourceManifest.model_validate_json(
+            canonical_json_bytes(impossible_leap_second), strict=True
+        )
+    with pytest.raises(ValueError, match="semantic validation failed"):
+        validate_instance(
+            "research-integrity-contracts.schema.json", impossible_leap_second
+        )
+
     nul_source_pointer = source.model_dump(mode="json")
     nul_source_pointer["source_pointer"] = "file:///tmp/paper\x00.pdf"
     with pytest.raises(ValidationError, match="NUL"):
