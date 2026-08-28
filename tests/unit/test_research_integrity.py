@@ -194,6 +194,24 @@ def test_source_builder_binds_complete_ars_entry_and_preserves_unicode() -> None
     assert changed_source.bibliographic_sha256 != source.bibliographic_sha256
 
 
+def test_source_builder_preserves_ars_valid_large_author_lists() -> None:
+    entry = {
+        **ARS_ENTRY,
+        "authors": [
+            {"family": f"ConsortiumMember{index:03d}"} for index in range(257)
+        ],
+    }
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    source = _bridge(entry)
+
+    assert len(source.authors) == 257
+    from arw.schema_registry import validate_instance
+
+    validate_instance(
+        "research-integrity-contracts.schema.json", source.model_dump(mode="json")
+    )
+
+
 def test_source_builder_revalidates_mutated_nested_ars_entry() -> None:
     signal = deepcopy(VALID_BIBLIOGRAPHIC_SIGNAL)
     signal["subject"]["citation_key"] = ARS_ENTRY["citation_key"]

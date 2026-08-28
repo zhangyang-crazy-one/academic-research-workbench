@@ -279,7 +279,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
 
     citation_key: CitationKey
     title: BoundedText
-    authors: list[CSLName] = Field(min_length=1, max_length=256)
+    authors: list[CSLName] = Field(min_length=1)
     year: Annotated[int, Field(ge=1000, le=2100)]
     source_pointer: BoundedText
     venue: BoundedText | None = None
@@ -477,7 +477,7 @@ class ResearchSourceManifest(StrictModel):
     source_id: StableRuntimeId
     citation_key: CitationKey
     title: BoundedText
-    authors: tuple[CSLName, ...] = Field(min_length=1, max_length=256)
+    authors: tuple[CSLName, ...] = Field(min_length=1)
     year: Annotated[int, Field(ge=1000, le=2100)]
     venue: BoundedText | None
     doi: Doi | None

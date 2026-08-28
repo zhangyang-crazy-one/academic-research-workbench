@@ -539,7 +539,6 @@
               }
             ]
           },
-          "maxItems": 256,
           "minItems": 1,
           "title": "Authors",
           "type": "array"
