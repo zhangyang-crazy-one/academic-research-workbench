@@ -132,8 +132,11 @@ def test_chain_validator_rejects_upstream_document_substitution() -> None:
 
 
 def test_chain_validator_revalidates_model_copy_contracts() -> None:
-    source = _source().model_copy(update={"imported_at": "2026-99-99T99:99:99Z"})
-    span = _span(source)
+    good_source = _source()
+    mutated_source = good_source.model_copy(
+        update={"imported_at": "2026-99-99T99:99:99Z"}
+    )
+    span = _span(good_source)
     link = research_integrity.build_claim_evidence_link(
         (span,),
         claim_link_id="link.claim-001",
@@ -144,9 +147,18 @@ def test_chain_validator_revalidates_model_copy_contracts() -> None:
 
     with pytest.raises(ValueError, match="research source contract is invalid"):
         research_integrity.validate_research_integrity_chain(
-            sources=(source,),
+            sources=(mutated_source,),
             evidence_spans=(span,),
             claim_links=(link,),
+        )
+
+    with pytest.raises(ValidationError, match="imported_at"):
+        research_integrity.build_evidence_span(
+            mutated_source,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=span.locator,
+            extracted_text_sha256=TEXT_SHA256,
         )
 
 
@@ -1078,3 +1090,217 @@ def test_bridge_still_enforces_authoritative_patterns_on_long_fields() -> None:
     dumped = source.model_dump(mode="json")
     assert dumped["authors"][0].get("dropping-particle") == "D" * 1025
     assert dumped["authors"][0].get("non-dropping-particle") == "N" * 1025
+
+
+# ---------------------------------------------------------------------------
+# Builder strict revalidation: every public builder must revalidate nested
+# Pydantic model parameters from canonical bytes before constructing its
+# output. ``model_copy(update=...)`` deliberately skips validation (see
+# ``arw.models._phase4_record``), so a builder that hands a nested model
+# directly to its output model would let bogus ``EvidenceLocator`` literals,
+# overlong labels, etc. slip through. The whole-chain validator only fires
+# when the caller explicitly invokes it; the builders themselves must fail
+# closed at the construction boundary (Codex review 3882364624).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "label",
+    ("mutation_via_model_copy",),
+)
+def test_evidence_span_builder_revalidates_locator_from_canonical_bytes(
+    label: str,
+) -> None:
+    """``build_evidence_span`` must refuse a ``model_copy(update=...)``
+    locator that violates the strict ``EvidenceLocator`` constraints."""
+
+    source = _source()
+    base_locator = research_integrity.EvidenceLocator(
+        kind="page", start=1, end=2, label="page 1"
+    )
+
+    bogus_kind = base_locator.model_copy(update={"kind": "bogus"})
+    with pytest.raises(ValidationError, match="Input should be"):
+        research_integrity.build_evidence_span(
+            source,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=bogus_kind,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    overlong_label = base_locator.model_copy(update={"label": "X" * 257})
+    with pytest.raises(ValidationError, match="at most 256 characters"):
+        research_integrity.build_evidence_span(
+            source,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=overlong_label,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    empty_label = base_locator.model_copy(update={"label": ""})
+    with pytest.raises(ValidationError, match="at least 1 character"):
+        research_integrity.build_evidence_span(
+            source,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=empty_label,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    negative_start = base_locator.model_copy(update={"start": -1})
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        research_integrity.build_evidence_span(
+            source,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=negative_start,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+
+def test_claim_link_builder_revalidates_each_evidence_span_from_canonical_bytes() -> (
+    None
+):
+    """``build_claim_evidence_link`` must refuse an ``EvidenceSpan`` whose
+    nested ``locator`` was mutated via ``model_copy(update=...)`` to violate
+    the strict ``EvidenceLocator`` constraints."""
+
+    source = _source()
+    locator = research_integrity.EvidenceLocator(
+        kind="page", start=1, end=2, label="page 1"
+    )
+    span = research_integrity.build_evidence_span(
+        source,
+        evidence_span_id="span.paper-001.001",
+        extraction_registration_sha256=EXTRACTION_SHA256,
+        locator=locator,
+        extracted_text_sha256=TEXT_SHA256,
+    )
+
+    mutated_locator = locator.model_copy(update={"kind": "bogus"})
+    mutated_span = span.model_copy(update={"locator": mutated_locator})
+    assert mutated_span.locator.kind == "bogus"
+
+    with pytest.raises(ValidationError, match="Input should be"):
+        research_integrity.build_claim_evidence_link(
+            (mutated_span,),
+            claim_link_id="link.claim-001",
+            claim_id="claim.paper-001",
+            claim_sha256=CLAIM_SHA256,
+            relation="supports",
+        )
+
+    mutated_label = locator.model_copy(update={"label": "X" * 257})
+    mutated_label_span = span.model_copy(update={"locator": mutated_label})
+    with pytest.raises(ValidationError, match="at most 256 characters"):
+        research_integrity.build_claim_evidence_link(
+            (mutated_label_span,),
+            claim_link_id="link.claim-001",
+            claim_id="claim.paper-001",
+            claim_sha256=CLAIM_SHA256,
+            relation="supports",
+        )
+
+
+def test_evidence_span_builder_still_accepts_a_freshly_constructed_locator() -> None:
+    """The new strict revalidation must not regress builders that receive a
+    locator constructed through the normal ``EvidenceLocator(...)`` path."""
+
+    source = _source()
+    locator = research_integrity.EvidenceLocator(
+        kind="section", start=10, end=42, label="methods"
+    )
+    span = research_integrity.build_evidence_span(
+        source,
+        evidence_span_id="span.paper-001.001",
+        extraction_registration_sha256=EXTRACTION_SHA256,
+        locator=locator,
+        extracted_text_sha256=TEXT_SHA256,
+    )
+    assert span.locator == locator
+
+
+def test_evidence_span_builder_revalidates_source_from_canonical_bytes() -> None:
+    """``build_evidence_span`` must revalidate the supplied
+    ``ResearchSourceManifest`` from canonical bytes before deriving
+    ``research_source_manifest_sha256``. A ``model_copy(update=...)``
+    mutation that violates the strict ``ResearchSourceManifest`` contract
+    must fail closed at the builder boundary (Codex review 3882364624)."""
+
+    source = _source()
+    locator = research_integrity.EvidenceLocator(
+        kind="page", start=1, end=2, label="page 1"
+    )
+
+    bogus_schema_version = source.model_copy(
+        update={"schema_version": "arw.bogus.v1"}
+    )
+    assert bogus_schema_version.schema_version == "arw.bogus.v1"
+    with pytest.raises(ValidationError, match="schema_version"):
+        research_integrity.build_evidence_span(
+            bogus_schema_version,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=locator,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    bogus_source_id = source.model_copy(
+        update={"source_id": "Bogus-Capitalised"}
+    )
+    assert bogus_source_id.source_id == "Bogus-Capitalised"
+    with pytest.raises(ValidationError, match="source_id"):
+        research_integrity.build_evidence_span(
+            bogus_source_id,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=locator,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    bogus_citation_key = source.model_copy(update={"citation_key": "1bad-key"})
+    assert bogus_citation_key.citation_key == "1bad-key"
+    with pytest.raises(ValidationError, match="citation_key"):
+        research_integrity.build_evidence_span(
+            bogus_citation_key,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=locator,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+    bogus_source_sha256 = source.model_copy(
+        update={"source_sha256": "not-a-real-sha256"}
+    )
+    assert bogus_source_sha256.source_sha256 == "not-a-real-sha256"
+    with pytest.raises(ValidationError, match="source_sha256"):
+        research_integrity.build_evidence_span(
+            bogus_source_sha256,
+            evidence_span_id="span.paper-001.001",
+            extraction_registration_sha256=EXTRACTION_SHA256,
+            locator=locator,
+            extracted_text_sha256=TEXT_SHA256,
+        )
+
+
+def test_evidence_span_builder_still_accepts_a_freshly_constructed_source() -> None:
+    """The new source strict revalidation must not regress the normal
+    ``research_source_from_ars_entry`` → ``build_evidence_span`` flow."""
+
+    source = _source()
+    locator = research_integrity.EvidenceLocator(
+        kind="section", start=10, end=42, label="methods"
+    )
+    span = research_integrity.build_evidence_span(
+        source,
+        evidence_span_id="span.paper-001.001",
+        extraction_registration_sha256=EXTRACTION_SHA256,
+        locator=locator,
+        extracted_text_sha256=TEXT_SHA256,
+    )
+    assert span.source_id == source.source_id
+    assert span.research_source_manifest_sha256 == research_integrity.research_integrity_sha256(
+        source
+    )

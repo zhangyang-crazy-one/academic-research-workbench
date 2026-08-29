@@ -712,14 +712,21 @@ def build_evidence_span(
 ) -> EvidenceSpan:
     """Bind exact source-manifest bytes and propagate the source-content digest."""
 
+    validated_source = ResearchSourceManifest.model_validate_json(
+        research_integrity_bytes(source), strict=True
+    )
+    validated_locator = EvidenceLocator.model_validate_json(
+        canonical_json_bytes(locator.model_dump(mode="json")),
+        strict=True,
+    )
     return EvidenceSpan(
         schema_version="arw.evidence-span.v1",
         evidence_span_id=evidence_span_id,
-        source_id=source.source_id,
-        research_source_manifest_sha256=research_integrity_sha256(source),
-        source_sha256=source.source_sha256,
+        source_id=validated_source.source_id,
+        research_source_manifest_sha256=research_integrity_sha256(validated_source),
+        source_sha256=validated_source.source_sha256,
         extraction_registration_sha256=extraction_registration_sha256,
-        locator=locator,
+        locator=validated_locator,
         extracted_text_sha256=extracted_text_sha256,
     )
 
@@ -734,7 +741,15 @@ def build_claim_evidence_link(
 ) -> ClaimEvidenceLink:
     """Bind a claim to the exact canonical bytes of unique evidence spans."""
 
-    digests = tuple(research_integrity_sha256(span) for span in evidence_spans)
+    validated_spans = tuple(
+        EvidenceSpan.model_validate_json(
+            research_integrity_bytes(span), strict=True
+        )
+        for span in evidence_spans
+    )
+    digests = tuple(
+        research_integrity_sha256(span) for span in validated_spans
+    )
     if not digests or len(digests) != len(set(digests)):
         raise ResearchIntegrityError(
             "claim links require unique non-empty evidence spans"
