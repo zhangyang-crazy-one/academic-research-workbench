@@ -347,6 +347,28 @@ if has_lock:
     _, staged_lock = canonical_lock(stage_root / lock_relative)
     verify_local_lock(staged_lock)
 
+# Always run the build-identity live recompute so digestPath and evidence
+# claims are verified against the live stage bytes regardless of whether the
+# stage carries an integration lock.  The staged_payloads list must be bound
+# here so the audit manifest gate's existing coverage check uses the same
+# closed set the live recompute just exercised.
+try:
+    source_manifest = json.loads(
+        (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"source manifest is unreadable: {error}") from error
+identity_for_payloads = json.loads(
+    (stage_root / identity_relative).read_text(encoding="utf-8")
+)
+staged_payload_paths = frozenset(
+    item["path"]
+    for item in identity_for_payloads.get("staged_payloads", [])
+    if isinstance(item, dict) and isinstance(item.get("path"), str)
+)
+observe_build_identity_binding(
+    stage_root, source_manifest, staged_payloads=staged_payload_paths
+)
 try:
     sbom = json.loads((stage_root / sbom_relative).read_text(encoding="utf-8"))
     # pi-lens-ignore: jscpd:duplicate
@@ -517,6 +539,14 @@ copy_file "scripts/file-base-graph-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
 copy_as "generated/file-contracts.h" "share/arw/file-contracts.h"
+# Stage each phase-01 evidence surface under ``share/arw/evidence`` so the
+# installed verifier can recompute every evidence digestPath against live
+# bytes without depending on the original ``build/evidence/phase-01`` tree.
+copy_as "build/evidence/phase-01/pre-vendor-license/receipt.json" "share/arw/evidence/pre_vendor.json"
+copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
+copy_as "build/evidence/phase-01/native/upstream/verdict.json" "share/arw/evidence/upstream.json"
+copy_as "build/evidence/phase-01/native/asan-ubsan/verdict.json" "share/arw/evidence/asan_ubsan.json"
+copy_as "build/evidence/phase-01/native/tsan/verdict.json" "share/arw/evidence/tsan.json"
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/file-base-MIT.txt"
@@ -739,12 +769,33 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def evidence(relative: str) -> dict[str, str]:
-    path = project_root / relative
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
+    """Bind an evidence surface to its staged copy inside ``share/arw/evidence``.
+
+    The producer MUST have copied the original phase-01 surface into the
+    plugin stage at ``staged_relative`` so the installed verifier never has to
+    read the original ``build/evidence/phase-01`` tree.  The staged copy
+    itself is what the identity digestPath points at; the producer reads it
+    here to confirm the closed ``technical_qualification: PASS`` semantic
+    before publishing the identity.
+    """
+
+    staged_path = stage_root / staged_relative
+    if staged_path.is_symlink() or not staged_path.is_file():
+        raise SystemExit(
+            f"required staged evidence surface is missing: {staged_relative}"
+        )
+    try:
+        payload = json.loads(staged_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"staged evidence surface is unreadable: {staged_relative}: {error}"
+        )
     if payload.get("technical_qualification") != "PASS":
-        raise SystemExit(f"required technical PASS evidence missing: {relative}")
-    return {"path": relative, "sha256": digest(path)}
+        raise SystemExit(
+            f"staged evidence surface is not technical_qualification=PASS: {label}"
+        )
+    return {"path": staged_relative, "sha256": digest(staged_path)}
 
 
 manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
@@ -846,11 +897,21 @@ identity = {
         "files": [{"path": path, "sha256": value} for path, value in schema_entries],
     },
     "evidence": {
-        "pre_vendor": evidence("build/evidence/phase-01/pre-vendor-license/receipt.json"),
-        "legal": evidence("build/evidence/phase-01/license-0002/verdict.json"),
-        "upstream": evidence("build/evidence/phase-01/native/upstream/verdict.json"),
-        "asan_ubsan": evidence("build/evidence/phase-01/native/asan-ubsan/verdict.json"),
-        "tsan": evidence("build/evidence/phase-01/native/tsan/verdict.json"),
+        "pre_vendor": staged_evidence(
+            "share/arw/evidence/pre_vendor.json", label="pre_vendor"
+        ),
+        "legal": staged_evidence(
+            "share/arw/evidence/legal.json", label="legal"
+        ),
+        "upstream": staged_evidence(
+            "share/arw/evidence/upstream.json", label="upstream"
+        ),
+        "asan_ubsan": staged_evidence(
+            "share/arw/evidence/asan_ubsan.json", label="asan_ubsan"
+        ),
+        "tsan": staged_evidence(
+            "share/arw/evidence/tsan.json", label="tsan"
+        ),
     },
     "staged_payloads": payloads,
 }
@@ -1127,6 +1188,11 @@ static_files = {
     "scripts/verify-phase-6",
     "share/arw/file-contracts.h",
     "share/arw/build-identity.json",
+    "share/arw/evidence/pre_vendor.json",
+    "share/arw/evidence/legal.json",
+    "share/arw/evidence/upstream.json",
+    "share/arw/evidence/asan_ubsan.json",
+    "share/arw/evidence/tsan.json",
     "share/arw/schemas/artifact-manifest.schema.json",
     "share/arw/schemas/artifact-request.schema.json",
     "share/arw/schemas/build-identity.schema.json",

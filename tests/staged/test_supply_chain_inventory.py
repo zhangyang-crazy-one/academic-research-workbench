@@ -487,7 +487,7 @@ def test_validate_only_rejects_build_identity_metadata_falsification(
 
     validated = _validate_stage(stage_root)
     assert validated.returncode != 0
-    assert "build-identity metadata" in validated.stderr
+    assert "evidence.pre_vendor" in validated.stderr
 
 
 @pytest.mark.parametrize(
@@ -688,3 +688,114 @@ def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None
     duplicate_payload = _validate_stage(stage_root)
     assert duplicate_payload.returncode != 0
     assert "duplicate staged payload paths" in duplicate_payload.stderr
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 evidence staging tests: the producer MUST copy the original
+# ``build/evidence/phase-01`` surfaces into ``share/arw/evidence`` so the
+# installed verifier never has to read the original tree.
+# ---------------------------------------------------------------------------
+
+
+EVIDENCE_STAGED_PATHS = (
+    "share/arw/evidence/pre_vendor.json",
+    "share/arw/evidence/legal.json",
+    "share/arw/evidence/upstream.json",
+    "share/arw/evidence/asan_ubsan.json",
+    "share/arw/evidence/tsan.json",
+)
+
+
+def test_staged_evidence_files_exist_with_pass_qualification(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "evidence-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    for relative in EVIDENCE_STAGED_PATHS:
+        staged_path = stage_root / relative
+        assert staged_path.is_file(), f"missing staged evidence: {relative}"
+        payload = json.loads(staged_path.read_text(encoding="utf-8"))
+        assert payload["technical_qualification"] == "PASS", (
+            f"staged evidence missing PASS semantic: {relative}"
+        )
+
+
+def test_build_identity_evidence_block_points_at_staged_copies(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "evidence-identity-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    evidence = identity["evidence"]
+    for label, relative in zip(
+        ("pre_vendor", "legal", "upstream", "asan_ubsan", "tsan"),
+        EVIDENCE_STAGED_PATHS,
+    ):
+        entry = evidence[label]
+        assert entry["path"] == relative, (
+            f"evidence.{label}.path drifts from staged copy: {entry['path']}"
+        )
+        assert entry["sha256"] == _sha256(stage_root / relative), (
+            f"evidence.{label}.sha256 drifts from staged copy bytes"
+        )
+
+
+def test_validate_only_rejects_staged_evidence_qualification_drift(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "evidence-drift-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    target = stage_root / "share/arw/evidence/upstream.json"
+    payload = _load(target)
+    payload["technical_qualification"] = "BLOCKED"
+    _write_pretty(target, payload)
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    identity["evidence"]["upstream"]["sha256"] = _sha256(target)
+    # Update staged_payloads for both files so the audit manifest gate does
+    # not fail before the identity verifier has a chance to run.
+    for entry in identity["staged_payloads"]:
+        if entry["path"] == "share/arw/evidence/upstream.json":
+            entry["sha256"] = _sha256(target)
+    _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+    for entry in identity["staged_payloads"]:
+        if entry["path"] == "share/arw/build-identity.json":
+            entry["sha256"] = _sha256(stage_root / "share/arw/build-identity.json")
+    _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+    _rebind_inventory(
+        stage_root,
+        "share/arw/evidence/upstream.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "evidence.upstream" in validated.stderr
+
+
+def test_validate_only_rejects_staged_evidence_path_redirect(
+    tmp_path: Path,
+) -> None:
+    stage_root = tmp_path / "evidence-redirect-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    contracts_path = stage_root / "share/arw/file-contracts.h"
+    contracts_digest = _sha256(contracts_path)
+
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    identity["evidence"]["pre_vendor"] = {
+        "path": "share/arw/file-contracts.h",
+        "sha256": contracts_digest,
+    }
+    _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+    _rebind_inventory(stage_root, "share/arw/build-identity.json")
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "pre_vendor" in validated.stderr

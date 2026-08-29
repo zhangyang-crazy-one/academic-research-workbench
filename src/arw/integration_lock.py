@@ -118,6 +118,25 @@ STAGE_IDENTITY_EXCLUDED_PREFIXES = ("supply-chain/host-canary/",)
 AUDIT_BUILD_IDENTITY_RELATIVE = "share/arw/build-identity.json"
 AUDIT_STAGE_INVENTORY_RELATIVE = "supply-chain/stage-inventory.json"
 AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE = "share/arw/schemas/build-identity.schema.json"
+# Phase 1 evidence must be staged into the plugin root so the installed
+# verifier does not depend on the original ``build/evidence/phase-01`` tree.
+# Each staged file MUST carry ``technical_qualification: PASS``; the
+# ``digestPath`` in the build identity points at these staged copies, and the
+# audit manifest gate recomputes every claim from the live bytes.
+EVIDENCE_PATH_PRE_VENDOR = "share/arw/evidence/pre_vendor.json"
+EVIDENCE_PATH_LEGAL = "share/arw/evidence/legal.json"
+EVIDENCE_PATH_UPSTREAM = "share/arw/evidence/upstream.json"
+EVIDENCE_PATH_ASAN_UBSAN = "share/arw/evidence/asan_ubsan.json"
+EVIDENCE_PATH_TSAN = "share/arw/evidence/tsan.json"
+EVIDENCE_RELATIVE_PATHS: frozenset[str] = frozenset(
+    {
+        EVIDENCE_PATH_PRE_VENDOR,
+        EVIDENCE_PATH_LEGAL,
+        EVIDENCE_PATH_UPSTREAM,
+        EVIDENCE_PATH_ASAN_UBSAN,
+        EVIDENCE_PATH_TSAN,
+    }
+)
 BUILD_IDENTITY_PROJECTION_ALGORITHM = "build-identity-metadata-v1"
 BUILD_IDENTITY_PROJECTION_KEYS = (
     "schema_version",
@@ -2181,8 +2200,178 @@ def _validate_build_identity_schema(stage_root: Path) -> dict[str, object]:
     return schema_document
 
 
+_CYCLE_METADATA_PATHS: frozenset[str] = frozenset(
+    {
+        AUDIT_BUILD_IDENTITY_RELATIVE,
+        AUDIT_STAGE_INVENTORY_RELATIVE,
+    }
+)
+
+
+def _verify_digest_path(
+    stage_root: Path,
+    entry: object,
+    *,
+    label: str,
+    staged_payloads: frozenset[str] | None = None,
+) -> None:
+    """Verify a ``digestPath`` entry has live bytes that match its declared sha256.
+
+    The path MUST resolve to a regular file under ``stage_root``, MUST NOT be a
+    cycle-forming metadata path, and MUST have a current sha256 equal to the
+    declared value.  When ``staged_payloads`` is supplied the path must also
+    appear in that closed set so every live claim remains bound to the staged
+    payload manifest.
+    """
+
+    if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+        raise IntegrationLockError(
+            f"{label} digestPath must declare exactly {{path, sha256}}"
+        )
+    relative = entry["path"]
+    digest = entry["sha256"]
+    if not isinstance(relative, str) or not isinstance(digest, str):
+        raise IntegrationLockError(
+            f"{label} digestPath fields must be strings"
+        )
+    if relative in _CYCLE_METADATA_PATHS:
+        raise IntegrationLockError(
+            f"{label} digestPath cannot point at cycle-forming metadata: {relative}"
+        )
+    if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise IntegrationLockError(
+            f"{label} digestPath sha256 is malformed: {relative}"
+        )
+    try:
+        path = _regular_file_under(stage_root, relative)
+    except IntegrationLockError as error:
+        raise IntegrationLockError(
+            f"{label} digestPath target is missing or unsafe: {relative}"
+        ) from error
+    if _digest(path) != digest:
+        raise IntegrationLockError(
+            f"{label} digestPath live bytes do not match declared digest: {relative}"
+        )
+    if staged_payloads is not None and relative not in staged_payloads:
+        raise IntegrationLockError(
+            f"{label} digestPath is not covered by staged_payloads: {relative}"
+        )
+
+
+def _verify_aggregate_sha256(
+    stage_root: Path,
+    entries: object,
+    claimed: object,
+    *,
+    label: str,
+    staged_payloads: frozenset[str] | None = None,
+) -> list[tuple[str, str]]:
+    """Verify a derived aggregate digest equals ``aggregate_schema_sha256``.
+
+    Returns the ordered ``(path, sha256)`` tuples that produced the verified
+    aggregate so callers can chain subsequent derivations off the already
+    verified primitives.
+    """
+
+    # Lazy import to avoid a circular dependency with ``arw.schema_registry``.
+    from arw.schema_registry import aggregate_schema_sha256
+
+    if not isinstance(claimed, str) or re.fullmatch(r"[0-9a-f]{64}", claimed) is None:
+        raise IntegrationLockError(f"{label} aggregate sha256 is malformed")
+    if not isinstance(entries, list) or not all(
+        isinstance(item, dict) for item in entries
+    ):
+        raise IntegrationLockError(f"{label} aggregate entries must be a list")
+    materialized: list[tuple[str, str]] = []
+    for index, item in enumerate(entries):
+        _verify_digest_path(
+            stage_root,
+            item,
+            label=f"{label} entry #{index}",
+            staged_payloads=staged_payloads,
+        )
+        materialized.append((item["path"], item["sha256"]))
+    if aggregate_schema_sha256(materialized) != claimed:
+        raise IntegrationLockError(
+            f"{label} aggregate sha256 does not match derived digest"
+        )
+    return materialized
+
+
+def _verify_evidence_pass(
+    stage_root: Path, path: str, *, label: str
+) -> dict[str, object]:
+    """Read a staged evidence file and require ``technical_qualification: PASS``.
+
+    Each of the five phase-01 evidence files is staged into
+    ``share/arw/evidence/*.json``; the file must be a JSON object carrying the
+    closed ``PASS`` semantic so the install-time verifier never has to read
+    the original ``build/evidence`` tree.
+    """
+
+    file_path = _regular_file_under(stage_root, path)
+    try:
+        payload = json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            f"{label} evidence file is unreadable: {path}: {error}"
+        ) from error
+    if not isinstance(payload, dict):
+        raise IntegrationLockError(
+            f"{label} evidence file must be a JSON object: {path}"
+        )
+    if payload.get("technical_qualification") != "PASS":
+        raise IntegrationLockError(
+            f"{label} evidence file is not technical_qualification=PASS: {path}"
+        )
+    return payload
+
+
+def _projection_patch_set_sha256(patches: list[Mapping[str, object]]) -> str:
+    """Mirror the canonical compact-JSON derivation used by the producer."""
+
+    materialized = [
+        {key: patch[key] for key in ("order", "path", "sha256")} for patch in patches
+    ]
+    return hashlib.sha256(
+        json.dumps(materialized, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _projection_profile_patch_sha256(patches: list[Mapping[str, object]]) -> str:
+    for patch in patches:
+        if patch.get("order") == 4:
+            value = patch.get("sha256")
+            if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+                raise IntegrationLockError(
+                    "source manifest patch with order=4 has an invalid sha256"
+                )
+            return value
+    raise IntegrationLockError("source manifest does not declare patch with order=4")
+
+
+def _file_contract_contract_sha256(header_path: Path) -> str:
+    """Return the embedded contract sha256 from the staged file-contracts header."""
+
+    try:
+        contract_header = header_path.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f"file-contracts header is unreadable: {error}"
+        ) from error
+    match = re.search(r'ARW_FILES_CONTRACT_SHA256 "([0-9a-f]{64})"', contract_header)
+    if match is None:
+        raise IntegrationLockError(
+            "file-contracts header does not embed ARW_FILES_CONTRACT_SHA256"
+        )
+    return match.group(1)
+
+
 def _load_build_identity_binding(
-    stage_root: Path, source_manifest: Mapping[str, object]
+    stage_root: Path,
+    source_manifest: Mapping[str, object],
+    *,
+    staged_payloads: frozenset[str] | None = None,
 ) -> tuple[BuildIdentityBinding, dict[str, object]]:
     schema_document = _validate_build_identity_schema(stage_root)
     identity = _read_pretty_sorted_json(
@@ -2246,8 +2435,209 @@ def _load_build_identity_binding(
             "build identity native.upstream_test_tree_sha256 drift"
         )
 
-    projection = {key: identity[key] for key in BUILD_IDENTITY_PROJECTION_KEYS}
-    projection_sha256 = hashlib.sha256(canonical_json_bytes(projection)).hexdigest()
+    # ----- plugin.version must match the staged plugin manifest ---------------
+    plugin = identity.get("plugin")
+    if not isinstance(plugin, dict):
+        raise IntegrationLockError("build identity plugin projection is malformed")
+    declared_version = plugin.get("version")
+    plugin_manifest_path = _regular_file_under(
+        stage_root, ".codex-plugin/plugin.json"
+    )
+    try:
+        plugin_manifest = json.loads(plugin_manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            f"staged plugin manifest is unreadable: {error}"
+        ) from error
+    if not isinstance(plugin_manifest, dict):
+        raise IntegrationLockError("staged plugin manifest must be a JSON object")
+    if plugin_manifest.get("version") != declared_version:
+        raise IntegrationLockError(
+            "build identity plugin.version drifts from staged plugin manifest"
+        )
+    if not re.fullmatch(r"0\.1\.0(?:\+[a-z0-9.-]+)?", str(declared_version)):
+        raise IntegrationLockError(
+            f"build identity plugin.version is not qualified: {declared_version}"
+        )
+
+    # ----- native.binary / native.build_evidence live bytes -------------------
+    _verify_digest_path(
+        stage_root,
+        native.get("binary"),
+        label="build identity native.binary",
+        staged_payloads=staged_payloads,
+    )
+    _verify_digest_path(
+        stage_root,
+        native.get("build_evidence"),
+        label="build identity native.build_evidence",
+        staged_payloads=staged_payloads,
+    )
+
+    # ----- projection (query_launcher + derived aggregates) -------------------
+    projection = identity.get("projection")
+    if not isinstance(projection, dict):
+        raise IntegrationLockError(
+            "build identity projection is malformed"
+        )
+    if projection.get("algorithm") != "research-graph-projection-v1":
+        raise IntegrationLockError(
+            "build identity projection.algorithm is not the qualified projection"
+        )
+    if projection.get("native_profile") != "research-graph-builder-v1":
+        raise IntegrationLockError(
+            "build identity projection.native_profile is not the qualified profile"
+        )
+    if projection.get("oracle") != "research-graph-normalization-v1":
+        raise IntegrationLockError(
+            "build identity projection.oracle is not the qualified oracle"
+        )
+    if projection.get("query_profile") != "arw-graph-mcp-v1":
+        raise IntegrationLockError(
+            "build identity projection.query_profile is not the qualified profile"
+        )
+    _verify_digest_path(
+        stage_root,
+        projection.get("query_launcher"),
+        label="build identity projection.query_launcher",
+        staged_payloads=staged_payloads,
+    )
+    expected_patch_set = _projection_patch_set_sha256(list(patches))
+    if projection.get("patch_set_sha256") != expected_patch_set:
+        raise IntegrationLockError(
+            "build identity projection.patch_set_sha256 drift"
+        )
+    expected_profile_patch = _projection_profile_patch_sha256(list(patches))
+    if projection.get("profile_patch_sha256") != expected_profile_patch:
+        raise IntegrationLockError(
+            "build identity projection.profile_patch_sha256 drift"
+        )
+
+    # ----- file_contract.header live bytes + embedded contract_sha256 ---------
+    file_contract = identity.get("file_contract")
+    if not isinstance(file_contract, dict):
+        raise IntegrationLockError("build identity file_contract is malformed")
+    header_entry = file_contract.get("header")
+    if not isinstance(header_entry, dict):
+        raise IntegrationLockError(
+            "build identity file_contract.header is malformed"
+        )
+    _verify_digest_path(
+        stage_root,
+        header_entry,
+        label="build identity file_contract.header",
+        staged_payloads=staged_payloads,
+    )
+    header_path = _regular_file_under(stage_root, header_entry["path"])
+    embedded_contract_sha = _file_contract_contract_sha256(header_path)
+    declared_contract_sha = file_contract.get("contract_sha256")
+    if not isinstance(declared_contract_sha, str):
+        raise IntegrationLockError(
+            "build identity file_contract.contract_sha256 must be a string"
+        )
+    if declared_contract_sha not in {embedded_contract_sha, header_entry["sha256"]}:
+        raise IntegrationLockError(
+            "build identity file_contract.contract_sha256 drifts from header bytes"
+        )
+
+    # ----- wheelhouse lock / requirements / first_party live bytes ------------
+    wheelhouse = identity.get("wheelhouse")
+    if not isinstance(wheelhouse, dict):
+        raise IntegrationLockError("build identity wheelhouse is malformed")
+    for field in ("lock", "requirements", "first_party"):
+        _verify_digest_path(
+            stage_root,
+            wheelhouse.get(field),
+            label=f"build identity wheelhouse.{field}",
+            staged_payloads=staged_payloads,
+        )
+    first_party = wheelhouse.get("first_party")
+    if isinstance(first_party, dict) and first_party.get("path", "").startswith(
+        "vendor/python/wheelhouse/"
+    ):
+        # Verify the wheelhouse.lock.json claims this exact first-party wheel
+        # so the digestPath and the lockfile cannot be rebound independently.
+        lock_path = _regular_file_under(
+            stage_root, wheelhouse["lock"]["path"]
+        )
+        try:
+            lock_payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise IntegrationLockError(
+                f"wheelhouse lock payload is unreadable: {error}"
+            ) from error
+        first_party_record = (
+            lock_payload.get("first_party_wheel")
+            if isinstance(lock_payload, dict)
+            else None
+        )
+        if not isinstance(first_party_record, dict):
+            raise IntegrationLockError(
+                "wheelhouse.lock.json does not declare first_party_wheel"
+            )
+        expected_wheel_filename = first_party["path"].rsplit("/", 1)[-1]
+        if first_party_record.get("file") != expected_wheel_filename:
+            raise IntegrationLockError(
+                "wheelhouse.first_party.path drifts from wheelhouse.lock.json"
+            )
+        if first_party_record.get("sha256") != first_party["sha256"]:
+            raise IntegrationLockError(
+                "wheelhouse.first_party.sha256 drifts from wheelhouse.lock.json"
+            )
+
+    # ----- schemas files + derived aggregate ---------------------------------
+    schemas = identity.get("schemas")
+    if not isinstance(schemas, dict):
+        raise IntegrationLockError("build identity schemas is malformed")
+    _verify_aggregate_sha256(
+        stage_root,
+        schemas.get("files"),
+        schemas.get("aggregate_sha256"),
+        label="build identity schemas",
+        staged_payloads=staged_payloads,
+    )
+
+    # ----- evidence files (5 staged copies) ----------------------------------
+    evidence = identity.get("evidence")
+    if not isinstance(evidence, dict):
+        raise IntegrationLockError("build identity evidence is malformed")
+    expected_evidence_paths = {
+        "pre_vendor": EVIDENCE_PATH_PRE_VENDOR,
+        "legal": EVIDENCE_PATH_LEGAL,
+        "upstream": EVIDENCE_PATH_UPSTREAM,
+        "asan_ubsan": EVIDENCE_PATH_ASAN_UBSAN,
+        "tsan": EVIDENCE_PATH_TSAN,
+    }
+    declared_evidence_paths: dict[str, str] = {}
+    for field, expected_path in expected_evidence_paths.items():
+        entry = evidence.get(field)
+        if entry is None:
+            raise IntegrationLockError(
+                f"build identity evidence.{field} is missing"
+            )
+        _verify_digest_path(
+            stage_root,
+            entry,
+            label=f"build identity evidence.{field}",
+            staged_payloads=staged_payloads,
+        )
+        if entry["path"] != expected_path:
+            raise IntegrationLockError(
+                f"build identity evidence.{field}.path must be {expected_path}"
+            )
+        _verify_evidence_pass(
+            stage_root, entry["path"], label=f"build identity evidence.{field}"
+        )
+        declared_evidence_paths[field] = entry["path"]
+    if set(declared_evidence_paths) != set(expected_evidence_paths):
+        raise IntegrationLockError(
+            "build identity evidence block is missing a phase-01 surface"
+        )
+
+    projection_payload = {key: identity[key] for key in BUILD_IDENTITY_PROJECTION_KEYS}
+    projection_sha256 = hashlib.sha256(
+        canonical_json_bytes(projection_payload)
+    ).hexdigest()
     return (
         BuildIdentityBinding(
             path=AUDIT_BUILD_IDENTITY_RELATIVE,
@@ -2259,12 +2649,24 @@ def _load_build_identity_binding(
 
 
 def observe_build_identity_binding(
-    stage_root: Path, source_manifest: Mapping[str, object]
+    stage_root: Path,
+    source_manifest: Mapping[str, object],
+    *,
+    staged_payloads: frozenset[str] | None = None,
 ) -> BuildIdentityBinding:
-    """Bind all build-identity metadata except cycle-forming staged_payloads."""
+    """Bind all build-identity metadata except cycle-forming staged_payloads.
+
+    When ``staged_payloads`` is supplied, every ``digestPath`` must point at a
+    file in that closed set so the staged payload manifest remains the sole
+    authoritative source of live claims.
+    """
 
     try:
-        binding, _ = _load_build_identity_binding(stage_root, source_manifest)
+        binding, _ = _load_build_identity_binding(
+            stage_root,
+            source_manifest,
+            staged_payloads=staged_payloads,
+        )
     except IntegrationLockError as error:
         raise IntegrationLockError(
             f"build identity validation failed: {error}"
@@ -2407,8 +2809,29 @@ def validate_live_audit_manifests(
         _regular_file_under(stage_root, "vendor/source-manifest.json"),
         label="source manifest",
     )
+
+    # The staged_payloads list defines the closed set of files that every
+    # ``digestPath`` claim must point at; resolve it first so the live
+    # recompute of every digestPath/aggregate can require staged_payloads
+    # membership as part of its verification.
+    identity_for_payloads = _read_pretty_sorted_json(
+        stage_root, AUDIT_BUILD_IDENTITY_RELATIVE, label="build identity"
+    )
+    raw_staged_payloads = (
+        identity_for_payloads.get("staged_payloads")
+        if isinstance(identity_for_payloads, dict)
+        else None
+    )
+    declared_payload_paths: set[str] = set()
+    if isinstance(raw_staged_payloads, list):
+        for entry in raw_staged_payloads:
+            if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+                declared_payload_paths.add(entry["path"])
+
     observed_build_identity, identity = _load_build_identity_binding(
-        stage_root, source_manifest
+        stage_root,
+        source_manifest,
+        staged_payloads=frozenset(declared_payload_paths),
     )
     if (
         expected_build_identity is not None

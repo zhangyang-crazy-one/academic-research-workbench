@@ -9,7 +9,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 
@@ -23,6 +23,7 @@ from arw.hook_contracts import (
     HookParityMatrix,
 )
 from arw.integration_lock import (
+    AUDIT_BUILD_IDENTITY_RELATIVE,
     EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
     CodexHostCanaryEvidence,
     CodexHostEvidenceBundle,
@@ -163,10 +164,12 @@ def _install_audit_manifests(stage: Path) -> None:
     """Materialize the build-identity and stage-inventory audit manifests.
 
     Both manifests are emitted as pretty-sorted + newline JSON to match
-    ``scripts/stage-plugin``.  Every digest and set is recomputed from the
-    live stage bytes so the new ``validate_live_audit_manifests`` gate has
-    nothing to trust but the stage itself.
+    ``scripts/stage-plugin``.  Every digest and aggregate is recomputed from
+    the live stage bytes via the canonical helpers in :mod:`arw.schema_registry`
+    so the audit gate has nothing to trust but the stage itself.
     """
+
+    from arw.schema_registry import aggregate_schema_sha256
 
     schema_destination = stage / "share/arw/schemas/build-identity.schema.json"
     schema_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -210,11 +213,63 @@ def _install_audit_manifests(stage: Path) -> None:
     wheel_path = (
         "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
     )
+    wheel_path_filename = wheel_path.rsplit("/", 1)[-1]
     requirements_path = "vendor/python/wheelhouse/requirements-runtime.txt"
     (stage / requirements_path).parent.mkdir(parents=True, exist_ok=True)
     (stage / requirements_path).write_text(
         "academic-research-workbench==0.1.0\n", encoding="utf-8"
     )
+    wheelhouse_lock_path = "vendor/python/wheelhouse.lock.json"
+    wheelhouse_lock_payload = {
+        "schema_version": "arw.wheelhouse-lock.v1",
+        "wheels": [],
+        "first_party_wheel": {
+            "file": wheel_path_filename,
+            "package": "academic-research-workbench",
+            "registry": "first-party",
+            "sha256": _digest(stage / wheel_path),
+            "source": "built-from-clean-stage-inputs",
+            "version": "0.1.0",
+        },
+    }
+    _json(stage / wheelhouse_lock_path, wheelhouse_lock_payload)
+
+    # Stage 5 synthetic phase-01 evidence files under ``share/arw/evidence``
+    # so the live recompute of the build-identity evidence block can verify
+    # every digestPath without depending on the original ``build/evidence``
+    # tree.  Each file must carry ``technical_qualification: PASS`` so the
+    # verifier accepts it as a closed phase-01 surface.
+    synthetic_evidence = {
+        "pre_vendor": "share/arw/evidence/pre_vendor.json",
+        "legal": "share/arw/evidence/legal.json",
+        "upstream": "share/arw/evidence/upstream.json",
+        "asan_ubsan": "share/arw/evidence/asan_ubsan.json",
+        "tsan": "share/arw/evidence/tsan.json",
+    }
+    evidence_digests: dict[str, str] = {}
+    for label, relative in synthetic_evidence.items():
+        destination = stage / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": "arw.phase-01-evidence.v1",
+            "surface": label,
+            "technical_qualification": "PASS",
+            "fixture": True,
+        }
+        destination.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        evidence_digests[label] = collect(relative)
+
+    # The query_launcher digestPath requires a real executable on disk so
+    # the live byte recompute can match the declared sha256.
+    graph_mcp_relative = "scripts/file-base-graph-mcp"
+    graph_mcp_destination = stage / graph_mcp_relative
+    graph_mcp_destination.parent.mkdir(parents=True, exist_ok=True)
+    graph_mcp_destination.write_bytes(b"fixture-graph-mcp")
+    graph_mcp_destination.chmod(0o755)
+    graph_mcp_digest = collect(graph_mcp_relative)
 
     schemas_files = [
         {
@@ -223,12 +278,19 @@ def _install_audit_manifests(stage: Path) -> None:
         }
     ]
     for index in range(2, 9):
+        stub_relative = f"share/arw/schemas/phase3-stub-{index:02d}.schema.json"
+        stub_destination = stage / stub_relative
+        stub_destination.parent.mkdir(parents=True, exist_ok=True)
+        stub_destination.write_bytes(f"stub-{index}".encode())
         schemas_files.append(
             {
-                "path": f"share/arw/schemas/phase3-stub-{index:02d}.schema.json",
-                "sha256": hashlib.sha256(f"stub-{index}".encode()).hexdigest(),
+                "path": stub_relative,
+                "sha256": collect(stub_relative),
             }
         )
+    schemas_aggregate = aggregate_schema_sha256(
+        [(entry["path"], entry["sha256"]) for entry in schemas_files]
+    )
 
     identity = {
         "schema_version": "1.0.0",
@@ -264,8 +326,8 @@ def _install_audit_manifests(stage: Path) -> None:
             "profile_patch_sha256": profile_patch_sha256,
             "query_profile": "arw-graph-mcp-v1",
             "query_launcher": {
-                "path": "scripts/file-base-graph-mcp",
-                "sha256": hashlib.sha256(b"fixture-graph-mcp").hexdigest(),
+                "path": graph_mcp_relative,
+                "sha256": graph_mcp_digest,
             },
         },
         "file_contract": {
@@ -285,8 +347,8 @@ def _install_audit_manifests(stage: Path) -> None:
         },
         "wheelhouse": {
             "lock": {
-                "path": "vendor/python/wheelhouse.lock.json",
-                "sha256": hashlib.sha256(b"fixture-wheelhouse-lock").hexdigest(),
+                "path": wheelhouse_lock_path,
+                "sha256": collect(wheelhouse_lock_path),
             },
             "requirements": {
                 "path": requirements_path,
@@ -295,34 +357,29 @@ def _install_audit_manifests(stage: Path) -> None:
             "first_party": {"path": wheel_path, "sha256": collect(wheel_path)},
         },
         "schemas": {
-            "aggregate_sha256": hashlib.sha256(
-                b"\0".join(
-                    f"{entry['path']}\0{entry['sha256']}\n".encode("ascii")
-                    for entry in schemas_files
-                )
-            ).hexdigest(),
+            "aggregate_sha256": schemas_aggregate,
             "files": schemas_files,
         },
         "evidence": {
             "pre_vendor": {
-                "path": "build/evidence/synthetic/pre-vendor.json",
-                "sha256": hashlib.sha256(b"fixture-pre-vendor").hexdigest(),
+                "path": synthetic_evidence["pre_vendor"],
+                "sha256": evidence_digests["pre_vendor"],
             },
             "legal": {
-                "path": "build/evidence/synthetic/legal.json",
-                "sha256": hashlib.sha256(b"fixture-legal").hexdigest(),
+                "path": synthetic_evidence["legal"],
+                "sha256": evidence_digests["legal"],
             },
             "upstream": {
-                "path": "build/evidence/synthetic/upstream.json",
-                "sha256": hashlib.sha256(b"fixture-upstream").hexdigest(),
+                "path": synthetic_evidence["upstream"],
+                "sha256": evidence_digests["upstream"],
             },
             "asan_ubsan": {
-                "path": "build/evidence/synthetic/asan-ubsan.json",
-                "sha256": hashlib.sha256(b"fixture-asan-ubsan").hexdigest(),
+                "path": synthetic_evidence["asan_ubsan"],
+                "sha256": evidence_digests["asan_ubsan"],
             },
             "tsan": {
-                "path": "build/evidence/synthetic/tsan.json",
-                "sha256": hashlib.sha256(b"fixture-tsan").hexdigest(),
+                "path": synthetic_evidence["tsan"],
+                "sha256": evidence_digests["tsan"],
             },
         },
     }
@@ -822,6 +879,59 @@ def _refresh_evidence_bindings(paths: dict[str, Path]) -> None:
     bundle_path.write_bytes(canonical_json_bytes(bundle))
     canary = json.loads(paths["canary"].read_text(encoding="utf-8"))
     canary["fresh_home_receipts"] = receipt_bindings
+    canary["evidence_bundle"] = {
+        "path": "evidence-bundle.json",
+        "sha256": _digest(bundle_path),
+    }
+    paths["canary"].write_bytes(canonical_json_bytes(canary))
+
+
+def _refresh_canary_stage_identity(paths: dict[str, Path]) -> None:
+    """Rebind every stage_sha256 in the canary/bundle/receipts to the live stage."""
+
+    stage_sha256 = observe_stage_identity(paths["stage"])
+    evidence_root = paths["canary"].parent
+    for index in range(1, 4):
+        receipt_path = evidence_root / f"fresh-home-{index}.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["stage_sha256"] = stage_sha256
+        receipt_path.write_bytes(canonical_json_bytes(receipt))
+    receipt_bindings = [
+        {
+            "path": f"fresh-home-{index}.json",
+            "sha256": _digest(evidence_root / f"fresh-home-{index}.json"),
+        }
+        for index in range(1, 4)
+    ]
+    bundle_path = evidence_root / "evidence-bundle.json"
+    bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle["stage_sha256"] = stage_sha256
+    bundle["fresh_home_receipts"] = receipt_bindings
+    bundle_path.write_bytes(canonical_json_bytes(bundle))
+    canary = json.loads(paths["canary"].read_text(encoding="utf-8"))
+    canary["stage_sha256"] = stage_sha256
+    canary["fresh_home_receipts"] = receipt_bindings
+    canary["evidence_bundle"] = {
+        "path": "evidence-bundle.json",
+        "sha256": _digest(bundle_path),
+    }
+    # Update hook parity evidence records so their stage_sha256 matches.
+    for classification in bundle["hook_status_classifications"]:
+        parity_path = evidence_root / classification["evidence"]["path"]
+        parity = json.loads(parity_path.read_text(encoding="utf-8"))
+        parity["stage_sha256"] = stage_sha256
+        new_bytes = canonical_json_bytes(parity)
+        parity_path.write_bytes(new_bytes)
+        new_digest = hashlib.sha256(new_bytes).hexdigest()
+        new_filename = f"{new_digest}.json"
+        if parity_path.name != new_filename:
+            new_path = evidence_root / new_filename
+            parity_path.rename(new_path)
+        classification["evidence"] = {
+            "path": new_filename,
+            "sha256": new_digest,
+        }
+    bundle_path.write_bytes(canonical_json_bytes(bundle))
     canary["evidence_bundle"] = {
         "path": "evidence-bundle.json",
         "sha256": _digest(bundle_path),
@@ -2007,3 +2117,397 @@ def test_audit_manifest_gate_rejects_unreferenced_canary_file_after_rebind(
 
     with pytest.raises(IntegrationLockError, match="canary evidence set is not closed"):
         _verify(integration_fixture, lock)
+
+
+# ---------------------------------------------------------------------------
+# Compact parametrized tamper matrix for the build-identity v2 live recompute.
+#
+# Each row covers one verifiable surface class; the verifier MUST reject the
+# drift on the first live recompute attempt.  The matrix pairs a one-line
+# mutation with the precise verifier error string so the audit gate cannot be
+# satisfied by a partial rebind attack.
+# ---------------------------------------------------------------------------
+
+
+def _rebind_build_identity(
+    stage: Path, *, mutate, extra_rebind_paths: tuple[str, ...] = ()
+) -> None:
+    """Rebuild the identity + inventory after a mutation.
+
+    The user mutation touches the identity file's content; we then refresh
+    every place that records the identity's own digest (the identity's
+    own ``staged_payloads`` row + the inventory's ``covered_files`` row) so
+    the audit manifest gate does not fail before the live recompute runs.
+    When ``extra_rebind_paths`` is supplied, every additional staged file
+    whose bytes have changed is also rebinded in both ``staged_payloads``
+    and ``covered_files`` so a full consistent rebind attack can be
+    exercised by the tests.
+    """
+
+    identity_path = stage / "share/arw/build-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    mutate(identity)
+    for path in extra_rebind_paths:
+        current = _digest(stage / path)
+        for entry in identity["staged_payloads"]:
+            if entry["path"] == path:
+                entry["sha256"] = current
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    new_identity_digest = _digest(identity_path)
+    for entry in identity["staged_payloads"]:
+        if entry["path"] == AUDIT_BUILD_IDENTITY_RELATIVE:
+            entry["sha256"] = new_identity_digest
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    inventory_path = stage / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == AUDIT_BUILD_IDENTITY_RELATIVE:
+            entry["sha256"] = new_identity_digest
+        elif entry["path"] in extra_rebind_paths:
+            entry["sha256"] = _digest(stage / entry["path"])
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "mutate", "match"),
+    [
+        # ---- one row per evidence digestPath --------------------------------
+        (
+            "evidence.pre_vendor.sha256",
+            lambda identity: identity["evidence"]["pre_vendor"].__setitem__(
+                "sha256", "1" * 64
+            ),
+            "evidence.pre_vendor",
+        ),
+        (
+            "evidence.legal.sha256",
+            lambda identity: identity["evidence"]["legal"].__setitem__(
+                "sha256", "2" * 64
+            ),
+            "evidence.legal",
+        ),
+        (
+            "evidence.upstream.sha256",
+            lambda identity: identity["evidence"]["upstream"].__setitem__(
+                "sha256", "3" * 64
+            ),
+            "evidence.upstream",
+        ),
+        (
+            "evidence.asan_ubsan.sha256",
+            lambda identity: identity["evidence"]["asan_ubsan"].__setitem__(
+                "sha256", "4" * 64
+            ),
+            "evidence.asan_ubsan",
+        ),
+        (
+            "evidence.tsan.sha256",
+            lambda identity: identity["evidence"]["tsan"].__setitem__(
+                "sha256", "5" * 64
+            ),
+            "evidence.tsan",
+        ),
+        # ---- schema aggregate / individual schema file -----------------------
+        (
+            "schemas.aggregate_sha256",
+            lambda identity: identity["schemas"].__setitem__(
+                "aggregate_sha256", "f" * 64
+            ),
+            "schemas aggregate sha256",
+        ),
+        (
+            "schemas.files[1].sha256",
+            lambda identity: identity["schemas"]["files"][1].__setitem__(
+                "sha256", "9" * 64
+            ),
+            "schemas entry #1",
+        ),
+        # ---- derived projection digests -------------------------------------
+        (
+            "projection.patch_set_sha256",
+            lambda identity: identity["projection"].__setitem__(
+                "patch_set_sha256", "a" * 64
+            ),
+            "projection.patch_set_sha256",
+        ),
+        (
+            "projection.profile_patch_sha256",
+            lambda identity: identity["projection"].__setitem__(
+                "profile_patch_sha256", "b" * 64
+            ),
+            "projection.profile_patch_sha256",
+        ),
+        (
+            "projection.query_launcher.sha256",
+            lambda identity: identity["projection"]["query_launcher"].__setitem__(
+                "sha256", "c" * 64
+            ),
+            "projection.query_launcher",
+        ),
+        # ---- file contract header / embedded contract sha256 ---------------
+        (
+            "file_contract.header.sha256",
+            lambda identity: identity["file_contract"]["header"].__setitem__(
+                "sha256", "d" * 64
+            ),
+            "file_contract.header",
+        ),
+        (
+            "file_contract.contract_sha256",
+            lambda identity: identity["file_contract"].__setitem__(
+                "contract_sha256", "e" * 64
+            ),
+            "file_contract.contract_sha256",
+        ),
+        # ---- wheelhouse digestPaths ----------------------------------------
+        (
+            "wheelhouse.lock.sha256",
+            lambda identity: identity["wheelhouse"]["lock"].__setitem__(
+                "sha256", "0" * 64
+            ),
+            "wheelhouse.lock",
+        ),
+        (
+            "wheelhouse.requirements.sha256",
+            lambda identity: identity["wheelhouse"]["requirements"].__setitem__(
+                "sha256", "1" * 64
+            ),
+            "wheelhouse.requirements",
+        ),
+        (
+            "wheelhouse.first_party.sha256",
+            lambda identity: identity["wheelhouse"]["first_party"].__setitem__(
+                "sha256", "2" * 64
+            ),
+            "wheelhouse.first_party",
+        ),
+        # ---- native digestPaths ---------------------------------------------
+        (
+            "native.binary.sha256",
+            lambda identity: identity["native"]["binary"].__setitem__(
+                "sha256", "3" * 64
+            ),
+            "native.binary",
+        ),
+        (
+            "native.build_evidence.sha256",
+            lambda identity: identity["native"]["build_evidence"].__setitem__(
+                "sha256", "4" * 64
+            ),
+            "native.build_evidence",
+        ),
+        # ---- plugin.version -------------------------------------------------
+        (
+            "plugin.version",
+            lambda identity: identity["plugin"].__setitem__(
+                "version", "0.1.0+falsified"
+            ),
+            "plugin.version",
+        ),
+        # ---- source-manifest component trees (non-recomputable authority) ----
+        (
+            "native.patched_source_tree_sha256",
+            lambda identity: identity["native"].__setitem__(
+                "patched_source_tree_sha256", "f" * 64
+            ),
+            "native.patched_source_tree_sha256",
+        ),
+        (
+            "native.upstream_test_tree_sha256",
+            lambda identity: identity["native"].__setitem__(
+                "upstream_test_tree_sha256", "e" * 64
+            ),
+            "native.upstream_test_tree_sha256",
+        ),
+    ],
+)
+def test_build_identity_live_recompute_tamper_matrix(
+    integration_fixture: dict[str, Path], field: str, mutate, match: str
+) -> None:
+    """Each verifiable surface must reject on the first live recompute attempt."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    _rebind_build_identity(integration_fixture["stage"], mutate=mutate)
+    with pytest.raises(IntegrationLockError, match=match):
+        _verify(integration_fixture, lock)
+
+
+@pytest.mark.parametrize(
+    ("label", "target_relative"),
+    [
+        ("pre_vendor", "share/arw/evidence/pre_vendor.json"),
+        ("legal", "share/arw/evidence/legal.json"),
+        ("upstream", "share/arw/evidence/upstream.json"),
+        ("asan_ubsan", "share/arw/evidence/asan_ubsan.json"),
+        ("tsan", "share/arw/evidence/tsan.json"),
+    ],
+)
+def test_evidence_partial_rebind_rejects_on_live_bytes_drift(
+    integration_fixture: dict[str, Path], label: str, target_relative: str
+) -> None:
+    """Partial rebind: only ``inventory.covered_files`` is updated.
+
+    A naive attacker flips ``technical_qualification`` on the staged file
+    *and* rebinds the inventory's coverage digest but leaves the identity
+    digestPath claim on the old bytes.  The verifier must catch this on the
+    first live recompute pass (digestPath live bytes mismatch) before the
+    PASS-semantic check has a chance to run.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    target = integration_fixture["stage"] / target_relative
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["technical_qualification"] = "BLOCKED"
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    # Partial rebind: only the inventory is updated; the identity digestPath
+    # claim is left on the stale bytes so the verifier must reject on the
+    # live bytes check, not on the PASS semantic check.
+    inventory_path = integration_fixture["stage"] / "supply-chain/stage-inventory.json"
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    for entry in inventory["covered_files"]:
+        if entry["path"] == target_relative:
+            entry["sha256"] = _digest(target)
+    inventory_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _refresh_canary_stage_identity(integration_fixture)
+    with pytest.raises(IntegrationLockError, match="live bytes do not match"):
+        _verify(integration_fixture, lock)
+
+
+def test_evidence_path_redirect_to_uncovered_file_is_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """A digestPath cannot be redirected at a file absent from staged_payloads."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    # Choose a file that is in the stage but not in staged_payloads (the
+    # identity file itself is cycle-excluded and is the only "shadow" target).
+    identity_path = integration_fixture["stage"] / "share/arw/build-identity.json"
+    identity_digest = _digest(identity_path)
+    target = "share/arw/build-identity.json"
+
+    def _redirect(identity: dict[str, object]) -> None:
+        evidence = cast(dict[str, object], identity["evidence"])
+        evidence["pre_vendor"] = {
+            "path": target,
+            "sha256": identity_digest,
+        }
+
+    _rebind_build_identity(integration_fixture["stage"], mutate=_redirect)
+    with pytest.raises(IntegrationLockError, match="cycle-forming metadata"):
+        _verify(integration_fixture, lock)
+
+
+@pytest.mark.parametrize(
+    ("label", "target_relative"),
+    [
+        ("pre_vendor", "share/arw/evidence/pre_vendor.json"),
+        ("legal", "share/arw/evidence/legal.json"),
+        ("upstream", "share/arw/evidence/upstream.json"),
+        ("asan_ubsan", "share/arw/evidence/asan_ubsan.json"),
+        ("tsan", "share/arw/evidence/tsan.json"),
+    ],
+)
+def test_evidence_full_consistent_rebind_rejects_on_pass_semantic(
+    integration_fixture: dict[str, Path], label: str, target_relative: str
+) -> None:
+    """Full consistent rebind: identity, staged_payloads, AND inventory.
+
+    An attacker rewrites the staged evidence file (flipping
+    ``technical_qualification`` from PASS to BLOCKED) and updates all
+    three digest records to the new bytes:
+
+    * ``identity.evidence[label].sha256``
+    * ``identity.staged_payloads[path].sha256``
+    * ``inventory.covered_files[path].sha256``
+
+    The canary stage_sha256 is also refreshed to track the new live stage
+    identity.  With every digest claim consistent, the verifier MUST reject
+    only because of the closed ``technical_qualification: PASS`` semantic
+    binding the evidence surface.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    target = integration_fixture["stage"] / target_relative
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["technical_qualification"] = "BLOCKED"
+    payload["tampered"] = True
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    def _rebind(identity: dict[str, object]) -> None:
+        evidence = cast(dict[str, object], identity["evidence"])
+        evidence[label] = {
+            "path": target_relative,
+            "sha256": _digest(target),
+        }
+
+    # _rebind_build_identity refreshes identity.evidence[label], the
+    # identity's own staged_payloads row, the inventory.covered_files row
+    # for the evidence file, AND the inventory.covered_files row for the
+    # identity file.  ``extra_rebind_paths`` additionally rebinds the
+    # identity's ``staged_payloads`` entry for the tampered evidence file so
+    # all three digest records (identity.evidence, identity.staged_payloads,
+    # inventory.covered_files) move together.
+    _rebind_build_identity(
+        integration_fixture["stage"],
+        mutate=_rebind,
+        extra_rebind_paths=(target_relative,),
+    )
+    _refresh_canary_stage_identity(integration_fixture)
+    # With every digest claim consistent, the rejection MUST come from the
+    # closed ``technical_qualification: PASS`` semantic - never from a
+    # digestPath live-bytes or staged_payloads mismatch.
+    with pytest.raises(
+        IntegrationLockError, match=f"evidence.{label}.*technical_qualification=PASS"
+    ):
+        _verify(integration_fixture, lock)
+
+
+def test_installed_verifier_does_not_read_original_build_evidence_tree(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """The live recompute must be bound to staged copies only.
+
+    Removing the original ``build/evidence`` tree (which would not exist in a
+    clean install) must not affect the audit gate: the staged copies under
+    ``share/arw/evidence`` are the sole live source.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    # A clean install has no ``build/evidence`` tree at all; the verifier
+    # must still produce a passing receipt because every claim is bound to the
+    # staged copies.
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"
+
+
+def test_schema_aggregate_matches_canonical_helper(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """The identity's schemas aggregate must equal ``aggregate_schema_sha256``."""
+
+    from arw.schema_registry import aggregate_schema_sha256
+
+    identity = json.loads(
+        (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entries = [(item["path"], item["sha256"]) for item in identity["schemas"]["files"]]
+    assert aggregate_schema_sha256(entries) == identity["schemas"]["aggregate_sha256"]
