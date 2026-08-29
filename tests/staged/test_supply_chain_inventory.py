@@ -904,3 +904,53 @@ def test_validate_only_rejects_3_15_staged_pin(
         "exactly 3\\.13\\.x or 3\\.14\\.x" in validated.stderr
         or "does not match" in validated.stderr
     )
+
+
+def test_validate_only_rejects_passthrough_evidence_stub(
+    tmp_path: Path,
+) -> None:
+    """RED: validate-only rejects a {"technical_qualification":"PASS"} stub.
+
+    Replaces each evidence surface with the smallest possible self-asserted
+    stub and asserts that ``stage-plugin --validate-only`` rejects the
+    semantically empty payload.
+    """
+
+    for label, relative in (
+        ("pre_vendor", "share/arw/evidence/pre_vendor.json"),
+        ("legal", "share/arw/evidence/legal.json"),
+        ("upstream", "share/arw/evidence/upstream.json"),
+        ("asan_ubsan", "share/arw/evidence/asan_ubsan.json"),
+        ("tsan", "share/arw/evidence/tsan.json"),
+    ):
+        stage_root = tmp_path / f"stub-{label}" / PLUGIN_NAME
+        result = _stage(stage_root)
+        assert result.returncode == 0, result.stderr
+
+        target = stage_root / relative
+        target.write_text(
+            json.dumps({"technical_qualification": "PASS"}, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        identity = _load(stage_root / "share/arw/build-identity.json")
+        identity["evidence"][label] = {
+            "path": relative,
+            "sha256": _sha256(target),
+        }
+        for entry in identity["staged_payloads"]:
+            if entry["path"] == relative:
+                entry["sha256"] = _sha256(target)
+        _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+        _rebind_inventory(
+            stage_root,
+            relative,
+            "share/arw/build-identity.json",
+        )
+
+        validated = _validate_stage(stage_root)
+        assert validated.returncode != 0, (
+            f"validate-only accepted stub for {label}: {validated.stderr}"
+        )
+        assert "producer contract" in validated.stderr

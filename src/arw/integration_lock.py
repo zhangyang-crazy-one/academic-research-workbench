@@ -97,6 +97,9 @@ EXPECTED_FILE_BASE_PATCHES = (
 EXPECTED_FILE_BASE_POST_PATCH_TREE = (
     "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1"
 )
+EXPECTED_FILE_BASE_TEST_TREE = (
+    "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
+)
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
         "SBOM.cdx.json",
@@ -2298,15 +2301,379 @@ def _verify_aggregate_sha256(
     return materialized
 
 
+# ---------------------------------------------------------------------------
+# Phase 01 evidence producer contracts.
+#
+# These strict Pydantic models capture the full producer contracts for each
+# phase-01 evidence surface (network verdicts, legal release verdict, pre-vendor
+# license receipt).  They are the SINGLE source of truth for both the
+# installed verifier (``_verify_evidence_pass``) and the producer
+# (``stage-plugin`` ``staged_evidence`` helper) - no mirrored logic.
+#
+# ``derive_qualification`` is the producer-defined semantic gate; the
+# verifier requires ``technical_qualification`` to equal this derived value
+# so a self-asserted field cannot be used to bypass semantic validation.
+# ---------------------------------------------------------------------------
+
+
+_NET_NAMESPACE_PATTERN = re.compile(r"^net:\[\d+\]$")
+
+
+class NetworkVerdict(LockModel):
+    """Contract for ``scripts/offline-exec`` network-verdict surfaces.
+
+    ``passed`` semantics: ``command_status == 0`` AND
+    ``network_namespace_denied is True`` AND ``network_syscall_attempts is []``.
+    """
+
+    schema_version: Literal["1.0.0"]
+    command_status: Literal[0]
+    network_namespace_denied: Literal[True]
+    network_syscall_attempts: list[object]
+    strace_network_audit: Literal[True]
+    child_network_namespace: str
+    host_network_namespace: str
+    network_denial_mechanism: Literal["bwrap-unshare-net"]
+    namespace_local_network_syscall_count: int
+    technical_qualification: str
+
+    @model_validator(mode="after")
+    def _validate_namespaces(self) -> Self:
+        if not _NET_NAMESPACE_PATTERN.fullmatch(self.child_network_namespace):
+            raise ValueError(
+                "child_network_namespace must match ^net:\\[\\d+\\]$"
+            )
+        if not _NET_NAMESPACE_PATTERN.fullmatch(self.host_network_namespace):
+            raise ValueError(
+                "host_network_namespace must match ^net:\\[\\d+\\]$"
+            )
+        if self.child_network_namespace == self.host_network_namespace:
+            raise ValueError(
+                "child_network_namespace must differ from host_network_namespace"
+            )
+        if self.namespace_local_network_syscall_count < 0:
+            raise ValueError(
+                "namespace_local_network_syscall_count must be a non-negative int"
+            )
+        return self
+
+    def derive_qualification(self) -> str:
+        if self.command_status != 0:
+            return "BLOCKED"
+        if not self.network_namespace_denied:
+            return "BLOCKED"
+        if self.network_syscall_attempts:
+            return "BLOCKED"
+        return "PASS"
+
+
+class _LegalComponentRow(LockModel):
+    component_id: Literal["academic-research-skills", "experiment-agent", "file-base"]
+    license: Literal["CC-BY-NC-4.0", "MIT"]
+    release_status: Literal["BLOCKED", "SATISFIED"]
+    source_path: str
+    source_sha256: Sha256
+    staged_path: str
+    staged_sha256: Sha256
+
+    @model_validator(mode="after")
+    def _validate_pair(self) -> Self:
+        if self.source_sha256 != self.staged_sha256:
+            raise ValueError(
+                f"{self.component_id} staged_sha256 must equal source_sha256"
+            )
+        if self.license == "CC-BY-NC-4.0" and self.release_status != "BLOCKED":
+            raise ValueError(
+                f"{self.component_id} is CC-BY-NC-4.0 and must be release_status=BLOCKED"
+            )
+        return self
+
+
+class LegalVerdict(LockModel):
+    """Contract for ``scripts/license-gate classify_release`` output."""
+
+    schema_version: Literal["1.0.0"]
+    release_qualification: Literal["BLOCKED"]
+    reason_codes: list[str]
+    evidence_needed: list[str]
+    components: list[_LegalComponentRow]
+    use_distribution_path: Literal["supply-chain/use-distribution.json"]
+    private_repository_is_noncommercial_evidence: Literal[False]
+    technical_qualification: str
+
+    @model_validator(mode="after")
+    def _validate_exact(self) -> Self:
+        if tuple(self.reason_codes) != EXPECTED_LEGAL_BLOCKERS:
+            raise ValueError(
+                "legal verdict reason_codes must equal the qualified blockers"
+            )
+        expected_needed = (
+            "Declare intended use and distribution class.",
+            "Record accountable approval with evidence hashes.",
+            "Record authentic owner permission or establish compatible CC BY-NC use.",
+        )
+        if tuple(self.evidence_needed) != expected_needed:
+            raise ValueError(
+                "legal verdict evidence_needed must equal the producer strings"
+            )
+        seen_ids = set()
+        for row in self.components:
+            if row.component_id in seen_ids:
+                raise ValueError(
+                    f"legal verdict has duplicate component_id: {row.component_id}"
+                )
+            seen_ids.add(row.component_id)
+        if seen_ids != {"academic-research-skills", "experiment-agent", "file-base"}:
+            raise ValueError(
+                "legal verdict must declare exactly the three qualified components"
+            )
+        return self
+
+    def derive_qualification(self) -> str:
+        return "PASS"
+
+
+class _PreVendorComponentLicense(LockModel):
+    component: Literal["academic-research-skills", "experiment-agent", "file-base"]
+    sha256: Sha256
+    source_path: Literal["LICENSE"]
+    attribution_required: bool
+    modification_marking_required: bool
+    noncommercial_restriction: bool
+
+
+class _PreVendorComponent(LockModel):
+    id: Literal["academic-research-skills", "experiment-agent", "file-base"]
+    clean: Literal[True]
+    status_porcelain: Literal[""]
+    revision: GitObjectId
+    git_tree: GitObjectId
+    tree_sha256: Sha256
+    upstream_url: str
+    version: str
+
+    @model_validator(mode="after")
+    def _validate_upstream(self) -> Self:
+        if not self.upstream_url.startswith(("https://", "http://")):
+            raise ValueError(
+                f"component {self.id} upstream_url must be an http(s) URL"
+            )
+        if not self.upstream_url or " " in self.upstream_url:
+            raise ValueError(
+                f"component {self.id} upstream_url is malformed"
+            )
+        if not self.version:
+            raise ValueError(
+                f"component {self.id} version must be non-empty"
+            )
+        return self
+
+
+class _PreVendorLegalInput(LockModel):
+    component: Literal["academic-research-skills", "experiment-agent", "file-base"]
+    kind: Literal["license", "notice", "policy", "checker", "generator", "package-lock"]
+    path: str
+    sha256: Sha256
+
+
+class _PreVendorCommand(LockModel):
+    argv: list[str]
+    cwd: str
+    started_at: str
+    ended_at: str
+    status: int
+    stderr_path: str
+    stdout_path: str
+
+
+class _PreVendorGeneratedNotice(LockModel):
+    path: str
+    sha256: Sha256
+
+
+class _PreVendorTool(LockModel):
+    path: str
+    sha256: Sha256
+
+
+class _PreVendorNativeFileBaseGate(LockModel):
+    unmodified: Literal[True]
+    entrypoint: Literal["scripts/license-gate.sh"]
+    commands: list[_PreVendorCommand]
+    generated_notices: list[_PreVendorGeneratedNotice]
+    tools: list[_PreVendorTool]
+
+    @model_validator(mode="after")
+    def _validate_nonempty(self) -> Self:
+        if not self.commands:
+            raise ValueError(
+                "native_file_base_gate.commands must be non-empty"
+            )
+        if not self.generated_notices:
+            raise ValueError(
+                "native_file_base_gate.generated_notices must be non-empty"
+            )
+        if not self.tools:
+            raise ValueError(
+                "native_file_base_gate.tools must be non-empty"
+            )
+        return self
+
+
+class _PreVendorRawEvidence(LockModel):
+    path: str
+    sha256: Sha256
+
+
+class _PreVendorToolIdentity(LockModel):
+    git: str
+    node: str
+    npm: str
+    python: str
+    scancode: str
+
+    @model_validator(mode="after")
+    def _validate_nonempty(self) -> Self:
+        for field in ("git", "node", "npm", "python", "scancode"):
+            value = getattr(self, field)
+            if not value:
+                raise ValueError(
+                    f"tool_identities.{field} must be a non-empty string"
+                )
+        return self
+
+
+class _PreVendorVendorObservation(LockModel):
+    model_config = ConfigDict(extra="allow")
+
+
+_RFC3339_Z_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$"
+)
+
+
+class PreVendorReceipt(LockModel):
+    """Contract for ``scripts/pre-vendor-license-gate`` output."""
+
+    schema_version: Literal["1.0.0"]
+    component_licenses: list[_PreVendorComponentLicense]
+    components: list[_PreVendorComponent]
+    legal_inputs: list[_PreVendorLegalInput]
+    native_file_base_gate: _PreVendorNativeFileBaseGate
+    raw_evidence: list[_PreVendorRawEvidence]
+    tool_identities: _PreVendorToolIdentity
+    created_at: str
+    vendor_sources_observations: list[_PreVendorVendorObservation]
+    technical_qualification: str
+
+    @model_validator(mode="after")
+    def _validate_exact(self) -> Self:
+        if len(self.component_licenses) != 3:
+            raise ValueError(
+                "pre-vendor receipt must declare exactly 3 component_licenses"
+            )
+        if len(self.components) != 3:
+            raise ValueError(
+                "pre-vendor receipt must declare exactly 3 components"
+            )
+        if not self.legal_inputs:
+            raise ValueError(
+                "pre-vendor receipt legal_inputs must be non-empty"
+            )
+        if not self.raw_evidence:
+            raise ValueError(
+                "pre-vendor receipt raw_evidence must be non-empty"
+            )
+        if not self.vendor_sources_observations:
+            raise ValueError(
+                "pre-vendor receipt vendor_sources_observations must be non-empty"
+            )
+        if not _RFC3339_Z_PATTERN.fullmatch(self.created_at):
+            raise ValueError(
+                "pre-vendor receipt created_at must be a strict RFC3339 Z timestamp"
+            )
+        # Pin the two CC-BY-NC-4.0 license digests; file-base can be any
+        # valid 64-hex sha256 because the producer does not pin it.
+        expected = {
+            "academic-research-skills": (
+                "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c",
+                True,
+                True,
+                True,
+            ),
+            "experiment-agent": (
+                "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25",
+                True,
+                True,
+                True,
+            ),
+            "file-base": (
+                None,
+                True,
+                False,
+                False,
+            ),
+        }
+        seen = set()
+        for license_row in self.component_licenses:
+            seen.add(license_row.component)
+            expected_sha, attribution, marking, noncommercial = expected[
+                license_row.component
+            ]
+            if expected_sha is not None and license_row.sha256 != expected_sha:
+                raise ValueError(
+                    f"pre-vendor license sha256 drift for "
+                    f"{license_row.component}: pinned={expected_sha} "
+                    f"declared={license_row.sha256}"
+                )
+            if license_row.attribution_required is not attribution:
+                raise ValueError(
+                    f"pre-vendor license {license_row.component} "
+                    f"attribution_required must be {attribution}"
+                )
+            if license_row.modification_marking_required is not marking:
+                raise ValueError(
+                    f"pre-vendor license {license_row.component} "
+                    f"modification_marking_required must be {marking}"
+                )
+            if license_row.noncommercial_restriction is not noncommercial:
+                raise ValueError(
+                    f"pre-vendor license {license_row.component} "
+                    f"noncommercial_restriction must be {noncommercial}"
+                )
+        if seen != {"academic-research-skills", "experiment-agent", "file-base"}:
+            raise ValueError(
+                "pre-vendor license set must cover the three qualified components"
+            )
+        return self
+
+    def derive_qualification(self) -> str:
+        return "PASS"
+
+
+_EVIDENCE_MODEL_BY_SURFACE: dict[str, type[BaseModel]] = {
+    "pre_vendor": PreVendorReceipt,
+    "legal": LegalVerdict,
+    "upstream": NetworkVerdict,
+    "asan_ubsan": NetworkVerdict,
+    "tsan": NetworkVerdict,
+}
+
+
 def _verify_evidence_pass(
     stage_root: Path, path: str, *, label: str
 ) -> dict[str, object]:
-    """Read a staged evidence file and require ``technical_qualification: PASS``.
+    """Read a staged evidence file and DERIVE its qualification from full semantics.
 
     Each of the five phase-01 evidence files is staged into
-    ``share/arw/evidence/*.json``; the file must be a JSON object carrying the
-    closed ``PASS`` semantic so the install-time verifier never has to read
-    the original ``build/evidence`` tree.
+    ``share/arw/evidence/*.json``.  This verifier no longer trusts a
+    self-asserted ``technical_qualification`` field; instead it parses the
+    file against the matching strict Pydantic producer contract and
+    DERIVES the qualification from the validated semantics (network
+    isolation for ``upstream``/``asan_ubsan``/``tsan``, license release
+    gate state for ``legal``, pre-vendor license gate state for
+    ``pre_vendor``).  The declared ``technical_qualification`` MUST equal
+    the derived value.
     """
 
     file_path = _regular_file_under(stage_root, path)
@@ -2320,11 +2687,42 @@ def _verify_evidence_pass(
         raise IntegrationLockError(
             f"{label} evidence file must be a JSON object: {path}"
         )
-    if payload.get("technical_qualification") != "PASS":
+    surface = _evidence_surface_for(path)
+    model = _EVIDENCE_MODEL_BY_SURFACE.get(surface)
+    if model is None:
         raise IntegrationLockError(
-            f"{label} evidence file is not technical_qualification=PASS: {path}"
+            f"{label} evidence file has no producer contract: {path}"
+        )
+    try:
+        validated = model.model_validate(payload, strict=True)
+    except ValidationError as error:
+        raise IntegrationLockError(
+            f"{label} evidence file fails the {model.__name__} producer "
+            f"contract: {error}"
+        ) from error
+    contract = cast(
+        "NetworkVerdict | LegalVerdict | PreVendorReceipt",
+        validated,
+    )
+    derived = contract.derive_qualification()
+    declared = contract.technical_qualification
+    if declared != derived:
+        raise IntegrationLockError(
+            f"{label} evidence file declared technical_qualification="
+            f"{declared!r} but the {model.__name__} semantics derive "
+            f"{derived!r}"
         )
     return payload
+
+
+def _evidence_surface_for(path: str) -> str:
+    """Map a staged evidence file path to its producer surface name."""
+
+    basename = Path(path).name
+    for surface in EVIDENCE_RELATIVE_PATHS:
+        if Path(surface).name == basename:
+            return Path(surface).stem
+    raise ValueError(f"no evidence surface maps to {path}")
 
 
 def _projection_patch_set_sha256(patches: list[Mapping[str, object]]) -> str:
@@ -2437,7 +2835,11 @@ def parse_file_contract_contract_sha256_from_bytes(header_bytes: bytes) -> str:
             "file-contracts header declares ARW_FILES_CONTRACT_SHA256 more "
             f"than once: {len(matches)} active definitions found"
         )
-    return matches[0].group(1)
+    for match in matches:
+        return match.group(1)
+    raise IntegrationLockError(
+        "file-contracts header active definition disappeared during parsing"
+    )
 
 
 def _file_contract_contract_sha256(header_path: Path) -> str:
@@ -2468,6 +2870,10 @@ def observe_regenerated_file_contract(
             "build identity file_contract.header must be a digestPath"
         )
     header_relative = header_entry["path"]
+    if not isinstance(header_relative, str):
+        raise IntegrationLockError(
+            "build identity file_contract.header path must be a string"
+        )
     try:
         header_path = _regular_file_under(stage_root, header_relative)
     except IntegrationLockError as error:
@@ -2614,6 +3020,14 @@ def _load_build_identity_binding(
     native = identity.get("native")
     if not isinstance(native, dict):
         raise IntegrationLockError("build identity native projection is malformed")
+    if expected_post_tree != EXPECTED_FILE_BASE_POST_PATCH_TREE:
+        raise IntegrationLockError(
+            "source manifest post-patch tree drifts from the pinned expectation"
+        )
+    if expected_test_tree != EXPECTED_FILE_BASE_TEST_TREE:
+        raise IntegrationLockError(
+            "source manifest native test tree drifts from the pinned expectation"
+        )
     if native.get("patched_source_tree_sha256") != expected_post_tree:
         raise IntegrationLockError(
             "build identity native.patched_source_tree_sha256 drift"
@@ -3636,6 +4050,9 @@ __all__ = (
     "IntegrationLockError",
     "IntegrationVerification",
     "IsolationProof",
+    "LegalVerdict",
+    "NetworkVerdict",
+    "PreVendorReceipt",
     "UseDistributionPolicyProjection",
     "build_integration_lock",
     "diagnose_integration_lock",

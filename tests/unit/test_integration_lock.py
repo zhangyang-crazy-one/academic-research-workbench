@@ -227,32 +227,48 @@ def _install_audit_manifests(stage: Path) -> None:
     }
     _json(stage / wheelhouse_lock_path, wheelhouse_lock_payload)
 
-    # Stage 5 synthetic phase-01 evidence files under ``share/arw/evidence``
-    # so the live recompute of the build-identity evidence block can verify
-    # every digestPath without depending on the original ``build/evidence``
-    # tree.  Each file must carry ``technical_qualification: PASS`` so the
-    # verifier accepts it as a closed phase-01 surface.
-    synthetic_evidence = {
+    # Stage the real phase-01 evidence files under ``share/arw/evidence``
+    # so the live recompute of the build-identity evidence block verifies
+    # each surface against the strict producer contract.  The copied bytes
+    # MUST satisfy the NetworkVerdict / LegalVerdict / PreVendorReceipt
+    # semantic validation - the fixture cannot bypass it with a stub.
+    synthetic_evidence_relative = {
         "pre_vendor": "share/arw/evidence/pre_vendor.json",
         "legal": "share/arw/evidence/legal.json",
         "upstream": "share/arw/evidence/upstream.json",
         "asan_ubsan": "share/arw/evidence/asan_ubsan.json",
         "tsan": "share/arw/evidence/tsan.json",
     }
+    synthetic_evidence_source = {
+        "pre_vendor": REPOSITORY_ROOT / "build/evidence/phase-01/pre-vendor-license/receipt.json",
+        "legal": REPOSITORY_ROOT / "build/evidence/phase-01/license-0002/verdict.json",
+        "upstream": REPOSITORY_ROOT / "build/evidence/phase-01/native/upstream/verdict.json",
+        "asan_ubsan": REPOSITORY_ROOT / "build/evidence/phase-01/native/asan-ubsan/verdict.json",
+        "tsan": REPOSITORY_ROOT / "build/evidence/phase-01/native/tsan/verdict.json",
+    }
+    synthetic_evidence = synthetic_evidence_relative
     evidence_digests: dict[str, str] = {}
     for label, relative in synthetic_evidence.items():
+        source = synthetic_evidence_source[label]
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"required phase-01 evidence source is missing: {source}"
+            )
         destination = stage / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "schema_version": "arw.phase-01-evidence.v1",
-            "surface": label,
-            "technical_qualification": "PASS",
-            "fixture": True,
-        }
-        destination.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        destination.write_bytes(source.read_bytes())
+        # Verify the copied file passes the matching producer contract.
+        from pydantic import ValidationError as _PydanticError
+
+        model_cls = integration_lock_module._EVIDENCE_MODEL_BY_SURFACE[label]
+        try:
+            model_cls.model_validate(
+                json.loads(destination.read_text(encoding="utf-8")), strict=True
+            )
+        except _PydanticError as error:
+            raise RuntimeError(
+                f"staged evidence surface {label} fails the producer contract: {error}"
+            ) from error
         evidence_digests[label] = collect(relative)
 
     # The query_launcher digestPath requires a real executable on disk so
@@ -528,9 +544,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         "native_test_suites": [
             {
                 "name": "fixture-upstream",
-                "tree_sha256": hashlib.sha256(
-                    b"fixture-upstream-test-tree"
-                ).hexdigest(),
+                "tree_sha256": integration_lock_module.EXPECTED_FILE_BASE_TEST_TREE,
             }
         ],
     }
@@ -2059,6 +2073,62 @@ def test_audit_manifest_gate_rejects_metadata_falsification(
         _verify(integration_fixture, lock)
 
 
+@pytest.mark.parametrize(
+    ("manifest_field", "match"),
+    (
+        ("post_tree", "post-patch tree"),
+        ("test_tree", "native test tree drifts from the pinned expectation"),
+    ),
+)
+def test_paired_manifest_identity_tree_rebind_rejected(
+    integration_fixture: dict[str, Path], manifest_field: str, match: str
+) -> None:
+    """RED: paired manifest+identity tree rewrite cannot move the pinned trees.
+
+    The attacker rewrites ``vendor/source-manifest.json`` (post-patch or
+    native test tree) and regenerates the build identity from the tampered
+    manifest so both producer artifacts agree.  The verifier must still
+    reject because both trees are pinned to constants in the wheel-bound
+    verifier code.
+    """
+
+    stage = integration_fixture["stage"]
+    manifest_path = stage / "vendor/source-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    forged = "9" * 64
+    if manifest_field == "post_tree":
+        for patch in manifest["patches"]:
+            patch["post_tree_sha256"] = forged
+    else:
+        manifest["native_test_suites"][0]["tree_sha256"] = forged
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if manifest_field == "test_tree":
+        # A maximal attacker also rebinds the use/distribution declaration's
+        # recorded source-manifest digest so the license gate's live digest
+        # comparison stays consistent; only the pinned constant can reject.
+        declaration_path = stage / "supply-chain/use-distribution.json"
+        declaration = json.loads(declaration_path.read_text(encoding="utf-8"))
+        tampered_digest = _digest(manifest_path)
+        for record in declaration["evidence_hashes"]:
+            if record["path"] == "vendor/source-manifest.json":
+                record["sha256"] = tampered_digest
+        declaration_path.write_text(
+            json.dumps(declaration, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    # Rebuild the audit manifests from the tampered manifest so identity,
+    # staged_payloads and inventory all agree with the forged tree.
+    _install_audit_manifests(stage)
+    _refresh_canary_stage_identity(integration_fixture)
+    # Both pinned-tree gates fire while the lock is built: the post-patch
+    # tree is cross-checked against staged build evidence, and the native
+    # test tree hits the pinned constant in observe_build_identity_binding.
+    with pytest.raises(IntegrationLockError, match=match):
+        _build(integration_fixture)
+
+
 def test_build_identity_projection_excludes_staged_payloads(
     integration_fixture: dict[str, Path],
 ) -> None:
@@ -2467,8 +2537,10 @@ def test_evidence_full_consistent_rebind_rejects_on_pass_semantic(
     write_integration_lock(integration_fixture["lock"], lock)
     target = integration_fixture["stage"] / target_relative
     payload = json.loads(target.read_text(encoding="utf-8"))
+    # Flip the semantic gate: every evidence surface must DERIVE PASS from
+    # its content; flipping the declared field to BLOCKED without changing
+    # the semantics is the closed semantic-attack the new verifier catches.
     payload["technical_qualification"] = "BLOCKED"
-    payload["tampered"] = True
     target.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -2495,9 +2567,13 @@ def test_evidence_full_consistent_rebind_rejects_on_pass_semantic(
     _refresh_canary_stage_identity(integration_fixture)
     # With every digest claim consistent, the rejection MUST come from the
     # closed ``technical_qualification: PASS`` semantic - never from a
-    # digestPath live-bytes or staged_payloads mismatch.
+    # digestPath live-bytes or staged_payloads mismatch.  The verifier
+    # reports the semantic derivation mismatch (``declared='BLOCKED'``
+    # vs derived='PASS') so the regex anchors on the surface and
+    # derivation language.
     with pytest.raises(
-        IntegrationLockError, match=f"evidence.{label}.*technical_qualification=PASS"
+        IntegrationLockError,
+        match=f"evidence.{label}.*derive 'PASS'",
     ):
         _verify(integration_fixture, lock)
 
@@ -2846,8 +2922,10 @@ def test_file_contract_paired_rebind_rejects_on_regeneration_mismatch(
     header_path.write_bytes(fake_bytes)
 
     def _mutate(identity: dict[str, object]) -> None:
-        identity["file_contract"]["header"]["sha256"] = _digest(header_path)
-        identity["file_contract"]["contract_sha256"] = fake_value
+        file_contract = cast(dict[str, object], identity["file_contract"])
+        header = cast(dict[str, object], file_contract["header"])
+        header["sha256"] = _digest(header_path)
+        file_contract["contract_sha256"] = fake_value
 
     _rebind_build_identity(
         integration_fixture["stage"],
@@ -2892,8 +2970,10 @@ def test_file_contract_if0_decoy_plus_continued_define_rejects(
     header_path.write_bytes(tampered)
 
     def _mutate(identity: dict[str, object]) -> None:
-        identity["file_contract"]["header"]["sha256"] = _digest(header_path)
-        identity["file_contract"]["contract_sha256"] = fake_value
+        file_contract = cast(dict[str, object], identity["file_contract"])
+        header = cast(dict[str, object], file_contract["header"])
+        header["sha256"] = _digest(header_path)
+        file_contract["contract_sha256"] = fake_value
 
     _rebind_build_identity(
         integration_fixture["stage"],
@@ -2941,7 +3021,8 @@ def test_runtime_python_version_15_is_rejected_by_verifier(
     )
 
     def _mutate(identity: dict[str, object]) -> None:
-        identity["runtime"]["build_interpreter"] = "3.15.0"
+        runtime = cast(dict[str, object], identity["runtime"])
+        runtime["build_interpreter"] = "3.15.0"
 
     _rebind_build_identity(
         integration_fixture["stage"],
@@ -2967,8 +3048,9 @@ def test_runtime_python_version_13_and_14_are_green(
         stage = integration_fixture["stage"]
         (stage / ".python-version").write_text(f"{pin}\n", encoding="ascii")
 
-        def _mutate(identity: dict[str, object]) -> None:
-            identity["runtime"]["build_interpreter"] = pin
+        def _mutate(identity: dict[str, object], pinned: str = pin) -> None:
+            runtime = cast(dict[str, object], identity["runtime"])
+            runtime["build_interpreter"] = pinned
 
         _rebind_build_identity(
             stage, mutate=_mutate, extra_rebind_paths=(".python-version",)
@@ -2981,3 +3063,269 @@ def test_runtime_python_version_13_and_14_are_green(
         write_integration_lock(integration_fixture["lock"], fresh_lock)
         receipt = _verify(integration_fixture, fresh_lock)
         assert receipt.technical_qualification == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# Codex round-42 P1 (comment 3886042142): the verifier must DERIVE
+# ``technical_qualification`` from full semantic validation of each
+# phase-01 evidence surface, never trust a self-asserted field.  The
+# NetworkVerdict / LegalVerdict / PreVendorReceipt producer contracts in
+# ``arw.integration_lock`` are the single source of truth for both the
+# installed verifier and the producer (``stage-plugin`` ``staged_evidence``).
+# ---------------------------------------------------------------------------
+
+
+EVIDENCE_SURFACES = (
+    ("pre_vendor", "share/arw/evidence/pre_vendor.json"),
+    ("legal", "share/arw/evidence/legal.json"),
+    ("upstream", "share/arw/evidence/upstream.json"),
+    ("asan_ubsan", "share/arw/evidence/asan_ubsan.json"),
+    ("tsan", "share/arw/evidence/tsan.json"),
+)
+
+
+def _replace_staged_evidence_with_passthrough_stub(
+    integration_fixture: dict[str, Path], target_relative: str
+) -> None:
+    """Replace a staged evidence file with a stub that asserts only PASS.
+
+    This is the attack the new verifier must reject: a single self-asserted
+    field cannot satisfy the producer contract.
+    """
+
+    target = integration_fixture["stage"] / target_relative
+    target.write_text(
+        json.dumps({"technical_qualification": "PASS"}, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _rebind_all_evidence_records(
+    integration_fixture: dict[str, Path], target_relative: str
+) -> None:
+    """Refresh identity, staged_payloads, and inventory for a tampered file."""
+
+    target = integration_fixture["stage"] / target_relative
+
+    def _mutate(identity: dict[str, object]) -> None:
+        for label, relative in EVIDENCE_SURFACES:
+            if relative == target_relative:
+                evidence = cast(dict[str, object], identity["evidence"])
+                evidence[label] = {
+                    "path": relative,
+                    "sha256": _digest(target),
+                }
+
+    _rebind_build_identity(
+        integration_fixture["stage"],
+        mutate=_mutate,
+        extra_rebind_paths=(target_relative,),
+    )
+    _refresh_canary_stage_identity(integration_fixture)
+
+
+@pytest.mark.parametrize(("label", "target_relative"), EVIDENCE_SURFACES)
+def test_evidence_stub_only_passthrough_always_rejected(
+    integration_fixture: dict[str, Path], label: str, target_relative: str
+) -> None:
+    """RED: a passthrough stub {"technical_qualification":"PASS"} is rejected.
+
+    Even with full consistent rebinds (identity, staged_payloads,
+    inventory), the verifier must reject because the file lacks every
+    required producer-contract field.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    _replace_staged_evidence_with_passthrough_stub(
+        integration_fixture, target_relative
+    )
+    _rebind_all_evidence_records(integration_fixture, target_relative)
+    with pytest.raises(
+        IntegrationLockError, match=f"evidence.{label}.*{label.upper()} producer contract"
+        if False
+        else f"evidence.{label}.*producer contract"
+    ):
+        _verify(integration_fixture, lock)
+
+
+@pytest.mark.parametrize(("label", "target_relative"), EVIDENCE_SURFACES)
+def test_evidence_stub_only_passthrough_rejected_at_build_too(
+    integration_fixture: dict[str, Path], label: str, target_relative: str
+) -> None:
+    """RED: a passthrough stub is also rejected by ``build_integration_lock``.
+
+    The build path calls ``observe_build_identity_binding`` which in turn
+    calls ``_verify_evidence_pass``; the contract gate fires before any
+    audit manifest gate can run.
+    """
+
+    # Build the baseline lock so the canary stage_sha256 is set against
+    # the unmodified stage; mutate the evidence afterwards and rebind
+    # identity + staged_payloads + inventory to the new bytes so the
+    # rebuild flow reaches the producer-contract gate (not the digestPath
+    # live-bytes gate).
+    _build(integration_fixture)
+    _replace_staged_evidence_with_passthrough_stub(
+        integration_fixture, target_relative
+    )
+    _rebind_all_evidence_records(integration_fixture, target_relative)
+    with pytest.raises(IntegrationLockError, match="producer contract"):
+        _build(integration_fixture)
+
+
+def _mutate_network_verdict(integration_fixture: dict[str, Path], mutation) -> None:
+    """Apply a mutation to the upstream NetworkVerdict and rebind all evidence."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/upstream.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    mutation(payload)
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(integration_fixture, "share/arw/evidence/upstream.json")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "match"),
+    [
+        (
+            lambda p: p.__setitem__("command_status", 1),
+            "producer contract|derive 'BLOCKED'",
+        ),
+        (
+            lambda p: p.__setitem__("network_namespace_denied", False),
+            "producer contract|derive 'BLOCKED'",
+        ),
+        (
+            lambda p: p.__setitem__("network_syscall_attempts", ["connect"]),
+            "producer contract|derive 'BLOCKED'",
+        ),
+        (
+            lambda p: p.__setitem__(
+                "child_network_namespace", p["host_network_namespace"]
+            ),
+            "producer contract|derive 'BLOCKED'",
+        ),
+    ],
+)
+def test_network_verdict_semantic_falsifications_rejected(
+    integration_fixture: dict[str, Path], mutation, match: str
+) -> None:
+    """RED: every NetworkVerdict semantic falsifier is rejected.
+
+    The verifier derives ``PASS`` from ``command_status==0 AND
+    network_namespace_denied is True AND network_syscall_attempts is []``;
+    flipping any of those flips the derivation to BLOCKED.
+    """
+
+    _mutate_network_verdict(integration_fixture, mutation)
+    with pytest.raises(IntegrationLockError, match=match):
+        _build(integration_fixture)
+
+
+def test_legal_verdict_component_sha_mismatch_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: legal verdict with mismatched source/staged sha256 is rejected."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/legal.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["components"][0]["staged_sha256"] = "f" * 64
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(integration_fixture, "share/arw/evidence/legal.json")
+    with pytest.raises(IntegrationLockError, match="staged_sha256 must equal source_sha256"):
+        _build(integration_fixture)
+
+
+def test_legal_verdict_wrong_reason_codes_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: legal verdict with wrong reason_codes is rejected."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/legal.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["reason_codes"] = list(reversed(payload["reason_codes"]))
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(integration_fixture, "share/arw/evidence/legal.json")
+    with pytest.raises(IntegrationLockError, match="qualified blockers"):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_unmodified_false_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: pre_vendor with native_file_base_gate.unmodified=false is rejected."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["native_file_base_gate"]["unmodified"] = False
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(integration_fixture, "share/arw/evidence/pre_vendor.json")
+    with pytest.raises(IntegrationLockError, match="unmodified"):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_wrong_pinned_license_sha256_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: pre_vendor with the pinned academic-research-skills sha256 changed is rejected."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    for license_row in payload["component_licenses"]:
+        if license_row["component"] == "academic-research-skills":
+            license_row["sha256"] = "f" * 64
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(
+        integration_fixture, "share/arw/evidence/pre_vendor.json"
+    )
+    with pytest.raises(IntegrationLockError, match="sha256 drift"):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_empty_legal_inputs_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: pre_vendor with empty legal_inputs is rejected."""
+
+    target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["legal_inputs"] = []
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(
+        integration_fixture, "share/arw/evidence/pre_vendor.json"
+    )
+    with pytest.raises(IntegrationLockError, match="legal_inputs"):
+        _build(integration_fixture)
+
+
+def test_real_evidence_green_passes_full_lock_rebuild(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """GREEN: real evidence (copied in the fixture) passes the verifier."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"
+    # Every staged evidence surface passes the matching producer contract.
+    for label, relative in EVIDENCE_SURFACES:
+        model_cls = integration_lock_module._EVIDENCE_MODEL_BY_SURFACE[label]
+        model_cls.model_validate(
+            json.loads(
+                (integration_fixture["stage"] / relative).read_text(encoding="utf-8")
+            ),
+            strict=True,
+        )

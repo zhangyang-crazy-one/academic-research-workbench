@@ -766,6 +766,9 @@ from arw.schema_registry import (  # noqa: E402
     validate_phase1_instance,
 )
 from arw.integration_lock import (  # noqa: E402
+    LegalVerdict,
+    NetworkVerdict,
+    PreVendorReceipt,
     observe_staged_python_version,
     parse_file_contract_contract_sha256_from_bytes,
 )
@@ -773,6 +776,7 @@ from arw.file_contracts import (  # noqa: E402
     FileContractError,
     render_native_contract_header,
 )
+from pydantic import ValidationError  # noqa: E402
 
 
 def digest(path: Path) -> str:
@@ -784,10 +788,12 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
 
     The producer MUST have copied the original phase-01 surface into the
     plugin stage at ``staged_relative`` so the installed verifier never has to
-    read the original ``build/evidence/phase-01`` tree.  The staged copy
-    itself is what the identity digestPath points at; the producer reads it
-    here to confirm the closed ``technical_qualification: PASS`` semantic
-    before publishing the identity.
+    read the original ``build/evidence/phase-01`` tree.  The producer
+    validates the staged copy against the matching strict producer
+    contract (the SAME model the verifier uses) and requires the derived
+    qualification to equal the declared ``technical_qualification``.  No
+    self-asserted PASS is accepted: the producer must run the gate and
+    derive the semantic result.
     """
 
     staged_path = stage_root / staged_relative
@@ -801,9 +807,30 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
         raise SystemExit(
             f"staged evidence surface is unreadable: {staged_relative}: {error}"
         )
-    if payload.get("technical_qualification") != "PASS":
+    model = {
+        "pre_vendor.json": PreVendorReceipt,
+        "legal.json": LegalVerdict,
+        "upstream.json": NetworkVerdict,
+        "asan_ubsan.json": NetworkVerdict,
+        "tsan.json": NetworkVerdict,
+    }.get(staged_path.name)
+    if model is None:
         raise SystemExit(
-            f"staged evidence surface is not technical_qualification=PASS: {label}"
+            f"no producer contract for staged evidence surface: {staged_relative}"
+        )
+    try:
+        validated = model.model_validate(payload, strict=True)
+    except ValidationError as error:
+        raise SystemExit(
+            f"staged evidence surface {label} fails the {model.__name__} "
+            f"producer contract: {error}"
+        )
+    derived = validated.derive_qualification()
+    declared = validated.technical_qualification
+    if declared != derived:
+        raise SystemExit(
+            f"staged evidence surface {label} declared technical_qualification="
+            f"{declared!r} but the {model.__name__} semantics derive {derived!r}"
         )
     return {"path": staged_relative, "sha256": digest(staged_path)}
 
