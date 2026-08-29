@@ -33,19 +33,25 @@ from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimesta
 
 _ContractT = TypeVar("_ContractT", bound=StrictModel)
 
-CitationKey = Annotated[
+# ARS-authoritative mapping aliases. The pinned ARS
+# ``literature_corpus_entry`` schema declares NO ``maxLength`` on these string
+# mapping fields; the bridge therefore intentionally exposes no bridge-only
+# upper bound so that long copied fields (citation_key, title, venue, DOI,
+# adapter identity, abstract, user_notes, private CSL names, etc.) bind
+# exactly as the authoritative schema allows (Codex review 3881860978).
+ArsCitationKey = Annotated[
     str,
     StringConstraints(
         min_length=1,
-        max_length=256,
         pattern=r"^[A-Za-z][A-Za-z0-9_:-]*$",
     ),
 ]
-BoundedText = Annotated[str, StringConstraints(min_length=1, max_length=8192)]
-AdapterIdentity = Annotated[str, StringConstraints(min_length=1, max_length=256)]
-Doi = Annotated[
+ArsRequiredText = Annotated[str, StringConstraints(min_length=1)]
+ArsOptionalText = Annotated[str, StringConstraints()]
+ArsAdapterIdentity = Annotated[str, StringConstraints(min_length=1)]
+ArsDoi = Annotated[
     str,
-    StringConstraints(max_length=2048, pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
+    StringConstraints(pattern=r"^10\.[0-9]{4,9}/[^\s]+$"),
 ]
 ObtainedVia = Literal[
     "zotero-api",
@@ -215,14 +221,14 @@ class ResearchIntegrityError(ValueError):
 
 
 class CSLPersonalName(StrictModel):
-    family: BoundedText
-    given: Annotated[str, StringConstraints(max_length=8192)] | None = None
-    suffix: Annotated[str, StringConstraints(max_length=1024)] | None = None
-    dropping_particle: Annotated[str, StringConstraints(max_length=1024)] | None = (
-        Field(default=None, alias="dropping-particle")
+    family: ArsRequiredText
+    given: ArsOptionalText | None = None
+    suffix: ArsOptionalText | None = None
+    dropping_particle: ArsOptionalText | None = Field(
+        default=None, alias="dropping-particle"
     )
-    non_dropping_particle: Annotated[str, StringConstraints(max_length=1024)] | None = (
-        Field(default=None, alias="non-dropping-particle")
+    non_dropping_particle: ArsOptionalText | None = Field(
+        default=None, alias="non-dropping-particle"
     )
     comma_suffix: str | bool | None = Field(default=None, alias="comma-suffix")
     static_ordering: str | bool | None = Field(default=None, alias="static-ordering")
@@ -235,7 +241,7 @@ class CSLPersonalName(StrictModel):
 
 
 class CSLLiteralName(StrictModel):
-    literal: BoundedText
+    literal: ArsRequiredText
 
 
 CSLName = CSLPersonalName | CSLLiteralName
@@ -275,24 +281,24 @@ class ContaminationSignalOmissions(StrictModel):
 class ARSLiteratureCorpusEntry(StrictModel):
     """In-memory projection of one strict ARS ``literature_corpus[]`` entry."""
 
-    citation_key: CitationKey
-    title: BoundedText
+    citation_key: ArsCitationKey
+    title: ArsRequiredText
     authors: list[CSLName] = Field(min_length=1)
     year: Annotated[int, Field(ge=1000, le=2100)]
-    source_pointer: BoundedText
-    venue: BoundedText | None = None
-    doi: Doi | None = None
+    source_pointer: ArsRequiredText
+    venue: ArsRequiredText | None = None
+    doi: ArsDoi | None = None
     arxiv_id: ArxivId | None = None
-    tags: list[BoundedText] | None = None
+    tags: list[ArsRequiredText] | None = None
     obtained_via: ObtainedVia | None = None
-    obtained_at: BoundedText | None = None
-    adapter_name: AdapterIdentity | None = None
-    adapter_version: AdapterIdentity | None = None
-    abstract: Annotated[str, StringConstraints(max_length=1_000_000)] | None = None
-    user_notes: Annotated[str, StringConstraints(max_length=1_000_000)] | None = None
+    obtained_at: ArsRequiredText | None = None
+    adapter_name: ArsAdapterIdentity | None = None
+    adapter_version: ArsAdapterIdentity | None = None
+    abstract: ArsOptionalText | None = None
+    user_notes: ArsOptionalText | None = None
     source_acquired: bool | None = None
-    source_acquisition_date: BoundedText | None = None
-    source_acquisition_path: BoundedText | None = None
+    source_acquisition_date: ArsRequiredText | None = None
+    source_acquisition_path: ArsRequiredText | None = None
     source_verified_against_original: bool | None = None
     source_verification_method: (
         Literal["codex_audit", "manual_grep", "vision_check", "none"] | None
@@ -306,10 +312,8 @@ class ARSLiteratureCorpusEntry(StrictModel):
         ]
         | None
     ) = None
-    description_last_audit: Annotated[str, StringConstraints(max_length=256)] | None = (
-        None
-    )
-    contamination_signals_backfilled_at: BoundedText | None = None
+    description_last_audit: ArsOptionalText | None = None
+    contamination_signals_backfilled_at: ArsRequiredText | None = None
     contamination_signals: ContaminationSignals | None = None
     venue_type: (
         Literal[
@@ -335,7 +339,7 @@ class ARSLiteratureCorpusEntry(StrictModel):
         ]
         | None
     ) = None
-    venue_type_source: BoundedText | None = None
+    venue_type_source: ArsRequiredText | None = None
     contamination_signal_omissions: ContaminationSignalOmissions | None = None
     bibliographic_integrity_signals: list[dict[str, Any]] | None = None
 
@@ -471,19 +475,19 @@ class ResearchSourceManifest(StrictModel):
 
     schema_version: Literal["arw.research-source-manifest.v1"]
     source_id: StableRuntimeId
-    citation_key: CitationKey
-    title: BoundedText
+    citation_key: ArsCitationKey
+    title: ArsRequiredText
     authors: tuple[CSLName, ...] = Field(min_length=1)
     year: Annotated[int, Field(ge=1000, le=2100)]
-    venue: BoundedText | None
-    doi: Doi | None
+    venue: ArsRequiredText | None
+    doi: ArsDoi | None
     arxiv_id: ArxivId | None
-    source_pointer: BoundedText
+    source_pointer: ArsRequiredText
     source_sha256: Sha256
     bibliographic_sha256: Sha256
     obtained_via: ObtainedVia | None
-    adapter_name: AdapterIdentity | None
-    adapter_version: AdapterIdentity | None
+    adapter_name: ArsAdapterIdentity | None
+    adapter_version: ArsAdapterIdentity | None
     imported_at: UtcTimestamp
     imported_by: ActorId
 

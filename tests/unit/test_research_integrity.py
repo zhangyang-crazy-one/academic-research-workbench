@@ -856,3 +856,225 @@ def test_bridge_exposes_no_parent_writer_or_hook_authority() -> None:
         "decide_gate",
     ):
         assert not hasattr(research_integrity, forbidden)
+
+
+# ---------------------------------------------------------------------------
+# Long-field cases: the authoritative ARS ``literature_corpus_entry`` schema
+# declares NO ``maxLength`` on these string mapping fields. The bridge must
+# not impose tighter caps than the authoritative schema (Codex review
+# 3881860978); non-ARS runtime bounds (EvidenceLocator.label,
+# StableRuntimeId, ActorId, Sha256) are deliberately retained.
+# ---------------------------------------------------------------------------
+
+_LONG_ARS_FIELD_CASES: tuple[tuple[str, dict[str, object]], ...] = (
+    (
+        "citation_key",
+        {"citation_key": "L" + "a" * 256},  # 257 chars, pattern-safe
+    ),
+    ("title", {"title": "T" * 8193}),
+    ("venue", {"venue": "V" * 8193}),
+    ("source_pointer", {"source_pointer": "f" * 8193}),
+    (
+        "doi",
+        {"doi": "10.1234/" + "x" * 2048},  # 2058 chars, no whitespace
+    ),
+    ("tag_item", {"tags": ["tag" + "x" * 8193]}),
+    ("adapter_name", {"adapter_name": "a" * 257}),
+    ("adapter_version", {"adapter_version": "v" * 257}),
+    (
+        "abstract",
+        {"abstract": "A" * 1_000_001},
+    ),
+    (
+        "user_notes",
+        {"user_notes": "N" * 1_000_001},
+    ),
+    ("source_acquisition_path", {"source_acquisition_path": "P" * 8193}),
+    (
+        "description_last_audit",
+        {"description_last_audit": "round" + "0" * 253},  # 258 chars
+    ),
+    ("venue_type_source", {"venue_type_source": "Y" * 8193}),
+    (
+        "csl_family",
+        {"authors": [{"family": "F" * 8193}]},
+    ),
+    (
+        "csl_given",
+        {"authors": [{"family": "Smith", "given": "G" * 8193}]},
+    ),
+    (
+        "csl_suffix",
+        {"authors": [{"family": "Smith", "suffix": "S" * 1025}]},
+    ),
+    (
+        "csl_dropping_particle",
+        {"authors": [{"family": "Smith", "dropping-particle": "D" * 1025}]},
+    ),
+    (
+        "csl_non_dropping_particle",
+        {"authors": [{"family": "Smith", "non-dropping-particle": "N" * 1025}]},
+    ),
+)
+
+
+@pytest.mark.parametrize(("label", "update"), _LONG_ARS_FIELD_CASES)
+def test_bridge_preserves_authoritative_long_ars_mapping_fields(
+    label: str, update: dict[str, object]
+) -> None:
+    """Pinned ARS ``literature_corpus_entry`` schema sets no ``maxLength`` on
+    these mapping fields; the bridge must not impose tighter caps than the
+    authoritative ARS schema (Codex review 3881860978 covers abstract /
+    user_notes >1M and the long copied fields / CSL names / private fields).
+    """
+
+    from arw.schema_registry import validate_instance
+
+    entry = {**ARS_ENTRY, **update}
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry), (
+        f"authoritative ARS schema must accept the long {label} case"
+    )
+
+    research_integrity.ARSLiteratureCorpusEntry.model_validate(entry, strict=True)
+    expected_digest = hashlib.sha256(canonical_json_bytes(entry)).hexdigest()
+    source = _bridge(entry)
+    assert source.bibliographic_sha256 == expected_digest, (
+        "bridge digest must equal the canonical bytes of the supplied entry"
+    )
+    validate_instance(
+        "research-integrity-contracts.schema.json",
+        source.model_dump(mode="json"),
+    )
+
+
+def test_checked_installed_schema_drops_bridge_only_max_length_caps() -> None:
+    """The checked research-integrity schema must mirror the
+    authoritative no-max ARS mapping fields, while keeping non-ARS runtime
+    bounds (EvidenceLocator.label) intact."""
+
+    checked = _load_json_object(
+        Path(__file__).resolve().parents[2]
+        / "schemas/v1/research-integrity-contracts.schema.json"
+    )
+    generated = research_integrity.research_integrity_contracts_schema_document()
+    assert checked == generated, "checked schema must equal the generated one"
+
+    # ARS-mapping fields: ResearchSourceManifest copies these from the
+    # authoritative ARS entry, so the checked schema MUST NOT impose a
+    # maxLength on them.
+    manifest_props = checked["$defs"]["ResearchSourceManifest"]["properties"]
+    for field in (
+        "citation_key",
+        "title",
+        "venue",
+        "source_pointer",
+        "doi",
+        "adapter_name",
+        "adapter_version",
+    ):
+        bound = manifest_props[field]
+        if "anyOf" in bound:
+            string_branches = [
+                branch for branch in bound["anyOf"] if branch.get("type") == "string"
+            ]
+            assert string_branches, f"{field} must remain a string-or-null branch"
+            for branch in string_branches:
+                assert "maxLength" not in branch, (
+                    f"ResearchSourceManifest.{field} retains a bridge-only "
+                    f"maxLength={branch.get('maxLength')} cap"
+                )
+        else:
+            assert bound.get("type") == "string", f"{field} must remain a string"
+            assert "maxLength" not in bound, (
+                f"ResearchSourceManifest.{field} retains a bridge-only "
+                f"maxLength={bound.get('maxLength')} cap"
+            )
+
+    # EvidenceLocator.label keeps its bounded runtime cap.
+    locator_props = checked["$defs"]["EvidenceLocator"]["properties"]["label"]
+    label_branches = locator_props.get("anyOf", [locator_props])
+    string_branches = [
+        branch for branch in label_branches if branch.get("type") == "string"
+    ]
+    assert string_branches and any(
+        branch.get("maxLength") == 256 for branch in string_branches
+    ), "EvidenceLocator.label must keep its 256-char runtime cap"
+
+
+def test_bridge_preserves_ars_valid_combined_long_field_entry() -> None:
+    """One entry exercising every long-field path simultaneously still binds,
+    digests canonically, and round-trips through the installed schema."""
+
+    from arw.schema_registry import validate_instance
+
+    entry = {
+        **ARS_ENTRY,
+        "title": "T" * 8193,
+        "venue": "V" * 8193,
+        "source_pointer": "S" * 8193,
+        "doi": "10.1234/" + "x" * 2048,
+        "tags": ["tag" + "x" * 8193],
+        "adapter_name": "a" * 257,
+        "adapter_version": "v" * 257,
+        "abstract": "A" * 1_000_001,
+        "user_notes": "N" * 1_000_001,
+        "source_acquisition_path": "P" * 8193,
+        "venue_type_source": "Y" * 8193,
+        "authors": [
+            {
+                "family": "F" * 8193,
+                "given": "G" * 8193,
+                "suffix": "S" * 1025,
+                "dropping-particle": "D" * 1025,
+                "non-dropping-particle": "N" * 1025,
+            }
+        ],
+    }
+    assert ARS_ENTRY_VALIDATOR.is_valid(entry)
+    research_integrity.ARSLiteratureCorpusEntry.model_validate(entry, strict=True)
+    expected_digest = hashlib.sha256(canonical_json_bytes(entry)).hexdigest()
+    source = _bridge(entry)
+    assert source.bibliographic_sha256 == expected_digest
+    validate_instance(
+        "research-integrity-contracts.schema.json",
+        source.model_dump(mode="json"),
+    )
+
+
+def test_bridge_still_enforces_authoritative_patterns_on_long_fields() -> None:
+    """Removing the bridge-only maxLength must not weaken the authoritative
+    pattern / format / NUL / cross-field / allOf rules."""
+
+    # DOI with whitespace remains rejected (authoritative pattern)
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge({**ARS_ENTRY, "doi": "10.1234/example with space"})
+
+    # citation_key starting with a digit remains rejected (authoritative pattern)
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge({**ARS_ENTRY, "citation_key": "1" + "a" * 257})
+
+    # NUL in source_pointer still rejected
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge({**ARS_ENTRY, "source_pointer": "ok\x00nope"})
+
+    # date-time format still enforced on long entries
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge({**ARS_ENTRY, "obtained_at": "yesterday"})
+
+    # CSL non-dropping-particle on a long entry still emits the
+    # dropping-particle alias wire-format and preserves the canonical field.
+    long_entry = {
+        **ARS_ENTRY,
+        "authors": [
+            {
+                "family": "F" * 1024,
+                "dropping-particle": "D" * 1025,
+                "non-dropping-particle": "N" * 1025,
+            }
+        ],
+    }
+    assert ARS_ENTRY_VALIDATOR.is_valid(long_entry)
+    source = _bridge(long_entry)
+    dumped = source.model_dump(mode="json")
+    assert dumped["authors"][0].get("dropping-particle") == "D" * 1025
+    assert dumped["authors"][0].get("non-dropping-particle") == "N" * 1025
