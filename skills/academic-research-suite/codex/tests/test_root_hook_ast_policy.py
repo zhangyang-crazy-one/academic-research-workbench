@@ -62,12 +62,30 @@ from typing import cast
 
 import pytest  # type: ignore[import-not-found]
 
+
+def _json_object_from_text(text: str, *, label: str) -> dict[str, object]:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        raise AssertionError(f"{label} is not valid JSON") from None
+    if not isinstance(value, dict):
+        raise AssertionError(f"{label} must be a JSON object")
+    return cast(dict[str, object], value)
+
+
+def _read_json_object(path: Path) -> dict[str, object]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise AssertionError(f"cannot read JSON fixture: {path}") from None
+    return _json_object_from_text(text, label=str(path))
+
 CODEX_ROOT = Path(__file__).resolve().parents[1]
 GATES_PATH = CODEX_ROOT / "scripts" / "ars_codex_quality_gates.py"
 REPOSITORY_ROOT = CODEX_ROOT.parents[2]
 HOOKS_DIR = REPOSITORY_ROOT / "hooks"
 REAL_HANDLER = (HOOKS_DIR / "arw_hook.py").read_text(encoding="utf-8")
-REAL_HOOKS_JSON = json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
+REAL_HOOKS_JSON = _read_json_object(HOOKS_DIR / "hooks.json")
 
 
 # Loader + fixture
@@ -245,7 +263,10 @@ def test_full_runtime_quality_gates_still_pass_for_in_tree_layout():
     import sys as _sys
     r = subprocess.run([_sys.executable, str(GATES_PATH), "all", "--json"],
                        cwd=REPOSITORY_ROOT, capture_output=True, text=True, check=False)
-    assert r.returncode == 0 and json.loads(r.stdout)["root-hook-supply-chain"]["ok"]
+    payload = _json_object_from_text(r.stdout, label="quality-gate stdout")
+    root_hook_result = payload.get("root-hook-supply-chain")
+    assert isinstance(root_hook_result, dict)
+    assert r.returncode == 0 and bool(root_hook_result.get("ok"))
 
 
 def test_syntax_error_fails_closed(gates, tmp_path):
