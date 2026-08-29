@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "95ba28cbdf7c733bf36b4e62fb26cb9e4e3e7e5da2433cd2b970f0f1121e1386"
+          "content": "1ef564d7131b087891f363032dccc7c92aa3096484b127d2c25947800e10e247"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c85d0c91ffee3cab214dbae3d49d90a9eedd54b36c497d1ca77e716cd25003ca"
+          "content": "d666b50cbf6d76851eab70ffb1a73b0435602a0da2e3f7432c92ffb06f262194"
         }
       ],
       "licenses": [
