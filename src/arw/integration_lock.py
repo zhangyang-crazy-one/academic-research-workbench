@@ -2535,9 +2535,16 @@ def _load_build_identity_binding(
         raise IntegrationLockError(
             "build identity file_contract.contract_sha256 must be a string"
         )
-    if declared_contract_sha not in {embedded_contract_sha, header_entry["sha256"]}:
+    # The contract_sha256 is the *embedded semantic* value
+    # ``ARW_FILES_CONTRACT_SHA256 "..."`` carried inside the staged header.
+    # It is intentionally NOT aliased to the whole-header file digest: a
+    # rebind attack that rewrites only the header bytes can satisfy a
+    # whole-header alias without changing the contract semantics; the
+    # embedded value is the one the file contract layer trusts.
+    if declared_contract_sha != embedded_contract_sha:
         raise IntegrationLockError(
-            "build identity file_contract.contract_sha256 drifts from header bytes"
+            "build identity file_contract.contract_sha256 must equal the embedded "
+            "ARW_FILES_CONTRACT_SHA256 inside the staged header"
         )
 
     # ----- wheelhouse lock / requirements / first_party live bytes ------------

@@ -178,11 +178,16 @@ def _install_audit_manifests(stage: Path) -> None:
     )
     contracts_destination = stage / "share/arw/file-contracts.h"
     contracts_destination.parent.mkdir(parents=True, exist_ok=True)
+    # The producer must record the embedded contract semantic value
+    # (the sha256 carried inside the header by ``ARW_FILES_CONTRACT_SHA256``)
+    # not the whole-header file digest; the build-identity verifier rejects
+    # the latter as an unjustified alias.
+    embedded_contract_sha256 = hashlib.sha256(b"contracts-stub").hexdigest()
     contracts_destination.write_text(
         "/* synthetic test file-contracts.h */\n"
         '#define ARW_FILES_CONTRACT_VERSION "1.0.0"\n'
         '#define ARW_FILES_CONTRACT_SHA256 "'
-        f'{hashlib.sha256(b"contracts-stub").hexdigest()}"\n',
+        f'{embedded_contract_sha256}"\n',
         encoding="ascii",
     )
     source_manifest = json.loads(
@@ -335,7 +340,9 @@ def _install_audit_manifests(stage: Path) -> None:
                 "path": "share/arw/file-contracts.h",
                 "sha256": contracts_digest,
             },
-            "contract_sha256": contracts_digest,
+            # Record the embedded ARW_FILES_CONTRACT_SHA256 semantic, not the
+            # whole-header file digest; the verifier requires an exact match.
+            "contract_sha256": embedded_contract_sha256,
             "tokenizer_id": "unicode61-cjk-v1",
             "ranking_version": "files-rank-v1",
             "outline_versions": [
@@ -2495,6 +2502,67 @@ def test_installed_verifier_does_not_read_original_build_evidence_tree(
     # staged copies.
     receipt = _verify(integration_fixture, lock)
     assert receipt.technical_qualification == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# Codex P1 3884109619: file_contract.contract_sha256 must equal the embedded
+# ``ARW_FILES_CONTRACT_SHA256`` carried inside the staged header.  An earlier
+# revision accepted either the embedded semantic OR the whole-header file
+# digest; the latter was an unjustified alias that allowed a rebind attack
+# to satisfy the contract claim by rewriting only the header bytes.  The
+# compact RED/GREEN tests below pin the new semantic.
+# ---------------------------------------------------------------------------
+
+
+def test_file_contract_contract_sha256_must_equal_embedded_semantic_red(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: outer header digest cannot alias the embedded contract semantic.
+
+    The identity passes schema validation AND the digestPath live-bytes
+    check (the header file is unchanged), but records the whole-header
+    digest in place of the embedded ``ARW_FILES_CONTRACT_SHA256`` value.
+    The verifier MUST reject this rebind.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    contracts_path = integration_fixture["stage"] / "share/arw/file-contracts.h"
+    outer_header_digest = _digest(contracts_path)
+
+    def _swap(identity: dict[str, object]) -> None:
+        # Replace the embedded semantic with the whole-header file digest;
+        # this would have been accepted by the prior ``in {a, b}`` alias.
+        identity["file_contract"]["contract_sha256"] = outer_header_digest
+
+    _rebind_build_identity(integration_fixture["stage"], mutate=_swap)
+    with pytest.raises(
+        IntegrationLockError, match="embedded ARW_FILES_CONTRACT_SHA256"
+    ):
+        _verify(integration_fixture, lock)
+
+
+def test_file_contract_contract_sha256_embedded_semantic_green(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """GREEN: identity that records the embedded value passes the verifier."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"
+    # The producer recorded the embedded value, NOT the whole-header digest;
+    # these are distinct by construction.
+    contracts_path = integration_fixture["stage"] / "share/arw/file-contracts.h"
+    contracts_digest = _digest(contracts_path)
+    identity = json.loads(
+        (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert identity["file_contract"]["contract_sha256"] != contracts_digest, (
+        "fixture must record the embedded semantic, not the whole-header digest"
+    )
 
 
 def test_schema_aggregate_matches_canonical_helper(
