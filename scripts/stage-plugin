@@ -538,7 +538,9 @@ copy_file "scripts/file-base-mcp" 0755
 copy_file "scripts/file-base-graph-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
-copy_as "generated/file-contracts.h" "share/arw/file-contracts.h"
+# ``share/arw/file-contracts.h`` is NOT copied from ``generated/``; the
+# producer regenerates it FROM the staged checked schemas below so the
+# embedded ``ARW_FILES_CONTRACT_SHA256`` reflects the staged schema digests.
 # Stage each phase-01 evidence surface under ``share/arw/evidence`` so the
 # installed verifier can recompute every evidence digestPath against live
 # bytes without depending on the original ``build/evidence/phase-01`` tree.
@@ -765,7 +767,11 @@ from arw.schema_registry import (  # noqa: E402
 )
 from arw.integration_lock import (  # noqa: E402
     observe_staged_python_version,
-    parse_file_contract_contract_sha256,
+    parse_file_contract_contract_sha256_from_bytes,
+)
+from arw.file_contracts import (  # noqa: E402
+    FileContractError,
+    render_native_contract_header,
 )
 
 
@@ -814,6 +820,24 @@ schema_entries = tuple(
     for path, _ in schema_entries
 )
 
+
+# Regenerate the file-contract header FROM the staged checked schemas
+# (NOT from the source ``generated/`` directory) so the embedded
+# ``ARW_FILES_CONTRACT_SHA256`` reflects the *staged* schema digests.  The
+# staged bytes are overwritten with the regeneration so the verifier's
+# regenerated-bytes equality check is satisfied.  This MUST happen before
+# ``payloads`` is captured so the regenerated header is in staged_payloads.
+try:
+    regenerated_header = render_native_contract_header(schema_dir)
+except FileContractError as error:
+    raise SystemExit(
+        f"stage-plugin cannot regenerate file-contract header from staged "
+        f"schemas: {error}"
+    )
+contract_header_path.write_bytes(regenerated_header)
+embedded_contract_sha = parse_file_contract_contract_sha256_from_bytes(
+    regenerated_header
+)
 payloads = [
     {"path": path.relative_to(stage_root).as_posix(), "sha256": digest(path)}
     for path in sorted(stage_root.rglob("*"))
@@ -835,10 +859,17 @@ if running_python_version != staged_python_version:
         f"staged={staged_python_version}"
     )
 major, minor, _patch = staged_python_version.split(".")
-if int(minor) < 13:
+if int(minor) not in {13, 14}:
     raise SystemExit(
-        f"stage-plugin requires Python >=3.13 (got {staged_python_version})"
+        f"stage-plugin requires Python 3.13.x or 3.14.x exactly "
+        f"(got {staged_python_version})"
     )
+
+# The producer regenerates the file-contract header FROM the staged
+# checked schemas (NOT from the source ``generated/`` directory) so the
+# The file-contract header is regenerated from the staged checked schemas
+# above (before ``payloads`` is captured) so the regenerated header is
+# already on disk and recorded in staged_payloads here.
 
 identity = {
     "schema_version": "1.0.0",
@@ -893,7 +924,7 @@ identity = {
             "path": "share/arw/file-contracts.h",
             "sha256": digest(contract_header_path),
         },
-        "contract_sha256": parse_file_contract_contract_sha256(contract_header_path),
+        "contract_sha256": embedded_contract_sha,
         "tokenizer_id": "unicode61-cjk-v1",
         "ranking_version": "files-rank-v1",
         "outline_versions": [
