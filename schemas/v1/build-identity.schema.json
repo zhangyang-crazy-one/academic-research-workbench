@@ -78,7 +78,7 @@
       "required": ["python_requires", "build_interpreter"],
       "properties": {
         "python_requires": {"const": ">=3.13"},
-        "build_interpreter": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+        "build_interpreter": {"type": "string", "pattern": "^3\\.(1[3-9]|[2-9][0-9])\\.[0-9]+$"}
       }
     },
     "component": {

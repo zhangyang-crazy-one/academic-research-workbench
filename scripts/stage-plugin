@@ -763,6 +763,10 @@ from arw.schema_registry import (  # noqa: E402
     regenerate_schemas,
     validate_phase1_instance,
 )
+from arw.integration_lock import (  # noqa: E402
+    observe_staged_python_version,
+    parse_file_contract_contract_sha256,
+)
 
 
 def digest(path: Path) -> str:
@@ -803,7 +807,6 @@ plugin = json.loads((stage_root / ".codex-plugin/plugin.json").read_text(encodin
 lock_path = stage_root / "vendor/python/wheelhouse.lock.json"
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
 contract_header_path = stage_root / "share/arw/file-contracts.h"
-contract_header = contract_header_path.read_text(encoding="ascii")
 schema_dir = stage_root / "share/arw/schemas"
 schema_entries = regenerate_schemas(schema_dir)
 schema_entries = tuple(
@@ -816,13 +819,34 @@ payloads = [
     for path in sorted(stage_root.rglob("*"))
     if path.is_file() and path.relative_to(stage_root).as_posix() != "share/arw/build-identity.json"
 ]
+
+# Build the pinned build_interpreter from the staged ``.python-version``
+# file.  The producer MUST refuse to emit an identity unless the running
+# interpreter equals the staged pin - the verifier compares the recorded
+# build_interpreter against this live file, so a mismatch would fail
+# install-time verification.  Use an explicit failure (never ``assert`` so
+# the check survives ``python -O``).
+staged_python_version = observe_staged_python_version(stage_root)
+running_python_version = platform.python_version()
+if running_python_version != staged_python_version:
+    raise SystemExit(
+        f"stage-plugin requires the running interpreter to match the staged "
+        f".python-version pin: running={running_python_version} "
+        f"staged={staged_python_version}"
+    )
+major, minor, _patch = staged_python_version.split(".")
+if int(minor) < 13:
+    raise SystemExit(
+        f"stage-plugin requires Python >=3.13 (got {staged_python_version})"
+    )
+
 identity = {
     "schema_version": "1.0.0",
     "platform_claim": "linux",
     "plugin": {"name": plugin["name"], "version": plugin["version"]},
     "runtime": {
         "python_requires": ">=3.13",
-        "build_interpreter": platform.python_version(),
+        "build_interpreter": staged_python_version,
     },
     "components": [
         {key: component[key] for key in ("id", "version", "revision", "tree_sha256")}
@@ -869,9 +893,7 @@ identity = {
             "path": "share/arw/file-contracts.h",
             "sha256": digest(contract_header_path),
         },
-        "contract_sha256": re.search(
-            r'ARW_FILES_CONTRACT_SHA256 "([0-9a-f]{64})"', contract_header
-        ).group(1),
+        "contract_sha256": parse_file_contract_contract_sha256(contract_header_path),
         "tokenizer_id": "unicode61-cjk-v1",
         "ranking_version": "files-rank-v1",
         "outline_versions": [

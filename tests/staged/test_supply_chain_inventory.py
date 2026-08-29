@@ -799,3 +799,25 @@ def test_validate_only_rejects_staged_evidence_path_redirect(
     validated = _validate_stage(stage_root)
     assert validated.returncode != 0
     assert "pre_vendor" in validated.stderr
+
+
+def test_validate_only_rejects_whole_header_alias_on_contract_sha256(
+    tmp_path: Path,
+) -> None:
+    """RED: validate-only must reject contract_sha256 rebound to whole-header digest."""
+
+    stage_root = tmp_path / "header-alias-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    contracts_path = stage_root / "share/arw/file-contracts.h"
+    whole_header_digest = _sha256(contracts_path)
+
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    identity["file_contract"]["contract_sha256"] = whole_header_digest
+    _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+    _rebind_inventory(stage_root, "share/arw/build-identity.json")
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert "embedded ARW_FILES_CONTRACT_SHA256" in validated.stderr

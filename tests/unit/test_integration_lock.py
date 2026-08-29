@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import platform
 import shutil
 import subprocess
 import sys
@@ -297,11 +298,20 @@ def _install_audit_manifests(stage: Path) -> None:
         [(entry["path"], entry["sha256"]) for entry in schemas_files]
     )
 
+    # Pin the staged ``.python-version`` so the build_interpreter claim
+    # matches the live stage bytes exactly.  The fixture generator pins it
+    # before constructing the identity so the verifier's
+    # ``observe_staged_python_version`` agrees with the recorded value.
+    staged_python_version = "3.13.1"
+    (stage / ".python-version").write_text(
+        f"{staged_python_version}\n", encoding="ascii"
+    )
+
     identity = {
         "schema_version": "1.0.0",
         "platform_claim": "linux",
         "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
-        "runtime": {"python_requires": ">=3.13", "build_interpreter": "3.13.1"},
+        "runtime": {"python_requires": ">=3.13", "build_interpreter": staged_python_version},
         "components": [
             {key: item[key] for key in ("id", "version", "revision", "tree_sha256")}
             for item in components
@@ -2533,7 +2543,8 @@ def test_file_contract_contract_sha256_must_equal_embedded_semantic_red(
     def _swap(identity: dict[str, object]) -> None:
         # Replace the embedded semantic with the whole-header file digest;
         # this would have been accepted by the prior ``in {a, b}`` alias.
-        identity["file_contract"]["contract_sha256"] = outer_header_digest
+        file_contract = cast(dict[str, object], identity["file_contract"])
+        file_contract["contract_sha256"] = outer_header_digest
 
     _rebind_build_identity(integration_fixture["stage"], mutate=_swap)
     with pytest.raises(
@@ -2579,3 +2590,210 @@ def test_schema_aggregate_matches_canonical_helper(
     )
     entries = [(item["path"], item["sha256"]) for item in identity["schemas"]["files"]]
     assert aggregate_schema_sha256(entries) == identity["schemas"]["aggregate_sha256"]
+
+
+# ---------------------------------------------------------------------------
+# Codex P1 3884328234 / 3884328236: parser hardening and python_requires pin.
+#
+# The producer must use the SAME comment-aware parser as the verifier; the
+# ``runtime.build_interpreter`` claim must equal the live staged
+# ``.python-version`` exactly; the verifier must NEVER compare against its
+# own runtime.  The compact RED/GREEN tests below pin each invariant.
+# ---------------------------------------------------------------------------
+
+
+def _write_header(path: Path, body: str) -> str:
+    path.write_text(body, encoding="ascii")
+    return _digest(path)
+
+
+def test_file_contract_parser_rejects_line_comment_decoy(tmp_path: Path) -> None:
+    """RED: line-commented define cannot satisfy the directive."""
+
+    header = tmp_path / "file-contracts.h"
+    real_value = "a" * 64
+    _write_header(
+        header,
+        '// #define ARW_FILES_CONTRACT_SHA256 "' + "f" * 64 + '"\n'
+        '#define ARW_FILES_CONTRACT_SHA256 "' + real_value + '"\n',
+    )
+    assert integration_lock_module.parse_file_contract_contract_sha256(header) == real_value
+
+
+def test_file_contract_parser_rejects_block_comment_decoy(tmp_path: Path) -> None:
+    """RED: block-commented define cannot shadow the active directive."""
+
+    header = tmp_path / "file-contracts.h"
+    real_value = "b" * 64
+    _write_header(
+        header,
+        '/*\n  #define ARW_FILES_CONTRACT_SHA256 "' + "f" * 64 + '"\n*/\n'
+        '#define ARW_FILES_CONTRACT_SHA256 "' + real_value + '"\n',
+    )
+    assert integration_lock_module.parse_file_contract_contract_sha256(header) == real_value
+
+
+def test_file_contract_parser_rejects_duplicate_active_defines(tmp_path: Path) -> None:
+    """RED: more than one active define is a hard error (no aliasing)."""
+
+    header = tmp_path / "file-contracts.h"
+    _write_header(
+        header,
+        '#define ARW_FILES_CONTRACT_SHA256 "' + "c" * 64 + '"\n'
+        '#define ARW_FILES_CONTRACT_SHA256 "' + "d" * 64 + '"\n',
+    )
+    with pytest.raises(IntegrationLockError, match="more than once"):
+        integration_lock_module.parse_file_contract_contract_sha256(header)
+
+
+def test_file_contract_parser_rejects_missing_active_define(tmp_path: Path) -> None:
+    """RED: no active define (only commented decoys) is rejected."""
+
+    header = tmp_path / "file-contracts.h"
+    _write_header(
+        header,
+        '// #define ARW_FILES_CONTRACT_SHA256 "' + "e" * 64 + '"\n',
+    )
+    with pytest.raises(IntegrationLockError, match="does not embed an active"):
+        integration_lock_module.parse_file_contract_contract_sha256(header)
+
+
+def test_runtime_build_interpreter_must_equal_staged_python_version(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: consistent rebind of build_interpreter to a non-staged value is rejected."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+
+    def _tamper(identity: dict[str, object]) -> None:
+        runtime = cast(dict[str, object], identity["runtime"])
+        runtime["build_interpreter"] = "3.13.99"
+
+    _rebind_build_identity(integration_fixture["stage"], mutate=_tamper)
+    with pytest.raises(
+        IntegrationLockError, match="must equal staged .python-version"
+    ):
+        _verify(integration_fixture, lock)
+
+
+def test_runtime_build_interpreter_green_exact_staged_pin(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """GREEN: identity whose build_interpreter equals the staged pin passes."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"
+    staged = (integration_fixture["stage"] / ".python-version").read_text(
+        encoding="ascii"
+    ).strip()
+    identity = json.loads(
+        (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert identity["runtime"]["build_interpreter"] == staged
+
+
+def test_runtime_build_interpreter_verifier_runtime_is_not_compared(
+    integration_fixture: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GREEN: verifier running on a different interpreter still passes.
+
+    The verifier must NOT compare ``build_interpreter`` against
+    ``sys.version_info``; it only reads the staged ``.python-version``.
+    Mock the current platform so the assertion below would fail if the
+    verifier ever sneaks in a runtime self-comparison.
+    """
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+
+    class _FakeVersionInfo:
+        major = 9
+        minor = 9
+        micro = 9
+        releaselevel = "final"
+        serial = 0
+
+    monkeypatch.setattr(sys, "version_info", _FakeVersionInfo())
+    monkeypatch.setattr(platform, "python_version", lambda: "9.9.9")
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"
+
+
+def test_build_identity_schema_rejects_legacy_python_310_interpreter(
+    tmp_path: Path,
+) -> None:
+    """RED: 3.10.x build_interpreter is rejected by the tightened schema."""
+
+    from arw.schema_registry import validate_instance
+
+    identity = {
+        "schema_version": "1.0.0",
+        "platform_claim": "linux",
+        "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
+        "runtime": {"python_requires": ">=3.13", "build_interpreter": "3.10.0"},
+        "components": [
+            {
+                "id": "academic-research-skills",
+                "version": "pinned",
+                "revision": "0" * 40,
+                "tree_sha256": "a" * 64,
+            }
+        ],
+        "patches": [],
+        "native": {
+            "binary": {"path": "libexec/file-base-mcp", "sha256": "b" * 64},
+            "build_evidence": {
+                "path": ".file-base/build-evidence.json",
+                "sha256": "c" * 64,
+            },
+            "compile_profile": "release-o2",
+            "patched_source_tree_sha256": "d" * 64,
+            "upstream_test_tree_sha256": "e" * 64,
+        },
+        "projection": {
+            "algorithm": "research-graph-projection-v1",
+            "oracle": "research-graph-normalization-v1",
+            "native_profile": "research-graph-builder-v1",
+            "patch_set_sha256": "f" * 64,
+            "profile_patch_sha256": "0" * 64,
+            "query_profile": "arw-graph-mcp-v1",
+            "query_launcher": {"path": "scripts/x", "sha256": "1" * 64},
+        },
+        "file_contract": {
+            "header": {"path": "share/arw/file-contracts.h", "sha256": "2" * 64},
+            "contract_sha256": "3" * 64,
+            "tokenizer_id": "unicode61-cjk-v1",
+            "ranking_version": "files-rank-v1",
+            "outline_versions": [
+                "bibtex-outline-v1",
+                "latex-outline-v1",
+                "markdown-outline-v1",
+                "source-outline-v1",
+            ],
+        },
+        "wheelhouse": {
+            "lock": {"path": "vendor/python/wheelhouse.lock.json", "sha256": "4" * 64},
+            "requirements": {"path": "x", "sha256": "5" * 64},
+            "first_party": {"path": "y", "sha256": "6" * 64},
+        },
+        "schemas": {
+            "aggregate_sha256": "7" * 64,
+            "files": [{"path": "share/arw/schemas/build-identity.schema.json",
+                       "sha256": "8" * 64}],
+        },
+        "evidence": {
+            "pre_vendor": {"path": "share/arw/evidence/pre_vendor.json", "sha256": "9" * 64},
+            "legal": {"path": "share/arw/evidence/legal.json", "sha256": "a" * 64},
+            "upstream": {"path": "share/arw/evidence/upstream.json", "sha256": "b" * 64},
+            "asan_ubsan": {"path": "share/arw/evidence/asan_ubsan.json", "sha256": "c" * 64},
+            "tsan": {"path": "share/arw/evidence/tsan.json", "sha256": "d" * 64},
+        },
+        "staged_payloads": [{"path": "z", "sha256": "e" * 64}],
+    }
+    with pytest.raises(Exception, match="3\\.10|build_interpreter"):
+        validate_instance("build-identity.schema.json", identity)

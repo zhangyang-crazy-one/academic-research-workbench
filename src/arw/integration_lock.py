@@ -2350,8 +2350,56 @@ def _projection_profile_patch_sha256(patches: list[Mapping[str, object]]) -> str
     raise IntegrationLockError("source manifest does not declare patch with order=4")
 
 
-def _file_contract_contract_sha256(header_path: Path) -> str:
-    """Return the embedded contract sha256 from the staged file-contracts header."""
+_CONTRACT_DEFINE_PATTERN = re.compile(
+    r'#\s*define\s+ARW_FILES_CONTRACT_SHA256\s+"([0-9a-f]{64})"'
+)
+_PYTHON_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+def _strip_c_comments(source: str) -> str:
+    """Strip C ``/* ... */`` block and ``// ...\\n`` line comments.
+
+    The stripper intentionally does NOT honour string literals or preprocessor
+    continuations - the file-contracts header we care about carries one
+    directive per line and no string literals, so a naive character-level
+    walk is both simpler and safer than a full C lexer.  Newlines inside
+    block comments are preserved so reported line numbers stay stable.
+    """
+
+    out: list[str] = []
+    index = 0
+    length = len(source)
+    while index < length:
+        char = source[index]
+        second = source[index + 1] if index + 1 < length else ""
+        if char == "/" and second == "*":
+            index += 2
+            while index < length:
+                if source[index] == "*" and index + 1 < length and source[index + 1] == "/":
+                    index += 2
+                    break
+                if source[index] == "\n":
+                    out.append("\n")
+                index += 1
+            continue
+        if char == "/" and second == "/":
+            while index < length and source[index] != "\n":
+                index += 1
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def parse_file_contract_contract_sha256(header_path: Path) -> str:
+    """Return the embedded contract sha256 from the staged file-contracts header.
+
+    The header MUST contain exactly one *active* (i.e. not commented out)
+    ``#define ARW_FILES_CONTRACT_SHA256 "<64hex>"`` directive; zero or
+    duplicate active defines are rejected.  String-aware ``/* */`` and
+    ``//`` comment stripping ensures commented decoys cannot satisfy or
+    shadow the directive.
+    """
 
     try:
         contract_header = header_path.read_text(encoding="ascii")
@@ -2359,12 +2407,65 @@ def _file_contract_contract_sha256(header_path: Path) -> str:
         raise IntegrationLockError(
             f"file-contracts header is unreadable: {error}"
         ) from error
-    match = re.search(r'ARW_FILES_CONTRACT_SHA256 "([0-9a-f]{64})"', contract_header)
-    if match is None:
+    stripped = _strip_c_comments(contract_header)
+    matches = tuple(_CONTRACT_DEFINE_PATTERN.finditer(stripped))
+    if not matches:
         raise IntegrationLockError(
-            "file-contracts header does not embed ARW_FILES_CONTRACT_SHA256"
+            "file-contracts header does not embed an active "
+            "ARW_FILES_CONTRACT_SHA256 directive"
         )
-    return match.group(1)
+    if len(matches) > 1:
+        raise IntegrationLockError(
+            "file-contracts header declares ARW_FILES_CONTRACT_SHA256 more "
+            f"than once: {len(matches)} active definitions found"
+        )
+    for match in matches:
+        return match.group(1)
+    raise IntegrationLockError(
+        "file-contracts header active definition disappeared during parsing"
+    )
+
+
+def _file_contract_contract_sha256(header_path: Path) -> str:
+    """Backward-compatible wrapper around :func:`parse_file_contract_contract_sha256`."""
+
+    return parse_file_contract_contract_sha256(header_path)
+
+
+def observe_staged_python_version(stage_root: Path) -> str:
+    """Read the staged ``.python-version`` and require strict x.y.z form.
+
+    The producer pins the interpreter that built the wheel into this file;
+    the verifier reads it back so the ``build_interpreter`` claim in the
+    build identity is a live, content-addressable reference rather than a
+    self-reported producer value.  A bare version without a patch component
+    is rejected so callers cannot smuggle a partial ``3.13`` declaration.
+    """
+
+    path = _regular_file_under(stage_root, ".python-version")
+    try:
+        raw = path.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f".python-version is unreadable: {error}"
+        ) from error
+    value = raw.strip()
+    if "\n" in value or not _PYTHON_VERSION_PATTERN.fullmatch(value):
+        raise IntegrationLockError(
+            ".python-version must contain a single strict x.y.z version line"
+        )
+    _major, minor, _patch = value.split(".")
+    try:
+        minor_value = int(minor)
+    except ValueError as error:
+        raise IntegrationLockError(
+            f".python-version has a non-numeric minor version: {value}"
+        ) from error
+    if minor_value < 13:
+        raise IntegrationLockError(
+            f".python-version must be >=3.13 (got {value})"
+        )
+    return value
 
 
 def _load_build_identity_binding(
@@ -2460,7 +2561,33 @@ def _load_build_identity_binding(
             f"build identity plugin.version is not qualified: {declared_version}"
         )
 
+    # ----- runtime.build_interpreter == staged .python-version --------------
+    # The producer pins the interpreter that built the wheel into the staged
+    # ``.python-version`` file; the verifier reads it back live so the
+    # ``build_interpreter`` claim is content-addressable rather than
+    # self-reported.  The verifier never compares against its own runtime
+    # because installed verification can run on a different interpreter.
+    runtime = identity.get("runtime")
+    if not isinstance(runtime, dict):
+        raise IntegrationLockError("build identity runtime is malformed")
+    declared_build_interpreter = runtime.get("build_interpreter")
+    if not isinstance(declared_build_interpreter, str):
+        raise IntegrationLockError(
+            "build identity runtime.build_interpreter must be a string"
+        )
+    staged_python_version = observe_staged_python_version(stage_root)
+    if declared_build_interpreter != staged_python_version:
+        raise IntegrationLockError(
+            "build identity runtime.build_interpreter must equal staged "
+            f".python-version: declared={declared_build_interpreter} "
+            f"staged={staged_python_version}"
+        )
+
     # ----- native.binary / native.build_evidence live bytes -------------------
+    if native.get("compile_profile") != "release-o2":
+        raise IntegrationLockError(
+            "build identity native.compile_profile must be the qualified release-o2"
+        )
     _verify_digest_path(
         stage_root,
         native.get("binary"),
@@ -3432,6 +3559,8 @@ __all__ = (
     "observe_codex_host",
     "observe_hook_definition",
     "observe_stage_identity",
+    "observe_staged_python_version",
+    "parse_file_contract_contract_sha256",
     "validate_live_audit_manifests",
     "verify_integration_lock",
     "write_integration_lock",
