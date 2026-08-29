@@ -1,0 +1,12 @@
+{
+  "child_network_namespace": "net:[4026533200]",
+  "command_status": 0,
+  "host_network_namespace": "net:[4026531833]",
+  "namespace_local_network_syscall_count": 58,
+  "network_denial_mechanism": "bwrap-unshare-net",
+  "network_namespace_denied": true,
+  "network_syscall_attempts": [],
+  "schema_version": "1.0.0",
+  "strace_network_audit": true,
+  "technical_qualification": "PASS"
+}

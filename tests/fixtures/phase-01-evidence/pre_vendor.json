@@ -1,0 +1,1349 @@
+{
+  "component_licenses": [
+    {
+      "attribution_required": true,
+      "component": "academic-research-skills",
+      "modification_marking_required": true,
+      "noncommercial_restriction": true,
+      "sha256": "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c",
+      "source_path": "LICENSE"
+    },
+    {
+      "attribution_required": true,
+      "component": "experiment-agent",
+      "modification_marking_required": true,
+      "noncommercial_restriction": true,
+      "sha256": "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25",
+      "source_path": "LICENSE"
+    },
+    {
+      "attribution_required": true,
+      "component": "file-base",
+      "modification_marking_required": false,
+      "noncommercial_restriction": false,
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb",
+      "source_path": "LICENSE"
+    }
+  ],
+  "components": [
+    {
+      "clean": true,
+      "git_tree": "7ce111463102462479835ce5f7c2b597d7ccfe22",
+      "id": "academic-research-skills",
+      "revision": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb",
+      "status_porcelain": "",
+      "tree_sha256": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
+      "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
+      "version": "0.1.27"
+    },
+    {
+      "clean": true,
+      "git_tree": "166734509cf5057e48a7f81ecce9e44573610636",
+      "id": "experiment-agent",
+      "revision": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
+      "status_porcelain": "",
+      "tree_sha256": "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
+      "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
+      "version": "1.1.0"
+    },
+    {
+      "clean": true,
+      "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
+      "id": "file-base",
+      "revision": "ee68144af5453addda995a27cce8142999f318fb",
+      "status_porcelain": "",
+      "tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+      "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
+      "version": "v0.9.0-2-gee68144"
+    }
+  ],
+  "created_at": "2026-08-25T16:16:15Z",
+  "legal_inputs": [
+    {
+      "component": "academic-research-skills",
+      "kind": "license",
+      "path": "LICENSE",
+      "sha256": "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c"
+    },
+    {
+      "component": "academic-research-skills",
+      "kind": "notice",
+      "path": "NOTICE.md",
+      "sha256": "4f8eb1306c01b419baeff7f66d96ea3bd46076436406954c7eff21fb2e0003f1"
+    },
+    {
+      "component": "experiment-agent",
+      "kind": "license",
+      "path": "LICENSE",
+      "sha256": "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "package-lock",
+      "path": "graph-ui/package-lock.json",
+      "sha256": "123eafae09498a3a807916963549011a21b561889f8108215c1083618951e19a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/common/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/common/tree_sitter/LICENSE",
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ada/LICENSE",
+      "sha256": "ad8425038de519f8c4e3e9339feebf99dfad8a6002dcf79227d91402780a32cc"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/agda/LICENSE",
+      "sha256": "ef120ea13e3e543234f3d9a193c99ea512872979802dc0cebaea404c1a47047c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/apex/LICENSE",
+      "sha256": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/assembly/LICENSE",
+      "sha256": "0e9f43573925c2e4b49f328a45c4df22c882191d77d876b0d18ecd60bd21e17c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/astro/LICENSE",
+      "sha256": "9ec95a90150fa19e2cee78faf49138fc480f6f7a2354006a0ab150c44239447e"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/awk/LICENSE",
+      "sha256": "512d5f9072b6227e356c765b40a4194fda964f75095b0816f24ce75aa8df03fa"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/bash/LICENSE",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/beancount/LICENSE",
+      "sha256": "8976806a7d187d8e152d49146fae44d8a98bb15be05099e63843756c116efcf0"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/bibtex/LICENSE",
+      "sha256": "e4bfcc87169fdab12e351211541723132f58648a5ffad8f0f45b534349dbed45"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/bicep/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/bitbake/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/blade/LICENSE",
+      "sha256": "96e0c1803ffb831c7287b1fb7f88567d05e58d37da553e6bb9a9c4a765434ecb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/c/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/c_sharp/LICENSE",
+      "sha256": "778fb7d63b8c1844da315648c02f325c4713a6f4a5d19644fd413421422776d3"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cairo/LICENSE",
+      "sha256": "108bfb047e0d45962dcadedfce730c86c278bc2a67f6939df405a706bec27e20"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/capnp/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cfml/LICENSE",
+      "sha256": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cfscript/LICENSE",
+      "sha256": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/clojure/LICENSE",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cmake/LICENSE",
+      "sha256": "97334c0f9c0962b33cbe03223f584b8ed64c2d14419ce80cc2e945eb8d367d28"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cobol/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/commonlisp/LICENSE",
+      "sha256": "00bb7f417416e8233ae465209e72eaa6162d53b061add7d9bed0238552a6fa0c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cpp/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/crystal/LICENSE",
+      "sha256": "d1e5e5f807a9e842c16a0b392d7dcc5542f9ed9163533fa7d9798f7289fa8547"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/css/LICENSE",
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/csv/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/cuda/LICENSE",
+      "sha256": "f44d7107a33801260dc82624c91a71ebf5918b4038a0fb0e3ef60e2dd9ba1999"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/d/LICENSE",
+      "sha256": "ecf206b1a27e8e4ea07f1e1529cb111b4be5ce8420bd27b8269981d9c0c389f8"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/dart/LICENSE",
+      "sha256": "d270cb3a4985d75033bd77d875ccebff1d66e32788a3f727891e28d76132dd46"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/devicetree/LICENSE",
+      "sha256": "b539c1b4ccd868c8d4fc89651c8133a1678823f5057e2e1a81455a3df4f4c0b8"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/diff/LICENSE",
+      "sha256": "bb98faf5a86e9458536a6c745e02b53775d01066f1e51dda4ae220a3c0b050f4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/dockerfile/LICENSE",
+      "sha256": "806b8fcd19c1cdf23e178eb25942acc844a38669e36b2c896c7baf5f8bcecbb4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/dotenv/LICENSE",
+      "sha256": "117a35332cc959aea7d16cfa7427f097f7fcfff6b4ef16b14a91a7296f3897dc"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/elisp/LICENSE",
+      "sha256": "f7d440114acea14bf9f510bb2e4b93f2aac6a51baf271acc112009b9b2ebe55e"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/elixir/LICENSE",
+      "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/elm/LICENSE",
+      "sha256": "26f7bf09693dd895ea64777316bad0133b131a8478a660b4785d4b9d1322f9a1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/erlang/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/fennel/LICENSE",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/fish/LICENSE",
+      "sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/form/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/fortran/LICENSE",
+      "sha256": "c0fc02a86ae2b179c4729694c523bbf42da674e5136ed8e12e3cb2f26556ea9f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/fsharp/LICENSE",
+      "sha256": "f9352b63e87252b282b252bf27530027c8ca69829e0023f8b8b682a736f271fd"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/func/LICENSE",
+      "sha256": "8193651e765c9c23b0259b508320925dfbd99418aa424105b622b7787c2f01c5"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gdscript/LICENSE",
+      "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gitattributes/LICENSE",
+      "sha256": "413ec4c3842f95bcaf662aba7d646b22baf044aa6ac5efa6531b94d4ee00248b"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gitignore/LICENSE",
+      "sha256": "239b228dfcf83043b3be6afe8c7508bbbecff75e8fe1e66db020ed21e213e721"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gleam/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/glsl/LICENSE",
+      "sha256": "f44d7107a33801260dc82624c91a71ebf5918b4038a0fb0e3ef60e2dd9ba1999"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gn/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/go/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gomod/LICENSE",
+      "sha256": "806b8fcd19c1cdf23e178eb25942acc844a38669e36b2c896c7baf5f8bcecbb4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/gotemplate/LICENSE",
+      "sha256": "44ee910db99318d5d0b74b0d187ab2c8cbc411ca0be632ad9300e54036a9d822"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/graphql/LICENSE",
+      "sha256": "7bd2788c7154b102cf03eeb335faba32d897fb82f252b28663c16c76738aaba5"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/groovy/LICENSE",
+      "sha256": "5f10fff4ea3c4892af1e2f1af0b9ba7fa79843598808a1dbbbbc8231ca81d1ad"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/hare/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/haskell/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/hcl/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/hlsl/LICENSE",
+      "sha256": "dec735ccc031754dd05e6556dd9e959915eb367cf01cf009c77a1a38786932b1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/html/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/hyprlang/LICENSE",
+      "sha256": "4ea4f76b4942edcbac34ea41d6cb988ef8dcccd18117a179430cc7b2e3624807"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ini/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ispc/LICENSE",
+      "sha256": "a1f7bdd70d68ab4e4adeb135b11cfa1696abf573c14495fb883a54f5d7968d0a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/janet/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/java/LICENSE",
+      "sha256": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/javascript/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/jinja2/LICENSE",
+      "sha256": "9a204f0ddf288ec72bc40d593faee33c8ac1f4aed518dc80f9b77e03b0f6cbf3"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/jsdoc/LICENSE",
+      "sha256": "ffaefecad68467134f8c701120a2410a2384ffff7a605b63638cf0b51e7d16cc"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/json/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/json5/LICENSE",
+      "sha256": "c91845be8393ab50c602041e1b1e96994ad40a1d28fec9b9ee3ffe0933e4e641"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/jsonnet/LICENSE",
+      "sha256": "9255998527012c182050a5bdb9ce619176f96bbeb2a056c3ba939011f85da611"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/julia/LICENSE",
+      "sha256": "74f800107f200f4e28da33e9c3f86230d37d8f4c0a4916f7111e800c395ee3a2"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/just/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/kconfig/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/kdl/LICENSE",
+      "sha256": "b193808d3a13d34ec589a2c0bc2959f52a57f8fb1fc234d04ff8d87ac075864a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/kotlin/LICENSE",
+      "sha256": "948495f61768f7de26bcc61113d8cd95f50bbc15adb678c28c941c6c8fcd5903"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/lean/LICENSE",
+      "sha256": "30dcd1c85faa36ad0917120a4d67a859e99f2dd8ff544cfc74c17f8b0b3ad06f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/linkerscript/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/liquid/LICENSE",
+      "sha256": "3b3e4e4252d5d7d1c18e1257005f23242bf0580ad619204fd093c99b8c56748d"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/llvm/LICENSE",
+      "sha256": "a292ff39c53d0d2af3a0804ec291737508f1c888efb148f8f2bd3030e7cfdc48"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/lua/LICENSE",
+      "sha256": "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/luau/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/magma/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/make/LICENSE",
+      "sha256": "28eecdb75b6de2d9020603531461444bf54db827ee2fb345a8fcf4dbee7c2ad1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/markdown/LICENSE",
+      "sha256": "52ec8a1bf8256511e2a92613e0bb41ffefba3897f16fa958d7bb28c466dd4804"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/matlab/LICENSE",
+      "sha256": "8673f5acd59bfb3bd129760a57f72092d5e3c01e05837532eac9497cf8006a46"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/mermaid/LICENSE",
+      "sha256": "40e46efcec726e70cc95c553ac377674f0a5d2eec6089483ba237af7dae4c54c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/meson/LICENSE",
+      "sha256": "62bca3ac5aaf95fdebc7f3d22f061dfa2fabd069c21b89cf18f704ef428f92b9"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/mojo/LICENSE",
+      "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/move/LICENSE",
+      "sha256": "9d65ce763fc8041bf860b52fe8e2e91bad4034deb1d93fe8a303f31b3217ecc0"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/nasm/LICENSE",
+      "sha256": "d6e36f2e5d337e6f72ea697a9675ed97fc53daf04522682d6f8db316b0e5b472"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/nickel/LICENSE",
+      "sha256": "39313c75af91e581acd59f2c43a94d6216ce52e76f65125a1bd8e900f6f548a5"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/nix/LICENSE",
+      "sha256": "c1b72e50266464ec5118d26200e17bf1f472d142e62ab637e1ffc23986657a78"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/objc/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/objectscript_routine/LICENSE",
+      "sha256": "85b458dc150c4d17873dd5e73d01cfa23c797997a09d841884e08378242e929c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/objectscript_udl/LICENSE",
+      "sha256": "85b458dc150c4d17873dd5e73d01cfa23c797997a09d841884e08378242e929c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ocaml/LICENSE",
+      "sha256": "f977a20805dd6e275f14bc090a5f8e638401dad4df366841c1060f12c75b74ae"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/odin/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/pascal/LICENSE",
+      "sha256": "2e2fcc500eacb15b76c11fd2229aebf0a5b4c8ed476f068447c6dce778a17ac9"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/perl/LICENSE",
+      "sha256": "68a9a526ae357ed5a2f8ca5dabb14131b283554b69639bb04816088d4b1f2fa0"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/php/LICENSE",
+      "sha256": "664764fabf40c0b318e06324a5a12379092a2df25b8cbf2415f71bc0bb352346"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/pine/LICENSE",
+      "sha256": "01aa3f7bf8fe0c7d06a983422d5ea7e1a71b1363501eaabfdbc6f2bac95aa5f0"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/pkl/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/po/LICENSE",
+      "sha256": "109ed1ed2db40c798111e05757f5b8576fe14bdb17aa24c7f2515b300c78572c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/pony/LICENSE",
+      "sha256": "e8d649c1f03766310c675dc46e9733748ca1a9eedbc5196f3247196eddcbc31f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/powershell/LICENSE",
+      "sha256": "1fca8454c0d77a73f9922a52d39e1f7c339f5da5d03f2766eff66b859fa19477"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/prisma/LICENSE",
+      "sha256": "fbce36bb615a015ea545373da62c178fe9e7e3a7b7de656455738e6f671aa652"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/properties/LICENSE",
+      "sha256": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/protobuf/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/puppet/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/purescript/LICENSE",
+      "sha256": "3ae7f9f8e25ac9a5466114a8593c138c8cab8d34898b57db4fc3f0c3f22eca98"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/python/LICENSE",
+      "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/qml/LICENSE",
+      "sha256": "a8fb3a7df5ba9ef3b6511a1d65ad69869de66828fe2d690b7b65913678739738"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/r/LICENSE",
+      "sha256": "de2e49529f03d573bc3fa229dc83acfe22c63a5ad1766b289563edfd45b72dea"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/racket/LICENSE",
+      "sha256": "cc35bd4a973bf6067558e88b56d9a369e02c36e240b2b537aef8f751b7808fd7"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/regex/LICENSE",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/requirements/LICENSE",
+      "sha256": "413ec4c3842f95bcaf662aba7d646b22baf044aa6ac5efa6531b94d4ee00248b"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/rescript/LICENSE",
+      "sha256": "21da9b4e463af4b4501cbd4e0c5886a1f321a740b584002a9c9a5fe7b2d46a8a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ron/LICENSE",
+      "sha256": "c6137844f3f63aa4522dfc1cde8dff4f3314ed594ea954a73e3073dcc9d33b11"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/rst/LICENSE",
+      "sha256": "5b337e5d1fedbb6275550101f7a1e7b00465409d32a29b308812fca394348500"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/ruby/LICENSE",
+      "sha256": "ee006f02a3d856df282e409be2a86e24a65bb573a98b9c28343771141351bb6b"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/rust/LICENSE",
+      "sha256": "31d5b6f4243d5c7c6e1c4ebbbb9f6407bd1457a08bcc4f706521710341acba36"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/scala/LICENSE",
+      "sha256": "1f95ed26e1f4074074c9c7083e61c0a9e4c3b9f435745044995f3beb4ed28575"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/scheme/LICENSE",
+      "sha256": "cc35bd4a973bf6067558e88b56d9a369e02c36e240b2b537aef8f751b7808fd7"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/scss/LICENSE",
+      "sha256": "ad64f38da1571e9042cef6bea8f4232c2761c2f52ae93cbada9ae7aeaeeafa74"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/slang/LICENSE",
+      "sha256": "188fdcca13247f567cddb0d5155c622de1a6cf3f0245e52f0986907b6c2819f5"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/smali/LICENSE",
+      "sha256": "1337ef2684df318a38036aeecfcdd4a041368de0b73c300c709da259bf994246"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/smithy/LICENSE",
+      "sha256": "c51b88530abf05268b117585ac199b590d160de1d49e763fee745c07518b7c54"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/solidity/LICENSE",
+      "sha256": "8844f0cc9b76b9c8a9d0251904eb7536b6bb9976e0ec577e8f27ab96d42523ef"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/soql/LICENSE",
+      "sha256": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/sosl/LICENSE",
+      "sha256": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/sql/LICENSE",
+      "sha256": "3b3e4e4252d5d7d1c18e1257005f23242bf0580ad619204fd093c99b8c56748d"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/squirrel/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/sshconfig/LICENSE",
+      "sha256": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/starlark/LICENSE",
+      "sha256": "099c44248f8cf353123211318680e93465587c005a4b3730ce8cb5334de043d6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/svelte/LICENSE",
+      "sha256": "0eea8dc45e89deeb03c7799bbbc7b4688f365fb274562f4540ecfebdea82e727"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/sway/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/swift/LICENSE",
+      "sha256": "3533cec129bb4bba015c0d61d86dd7c3b7e82110e4d2ff7837a01eff5bad5ccc"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/systemverilog/LICENSE",
+      "sha256": "f4ceaa91e73e623d6b30895a3b644e0e277754a81c8b28655b75d7a9113f1ac4"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/tablegen/LICENSE",
+      "sha256": "4d6033889c2f0e054589c67aa638e59e609b029c62b993c9659ebba19abfde5c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/tcl/LICENSE",
+      "sha256": "e3578fe6a7e9592bd4d39fb52d2be62c07e5f8bdca2ca66b3e22f553ec8351fb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/teal/LICENSE",
+      "sha256": "b2ddc8d974b4a74abebd8a4ac19b8fbfa3f4d37ec5b88f748cdfda3c76a22797"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/templ/LICENSE",
+      "sha256": "fb8a4a7edd1e655b1ecf15dd5324fd9c073bbbf07e50c064566c693d854a0f76"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/thrift/LICENSE",
+      "sha256": "f0a0f84bedde3f160f9db0337715a534ca8f1fb5f19726d743dadfde44bb08c8"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/tlaplus/LICENSE",
+      "sha256": "bb9ed59c3ddf6631a6138e4656fbcf7fb225b1a3260760e729d6e58a52c6b15a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/toml/LICENSE",
+      "sha256": "b727eee929bee836e8102cecf749a795b199f291b58c885bcd81cae727ac5a46"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/tsx/LICENSE",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/typescript/LICENSE",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/typst/LICENSE",
+      "sha256": "0d129fe54977b282fa928da9bcf1f609d3388b54862361c9292d83605f71bd4b"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/verilog/LICENSE",
+      "sha256": "8d2ff8d1e308828099436c43dc8bfbb8b6f368ad2a012ab9802a80ca22b03b53"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/vhdl/LICENSE",
+      "sha256": "a9323218abe9aabd3429b76634470b40c3be012600e1f96bd16ca254724fa954"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/vim/LICENSE",
+      "sha256": "14eaaaa5c0cdb0eb86e85c55643c4cfa04593dbfbaef6a20f35337667b7278d7"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/vue/LICENSE",
+      "sha256": "91ebb180e4e2e34628c45e405584d0faac6863660b69e8139da96290e58c14dd"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/wgsl/LICENSE",
+      "sha256": "d1b7f7ca8ec73d915cec4aa64d9e8b7f2d89b874225d4532e00d9c36c98528fe"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/wit/LICENSE",
+      "sha256": "3b26cd02b9d9bf324bce59edd88c02cb93fa9a908528b805264db8cde53295e6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/wolfram/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/xml/LICENSE",
+      "sha256": "3297073719030b7261afd78b7267931ccc03a27f7a65ca6fc644316180f71bf6"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/yaml/LICENSE",
+      "sha256": "2d181298822a124f6d106118dcc69c8d4d26ac668559be29682c452e712b0947"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/zig/LICENSE",
+      "sha256": "0eea8dc45e89deeb03c7799bbbc7b4688f365fb274562f4540ecfebdea82e727"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/zsh/LICENSE",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/lz4/LICENSE",
+      "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/simplecpp/LICENSE",
+      "sha256": "e10e0877c3b49180e55eaef544b796570841b3265544ab069f7bc5687b7ec584"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/ts_runtime/LICENSE",
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/verstable/LICENSE",
+      "sha256": "2ef609c58a83269273396bd1176fc47eeb3fa5bd705b7c7fc2abe2d672740f65"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/wyhash/LICENSE",
+      "sha256": "6a90b88421a0d9b090e121daa11b3c6d55eed5eeb3281a2fcc454d6a28b5547c"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/zstd/LICENSE",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    {
+      "component": "file-base",
+      "kind": "generator",
+      "path": "scripts/gen-third-party-notices.sh",
+      "sha256": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+    },
+    {
+      "component": "file-base",
+      "kind": "checker",
+      "path": "scripts/license-gate-check-npm.py",
+      "sha256": "a0456bf6f6f40b562417fffefa53657586193fbc240c8fede1ffbbb18b050417"
+    },
+    {
+      "component": "file-base",
+      "kind": "checker",
+      "path": "scripts/license-gate-check.py",
+      "sha256": "9f4fc12b961565779dc2d2320099915ae444bce68e6e9e8da92b7a71d99b175d"
+    },
+    {
+      "component": "file-base",
+      "kind": "checker",
+      "path": "scripts/license-gate.sh",
+      "sha256": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+    },
+    {
+      "component": "file-base",
+      "kind": "policy",
+      "path": "scripts/license-policy.json",
+      "sha256": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/mimalloc/LICENSE",
+      "sha256": "82ade5d7d9b029044b5fbbc326207fc47c2d44ee4dd71e8a559c36d728217de9"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/nomic/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "component": "file-base",
+      "kind": "notice",
+      "path": "vendored/nomic/NOTICE",
+      "sha256": "893a74d9e3f0a74358344edc999e165739df343b36297967f3fd9cd462022f39"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/sqlite3/LICENSE.md",
+      "sha256": "49e5417011e9720fc8a5fa2a400c1541535195788c59ab33888ade39b2a3f9f0"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/tre/LICENSE",
+      "sha256": "6a50ab50d856b30c965cf2dd899e577ec108c938242fd3a2e7a7a25eed996200"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/xxhash/LICENSE",
+      "sha256": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "vendored/yyjson/LICENSE",
+      "sha256": "45e384d3d52c73cba3a64d6e6c25d47cd738cd8a55c30629e3201046eda62947"
+    }
+  ],
+  "native_file_base_gate": {
+    "commands": [
+      {
+        "argv": [
+          "./scripts/license-gate.sh",
+          "--selftest"
+        ],
+        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
+        "ended_at": "2026-08-25T16:14:41Z",
+        "started_at": "2026-08-25T16:14:38Z",
+        "status": 0,
+        "stderr_path": "commands/001-native-gate-selftest/stderr.log",
+        "stdout_path": "commands/001-native-gate-selftest/stdout.log"
+      },
+      {
+        "argv": [
+          "./scripts/license-gate.sh"
+        ],
+        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
+        "ended_at": "2026-08-25T16:16:10Z",
+        "started_at": "2026-08-25T16:14:41Z",
+        "status": 0,
+        "stderr_path": "commands/002-native-gate/stderr.log",
+        "stdout_path": "commands/002-native-gate/stdout.log"
+      },
+      {
+        "argv": [
+          "./scripts/gen-third-party-notices.sh",
+          "/home/zhangyangrui/my_programes/academic-research-workbench/build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md"
+        ],
+        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
+        "ended_at": "2026-08-25T16:16:12Z",
+        "started_at": "2026-08-25T16:16:10Z",
+        "status": 0,
+        "stderr_path": "commands/003-notice-generator/stderr.log",
+        "stdout_path": "commands/003-notice-generator/stdout.log"
+      }
+    ],
+    "entrypoint": "scripts/license-gate.sh",
+    "generated_notices": [
+      {
+        "path": "generated/THIRD_PARTY_NOTICES.md",
+        "sha256": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+      }
+    ],
+    "tools": [
+      {
+        "path": "scripts/license-gate.sh",
+        "sha256": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+      },
+      {
+        "path": "scripts/license-policy.json",
+        "sha256": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+      },
+      {
+        "path": "scripts/license-gate-check.py",
+        "sha256": "9f4fc12b961565779dc2d2320099915ae444bce68e6e9e8da92b7a71d99b175d"
+      },
+      {
+        "path": "scripts/license-gate-check-npm.py",
+        "sha256": "a0456bf6f6f40b562417fffefa53657586193fbc240c8fede1ffbbb18b050417"
+      },
+      {
+        "path": "scripts/gen-third-party-notices.sh",
+        "sha256": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+      }
+    ],
+    "unmodified": true
+  },
+  "raw_evidence": [
+    {
+      "path": "commands/001-native-gate-selftest/command.json",
+      "sha256": "a16d61e46f72b1cf632d27f2e7dcb847008e2fea78664a2bb746cd4b8efd6672"
+    },
+    {
+      "path": "commands/001-native-gate-selftest/status.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "commands/001-native-gate-selftest/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/001-native-gate-selftest/stdout.log",
+      "sha256": "6f29ca51899df6263bcfa27eba0079581ab2a691c3074aef6e0194667cba1ff0"
+    },
+    {
+      "path": "commands/002-native-gate/command.json",
+      "sha256": "0aa731c008765b64649f74fef5ce250a630a0f4f0267f1f823a22799ad5bb838"
+    },
+    {
+      "path": "commands/002-native-gate/status.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "commands/002-native-gate/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/002-native-gate/stdout.log",
+      "sha256": "42e78069ed195b6914096c7f7113396f60981cb53d9cfb81d7613053ca5aa45f"
+    },
+    {
+      "path": "commands/003-notice-generator/command.json",
+      "sha256": "08c177621a704179c0ed519268970f2ca7db9007585627c50bf0edb7c9ed22e8"
+    },
+    {
+      "path": "commands/003-notice-generator/status.txt",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "commands/003-notice-generator/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/003-notice-generator/stdout.log",
+      "sha256": "783549aebe972dab92f033513c85f5798ff9f0e6d7f359a0280ab9dc188873a4"
+    },
+    {
+      "path": "commands/native-invocations.log",
+      "sha256": "b777666f3b5482b265c97d8370b2325da15917c2edccc1c6c54ed53e9d96dd63"
+    },
+    {
+      "path": "generated/THIRD_PARTY_NOTICES.md",
+      "sha256": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+    },
+    {
+      "path": "source-archives/academic-research-skills.tar",
+      "sha256": "57e819cd94d5569cb09da349bef323638972f8773abae252281b6cc4e4504ee8"
+    },
+    {
+      "path": "source-archives/experiment-agent.tar",
+      "sha256": "1d952cb8891ea443e2c2c41537d09248889c6a50f41912d1d3f693fdcd15aad0"
+    },
+    {
+      "path": "source-archives/file-base.tar",
+      "sha256": "448062c9e75daf93e8bb449771bfcd67bd226ce5fc25cbf678c6eab035469bef"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "technical_qualification": "PASS",
+  "tool_identities": {
+    "git": "git version 2.55.0",
+    "node": "v24.13.0",
+    "npm": "10.9.8",
+    "python": "3.11.10",
+    "scancode": "ScanCode version: 32.5.0\nScanCode Output Format version: 4.1.0\nSPDX License list version: 3.27"
+  },
+  "vendor_sources_observations": [
+    {
+      "exists": false,
+      "phase": "before"
+    },
+    {
+      "exists": false,
+      "phase": "during:fetch-academic-research-skills"
+    },
+    {
+      "exists": false,
+      "phase": "during:fetch-experiment-agent"
+    },
+    {
+      "exists": false,
+      "phase": "during:fetch-file-base"
+    },
+    {
+      "exists": false,
+      "phase": "during:native-gate-selftest"
+    },
+    {
+      "exists": false,
+      "phase": "during:native-gate"
+    },
+    {
+      "exists": false,
+      "phase": "during:notice-generator"
+    },
+    {
+      "exists": false,
+      "phase": "after"
+    }
+  ]
+}

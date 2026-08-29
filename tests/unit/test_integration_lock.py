@@ -239,12 +239,15 @@ def _install_audit_manifests(stage: Path) -> None:
         "asan_ubsan": "share/arw/evidence/asan_ubsan.json",
         "tsan": "share/arw/evidence/tsan.json",
     }
+    # Committed byte-exact copies of the real phase-01 evidence so CI (which
+    # never builds ``build/evidence``) exercises the same producer contracts.
+    fixture_evidence = REPOSITORY_ROOT / "tests/fixtures/phase-01-evidence"
     synthetic_evidence_source = {
-        "pre_vendor": REPOSITORY_ROOT / "build/evidence/phase-01/pre-vendor-license/receipt.json",
-        "legal": REPOSITORY_ROOT / "build/evidence/phase-01/license-0002/verdict.json",
-        "upstream": REPOSITORY_ROOT / "build/evidence/phase-01/native/upstream/verdict.json",
-        "asan_ubsan": REPOSITORY_ROOT / "build/evidence/phase-01/native/asan-ubsan/verdict.json",
-        "tsan": REPOSITORY_ROOT / "build/evidence/phase-01/native/tsan/verdict.json",
+        "pre_vendor": fixture_evidence / "pre_vendor.json",
+        "legal": fixture_evidence / "legal.json",
+        "upstream": fixture_evidence / "upstream.json",
+        "asan_ubsan": fixture_evidence / "asan_ubsan.json",
+        "tsan": fixture_evidence / "tsan.json",
     }
     synthetic_evidence = synthetic_evidence_relative
     evidence_digests: dict[str, str] = {}
