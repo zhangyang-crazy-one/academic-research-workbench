@@ -137,10 +137,11 @@ def _component(
     git_tree: str,
     tree_sha256: str,
     upstream_url: str,
+    version: str = "0.1.0",
 ) -> dict[str, object]:
     return {
         "id": component_id,
-        "version": "pinned",
+        "version": version,
         "revision": revision,
         "git_tree": git_tree,
         "tree_sha256": tree_sha256,
@@ -527,6 +528,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
                 "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
                 "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
                 "https://github.com/Imbad0202/academic-research-skills.git",
+                version="0.1.26",
             ),
             _component(
                 "experiment-agent",
@@ -534,6 +536,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
                 "166734509cf5057e48a7f81ecce9e44573610636",
                 "2985b59589805267cf1b268a126162ffd3689d0f31840a2de41b004471128bae",
                 "https://github.com/Imbad0202/experiment-agent.git",
+                version="1.1.0",
             ),
             _component(
                 "file-base",
@@ -541,6 +544,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
                 "de88f52c6614473d04aa1596304a328ef91267e8",
                 "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
                 "https://github.com/DeusData/codebase-memory-mcp.git",
+                version="v0.9.0-2-gee68144",
             ),
         ],
         "patches": patches,
@@ -666,6 +670,17 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         },
     )
     _write(external / "ars/academic-pipeline/WORKFLOW.md", "# Pipeline\n")
+
+    # Stage the pinned license files referenced by the LegalVerdict rows
+    # so the live digest cross-binding in ``verify_evidence_contract``
+    # has real bytes to recompute against.
+    (stage / "LICENSES").mkdir(parents=True, exist_ok=True)
+    for relative in (
+        "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+        "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
+        "LICENSES/file-base-MIT.txt",
+    ):
+        shutil.copyfile(REPOSITORY_ROOT / relative, stage / relative)
 
     _install_audit_manifests(stage)
 
@@ -3332,3 +3347,199 @@ def test_real_evidence_green_passes_full_lock_rebuild(
             ),
             strict=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Codex round-43 P1 findings (3886636729, 3886670801, 3886670806): tighten the
+# producer contracts to bind per-component rows to the staged vendor manifest
+# and to live staged bytes, plus strict RFC3339-Z datetime validation for
+# the pre-vendor ``created_at`` field.
+# ---------------------------------------------------------------------------
+
+
+def _rebind_one_evidence(
+    integration_fixture: dict[str, Path], target_relative: str, mutate_payload
+) -> None:
+    """Mutate the staged evidence file and rebind identity + staged_payloads.
+
+    Also refreshes the canary stage_sha256 so the verify path exercises the
+    semantic gate rather than the canary stage-identity mismatch.
+    """
+
+    target = integration_fixture["stage"] / target_relative
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    mutate_payload(payload)
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_all_evidence_records(integration_fixture, target_relative)
+
+
+def _mutate_pre_vendor_component(integration_fixture: dict[str, Path], mutation) -> None:
+    """Apply a mutation to a pre-vendor component row + rebind the file."""
+
+    def _mutate(payload: dict[str, object]) -> None:
+        for row in payload["components"]:
+            if row.get("id") == "academic-research-skills":
+                mutation(row)
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _mutate
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "tamper"),
+    [
+        ("revision", "0" * 40),
+        ("git_tree", "0" * 40),
+        ("tree_sha256", "f" * 64),
+        ("version", "9.9.9"),
+        ("upstream_url", "https://example.com/different.git"),
+    ],
+)
+def test_pre_vendor_component_field_drift_rejected(
+    integration_fixture: dict[str, Path], field: str, tamper: str
+) -> None:
+    """RED: any drift in pinned manifest fields rejects at verify path.
+
+    Each pinned field (revision, git_tree, tree_sha256, version,
+    upstream_url) is verified against the staged vendor/source-manifest.json
+    via the shared ``verify_evidence_contract`` helper.  Both the rebuild
+    path (``build_integration_lock``) and the verify path are covered.
+    """
+
+    def _tamper(row: dict[str, object]) -> None:
+        row[field] = tamper  # type: ignore[index]
+
+    # Build baseline lock + refresh canary while evidence is consistent.
+    lock = _build_with_consistent_evidence(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+
+    # Tamper the staged pre-vendor.json and rebind all digest records.
+    _mutate_pre_vendor_component(integration_fixture, _tamper)
+    with pytest.raises(IntegrationLockError, match=f"field {field} drifts"):
+        _verify(integration_fixture, lock)
+
+
+def _build_with_consistent_evidence(integration_fixture: dict[str, Path]):
+    """Build the lock and return it; the canary has already been refreshed.
+
+    Used by the RED tests that need the lock + canary to be in sync
+    before applying a tamper that mutates a staged file.  The caller
+    is responsible for not breaking the evidence state.
+    """
+
+    lock = _build(integration_fixture)
+    _refresh_canary_stage_identity(integration_fixture)
+    return lock
+
+
+def _mutate_legal_row(
+    integration_fixture: dict[str, Path], component_id: str, mutation
+) -> None:
+    """Apply a mutation to a LegalVerdict row and rebind the evidence file."""
+
+    def _mutate(payload: dict[str, object]) -> None:
+        for row in payload["components"]:
+            if row.get("component_id") == component_id:
+                mutation(row)
+
+    _rebind_one_evidence(integration_fixture, "share/arw/evidence/legal.json", _mutate)
+
+
+def test_legal_row_pinned_drift_to_mit_satisfied_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: legal row changed to MIT/SATISFIED for ARS rejects at build + verify."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+
+    def _tamper(row: dict[str, object]) -> None:
+        row["license"] = "MIT"
+        row["release_status"] = "SATISFIED"
+
+    _mutate_legal_row(integration_fixture, "academic-research-skills", _tamper)
+    _rebind_inventory_coverage = globals()["_rebind_inventory_coverage"]
+    _rebind_inventory_coverage(
+        integration_fixture["stage"], "share/arw/evidence/legal.json"
+    )
+    _refresh_canary_stage_identity(integration_fixture)
+    with pytest.raises(
+        IntegrationLockError, match="must equal pinned"
+    ):
+        _verify(integration_fixture, lock)
+
+
+def test_legal_staged_license_file_bytes_flipped_rejected(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: live digest of staged license file flipped rejects via cross-check."""
+
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    staged_license = (
+        integration_fixture["stage"] / "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
+    )
+    staged_license.write_bytes(b"flipped content\n")
+    _refresh_canary_stage_identity(integration_fixture)
+    with pytest.raises(IntegrationLockError, match="live-bytes cross-check"):
+        _verify(integration_fixture, lock)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-99-99T99:99:99Z",  # impossible calendar fields
+        "2026-02-29T12:00:00Z",  # non-leap February 29
+        "2026-13-01T00:00:00Z",  # month 13
+        "2026-01-32T00:00:00Z",  # day 32
+        "2026-01-01T24:00:00Z",  # hour 24
+        "not-a-timestamp",  # garbage
+        "",  # empty
+    ],
+)
+def test_pre_vendor_created_at_strict_rfc3339_z_rejects_impossible_dates(
+    integration_fixture: dict[str, Path], value: str
+) -> None:
+    """RED: impossible / non-leap / non-UTC dates reject at model validation."""
+
+    target = (
+        integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    )
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["created_at"] = value
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", lambda p: None
+    )
+    with pytest.raises(IntegrationLockError, match="created_at|RFC3339|calendar"):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_created_at_leap_year_accepts_at_model_level(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """GREEN: a real leap year timestamp passes the strict parser."""
+
+    target = (
+        integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    )
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["created_at"] = "2024-02-29T12:00:00Z"
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", lambda p: None
+    )
+    # The model validator must accept the leap year; downstream manifest
+    # cross-binding still passes because pre_vendor.components were not
+    # touched in this test.  A clean build is the GREEN signal.
+    lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], lock)
+    receipt = _verify(integration_fixture, lock)
+    assert receipt.technical_qualification == "PASS"

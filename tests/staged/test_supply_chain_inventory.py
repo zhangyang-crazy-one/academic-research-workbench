@@ -954,3 +954,79 @@ def test_validate_only_rejects_passthrough_evidence_stub(
             f"validate-only accepted stub for {label}: {validated.stderr}"
         )
         assert "producer contract" in validated.stderr
+
+
+def test_validate_only_rejects_pre_vendor_component_field_drift(
+    tmp_path: Path,
+) -> None:
+    """RED: tampered pre_vendor.json component field rejects validate-only."""
+
+    stage_root = tmp_path / "pre-vendor-drift" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    target = stage_root / "share/arw/evidence/pre_vendor.json"
+    payload = _load(target)
+    for row in payload["components"]:
+        if row["id"] == "academic-research-skills":
+            row["version"] = "9.9.9"
+    _write_pretty(target, payload)
+
+    # Rebind the identity's evidence digestPath, staged_payloads entry,
+    # and inventory so the audit manifest gate's digest checks do not
+    # pre-empt the verifier's manifest cross-binding on pre_vendor.
+    identity = _load(stage_root / "share/arw/build-identity.json")
+    new_digest = _sha256(target)
+    identity["evidence"]["pre_vendor"]["sha256"] = new_digest
+    payloads = {item["path"]: item for item in identity["staged_payloads"]}
+    payloads["share/arw/evidence/pre_vendor.json"]["sha256"] = new_digest
+    identity["staged_payloads"] = [payloads[p] for p in sorted(payloads)]
+    _write_pretty(stage_root / "share/arw/build-identity.json", identity)
+    _rebind_inventory(
+        stage_root,
+        "share/arw/evidence/pre_vendor.json",
+        "share/arw/build-identity.json",
+    )
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    # Either the manifest cross-check fires or the inventory gate catches
+    # the tampered file; both reject the validate-only path.
+    stderr = validated.stderr
+    assert (
+        "field version drifts" in stderr
+        or "manifest cross-check failed" in stderr
+    )
+
+
+def test_validate_only_rejects_legal_staged_path_byte_flip(
+    tmp_path: Path,
+) -> None:
+    """RED: live digest of legal staged_path flipped rejects validate-only."""
+
+    stage_root = tmp_path / "legal-bytes-flip" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    license_path = (
+        stage_root / "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
+    )
+    # Rebind inventory so the audit manifest gate does not pre-empt the
+    # verifier's live-bytes cross-check on legal.json rows.
+    _rebind_inventory(
+        stage_root,
+        "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+    )
+    license_path.write_bytes(b"tampered license content\n")
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    # The live-bytes cross-check fires; alternatively the inventory gate
+    # may catch the file digest drift if the inventory was not yet
+    # rebinded to the new bytes.
+    stderr = validated.stderr
+    assert (
+        "live-bytes cross-check" in stderr
+        or "stage inventory coverage digest mismatch" in stderr
+        or "coverage digest" in stderr
+    )

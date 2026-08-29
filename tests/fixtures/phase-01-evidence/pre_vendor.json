@@ -28,13 +28,13 @@
   "components": [
     {
       "clean": true,
-      "git_tree": "7ce111463102462479835ce5f7c2b597d7ccfe22",
+      "git_tree": "43b7ad965778b363b3ba1cfe3d5f3884dd29b417",
       "id": "academic-research-skills",
-      "revision": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb",
+      "revision": "8cc7f8f4cccda721646d9df590b42721c93cba31",
       "status_porcelain": "",
-      "tree_sha256": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
+      "tree_sha256": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e",
       "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "version": "0.1.27"
+      "version": "0.1.26"
     },
     {
       "clean": true,
@@ -57,7 +57,7 @@
       "version": "v0.9.0-2-gee68144"
     }
   ],
-  "created_at": "2026-08-25T16:16:15Z",
+  "created_at": "2026-08-29T13:46:39Z",
   "legal_inputs": [
     {
       "component": "academic-research-skills",
@@ -69,7 +69,7 @@
       "component": "academic-research-skills",
       "kind": "notice",
       "path": "NOTICE.md",
-      "sha256": "4f8eb1306c01b419baeff7f66d96ea3bd46076436406954c7eff21fb2e0003f1"
+      "sha256": "945eed0e90e311f10e0b0152367a13eab71b3163cdf1bd11175da50b26a78b21"
     },
     {
       "component": "experiment-agent",
@@ -1171,9 +1171,9 @@
           "./scripts/license-gate.sh",
           "--selftest"
         ],
-        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
-        "ended_at": "2026-08-25T16:14:41Z",
-        "started_at": "2026-08-25T16:14:38Z",
+        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.Gf78wX/sources/file-base",
+        "ended_at": "2026-08-29T13:45:47Z",
+        "started_at": "2026-08-29T13:45:46Z",
         "status": 0,
         "stderr_path": "commands/001-native-gate-selftest/stderr.log",
         "stdout_path": "commands/001-native-gate-selftest/stdout.log"
@@ -1182,9 +1182,9 @@
         "argv": [
           "./scripts/license-gate.sh"
         ],
-        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
-        "ended_at": "2026-08-25T16:16:10Z",
-        "started_at": "2026-08-25T16:14:41Z",
+        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.Gf78wX/sources/file-base",
+        "ended_at": "2026-08-29T13:46:35Z",
+        "started_at": "2026-08-29T13:45:47Z",
         "status": 0,
         "stderr_path": "commands/002-native-gate/stderr.log",
         "stdout_path": "commands/002-native-gate/stdout.log"
@@ -1194,9 +1194,9 @@
           "./scripts/gen-third-party-notices.sh",
           "/home/zhangyangrui/my_programes/academic-research-workbench/build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md"
         ],
-        "cwd": "/tmp/arw-pre-vendor.SzjVDR/sources/file-base",
-        "ended_at": "2026-08-25T16:16:12Z",
-        "started_at": "2026-08-25T16:16:10Z",
+        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.Gf78wX/sources/file-base",
+        "ended_at": "2026-08-29T13:46:36Z",
+        "started_at": "2026-08-29T13:46:35Z",
         "status": 0,
         "stderr_path": "commands/003-notice-generator/stderr.log",
         "stdout_path": "commands/003-notice-generator/stdout.log"
@@ -1236,7 +1236,7 @@
   "raw_evidence": [
     {
       "path": "commands/001-native-gate-selftest/command.json",
-      "sha256": "a16d61e46f72b1cf632d27f2e7dcb847008e2fea78664a2bb746cd4b8efd6672"
+      "sha256": "edf928d00ebb27f34d431465b7cacb6b1c88b1fa5bdd22a34982a64a3b279fd1"
     },
     {
       "path": "commands/001-native-gate-selftest/status.txt",
@@ -1252,7 +1252,7 @@
     },
     {
       "path": "commands/002-native-gate/command.json",
-      "sha256": "0aa731c008765b64649f74fef5ce250a630a0f4f0267f1f823a22799ad5bb838"
+      "sha256": "139735da42262aeaaeecd95f20f8e3754d518f671c20ea264d3cd19017cd458c"
     },
     {
       "path": "commands/002-native-gate/status.txt",
@@ -1268,7 +1268,7 @@
     },
     {
       "path": "commands/003-notice-generator/command.json",
-      "sha256": "08c177621a704179c0ed519268970f2ca7db9007585627c50bf0edb7c9ed22e8"
+      "sha256": "3284bc91421405cec8a8e8eb5a57e5ce61338431962a94b6f9580d404265064f"
     },
     {
       "path": "commands/003-notice-generator/status.txt",
@@ -1284,7 +1284,7 @@
     },
     {
       "path": "commands/native-invocations.log",
-      "sha256": "b777666f3b5482b265c97d8370b2325da15917c2edccc1c6c54ed53e9d96dd63"
+      "sha256": "0f43a2a84de7cb6b0df8da7cd0ec84d27a79157b7d5233d28e426fa731931127"
     },
     {
       "path": "generated/THIRD_PARTY_NOTICES.md",
@@ -1292,7 +1292,7 @@
     },
     {
       "path": "source-archives/academic-research-skills.tar",
-      "sha256": "57e819cd94d5569cb09da349bef323638972f8773abae252281b6cc4e4504ee8"
+      "sha256": "10cf0ed474e2852a3cbdf3374f36f474ef34d9ecae87ce71e8ddd314a220d9ce"
     },
     {
       "path": "source-archives/experiment-agent.tar",

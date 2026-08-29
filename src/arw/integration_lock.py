@@ -22,7 +22,8 @@ import subprocess
 import tempfile
 import tomllib
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, Self, TypeVar, cast
 
@@ -2377,14 +2378,30 @@ class _LegalComponentRow(LockModel):
     staged_sha256: Sha256
 
     @model_validator(mode="after")
-    def _validate_pair(self) -> Self:
-        if self.source_sha256 != self.staged_sha256:
+    def _validate_pinned(self) -> Self:
+        pinned = _PINNED_LEGAL_ROWS.get(self.component_id)
+        if pinned is None:
             raise ValueError(
-                f"{self.component_id} staged_sha256 must equal source_sha256"
+                f"legal verdict has no pinned row for {self.component_id}"
+            )
+        # Exact equality on every closed field; ``staged_sha256`` must
+        # equal ``source_sha256`` AND the pinned source_sha256.
+        for field_name, expected in pinned.items():
+            observed = getattr(self, field_name)
+            if observed != expected:
+                raise ValueError(
+                    f"legal verdict row {self.component_id}.{field_name} "
+                    f"must equal pinned {expected!r}: got {observed!r}"
+                )
+        if self.staged_sha256 != self.source_sha256:
+            raise ValueError(
+                f"legal verdict row {self.component_id} staged_sha256 "
+                f"must equal source_sha256"
             )
         if self.license == "CC-BY-NC-4.0" and self.release_status != "BLOCKED":
             raise ValueError(
-                f"{self.component_id} is CC-BY-NC-4.0 and must be release_status=BLOCKED"
+                f"legal verdict row {self.component_id} is CC-BY-NC-4.0 "
+                "and must be release_status=BLOCKED"
             )
         return self
 
@@ -2416,7 +2433,7 @@ class LegalVerdict(LockModel):
             raise ValueError(
                 "legal verdict evidence_needed must equal the producer strings"
             )
-        seen_ids = set()
+        seen_ids: set[str] = set()
         for row in self.components:
             if row.component_id in seen_ids:
                 raise ValueError(
@@ -2547,13 +2564,18 @@ class _PreVendorVendorObservation(LockModel):
     model_config = ConfigDict(extra="allow")
 
 
-_RFC3339_Z_PATTERN = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$"
-)
-
-
 class PreVendorReceipt(LockModel):
-    """Contract for ``scripts/pre-vendor-license-gate`` output."""
+    """Contract for ``scripts/pre-vendor-license-gate`` output.
+
+    The ``created_at`` field is parsed by :func:`_parse_strict_rfc3339_z`
+    so impossible calendar values (``2026-99-99T99:99:99Z``, non-leap
+    ``2026-02-29T12:00:00Z``) are rejected at model validation time.
+    Per-component cross-binding against the staged
+    ``vendor/source-manifest.json`` happens in
+    :func:`_bind_pre_vendor_components_to_manifest`, which is invoked
+    from the shared :func:`verify_evidence_contract` helper so the
+    installed verifier and the producer cannot drift.
+    """
 
     schema_version: Literal["1.0.0"]
     component_licenses: list[_PreVendorComponentLicense]
@@ -2565,6 +2587,13 @@ class PreVendorReceipt(LockModel):
     created_at: str
     vendor_sources_observations: list[_PreVendorVendorObservation]
     technical_qualification: str
+
+    @field_validator("created_at")
+    @classmethod
+    def _validate_created_at(cls, value: str) -> str:
+        # Strict parse rejects bad calendar / non-leap / non-UTC values.
+        _parse_strict_rfc3339_z(value)
+        return value
 
     @model_validator(mode="after")
     def _validate_exact(self) -> Self:
@@ -2588,10 +2617,6 @@ class PreVendorReceipt(LockModel):
             raise ValueError(
                 "pre-vendor receipt vendor_sources_observations must be non-empty"
             )
-        if not _RFC3339_Z_PATTERN.fullmatch(self.created_at):
-            raise ValueError(
-                "pre-vendor receipt created_at must be a strict RFC3339 Z timestamp"
-            )
         # Pin the two CC-BY-NC-4.0 license digests; file-base can be any
         # valid 64-hex sha256 because the producer does not pin it.
         expected = {
@@ -2614,7 +2639,7 @@ class PreVendorReceipt(LockModel):
                 False,
             ),
         }
-        seen = set()
+        seen: set[str] = set()
         for license_row in self.component_licenses:
             seen.add(license_row.component)
             expected_sha, attribution, marking, noncommercial = expected[
@@ -2660,20 +2685,297 @@ _EVIDENCE_MODEL_BY_SURFACE: dict[str, type[BaseModel]] = {
 }
 
 
+# Pinned exact row tuples for the LegalVerdict per-component contract.  Each
+# row is the complete claim the verifier requires; partial or drifted rows
+# are rejected.  Add new entries here only when the producer's pinned
+# release evidence changes - the lock is intentional.
+_PINNED_LEGAL_ROWS: dict[str, dict[str, str]] = {
+    "academic-research-skills": {
+        "license": "CC-BY-NC-4.0",
+        "release_status": "BLOCKED",
+        "source_path": "vendor/sources/academic-research-skills/LICENSE",
+        "source_sha256": (
+            "b3848009d12a173f549ef98d9ee486e64459e8eb5d9f895bff53782b4aa86d7c"
+        ),
+        "staged_path": "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt",
+    },
+    "experiment-agent": {
+        "license": "CC-BY-NC-4.0",
+        "release_status": "BLOCKED",
+        "source_path": "vendor/sources/experiment-agent/LICENSE",
+        "source_sha256": (
+            "f66a510318fa9c98534f64c844403bf54d9019613f5a818f9d92075b91133d25"
+        ),
+        "staged_path": "LICENSES/experiment-agent-CC-BY-NC-4.0.txt",
+    },
+    "file-base": {
+        "license": "MIT",
+        "release_status": "SATISFIED",
+        "source_path": "vendor/sources/file-base/LICENSE",
+        "source_sha256": (
+            "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        ),
+        "staged_path": "LICENSES/file-base-MIT.txt",
+    },
+}
+
+
+# Subset of fields that LegalVerdict rows MUST match against the staged
+# vendor/source-manifest.json for PreVendorReceipt cross-binding.  The
+# receipt's per-component row must equal the manifest's row values on
+# these exact keys.
+_PRE_VENDOR_MANIFEST_PIN_KEYS: tuple[str, ...] = (
+    "version",
+    "revision",
+    "git_tree",
+    "tree_sha256",
+    "upstream_url",
+)
+
+
+def _parse_strict_rfc3339_z(value: str) -> datetime:
+    """Parse ``YYYY-MM-DDTHH:MM:SS(.fff)Z`` strictly; reject bad calendar values.
+
+    A loose ``datetime.fromisoformat`` accepts the impossible date
+    ``2026-99-99T99:99:99Z`` because Python rolls invalid fields over
+    silently in some interpreter builds; a leap-year check plus a
+    round-trip ``strftime`` comparison guarantees the calendar values
+    are real.
+    """
+
+    match = re.fullmatch(
+        r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z",
+        value,
+    )
+    if match is None:
+        raise ValueError(
+            "RFC3339 Z timestamp must match "
+            "YYYY-MM-DDTHH:MM:SS(.fff)Z: " + value
+        )
+    year, month, day, hour, minute, second, fraction = match.groups()
+    try:
+        year_value = int(year)
+        month_value = int(month)
+        day_value = int(day)
+        hour_value = int(hour)
+        minute_value = int(minute)
+        second_value = int(second)
+    except ValueError as error:
+        raise ValueError(
+            f"RFC3339 Z timestamp has non-numeric fields: {value}"
+        ) from error
+    if not (
+        1 <= month_value <= 12
+        and 0 <= hour_value <= 23
+        and 0 <= minute_value <= 59
+        and 0 <= second_value <= 59
+    ):
+        raise ValueError(
+            f"RFC3339 Z timestamp has out-of-range calendar/time fields: {value}"
+        )
+    microsecond = 0
+    if fraction is not None:
+        try:
+            microsecond = int((fraction + "000000")[:6])
+        except ValueError as error:
+            raise ValueError(
+                f"RFC3339 Z timestamp has a non-numeric fraction: {value}"
+            ) from error
+    try:
+        parsed = datetime(
+            year_value,
+            month_value,
+            day_value,
+            hour_value,
+            minute_value,
+            second_value,
+            microsecond,
+            tzinfo=UTC,
+        )
+    except ValueError as error:
+        raise ValueError(
+            f"RFC3339 Z timestamp has invalid calendar date: {value}"
+        ) from error
+    # Round-trip the parsed datetime back through the same strict format
+    # and compare; any silent roll-over (e.g. 2026-99-99 → some other
+    # date) surfaces here.
+    canonical = parsed.astimezone(UTC).strftime(
+        "%Y-%m-%dT%H:%M:%S"
+        + (".%f" if parsed.microsecond else "")
+        + "Z"
+    )
+    if canonical != value:
+        raise ValueError(
+            "RFC3339 Z timestamp does not round-trip cleanly: "
+            f"{value!r} != {canonical!r}"
+        )
+    return parsed
+
+
+def _verify_legal_row_live_bytes(
+    stage_root: Path, row: _LegalComponentRow, *, label: str
+) -> None:
+    """Read the staged ``staged_path`` and require its digest matches.
+
+    The per-component row claims a ``staged_sha256`` that must equal both
+    the ``source_sha256`` and the live digest of the file staged under
+    ``row.staged_path``.  This binds the legal row to bytes the
+    ``scripts/stage-plugin`` actually placed in the plugin tree.
+    """
+
+    staged_path = _regular_file_under(stage_root, row.staged_path)
+    try:
+        observed = _digest(staged_path)
+    except IntegrationLockError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f"{label} legal row {row.component_id} staged file is "
+            f"unreadable: {row.staged_path}: {error}"
+        ) from error
+    if observed != row.staged_sha256:
+        raise IntegrationLockError(
+            f"{label} legal row {row.component_id} staged file digest "
+            f"drift: declared={row.staged_sha256} observed={observed}"
+        )
+    if observed != row.source_sha256:
+        raise IntegrationLockError(
+            f"{label} legal row {row.component_id} source/staged digest "
+            f"must be identical: source={row.source_sha256} staged={observed}"
+        )
+
+
+def _bind_pre_vendor_components_to_manifest(
+    stage_root: Path, components: Sequence[_PreVendorComponent], *, label: str
+) -> None:
+    """Cross-check PreVendorReceipt components against the staged vendor manifest.
+
+    Each ``components[i]`` row must equal the matching ``components[i]``
+    row in ``stage_root/vendor/source-manifest.json`` on the pinned keys
+    (``version``, ``revision``, ``git_tree``, ``tree_sha256``,
+    ``upstream_url``).  Any drift rejects.
+    """
+
+    manifest_path = _regular_file_under(stage_root, "vendor/source-manifest.json")
+    try:
+        manifest = strict_json_loads(manifest_path.read_bytes())
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            f"{label} vendor/source-manifest.json is unreadable: {error}"
+        ) from error
+    if not isinstance(manifest, dict):
+        raise IntegrationLockError(
+            f"{label} vendor/source-manifest.json must be a JSON object"
+        )
+    manifest_components = manifest.get("components")
+    if not isinstance(manifest_components, list):
+        raise IntegrationLockError(
+            f"{label} vendor/source-manifest.json has no components list"
+        )
+    manifest_by_id: dict[str, dict[str, object]] = {}
+    for entry in manifest_components:
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            manifest_by_id[entry["id"]] = cast(dict[str, object], entry)
+    seen_ids: set[str] = set()
+    for row in components:
+        seen_ids.add(row.id)
+        manifest_row = manifest_by_id.get(row.id)
+        if manifest_row is None:
+            raise IntegrationLockError(
+                f"{label} pre-vendor component {row.id} is absent from "
+                "the staged vendor/source-manifest.json"
+            )
+        for key in _PRE_VENDOR_MANIFEST_PIN_KEYS:
+            expected = manifest_row.get(key)
+            observed = getattr(row, key)
+            if observed != expected:
+                raise IntegrationLockError(
+                    f"{label} pre-vendor component {row.id} field {key} "
+                    f"drifts from staged vendor/source-manifest.json: "
+                    f"declared={observed!r} manifest={expected!r}"
+                )
+    expected_ids = {"academic-research-skills", "experiment-agent", "file-base"}
+    if seen_ids != expected_ids:
+        raise IntegrationLockError(
+            f"{label} pre-vendor components must be exactly "
+            f"{sorted(expected_ids)}; got {sorted(seen_ids)}"
+        )
+
+
+def verify_evidence_contract(
+    stage_root: Path, payload: dict[str, object], *, surface: str
+) -> BaseModel:
+    """Shared semantic validator for one evidence surface.
+
+    This is the SINGLE source of truth for ``_verify_evidence_pass`` (the
+    installed verifier) and ``staged_evidence`` (the producer).  It
+    validates the JSON against the strict Pydantic producer contract and
+    performs every cross-check that requires ``stage_root`` (manifest
+    cross-binding for ``pre_vendor``; live ``staged_path`` digest for
+    ``legal``).  The declared ``technical_qualification`` must equal the
+    model-derived value.
+    """
+
+    model = _EVIDENCE_MODEL_BY_SURFACE.get(surface)
+    if model is None:
+        raise IntegrationLockError(
+            f"no producer contract for surface: {surface}"
+        )
+    label = f"build identity evidence.{surface}"
+    try:
+        validated = model.model_validate(payload, strict=True)
+    except ValidationError as error:
+        raise IntegrationLockError(
+            f"{label} evidence file fails the {model.__name__} producer "
+            f"contract: {error}"
+        ) from error
+    if surface == "legal":
+        legal = cast(LegalVerdict, validated)
+        for row in legal.components:
+            try:
+                _verify_legal_row_live_bytes(stage_root, row, label=label)
+            except IntegrationLockError as error:
+                raise IntegrationLockError(
+                    f"{label} live-bytes cross-check failed: {error}"
+                ) from error
+    elif surface == "pre_vendor":
+        pre_vendor = cast(PreVendorReceipt, validated)
+        try:
+            _bind_pre_vendor_components_to_manifest(
+                stage_root, pre_vendor.components, label=label
+            )
+        except IntegrationLockError as error:
+            raise IntegrationLockError(
+                f"{label} manifest cross-check failed: {error}"
+            ) from error
+    contract = cast(
+        "NetworkVerdict | LegalVerdict | PreVendorReceipt",
+        validated,
+    )
+    derived = contract.derive_qualification()
+    declared = contract.technical_qualification
+    if declared != derived:
+        raise IntegrationLockError(
+            f"{label} evidence file declared technical_qualification="
+            f"{declared!r} but the {model.__name__} semantics derive "
+            f"{derived!r}"
+        )
+    return validated
+
 def _verify_evidence_pass(
     stage_root: Path, path: str, *, label: str
 ) -> dict[str, object]:
     """Read a staged evidence file and DERIVE its qualification from full semantics.
 
     Each of the five phase-01 evidence files is staged into
-    ``share/arw/evidence/*.json``.  This verifier no longer trusts a
-    self-asserted ``technical_qualification`` field; instead it parses the
-    file against the matching strict Pydantic producer contract and
-    DERIVES the qualification from the validated semantics (network
-    isolation for ``upstream``/``asan_ubsan``/``tsan``, license release
-    gate state for ``legal``, pre-vendor license gate state for
-    ``pre_vendor``).  The declared ``technical_qualification`` MUST equal
-    the derived value.
+    ``share/arw/evidence/*.json``.  This verifier delegates to the
+    shared :func:`verify_evidence_contract` helper so the installed
+    verifier and the producer (``stage-plugin`` ``staged_evidence``)
+    share a single source of truth.  The helper parses the file against
+    the matching strict Pydantic producer contract, runs every
+    cross-binding check that requires ``stage_root`` (legal live digest,
+    pre-vendor manifest cross-binding), and verifies the declared
+    ``technical_qualification`` equals the model-derived value.
     """
 
     file_path = _regular_file_under(stage_root, path)
@@ -2688,30 +2990,7 @@ def _verify_evidence_pass(
             f"{label} evidence file must be a JSON object: {path}"
         )
     surface = _evidence_surface_for(path)
-    model = _EVIDENCE_MODEL_BY_SURFACE.get(surface)
-    if model is None:
-        raise IntegrationLockError(
-            f"{label} evidence file has no producer contract: {path}"
-        )
-    try:
-        validated = model.model_validate(payload, strict=True)
-    except ValidationError as error:
-        raise IntegrationLockError(
-            f"{label} evidence file fails the {model.__name__} producer "
-            f"contract: {error}"
-        ) from error
-    contract = cast(
-        "NetworkVerdict | LegalVerdict | PreVendorReceipt",
-        validated,
-    )
-    derived = contract.derive_qualification()
-    declared = contract.technical_qualification
-    if declared != derived:
-        raise IntegrationLockError(
-            f"{label} evidence file declared technical_qualification="
-            f"{declared!r} but the {model.__name__} semantics derive "
-            f"{derived!r}"
-        )
+    verify_evidence_contract(stage_root, payload, surface=surface)
     return payload
 
 
