@@ -1,0 +1,699 @@
+{
+  "$defs": {
+    "CSLLiteralName": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "literal": {
+          "minLength": 1,
+          "title": "Literal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "literal"
+      ],
+      "title": "CSLLiteralName",
+      "type": "object"
+    },
+    "CSLPersonalName": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "minLength": 1,
+          "title": "Family",
+          "type": "string"
+        },
+        "given": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Given"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suffix"
+        },
+        "dropping-particle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dropping-Particle"
+        },
+        "non-dropping-particle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Non-Dropping-Particle"
+        },
+        "comma-suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comma-Suffix"
+        },
+        "static-ordering": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Static-Ordering"
+        },
+        "parse-names": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parse-Names"
+        }
+      },
+      "required": [
+        "family"
+      ],
+      "title": "CSLPersonalName",
+      "type": "object"
+    },
+    "ClaimEvidenceLink": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Claim linkage proposal; it has no gate, retry, or Passport authority.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.claim-evidence-link.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "claim_link_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Claim Link Id",
+          "type": "string"
+        },
+        "claim_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Claim Sha256",
+          "type": "string"
+        },
+        "evidence_span_sha256": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Evidence Span Sha256",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "contextualizes"
+          ],
+          "title": "Relation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "claim_link_id",
+        "claim_id",
+        "claim_sha256",
+        "evidence_span_sha256",
+        "relation"
+      ],
+      "title": "ClaimEvidenceLink",
+      "type": "object"
+    },
+    "EvidenceLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "page",
+            "line",
+            "byte",
+            "section"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "maximum": 10000000,
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "maximum": 10000001,
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "EvidenceLocator",
+      "type": "object"
+    },
+    "EvidenceSpan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Text-free evidence proposal; only the parent may admit its artifact manifest.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.evidence-span.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "evidence_span_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Span Id",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "research_source_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Research Source Manifest Sha256",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "extraction_registration_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Registration Sha256",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/EvidenceLocator"
+        },
+        "extracted_text_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extracted Text Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "evidence_span_id",
+        "source_id",
+        "research_source_manifest_sha256",
+        "source_sha256",
+        "extraction_registration_sha256",
+        "locator",
+        "extracted_text_sha256"
+      ],
+      "title": "EvidenceSpan",
+      "type": "object"
+    },
+    "IntegrationDiagnosticLayer": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "One bounded, read-only observation of the exact integration boundary.",
+      "properties": {
+        "name": {
+          "enum": [
+            "inputs",
+            "lock_document",
+            "staged_arw",
+            "ars_bundle",
+            "file_base",
+            "codex_host",
+            "hook_definition",
+            "hook_execution_evidence",
+            "legal_state",
+            "exact_lock"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "NOT_EVALUATED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "integration_inputs_incomplete",
+                "lock_document_invalid",
+                "lock_document_noncanonical",
+                "staged_arw_drift",
+                "ars_bundle_drift",
+                "file_base_drift",
+                "codex_host_drift",
+                "hook_definition_drift",
+                "hook_execution_evidence_drift",
+                "legal_state_drift",
+                "exact_lock_drift"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason Code"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "enum": [
+                "required integration inputs are absent or unsafe",
+                "integration lock is invalid strict JSON",
+                "integration lock bytes are not canonical JSON",
+                "staged ARW runtime differs from the lock",
+                "bundled ARS bytes differ from the lock",
+                "file-base bytes or patch evidence differ from the lock",
+                "Codex host tuple differs from the lock",
+                "root hook definition differs from the lock",
+                "retained hook evidence differs from the lock",
+                "legal policy differs from the qualified blocked state",
+                "complete exact integration verification failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detail"
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Sha256"
+        },
+        "observed_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Sha256"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "reason_code",
+        "detail",
+        "expected_sha256",
+        "observed_sha256"
+      ],
+      "title": "IntegrationDiagnosticLayer",
+      "type": "object"
+    },
+    "IntegrationDiagnosticReport": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Safe diagnostic projection; only exact verification may produce PASS.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.integration-diagnostic.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "technical_qualification": {
+          "enum": [
+            "PASS",
+            "BLOCKED"
+          ],
+          "title": "Technical Qualification",
+          "type": "string"
+        },
+        "release_qualification": {
+          "const": "BLOCKED",
+          "title": "Release Qualification",
+          "type": "string"
+        },
+        "experiment_execution": {
+          "const": "disabled",
+          "title": "Experiment Execution",
+          "type": "string"
+        },
+        "integration_lock_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Integration Lock Sha256"
+        },
+        "reason_codes": {
+          "items": {
+            "enum": [
+              "integration_inputs_incomplete",
+              "lock_document_invalid",
+              "lock_document_noncanonical",
+              "staged_arw_drift",
+              "ars_bundle_drift",
+              "file_base_drift",
+              "codex_host_drift",
+              "hook_definition_drift",
+              "hook_execution_evidence_drift",
+              "legal_state_drift",
+              "exact_lock_drift"
+            ],
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/IntegrationDiagnosticLayer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "technical_qualification",
+        "release_qualification",
+        "experiment_execution",
+        "integration_lock_sha256",
+        "reason_codes",
+        "layers"
+      ],
+      "title": "IntegrationDiagnosticReport",
+      "type": "object"
+    },
+    "ResearchSourceManifest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Digest-bound source proposal; parent artifact acceptance is still authoritative.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.research-source-manifest.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "citation_key": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9_:-]*$",
+          "title": "Citation Key",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "authors": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CSLPersonalName"
+              },
+              {
+                "$ref": "#/$defs/CSLLiteralName"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Authors",
+          "type": "array"
+        },
+        "year": {
+          "maximum": 2100,
+          "minimum": 1000,
+          "title": "Year",
+          "type": "integer"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        },
+        "doi": {
+          "anyOf": [
+            {
+              "pattern": "^10\\.[0-9]{4,9}/[^\\s]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Doi"
+        },
+        "arxiv_id": {
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z][A-Za-z0-9-]*(\\.[A-Za-z0-9-]+)*/\\d{7}(v[1-9]\\d*)?|\\d{4}\\.\\d{4,5}(v[1-9]\\d*)?)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Arxiv Id"
+        },
+        "source_pointer": {
+          "minLength": 1,
+          "title": "Source Pointer",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "bibliographic_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bibliographic Sha256",
+          "type": "string"
+        },
+        "obtained_via": {
+          "anyOf": [
+            {
+              "enum": [
+                "zotero-api",
+                "zotero-bbt-export",
+                "obsidian-vault",
+                "folder-scan",
+                "manual",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Obtained Via"
+        },
+        "adapter_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adapter Name"
+        },
+        "adapter_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adapter Version"
+        },
+        "imported_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "title": "Imported At",
+          "type": "string"
+        },
+        "imported_by": {
+          "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+          "title": "Imported By",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_id",
+        "citation_key",
+        "title",
+        "authors",
+        "year",
+        "venue",
+        "doi",
+        "arxiv_id",
+        "source_pointer",
+        "source_sha256",
+        "bibliographic_sha256",
+        "obtained_via",
+        "adapter_name",
+        "adapter_version",
+        "imported_at",
+        "imported_by"
+      ],
+      "title": "ResearchSourceManifest",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "arw.claim-evidence-link.v1": "#/$defs/ClaimEvidenceLink",
+      "arw.evidence-span.v1": "#/$defs/EvidenceSpan",
+      "arw.integration-diagnostic.v1": "#/$defs/IntegrationDiagnosticReport",
+      "arw.research-source-manifest.v1": "#/$defs/ResearchSourceManifest"
+    },
+    "propertyName": "schema_version"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/IntegrationDiagnosticReport"
+    },
+    {
+      "$ref": "#/$defs/ResearchSourceManifest"
+    },
+    {
+      "$ref": "#/$defs/EvidenceSpan"
+    },
+    {
+      "$ref": "#/$defs/ClaimEvidenceLink"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-integrity-contracts.schema.json",
+  "title": "ARW Research Integrity Contracts",
+  "description": "Read-only diagnostic and evidence documents. Hooks remain observational; the parent alone owns canonical state, evidence admission, retries, provenance, gates, ArtifactAcceptanceRequest, ArtifactManifest, and accepted Material Passport hashes."
+}

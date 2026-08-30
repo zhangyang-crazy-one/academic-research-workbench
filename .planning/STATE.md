@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-08-26T21:07:10+08:00
-last_activity: 2026-08-26 -- Completed quick task 260825-vd9: updated bundled ARS to adapter 0.1.27 / v3.21.1 with technical qualification PASS
+last_updated: 2026-08-26T22:26:15+08:00
+last_activity: 2026-08-26 -- Completed verified quick task 260826-9p7: research-integrity bridge, layered lock diagnostics, root-hook gate, and CJK ingestion
 progress:
   total_phases: 8
   completed_phases: 8
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-12)
 Phase: 7
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-08-26 -- Completed quick task 260825-vd9
+Last activity: 2026-07-16
 
 Progress: [██████████] 100%
 
@@ -45,7 +45,7 @@ Progress: [██████████] 100%
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
-| ------- | ------- | ------- | ---------- |
+|-------|-------|-------|----------|
 | 01 | 7 | 347 min | 50 min |
 | 02 | 5 | 107 min | 21 min |
 | 03 | 5 | 168 min | 34 min |
@@ -83,7 +83,7 @@ Progress: [██████████] 100%
 ### Quick Tasks Completed
 
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
-- 260825-vd9 — Updated bundled ARS to adapter 0.1.27 / ARS v3.21.1, preserved all ARW overlays and pinned native assets, and completed full staged/host qualification with technical PASS; release remains blocked only by the existing CC BY-NC legal gate.
+- [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
 
 ### Decisions
 
@@ -149,10 +149,10 @@ None yet.
 
 ## Deferred Items
 
-| Category | Item                                                       | Status   | Deferred At  |
-| -------- | ---------------------------------------------------------- | -------- | ------------ |
-| v2       | Desktop UI, domain packs, team coordination, and telemetry | Deferred | v1.0 roadmap |
-| v1.x/v2  | Publication AST/export and additional ingestion/connectors | Deferred | v1.0 roadmap |
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| v2 | Desktop UI, domain packs, team coordination, and telemetry | Deferred | v1.0 roadmap |
+| v1.x/v2 | Publication AST/export and additional ingestion/connectors | Deferred | v1.0 roadmap |
 
 ## Session Continuity
 

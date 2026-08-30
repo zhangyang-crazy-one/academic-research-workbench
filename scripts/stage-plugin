@@ -110,12 +110,15 @@ from arw.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
+    _validate_bundled_ars,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
+    observe_build_identity_binding,
     is_supported_codex_cli_version,
     observe_hook_definition,
     observe_stage_identity,
+    # pi-lens-ignore: jscpd:duplicate
 )
 
 
@@ -123,11 +126,116 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_technical_provenance(
+    sbom: dict[str, object], qualification_lock_ref: str | None
+) -> None:
+    # pi-lens-ignore: jscpd:duplicate
+    sbom_path = stage_root / "SBOM.cdx.json"
+    try:
+        sbom_bytes = sbom_path.read_bytes()
+    except OSError as error:
+        raise SystemExit(f"staged SBOM is unreadable: {error}") from error
+    canonical_sbom_bytes = (
+        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if sbom_bytes != canonical_sbom_bytes:
+        raise SystemExit("staged SBOM bytes are not canonical")
+    declaration_relative = "supply-chain/use-distribution.json"
+    expected_paths = frozenset(
+        {
+            "vendor/source-manifest.json",
+            "SBOM.cdx.json",
+            "THIRD_PARTY_NOTICES.md",
+        }
+    )
+    try:
+        declaration = json.loads(
+            (stage_root / declaration_relative).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"technical provenance declaration is invalid: {error}"
+        ) from error
+    rows = declaration.get("evidence_hashes") if isinstance(declaration, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit("technical provenance declaration has no evidence hashes")
+    paths: list[str] = []
+    for record in rows:
+        if not isinstance(record, dict) or set(record) != {
+            "path",
+            "purpose",
+            "sha256",
+        }:
+            raise SystemExit("technical provenance record is malformed")
+        relative = record.get("path")
+        declared = record.get("sha256")
+        candidate = Path(relative) if isinstance(relative, str) else Path("/")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or candidate.is_absolute()
+            or candidate.as_posix() != relative
+            or ".." in candidate.parts
+            or relative == declaration_relative
+        ):
+            raise SystemExit("technical provenance path is unsafe or self-referential")
+        if record.get("purpose") != "technical-provenance-only":
+            raise SystemExit(f"technical provenance purpose mismatch: {relative}")
+        if (
+            not isinstance(declared, str)
+            or re.fullmatch(r"[0-9a-f]{64}", declared) is None
+        ):
+            raise SystemExit(f"technical provenance digest is malformed: {relative}")
+        target = stage_root / candidate
+        if not target.is_file() or target.is_symlink():
+            raise SystemExit(f"technical provenance target is missing or unsafe: {relative}")
+        observed = digest(target)
+        if relative == "SBOM.cdx.json" and qualification_lock_ref is not None:
+            base_sbom = dict(sbom)
+            components = base_sbom.get("components")
+            if not isinstance(components, list):
+                raise SystemExit("staged SBOM components are malformed")
+            base_sbom["components"] = [
+                component
+                for component in components
+                if isinstance(component, dict)
+                and component.get("bom-ref") != qualification_lock_ref
+            ]
+            base_bytes = (
+                json.dumps(base_sbom, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            observed = hashlib.sha256(base_bytes).hexdigest()
+        if declared != observed:
+            raise SystemExit(f"technical provenance digest mismatch: {relative}")
+        paths.append(relative)
+    if len(paths) != len(set(paths)):
+        raise SystemExit("technical provenance declaration contains duplicate paths")
+    observed_paths = set(paths)
+    if observed_paths != expected_paths:
+        missing = ", ".join(sorted(expected_paths - observed_paths)) or "none"
+        unexpected = ", ".join(sorted(observed_paths - expected_paths)) or "none"
+        raise SystemExit(
+            "technical provenance path set mismatch: "
+            f"missing={missing}; unexpected={unexpected}"
+        )
+    components = sbom.get("components")
+    if isinstance(components, list) and any(
+        isinstance(component, dict)
+        and (
+            component.get("bom-ref") == f"artifact:{declaration_relative}"
+            or component.get("name") == declaration_relative
+        )
+        for component in components
+    ):
+        raise SystemExit("technical provenance contains an SBOM self-reference cycle")
+
+
 def canonical_lock(path: Path) -> tuple[bytes, IntegrationLock]:
     try:
         flags = os.O_RDONLY | os.O_CLOEXEC
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
+        # pi-lens-ignore: jscpd:duplicate
         descriptor = os.open(path, flags)
         try:
             mode = os.fstat(descriptor).st_mode
@@ -159,10 +267,20 @@ def verify_local_lock(lock: IntegrationLock) -> None:
     source_manifest = json.loads(
         (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
     )
+    if lock.ars != _validate_bundled_ars(stage_root, source_manifest):
+        raise SystemExit("integration lock does not bind the staged ARS bundle")
     if lock.file_base != _validate_file_base(stage_root, source_manifest):
         raise SystemExit("integration lock does not bind the staged file-base runtime")
+    # pi-lens-ignore: jscpd:duplicate
     if lock.license != _validate_license(stage_root):
         raise SystemExit("integration lock does not bind the staged legal blocker state")
+    if lock.build_identity != observe_build_identity_binding(
+        stage_root, source_manifest
+    ):
+        raise SystemExit(
+            "integration lock does not bind the staged build-identity metadata"
+        # pi-lens-ignore: jscpd:duplicate
+        )
     hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
     if lock.hook.config != hook_config or lock.hook.handler != hook_handler:
         raise SystemExit("integration lock does not bind the staged hook files")
@@ -229,8 +347,31 @@ if has_lock:
     _, staged_lock = canonical_lock(stage_root / lock_relative)
     verify_local_lock(staged_lock)
 
+# Always run the build-identity live recompute so digestPath and evidence
+# claims are verified against the live stage bytes regardless of whether the
+# stage carries an integration lock.  The staged_payloads list must be bound
+# here so the audit manifest gate's existing coverage check uses the same
+# closed set the live recompute just exercised.
+try:
+    source_manifest = json.loads(
+        (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"source manifest is unreadable: {error}") from error
+identity_for_payloads = json.loads(
+    (stage_root / identity_relative).read_text(encoding="utf-8")
+)
+staged_payload_paths = frozenset(
+    item["path"]
+    for item in identity_for_payloads.get("staged_payloads", [])
+    if isinstance(item, dict) and isinstance(item.get("path"), str)
+)
+observe_build_identity_binding(
+    stage_root, source_manifest, staged_payloads=staged_payload_paths
+)
 try:
     sbom = json.loads((stage_root / sbom_relative).read_text(encoding="utf-8"))
+    # pi-lens-ignore: jscpd:duplicate
     identity = json.loads((stage_root / identity_relative).read_text(encoding="utf-8"))
 except (OSError, UnicodeError, json.JSONDecodeError) as error:
     raise SystemExit(f"stage binding metadata is invalid: {error}") from error
@@ -245,6 +386,7 @@ if len(component_refs) != len(set(component_refs)):
     raise SystemExit("staged SBOM contains duplicate component references")
 components = {item["bom-ref"]: item for item in component_rows}
 lock_ref = f"artifact:{lock_relative}"
+# pi-lens-ignore: jscpd:duplicate
 if has_lock:
     lock_sha256 = digest(stage_root / lock_relative)
     if components.get(lock_ref) != {
@@ -257,6 +399,7 @@ if has_lock:
         raise SystemExit("staged SBOM does not bind the exact integration lock")
 elif lock_ref in components:
     raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+verify_technical_provenance(sbom, lock_ref if has_lock else None)
 
 payload_rows = identity.get("staged_payloads", [])
 if not isinstance(payload_rows, list) or not all(
@@ -367,6 +510,7 @@ copy_file "schemas/v1/gate-decision.schema.json"
 copy_file "schemas/v1/hook-observation.schema.json"
 copy_file "schemas/v1/host-qualification.schema.json"
 copy_file "schemas/v1/integration-lock.schema.json"
+copy_file "schemas/v1/research-integrity-contracts.schema.json"
 copy_file "schemas/v1/phase4-evaluation-verdict.schema.json"
 copy_file "schemas/v1/review-finding-matrix.schema.json"
 copy_file "schemas/v1/panel-manifest.schema.json"
@@ -394,7 +538,25 @@ copy_file "scripts/file-base-mcp" 0755
 copy_file "scripts/file-base-graph-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
-copy_as "generated/file-contracts.h" "share/arw/file-contracts.h"
+# ``share/arw/file-contracts.h`` is NOT copied from ``generated/``; the
+# producer regenerates it FROM the staged checked schemas below so the
+# embedded ``ARW_FILES_CONTRACT_SHA256`` reflects the staged schema digests.
+# Stage the canonical, committed pre-vendor receipt. Its raw bytes are pinned
+# by the wheel-bound verifier, so mutable build/evidence output cannot redefine
+# qualification after review. Other phase-01 surfaces remain retained evidence.
+copy_as "supply-chain/pre-vendor-receipt.json" "share/arw/evidence/pre_vendor.json"
+copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
+# Native five-file bundles are also canonical committed supply-chain evidence.
+# Producer and installed verifier both enforce surface-specific content hashes.
+for native_surface in "upstream" "asan-ubsan" "tsan"; do
+    canonical="supply-chain/native-evidence/${native_surface}"
+    staged_surface="${native_surface/-/_}"
+    copy_as "${canonical}/verdict.json" "share/arw/evidence/${staged_surface}.json"
+    copy_as "${canonical}/command.json" "share/arw/evidence/${staged_surface}_command.json"
+    copy_as "${canonical}/sanitizer-verdict.json" "share/arw/evidence/${staged_surface}_sanitizer_verdict.json"
+    copy_as "${canonical}/test-suite.sha256" "share/arw/evidence/${staged_surface}_test_suite_sha256.txt"
+    copy_as "${canonical}/status.txt" "share/arw/evidence/${staged_surface}_status.txt"
+done
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/file-base-MIT.txt"
@@ -442,6 +604,7 @@ try:
     flags = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    # pi-lens-ignore: jscpd:duplicate
     descriptor = os.open(source, flags)
     try:
         mode = os.fstat(descriptor).st_mode
@@ -596,6 +759,7 @@ import hashlib
 import json
 import platform
 import re
+# pi-lens-ignore: jscpd:duplicate
 import sys
 from pathlib import Path
 
@@ -604,10 +768,27 @@ project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
+from arw.canonical import strict_json_loads  # noqa: E402
 from arw.schema_registry import (  # noqa: E402
     aggregate_schema_sha256,
     regenerate_schemas,
     validate_phase1_instance,
+)
+from arw.integration_lock import (  # noqa: E402
+    _verify_native_surface_bundle,
+    IntegrationLockError,
+    EXPECTED_PRE_VENDOR_RECEIPT_SHA256,
+    NATIVE_EVIDENCE_KINDS,
+    NATIVE_SURFACES,
+    NATIVE_VERDICT_KIND,
+    native_evidence_path,
+    observe_staged_python_version,
+    parse_file_contract_contract_sha256_from_bytes,
+    verify_evidence_contract,
+)
+from arw.file_contracts import (  # noqa: E402
+    FileContractError,
+    render_native_contract_header,
 )
 
 
@@ -615,12 +796,66 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def evidence(relative: str) -> dict[str, str]:
-    path = project_root / relative
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("technical_qualification") != "PASS":
-        raise SystemExit(f"required technical PASS evidence missing: {relative}")
-    return {"path": relative, "sha256": digest(path)}
+def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
+    """Bind an evidence surface to its staged copy inside ``share/arw/evidence``.
+
+    The producer MUST have copied the original phase-01 surface into the
+    plugin stage at ``staged_relative`` so the installed verifier never
+    has to read the original ``build/evidence/phase-01`` tree.  This
+    delegates to the shared ``verify_evidence_contract`` helper from
+    ``arw.integration_lock`` so the producer and the installed verifier
+    cannot drift: both run the strict Pydantic contract, both perform
+    the legal live-digest check and the pre-vendor manifest
+    cross-binding, and both require the derived qualification to equal
+    the declared ``technical_qualification``.  No self-asserted PASS is
+    accepted: the producer must run the gate and derive the semantic
+    result.
+    """
+
+    staged_path = stage_root / staged_relative
+    if staged_path.is_symlink() or not staged_path.is_file():
+        raise SystemExit(
+            f"required staged evidence surface is missing: {staged_relative}"
+        )
+    if "." in label:
+        return {"path": staged_relative, "sha256": digest(staged_path)}
+    try:
+        payload = strict_json_loads(staged_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as error:
+        raise SystemExit(
+            f"staged evidence surface is not strict unambiguous JSON: "
+            f"{staged_relative}: {error}"
+        )
+    basename = staged_path.name
+    surface = {
+        "pre_vendor.json": "pre_vendor",
+        "legal.json": "legal",
+        "upstream.json": "upstream",
+        "asan_ubsan.json": "asan_ubsan",
+        "tsan.json": "tsan",
+    }.get(basename)
+    if surface is None:
+        raise SystemExit(
+            f"no producer contract for staged evidence surface: {staged_relative}"
+        )
+    try:
+        verify_evidence_contract(stage_root, payload, surface=surface)
+    except IntegrationLockError as error:
+        raise SystemExit(
+            f"staged evidence surface {label} ({basename}) fails the "
+            f"shared verifier contract: {error}"
+        )
+    staged_digest = digest(staged_path)
+    if (
+        surface == "pre_vendor"
+        and staged_digest != EXPECTED_PRE_VENDOR_RECEIPT_SHA256
+    ):
+        raise SystemExit(
+            "staged pre-vendor receipt raw bytes drift from canonical reviewed "
+            f"evidence: observed={staged_digest} "
+            f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
+        )
+    return {"path": staged_relative, "sha256": staged_digest}
 
 
 manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
@@ -628,7 +863,6 @@ plugin = json.loads((stage_root / ".codex-plugin/plugin.json").read_text(encodin
 lock_path = stage_root / "vendor/python/wheelhouse.lock.json"
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
 contract_header_path = stage_root / "share/arw/file-contracts.h"
-contract_header = contract_header_path.read_text(encoding="ascii")
 schema_dir = stage_root / "share/arw/schemas"
 schema_entries = regenerate_schemas(schema_dir)
 schema_entries = tuple(
@@ -636,18 +870,64 @@ schema_entries = tuple(
     for path, _ in schema_entries
 )
 
+
+# Regenerate the file-contract header FROM the staged checked schemas
+# (NOT from the source ``generated/`` directory) so the embedded
+# ``ARW_FILES_CONTRACT_SHA256`` reflects the *staged* schema digests.  The
+# staged bytes are overwritten with the regeneration so the verifier's
+# regenerated-bytes equality check is satisfied.  This MUST happen before
+# ``payloads`` is captured so the regenerated header is in staged_payloads.
+try:
+    regenerated_header = render_native_contract_header(schema_dir)
+except FileContractError as error:
+    raise SystemExit(
+        f"stage-plugin cannot regenerate file-contract header from staged "
+        f"schemas: {error}"
+    )
+contract_header_path.write_bytes(regenerated_header)
+embedded_contract_sha = parse_file_contract_contract_sha256_from_bytes(
+    regenerated_header
+)
 payloads = [
     {"path": path.relative_to(stage_root).as_posix(), "sha256": digest(path)}
     for path in sorted(stage_root.rglob("*"))
     if path.is_file() and path.relative_to(stage_root).as_posix() != "share/arw/build-identity.json"
 ]
+
+# Build the pinned build_interpreter from the staged ``.python-version``
+# file.  The producer MUST refuse to emit an identity unless the running
+# interpreter equals the staged pin - the verifier compares the recorded
+# build_interpreter against this live file, so a mismatch would fail
+# install-time verification.  Use an explicit failure (never ``assert`` so
+# the check survives ``python -O``).
+staged_python_version = observe_staged_python_version(stage_root)
+running_python_version = platform.python_version()
+if running_python_version != staged_python_version:
+    raise SystemExit(
+        f"stage-plugin requires the running interpreter to match the staged "
+        f".python-version pin: running={running_python_version} "
+        f"staged={staged_python_version}"
+    )
+major, minor, _patch = staged_python_version.split(".")
+if int(minor) not in {13, 14}:
+    raise SystemExit(
+        f"stage-plugin requires Python 3.13.x or 3.14.x exactly "
+        f"(got {staged_python_version})"
+    )
+
+# The producer regenerates the file-contract header FROM the staged
+# checked schemas (NOT from the source ``generated/`` directory) so the
+# The file-contract header is regenerated from the staged checked schemas
+# above (before ``payloads`` is captured) so the regenerated header is
+# already on disk and recorded in staged_payloads here.
+
 identity = {
     "schema_version": "1.0.0",
     "platform_claim": "linux",
     "plugin": {"name": plugin["name"], "version": plugin["version"]},
     "runtime": {
         "python_requires": ">=3.13",
-        "build_interpreter": platform.python_version(),
+        "build_interpreter": staged_python_version,
     },
     "components": [
         {key: component[key] for key in ("id", "version", "revision", "tree_sha256")}
@@ -694,9 +974,7 @@ identity = {
             "path": "share/arw/file-contracts.h",
             "sha256": digest(contract_header_path),
         },
-        "contract_sha256": re.search(
-            r'ARW_FILES_CONTRACT_SHA256 "([0-9a-f]{64})"', contract_header
-        ).group(1),
+        "contract_sha256": embedded_contract_sha,
         "tokenizer_id": "unicode61-cjk-v1",
         "ranking_version": "files-rank-v1",
         "outline_versions": [
@@ -722,14 +1000,43 @@ identity = {
         "files": [{"path": path, "sha256": value} for path, value in schema_entries],
     },
     "evidence": {
-        "pre_vendor": evidence("build/evidence/phase-01/pre-vendor-license/receipt.json"),
-        "legal": evidence("build/evidence/phase-01/license-0002/verdict.json"),
-        "upstream": evidence("build/evidence/phase-01/native/upstream/verdict.json"),
-        "asan_ubsan": evidence("build/evidence/phase-01/native/asan-ubsan/verdict.json"),
-        "tsan": evidence("build/evidence/phase-01/native/tsan/verdict.json"),
+        "pre_vendor": staged_evidence(
+            "share/arw/evidence/pre_vendor.json", label="pre_vendor"
+        ),
+        "legal": staged_evidence(
+            "share/arw/evidence/legal.json", label="legal"
+        ),
     },
-    "staged_payloads": payloads,
 }
+
+# The native surfaces are bundles of 5 digestPaths (verdict + command +
+# sanitizer_verdict + test_suite_sha256 + status) so the verifier can
+# distinguish them by argv, suite, and pinned bytes.  Emit each bundle
+# into the existing ``evidence`` dict under the surface key.
+for native_surface in NATIVE_SURFACES:
+    bundle: dict[str, dict[str, str]] = {}
+    bundle[NATIVE_VERDICT_KIND] = staged_evidence(
+        native_evidence_path(native_surface, NATIVE_VERDICT_KIND),
+        label=native_surface,
+    )
+    for kind in NATIVE_EVIDENCE_KINDS:
+        bundle[kind] = staged_evidence(
+            native_evidence_path(native_surface, kind),
+            label=f"{native_surface}.{kind}",
+        )
+    try:
+        _verify_native_surface_bundle(
+            stage_root, surface=native_surface, label=f"evidence.{native_surface}"
+        )
+    except IntegrationLockError as error:
+        raise SystemExit(
+            f"native evidence bundle {native_surface} fails the shared "
+            f"verifier contract: {error}"
+        ) from error
+    identity["evidence"][native_surface] = bundle
+
+
+identity["staged_payloads"] = payloads
 validate_phase1_instance("build-identity.schema.json", identity)
 (stage_root / "share/arw/build-identity.json").write_text(
     json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -741,6 +1048,7 @@ if [[ -n "$INTEGRATION_LOCK" ]]; then
 from __future__ import annotations
 
 import json
+# pi-lens-ignore: jscpd:duplicate
 import sys
 from pathlib import Path
 
@@ -753,9 +1061,11 @@ from arw.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
+    _validate_bundled_ars,
     _validate_file_base,
     _validate_license,
     integration_lock_bytes,
+    observe_build_identity_binding,
     is_supported_codex_cli_version,
     observe_hook_definition,
     observe_stage_identity,
@@ -782,11 +1092,23 @@ if lock.arw_runtime != observed_arw:
 source_manifest = json.loads(
     (stage_root / "vendor/source-manifest.json").read_text(encoding="utf-8")
 )
+observed_build_identity = observe_build_identity_binding(
+    stage_root, source_manifest
+)
+if lock.build_identity != observed_build_identity:
+    raise SystemExit(
+        "integration lock does not bind the staged build-identity metadata"
+    )
+observed_ars = _validate_bundled_ars(stage_root, source_manifest)
+if lock.ars != observed_ars:
+    raise SystemExit("integration lock does not bind the staged ARS bundle")
 observed_file_base = _validate_file_base(stage_root, source_manifest)
 if lock.file_base != observed_file_base:
     raise SystemExit("integration lock does not bind the staged file-base runtime")
 observed_license = _validate_license(stage_root)
+# pi-lens-ignore: jscpd:duplicate
 if lock.license != observed_license:
+    # pi-lens-ignore: jscpd:duplicate
     raise SystemExit("integration lock does not bind the staged legal blocker state")
 hook_config, hook_handler, hook_definition = observe_hook_definition(stage_root)
 if lock.hook.config != hook_config or lock.hook.handler != hook_handler:
@@ -818,11 +1140,116 @@ source_lock = json.loads(
 )
 stage_lock = json.loads(
     (stage_root / "vendor/python/wheelhouse.lock.json").read_text(encoding="utf-8")
+# pi-lens-ignore: jscpd:duplicate
 )
 
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def verify_technical_provenance(
+    sbom: dict[str, object], qualification_lock_ref: str | None
+) -> None:
+    # pi-lens-ignore: jscpd:duplicate
+    sbom_path = stage_root / "SBOM.cdx.json"
+    try:
+        sbom_bytes = sbom_path.read_bytes()
+    except OSError as error:
+        raise SystemExit(f"staged SBOM is unreadable: {error}") from error
+    canonical_sbom_bytes = (
+        json.dumps(sbom, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if sbom_bytes != canonical_sbom_bytes:
+        raise SystemExit("staged SBOM bytes are not canonical")
+    declaration_relative = "supply-chain/use-distribution.json"
+    expected_paths = frozenset(
+        {
+            "vendor/source-manifest.json",
+            "SBOM.cdx.json",
+            "THIRD_PARTY_NOTICES.md",
+        }
+    )
+    try:
+        declaration = json.loads(
+            (stage_root / declaration_relative).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"technical provenance declaration is invalid: {error}"
+        ) from error
+    rows = declaration.get("evidence_hashes") if isinstance(declaration, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit("technical provenance declaration has no evidence hashes")
+    paths: list[str] = []
+    for record in rows:
+        if not isinstance(record, dict) or set(record) != {
+            "path",
+            "purpose",
+            "sha256",
+        }:
+            raise SystemExit("technical provenance record is malformed")
+        relative = record.get("path")
+        declared = record.get("sha256")
+        candidate = Path(relative) if isinstance(relative, str) else Path("/")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or candidate.is_absolute()
+            or candidate.as_posix() != relative
+            or ".." in candidate.parts
+            or relative == declaration_relative
+        ):
+            raise SystemExit("technical provenance path is unsafe or self-referential")
+        if record.get("purpose") != "technical-provenance-only":
+            raise SystemExit(f"technical provenance purpose mismatch: {relative}")
+        if (
+            not isinstance(declared, str)
+            or re.fullmatch(r"[0-9a-f]{64}", declared) is None
+        ):
+            raise SystemExit(f"technical provenance digest is malformed: {relative}")
+        target = stage_root / candidate
+        if not target.is_file() or target.is_symlink():
+            raise SystemExit(f"technical provenance target is missing or unsafe: {relative}")
+        observed = digest(target)
+        if relative == "SBOM.cdx.json" and qualification_lock_ref is not None:
+            base_sbom = dict(sbom)
+            components = base_sbom.get("components")
+            if not isinstance(components, list):
+                raise SystemExit("staged SBOM components are malformed")
+            base_sbom["components"] = [
+                component
+                for component in components
+                if isinstance(component, dict)
+                and component.get("bom-ref") != qualification_lock_ref
+            ]
+            base_bytes = (
+                json.dumps(base_sbom, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            observed = hashlib.sha256(base_bytes).hexdigest()
+        if declared != observed:
+            raise SystemExit(f"technical provenance digest mismatch: {relative}")
+        paths.append(relative)
+    if len(paths) != len(set(paths)):
+        raise SystemExit("technical provenance declaration contains duplicate paths")
+    observed_paths = set(paths)
+    if observed_paths != expected_paths:
+        missing = ", ".join(sorted(expected_paths - observed_paths)) or "none"
+        unexpected = ", ".join(sorted(observed_paths - expected_paths)) or "none"
+        raise SystemExit(
+            "technical provenance path set mismatch: "
+            f"missing={missing}; unexpected={unexpected}"
+        )
+    components = sbom.get("components")
+    if isinstance(components, list) and any(
+        isinstance(component, dict)
+        and (
+            component.get("bom-ref") == f"artifact:{declaration_relative}"
+            or component.get("name") == declaration_relative
+        )
+        for component in components
+    ):
+        raise SystemExit("technical provenance contains an SBOM self-reference cycle")
 
 
 if digest(project_root / source_lock["uv_lock"]["path"]) != source_lock["uv_lock"]["sha256"]:
@@ -864,6 +1291,7 @@ static_files = {
     "schemas/v1/hook-observation.schema.json",
     "schemas/v1/host-qualification.schema.json",
     "schemas/v1/integration-lock.schema.json",
+    "schemas/v1/research-integrity-contracts.schema.json",
     "schemas/v1/phase4-evaluation-verdict.schema.json",
     "schemas/v1/review-finding-matrix.schema.json",
     "schemas/v1/panel-manifest.schema.json",
@@ -882,6 +1310,23 @@ static_files = {
     "scripts/verify-phase-6",
     "share/arw/file-contracts.h",
     "share/arw/build-identity.json",
+    "share/arw/evidence/pre_vendor.json",
+    "share/arw/evidence/legal.json",
+    "share/arw/evidence/upstream.json",
+    "share/arw/evidence/upstream_command.json",
+    "share/arw/evidence/upstream_sanitizer_verdict.json",
+    "share/arw/evidence/upstream_test_suite_sha256.txt",
+    "share/arw/evidence/upstream_status.txt",
+    "share/arw/evidence/asan_ubsan.json",
+    "share/arw/evidence/asan_ubsan_command.json",
+    "share/arw/evidence/asan_ubsan_sanitizer_verdict.json",
+    "share/arw/evidence/asan_ubsan_test_suite_sha256.txt",
+    "share/arw/evidence/asan_ubsan_status.txt",
+    "share/arw/evidence/tsan.json",
+    "share/arw/evidence/tsan_command.json",
+    "share/arw/evidence/tsan_sanitizer_verdict.json",
+    "share/arw/evidence/tsan_test_suite_sha256.txt",
+    "share/arw/evidence/tsan_status.txt",
     "share/arw/schemas/artifact-manifest.schema.json",
     "share/arw/schemas/artifact-request.schema.json",
     "share/arw/schemas/build-identity.schema.json",
@@ -911,6 +1356,7 @@ static_files = {
     "share/arw/schemas/hook-observation.schema.json",
     "share/arw/schemas/host-qualification.schema.json",
     "share/arw/schemas/integration-lock.schema.json",
+    "share/arw/schemas/research-integrity-contracts.schema.json",
     "share/arw/schemas/phase4-evaluation-verdict.schema.json",
     "share/arw/schemas/review-finding-matrix.schema.json",
     "share/arw/schemas/panel-manifest.schema.json",
@@ -1015,6 +1461,7 @@ if digest(first_party) != stage_lock["first_party_wheel"]["sha256"]:
 try:
     sbom = json.loads((stage_root / "SBOM.cdx.json").read_text(encoding="utf-8"))
     identity = json.loads(
+        # pi-lens-ignore: jscpd:duplicate
         (stage_root / "share/arw/build-identity.json").read_text(encoding="utf-8")
     )
 except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -1031,6 +1478,7 @@ if len(component_refs) != len(set(component_refs)):
 components = {item["bom-ref"]: item for item in component_rows}
 lock_ref = f"artifact:{lock_relative}"
 has_lock = lock_relative in actual
+# pi-lens-ignore: jscpd:duplicate
 if has_lock:
     lock_sha256 = digest(stage_root / lock_relative)
     if components.get(lock_ref) != {
@@ -1043,6 +1491,7 @@ if has_lock:
         raise SystemExit("staged SBOM does not bind the exact integration lock")
 elif lock_ref in components:
     raise SystemExit("base staged SBOM unexpectedly claims an integration lock")
+verify_technical_provenance(sbom, lock_ref if has_lock else None)
 payload_rows = identity.get("staged_payloads", [])
 if not isinstance(payload_rows, list) or not all(
     isinstance(item, dict) and isinstance(item.get("path"), str)

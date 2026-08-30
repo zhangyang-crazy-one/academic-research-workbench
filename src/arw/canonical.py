@@ -45,9 +45,26 @@ def seal_event(event: Mapping[str, object]) -> dict[str, object]:
 
 
 def strict_json_loads(value: bytes | str) -> Any:
-    """Parse JSON while rejecting JavaScript non-finite numeric extensions."""
+    """Parse unambiguous JSON, rejecting non-finite numbers and duplicate keys."""
 
     def reject_constant(token: str) -> None:
         raise ValueError(f"non-finite JSON number rejected: {token}")
 
-    return json.loads(value, parse_constant=reject_constant)
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON object key rejected: {key!r}")
+            result[key] = item
+        return result
+
+    try:
+        return json.loads(
+            value,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except UnicodeDecodeError:
+        raise
+    except ValueError as error:
+        raise ValueError(f"invalid strict JSON: {error}") from error

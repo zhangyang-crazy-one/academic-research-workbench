@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """Installed CLI surface and fail-closed orchestration routing tests."""
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 
 from arw.canonical import canonical_json_bytes
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ORCHESTRATION_COMMANDS = {
@@ -48,13 +48,13 @@ def test_orchestration_surface_and_public_bin_allowlist_are_exact() -> None:
     from arw.cli import build_parser
 
     parser = build_parser()
-    action = next(
-        item for item in parser._actions if item.dest == "command"  # noqa: SLF001
-    )
-    assert ORCHESTRATION_COMMANDS <= set(action.choices)
+    action = next(item for item in parser._actions if item.dest == "command")
+    choices = action.choices
+    assert choices is not None
+    assert set(choices) >= ORCHESTRATION_COMMANDS
 
     launcher = (REPOSITORY_ROOT / "bin/arw").read_text(encoding="utf-8")
-    for command in action.choices:
+    for command in choices:
         assert command in launcher
     for command in ORCHESTRATION_COMMANDS:
         assert command in launcher
@@ -68,7 +68,7 @@ def test_dispatch_without_exact_integration_evidence_is_blocked_before_asyncio(
     monkeypatch: pytest.MonkeyPatch,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    import arw.cli as cli
+    from arw import cli
 
     request = _runtime_request(tmp_path / "request.json")
     for name in (
@@ -110,8 +110,7 @@ def test_dispatch_rejects_receipt_without_assignment_mapping_proof(
     monkeypatch: pytest.MonkeyPatch,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    import arw.cli as cli
-    import arw.orchestration as orchestration
+    from arw import cli, orchestration
 
     assignment = SimpleNamespace(
         assignment_id="assignment.alpha",
@@ -177,7 +176,7 @@ def test_panel_rejects_unstructured_identity_claim_before_service_construction(
     tmp_path: Path,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    import arw.cli as cli
+    from arw import cli
 
     panel = tmp_path / "panel.json"
     panel.write_bytes(
@@ -214,7 +213,7 @@ def test_panel_rejects_unstructured_identity_claim_before_service_construction(
 
 
 def test_only_cli_process_boundary_drives_async_dispatch() -> None:
-    import arw.cli as cli
+    from arw import cli
     from arw.orchestration import OrchestrationService
 
     source = inspect.getsource(cli)
@@ -277,7 +276,7 @@ def test_read_only_route_import_never_probes_a_writable_temp_directory(
 def test_installed_route_discovers_staged_lock_but_requires_host_canary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arw.cli as cli
+    from arw import cli
 
     stage = tmp_path / "stage"
     (stage / "supply-chain").mkdir(parents=True)
@@ -298,10 +297,45 @@ def test_installed_route_discovers_staged_lock_but_requires_host_canary(
     assert route["reason_codes"] == ["integration_inputs_incomplete"]
 
 
+def test_installed_route_diagnostics_converts_native_discovery_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from arw import cli
+    from arw.integration_lock import IntegrationLockError
+
+    stage = tmp_path / "stage"
+    supply = stage / "supply-chain"
+    supply.mkdir(parents=True)
+    (supply / "integration-lock.json").write_text("{}\n", encoding="utf-8")
+    (supply / "host-canary.json").write_text("{}\n", encoding="utf-8")
+    launcher = tmp_path / "codex"
+    launcher.write_text("#!/bin/sh\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(stage))
+    for name in (
+        "ARW_INTEGRATION_LOCK",
+        "ARW_CODEX_LAUNCHER",
+        "ARW_CODEX_NATIVE_BINARY",
+        "ARW_HOST_CANARY_EVIDENCE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: str(launcher))
+
+    def fail_native_discovery(_launcher: Path) -> Path:
+        raise IntegrationLockError("installed Codex package has no native binary")
+
+    monkeypatch.setattr(
+        "arw.integration_lock.discover_codex_native_binary", fail_native_discovery
+    )
+    report = cli._installed_route_diagnostics_from_environment().model_dump(mode="json")
+    assert report["status"] == "BLOCKED"
+    assert report["reason_codes"] == ["integration_inputs_incomplete"]
+
+
 def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arw.cli as cli
+    from arw import cli
     from arw.integration_lock import IntegrationLockError, IntegrationVerification
 
     stage = tmp_path / "stage"

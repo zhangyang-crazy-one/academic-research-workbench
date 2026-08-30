@@ -17,6 +17,8 @@ jobs:
   python:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +35,7 @@ jobs:
           version: "0.11.28"
           enable-cache: true
       - name: Sync locked development environment
-        run: uv sync --frozen --all-groups
+        run: uv sync --frozen --all-groups --python "${{ matrix.python-version }}"
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean

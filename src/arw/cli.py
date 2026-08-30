@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Write the strict route contract as JSON.",
     )
+    route.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Explain the exact read-only integration layer that blocks routing.",
+    )
     version = subparsers.add_parser(
         "version",
         help="Report the installed packaged build identity.",
@@ -324,9 +329,15 @@ def _write_rejection(error: Exception) -> None:
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
 
-def _installed_route_from_environment():
-    from arw.contracts import installed_route
-    from arw.integration_lock import discover_codex_native_binary
+def _is_status_json_request(args: argparse.Namespace) -> bool:
+    return args.command == "status" and bool(args.json_output)
+
+
+def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
+    from arw.integration_lock import (
+        IntegrationLockError,
+        discover_codex_native_binary,
+    )
 
     plugin_root = Path(
         os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])
@@ -366,7 +377,7 @@ def _installed_route_from_environment():
     if launcher_default:
         try:
             native_default = str(discover_codex_native_binary(Path(launcher_default)))
-        except (OSError, ValueError):
+        except (IntegrationLockError, OSError, ValueError):
             native_default = None
     names = {
         "lock": "ARW_INTEGRATION_LOCK",
@@ -387,17 +398,26 @@ def _installed_route_from_environment():
     for key in ("lock", "canary", "launcher", "native"):
         if defaults[key] is not None:
             values[key] = defaults[key]
-    lock_value = values["lock"]
-    launcher_value = values["launcher"]
-    native_value = values["native"]
-    canary_value = values["canary"]
-    if not any((lock_value, launcher_value, native_value, canary_value)):
+    return plugin_root, {
+        key: Path(value) if value is not None else None for key, value in values.items()
+    }
+
+
+def _installed_route_from_environment():
+    from arw.contracts import installed_route
+
+    plugin_root, values = _discover_installed_route_inputs()
+    lock_path = values["lock"]
+    launcher_path = values["launcher"]
+    native_path = values["native"]
+    canary_path = values["canary"]
+    if not any((lock_path, launcher_path, native_path, canary_path)):
         return installed_route()
     if (
-        lock_value is None
-        or launcher_value is None
-        or native_value is None
-        or canary_value is None
+        lock_path is None
+        or launcher_path is None
+        or native_path is None
+        or canary_path is None
     ):
         return installed_route(blocked_reason="integration_inputs_incomplete")
     from arw.integration_lock import (
@@ -407,15 +427,28 @@ def _installed_route_from_environment():
 
     try:
         verification = load_and_verify_integration_lock(
-            Path(lock_value),
+            lock_path,
             stage_root=plugin_root,
-            codex_launcher=Path(launcher_value),
-            codex_native_binary=Path(native_value),
-            host_canary_evidence=Path(canary_value),
+            codex_launcher=launcher_path,
+            codex_native_binary=native_path,
+            host_canary_evidence=canary_path,
         )
     except (IntegrationLockError, OSError, ValueError):
         return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
     return installed_route(verification)
+
+
+def _installed_route_diagnostics_from_environment():
+    from arw.integration_lock import diagnose_integration_lock
+
+    plugin_root, values = _discover_installed_route_inputs()
+    return diagnose_integration_lock(
+        values["lock"],
+        stage_root=plugin_root,
+        codex_launcher=values["launcher"],
+        codex_native_binary=values["native"],
+        host_canary_evidence=values["canary"],
+    )
 
 
 def _blocked_orchestration_result(command: str, *reason_codes: str) -> None:
@@ -685,6 +718,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "route":
         if not args.json_output:
             parser.error("route requires --json")
+        if args.diagnostics:
+            report = _installed_route_diagnostics_from_environment()
+            _write_json(report.model_dump(mode="json"))
+            return 0 if report.status == "PASS" else 65
         _write_json(_installed_route_from_environment().model_dump(mode="json"))
         return 0
     if args.command == "version":
@@ -812,6 +849,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     from arw.reducer import ReducerError, reduce_events
     from arw.runtime import RuntimeCommandService
     from arw.status import build_status_report, render_status_text
+
+    handled_errors: tuple[type[Exception], ...] = (
+        CLIInputError,
+        JournalError,
+        ManifestError,
+        ReducerError,
+        OrchestrationError,
+        ValidationError,
+        OSError,
+    )
 
     try:
         if args.command == "init":
@@ -1136,18 +1183,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             ).rebuild_passport_pointer()
             _write_json(pointer.model_dump(mode="json"))
             return 0
-    except (
-        CLIInputError,
-        JournalError,
-        ManifestError,
-        ReducerError,
-        OrchestrationError,
-        ValidationError,
-        OSError,
-    ) as error:
-        if args.command == "status" and args.json_output:
+    except Exception as error:
+        if not isinstance(error, handled_errors):
+            raise
+        if _is_status_json_request(args):
             _write_rejection(error)
-        elif isinstance(error, OSError):
+            return 65
+        if isinstance(error, OSError):
             print(
                 "arw: canonical-error: runtime event may already be committed to "
                 f"the ledger; retry is safe: {error}",

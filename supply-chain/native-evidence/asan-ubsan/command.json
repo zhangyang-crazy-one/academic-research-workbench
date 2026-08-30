@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "./scripts/build-file-base",
+    "--clean",
+    "--sanitizers",
+    "asan,ubsan",
+    "--run-upstream-tests"
+  ],
+  "cwd": "/home/zhangyangrui/my_programes/academic-research-workbench",
+  "ended_at": "2026-07-13T07:24:15Z",
+  "environment": {
+    "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
+    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/zhangyangrui/my_programes/academic-research-workbench/build/evidence/phase-01/native/asan-ubsan",
+    "ARW_OFFLINE_EXEC_ACTIVE": "1",
+    "ARW_SANITIZER_RUNTIME_DIR": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/sanitizer-root/usr/lib64"
+  },
+  "network_denial_mechanism": "bwrap-unshare-net",
+  "started_at": "2026-07-13T07:10:29Z",
+  "strace": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/strace/root/usr/bin/strace"
+}

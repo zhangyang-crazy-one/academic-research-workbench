@@ -78,7 +78,7 @@
       "required": ["python_requires", "build_interpreter"],
       "properties": {
         "python_requires": {"const": ">=3.13"},
-        "build_interpreter": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+        "build_interpreter": {"type": "string", "pattern": "^3\\.(13|14)\\.[0-9]+$"}
       }
     },
     "component": {
@@ -197,6 +197,18 @@
         }
       }
     },
+    "nativeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "command", "sanitizer_verdict", "test_suite_sha256", "status"],
+      "properties": {
+        "verdict": {"$ref": "#/$defs/digestPath"},
+        "command": {"$ref": "#/$defs/digestPath"},
+        "sanitizer_verdict": {"$ref": "#/$defs/digestPath"},
+        "test_suite_sha256": {"$ref": "#/$defs/digestPath"},
+        "status": {"$ref": "#/$defs/digestPath"}
+      }
+    },
     "evidence": {
       "type": "object",
       "additionalProperties": false,
@@ -204,9 +216,9 @@
       "properties": {
         "pre_vendor": {"$ref": "#/$defs/digestPath"},
         "legal": {"$ref": "#/$defs/digestPath"},
-        "upstream": {"$ref": "#/$defs/digestPath"},
-        "asan_ubsan": {"$ref": "#/$defs/digestPath"},
-        "tsan": {"$ref": "#/$defs/digestPath"}
+        "upstream": {"$ref": "#/$defs/nativeEvidence"},
+        "asan_ubsan": {"$ref": "#/$defs/nativeEvidence"},
+        "tsan": {"$ref": "#/$defs/nativeEvidence"}
       }
     }
   }

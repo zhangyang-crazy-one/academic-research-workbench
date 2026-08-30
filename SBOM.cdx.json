@@ -73,7 +73,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "03efe7781b20ef1355dceab6eb84ca4dba03f976cf5d6b73a597f84e406fdb8c"
+          "content": "492f7677a3dfddeb985870e0741577362efa29528836e58867fda054a223efaf"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b1cf1aa1ea4390eaecc461481ba4229df766e1d14a09b688d670030f94323b4f"
+          "content": "cb1e0c5e24622f076f04802597d3d6d7a23a411ee23cca3ec47a6310c619003f"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -157,7 +157,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "90627c6943c28982f22ca1d3f6aefe37b6c635dd379f20226a9e5b3ec5585e41"
+          "content": "4a0b45310bc9c9121e450442bc62ddaebd1456bd8142b99e4b117c7737af1de0"
         }
       ],
       "name": "skills/academic-research-suite/ars",
@@ -169,7 +169,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cb43fc55ae831e63a5e801f6c30042e356a975ce03564b0dbb6f1ff5fd092f79"
+          "content": "b7687aa86fd4c7fc38c4210f9b1ea38b281b7495af959e56e1eb1f778675d8ac"
         }
       ],
       "name": "skills/academic-research-suite/manifest.json",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a722be129452fe8f2b6c3b3738a454b5561df28be2bfbc74d63521b801387624"
+          "content": "7fbf960a80b1532558802c7f0d3a5488633d9a440126c14a12af347db6f1eb49"
         }
       ],
       "licenses": [
@@ -3207,7 +3207,7 @@
       "type": "library",
       "version": "0.1.0"
     },
-    "timestamp": "2026-08-25T16:16:15Z",
+    "timestamp": "2026-08-13T23:08:10Z",
     "tools": [
       {
         "name": "uv",
@@ -3216,7 +3216,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:fb89692f-0000-4000-8000-fe75331829cd",
+  "serialNumber": "urn:uuid:d65ccdc7-0000-4000-8000-40cc3185a6c4",
   "specVersion": "1.5",
   "version": 1
 }

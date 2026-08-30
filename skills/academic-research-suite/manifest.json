@@ -20,6 +20,8 @@
         "agents",
         "hooks",
         ".github",
+        ".claude",
+        ".claude-plugin",
         "tests",
         "evals",
         "audits",
