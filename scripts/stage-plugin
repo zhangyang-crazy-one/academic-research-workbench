@@ -546,9 +546,16 @@ copy_file ".file-base/build-evidence.json"
 # bytes without depending on the original ``build/evidence/phase-01`` tree.
 copy_as "build/evidence/phase-01/pre-vendor-license/receipt.json" "share/arw/evidence/pre_vendor.json"
 copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
-copy_as "build/evidence/phase-01/native/upstream/verdict.json" "share/arw/evidence/upstream.json"
-copy_as "build/evidence/phase-01/native/asan-ubsan/verdict.json" "share/arw/evidence/asan_ubsan.json"
-copy_as "build/evidence/phase-01/native/tsan/verdict.json" "share/arw/evidence/tsan.json"
+# The three native surfaces carry a 5-file bundle (verdict + command +
+# sanitizer_verdict + test_suite_sha256 + status) so the verifier can
+# distinguish them by argv, suite, and pinned bytes.
+for native_surface in "upstream" "asan-ubsan" "tsan"; do
+    copy_as "build/evidence/phase-01/native/${native_surface}/verdict.json" "share/arw/evidence/${native_surface/-/_}.json"
+    copy_as "build/evidence/phase-01/native/${native_surface}/command.json" "share/arw/evidence/${native_surface/-/_}_command.json"
+    copy_as "build/evidence/phase-01/native/${native_surface}/sanitizer-verdict.json" "share/arw/evidence/${native_surface/-/_}_sanitizer_verdict.json"
+    copy_as "build/evidence/phase-01/native/${native_surface}/test-suite.sha256" "share/arw/evidence/${native_surface/-/_}_test_suite_sha256.txt"
+    copy_as "build/evidence/phase-01/native/${native_surface}/status.txt" "share/arw/evidence/${native_surface/-/_}_status.txt"
+done
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/file-base-MIT.txt"
@@ -766,7 +773,12 @@ from arw.schema_registry import (  # noqa: E402
     validate_phase1_instance,
 )
 from arw.integration_lock import (  # noqa: E402
+    _verify_native_surface_bundle,
     IntegrationLockError,
+    NATIVE_EVIDENCE_KINDS,
+    NATIVE_SURFACES,
+    NATIVE_VERDICT_KIND,
+    native_evidence_path,
     observe_staged_python_version,
     parse_file_contract_contract_sha256_from_bytes,
     verify_evidence_contract,
@@ -802,6 +814,8 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
         raise SystemExit(
             f"required staged evidence surface is missing: {staged_relative}"
         )
+    if "." in label:
+        return {"path": staged_relative, "sha256": digest(staged_path)}
     try:
         payload = json.loads(staged_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -978,18 +992,37 @@ identity = {
         "legal": staged_evidence(
             "share/arw/evidence/legal.json", label="legal"
         ),
-        "upstream": staged_evidence(
-            "share/arw/evidence/upstream.json", label="upstream"
-        ),
-        "asan_ubsan": staged_evidence(
-            "share/arw/evidence/asan_ubsan.json", label="asan_ubsan"
-        ),
-        "tsan": staged_evidence(
-            "share/arw/evidence/tsan.json", label="tsan"
-        ),
     },
-    "staged_payloads": payloads,
 }
+
+# The native surfaces are bundles of 5 digestPaths (verdict + command +
+# sanitizer_verdict + test_suite_sha256 + status) so the verifier can
+# distinguish them by argv, suite, and pinned bytes.  Emit each bundle
+# into the existing ``evidence`` dict under the surface key.
+for native_surface in NATIVE_SURFACES:
+    bundle: dict[str, dict[str, str]] = {}
+    bundle[NATIVE_VERDICT_KIND] = staged_evidence(
+        native_evidence_path(native_surface, NATIVE_VERDICT_KIND),
+        label=native_surface,
+    )
+    for kind in NATIVE_EVIDENCE_KINDS:
+        bundle[kind] = staged_evidence(
+            native_evidence_path(native_surface, kind),
+            label=f"{native_surface}.{kind}",
+        )
+    try:
+        _verify_native_surface_bundle(
+            stage_root, surface=native_surface, label=f"evidence.{native_surface}"
+        )
+    except IntegrationLockError as error:
+        raise SystemExit(
+            f"native evidence bundle {native_surface} fails the shared "
+            f"verifier contract: {error}"
+        ) from error
+    identity["evidence"][native_surface] = bundle
+
+
+identity["staged_payloads"] = payloads
 validate_phase1_instance("build-identity.schema.json", identity)
 (stage_root / "share/arw/build-identity.json").write_text(
     json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1266,8 +1299,20 @@ static_files = {
     "share/arw/evidence/pre_vendor.json",
     "share/arw/evidence/legal.json",
     "share/arw/evidence/upstream.json",
+    "share/arw/evidence/upstream_command.json",
+    "share/arw/evidence/upstream_sanitizer_verdict.json",
+    "share/arw/evidence/upstream_test_suite_sha256.txt",
+    "share/arw/evidence/upstream_status.txt",
     "share/arw/evidence/asan_ubsan.json",
+    "share/arw/evidence/asan_ubsan_command.json",
+    "share/arw/evidence/asan_ubsan_sanitizer_verdict.json",
+    "share/arw/evidence/asan_ubsan_test_suite_sha256.txt",
+    "share/arw/evidence/asan_ubsan_status.txt",
     "share/arw/evidence/tsan.json",
+    "share/arw/evidence/tsan_command.json",
+    "share/arw/evidence/tsan_sanitizer_verdict.json",
+    "share/arw/evidence/tsan_test_suite_sha256.txt",
+    "share/arw/evidence/tsan_status.txt",
     "share/arw/schemas/artifact-manifest.schema.json",
     "share/arw/schemas/artifact-request.schema.json",
     "share/arw/schemas/build-identity.schema.json",

@@ -731,17 +731,32 @@ def test_build_identity_evidence_block_points_at_staged_copies(
 
     identity = _load(stage_root / "share/arw/build-identity.json")
     evidence = identity["evidence"]
-    for label, relative in zip(
-        ("pre_vendor", "legal", "upstream", "asan_ubsan", "tsan"),
-        EVIDENCE_STAGED_PATHS,
+    for label, relative in (
+        ("pre_vendor", "share/arw/evidence/pre_vendor.json"),
+        ("legal", "share/arw/evidence/legal.json"),
     ):
         entry = evidence[label]
-        assert entry["path"] == relative, (
-            f"evidence.{label}.path drifts from staged copy: {entry['path']}"
-        )
-        assert entry["sha256"] == _sha256(stage_root / relative), (
-            f"evidence.{label}.sha256 drifts from staged copy bytes"
-        )
+        assert entry["path"] == relative
+        assert entry["sha256"] == _sha256(stage_root / relative)
+
+    for surface in ("upstream", "asan_ubsan", "tsan"):
+        bundle = evidence[surface]
+        expected = {
+            "verdict": f"share/arw/evidence/{surface}.json",
+            "command": f"share/arw/evidence/{surface}_command.json",
+            "sanitizer_verdict": (
+                f"share/arw/evidence/{surface}_sanitizer_verdict.json"
+            ),
+            "test_suite_sha256": (
+                f"share/arw/evidence/{surface}_test_suite_sha256.txt"
+            ),
+            "status": f"share/arw/evidence/{surface}_status.txt",
+        }
+        assert set(bundle) == set(expected)
+        for kind, relative in expected.items():
+            entry = bundle[kind]
+            assert entry["path"] == relative
+            assert entry["sha256"] == _sha256(stage_root / relative)
 
 
 def test_validate_only_rejects_staged_evidence_qualification_drift(
@@ -756,7 +771,7 @@ def test_validate_only_rejects_staged_evidence_qualification_drift(
     payload["technical_qualification"] = "BLOCKED"
     _write_pretty(target, payload)
     identity = _load(stage_root / "share/arw/build-identity.json")
-    identity["evidence"]["upstream"]["sha256"] = _sha256(target)
+    identity["evidence"]["upstream"]["verdict"]["sha256"] = _sha256(target)
     # Update staged_payloads for both files so the audit manifest gate does
     # not fail before the identity verifier has a chance to run.
     for entry in identity["staged_payloads"]:
@@ -935,10 +950,14 @@ def test_validate_only_rejects_passthrough_evidence_stub(
         )
 
         identity = _load(stage_root / "share/arw/build-identity.json")
-        identity["evidence"][label] = {
+        digest_path = {
             "path": relative,
             "sha256": _sha256(target),
         }
+        if label in {"pre_vendor", "legal"}:
+            identity["evidence"][label] = digest_path
+        else:
+            identity["evidence"][label]["verdict"] = digest_path
         for entry in identity["staged_payloads"]:
             if entry["path"] == relative:
                 entry["sha256"] = _sha256(target)

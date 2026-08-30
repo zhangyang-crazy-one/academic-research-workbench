@@ -1,0 +1,7 @@
+{
+  "fatal_diagnostic_patterns_absent": true,
+  "schema_version": "1.0.0",
+  "suite": "asan-ubsan",
+  "technical_qualification": "PASS",
+  "test_status": 0
+}

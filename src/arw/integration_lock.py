@@ -129,17 +129,43 @@ AUDIT_BUILD_IDENTITY_SCHEMA_RELATIVE = "share/arw/schemas/build-identity.schema.
 # audit manifest gate recomputes every claim from the live bytes.
 EVIDENCE_PATH_PRE_VENDOR = "share/arw/evidence/pre_vendor.json"
 EVIDENCE_PATH_LEGAL = "share/arw/evidence/legal.json"
-EVIDENCE_PATH_UPSTREAM = "share/arw/evidence/upstream.json"
-EVIDENCE_PATH_ASAN_UBSAN = "share/arw/evidence/asan_ubsan.json"
-EVIDENCE_PATH_TSAN = "share/arw/evidence/tsan.json"
+NATIVE_SURFACES: tuple[str, ...] = ("upstream", "asan_ubsan", "tsan")
+NATIVE_EVIDENCE_KINDS: tuple[str, ...] = (
+    "command",
+    "sanitizer_verdict",
+    "test_suite_sha256",
+    "status",
+)
+NATIVE_VERDICT_KIND = "verdict"
+
+
+def native_evidence_path(surface: str, kind: str) -> str:
+    """Return the staged evidence path for one native surface + kind.
+
+    The ``test_suite_sha256`` and ``status`` files are plain-text byte
+    digests (``status.txt`` is ``"0\\n"`` exactly; the test-suite file is
+    the pinned upstream test tree digest); the rest are JSON.
+    """
+
+    if surface not in NATIVE_SURFACES:
+        raise ValueError(f"unknown native surface: {surface}")
+    if kind == NATIVE_VERDICT_KIND:
+        return f"share/arw/evidence/{surface}.json"
+    extension = "txt" if kind in {"test_suite_sha256", "status"} else "json"
+    return f"share/arw/evidence/{surface}_{kind}.{extension}"
+
+
+NATIVE_EVIDENCE_RELATIVE_PATHS: frozenset[str] = frozenset(
+    native_evidence_path(surface, kind)
+    for surface in NATIVE_SURFACES
+    for kind in (NATIVE_VERDICT_KIND, *NATIVE_EVIDENCE_KINDS)
+)
 EVIDENCE_RELATIVE_PATHS: frozenset[str] = frozenset(
     {
         EVIDENCE_PATH_PRE_VENDOR,
         EVIDENCE_PATH_LEGAL,
-        EVIDENCE_PATH_UPSTREAM,
-        EVIDENCE_PATH_ASAN_UBSAN,
-        EVIDENCE_PATH_TSAN,
     }
+    | NATIVE_EVIDENCE_RELATIVE_PATHS
 )
 BUILD_IDENTITY_PROJECTION_ALGORITHM = "build-identity-metadata-v1"
 BUILD_IDENTITY_PROJECTION_KEYS = (
@@ -1791,9 +1817,7 @@ def _validate_hook(
         "host agent IDs": {item.host_agent_id for item in receipts},
         "attempt IDs": {item.expected_attempt_id for item in receipts},
         "proposal nonces": {item.expected_proposal_nonce for item in receipts},
-        "proposal digests": {
-            item.result_channel.proposal_sha256 for item in receipts
-        },
+        "proposal digests": {item.result_channel.proposal_sha256 for item in receipts},
         "result-channel scopes": {
             item.result_channel.channel_scope_sha256 for item in receipts
         },
@@ -2235,9 +2259,7 @@ def _verify_digest_path(
     relative = entry["path"]
     digest = entry["sha256"]
     if not isinstance(relative, str) or not isinstance(digest, str):
-        raise IntegrationLockError(
-            f"{label} digestPath fields must be strings"
-        )
+        raise IntegrationLockError(f"{label} digestPath fields must be strings")
     if relative in _CYCLE_METADATA_PATHS:
         raise IntegrationLockError(
             f"{label} digestPath cannot point at cycle-forming metadata: {relative}"
@@ -2318,6 +2340,65 @@ def _verify_aggregate_sha256(
 
 
 _NET_NAMESPACE_PATTERN = re.compile(r"^net:\[\d+\]$")
+_NATIVE_EVIDENCE_RELATIVE = re.compile(
+    r"^share/arw/evidence/(?P<surface>upstream|asan_ubsan|tsan)_(?P<kind>"
+    r"command|sanitizer_verdict|test_suite_sha256|status)\.json$"
+)
+# Surface-pinned argv used by ``scripts/build-file-base``.  The producer
+# passes one of these to the sandbox; the receiver fails if the argv is
+# not the exact closed tuple.
+_NATIVE_ARGV_BY_SURFACE: dict[str, tuple[str, ...]] = {
+    "upstream": (
+        "./scripts/build-file-base",
+        "--clean",
+        "--run-upstream-tests",
+    ),
+    "asan_ubsan": (
+        "./scripts/build-file-base",
+        "--clean",
+        "--sanitizers",
+        "asan,ubsan",
+        "--run-upstream-tests",
+    ),
+    "tsan": (
+        "./scripts/build-file-base",
+        "--clean",
+        "--sanitizers",
+        "tsan",
+        "--run-upstream-tests",
+    ),
+}
+# Surface-pinned environment keys that MUST appear with the right value.
+# Each surface shares three common keys; sanitizer surfaces additionally
+# pin ``ARW_SANITIZER_RUNTIME_DIR`` and the upstream surface MUST NOT
+# carry it.
+_NATIVE_ENV_REQUIRED: dict[str, dict[str, str | None]] = {
+    "upstream": {
+        "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
+        "ARW_OFFLINE_EXEC_ACTIVE": "1",
+    },
+    "asan_ubsan": {
+        "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
+        "ARW_OFFLINE_EXEC_ACTIVE": "1",
+        "ARW_SANITIZER_RUNTIME_DIR": None,  # presence required, value
+        #             checked by path suffix at validation time
+    },
+    "tsan": {
+        "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
+        "ARW_OFFLINE_EXEC_ACTIVE": "1",
+        "ARW_SANITIZER_RUNTIME_DIR": None,
+    },
+}
+_NATIVE_ENV_FORBIDDEN: dict[str, frozenset[str]] = {
+    "upstream": frozenset({"ARW_SANITIZER_RUNTIME_DIR"}),
+    "asan_ubsan": frozenset(),
+    "tsan": frozenset(),
+}
+_NATIVE_EVIDENCE_ROOT_TAIL: dict[str, str] = {
+    "upstream": "/native/upstream",
+    "asan_ubsan": "/native/asan-ubsan",
+    "tsan": "/native/tsan",
+}
 
 
 class NetworkVerdict(LockModel):
@@ -2341,13 +2422,9 @@ class NetworkVerdict(LockModel):
     @model_validator(mode="after")
     def _validate_namespaces(self) -> Self:
         if not _NET_NAMESPACE_PATTERN.fullmatch(self.child_network_namespace):
-            raise ValueError(
-                "child_network_namespace must match ^net:\\[\\d+\\]$"
-            )
+            raise ValueError("child_network_namespace must match ^net:\\[\\d+\\]$")
         if not _NET_NAMESPACE_PATTERN.fullmatch(self.host_network_namespace):
-            raise ValueError(
-                "host_network_namespace must match ^net:\\[\\d+\\]$"
-            )
+            raise ValueError("host_network_namespace must match ^net:\\[\\d+\\]$")
         if self.child_network_namespace == self.host_network_namespace:
             raise ValueError(
                 "child_network_namespace must differ from host_network_namespace"
@@ -2381,9 +2458,7 @@ class _LegalComponentRow(LockModel):
     def _validate_pinned(self) -> Self:
         pinned = _PINNED_LEGAL_ROWS.get(self.component_id)
         if pinned is None:
-            raise ValueError(
-                f"legal verdict has no pinned row for {self.component_id}"
-            )
+            raise ValueError(f"legal verdict has no pinned row for {self.component_id}")
         # Exact equality on every closed field; ``staged_sha256`` must
         # equal ``source_sha256`` AND the pinned source_sha256.
         for field_name, expected in pinned.items():
@@ -2450,6 +2525,225 @@ class LegalVerdict(LockModel):
         return "PASS"
 
 
+class NativeCommandReceipt(LockModel):
+    """Producer contract for the offline-exec command receipt per surface.
+
+    The producer (scripts/offline-exec) runs ``scripts/build-file-base`` with
+    one of three surface-pinned argv tuples inside a network-isolated
+    sandbox; the receiver (this model) requires the exact closed argv,
+    the exact sandbox/network pinning fields, and strict real UTC
+    calendar timestamps.  The exit status is NOT carried here - it
+    lives in the per-surface ``status.txt`` file (pinned to ``"0\\n"``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    argv: list[str]
+    cwd: str
+    started_at: str
+    ended_at: str
+    environment: dict[str, str]
+    network_denial_mechanism: Literal["bwrap-unshare-net"]
+    strace: str
+
+    @field_validator("started_at", "ended_at")
+    @classmethod
+    def _validate_timestamp(cls, value: str) -> str:
+        _parse_strict_rfc3339_z(value)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_exact(self) -> Self:
+        if not self.argv:
+            raise ValueError("native command receipt argv must be non-empty")
+        if not self.cwd:
+            raise ValueError("native command receipt cwd must be non-empty")
+        if not self.strace:
+            raise ValueError("native command receipt strace path must be non-empty")
+        started = _parse_strict_rfc3339_z(self.started_at)
+        ended = _parse_strict_rfc3339_z(self.ended_at)
+        if started > ended:
+            raise ValueError("native command receipt started_at must be <= ended_at")
+        return self
+
+
+class NativeSanitizerVerdict(LockModel):
+    """Producer contract for the per-surface sanitizer verdict file.
+
+    The producer writes the suite name verbatim from the offline-exec
+    run (e.g. ``asan-ubsan`` for the asan-ubsan surface), so the verifier
+    accepts the canonical surface keys (``upstream``/``asan_ubsan``/
+    ``tsan``) AND the producer-emitted path-style names
+    (``upstream``/``asan-ubsan``/``tsan``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0.0"]
+    suite: str
+    test_status: Literal[0]
+    fatal_diagnostic_patterns_absent: Literal[True]
+    technical_qualification: Literal["PASS"]
+
+    @field_validator("suite")
+    @classmethod
+    def _validate_suite(cls, value: str) -> str:
+        accepted = frozenset(NATIVE_SURFACES) | frozenset(
+            s.replace("_", "-") for s in NATIVE_SURFACES
+        )
+        if value not in accepted:
+            raise ValueError(
+                f"sanitizer verdict suite must be one of {sorted(accepted)}; "
+                f"got {value!r}"
+            )
+        return value
+
+
+_NATIVE_TEST_SUITE_SHA256_BYTES: bytes = (
+    EXPECTED_FILE_BASE_TEST_TREE.encode("ascii") + b"\n"
+)
+_NATIVE_STATUS_ZERO_BYTES: bytes = b"0\n"
+
+
+def _verify_native_surface_bundle(
+    stage_root: Path, *, surface: str, label: str
+) -> None:
+    """Validate the four per-surface evidence files for one native surface.
+
+    The bundle is the authoritative surface identity: ``command`` carries
+    the surface-pinned argv; ``sanitizer_verdict`` carries the suite +
+    test_status; ``test_suite_sha256.txt`` carries the upstream test tree
+    digest; ``status.txt`` is exactly ``"0\\n"``.  The verifier rejects on
+    any drift because two native surfaces are otherwise interchangeable
+    (both verdicts claim PASS; the bundle distinguishes them).
+    """
+
+    if surface not in NATIVE_SURFACES:
+        raise IntegrationLockError(
+            f"{label} native surface must be one of {NATIVE_SURFACES}"
+        )
+
+    command_path = _regular_file_under(
+        stage_root, native_evidence_path(surface, "command")
+    )
+    try:
+        command_raw = command_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f"{label} command file is unreadable: {error}"
+        ) from error
+    try:
+        command_payload = json.loads(command_raw)
+    except json.JSONDecodeError as error:
+        raise IntegrationLockError(
+            f"{label} command file is not valid JSON: {error}"
+        ) from error
+    if not isinstance(command_payload, dict):
+        raise IntegrationLockError(f"{label} command file must be a JSON object")
+    try:
+        command = NativeCommandReceipt.model_validate(command_payload, strict=True)
+    except ValidationError as error:
+        raise IntegrationLockError(
+            f"{label} command file fails the NativeCommandReceipt contract: {error}"
+        ) from error
+
+    pinned_argv = _NATIVE_ARGV_BY_SURFACE[surface]
+    if tuple(command.argv) != pinned_argv:
+        raise IntegrationLockError(
+            f"{label} native surface argv drift: expected {pinned_argv!r}; "
+            f"got {tuple(command.argv)!r}"
+        )
+
+    evidence_root = command.environment.get("ARW_OFFLINE_EVIDENCE_ROOT")
+    if not isinstance(evidence_root, str) or not evidence_root.endswith(
+        _NATIVE_EVIDENCE_ROOT_TAIL[surface]
+    ):
+        raise IntegrationLockError(
+            f"{label} native surface ARW_OFFLINE_EVIDENCE_ROOT must end "
+            f"with {_NATIVE_EVIDENCE_ROOT_TAIL[surface]!r}; got {evidence_root!r}"
+        )
+    if command.environment.get("ARW_OFFLINE_EXEC_ACTIVE") != "1":
+        raise IntegrationLockError(
+            f"{label} native surface ARW_OFFLINE_EXEC_ACTIVE must be '1'; "
+            f"got {command.environment.get('ARW_OFFLINE_EXEC_ACTIVE')!r}"
+        )
+
+    required_env = _NATIVE_ENV_REQUIRED[surface]
+    forbidden_env = _NATIVE_ENV_FORBIDDEN[surface]
+    for key, expected in required_env.items():
+        observed = command.environment.get(key)
+        if observed is None:
+            raise IntegrationLockError(
+                f"{label} native surface environment.{key} is required"
+            )
+        if expected is not None and observed != expected:
+            raise IntegrationLockError(
+                f"{label} native surface environment.{key} must equal "
+                f"{expected!r}; got {observed!r}"
+            )
+    for forbidden in forbidden_env:
+        if forbidden in command.environment:
+            raise IntegrationLockError(
+                f"{label} native surface environment.{forbidden} must not "
+                "be present on the upstream surface"
+            )
+
+    if surface != "upstream":
+        sanitizer_runtime = command.environment.get("ARW_SANITIZER_RUNTIME_DIR")
+        if not isinstance(sanitizer_runtime, str) or not sanitizer_runtime:
+            raise IntegrationLockError(
+                f"{label} native surface ARW_SANITIZER_RUNTIME_DIR is "
+                "required for sanitizer runs"
+            )
+
+    sanitizer_path = _regular_file_under(
+        stage_root, native_evidence_path(surface, "sanitizer_verdict")
+    )
+    try:
+        sanitizer_payload = json.loads(sanitizer_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrationLockError(
+            f"{label} sanitizer_verdict file is unreadable: {error}"
+        ) from error
+    try:
+        NativeSanitizerVerdict.model_validate(sanitizer_payload, strict=True)
+    except ValidationError as error:
+        raise IntegrationLockError(
+            f"{label} sanitizer_verdict file fails the "
+            f"NativeSanitizerVerdict contract: {error}"
+        ) from error
+
+    test_suite_path = _regular_file_under(
+        stage_root, native_evidence_path(surface, "test_suite_sha256")
+    )
+    try:
+        test_suite_bytes = test_suite_path.read_bytes()
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f"{label} test_suite_sha256.txt is unreadable: {error}"
+        ) from error
+    if test_suite_bytes != _NATIVE_TEST_SUITE_SHA256_BYTES:
+        raise IntegrationLockError(
+            f"{label} test_suite_sha256.txt must equal the pinned upstream "
+            f"test tree digest; got {test_suite_bytes!r}, expected "
+            f"{_NATIVE_TEST_SUITE_SHA256_BYTES!r}"
+        )
+
+    status_path = _regular_file_under(
+        stage_root, native_evidence_path(surface, "status")
+    )
+    try:
+        status_bytes = status_path.read_bytes()
+    except (OSError, UnicodeError) as error:
+        raise IntegrationLockError(
+            f"{label} status.txt is unreadable: {error}"
+        ) from error
+    if status_bytes != _NATIVE_STATUS_ZERO_BYTES:
+        raise IntegrationLockError(
+            f"{label} status.txt must be exactly b'0\\n'; got {status_bytes!r}"
+        )
+
+
 class _PreVendorComponentLicense(LockModel):
     component: Literal["academic-research-skills", "experiment-agent", "file-base"]
     sha256: Sha256
@@ -2472,17 +2766,11 @@ class _PreVendorComponent(LockModel):
     @model_validator(mode="after")
     def _validate_upstream(self) -> Self:
         if not self.upstream_url.startswith(("https://", "http://")):
-            raise ValueError(
-                f"component {self.id} upstream_url must be an http(s) URL"
-            )
+            raise ValueError(f"component {self.id} upstream_url must be an http(s) URL")
         if not self.upstream_url or " " in self.upstream_url:
-            raise ValueError(
-                f"component {self.id} upstream_url is malformed"
-            )
+            raise ValueError(f"component {self.id} upstream_url is malformed")
         if not self.version:
-            raise ValueError(
-                f"component {self.id} version must be non-empty"
-            )
+            raise ValueError(f"component {self.id} version must be non-empty")
         return self
 
 
@@ -2498,7 +2786,7 @@ class _PreVendorCommand(LockModel):
     cwd: str
     started_at: str
     ended_at: str
-    status: int
+    status: Literal[0]
     stderr_path: str
     stdout_path: str
 
@@ -2523,17 +2811,13 @@ class _PreVendorNativeFileBaseGate(LockModel):
     @model_validator(mode="after")
     def _validate_nonempty(self) -> Self:
         if not self.commands:
-            raise ValueError(
-                "native_file_base_gate.commands must be non-empty"
-            )
+            raise ValueError("native_file_base_gate.commands must be non-empty")
         if not self.generated_notices:
             raise ValueError(
                 "native_file_base_gate.generated_notices must be non-empty"
             )
         if not self.tools:
-            raise ValueError(
-                "native_file_base_gate.tools must be non-empty"
-            )
+            raise ValueError("native_file_base_gate.tools must be non-empty")
         return self
 
 
@@ -2554,9 +2838,7 @@ class _PreVendorToolIdentity(LockModel):
         for field in ("git", "node", "npm", "python", "scancode"):
             value = getattr(self, field)
             if not value:
-                raise ValueError(
-                    f"tool_identities.{field} must be a non-empty string"
-                )
+                raise ValueError(f"tool_identities.{field} must be a non-empty string")
         return self
 
 
@@ -2602,17 +2884,11 @@ class PreVendorReceipt(LockModel):
                 "pre-vendor receipt must declare exactly 3 component_licenses"
             )
         if len(self.components) != 3:
-            raise ValueError(
-                "pre-vendor receipt must declare exactly 3 components"
-            )
+            raise ValueError("pre-vendor receipt must declare exactly 3 components")
         if not self.legal_inputs:
-            raise ValueError(
-                "pre-vendor receipt legal_inputs must be non-empty"
-            )
+            raise ValueError("pre-vendor receipt legal_inputs must be non-empty")
         if not self.raw_evidence:
-            raise ValueError(
-                "pre-vendor receipt raw_evidence must be non-empty"
-            )
+            raise ValueError("pre-vendor receipt raw_evidence must be non-empty")
         if not self.vendor_sources_observations:
             raise ValueError(
                 "pre-vendor receipt vendor_sources_observations must be non-empty"
@@ -2749,8 +3025,7 @@ def _parse_strict_rfc3339_z(value: str) -> datetime:
     )
     if match is None:
         raise ValueError(
-            "RFC3339 Z timestamp must match "
-            "YYYY-MM-DDTHH:MM:SS(.fff)Z: " + value
+            "RFC3339 Z timestamp must match YYYY-MM-DDTHH:MM:SS(.fff)Z: " + value
         )
     year, month, day, hour, minute, second, fraction = match.groups()
     try:
@@ -2800,9 +3075,7 @@ def _parse_strict_rfc3339_z(value: str) -> datetime:
     # and compare; any silent roll-over (e.g. 2026-99-99 → some other
     # date) surfaces here.
     canonical = parsed.astimezone(UTC).strftime(
-        "%Y-%m-%dT%H:%M:%S"
-        + (".%f" if parsed.microsecond else "")
-        + "Z"
+        "%Y-%m-%dT%H:%M:%S" + (".%f" if parsed.microsecond else "") + "Z"
     )
     if canonical != value:
         raise ValueError(
@@ -2918,9 +3191,7 @@ def verify_evidence_contract(
 
     model = _EVIDENCE_MODEL_BY_SURFACE.get(surface)
     if model is None:
-        raise IntegrationLockError(
-            f"no producer contract for surface: {surface}"
-        )
+        raise IntegrationLockError(f"no producer contract for surface: {surface}")
     label = f"build identity evidence.{surface}"
     try:
         validated = model.model_validate(payload, strict=True)
@@ -2961,6 +3232,7 @@ def verify_evidence_contract(
             f"{derived!r}"
         )
     return validated
+
 
 def _verify_evidence_pass(
     stage_root: Path, path: str, *, label: str
@@ -3019,7 +3291,10 @@ def _projection_profile_patch_sha256(patches: list[Mapping[str, object]]) -> str
     for patch in patches:
         if patch.get("order") == 4:
             value = patch.get("sha256")
-            if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            if (
+                not isinstance(value, str)
+                or re.fullmatch(r"[0-9a-f]{64}", value) is None
+            ):
                 raise IntegrationLockError(
                     "source manifest patch with order=4 has an invalid sha256"
                 )
@@ -3052,7 +3327,11 @@ def _strip_c_comments(source: str) -> str:
         if char == "/" and second == "*":
             index += 2
             while index < length:
-                if source[index] == "*" and index + 1 < length and source[index + 1] == "/":
+                if (
+                    source[index] == "*"
+                    and index + 1 < length
+                    and source[index + 1] == "/"
+                ):
                     index += 2
                     break
                 if source[index] == "\n":
@@ -3159,9 +3438,7 @@ def observe_regenerated_file_contract(
         raise IntegrationLockError(
             f"file_contract.header target is missing or unsafe: {header_relative}"
         ) from error
-    schema_root = _safe_root(
-        stage_root / "share/arw/schemas", label="staged schemas"
-    )
+    schema_root = _safe_root(stage_root / "share/arw/schemas", label="staged schemas")
 
     # Lazy import to keep ``arw.integration_lock`` importable in the schema
     # registry circular dance.  ``render_native_contract_header`` enforces
@@ -3218,9 +3495,7 @@ def observe_staged_python_version(stage_root: Path) -> str:
     try:
         raw = path.read_text(encoding="ascii")
     except (OSError, UnicodeError) as error:
-        raise IntegrationLockError(
-            f".python-version is unreadable: {error}"
-        ) from error
+        raise IntegrationLockError(f".python-version is unreadable: {error}") from error
     value = raw.strip()
     if "\n" in value or not _PYTHON_VERSION_PATTERN.fullmatch(value):
         raise IntegrationLockError(
@@ -3321,9 +3596,7 @@ def _load_build_identity_binding(
     if not isinstance(plugin, dict):
         raise IntegrationLockError("build identity plugin projection is malformed")
     declared_version = plugin.get("version")
-    plugin_manifest_path = _regular_file_under(
-        stage_root, ".codex-plugin/plugin.json"
-    )
+    plugin_manifest_path = _regular_file_under(stage_root, ".codex-plugin/plugin.json")
     try:
         plugin_manifest = json.loads(plugin_manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -3384,9 +3657,7 @@ def _load_build_identity_binding(
     # ----- projection (query_launcher + derived aggregates) -------------------
     projection = identity.get("projection")
     if not isinstance(projection, dict):
-        raise IntegrationLockError(
-            "build identity projection is malformed"
-        )
+        raise IntegrationLockError("build identity projection is malformed")
     if projection.get("algorithm") != "research-graph-projection-v1":
         raise IntegrationLockError(
             "build identity projection.algorithm is not the qualified projection"
@@ -3411,9 +3682,7 @@ def _load_build_identity_binding(
     )
     expected_patch_set = _projection_patch_set_sha256(list(patches))
     if projection.get("patch_set_sha256") != expected_patch_set:
-        raise IntegrationLockError(
-            "build identity projection.patch_set_sha256 drift"
-        )
+        raise IntegrationLockError("build identity projection.patch_set_sha256 drift")
     expected_profile_patch = _projection_profile_patch_sha256(list(patches))
     if projection.get("profile_patch_sha256") != expected_profile_patch:
         raise IntegrationLockError(
@@ -3426,9 +3695,7 @@ def _load_build_identity_binding(
         raise IntegrationLockError("build identity file_contract is malformed")
     header_entry = file_contract.get("header")
     if not isinstance(header_entry, dict):
-        raise IntegrationLockError(
-            "build identity file_contract.header is malformed"
-        )
+        raise IntegrationLockError("build identity file_contract.header is malformed")
     _verify_digest_path(
         stage_root,
         header_entry,
@@ -3475,9 +3742,7 @@ def _load_build_identity_binding(
     ):
         # Verify the wheelhouse.lock.json claims this exact first-party wheel
         # so the digestPath and the lockfile cannot be rebound independently.
-        lock_path = _regular_file_under(
-            stage_root, wheelhouse["lock"]["path"]
-        )
+        lock_path = _regular_file_under(stage_root, wheelhouse["lock"]["path"])
         try:
             lock_payload = json.loads(lock_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -3515,24 +3780,22 @@ def _load_build_identity_binding(
         staged_payloads=staged_payloads,
     )
 
-    # ----- evidence files (5 staged copies) ----------------------------------
+    # ----- evidence files (5 surfaces; pre_vendor+legal are single JSON, the
+    # three native surfaces are bundles of 5 digestPaths that pin the
+    # authoritative command, sanitizer verdict, test-suite digest, and
+    # status for that surface) --------------------------------------------
     evidence = identity.get("evidence")
     if not isinstance(evidence, dict):
         raise IntegrationLockError("build identity evidence is malformed")
-    expected_evidence_paths = {
+    simple_evidence_paths: dict[str, str] = {
         "pre_vendor": EVIDENCE_PATH_PRE_VENDOR,
         "legal": EVIDENCE_PATH_LEGAL,
-        "upstream": EVIDENCE_PATH_UPSTREAM,
-        "asan_ubsan": EVIDENCE_PATH_ASAN_UBSAN,
-        "tsan": EVIDENCE_PATH_TSAN,
     }
     declared_evidence_paths: dict[str, str] = {}
-    for field, expected_path in expected_evidence_paths.items():
+    for field, expected_path in simple_evidence_paths.items():
         entry = evidence.get(field)
         if entry is None:
-            raise IntegrationLockError(
-                f"build identity evidence.{field} is missing"
-            )
+            raise IntegrationLockError(f"build identity evidence.{field} is missing")
         _verify_digest_path(
             stage_root,
             entry,
@@ -3547,7 +3810,57 @@ def _load_build_identity_binding(
             stage_root, entry["path"], label=f"build identity evidence.{field}"
         )
         declared_evidence_paths[field] = entry["path"]
-    if set(declared_evidence_paths) != set(expected_evidence_paths):
+
+    for field in NATIVE_SURFACES:
+        native_bundle = evidence.get(field)
+        if not isinstance(native_bundle, dict):
+            raise IntegrationLockError(
+                f"build identity evidence.{field} must be a nativeEvidence "
+                "object with 5 digestPath sub-fields"
+            )
+        expected_kinds = (
+            NATIVE_VERDICT_KIND,
+            *NATIVE_EVIDENCE_KINDS,
+        )
+        for kind in expected_kinds:
+            sub_entry = native_bundle.get(kind)
+            if not isinstance(sub_entry, dict):
+                raise IntegrationLockError(
+                    f"build identity evidence.{field}.{kind} must be a digestPath"
+                )
+            expected_path = native_evidence_path(field, kind)
+            _verify_digest_path(
+                stage_root,
+                sub_entry,
+                label=(f"build identity evidence.{field}.{kind}"),
+                staged_payloads=staged_payloads,
+            )
+            if sub_entry["path"] != expected_path:
+                raise IntegrationLockError(
+                    f"build identity evidence.{field}.{kind}.path must be "
+                    f"{expected_path}"
+                )
+        # The bundle-level verdict surface is the same NetworkVerdict
+        # contract the per-surface verdict.json was bound to; the other
+        # four files are validated by the shared contract helper.
+        _verify_evidence_pass(
+            stage_root,
+            native_evidence_path(field, NATIVE_VERDICT_KIND),
+            label=f"build identity evidence.{field}.{NATIVE_VERDICT_KIND}",
+        )
+        # Each native surface has its own authoritative surface-identity
+        # bundle (command, sanitizer verdict, test-suite sha, status).
+        _verify_native_surface_bundle(
+            stage_root,
+            surface=field,
+            label=f"build identity evidence.{field}",
+        )
+        declared_evidence_paths[field] = native_evidence_path(
+            field, NATIVE_VERDICT_KIND
+        )
+    if set(declared_evidence_paths) != (
+        set(simple_evidence_paths) | set(NATIVE_SURFACES)
+    ):
         raise IntegrationLockError(
             "build identity evidence block is missing a phase-01 surface"
         )
@@ -4342,6 +4655,7 @@ __all__ = (
     "is_supported_codex_cli_version",
     "load_and_verify_integration_lock",
     "load_integration_lock",
+    "native_evidence_path",
     "observe_build_identity_binding",
     "observe_codex_host",
     "observe_hook_definition",
