@@ -92,6 +92,14 @@ def _is_unicode_family(value: str) -> bool:
     return has_letter
 
 
+def _contains_unicode_control_or_format(value: str) -> bool:
+    """Reject controls that can spoof or conceal human-facing metadata."""
+
+    return any(
+        unicodedata.category(character) in {"Cc", "Cf"} for character in value
+    )
+
+
 def _contains_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
@@ -137,6 +145,9 @@ def parse_filename(name: str) -> dict | None:
     third component — it MUST exclude the family token, otherwise
     make_citation_key would produce keys like ``chen2024chen``.
     """
+    if _contains_unicode_control_or_format(name):
+        return None
+
     # pi-lens-ignore: jscpd:duplicate
     m = RE_FAMILY_UNDERSCORE.match(name)
     if m:

@@ -235,6 +235,26 @@ def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> Non
         assert not adapter._is_unicode_family(unsafe)
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "张_2024_\u202eevil.pdf",
+        "Chen2024_\u202eevil.pdf",
+        "张_2024_\u200bhidden.pdf",
+        "Chen2024_\ufeffhidden.pdf",
+        "张_2024_\u202dleft-to-right.pdf",
+        "Chen2024_line\nbreak.pdf",
+    ],
+)
+def test_filename_title_rejects_unicode_control_and_format_characters(
+    name: str,
+) -> None:
+    """Human-facing titles must not retain bidi/zero-width controls."""
+
+    adapter = _load_adapter_module()
+    assert adapter.parse_filename(name) is None
+
+
 def test_unicode_citekey_nfkc_equivalence_distinction_and_collision_suffixes() -> None:
     adapter = _load_adapter_module()
     composed = adapter._unicode_citation_key_base(
