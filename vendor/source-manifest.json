@@ -1067,7 +1067,7 @@
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "fb89692ffe75331829cdd0d489f0030827ca37e72a73b217306afdfc269bbbe6"
+    "sha256": "e0e23637bb2c8c45f5487e33cf9b0c41f173f7830ed4c42eec0d0406c06e81c9"
   },
   "schema_version": "1.0.0"
 }

@@ -9,7 +9,7 @@
     {
       "path": "vendor/source-manifest.json",
       "purpose": "technical-provenance-only",
-      "sha256": "d7b80d939f2c450258a42c3bab0cc0bb604eba4e9f9f0778e80e1324e50d1d88"
+      "sha256": "342425a722aaf19675c9fe3954ac0e0a685a7fde6cdf7e4c428de059e748ce49"
     },
     {
       "path": "SBOM.cdx.json",
