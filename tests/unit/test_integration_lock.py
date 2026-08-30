@@ -262,17 +262,18 @@ def _install_audit_manifests(stage: Path) -> None:
         "pre_vendor": REPOSITORY_ROOT / "supply-chain/pre-vendor-receipt.json",
         "legal": fixture_evidence / "legal.json",
     }
-    # Native surface fixtures are committed byte-for-byte producer evidence;
-# tests never depend on mutable ignored build/evidence output.
+    # Native surfaces are canonical committed supply-chain evidence; tests and
+    # production staging consume the same reviewed bytes.
+    canonical_native = REPOSITORY_ROOT / "supply-chain/native-evidence"
     native_surface_dir: dict[str, str] = {
         "upstream": "upstream",
         "asan_ubsan": "asan-ubsan",
         "tsan": "tsan",
     }
     for native_surface, source_dir in native_surface_dir.items():
-        fixture_dir = fixture_evidence / "native" / source_dir
+        fixture_dir = canonical_native / source_dir
         synthetic_evidence_source[f"{native_surface}_verdict"] = (
-            fixture_evidence / f"{native_surface}.json"
+            fixture_dir / "verdict.json"
         )
         for kind in native_evidence_kinds:
             ext = "txt" if kind in {"test_suite_sha256", "status"} else "json"
@@ -615,14 +616,10 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     repository_components = {
         item["id"]: item for item in repository_manifest["components"]
     }
-    fixture_components = cast(
-        list[dict[str, object]], source_manifest["components"]
-    )
+    fixture_components = cast(list[dict[str, object]], source_manifest["components"])
     for component in fixture_components:
         component_id = cast(str, component["id"])
-        component["legal_inputs"] = repository_components[component_id][
-            "legal_inputs"
-        ]
+        component["legal_inputs"] = repository_components[component_id]["legal_inputs"]
     _json(stage / "vendor/source-manifest.json", source_manifest)
     _json(stage / "SBOM.cdx.json", {"components": []})
     _write(stage / "THIRD_PARTY_NOTICES.md", "fixture notices\n")
@@ -3731,7 +3728,8 @@ def test_native_upstream_bundle_cannot_substitute_for_asan_ubsan(
         )
 
     with pytest.raises(
-        IntegrationLockError, match="native surface argv drift|sanitizer verdict suite"
+        IntegrationLockError,
+        match="canonical surface receipt|native surface argv drift|sanitizer verdict suite",
     ):
         _build(integration_fixture)
 
@@ -3901,5 +3899,46 @@ def test_pre_vendor_tool_identities_are_canonical(
     )
     with pytest.raises(
         IntegrationLockError, match="tool_identities.git must equal canonical"
+    ):
+        _build(integration_fixture)
+
+
+def test_native_verdict_is_content_bound_to_surface_command(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: an upstream network verdict cannot certify ASan/UBSan."""
+
+    stage = integration_fixture["stage"]
+    source = stage / "share/arw/evidence/upstream.json"
+    target_relative = "share/arw/evidence/asan_ubsan.json"
+    target = stage / target_relative
+    target.write_bytes(source.read_bytes())
+    _rebind_all_evidence_records(integration_fixture, target_relative)
+    with pytest.raises(
+        IntegrationLockError, match="verdict bytes.*canonical command surface"
+    ):
+        _build(integration_fixture)
+
+
+def test_staged_evidence_json_rejects_duplicate_object_keys(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: attested JSON has one unambiguous interpretation for auditors."""
+
+    target_relative = "share/arw/evidence/upstream.json"
+    target = integration_fixture["stage"] / target_relative
+    raw = target.read_text(encoding="utf-8")
+    needle = '  "network_syscall_attempts": [],'
+    assert raw.count(needle) == 1
+    target.write_text(
+        raw.replace(
+            needle,
+            '  "network_syscall_attempts": ["connect"],\n' + needle,
+        ),
+        encoding="utf-8",
+    )
+    _rebind_all_evidence_records(integration_fixture, target_relative)
+    with pytest.raises(
+        IntegrationLockError, match="duplicate JSON object key|strict unambiguous JSON"
     ):
         _build(integration_fixture)

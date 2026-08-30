@@ -546,15 +546,16 @@ copy_file ".file-base/build-evidence.json"
 # qualification after review. Other phase-01 surfaces remain retained evidence.
 copy_as "supply-chain/pre-vendor-receipt.json" "share/arw/evidence/pre_vendor.json"
 copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
-# The three native surfaces carry a 5-file bundle (verdict + command +
-# sanitizer_verdict + test_suite_sha256 + status) so the verifier can
-# distinguish them by argv, suite, and pinned bytes.
+# Native five-file bundles are also canonical committed supply-chain evidence.
+# Producer and installed verifier both enforce surface-specific content hashes.
 for native_surface in "upstream" "asan-ubsan" "tsan"; do
-    copy_as "build/evidence/phase-01/native/${native_surface}/verdict.json" "share/arw/evidence/${native_surface/-/_}.json"
-    copy_as "build/evidence/phase-01/native/${native_surface}/command.json" "share/arw/evidence/${native_surface/-/_}_command.json"
-    copy_as "build/evidence/phase-01/native/${native_surface}/sanitizer-verdict.json" "share/arw/evidence/${native_surface/-/_}_sanitizer_verdict.json"
-    copy_as "build/evidence/phase-01/native/${native_surface}/test-suite.sha256" "share/arw/evidence/${native_surface/-/_}_test_suite_sha256.txt"
-    copy_as "build/evidence/phase-01/native/${native_surface}/status.txt" "share/arw/evidence/${native_surface/-/_}_status.txt"
+    canonical="supply-chain/native-evidence/${native_surface}"
+    staged_surface="${native_surface/-/_}"
+    copy_as "${canonical}/verdict.json" "share/arw/evidence/${staged_surface}.json"
+    copy_as "${canonical}/command.json" "share/arw/evidence/${staged_surface}_command.json"
+    copy_as "${canonical}/sanitizer-verdict.json" "share/arw/evidence/${staged_surface}_sanitizer_verdict.json"
+    copy_as "${canonical}/test-suite.sha256" "share/arw/evidence/${staged_surface}_test_suite_sha256.txt"
+    copy_as "${canonical}/status.txt" "share/arw/evidence/${staged_surface}_status.txt"
 done
 copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
 copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
@@ -767,6 +768,7 @@ project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
+from arw.canonical import strict_json_loads  # noqa: E402
 from arw.schema_registry import (  # noqa: E402
     aggregate_schema_sha256,
     regenerate_schemas,
@@ -818,10 +820,11 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
     if "." in label:
         return {"path": staged_relative, "sha256": digest(staged_path)}
     try:
-        payload = json.loads(staged_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(staged_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as error:
         raise SystemExit(
-            f"staged evidence surface is unreadable: {staged_relative}: {error}"
+            f"staged evidence surface is not strict unambiguous JSON: "
+            f"{staged_relative}: {error}"
         )
     basename = staged_path.name
     surface = {

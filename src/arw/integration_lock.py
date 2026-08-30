@@ -2608,6 +2608,18 @@ _NATIVE_TEST_SUITE_SHA256_BYTES: bytes = (
 _NATIVE_STATUS_ZERO_BYTES: bytes = b"0\n"
 
 
+_NATIVE_VERDICT_SHA256_BY_SURFACE = {
+    "upstream": "8b30b76aea2732abdf52cf8f28c27d6670cb1c1dc57bafcd0cdb4bfb59244cac",
+    "asan_ubsan": "672741e6f3db1c9a056f82fc5a6947f5b2be5cfb777a8b28f89c88cefa983e0e",
+    "tsan": "849724d83b199b2ef124c28e22e007227ab1937f33085e9c1985d6459b51d269",
+}
+_NATIVE_COMMAND_SHA256_BY_SURFACE = {
+    "upstream": "0b3ac7a4f01a6e7516b4e8dbf9f6464fa8bc2240f2ff90c9ffbff01d2ac7d083",
+    "asan_ubsan": "f3642356554e51454b60e54d671f89e1d42006cd899d3af0a685fa2adc2afd65",
+    "tsan": "7c150b5d52556404fae2ea5fb0a3624c8578a5151397588e2d729cbc67f582f4",
+}
+
+
 def _verify_native_surface_bundle(
     stage_root: Path, *, surface: str, label: str
 ) -> None:
@@ -2636,10 +2648,10 @@ def _verify_native_surface_bundle(
             f"{label} command file is unreadable: {error}"
         ) from error
     try:
-        command_payload = json.loads(command_raw)
-    except json.JSONDecodeError as error:
+        command_payload = strict_json_loads(command_raw)
+    except ValueError as error:
         raise IntegrationLockError(
-            f"{label} command file is not valid JSON: {error}"
+            f"{label} command file is not strict unambiguous JSON: {error}"
         ) from error
     if not isinstance(command_payload, dict):
         raise IntegrationLockError(f"{label} command file must be a JSON object")
@@ -2649,6 +2661,25 @@ def _verify_native_surface_bundle(
         raise IntegrationLockError(
             f"{label} command file fails the NativeCommandReceipt contract: {error}"
         ) from error
+    observed_command_sha256 = _digest(command_path)
+    expected_command_sha256 = _NATIVE_COMMAND_SHA256_BY_SURFACE[surface]
+    if observed_command_sha256 != expected_command_sha256:
+        raise IntegrationLockError(
+            f"{label} command bytes do not match the canonical surface receipt: "
+            f"observed={observed_command_sha256} "
+            f"expected={expected_command_sha256}"
+        )
+    verdict_path = _regular_file_under(
+        stage_root, native_evidence_path(surface, NATIVE_VERDICT_KIND)
+    )
+    observed_verdict_sha256 = _digest(verdict_path)
+    expected_verdict_sha256 = _NATIVE_VERDICT_SHA256_BY_SURFACE[surface]
+    if observed_verdict_sha256 != expected_verdict_sha256:
+        raise IntegrationLockError(
+            f"{label} verdict bytes do not match the canonical command surface: "
+            f"observed={observed_verdict_sha256} "
+            f"expected={expected_verdict_sha256}"
+        )
 
     pinned_argv = _NATIVE_ARGV_BY_SURFACE[surface]
     if tuple(command.argv) != pinned_argv:
@@ -2703,10 +2734,11 @@ def _verify_native_surface_bundle(
         stage_root, native_evidence_path(surface, "sanitizer_verdict")
     )
     try:
-        sanitizer_payload = json.loads(sanitizer_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        sanitizer_payload = strict_json_loads(sanitizer_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as error:
         raise IntegrationLockError(
-            f"{label} sanitizer_verdict file is unreadable: {error}"
+            f"{label} sanitizer_verdict file is not strict unambiguous JSON: "
+            f"{error}"
         ) from error
     try:
         sanitizer = NativeSanitizerVerdict.model_validate(
@@ -3450,10 +3482,11 @@ def _verify_evidence_pass(
 
     file_path = _regular_file_under(stage_root, path)
     try:
-        payload = json.loads(file_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        payload = strict_json_loads(file_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as error:
         raise IntegrationLockError(
-            f"{label} evidence file is unreadable: {path}: {error}"
+            f"{label} evidence file is not strict unambiguous JSON: "
+            f"{path}: {error}"
         ) from error
     if not isinstance(payload, dict):
         raise IntegrationLockError(
