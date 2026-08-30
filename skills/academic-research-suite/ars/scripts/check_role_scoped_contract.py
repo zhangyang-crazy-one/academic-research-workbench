@@ -52,8 +52,8 @@ SHIPPED_EXAMPLES = (
 )
 SHIPPED_EXAMPLE_ANCHOR_COUNTS = {
     SHIPPED_EXAMPLES[0]: 10,
-    SHIPPED_EXAMPLES[1]: 36,
-    SHIPPED_EXAMPLES[2]: 36,
+    SHIPPED_EXAMPLES[1]: 38,
+    SHIPPED_EXAMPLES[2]: 38,
 }
 SHIPPED_EXAMPLE_ANCHOR_RE = re.compile(
     r"`(?P<anchor>(?:text|table|figure|equation|dataset|absence): [^`\n]+)`",
@@ -103,7 +103,11 @@ PHASE1_TERMINAL_PREFLIGHT_WITNESS = (
     "`## Failure Condition Checks`, `## Editorial Decision`, "
     "`dimension_scores`, `review_body`, or bare `editorial_decision=` "
     "appears, and no manuscript-specific claim appears. "
-    "6. The final nonblank output line is exactly "
+    "6. Binding: a criteria-aware call contains exactly the supplied marker "
+    "and one `criteria_parallel_conflicts:` line matching the brief; an "
+    "unbound call contains exactly `criteria_binding_unavailable`. Neither "
+    "form states manuscript applicability. "
+    "7. The final nonblank output line is exactly "
     "`[CONTRACT-ACKNOWLEDGED]`. "
     "Do not send until every check holds."
 )

@@ -121,6 +121,7 @@ ARS 暴露若干 opt-in flag，全部預設 OFF；設定後僅影響當前 sessi
 | Flag | 起始版本 | 作用 | 參考 |
 |---|---|---|---|
 | `ARS_CROSS_MODEL` | v3.0 | 啟用跨模型驗證（見下節） | [§「跨模型驗證」](#跨模型驗證選用) |
+| `ARS_CROSS_MODEL_TRANSPORT=codex` | #630 | 僅讓引用完整性查驗使用 ChatGPT 訂閱；DA／審稿／判斷路徑仍須 API key | `shared/cross_model_verification.md` |
 | `ARS_SOCRATIC_READING_PROBE=1` | v3.5.1 | 啟用 `socratic_mentor_agent` 的讀書檢查 probe layer。僅 goal-oriented intent；使用者引用過具體論文時最多觸發一次；婉拒不留紀錄懲罰。 | `deep-research/agents/socratic_mentor_agent.md` |
 | `ARS_PASSPORT_RESET=1` | v3.6.3 | 把每個 FULL checkpoint 提升為 context 重置邊界。**emit** boundary entry 必須設此 flag；新 session 用 `resume_from_passport=<hash>` 續跑**不需要** flag。`systematic-review` 模式下 flag ON 時，每個 FULL checkpoint 一律強制重置。 | `academic-pipeline/references/passport_as_reset_boundary.md` |
 | `ARS_CROSS_MODEL_SAMPLE_INTERVAL` | v3.5.0 | 跨模型完整性抽查的取樣間隔（advisory） | `shared/cross_model_verification.md` |
@@ -179,13 +180,13 @@ ARS 使用繼承的 Claude session 模型即可完整運作。想要更高信心
 
 ```bash
 # Step 1: Set your API key (choose one or both)
-export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.5 / GPT-5.5 Pro
+export OPENAI_API_KEY="sk-your-key-here"        # For GPT-5.6 Sol / GPT-5.5
 export GOOGLE_AI_API_KEY="AIza-your-key-here"    # For Gemini 3.1 Pro
 
 # Step 2: Choose your cross-verification model
-export ARS_CROSS_MODEL="gpt-5.5"                # Recommended pair (gpt-5.5-pro = strongest reasoning, ~6x cost)
-# or: export ARS_CROSS_MODEL="gemini-3.1-pro-preview"  # Strong at factual verification
-# or: export ARS_CROSS_MODEL="gpt-5.6-sol"      # Frontier, provisional pending ARS validation (same rates as gpt-5.5)
+export ARS_CROSS_MODEL="gpt-5.6-sol"            # Current OpenAI flagship — provisional pending ARS validation (run scripts/cross_model_smoke_test.sh)
+# or: export ARS_CROSS_MODEL="gemini-3.1-pro-preview"  # Current Google flagship — validated, strong at factual verification
+# or: export ARS_CROSS_MODEL="gpt-5.5"          # Previous generation — validated (designated bakeoff baseline)
 
 # Optional: reasoning effort for OpenAI verifier calls (unset = provider default)
 # export ARS_CROSS_MODEL_REASONING_EFFORT="medium"
@@ -211,6 +212,31 @@ claude
 
 沒有設定 `ARS_CROSS_MODEL` 時，一切照舊運作。跨模型功能不會出現，也不會增加任何額外開銷。
 
+### ChatGPT 訂閱傳輸（僅限引用完整性）
+
+若 Codex CLI 0.147.0 以上已透過 ChatGPT 訂閱登入，引用完整性查驗可不使用
+OpenAI API key 而改走該訂閱。這不涵蓋魔鬼代言人、Reviewer 2、校準、re-review
+或檢查點判斷。
+
+```bash
+# Citation-integrity calls only. General DA/reviewer/judgment calls remain on API transport.
+export ARS_CROSS_MODEL_TRANSPORT="codex"
+# gpt-5.6-sol is validated for THIS transport (2026-08-19 codex-transport bakeoff,
+# superiority on recall + latency — audits/bakeoff-gpt-5-6-sol-codex-2026-08-19.md).
+# gpt-5.5 remains the validated bakeoff baseline alternative.
+export ARS_CROSS_MODEL="gpt-5.6-sol"
+
+python3 scripts/cross_model_codex_transport.py detect
+# The producer sends one closed codex_citation_request/1.0 object on stdin:
+printf '%s' "$CITATION_REQUEST_JSON" | scripts/cross_model_codex_verify.sh
+```
+
+偵測與執行都遵守自訂 `CODEX_HOME`，並要求訂閱狀態逐字為
+`Logged in using ChatGPT`；憑證絕不輸出。Adapter 使用僅含 auth 的暫時 home、
+空白工作根、read-only sandbox、停用本機工具，且接受的來源 URL 必須綁定到
+結構化搜尋結果。選用的 live smoke `scripts/cross_model_smoke_test_codex.sh` 會耗用
+訂閱／模型／網路資源，CI 永不執行。
+
 ---
 
 ## 安裝方式
@@ -223,6 +249,10 @@ Claude 會在 `<install-root>/<skill-name>/SKILL.md` 尋找 skills。這個 repo
 - `academic-pipeline`
 
 不要把整個 repository 當成單一巢狀 skill 資料夾安裝到 `.claude/skills/academic-research-skills/`。那會讓四個 `SKILL.md` 比 Claude 可發現的位置多埋一層。請參考 Anthropic 的 [Claude Code Skills documentation](https://code.claude.com/docs/en/skills)。
+
+以下各安裝方式的差異不只是方便程度：hooks、slash commands、tools allowlist、subagent
+編排、以及需要 Python 的檢查功能，在某些管道可用、在其他管道會降級或不存在。倚賴任何
+一項機制之前，請先查對照表：[CONTROL_AVAILABILITY.md](CONTROL_AVAILABILITY.md)（英文）。
 
 ### 方法零：Claude Code Plugin（v3.7.0+，Claude Code CLI / IDE 用戶推薦）
 

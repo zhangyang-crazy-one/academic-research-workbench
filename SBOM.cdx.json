@@ -73,7 +73,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a60fa9ee1ad7c27fab0739f5742600b6c631339dd4b24b9270e0176a88a9c016"
+          "content": "492f7677a3dfddeb985870e0741577362efa29528836e58867fda054a223efaf"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -121,60 +121,60 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1dba15e18d4b42e359a27ba44cb61365bec7b56b56ac02626f54a503141c2762"
+          "content": "cb1e0c5e24622f076f04802597d3d6d7a23a411ee23cca3ec47a6310c619003f"
         }
       ],
       "name": "skills/academic-research-suite",
       "type": "file",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/SKILL.md",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "405afd52bfec6b2552aac99675c347c69ec91acb8f3baa2dc65f1730359a0646"
+          "content": "6b451546dbbb045aef407b05e11870b042cc87f7633becaeae2cf7ffc0ab7995"
         }
       ],
       "name": "skills/academic-research-suite/SKILL.md",
       "type": "file",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/VERSION",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2f9d5846cd782c38fbe467cf86ec1401dd1b648c42ea4376b1e82c7fb62f4edf"
+          "content": "246a6387221ae9ed8e7b362df6959a816c0a2a1e8f98481beec0cecfe3976486"
         }
       ],
       "name": "skills/academic-research-suite/VERSION",
       "type": "file",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/ars",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9c93b590653013ccbc288bad2c19105306f50bb04cf93ab0f8bb6ccd7afc91b0"
+          "content": "4a0b45310bc9c9121e450442bc62ddaebd1456bd8142b99e4b117c7737af1de0"
         }
       ],
       "name": "skills/academic-research-suite/ars",
       "type": "file",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "artifact:skills/academic-research-suite/manifest.json",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "801ed4e6e49a84df2ac3ea1a107ae1cc2d59de9a5c0631ebd461e3bed43ec157"
+          "content": "b7687aa86fd4c7fc38c4210f9b1ea38b281b7495af959e56e1eb1f778675d8ac"
         }
       ],
       "name": "skills/academic-research-suite/manifest.json",
       "type": "file",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "artifact:vendor/mcp-manifest.json",
@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9a0636d4592a334f8b24e0b4f4e55c91a168308f86a51fb459678af0ad8986ce"
+          "content": "664ffd64f948f12540596791f8998897a02236d1d0f727bc96ca920a1bcb6e95"
         }
       ],
       "licenses": [
@@ -2988,7 +2988,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a401bec5f0bda52d256ee1792cbea8cf63ce6cbe02eb363ed4b790212d0c853e"
+          "content": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6"
         }
       ],
       "licenses": [
@@ -3000,7 +3000,7 @@
       ],
       "name": "academic-research-skills",
       "type": "library",
-      "version": "0.1.26"
+      "version": "0.1.27"
     },
     {
       "bom-ref": "source:experiment-agent",
@@ -3207,7 +3207,7 @@
       "type": "library",
       "version": "0.1.0"
     },
-    "timestamp": "2026-08-13T23:08:10Z",
+    "timestamp": "2026-08-30T11:55:15Z",
     "tools": [
       {
         "name": "uv",
@@ -3216,7 +3216,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:d65ccdc7-0000-4000-8000-40cc3185a6c4",
+  "serialNumber": "urn:uuid:e0e23637-0000-4000-8000-bb2c8c45f548",
   "specVersion": "1.5",
   "version": 1
 }

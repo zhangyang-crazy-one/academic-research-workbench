@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS = REPO_ROOT / "shared/contracts/passport"
 
 BIBLIOGRAPHY_AGENT_PATH = REPO_ROOT / "deep-research/agents/bibliography_agent.md"
-BIBLIOGRAPHY_AGENT_SHA256 = "1e4f4bed354fdacdf11d36cda4f69b135477af876f77f88e3a9104971d3d4933"  # #651 baseline: added DOI-keyed retraction-status production only; NO temporal/M6/M5 logic touched, ownership invariant intact. Previous accepted #548/#511 baseline recorded the Last Searched and omission-provenance additions under the same rule.
+BIBLIOGRAPHY_AGENT_SHA256 = "d6dc70e8775a188b3d51ea7ee43b5a58fc5013119086166516f05cf006b15ad5"  # #738 baseline: the /ars-mark-read example now supplies required --scope; NO temporal/M6/M5 logic touched, ownership invariant intact. Previous accepted #660/#651/#548/#511 additions remain covered by the same rule.
 
 
 def _validate(yaml_path: Path, schema_path: Path) -> list[str]:

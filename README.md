@@ -21,10 +21,13 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
-The bundled adapter is version `0.1.26`. It tracks
-`academic-research-skills@8cc7f8f4cccda721646d9df590b42721c93cba31`
-(ARS v3.19.0 plus post-tag `main` updates through 2026-08-09) and
+The bundled adapter is version `0.1.27`. It tracks
+`academic-research-skills@127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
+(ARS v3.21.1, released 2026-08-24) and
 `experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
+The ARW core remains compatible with Codex CLI 0.144.4; the optional contained
+subscription citation transport is capability-gated and requires Codex CLI
+0.147.0 or newer.
 The Codex overlay also provides a source-audited annual venue registry for the
 October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027 under
 `skills/academic-research-suite/codex/references/annual_venue_profiles.*`.
@@ -92,13 +95,14 @@ self-tests. Verify the complete vendored skill suite from the checkout root:
 ```bash
 (cd skills/academic-research-suite/ars && \
   uv run --frozen --all-groups --project ../../.. python -m pytest -q \
-    --ignore scripts/test_check_calibration_tiers.py)
+    --ignore scripts/test_check_calibration_tiers.py \
+    --ignore scripts/test_check_distribution_surface_claims.py)
 ```
 
-The ignored calibration-tier test is an upstream maintainer check that requires
-the deliberately non-vendored `.claude/CLAUDE.md`; the runtime manifest records
-that boundary. Its executable Codex equivalents remain covered by the adapter
-quality gates.
+The ignored calibration-tier and distribution-surface tests are upstream
+maintainer checks that require deliberately non-vendored `.claude/CLAUDE.md`
+and `.claude-plugin` inputs. The runtime manifest records both boundaries;
+their executable Codex equivalents remain covered by the adapter quality gates.
 
 Source verification is an explicit online preparation step and materializes
 ignored snapshots under `vendor/sources/`:

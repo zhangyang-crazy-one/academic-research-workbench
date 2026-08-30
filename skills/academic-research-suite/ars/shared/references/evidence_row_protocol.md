@@ -1,4 +1,4 @@
-# Shared Evidence-row Protocol (`evidence-row/1.0`)
+# Shared Evidence-row Protocol (`evidence-row/1.0`, `1.1`, and `1.2`)
 
 This protocol is the runtime-facing authority for evidence rows. The canonical
 field shape is `shared/contracts/evidence/evidence_row.schema.json`; cross-field
@@ -161,3 +161,100 @@ Consumers reference this protocol and the schema by pointer. They consume the
 machine row, not a copied enum or a parsed rendered table. They may not upgrade
 `unconfirmed_anchor`, `not_checked`, `source_missing`, `access_failed`,
 `retrieval_failed`, or `anchorless` into evidence-bearing states.
+
+## Version 1.1 (`evidence-row/1.1`) authority-profile advisory extension (#681)
+
+`shared/contracts/evidence/evidence_row_v1_1.schema.json` is a separate closed
+version for `surface=authority_profile_content_coverage`. It does not extend the
+Phase E row in place: `claim`, `verdict`, and `detail` are absent, and exact
+`requirement_pointer`, `authority_anchor_pointer`,
+`structured_expectations[]` pointer/digest, packet artifact, and advisory
+document-locator bindings replace them. Version 1.0 producer behavior, cache
+semantics, persisted bytes, and Phase E rendering remain unchanged. A page may
+contain only one evidence-row version/surface.
+
+The 1.1 builder is `build_advisory(...)`. It records only passage provenance;
+it never chooses an `advisory_coverage_status`, interprets a structured
+expectation, opens a packet path, retrieves content, or calls a model/API. The
+closed states are:
+
+- `agent_extracted`: a once-decoded, bounded quote is an exact substring of the
+  explicitly supplied artifact string;
+- `checked_no_match`: the explicit artifact string was checked, with no quote
+  or excerpt persisted; and
+- `not_checked`, `source_missing`, `access_failed`, and `retrieval_failed`:
+  explicit unperformed/empty states with null content binding and excerpt.
+
+Both source-bound states require replay from an explicit
+`artifact_id -> exact session-held content` map before rendering. V1.1 retains
+the same strict once-decode, 25-word/1,000-code-point bounds, exact UTF-8 content
+hash and byte-span rules, inert Markdown/HTML treatment, rights pairing, and
+human-read-ledger noninterference. It deliberately fixes `cache.status` to
+`not_used` and `cache.key_sha256` to null.
+For a positive row, `captured_at` is the explicit RFC 3339 timestamp carried by
+the closed advisory draft; it is not invented from the authority-context
+confirmation time or the runtime clock.
+
+V1.1 rows are nested only in the replay-bound
+`content-coverage-advisory/1.0` carrier defined by
+`shared/contracts/human_subjects/content_coverage_advisory.schema.json` and
+`shared/references/authority_content_coverage_advisory_protocol.md`. Their
+labels remain `LLM-ADVISORY`; neither an exact passage nor a checked-no-match
+state changes #667 deterministic status, readiness, authorization, or
+institutional acceptance, and neither is an adequacy or efficacy finding.
+
+## Version 1.2 cross-document consistency extension (#672)
+
+`shared/contracts/evidence/evidence_row_v1_2.schema.json` is a separate closed
+version whose only surface is `cross_document_consistency`. It is nested only in
+`cross-document-consistency-advisory/1.0` and is finalized and replayed by
+`scripts/build_cross_document_consistency_advisory.py`. It does not widen either
+earlier schema or enter the Phase E Integrity Report. The 1.0 and 1.1 schemas,
+`scripts/evidence_rows.py` behavior, cache semantics, rendering, and serialized
+identities remain unchanged; versions and surfaces cannot be mixed.
+
+One 1.2 row is the complete ordered evidence unit for one observation. The first
+three pair kinds have two logical-role slots. Manuscript/preregistration has
+exactly three: `manuscript_report`, `preregistration`, then the manuscript-bound
+`disclosure_scope`. Logical roles remain distinct even when several bind the
+same accepted manuscript bytes.
+
+Its states are `agent_extracted`, `checked_no_match`, `not_checked`,
+`source_missing`, `access_failed`, and `retrieval_failed`. A quote is exact-span
+replayed. `checked_no_match` binds an exact, non-empty, named source scope and
+only records the caller's semantic assertion that no counterpart was located;
+it does not prove semantic absence or scope completeness. Methods absence
+requires one quote plus a checked counterpart scope. An undisclosed
+preregistration deviation requires two quotes plus its third checked disclosure
+scope. Consumers cannot promote an unavailable or unperformed slot.
+
+V1.2 retains strict single percent decode with literal `+`, the 25-word and
+1,000-code-point ceilings, exact strict-UTF-8 hash/span replay, inert rendering,
+and paired sharing/rights values. It performs no cache lookup, model/API call,
+retrieval, normalization, or ambient-clock read. One canonical `row_sha256`
+binds the complete bilateral or trilateral row.
+
+The row supports only a caller-supplied `LLM-ADVISORY` / `UNMEASURED`
+observation. It creates no PASS/FAIL, score, gate, clean/agreement certificate,
+ClaimIntent, revision authority, or consent/protocol finding. See
+`shared/references/cross_document_consistency_advisory_protocol.md`.
+
+## Version 1.3 claim-standing advisory surface (#655)
+
+`shared/contracts/evidence/evidence_row_v1_3.schema.json` defines
+`evidence-row/1.3`, surface `claim_standing_advisory`: one provenance-only row
+per (probe claim, selected work-family candidate) in the #655 claim-standing
+probe. The row binds a bounded inspected-evidence excerpt to the exact source
+content hash and UTF-8 span, reuses the family's cache, content-handling, and
+row-hash blocks verbatim, and carries a `coverage` declaration
+(`abstract` / `session_held_full_text` / `metadata_only`) in place of 1.0's
+anchor: the two anchor-derived excerpt states do not exist on this surface.
+Cross-field conditionals bind retrieved states to a full payload and a bound
+source, non-retrieved states to null payloads and `contains_external_text:
+false`, the rights coupling in both directions, and metadata-only coverage to
+failure states with a null source hash. The row never carries a stance or
+verdict; an exact excerpt match never determines stance; abstract-level
+coverage is never rendered as verified full text. The consuming stance record
+(`claim-standing-stance-record/1.0`) references rows by id AND row hash. No
+runtime validator for this surface exists yet — the future stance runner owns
+replay verification before rendering.

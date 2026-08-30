@@ -5,11 +5,12 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
-- Upstream revision: `8cc7f8f4cccda721646d9df590b42721c93cba31`
-- Upstream suite version: `v3.19.0` plus post-tag `main` updates through 2026-08-09
-- Adapter version: `0.1.26`
+- Upstream revision: `127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
+- Upstream suite version: `v3.21.1` (2026-08-24)
+- Adapter version: `0.1.27`
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
+- Snapshot lint hygiene: Markdown-only fixes add explicit fence languages, normalize ordered-list/table syntax, escape a literal table pipe, and render two maintainer-local feedback identifiers as non-links because those private notes are intentionally absent from the release snapshot. These changes do not alter ARS workflow policy.
 - Codex path overlay: vendored workflow entrypoints use `WORKFLOW.md`; upstream checks that address Claude `SKILL.md` entrypoints are translated and their byte-level locks are repinned to the adapted files.
 - Venue overlay: the Codex adapter adds a source-audited annual profile registry for the October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027. Official venue-year rules remain normative; accepted-paper patterns are explicitly non-normative editorial evidence.
 - Evidence-row integration: the post-v3.19 Phase E shared evidence-row schema, validator, paginated renderer, and producer/consumer contracts are vendored from upstream. The Codex overlay preserves deterministic rendering and the explicitly degraded legacy-absence state without deriving evidence at display time.

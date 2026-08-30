@@ -46,7 +46,7 @@ Use the **machine slug** (`cn_tech_report`), not a free paraphrase (“Chinese T
 ## Family index
 
 | `venue_family` | Use when | Load subsection |
-|----------------|----------|-----------------|
+| ---------------- | ---------- | ----------------- |
 | `acl` | ACL / EMNLP / NAACL / EACL / *ACL workshops using ACLPUB style | § ACL |
 | `neurips` | NeurIPS | § NeurIPS |
 | `icml` | ICML | § ICML |
@@ -69,10 +69,12 @@ Apply these unless the family row explicitly overrides:
 - Figure/table captions are scholarly labels, not chat with the author.
 - Do not claim “meets ACL/IEEE/…” unless that family was declared and its checklist passes.
 
+<!-- markdownlint-disable MD060 -->
 | Shared layout gate | Hard expectation |
 |--------------------|------------------|
 | Float scheduling | Preserve callout/source order; do not place a barrier ahead of a pending starred two-column float. |
 | Render audit | Compile, render every page, and inspect a contact sheet; compiler-only validation cannot support a camera-ready claim. |
+<!-- markdownlint-enable MD060 -->
 
 Hyperlinks: ACL allows dark blue `#000099`. IEEE camera-ready often prefers black body links — follow the family row.
 
@@ -83,7 +85,7 @@ Hyperlinks: ACL allows dark blue `#000099`. IEEE camera-ready often prefers blac
 Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Template | Official ACL style files (`acl.sty` / ACLPUB), not a free-form `article` report skin |
 | Paper | A4; two-column; ~2.5 cm margins |
 | Length | Follow that year's CFP (typically long ~8 review / ~9 final content pages — **confirm year**) |
@@ -103,7 +105,7 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 ## NeurIPS (`neurips`)
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Template | Official NeurIPS LaTeX style for that year |
 | Layout | Style-file geometry (do not freestyle margins/fonts) |
 | Length | Main body page cap per that year's CFP (**confirm year**) |
@@ -120,7 +122,7 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 ## ICML (`icml`)
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Template | Official ICML style |
 | Paper size | **US Letter** (not A4) unless that year explicitly says otherwise — **confirm** |
 | Layout | Follow style file; do not invent dual templates |
@@ -135,7 +137,7 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 ## IEEE Transactions / journal (`ieee_trans`)
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Template | IEEE two-column Transactions/journal template |
 | Font | Times / Times New Roman; embed fonts |
 | Figure callouts | In text: `Fig.` + number; caption below figure |
@@ -151,7 +153,7 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 ## ACM (`acm`)
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Template | `acmart` (correct document class option for the venue) |
 | Metadata | CCS concepts / keywords when required |
 | Headings | Template styling; **black** body/heads unless template says otherwise |
@@ -167,7 +169,7 @@ Pinned to ACLPUB formatting norms (A4, two-column, Times Roman for Latin text).
 Aligned with GB/T 7713.2 presentation spirit + GB/T 7714 references (journal may add house rules).
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Paper | A4 typical |
 | Fonts | Headings 黑体-class; body 宋体-class (or CJK serif equivalent); **black** |
 | Terms | First use: 中文全称（English full name, ABBR）；later Chinese-first |
@@ -185,7 +187,7 @@ Aligned with GB/T 7713.2 presentation spirit + GB/T 7714 references (journal may
 For design/architecture baselines (like Tow-Towers reports), **not** a substitute for conference templates.
 
 | Item | Hard expectation |
-|------|------------------|
+| ------ | ------------------ |
 | Paper | A4; single-column OK |
 | Fonts | Unified CJK serif OK; Latin may share CJK serif to avoid mixed stacks; **black** heads/body |
 | Terms | Chinese-first glossing as above |
@@ -208,7 +210,7 @@ For design/architecture baselines (like Tow-Towers reports), **not** a substitut
 
 ## Formatter preflight (minimal)
 
-```
+```text
 IF Venue Family declared:
   load only that subsection
   apply hard table to TeX/PDF/DOCX choices

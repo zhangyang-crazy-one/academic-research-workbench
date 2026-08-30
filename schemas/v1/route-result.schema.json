@@ -23,7 +23,7 @@
       "type": "string"
     },
     "source_adapter_version": {
-      "const": "0.1.26",
+      "const": "0.1.27",
       "title": "Source Adapter Version",
       "type": "string"
     },
