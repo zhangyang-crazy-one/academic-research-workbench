@@ -101,6 +101,9 @@ EXPECTED_FILE_BASE_POST_PATCH_TREE = (
 EXPECTED_FILE_BASE_TEST_TREE = (
     "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
 )
+EXPECTED_PRE_VENDOR_RECEIPT_SHA256 = (
+    "6f6436d468cf06f400b7bb3a101b27ac072710ed8620c2c0785d6c648aa93a77"
+)
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
         "SBOM.cdx.json",
@@ -2882,12 +2885,48 @@ class _PreVendorNativeFileBaseGate(LockModel):
                 raise ValueError(
                     f"native_file_base_gate command #{index} started after it ended"
                 )
-        if not self.generated_notices:
+        expected_notice = (
+            "generated/THIRD_PARTY_NOTICES.md",
+            "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af",
+        )
+        observed_notices = tuple(
+            (item.path, item.sha256) for item in self.generated_notices
+        )
+        if observed_notices != (expected_notice,):
             raise ValueError(
-                "native_file_base_gate.generated_notices must be non-empty"
+                "native_file_base_gate.generated_notices must equal the "
+                "canonical producer notice"
             )
-        if not self.tools:
-            raise ValueError("native_file_base_gate.tools must be non-empty")
+        expected_tools = (
+            (
+                "scripts/gen-third-party-notices.sh",
+                "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9",
+            ),
+            (
+                "scripts/license-gate-check-npm.py",
+                "a0456bf6f6f40b562417fffefa53657586193fbc240c8fede1ffbbb18b050417",
+            ),
+            (
+                "scripts/license-gate-check.py",
+                "9f4fc12b961565779dc2d2320099915ae444bce68e6e9e8da92b7a71d99b175d",
+            ),
+            (
+                "scripts/license-gate.sh",
+                "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b",
+            ),
+            (
+                "scripts/license-policy.json",
+                "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a",
+            ),
+        )
+        observed_tools = tuple(
+            sorted((item.path, item.sha256) for item in self.tools)
+        )
+        if observed_tools != expected_tools:
+            raise ValueError(
+                "native_file_base_gate.tools must equal the canonical five-tool "
+                "producer inventory"
+            )
         return self
 
 
@@ -2905,10 +2944,24 @@ class _PreVendorToolIdentity(LockModel):
 
     @model_validator(mode="after")
     def _validate_nonempty(self) -> Self:
-        for field in ("git", "node", "npm", "python", "scancode"):
+        expected = {
+            "git": "git version 2.55.0",
+            "node": "v24.13.0",
+            "npm": "10.9.8",
+            "python": "3.11.10",
+            "scancode": (
+                "ScanCode version: 32.5.0\n"
+                "ScanCode Output Format version: 4.1.0\n"
+                "SPDX License list version: 3.27"
+            ),
+        }
+        for field, pinned in expected.items():
             value = getattr(self, field)
-            if not value:
-                raise ValueError(f"tool_identities.{field} must be a non-empty string")
+            if value != pinned:
+                raise ValueError(
+                    f"tool_identities.{field} must equal canonical producer "
+                    f"identity {pinned!r}"
+                )
         return self
 
 
@@ -3003,7 +3056,7 @@ class PreVendorReceipt(LockModel):
                 True,
             ),
             "file-base": (
-                None,
+                "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb",
                 True,
                 False,
                 False,
@@ -3408,6 +3461,14 @@ def _verify_evidence_pass(
         )
     surface = _evidence_surface_for(path)
     verify_evidence_contract(stage_root, payload, surface=surface)
+    if surface == "pre_vendor":
+        observed_sha256 = _digest(file_path)
+        if observed_sha256 != EXPECTED_PRE_VENDOR_RECEIPT_SHA256:
+            raise IntegrationLockError(
+                f"{label} pre-vendor receipt raw bytes drift from canonical "
+                f"reviewed evidence: observed={observed_sha256} "
+                f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
+            )
     return payload
 
 

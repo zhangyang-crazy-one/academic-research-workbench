@@ -258,15 +258,12 @@ def _install_audit_manifests(stage: Path) -> None:
                 f"share/arw/evidence/{native_surface}_{kind}.{ext}"
             )
     fixture_evidence = REPOSITORY_ROOT / "tests/fixtures/phase-01-evidence"
-    fixture_native_root = REPOSITORY_ROOT / "build/evidence/phase-01/native"
     synthetic_evidence_source: dict[str, Path] = {
-        "pre_vendor": fixture_evidence / "pre_vendor.json",
+        "pre_vendor": REPOSITORY_ROOT / "supply-chain/pre-vendor-receipt.json",
         "legal": fixture_evidence / "legal.json",
     }
-    # Native surface fixtures: verdict + command + sanitizer_verdict come
-    # from ``tests/fixtures/phase-01-evidence/native/<surface>/``; the
-    # status.txt and test-suite.sha256 byte-for-byte files come from the
-    # real ``build/evidence/phase-01/native/<surface>/`` tree.
+    # Native surface fixtures are committed byte-for-byte producer evidence;
+# tests never depend on mutable ignored build/evidence output.
     native_surface_dir: dict[str, str] = {
         "upstream": "upstream",
         "asan_ubsan": "asan-ubsan",
@@ -274,10 +271,6 @@ def _install_audit_manifests(stage: Path) -> None:
     }
     for native_surface, source_dir in native_surface_dir.items():
         fixture_dir = fixture_evidence / "native" / source_dir
-        live_dir = fixture_native_root / source_dir
-        synthetic_evidence_source[f"{native_surface}_verdict"] = (
-            fixture_dir / "command.json"
-        )  # unused; verdict is below
         synthetic_evidence_source[f"{native_surface}_verdict"] = (
             fixture_evidence / f"{native_surface}.json"
         )
@@ -290,10 +283,9 @@ def _install_audit_manifests(stage: Path) -> None:
                 if ext == "json"
                 else f"{kind}.txt"
             )
-            source = fixture_dir / filename
-            if not source.is_file():
-                source = live_dir / filename
-            synthetic_evidence_source[f"{native_surface}_{kind}"] = source
+            synthetic_evidence_source[f"{native_surface}_{kind}"] = (
+                fixture_dir / filename
+            )
 
     evidence_digests: dict[str, str] = {}
     synthetic_evidence = synthetic_evidence_relative
@@ -3690,19 +3682,11 @@ def test_pre_vendor_created_at_leap_year_accepts_at_model_level(
     target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
     payload = json.loads(target.read_text(encoding="utf-8"))
     payload["created_at"] = "2024-02-29T12:00:00Z"
-    target.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    receipt = integration_lock_module.PreVendorReceipt.model_validate(
+        payload, strict=True
     )
-    _rebind_one_evidence(
-        integration_fixture, "share/arw/evidence/pre_vendor.json", lambda p: None
-    )
-    # The model validator must accept the leap year; downstream manifest
-    # cross-binding still passes because pre_vendor.components were not
-    # touched in this test.  A clean build is the GREEN signal.
-    lock = _build(integration_fixture)
-    write_integration_lock(integration_fixture["lock"], lock)
-    receipt = _verify(integration_fixture, lock)
-    assert receipt.technical_qualification == "PASS"
+    assert receipt.created_at == "2024-02-29T12:00:00Z"
+    assert receipt.derive_qualification() == "PASS"
 
 
 def test_pre_vendor_native_command_nonzero_status_rejected(
@@ -3845,5 +3829,77 @@ def test_pre_vendor_legal_inputs_match_closed_manifest_inventory(
     )
     with pytest.raises(
         IntegrationLockError, match="legal_inputs drift from the exact closed"
+    ):
+        _build(integration_fixture)
+
+
+@pytest.mark.parametrize("field", ["generated_notices", "tools"])
+def test_pre_vendor_native_gate_inventory_is_canonical(
+    integration_fixture: dict[str, Path], field: str
+) -> None:
+    """RED: dummy notice/tool rows cannot replace producer inventory."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        gate = cast(dict[str, object], payload["native_file_base_gate"])
+        gate[field] = [{"path": "DUMMY", "sha256": "0" * 64}]
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(
+        IntegrationLockError, match="generated_notices|five-tool producer inventory"
+    ):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_raw_evidence_requires_canonical_receipt_bytes(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: one typed raw-evidence row cannot replace retained evidence."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        payload["raw_evidence"] = [{"path": "DUMMY", "sha256": "0" * 64}]
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(
+        IntegrationLockError, match="raw bytes drift from canonical reviewed evidence"
+    ):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_file_base_license_digest_is_pinned(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: file-base MIT identity must equal its bound LICENSE digest."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        rows = cast(list[dict[str, object]], payload["component_licenses"])
+        for row in rows:
+            if row["component"] == "file-base":
+                row["sha256"] = "0" * 64
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(IntegrationLockError, match="sha256 drift for file-base"):
+        _build(integration_fixture)
+
+
+def test_pre_vendor_tool_identities_are_canonical(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: arbitrary nonempty tool versions cannot become provenance."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        identities = cast(dict[str, object], payload["tool_identities"])
+        identities["git"] = "unknown"
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(
+        IntegrationLockError, match="tool_identities.git must equal canonical"
     ):
         _build(integration_fixture)

@@ -541,10 +541,10 @@ copy_file ".file-base/build-evidence.json"
 # ``share/arw/file-contracts.h`` is NOT copied from ``generated/``; the
 # producer regenerates it FROM the staged checked schemas below so the
 # embedded ``ARW_FILES_CONTRACT_SHA256`` reflects the staged schema digests.
-# Stage each phase-01 evidence surface under ``share/arw/evidence`` so the
-# installed verifier can recompute every evidence digestPath against live
-# bytes without depending on the original ``build/evidence/phase-01`` tree.
-copy_as "build/evidence/phase-01/pre-vendor-license/receipt.json" "share/arw/evidence/pre_vendor.json"
+# Stage the canonical, committed pre-vendor receipt. Its raw bytes are pinned
+# by the wheel-bound verifier, so mutable build/evidence output cannot redefine
+# qualification after review. Other phase-01 surfaces remain retained evidence.
+copy_as "supply-chain/pre-vendor-receipt.json" "share/arw/evidence/pre_vendor.json"
 copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
 # The three native surfaces carry a 5-file bundle (verdict + command +
 # sanitizer_verdict + test_suite_sha256 + status) so the verifier can
@@ -775,6 +775,7 @@ from arw.schema_registry import (  # noqa: E402
 from arw.integration_lock import (  # noqa: E402
     _verify_native_surface_bundle,
     IntegrationLockError,
+    EXPECTED_PRE_VENDOR_RECEIPT_SHA256,
     NATIVE_EVIDENCE_KINDS,
     NATIVE_SURFACES,
     NATIVE_VERDICT_KIND,
@@ -841,7 +842,17 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
             f"staged evidence surface {label} ({basename}) fails the "
             f"shared verifier contract: {error}"
         )
-    return {"path": staged_relative, "sha256": digest(staged_path)}
+    staged_digest = digest(staged_path)
+    if (
+        surface == "pre_vendor"
+        and staged_digest != EXPECTED_PRE_VENDOR_RECEIPT_SHA256
+    ):
+        raise SystemExit(
+            "staged pre-vendor receipt raw bytes drift from canonical reviewed "
+            f"evidence: observed={staged_digest} "
+            f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
+        )
+    return {"path": staged_relative, "sha256": staged_digest}
 
 
 manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
