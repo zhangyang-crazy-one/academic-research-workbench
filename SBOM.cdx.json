@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1ef564d7131b087891f363032dccc7c92aa3096484b127d2c25947800e10e247"
+          "content": "1dba15e18d4b42e359a27ba44cb61365bec7b56b56ac02626f54a503141c2762"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -157,7 +157,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dc021dbca00df0459a6282e18276a0295c47b2432aaffc6462734ae8a503e903"
+          "content": "9c93b590653013ccbc288bad2c19105306f50bb04cf93ab0f8bb6ccd7afc91b0"
         }
       ],
       "name": "skills/academic-research-suite/ars",
