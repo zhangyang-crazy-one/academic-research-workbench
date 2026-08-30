@@ -3213,7 +3213,11 @@ def _verify_legal_row_live_bytes(
 
 
 def _bind_pre_vendor_components_to_manifest(
-    stage_root: Path, components: Sequence[_PreVendorComponent], *, label: str
+    stage_root: Path,
+    components: Sequence[_PreVendorComponent],
+    legal_inputs: Sequence[_PreVendorLegalInput],
+    *,
+    label: str,
 ) -> None:
     """Cross-check PreVendorReceipt components against the staged vendor manifest.
 
@@ -3268,6 +3272,50 @@ def _bind_pre_vendor_components_to_manifest(
             f"{sorted(expected_ids)}; got {sorted(seen_ids)}"
         )
 
+    expected_legal_rows: list[tuple[str, str, str, str]] = []
+    for component_id in sorted(expected_ids):
+        manifest_row = manifest_by_id[component_id]
+        manifest_legal = manifest_row.get("legal_inputs")
+        if not isinstance(manifest_legal, list):
+            raise IntegrationLockError(
+                f"{label} staged manifest component {component_id} has no "
+                "legal_inputs list"
+            )
+        prefix = f"vendor/sources/{component_id}/"
+        for entry in manifest_legal:
+            if not isinstance(entry, dict):
+                raise IntegrationLockError(
+                    f"{label} manifest legal input for {component_id} "
+                    "must be an object"
+                )
+            kind = entry.get("kind")
+            path = entry.get("path")
+            sha256 = entry.get("sha256")
+            if (
+                not isinstance(kind, str)
+                or not isinstance(path, str)
+                or not path.startswith(prefix)
+                or not isinstance(sha256, str)
+            ):
+                raise IntegrationLockError(
+                    f"{label} manifest legal input for {component_id} is malformed"
+                )
+            expected_legal_rows.append(
+                (component_id, kind, path.removeprefix(prefix), sha256)
+            )
+    observed_legal_rows = [
+        (item.component, item.kind, item.path, item.sha256)
+        for item in legal_inputs
+    ]
+    if (
+        len(set(observed_legal_rows)) != len(observed_legal_rows)
+        or sorted(observed_legal_rows) != sorted(expected_legal_rows)
+    ):
+        raise IntegrationLockError(
+            f"{label} pre-vendor legal_inputs drift from the exact closed "
+            "staged source-manifest inventory"
+        )
+
 
 def verify_evidence_contract(
     stage_root: Path, payload: dict[str, object], *, surface: str
@@ -3307,7 +3355,10 @@ def verify_evidence_contract(
         pre_vendor = cast(PreVendorReceipt, validated)
         try:
             _bind_pre_vendor_components_to_manifest(
-                stage_root, pre_vendor.components, label=label
+                stage_root,
+                pre_vendor.components,
+                pre_vendor.legal_inputs,
+                label=label,
             )
         except IntegrationLockError as error:
             raise IntegrationLockError(

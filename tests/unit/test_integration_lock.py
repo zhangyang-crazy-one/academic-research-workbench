@@ -620,6 +620,17 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             }
         ],
     }
+    repository_components = {
+        item["id"]: item for item in repository_manifest["components"]
+    }
+    fixture_components = cast(
+        list[dict[str, object]], source_manifest["components"]
+    )
+    for component in fixture_components:
+        component_id = cast(str, component["id"])
+        component["legal_inputs"] = repository_components[component_id][
+            "legal_inputs"
+        ]
     _json(stage / "vendor/source-manifest.json", source_manifest)
     _json(stage / "SBOM.cdx.json", {"components": []})
     _write(stage / "THIRD_PARTY_NOTICES.md", "fixture notices\n")
@@ -3803,5 +3814,36 @@ def test_pre_vendor_absence_observations_are_closed_and_ordered(
     )
     with pytest.raises(
         IntegrationLockError, match="vendor_sources_observations|phase|exists"
+    ):
+        _build(integration_fixture)
+
+
+@pytest.mark.parametrize("mode", ["dummy", "duplicate", "missing"])
+def test_pre_vendor_legal_inputs_match_closed_manifest_inventory(
+    integration_fixture: dict[str, Path], mode: str
+) -> None:
+    """RED: a typed subset, duplicate, or omission cannot replace inventory."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        legal_inputs = cast(list[dict[str, object]], payload["legal_inputs"])
+        if mode == "dummy":
+            payload["legal_inputs"] = [
+                {
+                    "component": "academic-research-skills",
+                    "kind": "license",
+                    "path": "DUMMY",
+                    "sha256": "0" * 64,
+                }
+            ]
+        elif mode == "duplicate":
+            legal_inputs.append(dict(legal_inputs[0]))
+        else:
+            legal_inputs.pop()
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(
+        IntegrationLockError, match="legal_inputs drift from the exact closed"
     ):
         _build(integration_fixture)
