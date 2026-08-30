@@ -2913,7 +2913,17 @@ class _PreVendorToolIdentity(LockModel):
 
 
 class _PreVendorVendorObservation(LockModel):
-    model_config = ConfigDict(extra="allow")
+    phase: Literal[
+        "before",
+        "during:fetch-academic-research-skills",
+        "during:fetch-experiment-agent",
+        "during:fetch-file-base",
+        "during:native-gate-selftest",
+        "during:native-gate",
+        "during:notice-generator",
+        "after",
+    ]
+    exists: Literal[False]
 
 
 class PreVendorReceipt(LockModel):
@@ -2959,9 +2969,23 @@ class PreVendorReceipt(LockModel):
             raise ValueError("pre-vendor receipt legal_inputs must be non-empty")
         if not self.raw_evidence:
             raise ValueError("pre-vendor receipt raw_evidence must be non-empty")
-        if not self.vendor_sources_observations:
+        expected_observation_phases = (
+            "before",
+            "during:fetch-academic-research-skills",
+            "during:fetch-experiment-agent",
+            "during:fetch-file-base",
+            "during:native-gate-selftest",
+            "during:native-gate",
+            "during:notice-generator",
+            "after",
+        )
+        observed_phases = tuple(
+            item.phase for item in self.vendor_sources_observations
+        )
+        if observed_phases != expected_observation_phases:
             raise ValueError(
-                "pre-vendor receipt vendor_sources_observations must be non-empty"
+                "pre-vendor receipt vendor_sources_observations must equal the "
+                "closed ordered producer phase sequence"
             )
         # Pin the two CC-BY-NC-4.0 license digests; file-base can be any
         # valid 64-hex sha256 because the producer does not pin it.

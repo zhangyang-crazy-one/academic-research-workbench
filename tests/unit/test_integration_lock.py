@@ -3776,3 +3776,32 @@ def test_sanitizer_verdict_suite_must_match_current_surface(
         IntegrationLockError, match="suite must equal current surface 'tsan'"
     ):
         _build(integration_fixture)
+
+
+@pytest.mark.parametrize(
+    "observations",
+    [
+        [{}],
+        [{"phase": "before", "exists": False}],
+        [{"phase": "before", "exists": True}],
+        [
+            {"phase": "after", "exists": False},
+            {"phase": "before", "exists": False},
+        ],
+    ],
+)
+def test_pre_vendor_absence_observations_are_closed_and_ordered(
+    integration_fixture: dict[str, Path], observations: list[dict[str, object]]
+) -> None:
+    """RED: fieldless, affirmative or reordered absence proofs reject."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        payload["vendor_sources_observations"] = observations
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(
+        IntegrationLockError, match="vendor_sources_observations|phase|exists"
+    ):
+        _build(integration_fixture)
