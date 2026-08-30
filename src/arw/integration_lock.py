@@ -2737,8 +2737,7 @@ def _verify_native_surface_bundle(
         sanitizer_payload = strict_json_loads(sanitizer_path.read_bytes())
     except (OSError, UnicodeError, ValueError) as error:
         raise IntegrationLockError(
-            f"{label} sanitizer_verdict file is not strict unambiguous JSON: "
-            f"{error}"
+            f"{label} sanitizer_verdict file is not strict unambiguous JSON: {error}"
         ) from error
     try:
         sanitizer = NativeSanitizerVerdict.model_validate(
@@ -2873,9 +2872,7 @@ class _PreVendorNativeFileBaseGate(LockModel):
         if (
             len(notice_argv) != 2
             or notice_argv[0] != "./scripts/gen-third-party-notices.sh"
-            or not notice_argv[1].endswith(
-                "/generated/THIRD_PARTY_NOTICES.md"
-            )
+            or not notice_argv[1].endswith("/generated/THIRD_PARTY_NOTICES.md")
         ):
             raise ValueError(
                 "native_file_base_gate command #3 argv must invoke the notice "
@@ -2951,9 +2948,7 @@ class _PreVendorNativeFileBaseGate(LockModel):
                 "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a",
             ),
         )
-        observed_tools = tuple(
-            sorted((item.path, item.sha256) for item in self.tools)
-        )
+        observed_tools = tuple(sorted((item.path, item.sha256) for item in self.tools))
         if observed_tools != expected_tools:
             raise ValueError(
                 "native_file_base_gate.tools must equal the canonical five-tool "
@@ -3064,9 +3059,7 @@ class PreVendorReceipt(LockModel):
             "during:notice-generator",
             "after",
         )
-        observed_phases = tuple(
-            item.phase for item in self.vendor_sources_observations
-        )
+        observed_phases = tuple(item.phase for item in self.vendor_sources_observations)
         if observed_phases != expected_observation_phases:
             raise ValueError(
                 "pre-vendor receipt vendor_sources_observations must equal the "
@@ -3370,8 +3363,7 @@ def _bind_pre_vendor_components_to_manifest(
         for entry in manifest_legal:
             if not isinstance(entry, dict):
                 raise IntegrationLockError(
-                    f"{label} manifest legal input for {component_id} "
-                    "must be an object"
+                    f"{label} manifest legal input for {component_id} must be an object"
                 )
             kind = entry.get("kind")
             path = entry.get("path")
@@ -3389,13 +3381,11 @@ def _bind_pre_vendor_components_to_manifest(
                 (component_id, kind, path.removeprefix(prefix), sha256)
             )
     observed_legal_rows = [
-        (item.component, item.kind, item.path, item.sha256)
-        for item in legal_inputs
+        (item.component, item.kind, item.path, item.sha256) for item in legal_inputs
     ]
-    if (
-        len(set(observed_legal_rows)) != len(observed_legal_rows)
-        or sorted(observed_legal_rows) != sorted(expected_legal_rows)
-    ):
+    if len(set(observed_legal_rows)) != len(observed_legal_rows) or sorted(
+        observed_legal_rows
+    ) != sorted(expected_legal_rows):
         raise IntegrationLockError(
             f"{label} pre-vendor legal_inputs drift from the exact closed "
             "staged source-manifest inventory"
@@ -3485,8 +3475,7 @@ def _verify_evidence_pass(
         payload = strict_json_loads(file_path.read_bytes())
     except (OSError, UnicodeError, ValueError) as error:
         raise IntegrationLockError(
-            f"{label} evidence file is not strict unambiguous JSON: "
-            f"{path}: {error}"
+            f"{label} evidence file is not strict unambiguous JSON: {path}: {error}"
         ) from error
     if not isinstance(payload, dict):
         raise IntegrationLockError(

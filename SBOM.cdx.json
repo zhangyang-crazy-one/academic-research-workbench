@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7fbf960a80b1532558802c7f0d3a5488633d9a440126c14a12af347db6f1eb49"
+          "content": "664ffd64f948f12540596791f8998897a02236d1d0f727bc96ca920a1bcb6e95"
         }
       ],
       "licenses": [
@@ -3207,7 +3207,7 @@
       "type": "library",
       "version": "0.1.0"
     },
-    "timestamp": "2026-08-13T23:08:10Z",
+    "timestamp": "2026-08-30T11:55:15Z",
     "tools": [
       {
         "name": "uv",
@@ -3216,7 +3216,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:d65ccdc7-0000-4000-8000-40cc3185a6c4",
+  "serialNumber": "urn:uuid:e0e23637-0000-4000-8000-bb2c8c45f548",
   "specVersion": "1.5",
   "version": 1
 }
