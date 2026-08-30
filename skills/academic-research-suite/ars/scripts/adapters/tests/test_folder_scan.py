@@ -1,19 +1,40 @@
+# pyright: reportMissingImports=false
 """Tests for scripts/adapters/folder_scan.py."""
-from pathlib import Path
+
+import importlib.util
+import json
+import os
+import re
 import subprocess
 import sys
+from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = REPO_ROOT / "scripts/adapters/folder_scan.py"
 FIXTURE_DIR = REPO_ROOT / "scripts/adapters/examples/folder_scan/input_fixture"
-EXPECTED_PASSPORT = REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_passport.yaml"
-EXPECTED_REJECTION = REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_rejection_log.yaml"
+EXPECTED_PASSPORT = (
+    REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_passport.yaml"
+)
+EXPECTED_REJECTION = (
+    REPO_ROOT / "scripts/adapters/examples/folder_scan/expected_rejection_log.yaml"
+)
 
 # folder_scan emits machine-dependent absolute paths in source_pointer and
 # input_source; widen clean_timestamps for these tests only. T8/T9 must NOT
 # widen — their logical URIs are deterministic and broken pointers should
 # fail the golden test.
 _FOLDER_SCAN_EXTRA = {"source_pointer", "input_source"}
+
+
+def _load_json(path: Path):
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise AssertionError(f"invalid JSON fixture: {path}") from error
+    assert isinstance(document, dict)
+    return document
 
 
 def _run(*args, cwd=None):
@@ -25,17 +46,324 @@ def _run(*args, cwd=None):
     )
 
 
+def _load_adapter_module():
+    spec = importlib.util.spec_from_file_location("folder_scan_adapter", ADAPTER)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_adapter_exists():
     assert ADAPTER.exists()
+
+
+def test_ascii_hyphenated_family_preserves_legacy_citation_key(tmp_path, load_yaml):
+    source = tmp_path / "ascii-legacy"
+    source.mkdir()
+    (source / "Smith-Jones_2024_Paper.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entry = load_yaml(passport_out)["literature_corpus"][0]
+    assert entry["authors"] == [{"family": "Smith"}]
+    assert entry["citation_key"] == "smith2024"
+
+
+def test_cjk_family_year_filename_is_accepted_with_original_display_text(
+    tmp_path, load_yaml
+):
+    source = tmp_path / "cjk"
+    source.mkdir()
+    (source / "中文檔名_2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert entries, "CJK family/year filename was rejected instead of accepted"
+    entry = entries[0]
+    assert entry["authors"] == [{"family": "中文檔名"}]
+    assert entry["title"] == "中文檔名_2024"
+    assert entry["year"] == 2024
+    assert entry["citation_key"].startswith("ref2024")
+
+    import jsonschema
+
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/literature_corpus_entry.schema.json"
+    )
+    jsonschema.validate(entry, schema)
+
+
+def test_mixed_cjk_latin_family_year_filename_is_accepted(tmp_path, load_yaml):
+    """Codex comment 3879630196: the legacy Latin filename fallback must
+    accept mixed-script family tokens like ``张Chen2024.pdf`` instead of
+    silently rejecting them. The whole ``张Chen`` run is a valid Unicode
+    family per ``_is_unicode_family`` and the rest of the filename
+    grammar is unchanged."""
+    source = tmp_path / "mixed"
+    source.mkdir()
+    (source / "张Chen2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert len(entries) == 1, "mixed-script family/year filename was rejected"
+    entry = entries[0]
+    assert entry["authors"] == [{"family": "张Chen"}]
+    assert entry["year"] == 2024
+    assert entry["title"] == "张Chen2024"
+    assert entry["citation_key"].startswith("ref2024")
+    import jsonschema
+
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/literature_corpus_entry.schema.json"
+    )
+    jsonschema.validate(entry, schema)
+
+
+def test_lowercase_ascii_legacy_rejection_preserved(tmp_path, load_yaml):
+    """Regression: the Unicode whole-token fallback must only run for
+    non-ASCII inputs, so lowercase-ASCII names like ``chen2024.pdf``
+    stay rejected (as at HEAD) instead of being accepted via
+    ``_is_unicode_family`` which would otherwise treat the all-letter
+    ASCII run as a valid family."""
+    source = tmp_path / "lower"
+    source.mkdir()
+    for name in ("chen2024.pdf", "smith2024.pdf", "wang2023.pdf"):
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(passport_out)
+    rejection = load_yaml(rejection_out)
+    assert passport["literature_corpus"] == [], (
+        "lowercase-ASCII filenames must not be accepted"
+    )
+    rejected_sources = {row["source"] for row in rejection["rejected"]}
+    assert rejected_sources == {"chen2024.pdf", "smith2024.pdf", "wang2023.pdf"}
+    for row in rejection["rejected"]:
+        assert row["reason"] == "authors_unparseable"
+
+
+def test_emoji_after_latin_family_is_rejected_not_partially_accepted(
+    tmp_path, load_yaml
+):
+    """Codex comment 3879630196: the legacy Latin filename fallback must
+    REJECT ``Chen🙂2024.pdf`` instead of accepting it with the emoji
+    silently truncated out of the family token. The whole-token
+    ``_is_unicode_family`` guard means any unsafe code point (here
+    emoji, category ``So``) makes the entire filename unparseable, with
+    the reason ``authors_unparseable`` so the user can see why."""
+    source = tmp_path / "emoji"
+    source.mkdir()
+    (source / "Chen🙂2024.pdf").touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(passport_out)
+    rejection = load_yaml(rejection_out)
+    assert passport["literature_corpus"] == [], (
+        "Chen🙂2024.pdf must not be partially accepted"
+    )
+    assert len(rejection["rejected"]) == 1
+    row = rejection["rejected"][0]
+    assert row["source"] == "Chen🙂2024.pdf"
+    assert row["reason"] == "authors_unparseable"
+    # The original emoji-bearing string is preserved verbatim in the
+    # diagnostic so the operator can see what was rejected.
+    assert "🙂" in row["raw"]
+
+
+def test_unicode_family_rejects_control_separator_and_emoji_only_tokens() -> None:
+    adapter = _load_adapter_module()
+    assert hasattr(adapter, "_is_unicode_family"), (
+        "the explicit Unicode family-token security grammar is missing"
+    )
+    assert adapter._is_unicode_family("张三")
+    assert adapter._is_unicode_family("O’Neil")
+    for unsafe in (
+        "",
+        "张\u200b三",
+        "张 三",
+        "🙂",
+        "张🙂",
+        "张\ue000三",
+        "张\ud800三",
+    ):
+        assert not adapter._is_unicode_family(unsafe)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "张_2024_\u202eevil.pdf",
+        "Chen2024_\u202eevil.pdf",
+        "张_2024_\u200bhidden.pdf",
+        "Chen2024_\ufeffhidden.pdf",
+        "张_2024_\u202dleft-to-right.pdf",
+        "Chen2024_line\nbreak.pdf",
+    ],
+)
+def test_filename_title_rejects_unicode_control_and_format_characters(
+    name: str,
+) -> None:
+    """Human-facing titles must not retain bidi/zero-width controls."""
+
+    adapter = _load_adapter_module()
+    assert adapter.parse_filename(name) is None
+
+
+def test_unicode_citekey_nfkc_equivalence_distinction_and_collision_suffixes() -> None:
+    adapter = _load_adapter_module()
+    composed = adapter._unicode_citation_key_base(
+        family="é", year=2024, title="é_2024_étude"
+    )
+    decomposed = adapter._unicode_citation_key_base(
+        family="e\u0301", year=2024, title="e\u0301_2024_e\u0301tude"
+    )
+    assert composed == decomposed
+    assert composed != adapter._unicode_citation_key_base(
+        family="李", year=2024, title="李_2024_研究"
+    )
+    assert re.fullmatch(r"[A-Za-z][A-Za-z0-9_:-]*", composed)
+
+    existing = set()
+    assert adapter._unique_ascii_citation_key(composed, existing) == composed
+    assert adapter._unique_ascii_citation_key(composed, existing) == f"{composed}a"
+
+
+def test_documented_unicode_separators_and_malformed_families(tmp_path, load_yaml):
+    source = tmp_path / "unicode"
+    source.mkdir()
+    accepted = (
+        "张_2024_研究.pdf",
+        "李-2024-研究.pdf",
+        "欧阳.2023.研究.pdf",
+        "赵 2022 研究.pdf",
+    )
+    rejected = (
+        "张\u200b三_2024_研究.pdf",
+        "🙂_2024_研究.pdf",
+        "张🙂_2024_研究.pdf",
+        "张_研究.pdf",
+    )
+    for name in accepted + rejected:
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    assert {entry["title"] for entry in entries} == {
+        Path(name).stem for name in accepted
+    }
+    assert {entry["authors"][0]["family"] for entry in entries} == {
+        "张",
+        "李",
+        "欧阳",
+        "赵",
+    }
+    keys = [entry["citation_key"] for entry in entries]
+    assert len(keys) == len(set(keys)) == 4
+    assert all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_:-]*", key) for key in keys)
+    rejected_rows = load_yaml(rejection_out)["rejected"]
+    assert {row["source"] for row in rejected_rows} == set(rejected)
+
+
+def test_nfkc_equivalent_filenames_share_base_without_losing_display_text(
+    tmp_path, load_yaml
+):
+    source = tmp_path / "nfkc"
+    source.mkdir()
+    names = ("é_2024_étude.pdf", "e\u0301_2024_e\u0301tude.pdf")
+    for name in names:
+        (source / name).touch()
+    passport_out = tmp_path / "passport.yaml"
+    rejection_out = tmp_path / "rejection.yaml"
+    result = _run(
+        "--input",
+        str(source),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
+    )
+    assert result.returncode == 0, result.stderr
+    entries = load_yaml(passport_out)["literature_corpus"]
+    adapter = _load_adapter_module()
+    base = adapter._unicode_citation_key_base(
+        family="é", year=2024, title="é_2024_étude"
+    )
+    assert {entry["citation_key"] for entry in entries} == {base, f"{base}a"}
+    assert {entry["authors"][0]["family"] for entry in entries} == {
+        "é",
+        "e\u0301",
+    }
+    assert {entry["title"] for entry in entries} == {
+        "é_2024_étude",
+        "e\u0301_2024_e\u0301tude",
+    }
 
 
 def test_happy_path(tmp_path, load_yaml, clean_timestamps):
     passport_out = tmp_path / "passport.yaml"
     rejection_out = tmp_path / "rejection_log.yaml"
     r = _run(
-        "--input", str(FIXTURE_DIR),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rejection_out),
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
     )
     assert r.returncode == 0, r.stderr
 
@@ -58,12 +386,16 @@ def test_empty_folder_emits_empty_passport(tmp_path):
     passport_out = tmp_path / "p.yaml"
     rej_out = tmp_path / "r.yaml"
     r = _run(
-        "--input", str(empty),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rej_out),
+        "--input",
+        str(empty),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rej_out),
     )
     assert r.returncode == 0
     import yaml
+
     with passport_out.open() as f:
         doc = yaml.safe_load(f)
     assert doc == {"literature_corpus": []}
@@ -71,9 +403,12 @@ def test_empty_folder_emits_empty_passport(tmp_path):
 
 def test_missing_input_dir_fails_loud(tmp_path):
     r = _run(
-        "--input", str(tmp_path / "does-not-exist"),
-        "--passport", str(tmp_path / "p.yaml"),
-        "--rejection-log", str(tmp_path / "r.yaml"),
+        "--input",
+        str(tmp_path / "does-not-exist"),
+        "--passport",
+        str(tmp_path / "p.yaml"),
+        "--rejection-log",
+        str(tmp_path / "r.yaml"),
     )
     assert r.returncode == 1
     assert "not found" in r.stderr.lower() or "exist" in r.stderr.lower()
@@ -84,8 +419,22 @@ def test_deterministic_output(tmp_path, load_yaml, clean_timestamps):
     r1_log = tmp_path / "r1.yaml"
     p2 = tmp_path / "p2.yaml"
     r2_log = tmp_path / "r2.yaml"
-    _run("--input", str(FIXTURE_DIR), "--passport", str(p1), "--rejection-log", str(r1_log))
-    _run("--input", str(FIXTURE_DIR), "--passport", str(p2), "--rejection-log", str(r2_log))
+    _run(
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(p1),
+        "--rejection-log",
+        str(r1_log),
+    )
+    _run(
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(p2),
+        "--rejection-log",
+        str(r2_log),
+    )
     assert clean_timestamps(load_yaml(p1), _FOLDER_SCAN_EXTRA) == clean_timestamps(
         load_yaml(p2), _FOLDER_SCAN_EXTRA
     )
@@ -104,12 +453,16 @@ def test_duplicate_collision_handled(tmp_path):
     passport_out = tmp_path / "p.yaml"
     rej_out = tmp_path / "r.yaml"
     r = _run(
-        "--input", str(dup_dir),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rej_out),
+        "--input",
+        str(dup_dir),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rej_out),
     )
     assert r.returncode == 0
     import yaml
+
     with passport_out.open() as f:
         doc = yaml.safe_load(f)
     keys = {e["citation_key"] for e in doc["literature_corpus"]}
@@ -127,6 +480,7 @@ def test_filename_with_spaces_produces_valid_uri(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     if doc["literature_corpus"]:
@@ -146,6 +500,7 @@ def test_chen2024_no_tail_uses_empty_title_hint(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     assert len(doc["literature_corpus"]) == 1
@@ -168,9 +523,12 @@ def test_mixed_valid_invalid_in_nested_tree(tmp_path):
     (root / "sub2" / "draft.pdf").touch()  # same basename, different subdir
     p_out = tmp_path / "p.yaml"
     r_out = tmp_path / "r.yaml"
-    r = _run("--input", str(root), "--passport", str(p_out), "--rejection-log", str(r_out))
+    r = _run(
+        "--input", str(root), "--passport", str(p_out), "--rejection-log", str(r_out)
+    )
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         passport = yaml.safe_load(f)
     with r_out.open() as f:
@@ -185,10 +543,53 @@ def test_mixed_valid_invalid_in_nested_tree(tmp_path):
     )
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX byte filenames")
+def test_surrogate_filename_is_rejected_without_aborting_scan(tmp_path, load_yaml):
+    root = tmp_path / "surrogate"
+    root.mkdir()
+    (root / "Chen_2024_valid.pdf").touch()
+    raw_name = "张_2024_".encode() + b"\xff.pdf"
+    descriptor = os.open(
+        os.path.join(os.fsencode(root), raw_name), os.O_CREAT | os.O_WRONLY, 0o600
+    )
+    os.close(descriptor)
+    p_out = tmp_path / "p.yaml"
+    r_out = tmp_path / "r.yaml"
+
+    result = _run(
+        "--input",
+        str(root),
+        "--passport",
+        str(p_out),
+        "--rejection-log",
+        str(r_out),
+    )
+
+    assert result.returncode == 0, result.stderr
+    passport = load_yaml(p_out)
+    rejection = load_yaml(r_out)
+    assert [entry["citation_key"] for entry in passport["literature_corpus"]] == [
+        "chen2024valid"
+    ]
+    assert len(rejection["rejected"]) == 1
+    rejected = rejection["rejected"][0]
+    assert rejected["reason"] == "other"
+    assert rejected["detail"] == "filename contains undecodable bytes"
+    assert "\\udcff" in rejected["source"].lower()
+    surrogate_characters = [
+        character
+        for field in ("source", "raw")
+        for character in rejected[field]
+        if 0xD800 <= ord(character) <= 0xDFFF
+    ]
+    assert surrogate_characters == []
+
+
 def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     # Symlinks escaping the scanned root can disclose files the user did not
     # intend to include, so they are rejected instead of followed.
     import os
+
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "Smith2024_real.pdf").touch()
@@ -197,28 +598,33 @@ def test_symlink_pointing_outside_input_does_not_crash(tmp_path):
     os.symlink(outside / "Smith2024_real.pdf", inside / "Smith2024_link.pdf")
     p_out = tmp_path / "p.yaml"
     r_out = tmp_path / "r.yaml"
-    r = _run("--input", str(inside), "--passport", str(p_out), "--rejection-log", str(r_out))
+    r = _run(
+        "--input", str(inside), "--passport", str(p_out), "--rejection-log", str(r_out)
+    )
     assert r.returncode == 0, r.stderr
-    import json
-    import yaml
+
     import jsonschema
+    import yaml
+
     with p_out.open() as f:
         passport = yaml.safe_load(f)
     with r_out.open() as f:
         rejection = yaml.safe_load(f)
     assert passport == {"literature_corpus": []}
-    assert rejection["rejected"] == [{
-        "detail": "symlink resolves outside the input root",
-        "missing_fields": [],
-        "raw": "Smith2024_link.pdf",
-        "reason": "other",
-        "source": "Smith2024_link.pdf",
-    }]
+    assert rejection["rejected"] == [
+        {
+            "detail": "symlink resolves outside the input root",
+            "missing_fields": [],
+            "raw": "Smith2024_link.pdf",
+            "reason": "other",
+            "source": "Smith2024_link.pdf",
+        }
+    ]
     # The emitted rejection log must satisfy the rejection-log contract, not
     # just be crash-free — a non-enum reason would pass the run but break the
     # schema (Codex follow-up to #310).
-    schema = json.loads(
-        (REPO_ROOT / "shared/contracts/passport/rejection_log.schema.json").read_text()
+    schema = _load_json(
+        REPO_ROOT / "shared/contracts/passport/rejection_log.schema.json"
     )
     jsonschema.validate(rejection, schema)
 
@@ -234,6 +640,7 @@ def test_parseable_non_pdf_extension(tmp_path):
     r = _run("--input", str(d), "--passport", str(p_out), "--rejection-log", str(r_out))
     assert r.returncode == 0, r.stderr
     import yaml
+
     with p_out.open() as f:
         doc = yaml.safe_load(f)
     assert len(doc["literature_corpus"]) == 1
@@ -242,15 +649,19 @@ def test_parseable_non_pdf_extension(tmp_path):
 
 # --- v3.10 venue_type always unknown/unknown (spec §3 PR-B item 13) ---
 
+
 def test_folder_scan_venue_type_always_unknown(tmp_path, load_yaml):
     """A filename scan carries no structured type → every entry is unknown/unknown,
     never inferred from the filename (R-L3-2-D)."""
     passport_out = tmp_path / "passport.yaml"
     rejection_out = tmp_path / "rejection_log.yaml"
     r = _run(
-        "--input", str(FIXTURE_DIR),
-        "--passport", str(passport_out),
-        "--rejection-log", str(rejection_out),
+        "--input",
+        str(FIXTURE_DIR),
+        "--passport",
+        str(passport_out),
+        "--rejection-log",
+        str(rejection_out),
     )
     assert r.returncode == 0, r.stderr
     got = load_yaml(passport_out)

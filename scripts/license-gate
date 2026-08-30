@@ -449,15 +449,36 @@ def refresh_technical_evidence_hashes() -> None:
     entries = use_distribution.get("evidence_hashes")
     if not isinstance(entries, list) or not entries:
         fail("use-distribution technical evidence hashes are absent")
+    expected_paths = frozenset(
+        {
+            "vendor/source-manifest.json",
+            "SBOM.cdx.json",
+            "THIRD_PARTY_NOTICES.md",
+        }
+    )
+    paths: list[str] = []
     refreshed = []
     for entry in entries:
         relative = entry.get("path") if isinstance(entry, dict) else None
         if not isinstance(relative, str) or entry.get("purpose") != "technical-provenance-only":
             fail("use-distribution technical evidence entry is invalid")
+        if relative not in expected_paths:
+            fail(f"use-distribution technical evidence path is unexpected: {relative}")
+        paths.append(relative)
         source = PROJECT_ROOT / relative
         if source.is_symlink() or not source.is_file():
             fail(f"use-distribution technical evidence is absent or unsafe: {relative}")
         refreshed.append({**entry, "sha256": digest(source)})
+    observed_paths = set(paths)
+    if len(paths) != len(observed_paths):
+        fail("use-distribution technical evidence paths are duplicated")
+    if observed_paths != expected_paths:
+        missing = ", ".join(sorted(expected_paths - observed_paths)) or "none"
+        unexpected = ", ".join(sorted(observed_paths - expected_paths)) or "none"
+        fail(
+            "use-distribution technical evidence path set mismatch: "
+            f"missing={missing}; unexpected={unexpected}"
+        )
     use_distribution["evidence_hashes"] = refreshed
     write_json(path, use_distribution)
 

@@ -69,6 +69,11 @@ Apply these unless the family row explicitly overrides:
 - Figure/table captions are scholarly labels, not chat with the author.
 - Do not claim “meets ACL/IEEE/…” unless that family was declared and its checklist passes.
 
+| Shared layout gate | Hard expectation |
+|--------------------|------------------|
+| Float scheduling | Preserve callout/source order; do not place a barrier ahead of a pending starred two-column float. |
+| Render audit | Compile, render every page, and inspect a contact sheet; compiler-only validation cannot support a camera-ready claim. |
+
 Hyperlinks: ACL allows dark blue `#000099`. IEEE camera-ready often prefers black body links — follow the family row.
 
 ---

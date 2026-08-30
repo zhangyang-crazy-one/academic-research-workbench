@@ -6,22 +6,34 @@ best-effort conventions. Never parses PDF content.
 Filename conventions recognized:
   - {Family}_{Year}_{title_slug}.{ext}  (underscore-separated)
   - {Family}{Year}{optional_title_slug}.{ext}  (concatenated)
-  - fallback: first capitalized Latin word before the year.
+  - Unicode {Family}{separator}{Year}{separator}{title}.{ext}, where separator
+    is underscore, hyphen, period, or ASCII space
+  - fallback (ASCII): first capitalized Latin word before the year.
+  - fallback (Unicode, whole-token): the complete non-ASCII token preceding
+    the year is validated against ``_is_unicode_family``; mixed-script
+    names without an explicit separator (e.g. ``张Chen2024.pdf``) land
+    here, and unsafe code points anywhere in the token cause the whole
+    filename to be rejected.
 
 Files whose filename cannot be parsed for both family and year are rejected.
-Non-Latin filenames (e.g. CJK characters) are rejected; Unicode filename
-support is a future extension opportunity.
+Unicode family tokens are accepted only when every code point is a letter,
+combining mark, documented apostrophe, or documented hyphen.
 
 Usage:
   python scripts/adapters/folder_scan.py \\
       --input <dir> --passport <out.yaml> --rejection-log <out.yaml>
 """
+
 from __future__ import annotations
+
 import argparse
+import hashlib
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
+# pi-lens-ignore: jscpd:duplicate
 # Allow running as a script: ensure repo root is importable for
 # `from scripts.adapters._common import ...`
 _THIS = Path(__file__).resolve()
@@ -29,16 +41,16 @@ _REPO_ROOT = _THIS.parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.adapters._common import (  # noqa: E402
+from scripts.adapters._common import (
     make_citation_key,
+    now_iso,
     path_to_file_uri,
     write_passport,
     write_rejection_log,
-    now_iso,
 )
 
 ADAPTER_NAME = "folder_scan.py"
-ADAPTER_VERSION = "1.1.0"
+ADAPTER_VERSION = "1.2.0"
 
 # Family_Year_title style: "Wang_2023_formative_feedback.pdf"
 RE_FAMILY_UNDERSCORE = re.compile(
@@ -51,9 +63,78 @@ RE_FAMILY_YEAR = re.compile(
 # fallback year anywhere
 RE_ANY_YEAR = re.compile(r"((?:19|20)\d{2})")
 RE_FIRST_CAPITAL = re.compile(r"\b([A-Z][A-Za-z]+)\b")
+RE_UNICODE_SEPARATED = re.compile(
+    r"^(.+?)([_\-. ])((?:19|20)\d{2})(?:([_\-. ])(.*))?\.[A-Za-z0-9]+$"
+)
+_FAMILY_PUNCTUATION = frozenset({"'", "’", "-", "‐", "‑"})
+_CITATION_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_:-]*$")
 
-# Reject entries with any non-ASCII char in the filename
-RE_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+
+def _parse_year(value: str) -> int | None:
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _is_unicode_family(value: str) -> bool:
+    """Return whether ``value`` satisfies the explicit safe family grammar."""
+
+    has_letter = False
+    for character in value:
+        category = unicodedata.category(character)
+        if category.startswith("L"):
+            has_letter = True
+            continue
+        if category.startswith("M") or character in _FAMILY_PUNCTUATION:
+            continue
+        return False
+    return has_letter
+
+
+def _contains_unicode_control_or_format(value: str) -> bool:
+    """Reject controls that can spoof or conceal human-facing metadata."""
+
+    return any(
+        unicodedata.category(character) in {"Cc", "Cf"} for character in value
+    )
+
+
+def _contains_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+
+
+def _surrogate_safe_text(value: str) -> str:
+    return value.encode("utf-8", errors="backslashreplace").decode("utf-8")
+
+
+def _unicode_citation_key_base(*, family: str, year: int, title: str) -> str:
+    """Derive an ASCII base from a private NFKC copy, never display fields."""
+
+    normalized = unicodedata.normalize("NFKC", f"{family}\0{year}\0{title}")
+    token = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
+    return f"ref{year}{token}"
+
+
+def _unique_ascii_citation_key(base: str, existing: set[str]) -> str:
+    """Apply the shared adapter's a..z, aa..zz collision policy locally."""
+
+    if not _CITATION_KEY.fullmatch(base):
+        raise ValueError("Unicode citation-key base is not schema-valid ASCII")
+    if base not in existing:
+        existing.add(base)
+        return base
+    suffixes = list("abcdefghijklmnopqrstuvwxyz") + [
+        first + second
+        for first in "abcdefghijklmnopqrstuvwxyz"
+        for second in "abcdefghijklmnopqrstuvwxyz"
+    ]
+    for suffix in suffixes:
+        candidate = f"{base}{suffix}"
+        if candidate not in existing:
+            existing.add(candidate)
+            return candidate
+    raise RuntimeError("exhausted citation key suffix space")
 
 
 def parse_filename(name: str) -> dict | None:
@@ -64,13 +145,16 @@ def parse_filename(name: str) -> dict | None:
     third component — it MUST exclude the family token, otherwise
     make_citation_key would produce keys like ``chen2024chen``.
     """
-    if RE_NON_ASCII.search(name):
+    if _contains_unicode_control_or_format(name):
         return None
 
+    # pi-lens-ignore: jscpd:duplicate
     m = RE_FAMILY_UNDERSCORE.match(name)
     if m:
         family = m.group(1)
-        year = int(m.group(2))
+        year = _parse_year(m.group(2))
+        if year is None:
+            return None
         tail = (m.group(3) or "").strip()
         tail_words = tail.replace("_", " ").strip()
         title = f"{family} {year} {tail_words}".strip()
@@ -81,10 +165,13 @@ def parse_filename(name: str) -> dict | None:
             "title_hint": tail_words,
         }
 
+    # pi-lens-ignore: jscpd:duplicate
     m = RE_FAMILY_YEAR.match(name)
     if m:
         family = m.group(1)
-        year = int(m.group(2))
+        year = _parse_year(m.group(2))
+        if year is None:
+            return None
         tail = (m.group(3) or "").strip()
         stem = Path(name).stem
         # Display title keeps the original stem layout (with _ → space).
@@ -96,14 +183,62 @@ def parse_filename(name: str) -> dict | None:
             "title_hint": tail.replace("_", " "),
         }
 
+    m = RE_UNICODE_SEPARATED.match(name)
+    if m and not m.group(1).isascii():
+        family = m.group(1)
+        if not _is_unicode_family(family):
+            return None
+        stem = Path(name).stem
+        tail = m.group(5) or ""
+        year = _parse_year(m.group(3))
+        if year is None:
+            return None
+        return {
+            "family": family,
+            "year": year,
+            "title": stem,
+            "title_hint": tail,
+        }
+
     year_match = RE_ANY_YEAR.search(name)
     if year_match:
         before_year = name.split(year_match.group(1))[0]
-        fam_match = RE_FIRST_CAPITAL.search(before_year)
-        if fam_match:
+        year = _parse_year(year_match.group(1))
+        if year is None:
+            return None
+        # Latin-ASCII path: keep the legacy first-capital behaviour so the
+        # ASCII legacy filenames (e.g. ``Chen2024.pdf``) stay bit-identical.
+        if before_year.isascii():
+            fam_match = RE_FIRST_CAPITAL.search(before_year)
+            if fam_match:
+                return {
+                    "family": fam_match.group(1),
+                    "year": year,
+                    "title": Path(name).stem.replace("_", " "),
+                    "title_hint": "",
+                }
+        # Unicode-aware fallback: validate the *complete* pre-year token
+        # against ``_is_unicode_family``. The earlier separator-aware
+        # regexes (``RE_FAMILY_UNDERSCORE``, ``RE_FAMILY_YEAR``,
+        # ``RE_UNICODE_SEPARATED``) only fire for purely-ASCII family
+        # tokens or names with an explicit ASCII-space-like separator, so
+        # mixed-script un-separated names such as ``张Chen2024.pdf`` end
+        # up here. Accepting only the whole-token form (rather than a
+        # safe prefix) keeps the safe-family grammar authoritative —
+        # unsafe code points like emoji (category ``So``) cannot survive
+        # by being moved into the title. Separated Unicode family
+        # grammar (``张_2024_研究.pdf``) is handled by
+        # ``RE_UNICODE_SEPARATED`` earlier in this function and is
+        # unaffected. Gating on ``not before_year.isascii()`` keeps the
+        # lowercase-ASCII rejection (e.g. ``chen2024.pdf``) intact: if
+        # the ASCII branch above did not find a capital Latin word, the
+        # whole name must be rejected rather than re-fed through the
+        # Unicode grammar (which would otherwise accept any all-letter
+        # ASCII run).
+        if not before_year.isascii() and _is_unicode_family(before_year):
             return {
-                "family": fam_match.group(1),
-                "year": int(year_match.group(1)),
+                "family": before_year,
+                "year": year,
                 "title": Path(name).stem.replace("_", " "),
                 "title_hint": "",
             }
@@ -112,8 +247,6 @@ def parse_filename(name: str) -> dict | None:
 
 def _missing_fields_for(name: str) -> list[str]:
     """Diagnostic for the rejection_log."""
-    if RE_NON_ASCII.search(name):
-        return ["authors"]
     if not RE_ANY_YEAR.search(name):
         return ["authors", "year"]
     return ["authors"]
@@ -121,17 +254,14 @@ def _missing_fields_for(name: str) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    # pi-lens-ignore: jscpd:duplicate
     ap.add_argument("--input", type=Path, required=True, help="Directory to scan")
     ap.add_argument("--passport", type=Path, required=True)
-    ap.add_argument(
-        "--rejection-log", dest="rejection_log", type=Path, required=True
-    )
+    ap.add_argument("--rejection-log", dest="rejection_log", type=Path, required=True)
     args = ap.parse_args()
 
     if not args.input.exists() or not args.input.is_dir():
-        print(
-            f"ERROR: input directory not found: {args.input}", file=sys.stderr
-        )
+        print(f"ERROR: input directory not found: {args.input}", file=sys.stderr)
         return 1
 
     entries: list[dict] = []
@@ -153,51 +283,80 @@ def main() -> int:
             # basename if it ever does.
             rel = Path(f.name)
         rel_str = rel.as_posix()
+        if _contains_surrogate(f.name) or _contains_surrogate(rel_str):
+            safe_relative = _surrogate_safe_text(rel_str)
+            rejected.append(
+                {
+                    "source": safe_relative,
+                    "reason": "other",
+                    "detail": "filename contains undecodable bytes",
+                    "raw": safe_relative,
+                    "missing_fields": [],
+                }
+            )
+            continue
         if f.is_symlink():
             try:
                 f.resolve().relative_to(input_root)
             except ValueError:
-                rejected.append({
-                    "source": rel_str,
-                    "reason": "other",
-                    "detail": "symlink resolves outside the input root",
-                    "raw": rel_str,
-                    "missing_fields": [],
-                })
+                rejected.append(
+                    {
+                        "source": rel_str,
+                        "reason": "other",
+                        "detail": "symlink resolves outside the input root",
+                        "raw": rel_str,
+                        "missing_fields": [],
+                    }
+                )
                 continue
         parsed = parse_filename(f.name)
         if not parsed:
-            rejected.append({
-                "source": rel_str,
-                "reason": "authors_unparseable",
-                "raw": rel_str,
-                "missing_fields": _missing_fields_for(f.name),
-            })
+            rejected.append(
+                {
+                    "source": rel_str,
+                    # pi-lens-ignore: typos:unknown
+                    "reason": "authors_unparseable",
+                    "raw": rel_str,
+                    "missing_fields": _missing_fields_for(f.name),
+                }
+            )
             continue
 
-        citation_key = make_citation_key(
-            family=parsed["family"],
-            year=parsed["year"],
-            title_hint=parsed["title_hint"],
-            existing=existing_keys,
+        if parsed["family"].isascii():
+            citation_key = make_citation_key(
+                family=parsed["family"],
+                year=parsed["year"],
+                title_hint=parsed["title_hint"],
+                existing=existing_keys,
+            )
+        else:
+            citation_key = _unique_ascii_citation_key(
+                _unicode_citation_key_base(
+                    family=parsed["family"],
+                    year=parsed["year"],
+                    title=parsed["title"],
+                ),
+                existing_keys,
+            )
+        entries.append(
+            {
+                "citation_key": citation_key,
+                "title": parsed["title"],
+                "authors": [{"family": parsed["family"]}],
+                "year": parsed["year"],
+                "source_pointer": path_to_file_uri(f),
+                "obtained_via": "folder-scan",
+                "obtained_at": now_iso(),
+                "adapter_name": ADAPTER_NAME,
+                "adapter_version": ADAPTER_VERSION,
+                # v3.10 (spec §3 PR-B item 13): a filename scan carries no structured
+                # source-type metadata, so venue_type is always unknown/unknown —
+                # never inferred from the filename (R-L3-2-D). Emitted as a pair to
+                # honor the schema pair invariant.
+                "venue_type": "unknown",
+                "venue_type_provenance": "unknown",
+            }
         )
-        entries.append({
-            "citation_key": citation_key,
-            "title": parsed["title"],
-            "authors": [{"family": parsed["family"]}],
-            "year": parsed["year"],
-            "source_pointer": path_to_file_uri(f),
-            "obtained_via": "folder-scan",
-            "obtained_at": now_iso(),
-            "adapter_name": ADAPTER_NAME,
-            "adapter_version": ADAPTER_VERSION,
-            # v3.10 (spec §3 PR-B item 13): a filename scan carries no structured
-            # source-type metadata, so venue_type is always unknown/unknown —
-            # never inferred from the filename (R-L3-2-D). Emitted as a pair to
-            # honor the schema pair invariant.
-            "venue_type": "unknown",
-            "venue_type_provenance": "unknown",
-        })
 
     write_passport(args.passport, entries)
     write_rejection_log(

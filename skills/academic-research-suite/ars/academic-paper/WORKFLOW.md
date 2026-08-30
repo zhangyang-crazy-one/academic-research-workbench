@@ -108,6 +108,17 @@ Activate `plan` mode when the user wants guidance, step-by-step planning, or exp
 ### Text Formats
 LaTeX (.tex + .bib), DOCX (via Pandoc), PDF (via LaTeX or Pandoc), Markdown.
 
+### LaTeX Layout Export Gate
+
+Contract label (kept as a two-line audit marker):
+LaTeX Layout
+Export Gate
+
+Phase 7 must apply the class-aware paragraph, proportional-asset, float-order,
+and rendered-page rules in `agents/formatter_agent.md` and the academic PDF/TeX
+references. Compilation alone does not pass formatting; a camera-ready claim
+requires an all-page rendered contact-sheet inspection.
+
 ### Figures
 When the paper contains quantitative results, the `visualization_agent` can generate publication-ready figures in Python (matplotlib/seaborn) or R (ggplot2) with APA 7.0 formatting and colorblind-safe palettes. Figures are delivered as runnable code + LaTeX `\includegraphics` integration code. See `references/statistical_visualization_standards.md` for chart type decision trees and code templates.
 

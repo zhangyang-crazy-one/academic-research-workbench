@@ -106,6 +106,25 @@ Preferred behavior:
 ### 5. Combined (All formats)
 - Generate Markdown + LaTeX + conversion instructions for DOCX and PDF
 
+## LaTeX Layout Export Gate
+
+Before a LaTeX/PDF artifact can be called camera-ready:
+
+- Read `references/academic_pdf_format_reference.md`,
+  `references/latex_template_reference.md`, and the declared venue-family hard
+  pack before changing layout.
+- Preserve class-aware paragraph indentation; do not set global `\parindent=0`.
+  Limit no-indent behavior to semantic exceptions such as abstracts or the first
+  paragraph after a heading when the selected class requires it.
+- Preserve the original figure asset and fit it proportionally. Use one-column
+  or starred two-column floats according to the figure's scholarly role and the
+  declared template rather than rescaling the source destructively.
+- Rule: never place `\FloatBarrier` while an earlier double-column float is still
+  pending placement; preserve source order for all wide floats.
+- Inspect the full-page render contact sheet after rendering every page to PNG.
+  Check for clipping, stranded floats, blank pages, font fallback, and
+  caption/body collisions. Compilation alone does not pass formatting.
+
 ## Journal-Specific Formatting
 
 When a target journal is specified:

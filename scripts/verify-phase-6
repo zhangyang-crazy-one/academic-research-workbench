@@ -60,6 +60,7 @@ class VerificationError(RuntimeError):
 
 
 def digest_bytes(data: bytes) -> str:
+    # pi-lens-ignore: jscpd:duplicate
     return hashlib.sha256(data).hexdigest()
 
 
@@ -125,6 +126,7 @@ def command(root: Path, name: str, argv: list[str], *, env: dict[str, str] | Non
     stdout, stderr = result.stdout[:MAX_CAPTURE], result.stderr[:MAX_CAPTURE]
     (target / "stdout.log").write_bytes(stdout)
     (target / "stderr.log").write_bytes(stderr)
+    # pi-lens-ignore: jscpd:duplicate
     payload: dict[str, Any] = {
         "argv": argv,
         "cwd": str(PROJECT_ROOT),
@@ -157,8 +159,11 @@ def observed_identities(root: Path) -> dict[str, Any]:
     lock_raw = lock.read_bytes()
     try:
         checked_lock = json.loads(lock_raw)
-        if not isinstance(checked_lock, dict) or checked_lock.get("schema_version") != "arw.integration-lock.v1":
-            raise ValueError("schema_version is not arw.integration-lock.v1")
+        if (
+            not isinstance(checked_lock, dict)
+            or checked_lock.get("schema_version") != "arw.integration-lock.v2"
+        ):
+            raise ValueError("schema_version is not arw.integration-lock.v2")
         if lock_raw != canonical(checked_lock):
             raise ValueError("integration lock bytes are not canonical")
     except Exception as error:

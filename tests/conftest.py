@@ -28,6 +28,7 @@ TEST_TMP_BASE = REPOSITORY_ROOT / "build" / "pytest-tmp"
 def pytest_configure(config: pytest.Config) -> None:
     # Drop leftovers from interrupted runs before every invocation.
     shutil.rmtree(TEST_TMP_BASE, ignore_errors=True)
+    TEST_TMP_BASE.parent.mkdir(parents=True, exist_ok=True)
     config.option.basetemp = str(TEST_TMP_BASE)
 
 

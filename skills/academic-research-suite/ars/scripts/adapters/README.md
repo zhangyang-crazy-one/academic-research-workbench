@@ -25,7 +25,7 @@ python scripts/adapters/folder_scan.py \
     --rejection-log /tmp/rejection_log.yaml
 ```
 
-Filenames are parsed with two conventions plus a fallback: `{Family}_{Year}_{title}.{ext}`, `{Family}{Year}{title}.{ext}`, or `... {Year} ... {Family} ...`. Files whose filename cannot yield both a family and a year are rejected. Non-ASCII filenames are rejected (Unicode support is a deferred extension). Symlinks are followed but the rejection log records the un-resolved path so collisions across subdirectories remain distinguishable.
+Filenames are parsed with the existing Latin conventions plus an explicit Unicode form: `{Family}_{Year}_{title}.{ext}`, `{Family}{Year}{title}.{ext}`, `... {Year} ... {Family} ...`, or Unicode `{Family}{separator}{Year}{separator}{title}.{ext}` where `separator` is `_`, `-`, `.`, or an ASCII space. A Unicode family must contain a letter and may otherwise contain only Unicode letters, combining marks, apostrophes, or hyphens. Display author/title text is preserved exactly; citation-key hashing uses a private NFKC-normalized copy and emits a deterministic ASCII `ref{year}{digest}` key with the normal alphabetic collision suffix. Files that cannot yield both a safe family and a year are rejected. Symlinks resolving outside the input root are rejected; accepted paths keep URI encoding and deterministic relative-path diagnostics.
 
 ### zotero
 
