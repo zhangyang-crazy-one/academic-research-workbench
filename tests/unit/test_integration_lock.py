@@ -3739,3 +3739,40 @@ def test_native_upstream_bundle_cannot_substitute_for_asan_ubsan(
         IntegrationLockError, match="native surface argv drift|sanitizer verdict suite"
     ):
         _build(integration_fixture)
+
+
+@pytest.mark.parametrize("argv", [[], ["true"]])
+def test_pre_vendor_command_argv_sequence_is_pinned(
+    integration_fixture: dict[str, Path], argv: list[str]
+) -> None:
+    """RED: status zero cannot bless a missing or substituted license gate."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        gate = cast(dict[str, object], payload["native_file_base_gate"])
+        commands = cast(list[dict[str, object]], gate["commands"])
+        commands[0]["argv"] = argv
+
+    _rebind_one_evidence(
+        integration_fixture, "share/arw/evidence/pre_vendor.json", _tamper
+    )
+    with pytest.raises(IntegrationLockError, match="command #1 argv"):
+        _build(integration_fixture)
+
+
+def test_sanitizer_verdict_suite_must_match_current_surface(
+    integration_fixture: dict[str, Path],
+) -> None:
+    """RED: a TSan command cannot retain an ASan/UBSan suite verdict."""
+
+    def _tamper(payload: dict[str, object]) -> None:
+        payload["suite"] = "asan-ubsan"
+
+    _rebind_one_evidence(
+        integration_fixture,
+        "share/arw/evidence/tsan_sanitizer_verdict.json",
+        _tamper,
+    )
+    with pytest.raises(
+        IntegrationLockError, match="suite must equal current surface 'tsan'"
+    ):
+        _build(integration_fixture)

@@ -2706,12 +2706,20 @@ def _verify_native_surface_bundle(
             f"{label} sanitizer_verdict file is unreadable: {error}"
         ) from error
     try:
-        NativeSanitizerVerdict.model_validate(sanitizer_payload, strict=True)
+        sanitizer = NativeSanitizerVerdict.model_validate(
+            sanitizer_payload, strict=True
+        )
     except ValidationError as error:
         raise IntegrationLockError(
             f"{label} sanitizer_verdict file fails the "
             f"NativeSanitizerVerdict contract: {error}"
         ) from error
+    expected_suite = surface.replace("_", "-")
+    if sanitizer.suite != expected_suite:
+        raise IntegrationLockError(
+            f"{label} sanitizer verdict suite must equal current surface "
+            f"{expected_suite!r}; got {sanitizer.suite!r}"
+        )
 
     test_suite_path = _regular_file_under(
         stage_root, native_evidence_path(surface, "test_suite_sha256")
@@ -2810,8 +2818,70 @@ class _PreVendorNativeFileBaseGate(LockModel):
 
     @model_validator(mode="after")
     def _validate_nonempty(self) -> Self:
-        if not self.commands:
-            raise ValueError("native_file_base_gate.commands must be non-empty")
+        expected_argv = (
+            ("./scripts/license-gate.sh", "--selftest"),
+            ("./scripts/license-gate.sh",),
+        )
+        if len(self.commands) != 3:
+            raise ValueError(
+                "native_file_base_gate.commands must contain exactly three "
+                "ordered producer commands"
+            )
+        for index, expected in enumerate(expected_argv):
+            command = self.commands[index]
+            if tuple(command.argv) != expected:
+                raise ValueError(
+                    f"native_file_base_gate command #{index + 1} argv must equal "
+                    f"{expected!r}"
+                )
+        notice_argv = tuple(self.commands[2].argv)
+        if (
+            len(notice_argv) != 2
+            or notice_argv[0] != "./scripts/gen-third-party-notices.sh"
+            or not notice_argv[1].endswith(
+                "/generated/THIRD_PARTY_NOTICES.md"
+            )
+        ):
+            raise ValueError(
+                "native_file_base_gate command #3 argv must invoke the notice "
+                "generator with generated/THIRD_PARTY_NOTICES.md"
+            )
+        expected_streams = (
+            (
+                "commands/001-native-gate-selftest/stdout.log",
+                "commands/001-native-gate-selftest/stderr.log",
+            ),
+            (
+                "commands/002-native-gate/stdout.log",
+                "commands/002-native-gate/stderr.log",
+            ),
+            (
+                "commands/003-notice-generator/stdout.log",
+                "commands/003-notice-generator/stderr.log",
+            ),
+        )
+        command_cwd = self.commands[0].cwd
+        if not command_cwd.endswith("/sources/file-base"):
+            raise ValueError(
+                "native_file_base_gate command cwd must end with /sources/file-base"
+            )
+        for index, (command, streams) in enumerate(
+            zip(self.commands, expected_streams, strict=True), start=1
+        ):
+            if command.cwd != command_cwd:
+                raise ValueError(
+                    "native_file_base_gate commands must share one source cwd"
+                )
+            if (command.stdout_path, command.stderr_path) != streams:
+                raise ValueError(
+                    f"native_file_base_gate command #{index} output paths drift"
+                )
+            started = _parse_strict_rfc3339_z(command.started_at)
+            ended = _parse_strict_rfc3339_z(command.ended_at)
+            if started > ended:
+                raise ValueError(
+                    f"native_file_base_gate command #{index} started after it ended"
+                )
         if not self.generated_notices:
             raise ValueError(
                 "native_file_base_gate.generated_notices must be non-empty"
