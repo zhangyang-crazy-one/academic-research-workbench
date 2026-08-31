@@ -1,0 +1,33 @@
+{
+  "commands": [
+    "_files-mcp",
+    "_graph-mcp",
+    "append",
+    "artifact-accept",
+    "attempt-close",
+    "attempt-start",
+    "checkpoint",
+    "decision-request",
+    "decision-resolve",
+    "files",
+    "health",
+    "init",
+    "orchestration-dispatch",
+    "orchestration-gate",
+    "orchestration-hook",
+    "orchestration-panel",
+    "orchestration-prepare",
+    "orchestration-recover",
+    "passport-pointer-rebuild",
+    "recover",
+    "replay",
+    "resume",
+    "route",
+    "status",
+    "storm",
+    "transition",
+    "version"
+  ],
+  "launcher": "bin/arw",
+  "schema_version": "1.0.0"
+}
