@@ -56,6 +56,25 @@ jobs:
           tests/unit
           tests/schema
           tests/unit/test_integration_lock.py
+      - name: Run v2 compatibility baseline
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        # tests/compat is listed explicitly: a bare marker run still
+        # COLLECTS the whole tests/ tree, and host-dependent integration
+        # modules (e.g. phase-07 installed E2E) fail collection on runners
+        # without an installed Codex binary. Path-scoping avoids that.
+        # The native-binary golden (test_filebase_mcp_contract.py) skips on
+        # clean runners BY DESIGN: PR CI has no pinned C toolchain, and
+        # building here would rebaseline vendor/source-manifest.json with
+        # toolchain-drifted hashes. Native-binary-dependent suites (native
+        # surface, confinement, file security) run in the local
+        # qualification flow (scripts/verify-phase-*), matching release.yml.
+        # I7's CI-runnable portion is the existing "Verify source manifest
+        # wire digests" step above; the full license gate requires retained
+        # local evidence and runs in the qualification flow.
+        run: >-
+          uv run pytest -q -m v2_compat tests/compat
       - name: Run Phase 4 lifecycle and hook regression tests
         env:
           PYTHONNOUSERSITE: "1"

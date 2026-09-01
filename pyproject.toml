@@ -7,18 +7,10 @@ name = "academic-research-workbench"
 version = "0.1.0"
 description = "Headless, auditable research-workflow control plane for Codex."
 requires-python = ">=3.13"
-dependencies = [
-  "jsonschema>=4.26.0",
-  "portalocker>=3.2.0",
-  "pydantic>=2.13.4",
-]
+dependencies = ["jsonschema>=4.26.0", "portalocker>=3.2.0", "pydantic>=2.13.4"]
 
 [dependency-groups]
-dev = [
-  "hatchling>=1.31.0",
-  "PyYAML>=6.0.3",
-  "pytest>=9.1.1",
-]
+dev = ["hatchling>=1.31.0", "PyYAML>=6.0.3", "pytest>=9.1.1"]
 ars-test = [
   "defusedxml",
   "jsonschema[format]>=4.17",
@@ -26,9 +18,9 @@ ars-test = [
   "ruamel-yaml>=0.17",
 ]
 storm = [
-    "knowledge-storm>=1.1",
-    "sentence-transformers>=3.4",
-    "tavily-python>=0.7.27",
+  "knowledge-storm>=1.1",
+  "sentence-transformers>=3.4",
+  "tavily-python>=0.7.27",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -39,6 +31,7 @@ addopts = ["--strict-markers", "-ra"]
 testpaths = ["tests"]
 markers = [
   "codex_host: exercises an authenticated fresh Codex host against installed plugin bytes",
+  "v2_compat: v2 compatibility baseline — pins v1 CLI/MCP/replay/projection contracts (tests/compat)",
 ]
 
 [tool.uv]
