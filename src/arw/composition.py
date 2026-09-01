@@ -31,11 +31,20 @@ def default_router(
     router.register("artifact.inspect", ArtifactIntegrityAdapter)
 
     if files_control_root is not None:
-        from arw.files import FilesAdminService
+        from arw.adapters.files import LocalFilesAdapter
+        from arw.files import load_query_generation
+        from arw.kernel.capabilities import CapabilityUnavailable
 
-        router.register(
-            "files.local", lambda: FilesAdminService(files_control_root)
-        )
+        def _local_files():
+            try:
+                generation = load_query_generation(files_control_root, "research-root")
+            except Exception as error:
+                raise CapabilityUnavailable(
+                    "files.local (no synced generation; run `files sync` first)"
+                ) from error
+            return LocalFilesAdapter(generation)
+
+        router.register("files.local", _local_files)
     if graph_control_root is not None and graph_root_id is not None:
         from arw.adapters.knowledge import GraphProjectionAdapter
         from arw.graph_store import GraphStore
@@ -45,3 +54,12 @@ def default_router(
             lambda: GraphProjectionAdapter(GraphStore(graph_control_root, graph_root_id)),
         )
     return router
+
+
+def files_admin_service(control_root: Path):
+    """Admin (register/sync/rebuild/status) service — the CLI files command
+    path. This is NOT the `files.local` query capability; query access is
+    resolved through the router as a LocalFilesAdapter."""
+    from arw.files import FilesAdminService
+
+    return FilesAdminService(control_root)

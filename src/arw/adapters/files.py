@@ -27,7 +27,7 @@ from arw.file_models import (
     FilesSearchResult,
 )
 from arw.files import FilesQueryGeneration
-from arw.files_mcp import FilesMcpServer, ToolError
+from arw.files_mcp import FilesMcpServer, LiveReadError, ToolError
 
 
 class FileProviderError(RuntimeError):
@@ -55,7 +55,7 @@ class LocalFilesAdapter:
 
         try:
             return self._server.list_files(request, deadline=time.monotonic() + 5.0)
-        except (CursorError, ToolError) as error:
+        except (CursorError, LiveReadError, ToolError) as error:
             code = getattr(error, 'code', 'tool_error')
             raise FileProviderError(code, str(error)) from error
 
@@ -67,7 +67,7 @@ class LocalFilesAdapter:
 
         try:
             return self._server.read_file(request, deadline=time.monotonic() + 5.0)
-        except (CursorError, ToolError) as error:
+        except (CursorError, LiveReadError, ToolError) as error:
             code = getattr(error, 'code', 'tool_error')
             raise FileProviderError(code, str(error)) from error
 
@@ -77,7 +77,7 @@ class LocalFilesAdapter:
 
         try:
             return self._server.search_files(request, deadline=time.monotonic() + 5.0)
-        except (CursorError, ToolError) as error:
+        except (CursorError, LiveReadError, ToolError) as error:
             code = getattr(error, 'code', 'tool_error')
             raise FileProviderError(code, str(error)) from error
 
@@ -87,7 +87,7 @@ class LocalFilesAdapter:
 
         try:
             return self._server.get_outline(request, deadline=time.monotonic() + 5.0)
-        except (CursorError, ToolError) as error:
+        except (CursorError, LiveReadError, ToolError) as error:
             code = getattr(error, 'code', 'tool_error')
             raise FileProviderError(code, str(error)) from error
 
@@ -97,6 +97,6 @@ class LocalFilesAdapter:
 
         try:
             return self._server.get_context(request, deadline=time.monotonic() + 5.0)
-        except (CursorError, ToolError) as error:
+        except (CursorError, LiveReadError, ToolError) as error:
             code = getattr(error, 'code', 'tool_error')
             raise FileProviderError(code, str(error)) from error

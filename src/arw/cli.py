@@ -346,14 +346,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json(receipt.model_dump(mode="json"))
         return 0
     if args.command == "files":
-        from arw.composition import default_router
         from arw.file_models import ExtractionRegistration
         from arw.files import FilesAdminError
 
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
-            router = default_router(files_control_root=args.control_root)
-            service = router.resolve("files.local")
+            from arw.composition import files_admin_service
+            service = files_admin_service(args.control_root)
             if builder_value is not None:
                 service.native_builder = Path(builder_value)
             if args.files_command == "root":
