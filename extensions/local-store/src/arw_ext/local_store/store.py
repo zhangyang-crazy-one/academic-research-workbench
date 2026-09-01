@@ -183,17 +183,13 @@ class LocalProjectionStore:
             # open() can start clean.  On any open failure the operator
             # receives the typed fault — they can manually inspect/remove
             # the half-built file if desired.
-            if is_fresh and self._database_path.exists():
-                with contextlib.suppress(OSError):
-                    self._database_path.unlink()
+            self._cleanup_fresh_file(is_fresh)
             raise
         except sqlite3.Error as error:
             with contextlib.suppress(sqlite3.Error):
                 connection.execute("ROLLBACK")
             connection.close()
-            if is_fresh and self._database_path.exists():
-                with contextlib.suppress(OSError):
-                    self._database_path.unlink()
+            self._cleanup_fresh_file(is_fresh)
             raise StoreOpenError(f"failed to run migrations: {error}") from error
 
         # Capture the snapshot now that we know the schema_version on disk.
@@ -217,6 +213,13 @@ class LocalProjectionStore:
             database_path=self._database_path,
         )
         return self._snapshot
+
+    def _cleanup_fresh_file(self, is_fresh: bool) -> None:
+        """Best-effort removal of a half-built fresh database file."""
+
+        if is_fresh and self._database_path.exists():
+            with contextlib.suppress(OSError):
+                self._database_path.unlink()
 
     def close(self) -> None:
         """Close the underlying SQLite connection.  Idempotent."""
