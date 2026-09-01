@@ -214,7 +214,7 @@ def test_panel_rejects_unstructured_identity_claim_before_service_construction(
 
 def test_only_cli_process_boundary_drives_async_dispatch() -> None:
     from arw import cli
-    from arw.orchestration import OrchestrationService
+    from arw.kernel.execution.orchestration import OrchestrationService
 
     source = inspect.getsource(cli)
     assert source.count("asyncio.run(") == 1

@@ -24,7 +24,7 @@ def _tree(root: Path) -> dict[str, bytes]:
 def _service(tmp_path: Path):
     from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"

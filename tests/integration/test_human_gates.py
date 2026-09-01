@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from arw.execution import DeterministicFakeAdapter
+from arw.kernel.execution.execution import DeterministicFakeAdapter
 from arw.kernel.state.models import LifecycleTransitionRequest, RuntimeCommandRequest
-from arw.orchestration import AssignmentSpec, OrchestrationService
+from arw.kernel.execution.orchestration import AssignmentSpec, OrchestrationService
 from arw.kernel.state.orchestration_models import GateDecision, HumanAuthority, HumanDecisionRecord
 
 from .test_orchestration_lifecycle import _run

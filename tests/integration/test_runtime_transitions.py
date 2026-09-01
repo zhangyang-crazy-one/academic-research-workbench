@@ -23,7 +23,7 @@ def _tree(root: Path) -> dict[str, bytes]:
 def _service(tmp_path: Path):
     from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
@@ -146,7 +146,7 @@ def test_duplicate_identity_rejects_without_second_append(tmp_path: Path, identi
 def test_phase2_transaction_rejects_legacy_journal_before_append(tmp_path: Path) -> None:
     from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root = tmp_path / "legacy"
     source = root / "input" / "source.txt"

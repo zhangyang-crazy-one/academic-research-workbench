@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.execution import (
+from arw.kernel.execution.execution import (
     DEFAULT_EXECUTION_POLICY,
     DispatchSpec,
     ExecutionAdapter,
@@ -83,9 +83,9 @@ from arw.kernel.state.orchestration_models import (
     locked_role_catalog,
 )
 from arw.kernel.ledger.reducer import RuntimeState
-from arw.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
-from arw.runtime import CommandOutcome, RuntimeCommandService
-from arw.scheduler import AttemptOutcome, DeterministicScheduler, ScheduledOutcome
+from arw.kernel.execution.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
+from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
+from arw.kernel.execution.scheduler import AttemptOutcome, DeterministicScheduler, ScheduledOutcome
 from arw.kernel.ledger.workflows import PHASE4_WORKFLOW_ID
 
 

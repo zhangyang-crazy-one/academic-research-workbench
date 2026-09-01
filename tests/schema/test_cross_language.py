@@ -92,7 +92,7 @@ def _phase2_instances() -> dict[str, list[object]]:
         ResumeRequest,
     )
     from arw.kernel.ledger.reducer import RuntimeState
-    from arw.runtime import CommandOutcome
+    from arw.kernel.execution.runtime import CommandOutcome
     from arw.kernel.state.status import build_status_report
 
     run_id = "run-00000000-0000-4000-8000-000000000101"

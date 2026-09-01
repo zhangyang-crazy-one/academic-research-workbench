@@ -31,9 +31,9 @@ from arw.kernel.core.faults import (
 )
 from arw.kernel.ledger.journal import JournalError, replay_run
 from arw.kernel.state.models import InitRunRequest, LifecycleTransitionRequest, RecoveryRequest, RuntimeCommandRequest
-from arw.execution import DispatchSpec, ExecutionPolicySnapshot, HostResult, RepairableEnvelopeFailure
-from arw.scheduler import DeterministicScheduler
-from arw.runtime import RuntimeCommandService
+from arw.kernel.execution.execution import DispatchSpec, ExecutionPolicySnapshot, HostResult, RepairableEnvelopeFailure
+from arw.kernel.execution.scheduler import DeterministicScheduler
+from arw.kernel.execution.runtime import RuntimeCommandService
 from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
 from .test_recovery import _damage, _initialize

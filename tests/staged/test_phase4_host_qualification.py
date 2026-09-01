@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.execution import (
+from arw.kernel.execution.execution import (
     CodexExecExecutionAdapter,
     CodexExecQualificationReceipt,
     CodexNativeExecutionAdapter,

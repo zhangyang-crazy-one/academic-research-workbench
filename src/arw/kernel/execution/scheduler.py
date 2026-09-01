@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from arw.execution import (
+from arw.kernel.execution.execution import (
     DEFAULT_EXECUTION_POLICY,
     AdapterFailure,
     DispatchSpec,

@@ -22,7 +22,7 @@ from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _safe_ro
 from arw.kernel.state.models import ActorId, RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 if TYPE_CHECKING:  # pragma: no cover - imported only for static tooling
-    from arw.runtime import CommandOutcome, RuntimeCommandService
+    from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
     from arw.kernel.state.models import RuntimeCommandRequest
 
 
@@ -537,7 +537,7 @@ def _authority_parts(
     allowed_root: Path, authority_envelope: ProvenanceAuthorityEnvelope
 ) -> ProvenanceAuthorityEnvelope:
     from arw.kernel.state.models import RuntimeCommandRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     if not isinstance(authority_envelope, ProvenanceAuthorityEnvelope):
         raise ProvenanceError("authority envelope must be an existing ProvenanceAuthorityEnvelope")

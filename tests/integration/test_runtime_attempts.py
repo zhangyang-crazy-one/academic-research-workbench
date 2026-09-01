@@ -18,7 +18,7 @@ def _tree(root: Path) -> dict[str, bytes]:
 def _service(tmp_path: Path):
     from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
@@ -66,7 +66,7 @@ def _base(event: int, revision: int, role: str = "parent_control_plane") -> dict
 
 def test_decision_and_attempt_state_survive_fresh_replay(tmp_path: Path) -> None:
     from arw.kernel.state.models import AttemptStartRequest, HumanDecisionRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root, service = _service(tmp_path)
     decision = HumanDecisionRequest.model_validate(

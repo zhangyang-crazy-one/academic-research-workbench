@@ -634,7 +634,7 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
             "from_stage": "initialized",
         }
     )
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     monkeypatch.setenv("ARW_TEST_MODE", "1")
     monkeypatch.setenv("ARW_TEST_FAULT_ID", "phase7.journal-fsync")

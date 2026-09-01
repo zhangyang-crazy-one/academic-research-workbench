@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 
 from arw.kernel.core.canonical import sha256_hex
-from arw.execution import (
+from arw.kernel.execution.execution import (
     DispatchSpec,
     DeterministicFakeAdapter,
     ExecutionPolicySnapshot,
@@ -17,7 +17,7 @@ from arw.execution import (
 from arw.kernel.ledger.journal import initialize_run, replay_run
 from arw.kernel.ledger.manifests import load_assignment_manifest
 from arw.kernel.state.models import InitRunRequest, LifecycleTransitionRequest, RuntimeCommandRequest
-from arw.orchestration import AssignmentSpec, OrchestrationService
+from arw.kernel.execution.orchestration import AssignmentSpec, OrchestrationService
 from arw.kernel.state.orchestration_models import AttemptDescriptor, WorkerProposal, canonical_orchestration_model_bytes
 from arw.kernel.ledger.workflows import PHASE4_WORKFLOW
 

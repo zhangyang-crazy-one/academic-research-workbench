@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from arw.review import (
+from arw.kernel.execution.review import (
     FORMAL_REVIEW_ROLES,
     FindingObservation,
     FormalPanelPolicy,

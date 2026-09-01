@@ -45,7 +45,7 @@ def _initialize(root: Path):
 
 def _append_transition(root: Path, number: int, revision: int, transition: str, stage: str):
     from arw.kernel.state.models import LifecycleTransitionRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     outcome = RuntimeCommandService(root).execute_transition(
         LifecycleTransitionRequest.model_validate(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from arw.execution import (
+from arw.kernel.execution.execution import (
     DispatchSpec,
     DeterministicFakeAdapter,
     ExecutionPolicySnapshot,
@@ -14,7 +14,7 @@ from arw.execution import (
     PermissionDenied,
     ProcessFailure,
 )
-from arw.scheduler import DEFAULT_SCHEDULER_POLICY, DeterministicScheduler
+from arw.kernel.execution.scheduler import DEFAULT_SCHEDULER_POLICY, DeterministicScheduler
 
 
 def _spec(

@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from arw.kernel.core.canonical import sha256_hex
-from arw.execution import DeterministicFakeAdapter
+from arw.kernel.execution.execution import DeterministicFakeAdapter
 from arw.kernel.state.models import RuntimeCommandRequest
-from arw.orchestration import OrchestrationError, OrchestrationService
+from arw.kernel.execution.orchestration import OrchestrationError, OrchestrationService
 from arw.kernel.state.orchestration_models import (
     HostIdentityReceipt,
     ReviewFinding,

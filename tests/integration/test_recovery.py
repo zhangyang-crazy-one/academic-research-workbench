@@ -89,7 +89,7 @@ def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> Non
     from arw.kernel.core.canonical import sha256_hex, strict_json_loads
     from arw.kernel.ledger.journal import replay_run
     from arw.kernel.ledger.recovery import load_recovery_receipt
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.policy.schema_registry import validate_instance
 
     root = tmp_path / "run"
@@ -140,7 +140,7 @@ def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> Non
 def test_conflicting_orphan_evidence_rejects_without_writing_raw_copy(
     tmp_path: Path,
 ) -> None:
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root = tmp_path / "orphan-conflict"
     _initialize(root)
@@ -161,7 +161,7 @@ def test_recovery_boundary_supports_standard_checkpoint_and_continuation(
     tmp_path: Path,
 ) -> None:
     from arw.kernel.state.models import CheckpointRequest, LifecycleTransitionRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root = tmp_path / "checkpoint"
     _initialize(root)
@@ -211,7 +211,7 @@ def test_recovery_boundary_supports_standard_checkpoint_and_continuation(
 def test_recovered_run_blocks_changed_binding_evidence(tmp_path: Path, tamper: str) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.kernel.ledger.journal import replay_run
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root = tmp_path / tamper
     _initialize(root)

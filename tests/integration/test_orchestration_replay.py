@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from arw.kernel.state.models import RuntimeCommandRequest
-from arw.orchestration import OrchestrationError, OrchestrationService
+from arw.kernel.execution.orchestration import OrchestrationError, OrchestrationService
 from arw.kernel.state.orchestration_models import AttemptDescriptor
-from arw.execution import DeterministicFakeAdapter
+from arw.kernel.execution.execution import DeterministicFakeAdapter
 from arw.kernel.ledger.journal import replay_run
 
 from .test_orchestration_lifecycle import AssignmentSpec, _run

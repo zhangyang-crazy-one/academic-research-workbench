@@ -464,7 +464,7 @@ def _blocked_orchestration_result(command: str, *reason_codes: str) -> None:
 
 
 def _blocked_execution_adapter():
-    from arw.execution import CodexExecExecutionAdapter, NativeHostConfig
+    from arw.kernel.execution.execution import CodexExecExecutionAdapter, NativeHostConfig
 
     return CodexExecExecutionAdapter(NativeHostConfig(execution_mode="blocked"))
 
@@ -490,7 +490,7 @@ class _AssignmentCodexExecAdapter:
     def _adapter(self, spec: Any) -> Any:
         adapter = self.adapters.get(spec.assignment_id)
         if adapter is None:
-            from arw.execution import HostQualificationBlocked, NativeHostQualification
+            from arw.kernel.execution.execution import HostQualificationBlocked, NativeHostQualification
 
             raise HostQualificationBlocked(
                 NativeHostQualification(
@@ -523,7 +523,7 @@ def _verified_dispatch_adapter(
 ) -> tuple[_AssignmentCodexExecAdapter | None, object | None, tuple[str, ...]]:
     """Build no executable route until integration and host evidence both pass."""
 
-    from arw.execution import (
+    from arw.kernel.execution.execution import (
         CodexExecExecutionAdapter,
         CodexExecQualificationReceipt,
         NativeHostConfig,
@@ -652,7 +652,7 @@ def _verified_dispatch_adapter(
 
 
 def _rehydrate_prepared_run(service: Any) -> Any:
-    from arw.orchestration import OrchestrationError, PreparedRun
+    from arw.kernel.execution.orchestration import OrchestrationError, PreparedRun
 
     state = service.runtime.read_state()
     if not all(
@@ -840,14 +840,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         ResumeRequest,
         RuntimeCommandRequest,
     )
-    from arw.orchestration import (
+    from arw.kernel.execution.orchestration import (
         AssignmentSpec,
         OrchestrationError,
         OrchestrationService,
     )
     from arw.kernel.state.orchestration_models import GateDecision, HookObservation
     from arw.kernel.ledger.reducer import ReducerError, reduce_events
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.state.status import build_status_report, render_status_text
 
     handled_errors: tuple[type[Exception], ...] = (
@@ -975,7 +975,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.command, "host_evidence_assignment_set_mismatch"
                 )
                 return 65
-            from arw.execution import DispatchSpec
+            from arw.kernel.execution.execution import DispatchSpec
 
             qualification_reasons: list[str] = []
             for assignment in prepared.assignments:
