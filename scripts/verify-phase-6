@@ -174,7 +174,7 @@ def observed_identities(root: Path) -> dict[str, Any]:
         "tree_sha256": tree_digest(),
         "python": sys.version,
         "python_executable": str(PYTHON),
-        "schema_registry": optional(PROJECT_ROOT / "src/arw/schema_registry.py"),
+        "schema_registry": optional(PROJECT_ROOT / "src/arw/kernel/policy/schema_registry.py"),
         "schema_tree_sha256": digest_bytes(b"".join(digest_file(p).encode() for p in sorted((PROJECT_ROOT / "schemas/v1").glob("*.json")))),
         "source_manifest": optional(PROJECT_ROOT / "vendor/source-manifest.json"),
         "sbom": optional(PROJECT_ROOT / "SBOM.cdx.json"),

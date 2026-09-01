@@ -14,7 +14,7 @@
     {
       "path": "SBOM.cdx.json",
       "purpose": "technical-provenance-only",
-      "sha256": "838d6ce693eadb1d13b807990d581f188a6d94890746c203766abb0112edac83"
+      "sha256": "1bcf1071029fa3e93be66b5177cda20e64aa42cf09befea881ace333f8955931"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",

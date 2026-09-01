@@ -616,7 +616,7 @@ def host_qualification(
     stage_digest = "0" * 64
     plugin_digest = "0" * 64
     codex_version = "0.0.0"
-    adapter_digest = digest_file(PROJECT_ROOT / "src/arw/execution.py")
+    adapter_digest = digest_file(PROJECT_ROOT / "src/arw/kernel/execution/execution.py")
     if stage_root is not None and stage_root.is_dir():
         from arw.kernel.policy.integration_lock import observe_stage_identity
 
