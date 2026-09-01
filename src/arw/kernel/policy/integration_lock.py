@@ -1511,7 +1511,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         raise IntegrationLockError(
             "ARW wheel unexpectedly includes the standalone ARS runtime"
         )
-    if "arw/integration_lock.py" not in members:
+    if "arw/kernel/policy/integration_lock.py" not in members:
         raise IntegrationLockError("ARW wheel omits the integration-lock runtime")
     metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
     if len(metadata_names) != 1:

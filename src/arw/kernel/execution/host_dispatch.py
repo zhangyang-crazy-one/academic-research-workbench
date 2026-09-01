@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from arw.kernel.core.canonical import canonical_json_bytes
+
 from arw.cli_support import (
     CLIInputError,
     _canonical_object_from_bytes,
@@ -30,7 +32,7 @@ def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
     )
 
     plugin_root = Path(
-        os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[2])
+        os.environ.get("ARW_PLUGIN_ROOT", Path(__file__).resolve().parents[4])
     ).resolve()
     # A staged plugin carries the lock as a runtime input. Discovering that
     # path is safe, but it never constitutes qualification: the exact host

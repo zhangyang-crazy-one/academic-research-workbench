@@ -26,7 +26,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     is_supported_codex_cli_version,
 )

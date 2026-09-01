@@ -156,7 +156,7 @@ def _make_wheel(path: Path) -> None:
     )
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
         archive.writestr("arw/__init__.py", "__version__ = '0.1.0'\n")
-        archive.writestr("arw/integration_lock.py", "# packaged verifier\n")
+        archive.writestr("arw/kernel/policy/integration_lock.py", "# packaged verifier\n")
         archive.writestr(
             "academic_research_workbench-0.1.0.dist-info/METADATA", metadata
         )

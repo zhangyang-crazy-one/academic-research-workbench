@@ -35,9 +35,9 @@ if (
     )
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from arw.canonical import canonical_json_bytes, strict_json_loads  # noqa: E402
-from arw.hook_contracts import HookParityMatrix, load_codex_hook_receipt  # noqa: E402
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads  # noqa: E402
+from arw.kernel.policy.hook_contracts import HookParityMatrix, load_codex_hook_receipt  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     CodexHostCanaryEvidence,
     CodexHostEvidenceBundle,
