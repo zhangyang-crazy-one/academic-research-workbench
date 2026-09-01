@@ -21,7 +21,7 @@ import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Self
+from typing import Final
 
 from .errors import (
     LocalStoreError,
@@ -63,9 +63,7 @@ def _resolve_database_path(path: Path) -> Path:
 
     resolved = path if path.is_absolute() else Path.cwd() / path
     if resolved.is_symlink():
-        raise StorePathUnsafeError(
-            f"database path is a symlink: {resolved}"
-        )
+        raise StorePathUnsafeError(f"database path is a symlink: {resolved}")
     if resolved.parent.exists() and resolved.parent.is_symlink():
         raise StorePathUnsafeError(
             f"database parent directory is a symlink: {resolved.parent}"
@@ -154,9 +152,7 @@ class LocalProjectionStore:
         try:
             connection = sqlite3.connect(str(self._database_path))
         except sqlite3.Error as error:
-            raise StoreOpenError(
-                f"sqlite connect failed: {error}"
-            ) from error
+            raise StoreOpenError(f"sqlite connect failed: {error}") from error
 
         try:
             # journal_mode=DELETE is the v1 default and the safest choice for
@@ -166,9 +162,7 @@ class LocalProjectionStore:
             connection.execute("PRAGMA synchronous=NORMAL")
         except sqlite3.Error as error:
             connection.close()
-            raise StoreOpenError(
-                f"failed to apply default pragmas: {error}"
-            ) from error
+            raise StoreOpenError(f"failed to apply default pragmas: {error}") from error
 
         # Migrations run inside one transaction so a failure rolls back to
         # the pre-open state.  apply_pending_migrations also seeds the
@@ -200,9 +194,7 @@ class LocalProjectionStore:
             if is_fresh and self._database_path.exists():
                 with contextlib.suppress(OSError):
                     self._database_path.unlink()
-            raise StoreOpenError(
-                f"failed to run migrations: {error}"
-            ) from error
+            raise StoreOpenError(f"failed to run migrations: {error}") from error
 
         # Capture the snapshot now that we know the schema_version on disk.
         meta_rows = read_projection_meta(connection)

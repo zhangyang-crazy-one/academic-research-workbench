@@ -223,7 +223,9 @@ def test_intermediate_version_is_migrated_and_data_preserved(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_newer_schema_version_raises_typed_fault_and_does_not_mutate(tmp_path: Path) -> None:
+def test_newer_schema_version_raises_typed_fault_and_does_not_mutate(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "arw.db"
 
     # Build a "future" DB at schema_version = current + 1, with the full
@@ -307,7 +309,9 @@ def test_missing_projection_meta_raises_distinct_fault(tmp_path: Path) -> None:
     assert database.exists()
 
 
-def test_projection_meta_without_schema_version_row_raises_corrupt(tmp_path: Path) -> None:
+def test_projection_meta_without_schema_version_row_raises_corrupt(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "arw.db"
     connection = sqlite3.connect(database)
     try:
@@ -328,7 +332,9 @@ def test_projection_meta_without_schema_version_row_raises_corrupt(tmp_path: Pat
     assert exc_info.value.code == "projection_meta_corrupt"
 
 
-def test_projection_meta_with_non_integer_schema_version_raises_corrupt(tmp_path: Path) -> None:
+def test_projection_meta_with_non_integer_schema_version_raises_corrupt(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "arw.db"
     connection = sqlite3.connect(database)
     try:
@@ -359,10 +365,7 @@ def test_fault_codes_are_distinct() -> None:
 
     assert SchemaVersionUnsupportedError.code == "schema_version_unsupported"
     assert ProjectionMetaCorruptError.code == "projection_meta_corrupt"
-    assert (
-        SchemaVersionUnsupportedError.code
-        != ProjectionMetaCorruptError.code
-    )
+    assert SchemaVersionUnsupportedError.code != ProjectionMetaCorruptError.code
     # Both must be reachable through the LocalStoreError base class.
     assert issubclass(SchemaVersionUnsupportedError, LocalStoreError)
     assert issubclass(ProjectionMetaCorruptError, LocalStoreError)

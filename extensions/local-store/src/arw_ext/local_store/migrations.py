@@ -116,10 +116,8 @@ def read_projection_meta(connection: sqlite3.Connection) -> dict[str, str]:
     call :func:`read_schema_version` after asserting the table exists.
     """
 
-    rows = connection.execute(
-        "SELECT key, value FROM projection_meta"
-    ).fetchall()
-    return {key: value for key, value in rows}
+    rows = connection.execute("SELECT key, value FROM projection_meta").fetchall()
+    return dict(rows)
 
 
 def applied_migrations(meta_rows: Mapping[str, str]) -> list[int]:
@@ -251,9 +249,9 @@ def apply_pending_migrations(connection: sqlite3.Connection) -> int:
         for migration in pending:
             connection.executescript(str(migration["sql"]))
         # Mark migrations applied (idempotent merge).
-        merged = sorted(set(already_applied) | {
-            int(migration["version"]) for migration in pending
-        })
+        merged = sorted(
+            set(already_applied) | {int(migration["version"]) for migration in pending}
+        )
         _record_applied(connection, merged)
         # Reflect the new schema_version.
         connection.execute(
@@ -264,9 +262,7 @@ def apply_pending_migrations(connection: sqlite3.Connection) -> int:
     except MigrationFailedError:
         raise
     except sqlite3.Error as error:
-        raise MigrationFailedError(
-            f"migration failed: {error}"
-        ) from error
+        raise MigrationFailedError(f"migration failed: {error}") from error
     return supported
 
 
@@ -300,9 +296,7 @@ def initialize_fresh(connection: sqlite3.Connection) -> int:
     except MigrationFailedError:
         raise
     except sqlite3.Error as error:
-        raise MigrationFailedError(
-            f"migration failed: {error}"
-        ) from error
+        raise MigrationFailedError(f"migration failed: {error}") from error
     return supported
 
 

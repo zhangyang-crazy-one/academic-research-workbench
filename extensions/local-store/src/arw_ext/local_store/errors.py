@@ -12,8 +12,6 @@ boundary code can ``except LocalStoreError`` without enumerating every subtype.
 
 from __future__ import annotations
 
-from typing import ClassVar
-
 
 class LocalStoreError(RuntimeError):
     """Base class for every typed fault the local store can raise.
@@ -25,12 +23,11 @@ class LocalStoreError(RuntimeError):
     messages that vary across rows).
     """
 
-    code: ClassVar[str] = "local_store_error"
+    code: str = "local_store_error"
 
     def __init__(self, message: str, *, code: str | None = None) -> None:
-        if code is None:
-            code = type(self).code
-        self.code = code
+        if code is not None:
+            self.code = code
         super().__init__(message)
 
 
@@ -42,7 +39,7 @@ class SchemaVersionUnsupportedError(LocalStoreError):
     to upgrade the workbench binary rather than downgrade the store.
     """
 
-    code: ClassVar[str] = "schema_version_unsupported"
+    code: str = "schema_version_unsupported"
 
 
 class ProjectionMetaCorruptError(LocalStoreError):
@@ -53,7 +50,7 @@ class ProjectionMetaCorruptError(LocalStoreError):
     from canonical evidence; the file is not auto-truncated.
     """
 
-    code: ClassVar[str] = "projection_meta_corrupt"
+    code: str = "projection_meta_corrupt"
 
 
 class MigrationFailedError(LocalStoreError):
@@ -64,28 +61,30 @@ class MigrationFailedError(LocalStoreError):
     blindly — the migration code is versioned and not idempotent on retry.
     """
 
-    code: ClassVar[str] = "migration_failed"
+    code: str = "migration_failed"
 
 
 class StorePathUnsafeError(LocalStoreError):
     """The requested store path is a symlink, a non-directory, or unwritable."""
 
-    code: ClassVar[str] = "store_path_unsafe"
+    code: str = "store_path_unsafe"
 
 
 class StoreOpenError(LocalStoreError):
     """Generic open-time failure (corrupt header, unreadable file, etc.)."""
 
-    code: ClassVar[str] = "store_open_failed"
+    code: str = "store_open_failed"
 
 
-FAULT_CODES: frozenset[str] = frozenset({
-    SchemaVersionUnsupportedError.code,
-    ProjectionMetaCorruptError.code,
-    MigrationFailedError.code,
-    StorePathUnsafeError.code,
-    StoreOpenError.code,
-})
+FAULT_CODES: frozenset[str] = frozenset(
+    {
+        SchemaVersionUnsupportedError.code,
+        ProjectionMetaCorruptError.code,
+        MigrationFailedError.code,
+        StorePathUnsafeError.code,
+        StoreOpenError.code,
+    }
+)
 
 __all__ = [
     "FAULT_CODES",

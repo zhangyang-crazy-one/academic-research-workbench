@@ -262,42 +262,46 @@ MIGRATIONS: tuple[dict[str, str | int], ...] = (
 # Tables and indexes the migration runner must be able to enumerate from
 # ``sqlite_master``.  Kept as a Python constant so tests can assert against the
 # exact set the proposal named without parsing SQL.
-EXPECTED_TABLES: frozenset[str] = frozenset({
-    "projection_meta",
-    "materialized_run_state",
-    "artifacts",
-    "files",
-    "files_fts",
-    "files_fts_trigram",
-    "file_extractions",
-    "nodes",
-    "edges",
-    "assertions",
-    "provenance",
-    "activities",
-    "agents",
-    "decisions",
-    "projection_checkpoints",
-})
+EXPECTED_TABLES: frozenset[str] = frozenset(
+    {
+        "projection_meta",
+        "materialized_run_state",
+        "artifacts",
+        "files",
+        "files_fts",
+        "files_fts_trigram",
+        "file_extractions",
+        "nodes",
+        "edges",
+        "assertions",
+        "provenance",
+        "activities",
+        "agents",
+        "decisions",
+        "projection_checkpoints",
+    }
+)
 
-EXPECTED_INDEXES: frozenset[str] = frozenset({
-    "materialized_run_state_stage_idx",
-    "materialized_run_state_status_idx",
-    "artifacts_kind_idx",
-    "files_index_state_idx",
-    "file_extractions_file_idx",
-    "nodes_entity_type_idx",
-    "edges_from_idx",
-    "edges_to_idx",
-    "edges_type_idx",
-    "edges_from_type_idx",
-    "edges_to_type_idx",
-    "assertions_entity_idx",
-    "provenance_node_or_edge_idx",
-    "provenance_source_artifact_idx",
-    "provenance_ledger_event_idx",
-    "decisions_subject_idx",
-})
+EXPECTED_INDEXES: frozenset[str] = frozenset(
+    {
+        "materialized_run_state_stage_idx",
+        "materialized_run_state_status_idx",
+        "artifacts_kind_idx",
+        "files_index_state_idx",
+        "file_extractions_file_idx",
+        "nodes_entity_type_idx",
+        "edges_from_idx",
+        "edges_to_idx",
+        "edges_type_idx",
+        "edges_from_type_idx",
+        "edges_to_type_idx",
+        "assertions_entity_idx",
+        "provenance_node_or_edge_idx",
+        "provenance_source_artifact_idx",
+        "provenance_ledger_event_idx",
+        "decisions_subject_idx",
+    }
+)
 
 
 def projection_meta_initial_rows() -> list[tuple[str, str]]:
