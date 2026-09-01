@@ -83,7 +83,7 @@ def _assignment_and_attempt():
 
 
 def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) -> bytes:
-    from arw.canonical import canonical_json_bytes
+    from arw.kernel.core.canonical import canonical_json_bytes
     from arw.orchestration_models import ProposedArtifact, WorkerProposal
 
     proposal = WorkerProposal.model_validate(

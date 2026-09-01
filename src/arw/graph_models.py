@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.models import Sha256, StableRuntimeId, StrictModel
 
 

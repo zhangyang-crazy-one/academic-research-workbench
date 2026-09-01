@@ -70,7 +70,7 @@ def test_canonical_bytes_and_hash_are_exactly_the_checked_in_fixture() -> None:
     assert importlib.util.find_spec("arw.canonical") is not None, (
         "expected RED: canonical serializer is not implemented"
     )
-    from arw.canonical import canonical_event_bytes, canonical_json_bytes
+    from arw.kernel.core.canonical import canonical_event_bytes, canonical_json_bytes
 
     manifest = _json(SEED / "expected-run-manifest.json")
     expected_manifest = (SEED / "expected-run-manifest.json").read_bytes()

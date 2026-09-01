@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.graph_models import GraphQueryRequest
 from arw.graph_oracle import assert_equivalent, normalize_query_page
 from arw.graph_projection import GraphProjectionError, project_canonical_records

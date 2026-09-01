@@ -74,7 +74,7 @@ def test_native_fixture_rejects_python_only_shape() -> None:
 
 
 def _phase2_instances() -> dict[str, list[object]]:
-    from arw.canonical import seal_event
+    from arw.kernel.core.canonical import seal_event
     from arw.models import (
         ArtifactAcceptanceRequest,
         ArtifactManifest,

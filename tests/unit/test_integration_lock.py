@@ -16,7 +16,7 @@ import pytest
 
 import arw.cli as cli_module
 import arw.integration_lock as integration_lock_module
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.hook_contracts import (
     PARITY_SURFACES,
     CodexHookReceipt,

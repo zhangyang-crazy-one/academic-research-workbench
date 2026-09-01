@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.integration_lock import (
     IntegrationLock,
     _tree_sha256,

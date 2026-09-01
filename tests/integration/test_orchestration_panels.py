@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import sha256_hex
+from arw.kernel.core.canonical import sha256_hex
 from arw.execution import DeterministicFakeAdapter
 from arw.models import RuntimeCommandRequest
 from arw.orchestration import OrchestrationError, OrchestrationService

@@ -19,7 +19,7 @@ def _provenance():
 
 def _ingestable_provenance():
     from arw.experiment_provenance import seal_experiment_provenance
-    from arw.canonical import canonical_json_bytes, sha256_hex
+    from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 
     value = json.loads(FIXTURE.read_text(encoding="utf-8"))
     value["artifacts"][0]["content_path"] = None

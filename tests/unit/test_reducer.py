@@ -433,7 +433,7 @@ def test_reducer_rejects_non_exact_or_branching_passport(
 
 
 def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files() -> None:
-    from arw.canonical import sha256_hex
+    from arw.kernel.core.canonical import sha256_hex
     from arw.models import (
         AssignmentPreparedPayload,
         CanonicalEvent,
@@ -509,7 +509,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
 
 
 def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_results() -> None:
-    from arw.canonical import sha256_hex
+    from arw.kernel.core.canonical import sha256_hex
     from arw.models import (
         AssignmentPreparedPayload,
         AttemptLifecyclePayload,

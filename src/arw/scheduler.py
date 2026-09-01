@@ -20,7 +20,7 @@ from arw.execution import (
     ExecutionPolicySnapshot,
     HostResult,
 )
-from arw.faults import inject
+from arw.kernel.core.faults import inject
 
 
 RETRYABLE_FAILURES = frozenset({"timeout", "process_failure", "repairable_envelope"})

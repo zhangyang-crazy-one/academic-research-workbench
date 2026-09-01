@@ -21,7 +21,7 @@ from pydantic import (
     model_validator,
 )
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.models import ActorId, RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 

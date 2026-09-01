@@ -125,7 +125,7 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
     forged.pop("dossier_sha256")
     # Recompute the outer digest so the only failing boundary is qualification
     # authority, not a superficial hash mismatch.
-    from arw.canonical import sha256_hex, canonical_json_bytes
+    from arw.kernel.core.canonical import sha256_hex, canonical_json_bytes
 
     forged["dossier_sha256"] = sha256_hex(
         canonical_json_bytes({k: v for k, v in forged.items() if k != "dossier_sha256"})

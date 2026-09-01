@@ -7,7 +7,7 @@ import jsonschema
 import pytest
 from pydantic import ValidationError
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.orchestration_models import (
     AttemptDescriptor,
     GateDecision,

@@ -13,7 +13,7 @@ from typing import Any, Iterator
 import portalocker
 from pydantic import ValidationError
 
-from arw.canonical import (
+from arw.kernel.core.canonical import (
     canonical_event_bytes,
     canonical_json_bytes,
     seal_event,
@@ -40,7 +40,7 @@ from arw.recovery import (
     publish_recovery_segment,
     validate_recovery_boundary,
 )
-from arw.faults import active_fault, inject
+from arw.kernel.core.faults import active_fault, inject
 from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 

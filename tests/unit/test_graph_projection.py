@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 
 
 def _node(entity_type: str, entity_id: str, source: str) -> dict[str, object]:

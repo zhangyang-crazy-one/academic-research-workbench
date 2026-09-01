@@ -306,7 +306,7 @@ def _phase4_record(value: object, model_name: str) -> object:
 
 def _phase4_record_digest(value: object) -> str:
     from arw.orchestration_models import canonical_orchestration_model_bytes
-    from arw.canonical import sha256_hex
+    from arw.kernel.core.canonical import sha256_hex
 
     return sha256_hex(canonical_orchestration_model_bytes(value))  # type: ignore[arg-type]
 

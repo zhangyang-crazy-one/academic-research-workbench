@@ -38,7 +38,7 @@ from pydantic import (
     model_validator,
 )
 
-from arw.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
 
 EXPECTED_ARS_ADAPTER_VERSION = "0.1.27"

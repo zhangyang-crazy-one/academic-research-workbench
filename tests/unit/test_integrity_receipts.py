@@ -34,7 +34,7 @@ def _payload() -> dict[str, object]:
 
 
 def test_seal_recomputes_receipt_hash_and_rejects_supplied_hash() -> None:
-    from arw.canonical import canonical_json_bytes, sha256_hex
+    from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
     from arw.integrity import IntegrityReceipt, seal_integrity_receipt
 
     receipt = seal_integrity_receipt(_payload())

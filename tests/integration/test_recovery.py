@@ -86,7 +86,7 @@ def _request(state, *, number: int = 82):
 
 
 def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> None:
-    from arw.canonical import sha256_hex, strict_json_loads
+    from arw.kernel.core.canonical import sha256_hex, strict_json_loads
     from arw.journal import replay_run
     from arw.recovery import load_recovery_receipt
     from arw.runtime import RuntimeCommandService
@@ -209,7 +209,7 @@ def test_recovery_boundary_supports_standard_checkpoint_and_continuation(
 
 @pytest.mark.parametrize("tamper", ["original", "raw", "receipt", "event"])
 def test_recovered_run_blocks_changed_binding_evidence(tmp_path: Path, tamper: str) -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.journal import replay_run
     from arw.runtime import RuntimeCommandService
 

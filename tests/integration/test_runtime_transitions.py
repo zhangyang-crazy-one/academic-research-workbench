@@ -209,7 +209,7 @@ def test_transition_cli_routes_only_through_runtime_service(tmp_path: Path) -> N
 def test_replay_cli_rejects_resealed_event_that_violates_runtime_authority(
     tmp_path: Path,
 ) -> None:
-    from arw.canonical import canonical_json_bytes, seal_event
+    from arw.kernel.core.canonical import canonical_json_bytes, seal_event
 
     root, service = _service(tmp_path)
     accepted = service.execute_transition(_transition())

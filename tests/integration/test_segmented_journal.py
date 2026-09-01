@@ -82,7 +82,7 @@ def test_segment_discovery_fails_closed(tmp_path: Path, defect: str) -> None:
 
 
 def test_replay_continues_chain_across_ordered_segments(tmp_path: Path) -> None:
-    from arw.canonical import canonical_json_bytes, seal_event
+    from arw.kernel.core.canonical import canonical_json_bytes, seal_event
     from arw.journal import replay_run
 
     root = tmp_path / "ordered"

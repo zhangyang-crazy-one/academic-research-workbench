@@ -12,7 +12,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from arw import research_integrity
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:

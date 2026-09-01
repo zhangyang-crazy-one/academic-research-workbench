@@ -17,13 +17,13 @@ from pathlib import Path
 import pytest
 
 from arw.audit_dossier import assemble_audit_dossier, replay_audit_dossier
-from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.evidence_access import (
     EvidenceAccessDecision,
     LifecycleEvidenceRecord,
     evaluate_claim_capability,
 )
-from arw.faults import InjectedFault
+from arw.kernel.core.faults import InjectedFault
 from arw.integrity import IntegrityReceipt
 from arw.experiment_provenance import QualificationReceipt
 from arw.graph_models import GraphProjectionReceipt

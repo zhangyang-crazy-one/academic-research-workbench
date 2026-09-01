@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 from pathlib import Path
 
-from arw.canonical import sha256_hex
+from arw.kernel.core.canonical import sha256_hex
 from arw.execution import (
     DispatchSpec,
     DeterministicFakeAdapter,

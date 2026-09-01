@@ -9,7 +9,7 @@ from typing import Annotated, Literal, TypeVar
 
 from pydantic import TypeAdapter, ValidationError
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.models import (
     ArtifactAcceptedPayload,
     ArtifactManifest,

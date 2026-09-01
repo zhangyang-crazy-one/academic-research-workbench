@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 
-from arw.canonical import canonical_event_bytes, canonical_json_bytes, seal_event, sha256_hex, strict_json_loads
+from arw.kernel.core.canonical import canonical_event_bytes, canonical_json_bytes, seal_event, sha256_hex, strict_json_loads
 from arw.evidence import write_fault_sidecar
-from arw.faults import (
+from arw.kernel.core.faults import (
     FAULT_SPECS,
     FaultConfigurationError,
     InjectedFault,

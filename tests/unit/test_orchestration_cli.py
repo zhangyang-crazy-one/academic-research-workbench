@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ORCHESTRATION_COMMANDS = {

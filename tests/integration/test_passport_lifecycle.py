@@ -198,7 +198,7 @@ def test_duplicate_artifact_id_rejects_before_installing_an_orphan_manifest(
 def test_replay_blocks_resealed_passport_that_does_not_bind_checkpoint_state(
     tmp_path: Path,
 ) -> None:
-    from arw.canonical import canonical_json_bytes, seal_event
+    from arw.kernel.core.canonical import canonical_json_bytes, seal_event
     from arw.models import CheckpointRequest
 
     root, service = _service(tmp_path)

@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.journal import replay_run
 from arw.reducer import reduce_events
 from arw.workflows import CORE_WORKFLOW

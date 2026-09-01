@@ -60,7 +60,7 @@ def test_phase6_receipt_schema_is_registry_generated_and_strict() -> None:
 
 
 def test_receipt_round_trips_through_json_schema_and_hashes_canonical_payload() -> None:
-    from arw.canonical import canonical_json_bytes, sha256_hex
+    from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
     from arw.integrity import IntegrityReceipt
 
     receipt = IntegrityReceipt.model_validate(_payload())

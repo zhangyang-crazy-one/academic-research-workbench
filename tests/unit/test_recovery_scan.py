@@ -111,7 +111,7 @@ def test_only_terminal_unverifiable_suffix_is_recoverable(
 
 
 def test_changed_accepted_final_event_is_blocked(tmp_path: Path) -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.journal import replay_run
 
     root = tmp_path / "changed-final"
@@ -132,7 +132,7 @@ def test_changed_accepted_final_event_is_blocked(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("defect", ["changed-middle", "deleted", "reordered", "later-valid"])
 def test_middle_or_later_chain_damage_is_blocked(tmp_path: Path, defect: str) -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.journal import replay_run
 
     root = tmp_path / defect
@@ -160,7 +160,7 @@ def test_middle_or_later_chain_damage_is_blocked(tmp_path: Path, defect: str) ->
 
 
 def test_changed_run_manifest_has_no_trustworthy_prefix(tmp_path: Path) -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.journal import JournalError, replay_run
 
     root = tmp_path / "manifest"

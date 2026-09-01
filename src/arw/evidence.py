@@ -9,8 +9,8 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.faults import FAULT_SPECS
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.faults import FAULT_SPECS
 
 
 ALLOWLISTED_ENVIRONMENT = (
