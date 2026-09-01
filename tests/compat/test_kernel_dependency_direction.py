@@ -23,17 +23,24 @@ def _imports_of(path: Path) -> set[str]:
     """Return the set of arw.* modules a file imports (static imports only)."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     found: set[str] = set()
+    # The file's own package (dots included) anchors relative imports.
+    package_parts = list(
+        path.relative_to(KERNEL_ROOT.parent.parent).with_suffix("").parts[:-1]
+    )
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if node.module.startswith("arw"):
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                # `from ..artifacts import integrity` at arw/kernel/execution/x.py
+                # resolves to arw.kernel.artifacts.integrity.
+                anchor = package_parts[: len(package_parts) - (node.level - 1)]
+                resolved = ".".join([*anchor, node.module or ""])
+                if node.module:
+                    found.add(resolved)
+                else:
+                    for alias in node.names:
+                        found.add(f"{resolved}.{alias.name}".removesuffix("."))
+            elif node.module.startswith("arw"):
                 found.add(node.module)
-            elif node.level and node.module is None:
-                # relative `from . import x` inside a package: anchor at the
-                # file's own package
-                package = ".".join(
-                    path.relative_to(KERNEL_ROOT.parent).with_suffix("").parts[:-1]
-                )
-                found.add(f"arw.{package}" if not package.startswith("arw") else package)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.startswith("arw"):

@@ -7,23 +7,23 @@ dispatch reporting), not CLI parsing/formatting.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
 import shutil
-import sys
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Sequence
-
-from arw.kernel.core.canonical import canonical_json_bytes
+from typing import Any
 
 from arw.cli_support import (
     CLIInputError,
     _canonical_object_from_bytes,
     _is_sha256_text,
-    _load_object,
     _write_json,
 )
+from arw.kernel.core.canonical import canonical_json_bytes
+
 
 def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
     from arw.kernel.policy.integration_lock import (
@@ -152,7 +152,10 @@ def _blocked_orchestration_result(command: str, *reason_codes: str) -> None:
     )
 
 def _blocked_execution_adapter():
-    from arw.kernel.execution.execution import CodexExecExecutionAdapter, NativeHostConfig
+    from arw.kernel.execution.execution import (
+        CodexExecExecutionAdapter,
+        NativeHostConfig,
+    )
 
     return CodexExecExecutionAdapter(NativeHostConfig(execution_mode="blocked"))
 
@@ -176,7 +179,10 @@ class _AssignmentCodexExecAdapter:
     def _adapter(self, spec: Any) -> Any:
         adapter = self.adapters.get(spec.assignment_id)
         if adapter is None:
-            from arw.kernel.execution.execution import HostQualificationBlocked, NativeHostQualification
+            from arw.kernel.execution.execution import (
+                HostQualificationBlocked,
+                NativeHostQualification,
+            )
 
             raise HostQualificationBlocked(
                 NativeHostQualification(
