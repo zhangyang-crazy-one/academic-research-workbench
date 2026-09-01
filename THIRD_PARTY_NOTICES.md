@@ -22,6 +22,7 @@ The collective plugin has mixed licensing. Component identities remain separate.
 - `packaging==26.2` — Apache-2.0 OR BSD-2-Clause.
 - `pathspec==1.1.1` — Mozilla Public License 2.0 (MPL 2.0).
 - `pluggy==1.6.0` — MIT License.
+- `platformdirs==4.11.6` — MIT.
 - `portalocker==3.2.0` — BSD-3-Clause.
 - `pydantic==2.13.4` — MIT.
 - `pydantic_core==2.46.4` — MIT.

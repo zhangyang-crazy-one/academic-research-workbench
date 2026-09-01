@@ -8,12 +8,12 @@
   "registry": "https://pypi.org/simple",
   "runtime_requirements": {
     "path": "vendor/python/wheelhouse/requirements-runtime.txt",
-    "sha256": "9d205fd064692f98da4ea36a2fa8f7ff3495e20b29ceee500b8e95a7711f302c"
+    "sha256": "0ccf78034737b9fd4a672d354cf8e97805b213fda8456245ad01f5a8ec8c148e"
   },
   "schema_version": "1.0.0",
   "uv_lock": {
     "path": "uv.lock",
-    "sha256": "95e73db07fb488e1a69d9a1df8ea3e9898b71a09102ff38ca766a1aba89257ec"
+    "sha256": "7a48885f7f03012158912c44012feed18ad6da781637d902e7429961c214a57e"
   },
   "wheels": [
     {
@@ -87,6 +87,14 @@
       "sha256": "e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746",
       "uv_lock_relationship": "registry-package",
       "version": "1.6.0"
+    },
+    {
+      "file": "platformdirs-4.11.6-py3-none-any.whl",
+      "package": "platformdirs",
+      "registry": "https://pypi.org/simple",
+      "sha256": "b22d992e863bc651c26b16242041c7979db6e3286e548f9a76cc91238fac599e",
+      "uv_lock_relationship": "registry-package",
+      "version": "4.11.6"
     },
     {
       "file": "portalocker-3.2.0-py3-none-any.whl",

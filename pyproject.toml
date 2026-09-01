@@ -7,7 +7,12 @@ name = "academic-research-workbench"
 version = "0.1.0"
 description = "Headless, auditable research-workflow control plane for Codex."
 requires-python = ">=3.13"
-dependencies = ["jsonschema>=4.26.0", "portalocker>=3.2.0", "pydantic>=2.13.4"]
+dependencies = [
+    "jsonschema>=4.26.0",
+    "platformdirs>=4.11.6",
+    "portalocker>=3.2.0",
+    "pydantic>=2.13.4",
+]
 
 [dependency-groups]
 dev = ["hatchling>=1.31.0", "PyYAML>=6.0.3", "pytest>=9.1.1"]
@@ -24,7 +29,7 @@ storm = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arw"]
+packages = ["src/arw", "extensions/local-store/src/arw_ext"]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
