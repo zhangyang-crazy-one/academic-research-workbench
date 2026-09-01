@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 
 from arw.kernel.core.canonical import canonical_event_bytes, canonical_json_bytes, seal_event, sha256_hex, strict_json_loads
-from arw.evidence import write_fault_sidecar
+from arw.kernel.artifacts.evidence import write_fault_sidecar
 from arw.kernel.core.faults import (
     FAULT_SPECS,
     FaultConfigurationError,
@@ -229,7 +229,7 @@ def _sidecar(
         run_root=run_root if replayable else None,
         allow_detached=not replayable,
     )
-    from arw.evidence import validate_fault_sidecar
+    from arw.kernel.artifacts.evidence import validate_fault_sidecar
 
     validate_fault_sidecar(
         evidence_root / "sidecar.json",
@@ -288,7 +288,7 @@ def test_phase7_fault_sidecar_rejects_forged_identity_boundary_and_retry(tmp_pat
         "file_snapshots": {"journal/manifest.json": "b" * 64},
         "process_state": {"returncode": 1, "signal": None},
     }
-    from arw.evidence import validate_fault_sidecar_payload
+    from arw.kernel.artifacts.evidence import validate_fault_sidecar_payload
 
     for mutation, pattern in (
         ({"fault_id": "phase7.not-registered"}, "not registered"),
@@ -305,7 +305,7 @@ def test_phase7_fault_sidecar_rejects_forged_identity_boundary_and_retry(tmp_pat
 
 
 def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
-    from arw.evidence import validate_fault_sidecar, write_fault_sidecar
+    from arw.kernel.artifacts.evidence import validate_fault_sidecar, write_fault_sidecar
 
     root = tmp_path / "sidecar"
     event = seal_event({"event_type": "fault-observation", "snapshot_sha256": "b" * 64})
@@ -329,7 +329,7 @@ def test_phase7_fault_sidecar_cold_digest_validation(tmp_path: Path) -> None:
 
 
 def test_phase7_fault_sidecar_rejects_noncanonical_and_forged_event_sequence(tmp_path: Path) -> None:
-    from arw.evidence import validate_fault_sidecar, write_fault_sidecar
+    from arw.kernel.artifacts.evidence import validate_fault_sidecar, write_fault_sidecar
 
     root = tmp_path / "sidecar"
     write_fault_sidecar(

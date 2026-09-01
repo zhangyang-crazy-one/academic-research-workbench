@@ -335,7 +335,7 @@ def validate_access_transition(
         if receipt_root is None:
             raise EvidenceAccessError("public promotion requires a run-root verification receipt")
         try:
-            from arw.integrity import evaluate_integrity_receipt, load_integrity_receipt
+            from arw.kernel.artifacts.integrity import evaluate_integrity_receipt, load_integrity_receipt
 
             checked_receipt = load_integrity_receipt(receipt_root, receipt)
             evaluation = evaluate_integrity_receipt(
@@ -451,7 +451,7 @@ def _fresh_integrity(
     if receipt is None:
         return ["missing_fresh_integrity_receipt"], ["integrity-receipt"]
     try:
-        from arw.integrity import IntegrityReceipt, evaluate_integrity_receipt, seal_integrity_receipt
+        from arw.kernel.artifacts.integrity import IntegrityReceipt, evaluate_integrity_receipt, seal_integrity_receipt
 
         checked = seal_integrity_receipt(receipt if isinstance(receipt, Mapping) else receipt.model_dump(mode="json"))
         if not isinstance(checked, IntegrityReceipt):
@@ -670,7 +670,7 @@ def evaluate_claim_capability(
         if provenance is None:
             return ClaimCapabilityDecision(capability, "BLOCKED", ("missing_external_provenance",), ("experiment-provenance",), scope)
         try:
-            from arw.experiment_provenance import evaluate_controlled_execution_policy, seal_experiment_provenance
+            from arw.kernel.artifacts.experiment_provenance import evaluate_controlled_execution_policy, seal_experiment_provenance
 
             checked = seal_experiment_provenance(provenance)
             policy = evaluate_controlled_execution_policy(checked, qualification_receipts, now=now)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from arw.audit_dossier import assemble_audit_dossier, replay_audit_dossier, render_audit_dossier_json, render_audit_dossier_markdown
+from arw.kernel.artifacts.audit_dossier import assemble_audit_dossier, replay_audit_dossier, render_audit_dossier_json, render_audit_dossier_markdown
 from arw.kernel.ledger.journal import ReplayState
 
 

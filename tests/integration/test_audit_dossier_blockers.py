@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from arw.evidence_access import evaluate_claim_capability
+from arw.kernel.artifacts.evidence_access import evaluate_claim_capability
 
 
 def test_audit_blocker_scope_is_explicit_and_graph_loss_is_not_a_pass() -> None:

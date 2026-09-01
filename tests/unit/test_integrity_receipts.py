@@ -35,7 +35,7 @@ def _payload() -> dict[str, object]:
 
 def test_seal_recomputes_receipt_hash_and_rejects_supplied_hash() -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-    from arw.integrity import IntegrityReceipt, seal_integrity_receipt
+    from arw.kernel.artifacts.integrity import IntegrityReceipt, seal_integrity_receipt
 
     receipt = seal_integrity_receipt(_payload())
     unsigned = receipt.model_dump(mode="json")
@@ -47,7 +47,7 @@ def test_seal_recomputes_receipt_hash_and_rejects_supplied_hash() -> None:
 
 
 def test_receipt_rejects_invalid_timestamp_and_skew_bounds() -> None:
-    from arw.integrity import IntegrityReceipt
+    from arw.kernel.artifacts.integrity import IntegrityReceipt
 
     with pytest.raises(ValueError):
         IntegrityReceipt.model_validate({**_payload(), "observed_at": "not-a-time"})
@@ -61,7 +61,7 @@ def test_receipt_rejects_invalid_timestamp_and_skew_bounds() -> None:
 
 
 def test_evaluate_integrity_receipt_is_pure_and_fail_closed() -> None:
-    from arw.integrity import IntegrityEvaluation, evaluate_integrity_receipt, seal_integrity_receipt
+    from arw.kernel.artifacts.integrity import IntegrityEvaluation, evaluate_integrity_receipt, seal_integrity_receipt
 
     receipt = seal_integrity_receipt(_payload())
     now = datetime(2026, 7, 15, 10, 30, tzinfo=UTC)

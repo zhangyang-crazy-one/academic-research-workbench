@@ -11,13 +11,13 @@ FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-
 
 
 def _receipt():
-    from arw.integrity import seal_integrity_receipt
+    from arw.kernel.artifacts.integrity import seal_integrity_receipt
 
     return seal_integrity_receipt(json.loads(FIXTURE.read_text(encoding="utf-8")))
 
 
 def test_publish_is_write_once_and_cold_replay_is_byte_identical(tmp_path: Path) -> None:
-    from arw.integrity import load_integrity_receipt, publish_integrity_receipt
+    from arw.kernel.artifacts.integrity import load_integrity_receipt, publish_integrity_receipt
 
     receipt = _receipt()
     path = publish_integrity_receipt(tmp_path, receipt)
@@ -29,7 +29,7 @@ def test_publish_is_write_once_and_cold_replay_is_byte_identical(tmp_path: Path)
 
 
 def test_publication_rejects_collision_and_symlink_store(tmp_path: Path) -> None:
-    from arw.integrity import IntegrityReceiptError, publish_integrity_receipt
+    from arw.kernel.artifacts.integrity import IntegrityReceiptError, publish_integrity_receipt
 
     receipt = _receipt()
     target = tmp_path / "integrity" / "receipts" / "sha256"
@@ -50,7 +50,7 @@ def test_publication_rejects_collision_and_symlink_store(tmp_path: Path) -> None
 def test_subject_input_expiry_and_future_clock_fail_closed_without_mutating_receipt(
     tmp_path: Path,
 ) -> None:
-    from arw.integrity import (
+    from arw.kernel.artifacts.integrity import (
         evaluate_integrity_receipt,
         load_integrity_receipt,
         publish_integrity_receipt,
@@ -88,7 +88,7 @@ def test_subject_input_expiry_and_future_clock_fail_closed_without_mutating_rece
 
 
 def test_tampered_file_is_not_revivable_by_evaluator_or_loader(tmp_path: Path) -> None:
-    from arw.integrity import IntegrityReceiptError, load_integrity_receipt, publish_integrity_receipt
+    from arw.kernel.artifacts.integrity import IntegrityReceiptError, load_integrity_receipt, publish_integrity_receipt
 
     receipt = _receipt()
     path = publish_integrity_receipt(tmp_path, receipt)
@@ -98,7 +98,7 @@ def test_tampered_file_is_not_revivable_by_evaluator_or_loader(tmp_path: Path) -
 
 
 def test_missing_integrity_load_is_read_only(tmp_path: Path) -> None:
-    from arw.integrity import IntegrityReceiptError, load_integrity_receipt
+    from arw.kernel.artifacts.integrity import IntegrityReceiptError, load_integrity_receipt
 
     with pytest.raises(IntegrityReceiptError):
         load_integrity_receipt(tmp_path, "a" * 64)

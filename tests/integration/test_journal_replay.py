@@ -88,7 +88,7 @@ def test_post_fsync_sigkill_replays_once_without_changing_journal() -> None:
     assert importlib.util.find_spec("arw.evidence") is not None, (
         "expected RED: allowlisted recovery evidence capture is not implemented"
     )
-    from arw.evidence import record_command_result, write_evidence_bytes, write_evidence_json
+    from arw.kernel.artifacts.evidence import record_command_result, write_evidence_bytes, write_evidence_json
 
     commands_root = EVIDENCE_ROOT / "commands"
     record_command_result(

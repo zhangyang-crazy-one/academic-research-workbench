@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.audit_dossier import (
+from arw.kernel.artifacts.audit_dossier import (
     AuditDossierError,
     AuditDossierManifest,
     assemble_audit_dossier,
@@ -139,10 +139,10 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
 
 
 def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
-    from arw.audit_dossier import _seal_audit_dossier
-    from arw.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
-    from arw.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
-    from arw.integrity import publish_integrity_receipt, seal_integrity_receipt
+    from arw.kernel.artifacts.audit_dossier import _seal_audit_dossier
+    from arw.kernel.artifacts.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
+    from arw.kernel.artifacts.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
+    from arw.kernel.artifacts.integrity import publish_integrity_receipt, seal_integrity_receipt
     from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
     from arw.kernel.ledger.workflows import CORE_WORKFLOW

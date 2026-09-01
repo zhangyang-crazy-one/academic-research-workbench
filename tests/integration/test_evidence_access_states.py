@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from arw.evidence_access import (
+from arw.kernel.artifacts.evidence_access import (
     EVIDENCE_ACCESS_SCHEMA_VERSION,
     EvidenceAccessDecision,
     EvidenceAccessState,

@@ -41,7 +41,7 @@ def _payload() -> dict[str, object]:
 
 
 def test_phase6_receipt_schema_is_registry_generated_and_strict() -> None:
-    from arw.integrity import generate_phase6_schema_documents
+    from arw.kernel.artifacts.integrity import generate_phase6_schema_documents
     from arw.schema_registry import PHASE6_SCHEMA_NAMES, SCHEMA_NAMES
 
     assert PHASE6_SCHEMA_NAMES == (
@@ -61,7 +61,7 @@ def test_phase6_receipt_schema_is_registry_generated_and_strict() -> None:
 
 def test_receipt_round_trips_through_json_schema_and_hashes_canonical_payload() -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-    from arw.integrity import IntegrityReceipt
+    from arw.kernel.artifacts.integrity import IntegrityReceipt
 
     receipt = IntegrityReceipt.model_validate(_payload())
     document = receipt.model_dump(mode="json")
@@ -86,7 +86,7 @@ def test_receipt_round_trips_through_json_schema_and_hashes_canonical_payload() 
     ],
 )
 def test_receipt_rejects_unknowns_noncanonical_arrays_and_digest_substitution(mutation) -> None:
-    from arw.integrity import IntegrityReceipt
+    from arw.kernel.artifacts.integrity import IntegrityReceipt
 
     value = _payload()
     mutation(value)
@@ -95,7 +95,7 @@ def test_receipt_rejects_unknowns_noncanonical_arrays_and_digest_substitution(mu
 
 
 def test_registry_validates_phase6_instances_without_static_count() -> None:
-    from arw.integrity import IntegrityReceipt
+    from arw.kernel.artifacts.integrity import IntegrityReceipt
     from arw.schema_registry import SCHEMA_NAMES, validate_checked_in_schemas, validate_instance
 
     receipt = IntegrityReceipt.model_validate(_payload())

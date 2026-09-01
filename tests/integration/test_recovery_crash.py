@@ -130,7 +130,7 @@ def test_partial_runtime_append_becomes_recoverable_tail(tmp_path: Path) -> None
 def test_recovery_crash_is_absent_or_fully_replayable_and_retryable(
     tmp_path: Path, failpoint: str
 ) -> None:
-    from arw.evidence import record_command_result
+    from arw.kernel.artifacts.evidence import record_command_result
     from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / failpoint

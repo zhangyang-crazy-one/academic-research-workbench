@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from arw.evidence_access import (
+from arw.kernel.artifacts.evidence_access import (
     EVIDENCE_ACCESS_SCHEMA_VERSION,
     EvidenceAccessDecision,
     EvidenceAccessError,
@@ -14,7 +14,7 @@ from arw.evidence_access import (
     publish_evidence_access_decision,
     validate_access_transition,
 )
-from arw.integrity import IntegrityReceipt, publish_integrity_receipt
+from arw.kernel.artifacts.integrity import IntegrityReceipt, publish_integrity_receipt
 from arw.kernel.state.orchestration_models import HumanAuthority
 
 

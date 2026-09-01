@@ -16,16 +16,16 @@ from pathlib import Path
 
 import pytest
 
-from arw.audit_dossier import assemble_audit_dossier, replay_audit_dossier
+from arw.kernel.artifacts.audit_dossier import assemble_audit_dossier, replay_audit_dossier
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-from arw.evidence_access import (
+from arw.kernel.artifacts.evidence_access import (
     EvidenceAccessDecision,
     LifecycleEvidenceRecord,
     evaluate_claim_capability,
 )
 from arw.kernel.core.faults import InjectedFault
-from arw.integrity import IntegrityReceipt
-from arw.experiment_provenance import QualificationReceipt
+from arw.kernel.artifacts.integrity import IntegrityReceipt
+from arw.kernel.artifacts.experiment_provenance import QualificationReceipt
 from arw.graph_models import GraphProjectionReceipt
 from arw.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
@@ -359,7 +359,7 @@ def _integrity(decision: EvidenceAccessDecision) -> IntegrityReceipt:
 def _qualification_receipts(provenance: object) -> dict[str, QualificationReceipt]:
     checked = provenance
     if not hasattr(checked, "provenance_sha256"):
-        from arw.experiment_provenance import seal_experiment_provenance
+        from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
 
         checked = seal_experiment_provenance(checked)
     result: dict[str, QualificationReceipt] = {}

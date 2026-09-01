@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import permutations
 
-from arw.audit_dossier import assemble_audit_dossier, render_audit_dossier_json
+from arw.kernel.artifacts.audit_dossier import assemble_audit_dossier, render_audit_dossier_json
 from arw.kernel.ledger.journal import ReplayState
 
 
