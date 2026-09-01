@@ -1,2 +1,2 @@
-{"edges":{"artifacts":["core","execution","ledger","state"],"execution":["core","ledger","state"],"ledger":["core","state"],"policy":["artifacts","core","state"],"state":["core","ledger"]}}
+{"edges":{"artifacts":["core","execution","ledger","state"],"execution":["core","ledger","policy","state"],"ledger":["core","state"],"policy":["artifacts","core","state"],"state":["core","ledger"]}}
 
