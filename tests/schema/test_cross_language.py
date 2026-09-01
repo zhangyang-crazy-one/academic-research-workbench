@@ -27,7 +27,7 @@ def _validator(name: str) -> jsonschema.Draft202012Validator:
 
 
 def test_python_and_native_fixtures_validate_independently() -> None:
-    from arw.schema_registry import validate_phase1_instance
+    from arw.kernel.policy.schema_registry import validate_phase1_instance
 
     python_fixture = json.loads(
         (REPOSITORY_ROOT / "tests/fixtures/recovery/seed/expected-run-manifest.json").read_text(
@@ -327,7 +327,7 @@ def _phase2_instances() -> dict[str, list[object]]:
 
 
 def test_phase2_model_fixtures_validate_and_unknown_fields_fail_independently() -> None:
-    from arw.schema_registry import SchemaRegistryError, validate_instance
+    from arw.kernel.policy.schema_registry import SchemaRegistryError, validate_instance
 
     for name, instances in _phase2_instances().items():
         validator = _validator(name)

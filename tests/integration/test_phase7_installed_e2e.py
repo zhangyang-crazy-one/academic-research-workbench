@@ -27,7 +27,7 @@ from arw.kernel.core.faults import InjectedFault
 from arw.kernel.artifacts.integrity import IntegrityReceipt
 from arw.kernel.artifacts.experiment_provenance import QualificationReceipt
 from arw.graph_models import GraphProjectionReceipt
-from arw.integration_lock import (
+from arw.kernel.policy.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
     discover_codex_native_binary,

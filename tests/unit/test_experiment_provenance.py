@@ -98,7 +98,7 @@ def test_external_provenance_is_strict_and_deterministically_sealed() -> None:
 
 def test_representative_fixture_round_trips_through_checked_schema() -> None:
     from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     value = json.loads(FIXTURE.read_text(encoding="utf-8"))
     provenance = seal_experiment_provenance(value)

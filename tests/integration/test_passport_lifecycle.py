@@ -73,7 +73,7 @@ def _base(number: int, revision: int, *, role: str = "parent_control_plane"):
 def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) -> None:
     from arw.kernel.ledger.manifests import install_artifact_manifest
     from arw.kernel.state.models import ArtifactAcceptanceRequest, ArtifactManifest
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     content = root / "outputs" / "figure.png"
@@ -287,7 +287,7 @@ def test_status_without_at_uses_current_utc_for_passport_freshness(
 def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -> None:
     from arw.kernel.ledger.manifests import load_material_passport
     from arw.kernel.state.models import CheckpointRequest
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(

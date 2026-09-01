@@ -41,7 +41,7 @@ def _registry() -> object:
 
 def test_phase4_schema_documents_are_generated_registered_and_byte_stable(tmp_path: Path) -> None:
     from arw.kernel.state.orchestration_models import generate_phase4_schema_documents
-    from arw.schema_registry import (
+    from arw.kernel.policy.schema_registry import (
         PHASE4_SCHEMA_NAMES,
         SCHEMA_NAMES,
         regenerate_schemas,
@@ -66,7 +66,7 @@ def test_phase4_schema_documents_are_generated_registered_and_byte_stable(tmp_pa
 
 def test_phase4_models_and_schemas_reject_unknown_and_invalid_contract_values() -> None:
     from arw.kernel.state.orchestration_models import GateDecision, WorkerProposal
-    from arw.schema_registry import SchemaRegistryError, validate_instance
+    from arw.kernel.policy.schema_registry import SchemaRegistryError, validate_instance
 
     proposal = {
         "schema_version": "arw.worker-proposal.v1",

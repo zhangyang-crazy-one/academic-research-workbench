@@ -10,7 +10,7 @@ import jsonschema
 import pytest
 from referencing import Registry, Resource
 
-from arw.schema_registry import SCHEMA_NAMES
+from arw.kernel.policy.schema_registry import SCHEMA_NAMES
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -156,7 +156,7 @@ def test_identity_loader_rejects_tampered_packaged_schema(
     )
     assert result.returncode == 0, result.stderr
 
-    from arw.build_identity import BuildIdentityError, load_packaged_build_identity
+    from arw.kernel.policy.build_identity import BuildIdentityError, load_packaged_build_identity
 
     schema = stage_root / "share/arw/schemas/build-identity.schema.json"
     schema.write_text(schema.read_text(encoding="utf-8") + "\n", encoding="utf-8")

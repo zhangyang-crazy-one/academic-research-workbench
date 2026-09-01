@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.hook_contracts import (
+from arw.kernel.policy.hook_contracts import (
     CONFIGURED_HOOK_NAMES,
     HOOK_STATUSES,
     MAX_HOOK_INPUT_BYTES,

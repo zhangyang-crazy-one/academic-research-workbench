@@ -10,7 +10,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_checked_in_schemas_regenerate_byte_stably(tmp_path: Path) -> None:
-    from arw.schema_registry import (
+    from arw.kernel.policy.schema_registry import (
         PHASE1_SCHEMA_NAMES,
         SCHEMA_NAMES,
         aggregate_schema_sha256,
@@ -38,7 +38,7 @@ def test_checked_in_schemas_regenerate_byte_stably(tmp_path: Path) -> None:
 
 
 def test_registry_rejects_unknown_or_incompatible_schema_drift(tmp_path: Path) -> None:
-    from arw.schema_registry import SchemaRegistryError, validate_schema_document
+    from arw.kernel.policy.schema_registry import SchemaRegistryError, validate_schema_document
 
     document = json.loads(
         (REPOSITORY_ROOT / "schemas/v1/build-identity.schema.json").read_text(
@@ -60,7 +60,7 @@ def test_registry_rejects_unknown_or_incompatible_schema_drift(tmp_path: Path) -
 
 
 def test_runtime_request_instances_validate_independently() -> None:
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     common = {
         "schema_version": "1.0.0",

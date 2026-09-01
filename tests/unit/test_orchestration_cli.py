@@ -301,7 +301,7 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from arw import cli
-    from arw.integration_lock import IntegrationLockError
+    from arw.kernel.policy.integration_lock import IntegrationLockError
 
     stage = tmp_path / "stage"
     supply = stage / "supply-chain"
@@ -336,7 +336,7 @@ def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from arw import cli
-    from arw.integration_lock import IntegrationLockError, IntegrationVerification
+    from arw.kernel.policy.integration_lock import IntegrationLockError, IntegrationVerification
 
     stage = tmp_path / "stage"
     supply = stage / "supply-chain"

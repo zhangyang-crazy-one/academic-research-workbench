@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from arw.kernel.core.canonical import canonical_json_bytes
-from arw.integration_lock import (
+from arw.kernel.policy.integration_lock import (
     IntegrationLock,
     _tree_sha256,
     _validate_arw_runtime,

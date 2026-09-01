@@ -334,7 +334,7 @@ def _is_status_json_request(args: argparse.Namespace) -> bool:
 
 
 def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
-    from arw.integration_lock import (
+    from arw.kernel.policy.integration_lock import (
         IntegrationLockError,
         discover_codex_native_binary,
     )
@@ -404,7 +404,7 @@ def _discover_installed_route_inputs() -> tuple[Path, dict[str, Path | None]]:
 
 
 def _installed_route_from_environment():
-    from arw.contracts import installed_route
+    from arw.kernel.policy.contracts import installed_route
 
     plugin_root, values = _discover_installed_route_inputs()
     lock_path = values["lock"]
@@ -420,7 +420,7 @@ def _installed_route_from_environment():
         or canary_path is None
     ):
         return installed_route(blocked_reason="integration_inputs_incomplete")
-    from arw.integration_lock import (
+    from arw.kernel.policy.integration_lock import (
         IntegrationLockError,
         load_and_verify_integration_lock,
     )
@@ -439,7 +439,7 @@ def _installed_route_from_environment():
 
 
 def _installed_route_diagnostics_from_environment():
-    from arw.integration_lock import diagnose_integration_lock
+    from arw.kernel.policy.integration_lock import diagnose_integration_lock
 
     plugin_root, values = _discover_installed_route_inputs()
     return diagnose_integration_lock(
@@ -528,7 +528,7 @@ def _verified_dispatch_adapter(
         CodexExecQualificationReceipt,
         NativeHostConfig,
     )
-    from arw.integration_lock import (
+    from arw.kernel.policy.integration_lock import (
         IntegrationLockError,
         load_and_verify_integration_lock,
         load_integration_lock,
@@ -727,7 +727,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "version":
         if not args.json_output:
             parser.error("version requires --json")
-        from arw.build_identity import BuildIdentityError, load_packaged_build_identity
+        from arw.kernel.policy.build_identity import BuildIdentityError, load_packaged_build_identity
 
         try:
             identity, digest = load_packaged_build_identity()

@@ -90,7 +90,7 @@ def test_explicit_recovery_preserves_and_binds_exact_tail(tmp_path: Path) -> Non
     from arw.kernel.ledger.journal import replay_run
     from arw.kernel.ledger.recovery import load_recovery_receipt
     from arw.runtime import RuntimeCommandService
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root = tmp_path / "run"
     initialized = _initialize(root)
