@@ -65,6 +65,24 @@ def test_kernel_never_imports_cli() -> None:
     assert not violations, "kernel must not import the CLI layer:\n" + "\n".join(violations)
 
 
+SRC_ROOT = KERNEL_ROOT.parent
+
+
+def test_kernel_never_imports_adapters() -> None:
+    """The kernel depends on ports (Protocols), never on concrete adapters."""
+    violations = []
+    for path in KERNEL_ROOT.rglob("*.py"):
+        if "__pycache__" in str(path):
+            continue
+        for module in _imports_of(path):
+            if module == "arw.adapters" or module.startswith("arw.adapters."):
+                violations.append(f"{path.relative_to(SRC_ROOT)}: {module}")
+    assert not violations, (
+        "kernel must not import concrete adapters (composition root only):\n"
+        + "\n".join(violations)
+    )
+
+
 def _kernel_edges() -> dict[str, list[str]]:
     edges: dict[str, set[str]] = {}
     for path in KERNEL_ROOT.rglob("*.py"):
