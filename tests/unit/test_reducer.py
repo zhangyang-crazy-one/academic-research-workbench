@@ -447,7 +447,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
     attempt = _phase4_attempt(assignment, attempt_id="attempt.phase4-001")
     proposal = _phase4_proposal(assignment, attempt)
     proposal_sha256 = sha256_hex(
-        __import__("arw.orchestration_models", fromlist=["canonical_orchestration_model_bytes"])
+        __import__("arw.kernel.state.orchestration_models", fromlist=["canonical_orchestration_model_bytes"])
         .canonical_orchestration_model_bytes(proposal)
     )
     events = [

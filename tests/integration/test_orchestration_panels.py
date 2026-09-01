@@ -274,7 +274,7 @@ def test_p04_05_t01_panel_manifest_and_seats_survive_cold_replay(
     assert {seat.role_id for seat in manifest.reviewer_seats} == set(ROLES)
     assert all(seat.identity_receipt_sha256 for seat in manifest.reviewer_seats)
     assert manifest.synthesizer_seat is not None
-    events = __import__("arw.journal", fromlist=["replay_run"]).replay_run(root).events
+    events = __import__("arw.kernel.ledger.journal", fromlist=["replay_run"]).replay_run(root).events
     panel_index = next(
         index for index, event in enumerate(events) if event.event_type == "panel.prepared"
     )

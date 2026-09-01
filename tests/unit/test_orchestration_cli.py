@@ -110,7 +110,8 @@ def test_dispatch_rejects_receipt_without_assignment_mapping_proof(
     monkeypatch: pytest.MonkeyPatch,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    from arw import cli, orchestration
+    from arw import cli
+    from arw.kernel.execution import orchestration
 
     assignment = SimpleNamespace(
         assignment_id="assignment.alpha",
@@ -255,7 +256,7 @@ def test_read_only_route_import_never_probes_a_writable_temp_directory(
                 "import sys; import arw.cli as cli; "
                 "status = cli.main(['route', '--json']); "
                 "assert 'arw.files' not in sys.modules; "
-                "assert 'arw.journal' not in sys.modules; "
+                "assert 'arw.kernel.ledger.journal' not in sys.modules; "
                 "assert 'portalocker' not in sys.modules; "
                 "raise SystemExit(status)"
             ),
@@ -325,7 +326,7 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
         raise IntegrationLockError("installed Codex package has no native binary")
 
     monkeypatch.setattr(
-        "arw.integration_lock.discover_codex_native_binary", fail_native_discovery
+        "arw.kernel.policy.integration_lock.discover_codex_native_binary", fail_native_discovery
     )
     report = cli._installed_route_diagnostics_from_environment().model_dump(mode="json")
     assert report["status"] == "BLOCKED"
@@ -382,11 +383,11 @@ def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
         )
 
     monkeypatch.setattr(
-        "arw.integration_lock.discover_codex_native_binary",
+        "arw.kernel.policy.integration_lock.discover_codex_native_binary",
         lambda _launcher: launcher,
     )
     monkeypatch.setattr(
-        "arw.integration_lock.load_and_verify_integration_lock",
+        "arw.kernel.policy.integration_lock.load_and_verify_integration_lock",
         fake_verify,
     )
     # Force lock-bound launcher discovery to succeed via invoked_path missing

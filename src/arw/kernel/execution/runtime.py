@@ -73,7 +73,7 @@ from arw.kernel.ledger.workflows import (
     require_workflow,
 )
 
-_logger = logging.getLogger("arw.runtime")
+_logger = logging.getLogger("arw.kernel.execution.runtime")
 
 
 def _discard_orphan(root: Path, relative: str, digest: str | None) -> None:

@@ -139,7 +139,7 @@ def _ars_passport_schema_path(name: str) -> Path:
     raw_root = (
         Path(plugin_root).absolute()
         if plugin_root
-        else Path(__file__).resolve().parents[2]
+        else Path(__file__).resolve().parents[4]
     )
     try:
         resolved_root = raw_root.resolve(strict=True)

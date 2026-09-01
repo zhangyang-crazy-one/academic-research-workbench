@@ -85,7 +85,7 @@ def test_post_fsync_sigkill_replays_once_without_changing_journal() -> None:
     assert len(events) == 2
     assert sum(event["event_type"] == "baseline.probe_recorded" for event in events) == 1
 
-    assert importlib.util.find_spec("arw.evidence") is not None, (
+    assert importlib.util.find_spec("arw.kernel.artifacts.evidence") is not None, (
         "expected RED: allowlisted recovery evidence capture is not implemented"
     )
     from arw.kernel.artifacts.evidence import record_command_result, write_evidence_bytes, write_evidence_json

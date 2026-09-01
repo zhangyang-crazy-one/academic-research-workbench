@@ -73,7 +73,7 @@ def _schema_root() -> Path:
     packaged_root = os.environ.get("ARW_SCHEMA_ROOT")
     if packaged_root:
         return Path(packaged_root).resolve()
-    return Path(__file__).resolve().parents[2] / "schemas" / "v1"
+    return Path(__file__).resolve().parents[4] / "schemas" / "v1"
 
 
 class SchemaRegistryError(ValueError):
