@@ -18,7 +18,7 @@ from pydantic import BeforeValidator, Field, StringConstraints, field_validator,
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.manifests import ManifestError, _safe_directory, _write_once
-from arw.models import ActorId, Sha256, StrictModel
+from arw.kernel.state.models import ActorId, Sha256, StrictModel
 
 
 INTEGRITY_SCHEMA_VERSION = "arw.integrity-receipt.v1"

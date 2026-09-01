@@ -35,7 +35,7 @@ def test_transition_lookup_and_actor_authority_fail_closed() -> None:
 
 def test_manifest_workflow_identity_is_pairwise_and_registry_bound(tmp_path) -> None:
     from arw.journal import JournalError, initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"

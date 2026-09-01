@@ -29,7 +29,7 @@ from pydantic import (
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.integration_lock import IntegrationDiagnosticReport
-from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.state.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 _ContractT = TypeVar("_ContractT", bound=StrictModel)
 

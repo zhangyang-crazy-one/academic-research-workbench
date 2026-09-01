@@ -10,7 +10,7 @@ RUN_ID = "run-00000000-0000-4000-8000-000000000021"
 
 
 def _request(root: Path):
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
 
     source = root / "input" / "source.txt"
@@ -115,7 +115,7 @@ def test_replay_continues_chain_across_ordered_segments(tmp_path: Path) -> None:
 
 def test_legacy_append_cannot_bypass_segmented_runtime_authority(tmp_path: Path) -> None:
     from arw.journal import JournalError, append_probe
-    from arw.models import AppendProbeRequest
+    from arw.kernel.state.models import AppendProbeRequest
 
     root = tmp_path / "segmented-append"
     _initialize(root)

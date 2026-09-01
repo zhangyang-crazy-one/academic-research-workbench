@@ -16,8 +16,8 @@ from typing import Annotated, Literal, Self
 from pydantic import BeforeValidator, Field, ValidationError, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-from arw.models import Sha256, StableRuntimeId, StrictModel
-from arw.orchestration_models import HookObservation as CanonicalHookObservation
+from arw.kernel.state.models import Sha256, StableRuntimeId, StrictModel
+from arw.kernel.state.orchestration_models import HookObservation as CanonicalHookObservation
 
 
 HookName = Literal[

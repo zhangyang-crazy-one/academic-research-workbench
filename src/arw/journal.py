@@ -20,7 +20,7 @@ from arw.kernel.core.canonical import (
     sha256_hex,
     strict_json_loads,
 )
-from arw.models import (
+from arw.kernel.state.models import (
     AppendProbeRequest,
     BaselineProbePayload,
     CanonicalEvent,

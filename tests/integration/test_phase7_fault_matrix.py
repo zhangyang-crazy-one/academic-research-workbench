@@ -30,7 +30,7 @@ from arw.kernel.core.faults import (
     inject,
 )
 from arw.journal import JournalError, replay_run
-from arw.models import InitRunRequest, LifecycleTransitionRequest, RecoveryRequest, RuntimeCommandRequest
+from arw.kernel.state.models import InitRunRequest, LifecycleTransitionRequest, RecoveryRequest, RuntimeCommandRequest
 from arw.execution import DispatchSpec, ExecutionPolicySnapshot, HostResult, RepairableEnvelopeFailure
 from arw.scheduler import DeterministicScheduler
 from arw.runtime import RuntimeCommandService

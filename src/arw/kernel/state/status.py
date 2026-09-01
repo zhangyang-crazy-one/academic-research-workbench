@@ -17,7 +17,7 @@ from arw.reducer import (
     ProposalState,
     RuntimeState,
 )
-from arw.models import RecoveryHealth, RunId, Sha256, StableRuntimeId, StrictModel
+from arw.kernel.state.models import RecoveryHealth, RunId, Sha256, StableRuntimeId, StrictModel
 
 
 class StatusReport(StrictModel):

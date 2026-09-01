@@ -22,7 +22,7 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 def _initialize(root: Path):
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
 
     source = root / "input/source.txt"
@@ -63,7 +63,7 @@ def _damage(root: Path) -> tuple[bytes, object]:
 
 
 def _request(state, *, number: int = 82):
-    from arw.models import RecoveryRequest
+    from arw.kernel.state.models import RecoveryRequest
 
     segment = state.segments[-1]
     return RecoveryRequest.model_validate(
@@ -160,7 +160,7 @@ def test_conflicting_orphan_evidence_rejects_without_writing_raw_copy(
 def test_recovery_boundary_supports_standard_checkpoint_and_continuation(
     tmp_path: Path,
 ) -> None:
-    from arw.models import CheckpointRequest, LifecycleTransitionRequest
+    from arw.kernel.state.models import CheckpointRequest, LifecycleTransitionRequest
     from arw.runtime import RuntimeCommandService
 
     root = tmp_path / "checkpoint"

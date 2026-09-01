@@ -15,7 +15,7 @@ from arw.evidence_access import (
     validate_access_transition,
 )
 from arw.integrity import IntegrityReceipt, publish_integrity_receipt
-from arw.orchestration_models import HumanAuthority
+from arw.kernel.state.orchestration_models import HumanAuthority
 
 
 def _decision(**updates: object) -> dict[str, object]:

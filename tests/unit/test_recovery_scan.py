@@ -12,7 +12,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures/recovery/tails"
 
 def _initialize(root: Path):
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
 
     source = root / "input/source.txt"
@@ -44,7 +44,7 @@ def _initialize(root: Path):
 
 
 def _append_transition(root: Path, number: int, revision: int, transition: str, stage: str):
-    from arw.models import LifecycleTransitionRequest
+    from arw.kernel.state.models import LifecycleTransitionRequest
     from arw.runtime import RuntimeCommandService
 
     outcome = RuntimeCommandService(root).execute_transition(

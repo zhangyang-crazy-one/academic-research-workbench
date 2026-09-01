@@ -144,7 +144,7 @@ def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
     from arw.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
     from arw.integrity import publish_integrity_receipt, seal_integrity_receipt
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"

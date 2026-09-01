@@ -10,7 +10,7 @@ from typing import Annotated, Literal, TypeVar
 from pydantic import TypeAdapter, ValidationError
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.models import (
+from arw.kernel.state.models import (
     ArtifactAcceptedPayload,
     ArtifactManifest,
     CanonicalEvent,
@@ -24,7 +24,7 @@ from arw.models import (
     StrictModel,
 )
 from arw.reducer import RuntimeState
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     ImmutableAssignment,
     MAX_OUTPUT_BYTES,

@@ -17,7 +17,7 @@ from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
 from arw.integration_lock import integration_lock_schema_document
 from arw.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
     generate_phase4_schema_documents,
 )

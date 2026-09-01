@@ -90,7 +90,7 @@ def test_strict_runtime_models_reject_noncanonical_values() -> None:
     )
     from pydantic import ValidationError
 
-    from arw.models import CanonicalEvent, RunManifest
+    from arw.kernel.state.models import CanonicalEvent, RunManifest
 
     manifest = _json(SEED / "expected-run-manifest.json")
     event = json.loads((SEED / "expected-initial-event.jsonl").read_bytes())

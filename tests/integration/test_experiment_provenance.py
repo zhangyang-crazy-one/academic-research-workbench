@@ -59,7 +59,7 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
 
     from arw.experiment_provenance import ingest_experiment_provenance, load_experiment_provenance
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest, RuntimeCommandRequest
+    from arw.kernel.state.models import InitRunRequest, RuntimeCommandRequest
     from arw.runtime import RuntimeCommandService
     from arw.workflows import CORE_WORKFLOW
 
@@ -152,7 +152,7 @@ def test_policy_rejects_forged_flags_and_stays_blocked_after_projection_loss(mon
 
 def test_ingest_rejects_non_parent_authority_before_publication(tmp_path: Path) -> None:
     from arw.experiment_provenance import ProvenanceAuthorityEnvelope, ProvenanceError, ingest_experiment_provenance
-    from arw.models import RuntimeCommandRequest
+    from arw.kernel.state.models import RuntimeCommandRequest
     from arw.runtime import RuntimeCommandService
 
     request = RuntimeCommandRequest.model_validate(

@@ -75,7 +75,7 @@ def test_native_fixture_rejects_python_only_shape() -> None:
 
 def _phase2_instances() -> dict[str, list[object]]:
     from arw.kernel.core.canonical import seal_event
-    from arw.models import (
+    from arw.kernel.state.models import (
         ArtifactAcceptanceRequest,
         ArtifactManifest,
         AttemptCloseRequest,
@@ -93,7 +93,7 @@ def _phase2_instances() -> dict[str, list[object]]:
     )
     from arw.reducer import RuntimeState
     from arw.runtime import CommandOutcome
-    from arw.status import build_status_report
+    from arw.kernel.state.status import build_status_report
 
     run_id = "run-00000000-0000-4000-8000-000000000101"
     common = {

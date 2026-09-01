@@ -27,7 +27,7 @@ from arw.manifests import (
     validate_content_file,
     write_passport_pointer,
 )
-from arw.models import (
+from arw.kernel.state.models import (
     ArtifactAcceptanceRequest,
     ArtifactAcceptedPayload,
     ArtifactManifest,

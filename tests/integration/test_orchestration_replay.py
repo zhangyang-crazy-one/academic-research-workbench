@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from arw.models import RuntimeCommandRequest
+from arw.kernel.state.models import RuntimeCommandRequest
 from arw.orchestration import OrchestrationError, OrchestrationService
-from arw.orchestration_models import AttemptDescriptor
+from arw.kernel.state.orchestration_models import AttemptDescriptor
 from arw.execution import DeterministicFakeAdapter
 from arw.journal import replay_run
 

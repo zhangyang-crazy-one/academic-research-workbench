@@ -36,7 +36,7 @@ from arw.manifests import (
     install_assignment_manifest,
     materialize_attempt_tree,
 )
-from arw.models import (
+from arw.kernel.state.models import (
     AssignmentPreparedPayload,
     AssignmentSupersededPayload,
     AttemptLifecyclePayload,
@@ -58,7 +58,7 @@ from arw.models import (
     RunManifest,
     StrictModel,
 )
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     AttemptStatus,
     AssignmentKey,
@@ -117,7 +117,7 @@ def _utc_after(value: str, seconds: float) -> str:
 
 
 def _schema_digest(name: str) -> str:
-    from arw.orchestration_models import generate_phase4_schema_documents
+    from arw.kernel.state.orchestration_models import generate_phase4_schema_documents
 
     document = generate_phase4_schema_documents()[name]
     return sha256_hex(canonical_json_bytes(document))

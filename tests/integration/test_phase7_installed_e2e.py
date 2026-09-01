@@ -35,8 +35,8 @@ from arw.integration_lock import (
     observe_stage_identity,
 )
 from arw.journal import replay_run
-from arw.models import LifecycleTransitionRequest
-from arw.orchestration_models import (
+from arw.kernel.state.models import LifecycleTransitionRequest
+from arw.kernel.state.orchestration_models import (
     FORMAL_REVIEW_ROLE_IDS,
     GateDecision,
     HumanDecisionRecord,

@@ -15,7 +15,7 @@ HASH_E = "e" * 64
 
 
 def _assignment_and_attempt():
-    from arw.orchestration_models import AttemptDescriptor, ImmutableAssignment
+    from arw.kernel.state.orchestration_models import AttemptDescriptor, ImmutableAssignment
 
     assignment = ImmutableAssignment.model_validate(
         {
@@ -84,7 +84,7 @@ def _assignment_and_attempt():
 
 def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) -> bytes:
     from arw.kernel.core.canonical import canonical_json_bytes
-    from arw.orchestration_models import ProposedArtifact, WorkerProposal
+    from arw.kernel.state.orchestration_models import ProposedArtifact, WorkerProposal
 
     proposal = WorkerProposal.model_validate(
         {
@@ -127,7 +127,7 @@ def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) ->
 
 def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None:
     from arw.manifests import install_artifact_manifest, manifest_bytes_and_sha256
-    from arw.models import ArtifactManifest
+    from arw.kernel.state.models import ArtifactManifest
     from arw.schema_registry import validate_instance
 
     root = tmp_path / "run"

@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from arw.kernel.core.canonical import canonical_json_bytes
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     GateDecision,
     HookObservation,
@@ -370,7 +370,7 @@ def test_gate_human_hook_and_host_contracts_are_strict_and_append_only() -> None
 
 
 def test_phase4_events_are_parent_authored_and_preserve_source_provenance() -> None:
-    from arw.models import CanonicalEvent
+    from arw.kernel.state.models import CanonicalEvent
 
     assignment = ImmutableAssignment.model_validate(_assignment_payload())
     payload = {
@@ -418,7 +418,7 @@ def test_phase4_events_are_parent_authored_and_preserve_source_provenance() -> N
 
 
 def test_phase4_event_union_covers_lifecycle_evidence_and_human_authority() -> None:
-    from arw.models import EVENT_PAYLOAD_TYPES, PHASE4_EVENT_TYPES
+    from arw.kernel.state.models import EVENT_PAYLOAD_TYPES, PHASE4_EVENT_TYPES
 
     expected = {
         "execution.mode_selected",

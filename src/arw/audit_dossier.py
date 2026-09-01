@@ -19,7 +19,7 @@ from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, fie
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.manifests import ManifestError, _safe_directory, _write_once
-from arw.models import RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.state.models import RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 
 AUDIT_DOSSIER_SCHEMA_VERSION = "arw.audit-dossier.v1"

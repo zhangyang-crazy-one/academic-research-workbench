@@ -323,7 +323,7 @@ def _parse_utc(value: str | None) -> datetime | None:
 
 
 def _write_rejection(error: Exception) -> None:
-    from arw.models import Rejection
+    from arw.kernel.state.models import Rejection
 
     rejection = Rejection(code="canonical-error", message=str(error))
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
@@ -826,7 +826,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         replay_run,
     )
     from arw.manifests import ManifestError
-    from arw.models import (
+    from arw.kernel.state.models import (
         AppendProbeRequest,
         ArtifactAcceptanceRequest,
         AttemptCloseRequest,
@@ -845,10 +845,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         OrchestrationError,
         OrchestrationService,
     )
-    from arw.orchestration_models import GateDecision, HookObservation
+    from arw.kernel.state.orchestration_models import GateDecision, HookObservation
     from arw.reducer import ReducerError, reduce_events
     from arw.runtime import RuntimeCommandService
-    from arw.status import build_status_report, render_status_text
+    from arw.kernel.state.status import build_status_report, render_status_text
 
     handled_errors: tuple[type[Exception], ...] = (
         CLIInputError,

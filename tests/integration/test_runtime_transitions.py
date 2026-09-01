@@ -22,7 +22,7 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 def _service(tmp_path: Path):
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.runtime import RuntimeCommandService
     from arw.workflows import CORE_WORKFLOW
 
@@ -57,7 +57,7 @@ def _service(tmp_path: Path):
 
 
 def _transition(**overrides):
-    from arw.models import LifecycleTransitionRequest
+    from arw.kernel.state.models import LifecycleTransitionRequest
 
     payload = {
         "schema_version": "1.0.0",
@@ -145,7 +145,7 @@ def test_duplicate_identity_rejects_without_second_append(tmp_path: Path, identi
 
 def test_phase2_transaction_rejects_legacy_journal_before_append(tmp_path: Path) -> None:
     from arw.journal import initialize_run
-    from arw.models import InitRunRequest
+    from arw.kernel.state.models import InitRunRequest
     from arw.runtime import RuntimeCommandService
 
     root = tmp_path / "legacy"

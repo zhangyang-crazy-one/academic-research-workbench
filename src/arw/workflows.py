@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-from arw.models import ActorRole, Sha256, StableRuntimeId, StrictModel
+from arw.kernel.state.models import ActorRole, Sha256, StableRuntimeId, StrictModel
 
 
 class WorkflowDefinitionError(ValueError):

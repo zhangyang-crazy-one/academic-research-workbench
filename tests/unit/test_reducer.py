@@ -14,7 +14,7 @@ HASH_E = "e" * 64
 
 
 def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
-    from arw.orchestration_models import ImmutableAssignment
+    from arw.kernel.state.orchestration_models import ImmutableAssignment
 
     return ImmutableAssignment.model_validate(
         {
@@ -66,7 +66,7 @@ def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
 
 
 def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, status: str = "prepared"):
-    from arw.orchestration_models import AttemptDescriptor
+    from arw.kernel.state.orchestration_models import AttemptDescriptor
 
     return AttemptDescriptor.model_validate(
         {
@@ -86,7 +86,7 @@ def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, sta
 
 
 def _phase4_proposal(assignment, attempt):
-    from arw.orchestration_models import ProposedArtifact, WorkerProposal
+    from arw.kernel.state.orchestration_models import ProposedArtifact, WorkerProposal
 
     return WorkerProposal.model_validate(
         {
@@ -127,7 +127,7 @@ def _phase4_proposal(assignment, attempt):
 
 
 def _event(event_type: str, payload: object, *, revision: int, role: str = "parent_control_plane"):
-    from arw.models import CanonicalEvent
+    from arw.kernel.state.models import CanonicalEvent
 
     return CanonicalEvent.model_validate(
         {
@@ -434,14 +434,14 @@ def test_reducer_rejects_non_exact_or_branching_passport(
 
 def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files() -> None:
     from arw.kernel.core.canonical import sha256_hex
-    from arw.models import (
+    from arw.kernel.state.models import (
         AssignmentPreparedPayload,
         CanonicalEvent,
         ExecutionModeSelectedPayload,
         ProposalAcceptedPayload,
     )
     from arw.reducer import reduce_events
-    from arw.status import build_status_report
+    from arw.kernel.state.status import build_status_report
 
     assignment = _phase4_assignment(assignment_id="assignment.phase4-001", task_ordinal=0)
     attempt = _phase4_attempt(assignment, attempt_id="attempt.phase4-001")
@@ -510,13 +510,13 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
 
 def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_results() -> None:
     from arw.kernel.core.canonical import sha256_hex
-    from arw.models import (
+    from arw.kernel.state.models import (
         AssignmentPreparedPayload,
         AttemptLifecyclePayload,
         GateEvaluatedPayload,
         ProposalAcceptedPayload,
     )
-    from arw.orchestration_models import GateDecision, canonical_orchestration_model_bytes
+    from arw.kernel.state.orchestration_models import GateDecision, canonical_orchestration_model_bytes
     from arw.reducer import reduce_events
 
     first_assignment = _phase4_assignment(assignment_id="assignment.phase4-002", task_ordinal=0)
