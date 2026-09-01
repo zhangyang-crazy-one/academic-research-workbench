@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ORCHESTRATION_COMMANDS = {
@@ -110,7 +110,8 @@ def test_dispatch_rejects_receipt_without_assignment_mapping_proof(
     monkeypatch: pytest.MonkeyPatch,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    from arw import cli, orchestration
+    from arw import cli
+    from arw.kernel.execution import orchestration
 
     assignment = SimpleNamespace(
         assignment_id="assignment.alpha",
@@ -214,7 +215,7 @@ def test_panel_rejects_unstructured_identity_claim_before_service_construction(
 
 def test_only_cli_process_boundary_drives_async_dispatch() -> None:
     from arw import cli
-    from arw.orchestration import OrchestrationService
+    from arw.kernel.execution.orchestration import OrchestrationService
 
     source = inspect.getsource(cli)
     assert source.count("asyncio.run(") == 1
@@ -255,7 +256,7 @@ def test_read_only_route_import_never_probes_a_writable_temp_directory(
                 "import sys; import arw.cli as cli; "
                 "status = cli.main(['route', '--json']); "
                 "assert 'arw.files' not in sys.modules; "
-                "assert 'arw.journal' not in sys.modules; "
+                "assert 'arw.kernel.ledger.journal' not in sys.modules; "
                 "assert 'portalocker' not in sys.modules; "
                 "raise SystemExit(status)"
             ),
@@ -301,7 +302,7 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from arw import cli
-    from arw.integration_lock import IntegrationLockError
+    from arw.kernel.policy.integration_lock import IntegrationLockError
 
     stage = tmp_path / "stage"
     supply = stage / "supply-chain"
@@ -325,7 +326,7 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
         raise IntegrationLockError("installed Codex package has no native binary")
 
     monkeypatch.setattr(
-        "arw.integration_lock.discover_codex_native_binary", fail_native_discovery
+        "arw.kernel.policy.integration_lock.discover_codex_native_binary", fail_native_discovery
     )
     report = cli._installed_route_diagnostics_from_environment().model_dump(mode="json")
     assert report["status"] == "BLOCKED"
@@ -336,7 +337,7 @@ def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from arw import cli
-    from arw.integration_lock import IntegrationLockError, IntegrationVerification
+    from arw.kernel.policy.integration_lock import IntegrationLockError, IntegrationVerification
 
     stage = tmp_path / "stage"
     supply = stage / "supply-chain"
@@ -382,11 +383,11 @@ def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
         )
 
     monkeypatch.setattr(
-        "arw.integration_lock.discover_codex_native_binary",
+        "arw.kernel.policy.integration_lock.discover_codex_native_binary",
         lambda _launcher: launcher,
     )
     monkeypatch.setattr(
-        "arw.integration_lock.load_and_verify_integration_lock",
+        "arw.kernel.policy.integration_lock.load_and_verify_integration_lock",
         fake_verify,
     )
     # Force lock-bound launcher discovery to succeed via invoked_path missing

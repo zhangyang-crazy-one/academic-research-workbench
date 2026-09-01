@@ -12,14 +12,14 @@ FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-
 
 
 def _provenance():
-    from arw.experiment_provenance import seal_experiment_provenance
+    from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
 
     return seal_experiment_provenance(json.loads(FIXTURE.read_text(encoding="utf-8")))
 
 
 def _ingestable_provenance():
-    from arw.experiment_provenance import seal_experiment_provenance
-    from arw.canonical import canonical_json_bytes, sha256_hex
+    from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
+    from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 
     value = json.loads(FIXTURE.read_text(encoding="utf-8"))
     value["artifacts"][0]["content_path"] = None
@@ -35,7 +35,7 @@ def _ingestable_provenance():
 
 
 def _receipt(provenance, kind: str, *, valid_until: str = "2026-07-15T12:00:00Z", **changes):
-    from arw.experiment_provenance import QualificationReceipt
+    from arw.kernel.artifacts.experiment_provenance import QualificationReceipt
 
     payload = {
         "kind": kind,
@@ -57,11 +57,11 @@ def _receipt(provenance, kind: str, *, valid_until: str = "2026-07-15T12:00:00Z"
 def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> None:
     import hashlib
 
-    from arw.experiment_provenance import ingest_experiment_provenance, load_experiment_provenance
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest, RuntimeCommandRequest
-    from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.artifacts.experiment_provenance import ingest_experiment_provenance, load_experiment_provenance
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest, RuntimeCommandRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"
@@ -103,7 +103,7 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
         }
     )
     service = RuntimeCommandService(root)
-    from arw.experiment_provenance import ProvenanceAuthorityEnvelope
+    from arw.kernel.artifacts.experiment_provenance import ProvenanceAuthorityEnvelope
 
     result = ingest_experiment_provenance(
         _ingestable_provenance(), root, ProvenanceAuthorityEnvelope(service, request)
@@ -126,7 +126,7 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
 
 
 def test_policy_rejects_forged_flags_and_stays_blocked_after_projection_loss(monkeypatch) -> None:
-    from arw.experiment_provenance import evaluate_controlled_execution_policy
+    from arw.kernel.artifacts.experiment_provenance import evaluate_controlled_execution_policy
 
     provenance = _provenance()
     called = []
@@ -151,9 +151,9 @@ def test_policy_rejects_forged_flags_and_stays_blocked_after_projection_loss(mon
 
 
 def test_ingest_rejects_non_parent_authority_before_publication(tmp_path: Path) -> None:
-    from arw.experiment_provenance import ProvenanceAuthorityEnvelope, ProvenanceError, ingest_experiment_provenance
-    from arw.models import RuntimeCommandRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.artifacts.experiment_provenance import ProvenanceAuthorityEnvelope, ProvenanceError, ingest_experiment_provenance
+    from arw.kernel.state.models import RuntimeCommandRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     request = RuntimeCommandRequest.model_validate(
         {
@@ -174,7 +174,7 @@ def test_ingest_rejects_non_parent_authority_before_publication(tmp_path: Path) 
 
 
 def test_missing_local_reference_and_loader_are_fail_closed_and_read_only(tmp_path: Path) -> None:
-    from arw.experiment_provenance import ProvenanceError, load_experiment_provenance, _verify_local_references
+    from arw.kernel.artifacts.experiment_provenance import ProvenanceError, load_experiment_provenance, _verify_local_references
 
     with pytest.raises(ProvenanceError):
         _verify_local_references(tmp_path, _provenance())
@@ -184,7 +184,7 @@ def test_missing_local_reference_and_loader_are_fail_closed_and_read_only(tmp_pa
 
 
 def test_raw_mapping_authority_is_rejected(tmp_path: Path) -> None:
-    from arw.experiment_provenance import ProvenanceError, ingest_experiment_provenance
+    from arw.kernel.artifacts.experiment_provenance import ProvenanceError, ingest_experiment_provenance
 
     with pytest.raises(ProvenanceError, match="existing ProvenanceAuthorityEnvelope"):
         ingest_experiment_provenance(_ingestable_provenance(), tmp_path, {"actor_role": "parent_control_plane"})

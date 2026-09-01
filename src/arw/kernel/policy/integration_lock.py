@@ -38,8 +38,8 @@ from pydantic import (
     model_validator,
 )
 
-from arw.canonical import canonical_json_bytes, strict_json_loads
-from arw.hook_contracts import CodexHookReceipt, HookParityMatrix
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.policy.hook_contracts import CodexHookReceipt, HookParityMatrix
 
 EXPECTED_ARS_ADAPTER_VERSION = "0.1.27"
 MINIMUM_CODEX_CLI_VERSION = (0, 144, 4)
@@ -1511,7 +1511,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         raise IntegrationLockError(
             "ARW wheel unexpectedly includes the standalone ARS runtime"
         )
-    if "arw/integration_lock.py" not in members:
+    if "arw/kernel/policy/integration_lock.py" not in members:
         raise IntegrationLockError("ARW wheel omits the integration-lock runtime")
     metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
     if len(metadata_names) != 1:
@@ -2303,7 +2303,7 @@ def _verify_aggregate_sha256(
     """
 
     # Lazy import to avoid a circular dependency with ``arw.schema_registry``.
-    from arw.schema_registry import aggregate_schema_sha256
+    from arw.kernel.policy.schema_registry import aggregate_schema_sha256
 
     if not isinstance(claimed, str) or re.fullmatch(r"[0-9a-f]{64}", claimed) is None:
         raise IntegrationLockError(f"{label} aggregate sha256 is malformed")

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from tests.qualification_support import discover_bundled_qualification
 
-from arw.integration_lock import (
+from arw.kernel.policy.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     IntegrationLockError,
     build_integration_lock,

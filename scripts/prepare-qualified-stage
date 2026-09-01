@@ -134,7 +134,7 @@ if [[ ! -f "$LOCK_PATH" ]]; then
   "$PYTHON" - "$BOOTSTRAP_STAGE" "$CODEX_LAUNCHER" "$CODEX_NATIVE" "$HOST_CANARY" "$LOCK_PATH" <<'PY'
 from pathlib import Path
 import sys
-from arw.integration_lock import build_integration_lock, write_integration_lock
+from arw.kernel.policy.integration_lock import build_integration_lock, write_integration_lock
 
 stage, launcher, native, canary, output = map(Path, sys.argv[1:])
 lock = build_integration_lock(

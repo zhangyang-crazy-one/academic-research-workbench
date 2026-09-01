@@ -9,8 +9,8 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.faults import FAULT_SPECS
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.faults import FAULT_SPECS
 
 
 ALLOWLISTED_ENVIRONMENT = (
@@ -124,7 +124,7 @@ def validate_fault_sidecar(
         raise ValueError("fault sidecar event sequence does not match replay")
     if run_root is not None:
         try:
-            from arw.journal import replay_run
+            from arw.kernel.ledger.journal import replay_run
 
             replayed = replay_run(run_root)
             replay_sequence = [

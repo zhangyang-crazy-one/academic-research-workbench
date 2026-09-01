@@ -17,9 +17,9 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _write_once
-from arw.models import RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.state.models import RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 
 AUDIT_DOSSIER_SCHEMA_VERSION = "arw.audit-dossier.v1"
@@ -519,9 +519,9 @@ def _validate_persisted_pass_inputs(
         raise AuditDossierError("technical PASS dossier lacks provenance evidence")
     if not dossier.access_decisions:
         raise AuditDossierError("technical PASS dossier lacks access evidence")
-    from arw.evidence_access import load_evidence_access_decision
-    from arw.experiment_provenance import load_experiment_provenance
-    from arw.integrity import load_integrity_receipt
+    from arw.kernel.artifacts.evidence_access import load_evidence_access_decision
+    from arw.kernel.artifacts.experiment_provenance import load_experiment_provenance
+    from arw.kernel.artifacts.integrity import load_integrity_receipt
 
     for digest in dossier.integrity_receipt_sha256:
         if load_integrity_receipt(root, digest).receipt_sha256 != digest:
@@ -591,7 +591,7 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
             )
             if receipt.dossier_sha256 != dossier_sha256:
                 raise AuditDossierError("qualification receipt is bound to another dossier")
-            from arw.journal import replay_run
+            from arw.kernel.ledger.journal import replay_run
 
             replayed = replay_run(root)
             if (
@@ -721,17 +721,17 @@ def _validated_refs(kind: str, values: Sequence[Any] | None) -> tuple[str, ...]:
         if isinstance(raw, Mapping) and raw.get("schema_version"):
             try:
                 if kind == "integrity":
-                    from arw.integrity import seal_integrity_receipt
+                    from arw.kernel.artifacts.integrity import seal_integrity_receipt
 
                     checked.append(seal_integrity_receipt(raw))
                     continue
                 if kind == "provenance":
-                    from arw.experiment_provenance import seal_experiment_provenance
+                    from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
 
                     checked.append(seal_experiment_provenance(raw))
                     continue
                 if kind == "access":
-                    from arw.evidence_access import seal_evidence_access_decision
+                    from arw.kernel.artifacts.evidence_access import seal_evidence_access_decision
 
                     checked.append(seal_evidence_access_decision(raw))
                     continue
@@ -772,7 +772,7 @@ def assemble_audit_dossier(
 ) -> AuditDossierManifest:
     """Assemble references after replay; no event, graph, or SQLite writes occur."""
 
-    from arw.journal import ReplayState, replay_run
+    from arw.kernel.ledger.journal import ReplayState, replay_run
 
     if run_root is not None:
         replayed = replay_run(run_root)
@@ -854,7 +854,7 @@ def assemble_audit_dossier(
 
     # Derive capabilities from typed records before reducing them to digest
     # references.  A correctly hashed display row cannot launder a PASS.
-    from arw.evidence_access import evaluate_claim_capability, seal_evidence_access_decision
+    from arw.kernel.artifacts.evidence_access import evaluate_claim_capability, seal_evidence_access_decision
 
     def first_typed(key: str) -> Any:
         values = ev.get(key) or ev.get({"access_decisions": "access", "integrity_receipts": "integrity", "provenance": "provenance"}.get(key, key))

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from arw.evidence_access import EVIDENCE_ACCESS_SCHEMA_VERSION, EvidenceAccessDecision, evaluate_claim_capability
-from arw.integrity import IntegrityReceipt
-from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.artifacts.evidence_access import EVIDENCE_ACCESS_SCHEMA_VERSION, EvidenceAccessDecision, evaluate_claim_capability
+from arw.kernel.artifacts.integrity import IntegrityReceipt
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/phase6/representative-run/experiment/provenance.json"

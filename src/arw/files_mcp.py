@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from arw.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.file_contracts import CursorCodec, CursorError
 from arw.file_models import (
     CONTRACT_LIMITS,

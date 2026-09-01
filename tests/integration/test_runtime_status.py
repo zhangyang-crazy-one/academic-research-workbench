@@ -53,7 +53,7 @@ def test_status_json_for_phase1_fixture_uses_versioned_contract(tmp_path: Path) 
     result = _run("status", "--json", "--run-root", str(run_root))
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     validate_instance("status.schema.json", payload)
     assert payload["run_id"].startswith("run-")

@@ -169,7 +169,7 @@ def test_later_phase_modules_collect_under_explicit_plan_ownership() -> None:
 
 def test_checked_file_schema_documents_are_generated_strict_and_registered() -> None:
     contracts = _production_module("arw.file_contracts")
-    from arw.schema_registry import SCHEMA_NAMES
+    from arw.kernel.policy.schema_registry import SCHEMA_NAMES
 
     assert contracts.FILE_SCHEMA_NAMES == EXPECTED_FILE_SCHEMAS
     generated = contracts.generate_file_schema_documents()

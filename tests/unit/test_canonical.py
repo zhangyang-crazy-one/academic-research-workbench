@@ -67,10 +67,10 @@ def test_checked_in_contracts_reject_coercion_unknowns_and_invalid_identity(
 
 
 def test_canonical_bytes_and_hash_are_exactly_the_checked_in_fixture() -> None:
-    assert importlib.util.find_spec("arw.canonical") is not None, (
+    assert importlib.util.find_spec("arw.kernel.core.canonical") is not None, (
         "expected RED: canonical serializer is not implemented"
     )
-    from arw.canonical import canonical_event_bytes, canonical_json_bytes
+    from arw.kernel.core.canonical import canonical_event_bytes, canonical_json_bytes
 
     manifest = _json(SEED / "expected-run-manifest.json")
     expected_manifest = (SEED / "expected-run-manifest.json").read_bytes()
@@ -85,12 +85,12 @@ def test_canonical_bytes_and_hash_are_exactly_the_checked_in_fixture() -> None:
 
 
 def test_strict_runtime_models_reject_noncanonical_values() -> None:
-    assert importlib.util.find_spec("arw.models") is not None, (
+    assert importlib.util.find_spec("arw.kernel.state.models") is not None, (
         "expected RED: strict runtime models are not implemented"
     )
     from pydantic import ValidationError
 
-    from arw.models import CanonicalEvent, RunManifest
+    from arw.kernel.state.models import CanonicalEvent, RunManifest
 
     manifest = _json(SEED / "expected-run-manifest.json")
     event = json.loads((SEED / "expected-initial-event.jsonl").read_bytes())

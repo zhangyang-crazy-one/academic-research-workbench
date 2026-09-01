@@ -18,7 +18,7 @@ from typing import Literal
 import portalocker
 from pydantic import ValidationError
 
-from arw.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.file_contracts import (
     canonical_file_model_bytes,
     canonical_file_model_sha256,

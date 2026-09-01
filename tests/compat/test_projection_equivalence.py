@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import sha256_hex
+from arw.kernel.core.canonical import sha256_hex
 from arw.graph_models import GraphQueryOperation, GraphQueryRequest
 from arw.graph_oracle import assert_equivalent, normalize_query_page
 from arw.graph_projection import project_canonical_records

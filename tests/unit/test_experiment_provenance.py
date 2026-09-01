@@ -86,7 +86,7 @@ def _payload() -> dict[str, object]:
 
 
 def test_external_provenance_is_strict_and_deterministically_sealed() -> None:
-    from arw.experiment_provenance import ExperimentProvenance, seal_experiment_provenance
+    from arw.kernel.artifacts.experiment_provenance import ExperimentProvenance, seal_experiment_provenance
 
     first = seal_experiment_provenance(_payload())
     second = seal_experiment_provenance(first.model_dump(mode="json"))
@@ -97,8 +97,8 @@ def test_external_provenance_is_strict_and_deterministically_sealed() -> None:
 
 
 def test_representative_fixture_round_trips_through_checked_schema() -> None:
-    from arw.experiment_provenance import seal_experiment_provenance
-    from arw.schema_registry import validate_instance
+    from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     value = json.loads(FIXTURE.read_text(encoding="utf-8"))
     provenance = seal_experiment_provenance(value)
@@ -124,7 +124,7 @@ def test_representative_fixture_round_trips_through_checked_schema() -> None:
     ],
 )
 def test_untrusted_or_malformed_provenance_fails_before_publication(mutation) -> None:
-    from arw.experiment_provenance import ExperimentProvenance, seal_experiment_provenance
+    from arw.kernel.artifacts.experiment_provenance import ExperimentProvenance, seal_experiment_provenance
 
     value = _payload()
     mutation(value)
@@ -135,7 +135,7 @@ def test_untrusted_or_malformed_provenance_fails_before_publication(mutation) ->
 
 
 def test_secret_environment_key_is_rejected() -> None:
-    from arw.experiment_provenance import ExperimentProvenance
+    from arw.kernel.artifacts.experiment_provenance import ExperimentProvenance
 
     value = _payload()
     value["environment"] = [
@@ -151,7 +151,7 @@ def test_secret_environment_key_is_rejected() -> None:
 
 
 def test_local_content_digest_is_checked_at_parent_ingest_boundary() -> None:
-    from arw.experiment_provenance import DatasetSource, ExperimentArtifact
+    from arw.kernel.artifacts.experiment_provenance import DatasetSource, ExperimentArtifact
 
     local_source = DatasetSource.model_validate(
         {

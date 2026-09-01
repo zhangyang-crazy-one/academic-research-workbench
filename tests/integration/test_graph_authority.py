@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.graph_models import GraphQueryRequest
 from arw.graph_projection import project_canonical_records
 from arw.graph_store import GraphStore
-from arw.runtime import RuntimeCommandService
+from arw.kernel.execution.runtime import RuntimeCommandService
 
 from .test_graph_projection import _fixture_records
 from .test_orchestration_lifecycle import _run

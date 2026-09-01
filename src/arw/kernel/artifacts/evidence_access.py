@@ -19,9 +19,9 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _write_once
-from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.state.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 
 EVIDENCE_ACCESS_SCHEMA_VERSION = "arw.evidence-access-decision.v1"
@@ -335,7 +335,7 @@ def validate_access_transition(
         if receipt_root is None:
             raise EvidenceAccessError("public promotion requires a run-root verification receipt")
         try:
-            from arw.integrity import evaluate_integrity_receipt, load_integrity_receipt
+            from arw.kernel.artifacts.integrity import evaluate_integrity_receipt, load_integrity_receipt
 
             checked_receipt = load_integrity_receipt(receipt_root, receipt)
             evaluation = evaluate_integrity_receipt(
@@ -355,7 +355,7 @@ def validate_access_transition(
         if parent is None:
             raise EvidenceAccessError("public promotion requires parent-authorized transition")
         try:
-            from arw.orchestration_models import HumanAuthority
+            from arw.kernel.state.orchestration_models import HumanAuthority
 
             if not isinstance(parent, HumanAuthority):
                 raise TypeError("authority must be a validated HumanAuthority")
@@ -451,7 +451,7 @@ def _fresh_integrity(
     if receipt is None:
         return ["missing_fresh_integrity_receipt"], ["integrity-receipt"]
     try:
-        from arw.integrity import IntegrityReceipt, evaluate_integrity_receipt, seal_integrity_receipt
+        from arw.kernel.artifacts.integrity import IntegrityReceipt, evaluate_integrity_receipt, seal_integrity_receipt
 
         checked = seal_integrity_receipt(receipt if isinstance(receipt, Mapping) else receipt.model_dump(mode="json"))
         if not isinstance(checked, IntegrityReceipt):
@@ -670,7 +670,7 @@ def evaluate_claim_capability(
         if provenance is None:
             return ClaimCapabilityDecision(capability, "BLOCKED", ("missing_external_provenance",), ("experiment-provenance",), scope)
         try:
-            from arw.experiment_provenance import evaluate_controlled_execution_policy, seal_experiment_provenance
+            from arw.kernel.artifacts.experiment_provenance import evaluate_controlled_execution_policy, seal_experiment_provenance
 
             checked = seal_experiment_provenance(provenance)
             policy = evaluate_controlled_execution_policy(checked, qualification_receipts, now=now)
@@ -699,7 +699,7 @@ def evaluate_claim_capability(
         reasons = []
         replacements = []
         try:
-            from arw.orchestration_models import GateDecision, PanelManifest, ReviewFindingMatrix
+            from arw.kernel.state.orchestration_models import GateDecision, PanelManifest, ReviewFindingMatrix
 
             panel = PanelManifest.model_validate(panel_manifest.model_dump(mode="json") if hasattr(panel_manifest, "model_dump") else panel_manifest)
             matrix = ReviewFindingMatrix.model_validate(review_matrix.model_dump(mode="json") if hasattr(review_matrix, "model_dump") else review_matrix)

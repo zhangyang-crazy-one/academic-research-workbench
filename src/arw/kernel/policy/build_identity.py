@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from arw.schema_registry import (
+from arw.kernel.policy.schema_registry import (
     SchemaRegistryError,
     aggregate_schema_sha256,
     validate_phase1_instance,

@@ -340,7 +340,7 @@ def pytest_command(*tests: str, marker: str | None = "not codex_host") -> list[s
 
 def validate_phase4_schema() -> None:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
-    from arw.schema_registry import validate_checked_in_schemas
+    from arw.kernel.policy.schema_registry import validate_checked_in_schemas
 
     validate_checked_in_schemas()
 
@@ -423,7 +423,7 @@ def evaluate_corpus(root: Path) -> dict[str, Any]:
 
 def validate_phase4_instance(name: str, value: object) -> None:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     validate_instance(name, value)
 
@@ -561,11 +561,11 @@ def host_qualification(
         try:
             if statuses != [0] or host_canary_evidence is None or not host_canary_evidence.is_file():
                 raise VerificationError("retained Codex host canary is missing", 70)
-            from arw.integration_lock import load_and_verify_integration_lock
+            from arw.kernel.policy.integration_lock import load_and_verify_integration_lock
 
             native = codex_native_binary
             if native is None:
-                from arw.integration_lock import discover_codex_native_binary
+                from arw.kernel.policy.integration_lock import discover_codex_native_binary
 
                 native = discover_codex_native_binary(launcher_path)
             verification = load_and_verify_integration_lock(
@@ -616,9 +616,9 @@ def host_qualification(
     stage_digest = "0" * 64
     plugin_digest = "0" * 64
     codex_version = "0.0.0"
-    adapter_digest = digest_file(PROJECT_ROOT / "src/arw/execution.py")
+    adapter_digest = digest_file(PROJECT_ROOT / "src/arw/kernel/execution/execution.py")
     if stage_root is not None and stage_root.is_dir():
-        from arw.integration_lock import observe_stage_identity
+        from arw.kernel.policy.integration_lock import observe_stage_identity
 
         stage_digest = observe_stage_identity(stage_root)
         plugin_path = stage_root / ".codex-plugin/plugin.json"
@@ -976,7 +976,7 @@ def main(argv: list[str] | None = None) -> int:
         # Task-specific commands retain a result even when a later aggregate
         # verdict is blocked.  The command list is intentionally explicit.
         commands: list[tuple[str, list[str], bool]] = [
-            ("schema-check", [str(PYTHON), "-c", "import sys; sys.path.insert(0, 'src'); from arw.schema_registry import validate_checked_in_schemas; validate_checked_in_schemas()"], True),
+            ("schema-check", [str(PYTHON), "-c", "import sys; sys.path.insert(0, 'src'); from arw.kernel.policy.schema_registry import validate_checked_in_schemas; validate_checked_in_schemas()"], True),
             ("P04-01-T01", pytest_command("tests/unit/test_orchestration_models.py", "tests/schema/test_phase4_contracts.py"), True),
             ("P04-01-T02", pytest_command("tests/evals/test_phase4_corpus.py"), True),
             ("P04-01-T03", pytest_command(*PHASE4_TESTS), True),

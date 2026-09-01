@@ -11,8 +11,8 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from arw import research_integrity
-from arw.canonical import canonical_json_bytes
+from arw.kernel.policy import research_integrity
+from arw.kernel.core.canonical import canonical_json_bytes
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -215,7 +215,7 @@ def test_source_builder_preserves_ars_valid_large_author_lists() -> None:
     source = _bridge(entry)
 
     assert len(source.authors) == 257
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     validate_instance(
         "research-integrity-contracts.schema.json", source.model_dump(mode="json")
@@ -271,7 +271,7 @@ def test_bridge_preserves_ars_valid_large_signal_lists() -> None:
     assert source.bibliographic_sha256 == hashlib.sha256(
         canonical_json_bytes(entry)
     ).hexdigest()
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     validate_instance(
         "research-integrity-contracts.schema.json", source.model_dump(mode="json")
@@ -476,7 +476,7 @@ def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -
 
 
 def test_source_manifest_round_trips_every_aliased_csl_author_field() -> None:
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     source = _bridge(
         {
@@ -731,7 +731,7 @@ def test_chain_validator_rejects_ambiguous_source_and_claim_identities() -> None
 
 
 def test_model_schema_branches_equal_checked_bundle_and_registry_is_strict() -> None:
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root = Path(__file__).resolve().parents[2]
     checked = _load_json_object(
@@ -940,7 +940,7 @@ def test_bridge_preserves_authoritative_long_ars_mapping_fields(
     user_notes >1M and the long copied fields / CSL names / private fields).
     """
 
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     entry = {**ARS_ENTRY, **update}
     assert ARS_ENTRY_VALIDATOR.is_valid(entry), (
@@ -1017,7 +1017,7 @@ def test_bridge_preserves_ars_valid_combined_long_field_entry() -> None:
     """One entry exercising every long-field path simultaneously still binds,
     digests canonically, and round-trips through the installed schema."""
 
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     entry = {
         **ARS_ENTRY,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 
 def test_status_json_and_text_render_the_same_runtime_state() -> None:
-    from arw.reducer import RuntimeState
-    from arw.status import build_status_report, render_status_text
+    from arw.kernel.ledger.reducer import RuntimeState
+    from arw.kernel.state.status import build_status_report, render_status_text
 
     state = RuntimeState.empty(
         run_id="run-00000000-0000-4000-8000-000000000001",

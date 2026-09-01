@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from arw.execution import DeterministicFakeAdapter
-from arw.models import RuntimeCommandRequest
-from arw.orchestration import AssignmentSpec, OrchestrationService
-from arw.orchestration_models import HookObservation
+from arw.kernel.execution.execution import DeterministicFakeAdapter
+from arw.kernel.state.models import RuntimeCommandRequest
+from arw.kernel.execution.orchestration import AssignmentSpec, OrchestrationService
+from arw.kernel.state.orchestration_models import HookObservation
 
 from .test_orchestration_lifecycle import _run
 

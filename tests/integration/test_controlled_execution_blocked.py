@@ -9,7 +9,7 @@ from tests.integration.test_experiment_provenance import _provenance, _receipt
 
 @pytest.mark.parametrize("mask", range(16))
 def test_all_sixteen_gate_combinations_are_blocked_without_subprocess(monkeypatch, mask: int) -> None:
-    from arw.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
+    from arw.kernel.artifacts.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
 
     called: list[object] = []
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: called.append(args))
@@ -33,7 +33,7 @@ def test_all_sixteen_gate_combinations_are_blocked_without_subprocess(monkeypatc
 
 
 def test_stale_mismatched_and_failed_receipts_are_not_qualification(monkeypatch) -> None:
-    from arw.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
+    from arw.kernel.artifacts.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
 
     called: list[object] = []
     monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: called.append(args))
@@ -68,7 +68,7 @@ def test_stale_mismatched_and_failed_receipts_are_not_qualification(monkeypatch)
 
 
 def test_all_four_fresh_receipts_still_do_not_enable_controlled_execution() -> None:
-    from arw.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
+    from arw.kernel.artifacts.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
 
     provenance = _provenance()
     receipts = {kind: _receipt(provenance, kind) for kind in QUALIFICATION_KINDS}
@@ -83,7 +83,7 @@ def test_all_four_fresh_receipts_still_do_not_enable_controlled_execution() -> N
 
 
 def test_model_copy_forged_receipt_is_revalidated_before_policy() -> None:
-    from arw.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
+    from arw.kernel.artifacts.experiment_provenance import QUALIFICATION_KINDS, evaluate_controlled_execution_policy
 
     provenance = _provenance()
     valid = _receipt(provenance, "sandbox_approval")

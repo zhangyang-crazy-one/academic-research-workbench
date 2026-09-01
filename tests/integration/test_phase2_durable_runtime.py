@@ -134,7 +134,7 @@ class StagedHarness:
         if result.stdout.strip():
             payload = json.loads(result.stdout)
             if isinstance(payload, dict) and "accepted" in payload:
-                from arw.schema_registry import validate_instance
+                from arw.kernel.policy.schema_registry import validate_instance
 
                 validate_instance("command-outcome.schema.json", payload)
         return result, payload
@@ -193,9 +193,9 @@ def _assert_rejection_unchanged(
 
 
 def test_staged_projection_free_durable_runtime_design_intent(tmp_path: Path) -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
-    from arw.schema_registry import validate_instance
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.policy.schema_registry import validate_instance
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     harness = StagedHarness(tmp_path)
     run_root = tmp_path / "run"

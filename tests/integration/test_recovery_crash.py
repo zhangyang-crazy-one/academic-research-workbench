@@ -15,9 +15,9 @@ RUN_ID = "run-00000000-0000-4000-8000-000000000091"
 
 
 def _initialize(root: Path):
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     source = root / "input/source.txt"
     source.parent.mkdir(parents=True)
@@ -53,7 +53,7 @@ def _write_request(path: Path, value: object) -> None:
 
 
 def _recovery_request(state):
-    from arw.models import RecoveryRequest
+    from arw.kernel.state.models import RecoveryRequest
 
     return RecoveryRequest.model_validate(
         {
@@ -75,7 +75,7 @@ def _recovery_request(state):
 
 
 def test_partial_runtime_append_becomes_recoverable_tail(tmp_path: Path) -> None:
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / "partial-append"
     initialized = _initialize(root)
@@ -130,8 +130,8 @@ def test_partial_runtime_append_becomes_recoverable_tail(tmp_path: Path) -> None
 def test_recovery_crash_is_absent_or_fully_replayable_and_retryable(
     tmp_path: Path, failpoint: str
 ) -> None:
-    from arw.evidence import record_command_result
-    from arw.journal import replay_run
+    from arw.kernel.artifacts.evidence import record_command_result
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / failpoint
     _initialize(root)

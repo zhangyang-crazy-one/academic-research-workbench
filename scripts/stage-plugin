@@ -106,7 +106,7 @@ stage_root = Path(sys.argv[2]).resolve()
 provided_lock = Path(sys.argv[3]) if sys.argv[3] else None
 sys.path.insert(0, str(project_root / "src"))
 
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,
@@ -591,8 +591,8 @@ source = Path(sys.argv[2])
 stage_root = Path(sys.argv[3]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
-from arw.canonical import strict_json_loads  # noqa: E402
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.core.canonical import strict_json_loads  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     integration_lock_bytes,
@@ -768,13 +768,13 @@ project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
-from arw.canonical import strict_json_loads  # noqa: E402
-from arw.schema_registry import (  # noqa: E402
+from arw.kernel.core.canonical import strict_json_loads  # noqa: E402
+from arw.kernel.policy.schema_registry import (  # noqa: E402
     aggregate_schema_sha256,
     regenerate_schemas,
     validate_phase1_instance,
 )
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     _verify_native_surface_bundle,
     IntegrationLockError,
     EXPECTED_PRE_VENDOR_RECEIPT_SHA256,
@@ -1057,7 +1057,7 @@ project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(project_root / "src"))
 
-from arw.integration_lock import (  # noqa: E402
+from arw.kernel.policy.integration_lock import (  # noqa: E402
     CODEX_CLI_VERSION_REQUIREMENT,
     IntegrationLock,
     _validate_arw_runtime,

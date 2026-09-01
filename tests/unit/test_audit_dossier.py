@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.audit_dossier import (
+from arw.kernel.artifacts.audit_dossier import (
     AuditDossierError,
     AuditDossierManifest,
     assemble_audit_dossier,
@@ -16,7 +16,7 @@ from arw.audit_dossier import (
     render_audit_dossier_markdown,
     seal_audit_dossier,
 )
-from arw.journal import ReplayState
+from arw.kernel.ledger.journal import ReplayState
 
 
 RUN_ID = "run-00000000-0000-4000-8000-000000000031"
@@ -125,7 +125,7 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
     forged.pop("dossier_sha256")
     # Recompute the outer digest so the only failing boundary is qualification
     # authority, not a superficial hash mismatch.
-    from arw.canonical import sha256_hex, canonical_json_bytes
+    from arw.kernel.core.canonical import sha256_hex, canonical_json_bytes
 
     forged["dossier_sha256"] = sha256_hex(
         canonical_json_bytes({k: v for k, v in forged.items() if k != "dossier_sha256"})
@@ -139,13 +139,13 @@ def test_direct_technical_pass_cannot_be_sealed_or_published(tmp_path) -> None:
 
 
 def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
-    from arw.audit_dossier import _seal_audit_dossier
-    from arw.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
-    from arw.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
-    from arw.integrity import publish_integrity_receipt, seal_integrity_receipt
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.artifacts.audit_dossier import _seal_audit_dossier
+    from arw.kernel.artifacts.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
+    from arw.kernel.artifacts.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
+    from arw.kernel.artifacts.integrity import publish_integrity_receipt, seal_integrity_receipt
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input/source.txt"

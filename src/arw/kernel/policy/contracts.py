@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from arw.integration_lock import IntegrationVerification
+from arw.kernel.policy.integration_lock import IntegrationVerification
 
 
 RouteReasonCode = Literal[

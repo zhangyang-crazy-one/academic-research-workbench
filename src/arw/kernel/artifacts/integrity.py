@@ -16,9 +16,9 @@ from typing import Annotated, Any, Literal, Mapping, Sequence
 
 from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _write_once
-from arw.models import ActorId, Sha256, StrictModel
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.state.models import ActorId, Sha256, StrictModel
 
 
 INTEGRITY_SCHEMA_VERSION = "arw.integrity-receipt.v1"
@@ -335,23 +335,23 @@ def generate_phase6_schema_documents() -> dict[str, dict[str, object]]:
     }
     # Keep one registry-owned Phase 6 name tuple while allowing each contract
     # module to own its model projection.
-    from arw.experiment_provenance import generate_phase6_schema_documents as generate_provenance_schemas
+    from arw.kernel.artifacts.experiment_provenance import generate_phase6_schema_documents as generate_provenance_schemas
 
     generated.update(generate_provenance_schemas())
     # Evidence access and claim-capability contracts are kept in their own
     # module to avoid making integrity receipts an authority store.  Import
     # lazily here so the two modules can compose their pure evaluators without
     # creating an import cycle during normal runtime use.
-    from arw.evidence_access import generate_phase6_schema_documents as generate_access_schemas
+    from arw.kernel.artifacts.evidence_access import generate_phase6_schema_documents as generate_access_schemas
 
     generated.update(generate_access_schemas())
-    from arw.audit_dossier import generate_phase6_audit_schema_documents
+    from arw.kernel.artifacts.audit_dossier import generate_phase6_audit_schema_documents
 
     generated.update(generate_phase6_audit_schema_documents())
     return generated
 
 
-from arw.experiment_provenance import ExperimentProvenance
+from arw.kernel.artifacts.experiment_provenance import ExperimentProvenance
 
 
 PHASE6_SCHEMA_MODELS: tuple[type[StrictModel], ...] = (IntegrityReceipt, ExperimentProvenance)

@@ -16,10 +16,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 
 def _service(tmp_path: Path):
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"
@@ -65,8 +65,8 @@ def _base(event: int, revision: int, role: str = "parent_control_plane") -> dict
 
 
 def test_decision_and_attempt_state_survive_fresh_replay(tmp_path: Path) -> None:
-    from arw.models import AttemptStartRequest, HumanDecisionRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.state.models import AttemptStartRequest, HumanDecisionRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root, service = _service(tmp_path)
     decision = HumanDecisionRequest.model_validate(
@@ -98,7 +98,7 @@ def test_decision_and_attempt_state_survive_fresh_replay(tmp_path: Path) -> None
 
 
 def test_decision_resolution_and_attempt_close_are_separate_events(tmp_path: Path) -> None:
-    from arw.models import (
+    from arw.kernel.state.models import (
         AttemptCloseRequest,
         AttemptStartRequest,
         HumanDecisionRequest,
@@ -157,7 +157,7 @@ def test_decision_resolution_and_attempt_close_are_separate_events(tmp_path: Pat
 
 
 def test_stale_or_unknown_attempt_requests_append_nothing(tmp_path: Path) -> None:
-    from arw.models import AttemptCloseRequest, AttemptStartRequest
+    from arw.kernel.state.models import AttemptCloseRequest, AttemptStartRequest
 
     root, service = _service(tmp_path)
     stale = AttemptStartRequest.model_validate(
@@ -191,7 +191,7 @@ def test_stale_or_unknown_attempt_requests_append_nothing(tmp_path: Path) -> Non
 def test_pending_decision_blocks_lifecycle_transition_without_mutation(
     tmp_path: Path,
 ) -> None:
-    from arw.models import HumanDecisionRequest, LifecycleTransitionRequest
+    from arw.kernel.state.models import HumanDecisionRequest, LifecycleTransitionRequest
 
     root, service = _service(tmp_path)
     requested = service.request_decision(

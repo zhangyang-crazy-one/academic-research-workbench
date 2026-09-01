@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, Self
 
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     FORMAL_REVIEW_ROLE_IDS,
     ReviewFinding as OrchestrationReviewFinding,
     ReviewFindingMatrix as OrchestrationReviewFindingMatrix,

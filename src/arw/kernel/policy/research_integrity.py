@@ -27,9 +27,9 @@ from pydantic import (
     model_validator,
 )
 
-from arw.canonical import canonical_json_bytes, sha256_hex
-from arw.integration_lock import IntegrationDiagnosticReport
-from arw.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.policy.integration_lock import IntegrationDiagnosticReport
+from arw.kernel.state.models import ActorId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 _ContractT = TypeVar("_ContractT", bound=StrictModel)
 
@@ -139,7 +139,7 @@ def _ars_passport_schema_path(name: str) -> Path:
     raw_root = (
         Path(plugin_root).absolute()
         if plugin_root
-        else Path(__file__).resolve().parents[2]
+        else Path(__file__).resolve().parents[4]
     )
     try:
         resolved_root = raw_root.resolve(strict=True)

@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from arw.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.graph_models import (
     GRAPH_PROJECTION_ALGORITHM,
     GraphEdge,

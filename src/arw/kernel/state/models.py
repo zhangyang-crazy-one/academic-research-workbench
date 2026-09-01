@@ -290,7 +290,7 @@ Phase4RetryReason = Literal[
 def _phase4_record(value: object, model_name: str) -> object:
     """Validate a Plan 01 immutable record without creating an import cycle."""
 
-    from arw import orchestration_models
+    from arw.kernel.state import orchestration_models
 
     model = getattr(orchestration_models, model_name)
     if isinstance(value, model):
@@ -305,8 +305,8 @@ def _phase4_record(value: object, model_name: str) -> object:
 
 
 def _phase4_record_digest(value: object) -> str:
-    from arw.orchestration_models import canonical_orchestration_model_bytes
-    from arw.canonical import sha256_hex
+    from arw.kernel.state.orchestration_models import canonical_orchestration_model_bytes
+    from arw.kernel.core.canonical import sha256_hex
 
     return sha256_hex(canonical_orchestration_model_bytes(value))  # type: ignore[arg-type]
 
@@ -509,7 +509,7 @@ class ReviewReportAcceptedPayload(Phase4Payload):
 
     @model_validator(mode="after")
     def report_digest_is_bound(self) -> Self:
-        from arw.orchestration_models import review_report_body_sha256
+        from arw.kernel.state.orchestration_models import review_report_body_sha256
 
         if self.report.report_sha256 != self.report_sha256:  # type: ignore[attr-defined]
             raise ValueError("review report digest does not match the report record")

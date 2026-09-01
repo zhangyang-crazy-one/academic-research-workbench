@@ -22,10 +22,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 
 def _service(tmp_path: Path):
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"
@@ -71,9 +71,9 @@ def _base(number: int, revision: int, *, role: str = "parent_control_plane"):
 
 
 def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) -> None:
-    from arw.manifests import install_artifact_manifest
-    from arw.models import ArtifactAcceptanceRequest, ArtifactManifest
-    from arw.schema_registry import validate_instance
+    from arw.kernel.ledger.manifests import install_artifact_manifest
+    from arw.kernel.state.models import ArtifactAcceptanceRequest, ArtifactManifest
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     content = root / "outputs" / "figure.png"
@@ -122,7 +122,7 @@ def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) 
 
 
 def test_artifact_rejection_preserves_store_and_journal(tmp_path: Path) -> None:
-    from arw.models import ArtifactAcceptanceRequest
+    from arw.kernel.state.models import ArtifactAcceptanceRequest
 
     root, service = _service(tmp_path)
     content = root / "outputs" / "result.txt"
@@ -150,7 +150,7 @@ def test_artifact_rejection_preserves_store_and_journal(tmp_path: Path) -> None:
 def test_duplicate_artifact_id_rejects_before_installing_an_orphan_manifest(
     tmp_path: Path,
 ) -> None:
-    from arw.models import ArtifactAcceptanceRequest
+    from arw.kernel.state.models import ArtifactAcceptanceRequest
 
     root, service = _service(tmp_path)
     outputs = root / "outputs"
@@ -198,8 +198,8 @@ def test_duplicate_artifact_id_rejects_before_installing_an_orphan_manifest(
 def test_replay_blocks_resealed_passport_that_does_not_bind_checkpoint_state(
     tmp_path: Path,
 ) -> None:
-    from arw.canonical import canonical_json_bytes, seal_event
-    from arw.models import CheckpointRequest
+    from arw.kernel.core.canonical import canonical_json_bytes, seal_event
+    from arw.kernel.state.models import CheckpointRequest
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -249,7 +249,7 @@ def test_replay_blocks_resealed_passport_that_does_not_bind_checkpoint_state(
 def test_status_without_at_uses_current_utc_for_passport_freshness(
     tmp_path: Path,
 ) -> None:
-    from arw.models import CheckpointRequest
+    from arw.kernel.state.models import CheckpointRequest
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -285,9 +285,9 @@ def test_status_without_at_uses_current_utc_for_passport_freshness(
 
 
 def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -> None:
-    from arw.manifests import load_material_passport
-    from arw.models import CheckpointRequest
-    from arw.schema_registry import validate_instance
+    from arw.kernel.ledger.manifests import load_material_passport
+    from arw.kernel.state.models import CheckpointRequest
+    from arw.kernel.policy.schema_registry import validate_instance
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -322,8 +322,8 @@ def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -
 
 
 def test_passport_snapshots_pending_decisions_and_active_attempts(tmp_path: Path) -> None:
-    from arw.manifests import load_material_passport
-    from arw.models import AttemptStartRequest, CheckpointRequest, HumanDecisionRequest
+    from arw.kernel.ledger.manifests import load_material_passport
+    from arw.kernel.state.models import AttemptStartRequest, CheckpointRequest, HumanDecisionRequest
 
     root, service = _service(tmp_path)
     decision = service.request_decision(
@@ -365,7 +365,7 @@ def test_passport_snapshots_pending_decisions_and_active_attempts(tmp_path: Path
 
 
 def test_checkpoint_kind_requires_a_coherent_boundary(tmp_path: Path) -> None:
-    from arw.models import CheckpointRequest
+    from arw.kernel.state.models import CheckpointRequest
 
     root, service = _service(tmp_path)
     before = _tree(root)
@@ -379,7 +379,7 @@ def test_checkpoint_kind_requires_a_coherent_boundary(tmp_path: Path) -> None:
 
 
 def test_passport_supersession_and_exact_single_use_resume(tmp_path: Path) -> None:
-    from arw.models import CheckpointRequest, ResumeRequest
+    from arw.kernel.state.models import CheckpointRequest, ResumeRequest
 
     root, service = _service(tmp_path)
     first = service.create_checkpoint(
@@ -420,7 +420,7 @@ def test_passport_supersession_and_exact_single_use_resume(tmp_path: Path) -> No
 
 
 def test_freshness_blocks_resume_without_mutating_passport(tmp_path: Path) -> None:
-    from arw.models import CheckpointRequest, LifecycleTransitionRequest, ResumeRequest
+    from arw.kernel.state.models import CheckpointRequest, LifecycleTransitionRequest, ResumeRequest
 
     root, service = _service(tmp_path)
     checkpoint = service.create_checkpoint(
@@ -464,7 +464,7 @@ def test_freshness_blocks_resume_without_mutating_passport(tmp_path: Path) -> No
 
 
 def test_passport_event_survives_sigkill_before_pointer(tmp_path: Path) -> None:
-    from arw.models import CheckpointRequest
+    from arw.kernel.state.models import CheckpointRequest
 
     root, service = _service(tmp_path)
     request = CheckpointRequest.model_validate(

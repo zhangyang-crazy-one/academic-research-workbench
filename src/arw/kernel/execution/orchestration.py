@@ -18,8 +18,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.execution import (
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.execution.execution import (
     DEFAULT_EXECUTION_POLICY,
     DispatchSpec,
     ExecutionAdapter,
@@ -28,15 +28,15 @@ from arw.execution import (
     RepairableEnvelopeFailure,
     StaleAttempt,
 )
-from arw.faults import inject
-from arw.journal import replay_run
-from arw.manifests import (
+from arw.kernel.core.faults import inject
+from arw.kernel.ledger.journal import replay_run
+from arw.kernel.ledger.manifests import (
     ManifestError,
     admit_raw_proposal,
     install_assignment_manifest,
     materialize_attempt_tree,
 )
-from arw.models import (
+from arw.kernel.state.models import (
     AssignmentPreparedPayload,
     AssignmentSupersededPayload,
     AttemptLifecyclePayload,
@@ -58,7 +58,7 @@ from arw.models import (
     RunManifest,
     StrictModel,
 )
-from arw.orchestration_models import (
+from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     AttemptStatus,
     AssignmentKey,
@@ -82,11 +82,11 @@ from arw.orchestration_models import (
     canonical_orchestration_model_bytes,
     locked_role_catalog,
 )
-from arw.reducer import RuntimeState
-from arw.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
-from arw.runtime import CommandOutcome, RuntimeCommandService
-from arw.scheduler import AttemptOutcome, DeterministicScheduler, ScheduledOutcome
-from arw.workflows import PHASE4_WORKFLOW_ID
+from arw.kernel.ledger.reducer import RuntimeState
+from arw.kernel.execution.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
+from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
+from arw.kernel.execution.scheduler import AttemptOutcome, DeterministicScheduler, ScheduledOutcome
+from arw.kernel.ledger.workflows import PHASE4_WORKFLOW_ID
 
 
 class OrchestrationError(RuntimeError):
@@ -117,7 +117,7 @@ def _utc_after(value: str, seconds: float) -> str:
 
 
 def _schema_digest(name: str) -> str:
-    from arw.orchestration_models import generate_phase4_schema_documents
+    from arw.kernel.state.orchestration_models import generate_phase4_schema_documents
 
     document = generate_phase4_schema_documents()[name]
     return sha256_hex(canonical_json_bytes(document))

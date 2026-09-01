@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.graph_models import GRAPH_NORMALIZATION_ORACLE, GraphOracleComparison
 
 

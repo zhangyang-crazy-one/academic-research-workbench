@@ -26,10 +26,10 @@ from pathlib import Path
 
 import pytest
 
-from arw.canonical import canonical_json_bytes, sha256_hex
-from arw.journal import replay_run
-from arw.reducer import reduce_events
-from arw.workflows import CORE_WORKFLOW
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.ledger.journal import replay_run
+from arw.kernel.ledger.reducer import reduce_events
+from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
 from .normalize import normalize_text, path_replacements, read_golden_json
 

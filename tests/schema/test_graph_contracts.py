@@ -57,7 +57,7 @@ def test_graph_schema_documents_are_draft_2020_12_and_closed() -> None:
 
 
 def test_schema_registry_includes_phase5_documents() -> None:
-    from arw.schema_registry import PHASE5_SCHEMA_NAMES, SCHEMA_NAMES
+    from arw.kernel.policy.schema_registry import PHASE5_SCHEMA_NAMES, SCHEMA_NAMES
 
     assert len(PHASE5_SCHEMA_NAMES) == 7
     assert set(PHASE5_SCHEMA_NAMES) <= set(SCHEMA_NAMES)

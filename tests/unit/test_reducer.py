@@ -14,7 +14,7 @@ HASH_E = "e" * 64
 
 
 def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
-    from arw.orchestration_models import ImmutableAssignment
+    from arw.kernel.state.orchestration_models import ImmutableAssignment
 
     return ImmutableAssignment.model_validate(
         {
@@ -66,7 +66,7 @@ def _phase4_assignment(*, assignment_id: str, task_ordinal: int):
 
 
 def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, status: str = "prepared"):
-    from arw.orchestration_models import AttemptDescriptor
+    from arw.kernel.state.orchestration_models import AttemptDescriptor
 
     return AttemptDescriptor.model_validate(
         {
@@ -86,7 +86,7 @@ def _phase4_attempt(assignment, *, attempt_id: str, attempt_number: int = 1, sta
 
 
 def _phase4_proposal(assignment, attempt):
-    from arw.orchestration_models import ProposedArtifact, WorkerProposal
+    from arw.kernel.state.orchestration_models import ProposedArtifact, WorkerProposal
 
     return WorkerProposal.model_validate(
         {
@@ -127,7 +127,7 @@ def _phase4_proposal(assignment, attempt):
 
 
 def _event(event_type: str, payload: object, *, revision: int, role: str = "parent_control_plane"):
-    from arw.models import CanonicalEvent
+    from arw.kernel.state.models import CanonicalEvent
 
     return CanonicalEvent.model_validate(
         {
@@ -150,7 +150,7 @@ def _event(event_type: str, payload: object, *, revision: int, role: str = "pare
 
 
 def test_reducer_applies_legal_lifecycle_decisions_attempts_and_passport() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -208,7 +208,7 @@ def test_reducer_applies_legal_lifecycle_decisions_attempts_and_passport() -> No
 
 
 def test_reducer_rejects_unauthorized_or_illegal_transition() -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     initialized = _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)
     unauthorized = _event(
@@ -230,7 +230,7 @@ def test_reducer_rejects_unauthorized_or_illegal_transition() -> None:
 
 
 def test_reducer_requires_explicit_actor_role_for_phase2_initialization() -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     initialized = _event(
         "run.initialized", {"manifest_sha256": "a" * 64}, revision=1
@@ -244,7 +244,7 @@ def test_reducer_requires_explicit_actor_role_for_phase2_initialization() -> Non
 
 
 def test_reducer_keeps_shared_blocker_until_every_decision_is_resolved() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
     for revision, decision_id in ((2, "decision.first"), (3, "decision.second")):
@@ -281,7 +281,7 @@ def test_reducer_keeps_shared_blocker_until_every_decision_is_resolved() -> None
 
 @pytest.mark.parametrize("identity", ["decision", "attempt", "artifact"])
 def test_reducer_rejects_reused_stable_runtime_identity(identity: str) -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
     if identity == "decision":
@@ -371,7 +371,7 @@ def test_reducer_rejects_reused_stable_runtime_identity(identity: str) -> None:
 
 
 def test_freshness_is_dynamic_and_does_not_change_events() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -409,7 +409,7 @@ def test_freshness_is_dynamic_and_does_not_change_events() -> None:
 def test_reducer_rejects_non_exact_or_branching_passport(
     based_on_revision: int, supersedes: str | None, message: str
 ) -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -433,21 +433,21 @@ def test_reducer_rejects_non_exact_or_branching_passport(
 
 
 def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files() -> None:
-    from arw.canonical import sha256_hex
-    from arw.models import (
+    from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.state.models import (
         AssignmentPreparedPayload,
         CanonicalEvent,
         ExecutionModeSelectedPayload,
         ProposalAcceptedPayload,
     )
-    from arw.reducer import reduce_events
-    from arw.status import build_status_report
+    from arw.kernel.ledger.reducer import reduce_events
+    from arw.kernel.state.status import build_status_report
 
     assignment = _phase4_assignment(assignment_id="assignment.phase4-001", task_ordinal=0)
     attempt = _phase4_attempt(assignment, attempt_id="attempt.phase4-001")
     proposal = _phase4_proposal(assignment, attempt)
     proposal_sha256 = sha256_hex(
-        __import__("arw.orchestration_models", fromlist=["canonical_orchestration_model_bytes"])
+        __import__("arw.kernel.state.orchestration_models", fromlist=["canonical_orchestration_model_bytes"])
         .canonical_orchestration_model_bytes(proposal)
     )
     events = [
@@ -509,15 +509,15 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
 
 
 def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_results() -> None:
-    from arw.canonical import sha256_hex
-    from arw.models import (
+    from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.state.models import (
         AssignmentPreparedPayload,
         AttemptLifecyclePayload,
         GateEvaluatedPayload,
         ProposalAcceptedPayload,
     )
-    from arw.orchestration_models import GateDecision, canonical_orchestration_model_bytes
-    from arw.reducer import reduce_events
+    from arw.kernel.state.orchestration_models import GateDecision, canonical_orchestration_model_bytes
+    from arw.kernel.ledger.reducer import reduce_events
 
     first_assignment = _phase4_assignment(assignment_id="assignment.phase4-002", task_ordinal=0)
     second_assignment = _phase4_assignment(assignment_id="assignment.phase4-003", task_ordinal=1)

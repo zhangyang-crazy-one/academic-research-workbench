@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.file_models import (
     CONTRACT_LIMITS,
     RANKING_VERSION,

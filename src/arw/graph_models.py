@@ -13,8 +13,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes
-from arw.models import Sha256, StableRuntimeId, StrictModel
+from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.state.models import Sha256, StableRuntimeId, StrictModel
 
 
 GRAPH_SCHEMA_VERSION = "1.0.0"

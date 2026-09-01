@@ -12,16 +12,16 @@ from typing import Any
 import jsonschema
 from referencing import Registry, Resource
 
-from arw.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
+from arw.kernel.artifacts.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
 from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
-from arw.integration_lock import integration_lock_schema_document
-from arw.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
-from arw.orchestration_models import (
+from arw.kernel.policy.integration_lock import integration_lock_schema_document
+from arw.kernel.artifacts.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
+from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
     generate_phase4_schema_documents,
 )
-from arw.research_integrity import (
+from arw.kernel.policy.research_integrity import (
     ResearchIntegrityError,
     research_integrity_contracts_schema_document,
     validate_research_integrity_contract_instance,
@@ -73,7 +73,7 @@ def _schema_root() -> Path:
     packaged_root = os.environ.get("ARW_SCHEMA_ROOT")
     if packaged_root:
         return Path(packaged_root).resolve()
-    return Path(__file__).resolve().parents[2] / "schemas" / "v1"
+    return Path(__file__).resolve().parents[4] / "schemas" / "v1"
 
 
 class SchemaRegistryError(ValueError):

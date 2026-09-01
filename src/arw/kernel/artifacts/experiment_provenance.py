@@ -17,13 +17,13 @@ from typing import Annotated, Any, Literal, TYPE_CHECKING
 
 from pydantic import BeforeValidator, Field, StrictFloat, StrictInt, StringConstraints, field_validator, model_validator
 
-from arw.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _safe_root, _write_once
-from arw.models import ActorId, RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _safe_root, _write_once
+from arw.kernel.state.models import ActorId, RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 if TYPE_CHECKING:  # pragma: no cover - imported only for static tooling
-    from arw.runtime import CommandOutcome, RuntimeCommandService
-    from arw.models import RuntimeCommandRequest
+    from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
+    from arw.kernel.state.models import RuntimeCommandRequest
 
 
 EXPERIMENT_PROVENANCE_SCHEMA_VERSION = "arw.experiment-provenance.v1"
@@ -536,8 +536,8 @@ def _verify_local_references(root: Path, provenance: ExperimentProvenance) -> No
 def _authority_parts(
     allowed_root: Path, authority_envelope: ProvenanceAuthorityEnvelope
 ) -> ProvenanceAuthorityEnvelope:
-    from arw.models import RuntimeCommandRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.state.models import RuntimeCommandRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     if not isinstance(authority_envelope, ProvenanceAuthorityEnvelope):
         raise ProvenanceError("authority envelope must be an existing ProvenanceAuthorityEnvelope")

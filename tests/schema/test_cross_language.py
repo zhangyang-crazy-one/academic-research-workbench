@@ -27,7 +27,7 @@ def _validator(name: str) -> jsonschema.Draft202012Validator:
 
 
 def test_python_and_native_fixtures_validate_independently() -> None:
-    from arw.schema_registry import validate_phase1_instance
+    from arw.kernel.policy.schema_registry import validate_phase1_instance
 
     python_fixture = json.loads(
         (REPOSITORY_ROOT / "tests/fixtures/recovery/seed/expected-run-manifest.json").read_text(
@@ -74,8 +74,8 @@ def test_native_fixture_rejects_python_only_shape() -> None:
 
 
 def _phase2_instances() -> dict[str, list[object]]:
-    from arw.canonical import seal_event
-    from arw.models import (
+    from arw.kernel.core.canonical import seal_event
+    from arw.kernel.state.models import (
         ArtifactAcceptanceRequest,
         ArtifactManifest,
         AttemptCloseRequest,
@@ -91,9 +91,9 @@ def _phase2_instances() -> dict[str, list[object]]:
         Rejection,
         ResumeRequest,
     )
-    from arw.reducer import RuntimeState
-    from arw.runtime import CommandOutcome
-    from arw.status import build_status_report
+    from arw.kernel.ledger.reducer import RuntimeState
+    from arw.kernel.execution.runtime import CommandOutcome
+    from arw.kernel.state.status import build_status_report
 
     run_id = "run-00000000-0000-4000-8000-000000000101"
     common = {
@@ -327,7 +327,7 @@ def _phase2_instances() -> dict[str, list[object]]:
 
 
 def test_phase2_model_fixtures_validate_and_unknown_fields_fail_independently() -> None:
-    from arw.schema_registry import SchemaRegistryError, validate_instance
+    from arw.kernel.policy.schema_registry import SchemaRegistryError, validate_instance
 
     for name, instances in _phase2_instances().items():
         validator = _validator(name)

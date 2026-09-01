@@ -15,15 +15,15 @@ from typing import Literal, cast
 import pytest
 
 import arw.cli as cli_module
-import arw.integration_lock as integration_lock_module
-from arw.canonical import canonical_json_bytes
-from arw.hook_contracts import (
+import arw.kernel.policy.integration_lock as integration_lock_module
+from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.policy.hook_contracts import (
     PARITY_SURFACES,
     CodexHookReceipt,
     CodexReceiptControl,
     HookParityMatrix,
 )
-from arw.integration_lock import (
+from arw.kernel.policy.integration_lock import (
     AUDIT_BUILD_IDENTITY_RELATIVE,
     EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256,
     CodexHostCanaryEvidence,
@@ -156,7 +156,7 @@ def _make_wheel(path: Path) -> None:
     )
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
         archive.writestr("arw/__init__.py", "__version__ = '0.1.0'\n")
-        archive.writestr("arw/integration_lock.py", "# packaged verifier\n")
+        archive.writestr("arw/kernel/policy/integration_lock.py", "# packaged verifier\n")
         archive.writestr(
             "academic_research_workbench-0.1.0.dist-info/METADATA", metadata
         )
@@ -171,7 +171,7 @@ def _install_audit_manifests(stage: Path) -> None:
     so the audit gate has nothing to trust but the stage itself.
     """
 
-    from arw.schema_registry import aggregate_schema_sha256
+    from arw.kernel.policy.schema_registry import aggregate_schema_sha256
 
     schema_destination = stage / "share/arw/schemas/build-identity.schema.json"
     schema_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1692,7 +1692,7 @@ def test_route_diagnostics_reports_noncanonical_lock_at_lock_document(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     assert hasattr(integration_lock_module, "diagnose_integration_lock"), (
         "the read-only layered integration diagnostic API is missing"
@@ -1783,7 +1783,7 @@ def _diagnose_fixture(
 def test_complete_diagnostic_requires_exact_verification_and_validates_schema(
     integration_fixture: dict[str, Path],
 ) -> None:
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     lock = _build(integration_fixture)
     expected = write_integration_lock(integration_fixture["lock"], lock)
@@ -2747,7 +2747,7 @@ def test_schema_aggregate_matches_canonical_helper(
 ) -> None:
     """The identity's schemas aggregate must equal ``aggregate_schema_sha256``."""
 
-    from arw.schema_registry import aggregate_schema_sha256
+    from arw.kernel.policy.schema_registry import aggregate_schema_sha256
 
     identity = json.loads(
         (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
@@ -2901,7 +2901,7 @@ def test_build_identity_schema_rejects_legacy_python_310_interpreter(
 ) -> None:
     """RED: 3.10.x build_interpreter is rejected by the tightened schema."""
 
-    from arw.schema_registry import validate_instance
+    from arw.kernel.policy.schema_registry import validate_instance
 
     identity = {
         "schema_version": "1.0.0",

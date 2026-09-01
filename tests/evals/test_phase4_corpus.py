@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]

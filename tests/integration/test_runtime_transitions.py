@@ -21,10 +21,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 
 def _service(tmp_path: Path):
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"
@@ -57,7 +57,7 @@ def _service(tmp_path: Path):
 
 
 def _transition(**overrides):
-    from arw.models import LifecycleTransitionRequest
+    from arw.kernel.state.models import LifecycleTransitionRequest
 
     payload = {
         "schema_version": "1.0.0",
@@ -76,8 +76,8 @@ def _transition(**overrides):
 
 
 def test_valid_transition_appends_once_and_replays_same_state(tmp_path: Path) -> None:
-    from arw.reducer import reduce_events
-    from arw.journal import replay_run
+    from arw.kernel.ledger.reducer import reduce_events
+    from arw.kernel.ledger.journal import replay_run
 
     root, service = _service(tmp_path)
     outcome = service.execute_transition(_transition())
@@ -144,9 +144,9 @@ def test_duplicate_identity_rejects_without_second_append(tmp_path: Path, identi
 
 
 def test_phase2_transaction_rejects_legacy_journal_before_append(tmp_path: Path) -> None:
-    from arw.journal import initialize_run
-    from arw.models import InitRunRequest
-    from arw.runtime import RuntimeCommandService
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.state.models import InitRunRequest
+    from arw.kernel.execution.runtime import RuntimeCommandService
 
     root = tmp_path / "legacy"
     source = root / "input" / "source.txt"
@@ -209,7 +209,7 @@ def test_transition_cli_routes_only_through_runtime_service(tmp_path: Path) -> N
 def test_replay_cli_rejects_resealed_event_that_violates_runtime_authority(
     tmp_path: Path,
 ) -> None:
-    from arw.canonical import canonical_json_bytes, seal_event
+    from arw.kernel.core.canonical import canonical_json_bytes, seal_event
 
     root, service = _service(tmp_path)
     accepted = service.execute_transition(_transition())

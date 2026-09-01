@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from arw.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes
 from arw.graph_projection import GraphProjectionError, project_canonical_records, project_replayed_manifests
 from arw.graph_oracle import assert_equivalent, compare_normalized
 

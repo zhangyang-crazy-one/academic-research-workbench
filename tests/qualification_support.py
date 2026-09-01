@@ -30,7 +30,7 @@ def discover_bundled_qualification() -> tuple[Path, Path, Path] | None:
     retained qualification that verifies against the current Codex host, or
     ``None`` when no retained triple is currently valid."""
 
-    from arw.integration_lock import (
+    from arw.kernel.policy.integration_lock import (
         IntegrationLockError,
         discover_codex_native_binary,
         load_integration_lock,

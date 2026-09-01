@@ -85,10 +85,10 @@ def test_post_fsync_sigkill_replays_once_without_changing_journal() -> None:
     assert len(events) == 2
     assert sum(event["event_type"] == "baseline.probe_recorded" for event in events) == 1
 
-    assert importlib.util.find_spec("arw.evidence") is not None, (
+    assert importlib.util.find_spec("arw.kernel.artifacts.evidence") is not None, (
         "expected RED: allowlisted recovery evidence capture is not implemented"
     )
-    from arw.evidence import record_command_result, write_evidence_bytes, write_evidence_json
+    from arw.kernel.artifacts.evidence import record_command_result, write_evidence_bytes, write_evidence_json
 
     commands_root = EVIDENCE_ROOT / "commands"
     record_command_result(
@@ -187,9 +187,9 @@ def test_post_fsync_sigkill_replays_once_without_changing_journal() -> None:
 
 
 def test_phase4_canonical_event_bytes_replay_to_identical_parent_state() -> None:
-    from arw.canonical import canonical_json_bytes, strict_json_loads
-    from arw.models import CanonicalEvent
-    from arw.reducer import reduce_events
+    from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+    from arw.kernel.state.models import CanonicalEvent
+    from arw.kernel.ledger.reducer import reduce_events
 
     event = CanonicalEvent.model_validate(
         {
