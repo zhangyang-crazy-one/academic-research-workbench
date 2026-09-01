@@ -150,7 +150,7 @@ def _event(event_type: str, payload: object, *, revision: int, role: str = "pare
 
 
 def test_reducer_applies_legal_lifecycle_decisions_attempts_and_passport() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -208,7 +208,7 @@ def test_reducer_applies_legal_lifecycle_decisions_attempts_and_passport() -> No
 
 
 def test_reducer_rejects_unauthorized_or_illegal_transition() -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     initialized = _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)
     unauthorized = _event(
@@ -230,7 +230,7 @@ def test_reducer_rejects_unauthorized_or_illegal_transition() -> None:
 
 
 def test_reducer_requires_explicit_actor_role_for_phase2_initialization() -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     initialized = _event(
         "run.initialized", {"manifest_sha256": "a" * 64}, revision=1
@@ -244,7 +244,7 @@ def test_reducer_requires_explicit_actor_role_for_phase2_initialization() -> Non
 
 
 def test_reducer_keeps_shared_blocker_until_every_decision_is_resolved() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
     for revision, decision_id in ((2, "decision.first"), (3, "decision.second")):
@@ -281,7 +281,7 @@ def test_reducer_keeps_shared_blocker_until_every_decision_is_resolved() -> None
 
 @pytest.mark.parametrize("identity", ["decision", "attempt", "artifact"])
 def test_reducer_rejects_reused_stable_runtime_identity(identity: str) -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     events = [_event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1)]
     if identity == "decision":
@@ -371,7 +371,7 @@ def test_reducer_rejects_reused_stable_runtime_identity(identity: str) -> None:
 
 
 def test_freshness_is_dynamic_and_does_not_change_events() -> None:
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -409,7 +409,7 @@ def test_freshness_is_dynamic_and_does_not_change_events() -> None:
 def test_reducer_rejects_non_exact_or_branching_passport(
     based_on_revision: int, supersedes: str | None, message: str
 ) -> None:
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
     events = [
         _event("run.initialized", {"manifest_sha256": "a" * 64}, revision=1),
@@ -440,7 +440,7 @@ def test_phase4_replay_reduces_parent_events_and_status_without_evidence_files()
         ExecutionModeSelectedPayload,
         ProposalAcceptedPayload,
     )
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
     from arw.kernel.state.status import build_status_report
 
     assignment = _phase4_assignment(assignment_id="assignment.phase4-001", task_ordinal=0)
@@ -517,7 +517,7 @@ def test_phase4_reducer_buffers_frozen_order_and_blocks_stale_or_unresolved_resu
         ProposalAcceptedPayload,
     )
     from arw.kernel.state.orchestration_models import GateDecision, canonical_orchestration_model_bytes
-    from arw.reducer import reduce_events
+    from arw.kernel.ledger.reducer import reduce_events
 
     first_assignment = _phase4_assignment(assignment_id="assignment.phase4-002", task_ordinal=0)
     second_assignment = _phase4_assignment(assignment_id="assignment.phase4-003", task_ordinal=1)

@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from arw.reducer import (
+from arw.kernel.ledger.reducer import (
     AssignmentState,
     AttemptLifecycleState,
     AttemptState,

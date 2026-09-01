@@ -41,7 +41,7 @@ from arw.kernel.state.models import (
     ZERO_HASH,
 )
 from arw.kernel.state.orchestration_models import RETRYABLE_FAILURES
-from arw.workflows import (
+from arw.kernel.ledger.workflows import (
     LEGACY_WORKFLOW_ID,
     WorkflowDefinitionError,
     actor_can_commit,

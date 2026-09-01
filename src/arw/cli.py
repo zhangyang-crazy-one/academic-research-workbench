@@ -819,13 +819,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Writable/runtime services are intentionally imported only after the two
     # read-only installed commands above have returned.
-    from arw.journal import (
+    from arw.kernel.ledger.journal import (
         JournalError,
         append_probe,
         initialize_run,
         replay_run,
     )
-    from arw.manifests import ManifestError
+    from arw.kernel.ledger.manifests import ManifestError
     from arw.kernel.state.models import (
         AppendProbeRequest,
         ArtifactAcceptanceRequest,
@@ -846,7 +846,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         OrchestrationService,
     )
     from arw.kernel.state.orchestration_models import GateDecision, HookObservation
-    from arw.reducer import ReducerError, reduce_events
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
     from arw.runtime import RuntimeCommandService
     from arw.kernel.state.status import build_status_report, render_status_text
 

@@ -18,7 +18,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import BeforeValidator, Field, PrivateAttr, StringConstraints, field_validator, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
 from arw.kernel.state.models import RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
 
 
@@ -591,7 +591,7 @@ def load_audit_dossier(root: Path, dossier_sha256: str) -> AuditDossierManifest:
             )
             if receipt.dossier_sha256 != dossier_sha256:
                 raise AuditDossierError("qualification receipt is bound to another dossier")
-            from arw.journal import replay_run
+            from arw.kernel.ledger.journal import replay_run
 
             replayed = replay_run(root)
             if (
@@ -772,7 +772,7 @@ def assemble_audit_dossier(
 ) -> AuditDossierManifest:
     """Assemble references after replay; no event, graph, or SQLite writes occur."""
 
-    from arw.journal import ReplayState, replay_run
+    from arw.kernel.ledger.journal import ReplayState, replay_run
 
     if run_root is not None:
         replayed = replay_run(run_root)

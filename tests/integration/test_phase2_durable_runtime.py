@@ -195,7 +195,7 @@ def _assert_rejection_unchanged(
 def test_staged_projection_free_durable_runtime_design_intent(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.schema_registry import validate_instance
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     harness = StagedHarness(tmp_path)
     run_root = tmp_path / "run"

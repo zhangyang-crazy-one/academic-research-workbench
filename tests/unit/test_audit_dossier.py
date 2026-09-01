@@ -16,7 +16,7 @@ from arw.audit_dossier import (
     render_audit_dossier_markdown,
     seal_audit_dossier,
 )
-from arw.journal import ReplayState
+from arw.kernel.ledger.journal import ReplayState
 
 
 RUN_ID = "run-00000000-0000-4000-8000-000000000031"
@@ -143,9 +143,9 @@ def test_parent_receipt_allows_cold_load_of_assembled_pass(tmp_path) -> None:
     from arw.evidence_access import publish_evidence_access_decision, seal_evidence_access_decision
     from arw.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
     from arw.integrity import publish_integrity_receipt, seal_integrity_receipt
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input/source.txt"

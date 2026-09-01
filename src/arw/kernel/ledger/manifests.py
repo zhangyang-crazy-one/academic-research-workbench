@@ -23,7 +23,7 @@ from arw.kernel.state.models import (
     StableRuntimeId,
     StrictModel,
 )
-from arw.reducer import RuntimeState
+from arw.kernel.ledger.reducer import RuntimeState
 from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     ImmutableAssignment,
@@ -440,7 +440,7 @@ def validate_event_manifest_semantics(
 ) -> None:
     """Bind one selected manifest to the complete accepted state before its event."""
 
-    from arw.workflows import require_workflow
+    from arw.kernel.ledger.workflows import require_workflow
 
     if event.event_type == "artifact.accepted":
         assert isinstance(event.payload, ArtifactAcceptedPayload)

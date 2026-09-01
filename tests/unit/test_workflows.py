@@ -4,7 +4,7 @@ import pytest
 
 
 def test_registered_workflow_identity_is_deterministic_and_domain_neutral() -> None:
-    from arw.workflows import CORE_WORKFLOW, workflow_definition_sha256
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW, workflow_definition_sha256
 
     assert CORE_WORKFLOW.definition_id == "core-research.v1"
     assert workflow_definition_sha256(CORE_WORKFLOW) == CORE_WORKFLOW.sha256
@@ -15,7 +15,7 @@ def test_registered_workflow_identity_is_deterministic_and_domain_neutral() -> N
 
 
 def test_transition_lookup_and_actor_authority_fail_closed() -> None:
-    from arw.workflows import (
+    from arw.kernel.ledger.workflows import (
         WorkflowDefinitionError,
         actor_can_commit,
         legal_transitions,
@@ -34,9 +34,9 @@ def test_transition_lookup_and_actor_authority_fail_closed() -> None:
 
 
 def test_manifest_workflow_identity_is_pairwise_and_registry_bound(tmp_path) -> None:
-    from arw.journal import JournalError, initialize_run
+    from arw.kernel.ledger.journal import JournalError, initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     (root / "input").mkdir(parents=True)
@@ -72,7 +72,7 @@ def test_manifest_workflow_identity_is_pairwise_and_registry_bound(tmp_path) -> 
 
 
 def test_phase4_workflow_is_frozen_parent_only_and_blocks_pending_completion() -> None:
-    from arw.workflows import (
+    from arw.kernel.ledger.workflows import (
         PHASE4_WORKFLOW,
         WorkflowDefinitionError,
         actor_can_commit,

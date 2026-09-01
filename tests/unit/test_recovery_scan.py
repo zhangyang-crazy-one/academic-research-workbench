@@ -11,9 +11,9 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures/recovery/tails"
 
 
 def _initialize(root: Path):
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     source = root / "input/source.txt"
     source.parent.mkdir(parents=True)
@@ -82,7 +82,7 @@ def _segment(root: Path) -> Path:
 def test_only_terminal_unverifiable_suffix_is_recoverable(
     tmp_path: Path, fixture: str, expected_class: str
 ) -> None:
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / fixture
     initialized = _initialize(root)
@@ -112,7 +112,7 @@ def test_only_terminal_unverifiable_suffix_is_recoverable(
 
 def test_changed_accepted_final_event_is_blocked(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / "changed-final"
     _initialize(root)
@@ -133,7 +133,7 @@ def test_changed_accepted_final_event_is_blocked(tmp_path: Path) -> None:
 @pytest.mark.parametrize("defect", ["changed-middle", "deleted", "reordered", "later-valid"])
 def test_middle_or_later_chain_damage_is_blocked(tmp_path: Path, defect: str) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / defect
     _initialize(root)
@@ -161,7 +161,7 @@ def test_middle_or_later_chain_damage_is_blocked(tmp_path: Path, defect: str) ->
 
 def test_changed_run_manifest_has_no_trustworthy_prefix(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-    from arw.journal import JournalError, replay_run
+    from arw.kernel.ledger.journal import JournalError, replay_run
 
     root = tmp_path / "manifest"
     _initialize(root)
@@ -175,7 +175,7 @@ def test_changed_run_manifest_has_no_trustworthy_prefix(tmp_path: Path) -> None:
 
 
 def test_unbound_next_segment_after_damaged_tail_is_blocked(tmp_path: Path) -> None:
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / "unexpected-next"
     _initialize(root)

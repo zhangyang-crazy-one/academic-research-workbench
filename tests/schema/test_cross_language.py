@@ -91,7 +91,7 @@ def _phase2_instances() -> dict[str, list[object]]:
         Rejection,
         ResumeRequest,
     )
-    from arw.reducer import RuntimeState
+    from arw.kernel.ledger.reducer import RuntimeState
     from arw.runtime import CommandOutcome
     from arw.kernel.state.status import build_status_report
 

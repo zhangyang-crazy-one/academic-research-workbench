@@ -3,7 +3,7 @@ from __future__ import annotations
 from itertools import permutations
 
 from arw.audit_dossier import assemble_audit_dossier, render_audit_dossier_json
-from arw.journal import ReplayState
+from arw.kernel.ledger.journal import ReplayState
 
 
 def test_reference_permutation_has_one_canonical_order() -> None:

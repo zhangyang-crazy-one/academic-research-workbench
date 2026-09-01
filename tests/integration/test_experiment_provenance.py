@@ -58,10 +58,10 @@ def test_external_import_is_parent_owned_and_cold_replayable(tmp_path: Path) -> 
     import hashlib
 
     from arw.experiment_provenance import ingest_experiment_provenance, load_experiment_provenance
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest, RuntimeCommandRequest
     from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"

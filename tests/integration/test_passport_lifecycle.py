@@ -22,10 +22,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 
 def _service(tmp_path: Path):
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
     from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"
@@ -71,7 +71,7 @@ def _base(number: int, revision: int, *, role: str = "parent_control_plane"):
 
 
 def test_artifact_store_is_not_authority_until_acceptance_event(tmp_path: Path) -> None:
-    from arw.manifests import install_artifact_manifest
+    from arw.kernel.ledger.manifests import install_artifact_manifest
     from arw.kernel.state.models import ArtifactAcceptanceRequest, ArtifactManifest
     from arw.schema_registry import validate_instance
 
@@ -285,7 +285,7 @@ def test_status_without_at_uses_current_utc_for_passport_freshness(
 
 
 def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -> None:
-    from arw.manifests import load_material_passport
+    from arw.kernel.ledger.manifests import load_material_passport
     from arw.kernel.state.models import CheckpointRequest
     from arw.schema_registry import validate_instance
 
@@ -322,7 +322,7 @@ def test_checkpoint_binds_state_and_pointer_is_never_authority(tmp_path: Path) -
 
 
 def test_passport_snapshots_pending_decisions_and_active_attempts(tmp_path: Path) -> None:
-    from arw.manifests import load_material_passport
+    from arw.kernel.ledger.manifests import load_material_passport
     from arw.kernel.state.models import AttemptStartRequest, CheckpointRequest, HumanDecisionRequest
 
     root, service = _service(tmp_path)

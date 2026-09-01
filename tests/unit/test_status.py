@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_status_json_and_text_render_the_same_runtime_state() -> None:
-    from arw.reducer import RuntimeState
+    from arw.kernel.ledger.reducer import RuntimeState
     from arw.kernel.state.status import build_status_report, render_status_text
 
     state = RuntimeState.empty(

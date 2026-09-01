@@ -30,18 +30,18 @@ from arw.kernel.state.models import (
     RunManifest,
     ZERO_HASH,
 )
-from arw.manifests import (
+from arw.kernel.ledger.manifests import (
     ManifestError,
     validate_accepted_event_manifests,
     validate_event_manifest_semantics,
 )
-from arw.recovery import (
+from arw.kernel.ledger.recovery import (
     RecoveryError,
     publish_recovery_segment,
     validate_recovery_boundary,
 )
 from arw.kernel.core.faults import active_fault, inject
-from arw.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
+from arw.kernel.ledger.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
 
 
 MANIFEST_NAME = "run-manifest.json"
@@ -416,7 +416,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
             except ManifestError as error:
                 raise JournalError(str(error)) from error
         try:
-            from arw.reducer import ReducerError, reduce_events
+            from arw.kernel.ledger.reducer import ReducerError, reduce_events
 
             candidate_reduced_state = reduce_events(
                 manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,

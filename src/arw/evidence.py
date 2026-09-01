@@ -124,7 +124,7 @@ def validate_fault_sidecar(
         raise ValueError("fault sidecar event sequence does not match replay")
     if run_root is not None:
         try:
-            from arw.journal import replay_run
+            from arw.kernel.ledger.journal import replay_run
 
             replayed = replay_run(run_root)
             replay_sequence = [

@@ -11,7 +11,7 @@ RUN_ID = "run-00000000-0000-4000-8000-000000000021"
 
 def _request(root: Path):
     from arw.kernel.state.models import InitRunRequest
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     source = root / "input" / "source.txt"
     source.parent.mkdir(parents=True)
@@ -39,13 +39,13 @@ def _request(root: Path):
 
 
 def _initialize(root: Path):
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
 
     return initialize_run(root, _request(root))
 
 
 def test_new_run_uses_declared_segment_layout_and_replays_locations(tmp_path: Path) -> None:
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / "run"
     initialized = _initialize(root)
@@ -62,7 +62,7 @@ def test_new_run_uses_declared_segment_layout_and_replays_locations(tmp_path: Pa
 
 @pytest.mark.parametrize("defect", ["gap", "unexpected", "symlink"])
 def test_segment_discovery_fails_closed(tmp_path: Path, defect: str) -> None:
-    from arw.journal import JournalError, replay_run
+    from arw.kernel.ledger.journal import JournalError, replay_run
 
     root = tmp_path / defect
     _initialize(root)
@@ -83,7 +83,7 @@ def test_segment_discovery_fails_closed(tmp_path: Path, defect: str) -> None:
 
 def test_replay_continues_chain_across_ordered_segments(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, seal_event
-    from arw.journal import replay_run
+    from arw.kernel.ledger.journal import replay_run
 
     root = tmp_path / "ordered"
     first_state = _initialize(root)
@@ -114,7 +114,7 @@ def test_replay_continues_chain_across_ordered_segments(tmp_path: Path) -> None:
 
 
 def test_legacy_append_cannot_bypass_segmented_runtime_authority(tmp_path: Path) -> None:
-    from arw.journal import JournalError, append_probe
+    from arw.kernel.ledger.journal import JournalError, append_probe
     from arw.kernel.state.models import AppendProbeRequest
 
     root = tmp_path / "segmented-append"
@@ -153,7 +153,7 @@ def test_legacy_append_cannot_bypass_segmented_runtime_authority(tmp_path: Path)
 
 
 def test_writer_lock_symlink_is_rejected_without_touching_target(tmp_path: Path) -> None:
-    from arw.journal import JournalError, initialize_run
+    from arw.kernel.ledger.journal import JournalError, initialize_run
 
     root = tmp_path / "lock-symlink"
     root.mkdir()

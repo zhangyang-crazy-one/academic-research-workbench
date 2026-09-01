@@ -16,10 +16,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 
 def _service(tmp_path: Path):
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
     from arw.kernel.state.models import InitRunRequest
     from arw.runtime import RuntimeCommandService
-    from arw.workflows import CORE_WORKFLOW
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
     root = tmp_path / "run"
     source = root / "input" / "source.txt"

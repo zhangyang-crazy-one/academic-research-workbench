@@ -17,7 +17,7 @@ from typing import Annotated, Any, Literal, Mapping, Sequence
 from pydantic import BeforeValidator, Field, StringConstraints, field_validator, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
 from arw.kernel.state.models import ActorId, Sha256, StrictModel
 
 

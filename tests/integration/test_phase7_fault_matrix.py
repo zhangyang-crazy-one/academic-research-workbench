@@ -29,12 +29,12 @@ from arw.kernel.core.faults import (
     fault_ids,
     inject,
 )
-from arw.journal import JournalError, replay_run
+from arw.kernel.ledger.journal import JournalError, replay_run
 from arw.kernel.state.models import InitRunRequest, LifecycleTransitionRequest, RecoveryRequest, RuntimeCommandRequest
 from arw.execution import DispatchSpec, ExecutionPolicySnapshot, HostResult, RepairableEnvelopeFailure
 from arw.scheduler import DeterministicScheduler
 from arw.runtime import RuntimeCommandService
-from arw.workflows import CORE_WORKFLOW
+from arw.kernel.ledger.workflows import CORE_WORKFLOW
 
 from .test_recovery import _damage, _initialize
 
@@ -84,7 +84,7 @@ def _fresh_run(root: Path) -> None:
             "actor_id": "parent.runtime",
         }
     )
-    from arw.journal import initialize_run
+    from arw.kernel.ledger.journal import initialize_run
 
     initialize_run(root, initialize)
 

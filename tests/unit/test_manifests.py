@@ -126,7 +126,7 @@ def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) ->
 
 
 def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None:
-    from arw.manifests import install_artifact_manifest, manifest_bytes_and_sha256
+    from arw.kernel.ledger.manifests import install_artifact_manifest, manifest_bytes_and_sha256
     from arw.kernel.state.models import ArtifactManifest
     from arw.schema_registry import validate_instance
 
@@ -162,7 +162,7 @@ def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None
 
 @pytest.mark.parametrize("path", ["../outside.txt", "/tmp/outside.txt", "a/../outside.txt"])
 def test_content_validation_rejects_non_normalized_paths(tmp_path: Path, path: str) -> None:
-    from arw.manifests import ManifestError, validate_content_file
+    from arw.kernel.ledger.manifests import ManifestError, validate_content_file
 
     root = tmp_path / "run"
     root.mkdir()
@@ -171,7 +171,7 @@ def test_content_validation_rejects_non_normalized_paths(tmp_path: Path, path: s
 
 
 def test_content_validation_rejects_symlink_and_digest_drift(tmp_path: Path) -> None:
-    from arw.manifests import ManifestError, validate_content_file
+    from arw.kernel.ledger.manifests import ManifestError, validate_content_file
 
     root = tmp_path / "run"
     content = root / "outputs" / "result.txt"
@@ -190,7 +190,7 @@ def test_content_validation_rejects_symlink_and_digest_drift(tmp_path: Path) -> 
 def test_assignment_attempt_tree_is_write_once_and_rejects_replacement_or_symlink(
     tmp_path: Path,
 ) -> None:
-    from arw.manifests import (
+    from arw.kernel.ledger.manifests import (
         ManifestError,
         install_assignment_manifest,
         materialize_attempt_tree,
@@ -220,7 +220,7 @@ def test_assignment_attempt_tree_is_write_once_and_rejects_replacement_or_symlin
 
 @pytest.mark.parametrize("assignment_id", ["../outside", "nested/assignment", "/absolute"])
 def test_assignment_loader_rejects_path_traversal_ids(tmp_path: Path, assignment_id: str) -> None:
-    from arw.manifests import ManifestError, load_assignment_manifest
+    from arw.kernel.ledger.manifests import ManifestError, load_assignment_manifest
 
     root = tmp_path / "run"
     root.mkdir()
@@ -229,7 +229,7 @@ def test_assignment_loader_rejects_path_traversal_ids(tmp_path: Path, assignment
 
 
 def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(tmp_path: Path) -> None:
-    from arw.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
+    from arw.kernel.ledger.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
 
     root = tmp_path / "run"
     root.mkdir()
@@ -253,7 +253,7 @@ def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(tmp_path
 
 @pytest.mark.parametrize("kind", ["symlink", "oversized", "echo-mismatch", "replaced"])
 def test_raw_proposal_admission_rejects_untrusted_file_variants(tmp_path: Path, kind: str) -> None:
-    from arw.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
+    from arw.kernel.ledger.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
 
     root = tmp_path / "run"
     root.mkdir()
