@@ -68,6 +68,21 @@ def test_kernel_never_imports_cli() -> None:
 SRC_ROOT = KERNEL_ROOT.parent
 
 
+def test_cli_imports_adapters_only_via_composition() -> None:
+    """cli.py and cli_support.py must not import concrete adapters directly;
+    only arw.composition (the composition root) may."""
+    violations = []
+    for name in ("cli.py", "cli_support.py"):
+        path = SRC_ROOT / name
+        for module in _imports_of(path):
+            if module == "arw.adapters" or module.startswith("arw.adapters."):
+                violations.append(f"{name}: {module}")
+    assert not violations, (
+        "CLI must resolve adapters through the composition root only:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_kernel_never_imports_adapters() -> None:
     """The kernel depends on ports (Protocols), never on concrete adapters."""
     violations = []

@@ -30,20 +30,41 @@ class KnowledgeProvider(Protocol):
 
 
 class NullKnowledgeProvider:
-    """L0 no-op provider: ARW remains fully functional with no graph backend."""
+    """L0 no-op provider: typed empty/unavailable results, never raises.
+
+    ARW remains fully functional at L0 with no knowledge backend installed;
+    kernel code may call the port unconditionally.
+    """
 
     def build_full(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
-        raise KnowledgeUnavailable("knowledge graph is not enabled")
+        return GraphProjectionReceipt(
+            schema_version="1.0.0",
+            root_id="null",
+            candidate_generation_id="null-unavailable",
+            previous_generation_id=None,
+            selected_generation_id=None,
+            projection_manifest_sha256=None,
+            input_sha256=projection.ledger_head_sha256,
+            ledger_watermark=projection.ledger_watermark,
+            status="BLOCKED",
+            reason_codes=["knowledge_not_enabled"],
+        )
 
     def build_incremental(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
-        raise KnowledgeUnavailable("knowledge graph is not enabled")
+        return self.build_full(projection)
 
     def delete_and_rebuild(self, projection: GraphProjectionInput) -> GraphProjectionReceipt:
-        raise KnowledgeUnavailable("knowledge graph is not enabled")
+        return self.build_full(projection)
 
     def query(self, request: GraphQueryRequest) -> GraphQueryResult:
-        raise KnowledgeUnavailable("knowledge graph is not enabled")
-
-
-class KnowledgeUnavailable(RuntimeError):
-    """Raised when a knowledge capability is requested but not enabled."""
+        return GraphQueryResult(
+            schema_version="1.0.0",
+            operation=request.operation,
+            status="projection_unavailable",
+            projection_generation_id=None,
+            projection_manifest_sha256=None,
+            ledger_watermark=None,
+            rows=[],
+            next_cursor=None,
+            reason_code="knowledge_not_enabled",
+        )

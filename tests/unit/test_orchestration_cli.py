@@ -320,7 +320,9 @@ def test_installed_route_diagnostics_converts_native_discovery_failure(
         "ARW_HOST_CANARY_EVIDENCE",
     ):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(cli.shutil, "which", lambda _name: str(launcher))
+    monkeypatch.setattr(
+            "arw.kernel.execution.host_dispatch.shutil.which", lambda _name: str(launcher)
+        )
 
     def fail_native_discovery(_launcher: Path) -> Path:
         raise IntegrationLockError("installed Codex package has no native binary")
@@ -392,7 +394,9 @@ def test_installed_route_prefers_plugin_bundled_lock_over_stale_env(
     )
     # Force lock-bound launcher discovery to succeed via invoked_path missing
     # (empty JSON); defaults still pick up which()/env only after prefer-bundled.
-    monkeypatch.setattr(cli.shutil, "which", lambda _name: str(launcher))
+    monkeypatch.setattr(
+            "arw.kernel.execution.host_dispatch.shutil.which", lambda _name: str(launcher)
+        )
 
     route = cli._installed_route_from_environment().model_dump(mode="json")
     assert route["integration_status"] == "PASS"

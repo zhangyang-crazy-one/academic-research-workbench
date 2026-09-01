@@ -179,18 +179,42 @@ def test_knowledge_provider_adapter_matches_projection_oracle(tmp_path: Path) ->
     assert rebuilt.input_sha256 == receipt_golden["input_sha256"]
 
 
-def test_null_knowledge_provider_raises_unavailable() -> None:
-    """L0: with no knowledge backend, the port raises a typed fault."""
-    from arw.ports.knowledge import KnowledgeUnavailable, NullKnowledgeProvider
+def test_null_knowledge_provider_returns_typed_unavailable() -> None:
+    """L0: with no knowledge backend, the port returns typed empty results."""
+    from arw.ports.knowledge import NullKnowledgeProvider
 
     provider = NullKnowledgeProvider()
-    with pytest.raises(KnowledgeUnavailable, match="not enabled"):
-        provider.query(
-            GraphQueryRequest(
+    result = provider.query(
+        GraphQueryRequest(
+            schema_version="1.0.0",
+            operation="trace_claim",
+            entity_id="claim-004",
+            max_depth=1,
+            max_rows=10,
+        )
+    )
+    assert result.status == "projection_unavailable"
+    assert result.rows == []
+    assert result.reason_code == "knowledge_not_enabled"
+
+
+def test_file_provider_adapter_preserves_root_denial(tmp_path: Path) -> None:
+    """The adapter must keep the MCP root_denied confinement check."""
+    from arw.adapters.files import FileProviderError
+
+    adapter, _, records = _adapter_on_seeded_corpus(tmp_path)
+    a_txt = records["notes/a.txt"]
+    with pytest.raises(FileProviderError) as exc_info:
+        adapter.read_file(
+            FilesReadRequest(
                 schema_version="1.0.0",
-                operation="trace_claim",
-                entity_id="claim-004",
-                max_depth=1,
-                max_rows=10,
+                root_id="other-root",
+                file_id=a_txt["file_id"],
+                relative_path="notes/a.txt",
+                expected_digest=None,
+                byte_range=None,
+                line_range=LineRange(start_line=1, max_lines=10),
+                cursor=None,
             )
         )
+    assert exc_info.value.code == "root_denied"
