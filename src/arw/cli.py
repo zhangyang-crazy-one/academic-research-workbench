@@ -4,23 +4,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
-import json
 import os
-import shutil
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-
 from arw.cli_support import (
     CLIInputError,
-    _canonical_object_from_bytes,
     _identity_receipt_reference,
     _is_sha256_text,
     _load_object,
@@ -28,20 +22,16 @@ from arw.cli_support import (
     _parse_utc,
     _write_json,
 )
+from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.kernel.execution.host_dispatch import (
-    _AssignmentCodexExecAdapter,
     _blocked_execution_adapter,
     _blocked_orchestration_result,
-    _discover_installed_route_inputs,
     _dispatch_report_json,
     _installed_route_diagnostics_from_environment,
     _installed_route_from_environment,
-    _path_argument_or_environment,
     _rehydrate_prepared_run,
     _verified_dispatch_adapter,
 )
-
-
 
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
 
@@ -301,7 +291,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "version":
         if not args.json_output:
             parser.error("version requires --json")
-        from arw.kernel.policy.build_identity import BuildIdentityError, load_packaged_build_identity
+        from arw.kernel.policy.build_identity import (
+            BuildIdentityError,
+            load_packaged_build_identity,
+        )
 
         try:
             identity, digest = load_packaged_build_identity()
@@ -354,14 +347,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "files":
         from arw.file_models import ExtractionRegistration
-        from arw.files import FilesAdminError, FilesAdminService
+        from arw.files import FilesAdminError
 
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
-            service = FilesAdminService(
-                args.control_root,
-                native_builder=None if builder_value is None else Path(builder_value),
-            )
+            from arw.composition import files_admin_service
+            service = files_admin_service(args.control_root)
+            if builder_value is not None:
+                service.native_builder = Path(builder_value)
             if args.files_command == "root":
                 result = service.register_root(
                     root_id=args.root_id,
@@ -386,13 +379,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"arw: files-admin-error: {error}", file=sys.stderr)
             return 65
     if args.command == "_graph-mcp":
+        from arw.composition import default_router
         from arw.graph_mcp import GraphMcpServer, run_stdio
-        from arw.graph_store import GraphStore
 
-        return run_stdio(GraphMcpServer(GraphStore(args.control_root, args.root_id)))
+        router = default_router(
+            graph_control_root=args.control_root, graph_root_id=args.root_id
+        )
+        provider = router.resolve("knowledge.graph")
+        return run_stdio(GraphMcpServer(provider._store))
 
     # Writable/runtime services are intentionally imported only after the two
     # read-only installed commands above have returned.
+    from arw.kernel.execution.orchestration import (
+        AssignmentSpec,
+        OrchestrationError,
+        OrchestrationService,
+    )
+    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.ledger.journal import (
         JournalError,
         append_probe,
@@ -400,6 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         replay_run,
     )
     from arw.kernel.ledger.manifests import ManifestError
+    from arw.kernel.ledger.reducer import ReducerError, reduce_events
     from arw.kernel.state.models import (
         AppendProbeRequest,
         ArtifactAcceptanceRequest,
@@ -414,14 +418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ResumeRequest,
         RuntimeCommandRequest,
     )
-    from arw.kernel.execution.orchestration import (
-        AssignmentSpec,
-        OrchestrationError,
-        OrchestrationService,
-    )
     from arw.kernel.state.orchestration_models import GateDecision, HookObservation
-    from arw.kernel.ledger.reducer import ReducerError, reduce_events
-    from arw.kernel.execution.runtime import RuntimeCommandService
     from arw.kernel.state.status import build_status_report, render_status_text
 
     handled_errors: tuple[type[Exception], ...] = (

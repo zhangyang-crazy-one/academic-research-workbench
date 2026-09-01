@@ -13,7 +13,6 @@ import signal
 from dataclasses import dataclass
 from typing import Final, Literal
 
-
 FAULT_PLAN_ENV: Final[str] = "ARW_TEST_FAULT_ID"
 FAULT_MODE_ENV: Final[str] = "ARW_TEST_MODE"
 
