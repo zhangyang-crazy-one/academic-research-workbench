@@ -105,14 +105,14 @@ def test_local_store_knowledge_adapter_matches_v1_projection_oracle(
     events = [
         _event(
             event_type="run.initialized",
-            payload=RunInitializedPayload(manifest_sha256=records[0]["source_digest"]),
+            payload=RunInitializedPayload(manifest_sha256=str(records[0]["source_digest"])),
             seq=1,
         ),
         _event(
             event_type="artifact.accepted",
             payload=ArtifactAcceptedPayload(
                 artifact_id="artifact-local-compat",
-                manifest_sha256=records[2]["source_digest"],
+                manifest_sha256=str(records[2]["source_digest"]),
                 artifact_sha256="0" * 64,
                 attempt_id=None,
             ),

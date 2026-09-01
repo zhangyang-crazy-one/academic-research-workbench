@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from arw_ext.local_store import (
+from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
     ApplyError,
     LocalProjectionStore,
     apply_projection,

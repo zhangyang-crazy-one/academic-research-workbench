@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from arw_ext.local_store import map_ledger_events
+from arw_ext.local_store import (
+    map_ledger_events,  # pyright: ignore[reportMissingImports]
+)
 
 from arw.kernel.core.canonical import canonical_event_bytes, sha256_hex
 from arw.kernel.state.models import (

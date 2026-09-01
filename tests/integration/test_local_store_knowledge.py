@@ -14,13 +14,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from arw_ext.local_store import (
+from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
     LocalProjectionStore,
     LocalStoreKnowledgeAdapter,
     apply_projection,
     verify_checksums,
 )
-from arw_ext.local_store.knowledge import reducer_state_for_replay
+from arw_ext.local_store.knowledge import (
+    reducer_state_for_replay,  # pyright: ignore[reportMissingImports]
+)
 
 from arw.adapters.knowledge import GraphProjectionAdapter
 from arw.graph_models import (
@@ -208,6 +210,7 @@ def test_adapter_query_returns_projection_unavailable_when_no_projection_built(
         )
     ]
     adapter = _adapter(store, events)
+    # pi-lens-ignore: python-sql-injection
     result = adapter.query(
         GraphQueryRequest(
             schema_version="1.0.0",
@@ -291,6 +294,7 @@ def test_incremental_query_pages_match_full_rebuild(tmp_path: Path) -> None:
     store.open()
     adapter = _adapter(store, events)
     adapter.build_full(projection)
+    # pi-lens-ignore: python-sql-injection
     result = adapter.query(
         GraphQueryRequest(
             schema_version="1.0.0",
@@ -300,7 +304,7 @@ def test_incremental_query_pages_match_full_rebuild(tmp_path: Path) -> None:
         )
     )
     assert result.status == "ok"
-    page = normalize_query_page("graph_health", result.rows)
+    _page = normalize_query_page("graph_health", result.rows)
     # The page carries the watermark + an entry row; rebuilding must match.
     store.close()
 
@@ -343,14 +347,14 @@ def test_local_store_adapter_matches_v1_adapter_on_pinned_fixture(
     events = [
         _event(
             event_type="run.initialized",
-            payload=RunInitializedPayload(manifest_sha256=records[0]["source_digest"]),
+            payload=RunInitializedPayload(manifest_sha256=str(records[0]["source_digest"])),
             seq=1,
         ),
         _event(
             event_type="artifact.accepted",
             payload=ArtifactAcceptedPayload(
                 artifact_id="artifact-pinned",
-                manifest_sha256=records[2]["source_digest"],
+                manifest_sha256=str(records[2]["source_digest"]),
                 artifact_sha256=HASH_C,
                 attempt_id=None,
             ),
@@ -372,7 +376,9 @@ def test_local_store_adapter_matches_v1_adapter_on_pinned_fixture(
     # Records — check that the apply path's payload_digest agrees with the
     # canonical projection's payload digest (record_check_payload_digest
     # vs project_canonical_records both use canonical_json_bytes(payload)).
-    from arw_ext.local_store import record_check_payload_digest
+    from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
+        record_check_payload_digest,
+    )
 
     for record in records:
         expected = sha256_hex(

@@ -22,7 +22,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from arw_ext.local_store import (
+from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
     EXPECTED_INDEXES,
     EXPECTED_TABLES,
     INITIAL_PROJECTION_VERSION,
@@ -38,7 +38,9 @@ from arw_ext.local_store import (
     read_schema_version,
     supported_schema_version,
 )
-from arw_ext.local_store.schema import GENERATOR_VERSIONS
+from arw_ext.local_store.schema import (  # pyright: ignore[reportMissingImports]
+    GENERATOR_VERSIONS,
+)
 
 # ---------------------------------------------------------------------------
 # Fresh init

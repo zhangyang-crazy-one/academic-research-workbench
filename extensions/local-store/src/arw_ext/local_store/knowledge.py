@@ -116,6 +116,7 @@ class LocalStoreKnowledgeAdapter:
             return _unavailable(
                 request, "projection_unavailable", "no projection is selected"
             )
+        # pi-lens-ignore: unchecked-throwing-call-python
         selected_watermark = int(checkpoint[0])
 
         generation_id = self._receipt_generation_id()

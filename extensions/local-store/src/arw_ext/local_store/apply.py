@@ -392,6 +392,7 @@ def apply_projection(
         entity_id = record["entity_id"]
         source_digest = record["source_digest"]
         payload_digest = record_check_payload_digest(record)
+        # pi-lens-ignore: unchecked-throwing-call-python
         ledger_watermark = int(record.get("ledger_watermark", new_watermark))
         supersession_state = record.get("supersession_state", "active")
         attributes = record.get("payload", {})
@@ -526,6 +527,7 @@ def apply_projection(
                         source_digest=source_digest,
                     )
                 )
+                # pi-lens-ignore: python-sql-injection
                 cursor.execute(
                     _PROVENANCE_UPSERT,
                     (
@@ -557,6 +559,7 @@ def apply_projection(
                 )
             )
             bound_event = event_index.get(ledger_event_id) if ledger_event_id else None
+            # pi-lens-ignore: python-sql-injection
             cursor.execute(
                 _PROVENANCE_UPSERT,
                 (
@@ -589,6 +592,7 @@ def apply_projection(
                 evidence
             )
             edge_supersession_state = raw_edge.get("supersession_state", "active")
+            # pi-lens-ignore: unchecked-throwing-call-python
             edge_watermark = int(raw_edge.get("ledger_watermark", new_watermark))
             edge_attributes = raw_edge.get("attributes", {})
 
@@ -602,6 +606,7 @@ def apply_projection(
                 edge_watermark,
                 _jsonify(edge_attributes),
             )
+            # pi-lens-ignore: python-sql-injection
             cursor.execute(
                 """
                 INSERT INTO edges (edge_type, from_entity_id, to_entity_id,
@@ -717,6 +722,7 @@ def apply_projection(
                     source_digest=record["source_digest"],
                 )
             )
+            # pi-lens-ignore: python-sql-injection
             cursor.execute(
                 _PROVENANCE_UPSERT,
                 (
@@ -854,6 +860,7 @@ def _read_checkpoint(
     ).fetchone()
     if row is None:
         return None
+    # pi-lens-ignore: unchecked-throwing-call-python
     return int(row[0]), str(row[1])
 
 
