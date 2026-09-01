@@ -118,7 +118,7 @@ jobs:
       - run: uv sync --frozen --all-groups
       - name: Verify publish surface before building artifacts
         run: |
-          test -f src/arw/orchestration.py
+          test -f src/arw/kernel/execution/orchestration.py
           test -f hooks/arw_hook.py
           test -x scripts/prepare-qualified-stage
           test -x scripts/create-marketplace
