@@ -44,7 +44,7 @@ class NullKnowledgeProvider:
             previous_generation_id=None,
             selected_generation_id=None,
             projection_manifest_sha256=None,
-            input_sha256=projection.ledger_head_sha256,
+            input_sha256=projection.input_sha256,
             ledger_watermark=projection.ledger_watermark,
             status="BLOCKED",
             reason_codes=["knowledge_not_enabled"],

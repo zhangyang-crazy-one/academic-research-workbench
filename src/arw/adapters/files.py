@@ -1,12 +1,17 @@
 """FileProvider adapters for the v1 file-plane implementations.
 
-Both wrap the existing strict services without changing behavior:
-- LocalFilesAdapter drives the in-repo pure-Python server path.
-- FileBaseMCPAdapter keeps the vendored native MCP binary reachable.
+LocalFilesAdapter wraps the in-repo pure-Python server path without changing
+behavior. The vendored native file-base MCP binary is NOT adapted here: no
+v2 consumer selects it through this port yet, and building a subprocess
+JSON-RPC client adapter is speculative until plugin-first-routing (PR5)
+switches the Codex default provider — the native binary remains reachable
+via the existing `python -m arw.files_mcp` / `_graph-mcp` entry points and
+the pinned MCP goldens in tests/compat.
 """
 
 from __future__ import annotations
 
+from arw.file_contracts import CursorError
 from arw.file_models import (
     FilesContextRequest,
     FilesContextResult,
@@ -22,7 +27,7 @@ from arw.file_models import (
     FilesSearchResult,
 )
 from arw.files import FilesQueryGeneration
-from arw.files_mcp import FilesMcpServer
+from arw.files_mcp import FilesMcpServer, ToolError
 
 
 class FileProviderError(RuntimeError):
@@ -48,7 +53,11 @@ class LocalFilesAdapter:
         self._check_root(request.root_id)
         import time
 
-        return self._server.list_files(request, deadline=time.monotonic() + 5.0)
+        try:
+            return self._server.list_files(request, deadline=time.monotonic() + 5.0)
+        except (CursorError, ToolError) as error:
+            code = getattr(error, 'code', 'tool_error')
+            raise FileProviderError(code, str(error)) from error
 
     def read_file(
         self, request: FilesReadRequest
@@ -56,22 +65,38 @@ class LocalFilesAdapter:
         self._check_root(request.root_id)
         import time
 
-        return self._server.read_file(request, deadline=time.monotonic() + 5.0)
+        try:
+            return self._server.read_file(request, deadline=time.monotonic() + 5.0)
+        except (CursorError, ToolError) as error:
+            code = getattr(error, 'code', 'tool_error')
+            raise FileProviderError(code, str(error)) from error
 
     def search_files(self, request: FilesSearchRequest) -> FilesSearchResult:
         self._check_root(request.root_id)
         import time
 
-        return self._server.search_files(request, deadline=time.monotonic() + 5.0)
+        try:
+            return self._server.search_files(request, deadline=time.monotonic() + 5.0)
+        except (CursorError, ToolError) as error:
+            code = getattr(error, 'code', 'tool_error')
+            raise FileProviderError(code, str(error)) from error
 
     def get_outline(self, request: FilesOutlineRequest) -> FilesOutlineResult:
         self._check_root(request.root_id)
         import time
 
-        return self._server.get_outline(request, deadline=time.monotonic() + 5.0)
+        try:
+            return self._server.get_outline(request, deadline=time.monotonic() + 5.0)
+        except (CursorError, ToolError) as error:
+            code = getattr(error, 'code', 'tool_error')
+            raise FileProviderError(code, str(error)) from error
 
     def get_context(self, request: FilesContextRequest) -> FilesContextResult:
         self._check_root(request.root_id)
         import time
 
-        return self._server.get_context(request, deadline=time.monotonic() + 5.0)
+        try:
+            return self._server.get_context(request, deadline=time.monotonic() + 5.0)
+        except (CursorError, ToolError) as error:
+            code = getattr(error, 'code', 'tool_error')
+            raise FileProviderError(code, str(error)) from error

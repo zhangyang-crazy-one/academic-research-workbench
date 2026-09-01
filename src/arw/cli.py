@@ -346,13 +346,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json(receipt.model_dump(mode="json"))
         return 0
     if args.command == "files":
-        from arw.composition import files_admin_service
+        from arw.composition import default_router
         from arw.file_models import ExtractionRegistration
         from arw.files import FilesAdminError
 
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
-            service = files_admin_service(args.control_root)
+            router = default_router(files_control_root=args.control_root)
+            service = router.resolve("files.local")
             if builder_value is not None:
                 service.native_builder = Path(builder_value)
             if args.files_command == "root":
@@ -379,10 +380,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"arw: files-admin-error: {error}", file=sys.stderr)
             return 65
     if args.command == "_graph-mcp":
-        from arw.composition import graph_store_provider
+        from arw.composition import default_router
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
-        provider = graph_store_provider(args.control_root, args.root_id)
+        router = default_router(
+            graph_control_root=args.control_root, graph_root_id=args.root_id
+        )
+        provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
 
     # Writable/runtime services are intentionally imported only after the two
