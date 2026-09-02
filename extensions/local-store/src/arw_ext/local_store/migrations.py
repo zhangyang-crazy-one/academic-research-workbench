@@ -135,7 +135,12 @@ def applied_migrations(meta_rows: Mapping[str, str]) -> list[int]:
     for token in raw.split(","):
         token = token.strip()
         if not token:
-            continue
+            # An empty token means the row was hand-edited or torn
+            # ("1,,2"); never silently skip — contiguity depends on exact
+            # membership (review P2).
+            raise ProjectionMetaCorruptError(
+                "applied_migrations contains an empty token"
+            )
         try:
             out.append(int(token))
         except ValueError:

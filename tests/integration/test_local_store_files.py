@@ -47,7 +47,9 @@ def _seed(
         id_factory=lambda kind: f"{kind}_test_{next(sequence):03d}",
         clock=lambda: "2026-07-14T00:00:00Z",
     )
-    service.register_root(root_id="research-root", root_path=root, policy_id="research-files-v1")
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
     receipt = service.sync("research-root", extractor_version="1.0.0")
     assert receipt.selected_generation_id is not None
     generation = load_query_generation(control, "research-root")
@@ -55,7 +57,12 @@ def _seed(
     store = LocalProjectionStore(tmp_path / "arw.db")
     store.open()
     ingest_files_generation(store.connection, generation)
-    return LocalStoreFilesAdapter(store), LocalFilesAdapter(generation), store, "research-root"
+    return (
+        LocalStoreFilesAdapter(store),
+        LocalFilesAdapter(generation),
+        store,
+        "research-root",
+    )
 
 
 def _search(adapter: Any, query: str, *, mode: str = "full_text"):
@@ -88,7 +95,9 @@ def test_trigram_bridge_catches_substring_inside_token(tmp_path: Path) -> None:
     "betatest"); the trigram bridge preserves the v1 substring semantics.
     """
 
-    store_adapter, _v1, store, _ = _seed(tmp_path, {"notes/word.txt": "betatest betatest\n"})
+    store_adapter, _v1, store, _ = _seed(
+        tmp_path, {"notes/word.txt": "betatest betatest\n"}
+    )
     try:
         result = _search(store_adapter, "beta")
         assert _paths(result) == ["notes/word.txt"]
@@ -199,7 +208,9 @@ def test_stale_file_surfaces_stale_metadata_branch(tmp_path: Path) -> None:
     """Mutating a file after ingest flips its hits to stale_metadata."""
 
     root_file = tmp_path / "root" / "notes" / "a.txt"
-    store_adapter, _v1, store, _ = _seed(tmp_path, {"notes/a.txt": "alpha\nbeta\ngamma\n"})
+    store_adapter, _v1, store, _ = _seed(
+        tmp_path, {"notes/a.txt": "alpha\nbeta\ngamma\n"}
+    )
     try:
         # Fresh hit first.
         fresh = _search(store_adapter, "beta")

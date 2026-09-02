@@ -43,8 +43,10 @@ from .apply import (
 from .query import execute_query
 from .receipts import (
     clear_audit_faults,
+    load_manifest,
     load_receipt,
     persist_audit_fault,
+    persist_manifest,
     persist_receipt,
     receipts_root,
 )
@@ -136,11 +138,18 @@ class LocalStoreKnowledgeAdapter:
         # a crash in between leaves the checkpoint ahead of the selected
         # generation.  Never serve newer data under an older identity.
         receipt = load_receipt(store.database_path, generation_id)
-        if receipt is None or receipt.ledger_watermark != selected_watermark:
+        manifest = load_manifest(store.database_path, generation_id)
+        checkpoint_digest = str(checkpoint[1])
+        if (
+            receipt is None
+            or manifest is None
+            or receipt.ledger_watermark != selected_watermark
+            or manifest.ledger_head_sha256 != checkpoint_digest
+        ):
             return _unavailable(
                 request,
                 "projection_stale",
-                "selected generation watermark differs from the applied checkpoint",
+                "selected generation differs from the applied checkpoint",
             )
 
         return execute_query(
@@ -243,6 +252,7 @@ class LocalStoreKnowledgeAdapter:
             reason_codes=[],
         )
         persist_receipt(store.database_path, receipt)
+        persist_manifest(store.database_path, generation_id, manifest)
 
         # The selected-generation pointer is written LAST, in its own
         # transaction, only after the receipt sidecar exists on disk.  A

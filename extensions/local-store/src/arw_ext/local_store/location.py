@@ -104,7 +104,9 @@ def default_store_path(workspace_root: Path) -> Path:
     from arw.kernel.core.canonical import sha256_hex
 
     workspace_key = sha256_hex(str(workspace_root.resolve()).encode("utf-8"))[:16]
-    return user_cache_path("arw", appauthor=False) / "local-store" / f"{workspace_key}.db"
+    return (
+        user_cache_path("arw", appauthor=False) / "local-store" / f"{workspace_key}.db"
+    )
 
 
 def resolve_store_path(

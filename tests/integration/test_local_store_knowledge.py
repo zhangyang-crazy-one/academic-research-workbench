@@ -34,6 +34,7 @@ from arw.graph_projection import project_canonical_records
 from arw.graph_store import GraphStore
 from arw.kernel.core.canonical import canonical_event_bytes, sha256_hex
 from arw.kernel.ledger.journal import ReplayState
+from arw.kernel.ledger.reducer import RuntimeState
 from arw.kernel.state.models import (
     ArtifactAcceptedPayload,
     CanonicalEvent,
@@ -407,7 +408,7 @@ def test_apply_populates_materialized_run_state_from_reducer(
         events=events,
         projection=projection,
     )
-    reducer_state = reducer_state_for_replay(_replay_state(events))
+    reducer_state: RuntimeState = reducer_state_for_replay(_replay_state(events))
     assert reducer_state.run_id == RUN_ID
     assert reducer_state.accepted_revision == 1
 

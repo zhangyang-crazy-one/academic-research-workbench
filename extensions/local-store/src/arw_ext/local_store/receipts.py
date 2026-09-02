@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from arw.graph_models import GraphProjectionReceipt
+from arw.graph_models import GraphProjectionManifest, GraphProjectionReceipt
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 
 
@@ -92,6 +92,32 @@ def load_receipt(
     if canonical_json_bytes(parsed) != raw:
         return None
     return GraphProjectionReceipt.model_validate(parsed)
+
+
+def persist_manifest(
+    database_path: Path, generation_id: str, manifest: GraphProjectionManifest
+) -> Path:
+    """Persist the generation manifest next to the receipt (query-side
+    consistency checks need its ``ledger_head_sha256``)."""
+
+    target = receipts_root(database_path) / f"{generation_id}.manifest.json"
+    _atomic_write(target, canonical_json_bytes(manifest.model_dump(mode="json")))
+    return target
+
+
+def load_manifest(
+    database_path: Path, generation_id: str
+) -> GraphProjectionManifest | None:
+    """Load a persisted manifest, rejecting non-canonical bytes."""
+
+    path = receipts_root(database_path) / f"{generation_id}.manifest.json"
+    if not path.is_file():
+        return None
+    raw = path.read_bytes()
+    parsed = strict_json_loads(raw)
+    if canonical_json_bytes(parsed) != raw:
+        return None
+    return GraphProjectionManifest.model_validate(parsed)
 
 
 def list_receipts(database_path: Path) -> tuple[str, ...]:
@@ -216,9 +242,11 @@ __all__ = [
     "audit_root",
     "clear_audit_faults",
     "list_receipts",
+    "load_manifest",
     "load_audit_faults",
     "load_receipt",
     "persist_audit_fault",
+    "persist_manifest",
     "persist_receipt",
     "receipts_root",
 ]

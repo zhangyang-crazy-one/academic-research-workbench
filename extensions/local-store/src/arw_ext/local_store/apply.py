@@ -324,8 +324,7 @@ def apply_projection(
         if existing_checkpoint is not None:
             existing_seq, existing_digest = existing_checkpoint
             if existing_seq > new_watermark or (
-                existing_seq == new_watermark
-                and existing_digest != head_event.event_sha256
+                existing_seq == new_watermark and existing_digest != head_digest
             ):
                 raise ApplyError(
                     "stored projection checkpoint is ahead of the new input watermark",
@@ -448,7 +447,7 @@ def apply_projection(
 
         if origin == "direct" and history:
             previous_prov_id: str | None = None
-            for h_event_id, h_event_sha, h_occurred_at, h_actor_id, _ in history:
+            for h_event_id, h_event_sha, h_occurred_at, h_actor_id, h_digest in history:
                 prov_id = _provenance_id_for(assertion_id, h_event_id)
                 prov_checksum = sha256_hex(
                     _provenance_identity_subset(
@@ -456,7 +455,7 @@ def apply_projection(
                         provenance_id=prov_id,
                         assertion_id=assertion_id,
                         node_or_edge_id=node_or_edge_id,
-                        source_digest=source_digest,
+                        source_digest=h_digest,
                     )
                 )
                 # pi-lens-ignore: python-sql-injection
@@ -466,7 +465,7 @@ def apply_projection(
                         prov_id,
                         assertion_id,
                         node_or_edge_id,
-                        source_digest,
+                        h_digest,
                         source_locator,
                         h_actor_id,
                         h_occurred_at,
@@ -632,9 +631,7 @@ def apply_projection(
         )
         edges_inserted += 1
 
-        edge_node_or_edge_id = (
-            f"{edge.edge_type}:{edge.from_entity_id}->{edge.to_entity_id}:{edge.evidence_digest}"
-        )
+        edge_node_or_edge_id = f"{edge.edge_type}:{edge.from_entity_id}->{edge.to_entity_id}:{edge.evidence_digest}"
         assertion_id = _edge_assertion_id(
             edge.edge_type, edge.from_entity_id, edge.to_entity_id, edge.evidence_digest
         )
@@ -784,9 +781,9 @@ def apply_projection(
             status,
             events[0].occurred_at,
             head_event.occurred_at,
-            new_watermark,
+            head_event.sequence,
             _jsonify(attributes),
-            new_watermark,
+            head_event.sequence,
         ),
     )
 

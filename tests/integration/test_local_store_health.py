@@ -51,9 +51,7 @@ def test_network_filesystem_explicit_path_faults(
 
     from arw_ext.local_store import location  # pyright: ignore[reportMissingImports]
 
-    monkeypatch.setattr(
-        location, "_mounts_fs_types", lambda: {str(tmp_path): "nfs4"}
-    )
+    monkeypatch.setattr(location, "_mounts_fs_types", lambda: {str(tmp_path): "nfs4"})
     assert is_network_filesystem(tmp_path / "arw.db")
     with pytest.raises(StoreLocationError) as exc_info:
         resolve_store_path(tmp_path, explicit_path=tmp_path / "arw.db")

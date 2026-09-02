@@ -196,7 +196,9 @@ class LocalStoreFilesAdapter:
         self._check_root(request.root_id)
         return self._wrap(self._list_files, request, deadline=self._deadline())
 
-    def _list_files(self, request: FilesListRequest, *, deadline: float) -> FilesListResult:
+    def _list_files(
+        self, request: FilesListRequest, *, deadline: float
+    ) -> FilesListResult:
         parameters = {"max_files": request.max_files}
         offset = 0
         if request.cursor is not None:
@@ -210,7 +212,9 @@ class LocalStoreFilesAdapter:
             # pi-lens-ignore: unchecked-throwing-call-python
             offset = int(envelope.position.get("offset", -1))
             if offset < 0:
-                raise CursorError("cursor_position_invalid", "list cursor position is invalid")
+                raise CursorError(
+                    "cursor_position_invalid", "list cursor position is invalid"
+                )
         rows = self._rows(
             "SELECT file_id, relative_path, file_type, size_bytes, source_digest,"
             "       index_state"
@@ -220,14 +224,22 @@ class LocalStoreFilesAdapter:
         )
         records = [
             # pi-lens-ignore: unchecked-throwing-call-python
-            (str(r[0]), str(r[1]), str(r[2]), int(r[3]), str(r[4]), str(r[5])) for r in rows
+            (str(r[0]), str(r[1]), str(r[2]), int(r[3]), str(r[4]), str(r[5]))
+            for r in rows
         ]
         entries: list[FileListEntry] = []
-        for file_id, relative_path, file_type, size_bytes, digest, index_state in records[
-            offset : offset + request.max_files
-        ]:
+        for (
+            file_id,
+            relative_path,
+            file_type,
+            size_bytes,
+            digest,
+            index_state,
+        ) in records[offset : offset + request.max_files]:
             try:
-                live = _read_live(Path(self._canonical_path), relative_path, deadline=deadline)
+                live = _read_live(
+                    Path(self._canonical_path), relative_path, deadline=deadline
+                )
             except LiveReadError as error:
                 if error.code == "timeout":
                     raise
@@ -235,7 +247,9 @@ class LocalStoreFilesAdapter:
             except OSError:
                 live = None
             if file_type == "pdf":
-                extraction_state = "registered" if index_state == "indexed" else "degraded"
+                extraction_state = (
+                    "registered" if index_state == "indexed" else "degraded"
+                )
             elif file_type == "binary":
                 extraction_state = "not_applicable"
             else:
@@ -250,7 +264,9 @@ class LocalStoreFilesAdapter:
                     current_digest=current_digest,
                     indexed_digest=digest,
                     extraction_state=extraction_state,
-                    freshness="current" if current_digest == digest else "stale_metadata",
+                    freshness="current"
+                    if current_digest == digest
+                    else "stale_metadata",
                 )
             )
         next_offset = offset + len(entries)
@@ -318,14 +334,22 @@ class LocalStoreFilesAdapter:
         record = self._indexed_file(request.file_id, deadline=deadline)
         if record is None or record.relative_path != request.relative_path:
             return self._read_denied(
-                request, "denied", "identity_mismatch", "file ID and relative path do not match"
+                request,
+                "denied",
+                "identity_mismatch",
+                "file ID and relative path do not match",
             )
         if _sensitive(request.relative_path):
             return self._read_denied(
-                request, "denied", "sensitive_path", "sensitive path names are not readable"
+                request,
+                "denied",
+                "sensitive_path",
+                "sensitive path names are not readable",
             )
         try:
-            live = _read_live(Path(self._canonical_path), request.relative_path, deadline=deadline)
+            live = _read_live(
+                Path(self._canonical_path), request.relative_path, deadline=deadline
+            )
         except LiveReadError as error:
             if error.code == "timeout":
                 return self._read_denied(request, "timeout", "timeout", str(error))
@@ -335,7 +359,10 @@ class LocalStoreFilesAdapter:
         except OSError as error:
             return self._read_denied(request, "denied", "read_failed", str(error))
         expected = request.expected_digest or live.digest
-        if request.expected_digest is not None and request.expected_digest != live.digest:
+        if (
+            request.expected_digest is not None
+            and request.expected_digest != live.digest
+        ):
             return FilesReadStale(
                 schema_version="1.0.0",
                 status="stale_conflict",
@@ -372,7 +399,9 @@ class LocalStoreFilesAdapter:
             # pi-lens-ignore: unchecked-throwing-call-python
             position = int(envelope.position.get(key, -1))
             if position < (0 if mode == "bytes" else 1):
-                raise CursorError("cursor_position_invalid", "read cursor position is invalid")
+                raise CursorError(
+                    "cursor_position_invalid", "read cursor position is invalid"
+                )
 
         if request.byte_range is not None:
             if position > len(live.body):
@@ -400,7 +429,10 @@ class LocalStoreFilesAdapter:
                 text_body = live.body.decode("utf-8")
             except UnicodeDecodeError:
                 return self._read_denied(
-                    request, "encoding_error", "invalid_utf8", "line ranges require strict UTF-8"
+                    request,
+                    "encoding_error",
+                    "invalid_utf8",
+                    "line ranges require strict UTF-8",
                 )
             lines = text_body.splitlines(keepends=True)
             start_index = min(len(lines), position - 1)
@@ -486,7 +518,9 @@ class LocalStoreFilesAdapter:
             # folded bodies with LIKE (v1 parity — v1 scans everything).
             candidate_ids: set[str] | None = None
             for term in terms:
-                escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                escaped = (
+                    term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                )
                 rows = self._rows(
                     "SELECT file_id FROM files"
                     " WHERE index_state = 'indexed' AND body_nfkc_folded IS NOT NULL"
@@ -499,8 +533,7 @@ class LocalStoreFilesAdapter:
             return candidate_ids if candidate_ids is not None else set()
         phrases = " ".join('"' + term.replace('"', '""') + '"' for term in long_terms)
         rows = self._rows(
-            "SELECT file_id FROM files_fts_trigram"
-            " WHERE files_fts_trigram MATCH ?",
+            "SELECT file_id FROM files_fts_trigram WHERE files_fts_trigram MATCH ?",
             (f"body_nfkc_folded : {phrases}",),
             deadline=deadline,
         )
@@ -534,7 +567,9 @@ class LocalStoreFilesAdapter:
         )
         # pi-lens-ignore: unchecked-throwing-call-python
         if int(corpus_rows[0][0]) > MAX_SEARCH_CANDIDATES:
-            raise ToolError("candidate_budget_exceeded", "search candidate ceiling exceeded")
+            raise ToolError(
+                "candidate_budget_exceeded", "search candidate ceiling exceeded"
+            )
 
         if candidate_ids is None:
             rows = self._rows(
@@ -576,7 +611,9 @@ class LocalStoreFilesAdapter:
                 positions = [folded.find(term) for term in terms]
                 if any(position < 0 for position in positions):
                     continue
-                first_index = min(range(len(positions)), key=lambda index: positions[index])
+                first_index = min(
+                    range(len(positions)), key=lambda index: positions[index]
+                )
                 start = positions[first_index]
                 end = start + len(terms[first_index])
                 score = round(
@@ -606,7 +643,9 @@ class LocalStoreFilesAdapter:
         )
         return ranked
 
-    def _search_files(self, request: FilesSearchRequest, *, deadline: float) -> FilesSearchResult:
+    def _search_files(
+        self, request: FilesSearchRequest, *, deadline: float
+    ) -> FilesSearchResult:
         normalized_query, terms = self._normalize_query(request.mode, request.query)
         parameters = {
             "mode": request.mode,
@@ -628,7 +667,9 @@ class LocalStoreFilesAdapter:
             # pi-lens-ignore: unchecked-throwing-call-python
             offset = int(envelope.position.get("offset", -1))
             if offset < 0:
-                raise CursorError("cursor_position_invalid", "search cursor position is invalid")
+                raise CursorError(
+                    "cursor_position_invalid", "search cursor position is invalid"
+                )
         ranked = self._rank_search_rows(
             request,
             normalized_query,
@@ -638,7 +679,9 @@ class LocalStoreFilesAdapter:
         page = ranked[offset : offset + request.max_hits]
         hits: list[FileSearchHit] = []
         for match in page:
-            current_digest, current = self._live_digest(match.indexed, deadline=deadline)
+            current_digest, current = self._live_digest(
+                match.indexed, deadline=deadline
+            )
             if current:
                 location_payload = match.location.model_dump(mode="json")
                 hit_id = self._hit_codec.issue(
@@ -723,11 +766,15 @@ class LocalStoreFilesAdapter:
         self._check_root(request.root_id)
         return self._wrap(self._get_outline, request, deadline=self._deadline())
 
-    def _get_outline(self, request: FilesOutlineRequest, *, deadline: float) -> FilesOutlineResult:
+    def _get_outline(
+        self, request: FilesOutlineRequest, *, deadline: float
+    ) -> FilesOutlineResult:
         self._check_generation(request.generation_id)
         indexed = self._indexed_file(request.file_id, deadline=deadline)
         if indexed is None:
-            raise ToolError("file_not_found", "file ID is absent from the files projection")
+            raise ToolError(
+                "file_not_found", "file ID is absent from the files projection"
+            )
         current_digest, current = self._live_digest(indexed, deadline=deadline)
         base = {
             "schema_version": "1.0.0",
@@ -782,7 +829,9 @@ class LocalStoreFilesAdapter:
             # pi-lens-ignore: unchecked-throwing-call-python
             offset = int(envelope.position.get("offset", -1))
             if offset < 0:
-                raise CursorError("cursor_position_invalid", "outline cursor position is invalid")
+                raise CursorError(
+                    "cursor_position_invalid", "outline cursor position is invalid"
+                )
         page = nodes[offset : offset + request.max_nodes]
         next_offset = offset + len(page)
         next_cursor = None
@@ -814,11 +863,15 @@ class LocalStoreFilesAdapter:
         self._check_root(request.root_id)
         return self._wrap(self._get_context, request, deadline=self._deadline())
 
-    def _get_context(self, request: FilesContextRequest, *, deadline: float) -> FilesContextResult:
+    def _get_context(
+        self, request: FilesContextRequest, *, deadline: float
+    ) -> FilesContextResult:
         self._check_generation(request.generation_id)
         indexed = self._indexed_file(request.file_id, deadline=deadline)
         if indexed is None:
-            raise ToolError("file_not_found", "file ID is absent from the files projection")
+            raise ToolError(
+                "file_not_found", "file ID is absent from the files projection"
+            )
         current_digest, current = self._live_digest(indexed, deadline=deadline)
         base = {
             "schema_version": "1.0.0",
@@ -899,7 +952,9 @@ def _context_window(
 
     body_bytes = body.encode("utf-8")
     if anchor.end_byte > len(body_bytes):
-        raise ToolError("anchor_out_of_range", "context anchor exceeds the indexed body")
+        raise ToolError(
+            "anchor_out_of_range", "context anchor exceeds the indexed body"
+        )
     try:
         body_bytes[: anchor.start_byte].decode("utf-8")
         body_bytes[: anchor.end_byte].decode("utf-8")

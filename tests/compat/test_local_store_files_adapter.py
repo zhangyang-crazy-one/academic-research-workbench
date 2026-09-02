@@ -43,7 +43,10 @@ def _scrub(value: Any) -> Any:
     """Recursively scrub HMAC-signed tokens (hit_id / next_cursor)."""
 
     if isinstance(value, dict):
-        return {k: ("<SCRUBBED>" if k in {"hit_id", "next_cursor"} else _scrub(v)) for k, v in value.items()}
+        return {
+            k: ("<SCRUBBED>" if k in {"hit_id", "next_cursor"} else _scrub(v))
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_scrub(item) for item in value]
     return value
@@ -70,7 +73,9 @@ def _adapter_on_seeded_corpus(
         id_factory=lambda kind: f"{kind}_test_{next(sequence):03d}",
         clock=lambda: "2026-07-14T00:00:00Z",
     )
-    service.register_root(root_id="research-root", root_path=root, policy_id="research-files-v1")
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
     receipt = service.sync("research-root", extractor_version="1.0.0")
     generation_id = receipt.selected_generation_id
     assert generation_id is not None
@@ -83,8 +88,10 @@ def _adapter_on_seeded_corpus(
     adapter = LocalStoreFilesAdapter(store)
 
     manifest = json.loads(
-        (service.generation_path("research-root", generation_id) / "identity-manifest.json")
-        .read_text(encoding="utf-8")
+        (
+            service.generation_path("research-root", generation_id)
+            / "identity-manifest.json"
+        ).read_text(encoding="utf-8")
     )
     records = {item["relative_path"]: item for item in manifest["records"]}
     return adapter, generation_id, records, store
@@ -95,11 +102,16 @@ def test_list_files_matches_golden(tmp_path: Path) -> None:
     try:
         result = adapter.list_files(
             FilesListRequest(
-                schema_version="1.0.0", root_id="research-root", max_files=50, cursor=None
+                schema_version="1.0.0",
+                root_id="research-root",
+                max_files=50,
+                cursor=None,
             )
         )
         golden = read_golden_json(GOLDEN_MCP / "tool_happy_paths.json")
-        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(golden["2"]["payload"])
+        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(
+            golden["2"]["payload"]
+        )
     finally:
         store.close()
 
@@ -121,7 +133,9 @@ def test_read_file_matches_golden(tmp_path: Path) -> None:
             )
         )
         golden = read_golden_json(GOLDEN_MCP / "tool_happy_paths.json")
-        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(golden["3"]["payload"])
+        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(
+            golden["3"]["payload"]
+        )
     finally:
         store.close()
 
@@ -143,7 +157,9 @@ def test_search_files_matches_golden_full_envelope(tmp_path: Path) -> None:
             )
         )
         golden = read_golden_json(GOLDEN_MCP / "tool_happy_paths.json")
-        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(golden["4"]["payload"])
+        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(
+            golden["4"]["payload"]
+        )
     finally:
         store.close()
 
@@ -164,7 +180,9 @@ def test_get_outline_matches_golden(tmp_path: Path) -> None:
             )
         )
         golden = read_golden_json(GOLDEN_MCP / "tool_happy_paths.json")
-        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(golden["5"]["payload"])
+        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(
+            golden["5"]["payload"]
+        )
     finally:
         store.close()
 
@@ -189,6 +207,8 @@ def test_get_context_matches_golden(tmp_path: Path) -> None:
             )
         )
         golden = read_golden_json(GOLDEN_MCP / "tool_happy_paths.json")
-        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(golden["6"]["payload"])
+        assert _scrub(result.model_dump(mode="json")) == _scrub_golden(
+            golden["6"]["payload"]
+        )
     finally:
         store.close()

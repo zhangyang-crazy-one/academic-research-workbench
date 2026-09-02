@@ -45,16 +45,24 @@ def collect_health(store: LocalProjectionStore) -> dict[str, Any]:
         # pi-lens-ignore: unchecked-throwing-call-python
         "edges": int(connection.execute("SELECT COUNT(*) FROM edges").fetchone()[0]),
         # pi-lens-ignore: unchecked-throwing-call-python
-        "assertions": int(connection.execute("SELECT COUNT(*) FROM assertions").fetchone()[0]),
+        "assertions": int(
+            connection.execute("SELECT COUNT(*) FROM assertions").fetchone()[0]
+        ),
         # pi-lens-ignore: unchecked-throwing-call-python
-        "provenance": int(connection.execute("SELECT COUNT(*) FROM provenance").fetchone()[0]),
+        "provenance": int(
+            connection.execute("SELECT COUNT(*) FROM provenance").fetchone()[0]
+        ),
         # pi-lens-ignore: unchecked-throwing-call-python
         "files": int(connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]),
     }
 
     checksum_faults = verify_checksums(connection)
     fault_list = [
-        {"code": fault.code, "message": fault.message, "affected_rows": fault.affected_rows}
+        {
+            "code": fault.code,
+            "message": fault.message,
+            "affected_rows": fault.affected_rows,
+        }
         for fault in checksum_faults
     ]
 
