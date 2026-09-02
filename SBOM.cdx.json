@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "97a49e6a543c80a16756124fb2be8f9e39322b9922eae4ad6862910813aa92c1"
+          "content": "26f5ddd49195a372bc59cbad9c61fd5e8c2393ad87aacae528f89b4f6fcbbc43"
         }
       ],
       "licenses": [
@@ -2488,42 +2488,49 @@
       "version": "1.1.1"
     },
     {
-      "bom-ref": "pluggy-11@1.6.0",
+      "bom-ref": "platformdirs-11@4.11.6",
+      "name": "platformdirs",
+      "purl": "pkg:pypi/platformdirs@4.11.6",
+      "type": "library",
+      "version": "4.11.6"
+    },
+    {
+      "bom-ref": "pluggy-12@1.6.0",
       "name": "pluggy",
       "purl": "pkg:pypi/pluggy@1.6.0",
       "type": "library",
       "version": "1.6.0"
     },
     {
-      "bom-ref": "portalocker-12@3.2.0",
+      "bom-ref": "portalocker-13@3.2.0",
       "name": "portalocker",
       "purl": "pkg:pypi/portalocker@3.2.0",
       "type": "library",
       "version": "3.2.0"
     },
     {
-      "bom-ref": "pydantic-13@2.13.4",
+      "bom-ref": "pydantic-14@2.13.4",
       "name": "pydantic",
       "purl": "pkg:pypi/pydantic@2.13.4",
       "type": "library",
       "version": "2.13.4"
     },
     {
-      "bom-ref": "pydantic-core-14@2.46.4",
+      "bom-ref": "pydantic-core-15@2.46.4",
       "name": "pydantic-core",
       "purl": "pkg:pypi/pydantic-core@2.46.4",
       "type": "library",
       "version": "2.46.4"
     },
     {
-      "bom-ref": "pygments-15@2.20.0",
+      "bom-ref": "pygments-16@2.20.0",
       "name": "pygments",
       "purl": "pkg:pypi/pygments@2.20.0",
       "type": "library",
       "version": "2.20.0"
     },
     {
-      "bom-ref": "pytest-16@9.1.1",
+      "bom-ref": "pytest-17@9.1.1",
       "name": "pytest",
       "purl": "pkg:pypi/pytest@9.1.1",
       "type": "library",
@@ -2672,6 +2679,24 @@
       "purl": "pkg:pypi/pathspec@1.1.1",
       "type": "library",
       "version": "1.1.1"
+    },
+    {
+      "bom-ref": "python-wheel:platformdirs-4.11.6-py3-none-any.whl",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b22d992e863bc651c26b16242041c7979db6e3286e548f9a76cc91238fac599e"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "platformdirs",
+      "purl": "pkg:pypi/platformdirs@4.11.6",
+      "type": "library",
+      "version": "4.11.6"
     },
     {
       "bom-ref": "python-wheel:pluggy-1.6.0-py3-none-any.whl",
@@ -2944,7 +2969,7 @@
       "version": "0.4.2"
     },
     {
-      "bom-ref": "pywin32-17@312",
+      "bom-ref": "pywin32-18@312",
       "name": "pywin32",
       "properties": [
         {
@@ -2957,21 +2982,21 @@
       "version": "312"
     },
     {
-      "bom-ref": "pyyaml-18@6.0.3",
+      "bom-ref": "pyyaml-19@6.0.3",
       "name": "pyyaml",
       "purl": "pkg:pypi/pyyaml@6.0.3",
       "type": "library",
       "version": "6.0.3"
     },
     {
-      "bom-ref": "referencing-19@0.37.0",
+      "bom-ref": "referencing-20@0.37.0",
       "name": "referencing",
       "purl": "pkg:pypi/referencing@0.37.0",
       "type": "library",
       "version": "0.37.0"
     },
     {
-      "bom-ref": "rpds-py-20@2026.6.3",
+      "bom-ref": "rpds-py-21@2026.6.3",
       "name": "rpds-py",
       "purl": "pkg:pypi/rpds-py@2026.6.3",
       "type": "library",
@@ -3053,21 +3078,21 @@
       "version": "v0.9.0-2-gee68144"
     },
     {
-      "bom-ref": "trove-classifiers-21@2026.6.1.19",
+      "bom-ref": "trove-classifiers-22@2026.6.1.19",
       "name": "trove-classifiers",
       "purl": "pkg:pypi/trove-classifiers@2026.6.1.19",
       "type": "library",
       "version": "2026.6.1.19"
     },
     {
-      "bom-ref": "typing-extensions-22@4.16.0",
+      "bom-ref": "typing-extensions-23@4.16.0",
       "name": "typing-extensions",
       "purl": "pkg:pypi/typing-extensions@4.16.0",
       "type": "library",
       "version": "4.16.0"
     },
     {
-      "bom-ref": "typing-inspection-23@0.4.2",
+      "bom-ref": "typing-inspection-24@0.4.2",
       "name": "typing-inspection",
       "purl": "pkg:pypi/typing-inspection@0.4.2",
       "type": "library",
@@ -3079,10 +3104,11 @@
       "dependsOn": [
         "hatchling-5@1.31.0",
         "jsonschema-7@4.26.0",
-        "portalocker-12@3.2.0",
-        "pydantic-13@2.13.4",
-        "pytest-16@9.1.1",
-        "pyyaml-18@6.0.3"
+        "platformdirs-11@4.11.6",
+        "portalocker-13@3.2.0",
+        "pydantic-14@2.13.4",
+        "pytest-17@9.1.1",
+        "pyyaml-19@6.0.3"
       ],
       "ref": "academic-research-workbench-1@0.1.0"
     },
@@ -3099,8 +3125,8 @@
       "dependsOn": [
         "packaging-9@26.2",
         "pathspec-10@1.1.1",
-        "pluggy-11@1.6.0",
-        "trove-classifiers-21@2026.6.1.19"
+        "pluggy-12@1.6.0",
+        "trove-classifiers-22@2026.6.1.19"
       ],
       "ref": "hatchling-5@1.31.0"
     },
@@ -3111,14 +3137,14 @@
       "dependsOn": [
         "attrs-3@26.1.0",
         "jsonschema-specifications-8@2025.9.1",
-        "referencing-19@0.37.0",
-        "rpds-py-20@2026.6.3"
+        "referencing-20@0.37.0",
+        "rpds-py-21@2026.6.3"
       ],
       "ref": "jsonschema-7@4.26.0"
     },
     {
       "dependsOn": [
-        "referencing-19@0.37.0"
+        "referencing-20@0.37.0"
       ],
       "ref": "jsonschema-specifications-8@2025.9.1"
     },
@@ -3129,69 +3155,72 @@
       "ref": "pathspec-10@1.1.1"
     },
     {
-      "ref": "pluggy-11@1.6.0"
+      "ref": "platformdirs-11@4.11.6"
+    },
+    {
+      "ref": "pluggy-12@1.6.0"
     },
     {
       "dependsOn": [
-        "pywin32-17@312"
+        "pywin32-18@312"
       ],
-      "ref": "portalocker-12@3.2.0"
+      "ref": "portalocker-13@3.2.0"
     },
     {
       "dependsOn": [
         "annotated-types-2@0.7.0",
-        "pydantic-core-14@2.46.4",
-        "typing-extensions-22@4.16.0",
-        "typing-inspection-23@0.4.2"
+        "pydantic-core-15@2.46.4",
+        "typing-extensions-23@4.16.0",
+        "typing-inspection-24@0.4.2"
       ],
-      "ref": "pydantic-13@2.13.4"
+      "ref": "pydantic-14@2.13.4"
     },
     {
       "dependsOn": [
-        "typing-extensions-22@4.16.0"
+        "typing-extensions-23@4.16.0"
       ],
-      "ref": "pydantic-core-14@2.46.4"
+      "ref": "pydantic-core-15@2.46.4"
     },
     {
-      "ref": "pygments-15@2.20.0"
+      "ref": "pygments-16@2.20.0"
     },
     {
       "dependsOn": [
         "colorama-4@0.4.6",
         "iniconfig-6@2.3.0",
         "packaging-9@26.2",
-        "pluggy-11@1.6.0",
-        "pygments-15@2.20.0"
+        "pluggy-12@1.6.0",
+        "pygments-16@2.20.0"
       ],
-      "ref": "pytest-16@9.1.1"
+      "ref": "pytest-17@9.1.1"
     },
     {
-      "ref": "pywin32-17@312"
+      "ref": "pywin32-18@312"
     },
     {
-      "ref": "pyyaml-18@6.0.3"
+      "ref": "pyyaml-19@6.0.3"
     },
     {
       "dependsOn": [
         "attrs-3@26.1.0",
-        "rpds-py-20@2026.6.3"
+        "rpds-py-21@2026.6.3"
       ],
-      "ref": "referencing-19@0.37.0"
+      "ref": "referencing-20@0.37.0"
     },
     {
-      "ref": "rpds-py-20@2026.6.3"
+      "ref": "rpds-py-21@2026.6.3"
     },
     {
-      "ref": "trove-classifiers-21@2026.6.1.19"
+      "ref": "trove-classifiers-22@2026.6.1.19"
     },
     {
-      "ref": "typing-extensions-22@4.16.0"
+      "ref": "typing-extensions-23@4.16.0"
     },
     {
       "dependsOn": [
-        "typing-extensions-22@4.16.0"
+        "typing-extensions-23@4.16.0"
       ],
-      "ref": "typing-inspection-23@0.4.2"
+      "ref": "typing-inspection-24@0.4.2"
     }
   ],
   "metadata": {

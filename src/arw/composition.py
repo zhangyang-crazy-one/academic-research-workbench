@@ -63,3 +63,23 @@ def files_admin_service(control_root: Path):
     from arw.files import FilesAdminService
 
     return FilesAdminService(control_root)
+
+
+def local_store_health(store_path: Path) -> dict:
+    """Projection-health summary for one local store (task 5.3).
+
+    Composition-root seam: the kernel never imports ``arw_ext``; the CLI
+    calls this helper so the extension boundary stays one-directional.
+    The store is opened read-only for the health read and closed before
+    returning; the mapping is a plain dict so ``arw status`` output stays
+    JSON-serializable without leaking extension types across the seam.
+    """
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.health import collect_health
+
+    store = LocalProjectionStore(Path(store_path))
+    store.open()
+    try:
+        return collect_health(store)
+    finally:
+        store.close()
