@@ -67,7 +67,9 @@ def default_router(
                     "files.local (no local store at the configured path)"
                 )
             store = LocalProjectionStore(Path(store_path))
-            store.open()
+            # Read-path resolution opens read-only: never migrate or mutate
+            # the store as a side effect of resolving a query capability.
+            store.open_readonly()
             try:
                 return LocalStoreFilesAdapter(store)
             except Exception:
