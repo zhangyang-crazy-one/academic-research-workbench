@@ -27,7 +27,7 @@ from __future__ import annotations
 
 # The schema version this migration produces.  Bumping it is a NORMAL schema
 # change; never edit this constant after migration 0001 has shipped.
-SCHEMA_VERSION: str = "1"
+SCHEMA_VERSION: str = "2"
 
 # Initial projection_version (= 0).  Projection versions are independent of
 # schema versions; the Semantica-lite lane (PR4 task 5.1+) bumps this without
@@ -255,8 +255,16 @@ CREATE TABLE IF NOT EXISTS projection_checkpoints (
 #: is the (single-statement or script) DDL applied as one transaction.
 #: A later lane will introduce a typed migration step runner; for now the
 #: contract is "every entry is exactly one SQL script".
+#: Migration 0002: the files table gains the ORIGINAL (non-folded) body so
+#: the search adapter can recompute v1 locations/snippets on original text
+#: while the FTS indexes carry the NFKC-casefolded projection (D4-amended).
+MIGRATION_0002_SQL: str = """
+ALTER TABLE files ADD COLUMN body TEXT;
+"""
+
 MIGRATIONS: tuple[dict[str, str | int], ...] = (
     {"version": 1, "sql": MIGRATION_0001_SQL},
+    {"version": 2, "sql": MIGRATION_0002_SQL},
 )
 
 # Tables and indexes the migration runner must be able to enumerate from
@@ -327,6 +335,7 @@ __all__ = [
     "INITIAL_PROJECTION_VERSION",
     "MIGRATIONS",
     "MIGRATION_0001_SQL",
+    "MIGRATION_0002_SQL",
     "SCHEMA_VERSION",
     "projection_meta_initial_rows",
 ]

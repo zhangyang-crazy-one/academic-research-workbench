@@ -174,7 +174,7 @@ def load_audit_faults(database_path: Path) -> tuple[AuditFault, ...]:
                 message=str(value.get("message", "")),
                 affected_rows=int(str(value.get("affected_rows", 0))),
                 projection_name=str(value.get("projection_name", "knowledge")),
-            receipt_id=str(value["receipt_id"])
+                receipt_id=str(value["receipt_id"])
                 if isinstance(value.get("receipt_id"), str)
                 else None,
             )

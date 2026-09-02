@@ -200,7 +200,9 @@ class LocalStoreKnowledgeAdapter:
         # survive a rolled-back projection transaction.  Full rebuilds first
         # clear this projection's stale faults.
         if apply_result is None:
-            raise ApplyError("apply did not produce a result", code="apply_projection_invalid")
+            raise ApplyError(
+                "apply did not produce a result", code="apply_projection_invalid"
+            )
         clear_audit_faults(store.database_path)
         for fault in apply_result.audit_faults:
             persist_audit_fault(store.database_path, fault)

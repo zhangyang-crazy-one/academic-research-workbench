@@ -105,7 +105,9 @@ def test_local_store_knowledge_adapter_matches_v1_projection_oracle(
     events = [
         _event(
             event_type="run.initialized",
-            payload=RunInitializedPayload(manifest_sha256=str(records[0]["source_digest"])),
+            payload=RunInitializedPayload(
+                manifest_sha256=str(records[0]["source_digest"])
+            ),
             seq=1,
         ),
         _event(

@@ -26,6 +26,7 @@ from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
     EXPECTED_INDEXES,
     EXPECTED_TABLES,
     INITIAL_PROJECTION_VERSION,
+    MIGRATIONS,
     SCHEMA_VERSION,
     LocalProjectionStore,
     LocalStoreError,
@@ -67,7 +68,8 @@ def test_fresh_init_creates_all_expected_tables(tmp_path: Path) -> None:
     assert isinstance(snapshot, StoreSnapshot)
     assert snapshot.schema_version == int(SCHEMA_VERSION)
     assert snapshot.projection_version == INITIAL_PROJECTION_VERSION
-    assert snapshot.applied_migrations == (int(SCHEMA_VERSION),)
+    expected_migrations = tuple(int(m["version"]) for m in MIGRATIONS)
+    assert snapshot.applied_migrations == expected_migrations
 
 
 def test_fresh_init_creates_all_expected_indexes(tmp_path: Path) -> None:
@@ -215,7 +217,7 @@ def test_intermediate_version_is_migrated_and_data_preserved(tmp_path: Path) -> 
         applied = sorted(
             int(token) for token in meta["applied_migrations"].split(",") if token
         )
-        assert applied == [supported_schema_version()]
+        assert applied == [int(m["version"]) for m in MIGRATIONS]
     finally:
         store.close()
 

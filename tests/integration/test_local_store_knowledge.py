@@ -347,7 +347,9 @@ def test_local_store_adapter_matches_v1_adapter_on_pinned_fixture(
     events = [
         _event(
             event_type="run.initialized",
-            payload=RunInitializedPayload(manifest_sha256=str(records[0]["source_digest"])),
+            payload=RunInitializedPayload(
+                manifest_sha256=str(records[0]["source_digest"])
+            ),
             seq=1,
         ),
         _event(
@@ -489,9 +491,7 @@ def _supersession_events() -> list[CanonicalEvent]:
 def _snapshot_tables(store: LocalProjectionStore) -> dict[str, list[tuple]]:
     cursor = store.connection.cursor()
     return {
-        "nodes": cursor.execute(
-            "SELECT * FROM nodes ORDER BY entity_id"
-        ).fetchall(),
+        "nodes": cursor.execute("SELECT * FROM nodes ORDER BY entity_id").fetchall(),
         "edges": cursor.execute(
             "SELECT * FROM edges ORDER BY edge_type, from_entity_id, to_entity_id"
         ).fetchall(),
