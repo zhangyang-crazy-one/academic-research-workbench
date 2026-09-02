@@ -215,6 +215,19 @@ def ingest_files_into_default_store(
     store.open()
     try:
         ingested = ingest_files_generation(store.connection, generation)
+        # Re-read the selection pointer right before committing: a concurrent
+        # sync may have re-selected a newer generation while we ingested
+        # (review P2).  Committing stale rows would leave the store ahead of
+        # the control root's actual selection.
+        from arw.files import load_selected_generation
+
+        current = load_selected_generation(control_root, root_id)
+        if current.generation_id != generation_id:
+            store.connection.rollback()
+            raise ValueError(
+                f"selected generation moved to {current.generation_id} during "
+                f"ingest of {generation_id}; rolled back"
+            )
         store.connection.commit()
     finally:
         store.close()

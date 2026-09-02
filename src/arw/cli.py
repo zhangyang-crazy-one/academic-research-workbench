@@ -407,10 +407,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.composition import default_router
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
-        # The plugin manifest rides next to the CLI entry point; when it is
-        # present, its declared capability set gates activation (PR5).
+        # The manifest's declared capability set gates activation (PR5).
+        # Resolution order: explicit env override (staged/installed plugin
+        # sets it), then the source-tree layout.  Never guess from the
+        # installed package location — that path differs per install.
+        manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
         manifest_path = (
-            Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
+            Path(manifest_env)
+            if manifest_env
+            else Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
         )
         router = default_router(
             graph_control_root=args.control_root,
