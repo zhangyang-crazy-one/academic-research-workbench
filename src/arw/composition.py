@@ -188,50 +188,56 @@ def ingest_files_into_default_store(
     Called from the ``arw files sync/rebuild`` path after a new generation is
     selected, so the native files provider actually has data to serve (PR5
     review P1).  This is a WRITE path (sync), so creating the store at the
-    default per-user cache location is intended.  Returns the ingested row
-    count.
+    default per-user cache location is intended.
+
+    Overlapping syncs are handled by converging on the LATEST selected
+    generation: if the selection moves mid-ingest, the stale attempt rolls
+    back and the ingest retries against the new selection (bounded), so a
+    failed first attempt never leaves the pointer permanently ahead of the
+    cache (review P2, round 5).  Returns the ingested row count.
     """
-    from arw.files import load_query_generation
-
-    generation = load_query_generation(control_root, root_id)
-    # Bind to the generation the sync JUST produced (its receipt carries the
-    # id), not whatever happens to be selected at read time — a concurrent
-    # sync must not shift this ingest onto another generation (review P2).
-    if generation.selected.generation_id != generation_id:
-        raise ValueError(
-            f"selected generation {generation.selected.generation_id} != "
-            f"sync-produced {generation_id}"
-        )
-
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.ingest import ingest_files_generation
     from arw_ext.local_store.location import resolve_store_path
 
-    # Key the default store by the REGISTERED root's canonical path, not the
-    # caller's working directory (sync may run from anywhere).
-    store_path = resolve_store_path(Path(generation.root.canonical_path))
-    store_path.parent.mkdir(parents=True, exist_ok=True)
-    store = LocalProjectionStore(store_path)
-    store.open()
-    try:
-        ingested = ingest_files_generation(store.connection, generation)
-        # Re-read the selection pointer right before committing: a concurrent
-        # sync may have re-selected a newer generation while we ingested
-        # (review P2).  Committing stale rows would leave the store ahead of
-        # the control root's actual selection.
-        from arw.files import load_selected_generation
+    from arw.files import load_query_generation, load_selected_generation
 
-        current = load_selected_generation(control_root, root_id)
-        if current.generation_id != generation_id:
-            store.connection.rollback()
-            raise ValueError(
-                f"selected generation moved to {current.generation_id} during "
-                f"ingest of {generation_id}; rolled back"
-            )
-        store.connection.commit()
-    finally:
-        store.close()
-    return ingested
+    target_generation_id = generation_id
+    attempts = 3
+    while True:
+        generation = load_query_generation(control_root, root_id)
+        # Bind to the generation the sync produced when it is still selected;
+        # otherwise follow the CURRENT selection (a newer sync won).
+        if generation.selected.generation_id != target_generation_id:
+            target_generation_id = generation.selected.generation_id
+
+        # Key the default store by the REGISTERED root's canonical path, not
+        # the caller's working directory (sync may run from anywhere).
+        store_path = resolve_store_path(Path(generation.root.canonical_path))
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        store = LocalProjectionStore(store_path)
+        store.open()
+        try:
+            ingested = ingest_files_generation(store.connection, generation)
+            # Re-read the selection pointer right before committing: a
+            # concurrent sync may have re-selected a newer generation while
+            # we ingested.  Committing stale rows would leave the store ahead
+            # of the control root's actual selection.
+            current = load_selected_generation(control_root, root_id)
+            if current.generation_id != target_generation_id:
+                store.connection.rollback()
+                attempts -= 1
+                if attempts <= 0:
+                    raise ValueError(
+                        "selected generation kept moving during ingest; "
+                        "giving up after bounded retries"
+                    )
+                target_generation_id = current.generation_id
+                continue
+            store.connection.commit()
+            return ingested
+        finally:
+            store.close()
 
 
 def local_store_files_provider(store_path: Path):
