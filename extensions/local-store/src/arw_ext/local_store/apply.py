@@ -411,6 +411,7 @@ def apply_projection(
     # 3-tier binding (direct / indirect / unbound) covers entities the
     # mapper does not know.
     # ------------------------------------------------------------------
+    written_prov_ids: list[str] = []
     history_by_entity_id: dict[str, list[tuple[str, str, str, str, str]]] = {}
     for record in records:
         history = record.get("_acceptance_history") or []
@@ -443,7 +444,12 @@ def apply_projection(
         history: Sequence[tuple[str, str, str, str, str]],
     ) -> None:
         """Write one deterministic provenance row per acceptance (chained via
-        ``supersedes``) for direct bindings with history, else a single row."""
+        ``supersedes``) for direct bindings with history, else a single row.
+
+        Every written id is recorded in ``written_prov_ids`` so the
+        incremental GC can drop stale rows for SURVIVING assertions whose
+        binding changed (review P1).
+        """
 
         if origin == "direct" and history:
             previous_prov_id: str | None = None
@@ -478,6 +484,7 @@ def apply_projection(
                     ),
                 )
                 previous_prov_id = prov_id
+                written_prov_ids.append(prov_id)
             return
         prov_id = _provenance_id_for(assertion_id, ledger_event_id or "unbound")
         prov_checksum = sha256_hex(
@@ -509,11 +516,24 @@ def apply_projection(
                 origin,
             ),
         )
+        written_prov_ids.append(prov_id)
 
     # ------------------------------------------------------------------
     # Nodes (from projection.nodes) + assertions + provenance
     # ------------------------------------------------------------------
     for node in projection.nodes:
+        # The nodes table is keyed by entity_id alone (v1 parity); a
+        # collision across entity types is a hard fault, never a silent
+        # collapse (v1 raises generation_integrity_blocked in this case).
+        existing_type = cursor.execute(
+            "SELECT entity_type FROM nodes WHERE entity_id = ?", (node.entity_id,)
+        ).fetchone()
+        if existing_type is not None and str(existing_type[0]) != node.entity_type:
+            raise ApplyError(
+                f"entity_id {node.entity_id!r} is shared across entity types "
+                f"({existing_type[0]} vs {node.entity_type})",
+                code="apply_projection_invalid",
+            )
         # pi-lens-ignore: python-sql-injection
         cursor.execute(
             """
@@ -762,6 +782,14 @@ def apply_projection(
             cursor.execute(
                 "DELETE FROM assertions WHERE assertion_id = ?", (assertion_id,)
             )
+        # Provenance rows for SURVIVING assertions whose binding changed are
+        # equally obsolete; keep only rows written by this apply.
+        current_prov = set(written_prov_ids)
+        for row in cursor.execute("SELECT provenance_id FROM provenance").fetchall():
+            if str(row[0]) not in current_prov:
+                cursor.execute(
+                    "DELETE FROM provenance WHERE provenance_id = ?", (row[0],)
+                )
 
     # ------------------------------------------------------------------
     # Projection checkpoint + applied-input binding (review P1: the query

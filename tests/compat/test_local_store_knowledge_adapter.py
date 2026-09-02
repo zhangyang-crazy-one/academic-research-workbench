@@ -68,6 +68,25 @@ def _event(
     return CanonicalEvent.model_validate(unsigned)
 
 
+def _chained(events):
+    """Re-mint fixture events with a valid prev_event_sha256 chain."""
+
+    from arw.kernel.ledger.journal import ZERO_HASH
+    from arw.kernel.state.models import CanonicalEvent
+
+    out = []
+    previous = ZERO_HASH
+    for event in events:
+        unsigned = event.model_dump(mode="json")
+        unsigned.pop("event_sha256", None)
+        unsigned["prev_event_sha256"] = previous
+        unsigned["event_sha256"] = sha256_hex(canonical_event_bytes(unsigned))
+        minted = CanonicalEvent.model_validate(unsigned)
+        out.append(minted)
+        previous = minted.event_sha256
+    return out
+
+
 def _replay_state(events) -> ReplayState:
     last = events[-1]
     return ReplayState(
@@ -126,7 +145,7 @@ def test_local_store_knowledge_adapter_matches_v1_projection_oracle(
     adapter = LocalStoreKnowledgeAdapter(
         local_store,
         run_id=RUN_ID,
-        run_state=_replay_state(events),
+        run_state=_replay_state(_chained(events)),
         workflow_definition_id="core-research.v1",
         root_id="research-root",
     )

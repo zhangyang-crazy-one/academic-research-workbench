@@ -86,6 +86,29 @@ def _event(
     return CanonicalEvent.model_validate(unsigned)
 
 
+def _chained(events: list[CanonicalEvent]) -> list[CanonicalEvent]:
+    """Re-mint the fixture events with a valid prev_event_sha256 chain.
+
+    The ``_event`` helper defaults every prev hash to ZERO_HASH; the
+    adapter now validates the chain, so fixtures re-mint each event with
+    the actual previous event's digest (event ids are unchanged).
+    """
+
+    from arw.kernel.ledger.journal import ZERO_HASH
+
+    out: list[CanonicalEvent] = []
+    previous = ZERO_HASH
+    for event in events:
+        unsigned = event.model_dump(mode="json")
+        unsigned.pop("event_sha256", None)
+        unsigned["prev_event_sha256"] = previous
+        unsigned["event_sha256"] = sha256_hex(canonical_event_bytes(unsigned))
+        minted = CanonicalEvent.model_validate(unsigned)
+        out.append(minted)
+        previous = minted.event_sha256
+    return out
+
+
 def _replay_state(events) -> ReplayState:
     last = events[-1]
     return ReplayState(
@@ -105,7 +128,7 @@ def _adapter(store: LocalProjectionStore, events) -> LocalStoreKnowledgeAdapter:
     return LocalStoreKnowledgeAdapter(
         store,
         run_id=RUN_ID,
-        run_state=_replay_state(events),
+        run_state=_replay_state(_chained(events)),
         workflow_definition_id="core-research.v1",
         root_id="research-root",
     )

@@ -31,7 +31,7 @@ from arw.graph_models import (
     GraphResultStatus,
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-from arw.kernel.ledger.journal import ReplayState
+from arw.kernel.ledger.journal import ZERO_HASH, ReplayState
 from arw.kernel.ledger.reducer import RuntimeState, reduce_events
 
 from .apply import (
@@ -139,6 +139,17 @@ class LocalStoreKnowledgeAdapter:
         # generation.  Never serve newer data under an older identity.
         receipt = load_receipt(store.database_path, generation_id)
         manifest = load_manifest(store.database_path, generation_id)
+        if (
+            receipt is not None
+            and manifest is not None
+            and sha256_hex(canonical_json_bytes(manifest.model_dump(mode="json")))
+            != receipt.projection_manifest_sha256
+        ):
+            return _unavailable(
+                request,
+                "projection_corrupt",
+                "persisted manifest does not match the receipt's manifest digest",
+            )
         checkpoint_digest = str(checkpoint[1])
         applied_row = connection.execute(
             "SELECT value FROM projection_meta WHERE key = ?",
@@ -274,13 +285,19 @@ class LocalStoreKnowledgeAdapter:
         """Return the run's events, rejecting unvalidated/mismatched replays.
 
         The events drive provenance binding, so they must be a replay-
-        validated, contiguous prefix of THIS run's ledger (review P1:
-        previously any caller-supplied ReplayState was trusted).
+        validated, contiguous, hash-chained prefix of THIS run's ledger
+        (review P1: a caller-forged ReplayState with ``validated=True``
+        previously sufficed).
         """
 
         if not self._run_state.validated:
             raise ApplyError(
                 "run_state is not replay-validated",
+                code="apply_projection_invalid",
+            )
+        if self._run_state.workflow_definition_id != self._workflow_definition_id:
+            raise ApplyError(
+                "run_state workflow identity differs from the adapter's",
                 code="apply_projection_invalid",
             )
         events = list(self._run_state.events)
@@ -289,12 +306,19 @@ class LocalStoreKnowledgeAdapter:
                 "apply requires at least run.initialized",
                 code="apply_projection_invalid",
             )
+        previous_hash = ZERO_HASH
         for index, event in enumerate(events, start=1):
             if event.run_id != self._run_id or event.sequence != index:
                 raise ApplyError(
                     "run_state events do not form this run's contiguous prefix",
                     code="apply_projection_invalid",
                 )
+            if event.prev_event_sha256 != previous_hash:
+                raise ApplyError(
+                    "run_state event hash chain is broken",
+                    code="apply_projection_invalid",
+                )
+            previous_hash = event.event_sha256
         return events
 
     def _receipt_generation_id(self) -> str | None:
