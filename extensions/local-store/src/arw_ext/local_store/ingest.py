@@ -19,6 +19,7 @@ import os
 import sqlite3
 import unicodedata
 from pathlib import Path
+from urllib.parse import quote
 
 from arw.files import FilesQueryGeneration
 
@@ -81,7 +82,9 @@ def ingest_files_generation(
     if not source_path.is_file():
         raise FilesIngestError(f"generation database is missing: {source_path}")
 
-    source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
+    # URI-encode the generation path: a literal ``?`` / ``#`` / ``%`` would
+    # otherwise corrupt the read-only URI (same rule as the store opener).
+    source = sqlite3.connect(f"file:{quote(str(source_path))}?mode=ro", uri=True)
     try:
         rows = source.execute(
             "SELECT file_id, relative_path, file_type, size_bytes, source_digest,"

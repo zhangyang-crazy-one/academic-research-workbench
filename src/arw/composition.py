@@ -232,3 +232,30 @@ def ingest_files_into_default_store(
     finally:
         store.close()
     return ingested
+
+
+def local_store_files_provider(store_path: Path):
+    """Return the native files provider over an existing local store.
+
+    Read-only: opens with ``open_readonly`` (never creates/migrates/mutates
+    the store).  Raises ``CapabilityUnavailable`` when the store file is
+    absent or carries no ingested files projection — callers treat that as
+    "fall back to the v1 provider", not a crash.
+    """
+    from arw.kernel.capabilities import CapabilityUnavailable
+
+    if not Path(store_path).is_file():
+        raise CapabilityUnavailable(
+            "files.local (no local store at the configured path)"
+        )
+
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.files import LocalStoreFilesAdapter
+
+    store = LocalProjectionStore(Path(store_path))
+    store.open_readonly()
+    try:
+        return LocalStoreFilesAdapter(store)
+    except Exception:
+        store.close()
+        raise
