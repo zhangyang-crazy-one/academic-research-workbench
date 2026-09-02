@@ -22,6 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+from urllib.parse import quote
 
 from .errors import (
     LocalStoreError,
@@ -244,8 +245,11 @@ class LocalProjectionStore:
         self._database_path = resolved
 
         try:
+            # URI-encode the path: a literal ``?`` / ``#`` / ``%`` in a valid
+            # filesystem path would otherwise corrupt the SQLite URI (the
+            # read-only mode must bind the intended file, never another).
             connection = sqlite3.connect(
-                f"file:{self._database_path}?mode=ro", uri=True
+                f"file:{quote(str(self._database_path))}?mode=ro", uri=True
             )
         except sqlite3.Error as error:
             raise StoreOpenError(f"sqlite read-only connect failed: {error}") from error
