@@ -17,11 +17,18 @@ def default_router(
     files_control_root: Path | None = None,
     graph_control_root: Path | None = None,
     graph_root_id: str | None = None,
+    store_path: Path | None = None,
 ) -> CapabilityRouter:
-    """The v1-default routing table (local files + graph + ARS + integrity).
+    """The default routing table (local files + graph + ARS + integrity).
 
     File and graph providers require a control root, so they are registered
     only when the caller supplies one (the CLI composition sites do).
+
+    When ``store_path`` is supplied AND the store carries a files projection,
+    ``files.local`` resolves to the native :class:`LocalStoreFilesAdapter`
+    (PR5 task 3.2: the native provider is the default once equivalence is
+    proven); the v1 file-base generation path remains selectable by simply
+    not passing ``store_path``.
     """
     from arw.adapters.artifacts import ArtifactIntegrityAdapter
     from arw.adapters.workflow import ARSAdapter
@@ -30,7 +37,47 @@ def default_router(
     router.register("research.literature", ARSAdapter)
     router.register("artifact.inspect", ArtifactIntegrityAdapter)
 
-    if files_control_root is not None:
+    # Optional research engines degrade to capability-not-available receipts
+    # when their extras are not installed (never an import error).
+    def _storm_adapter():
+        # Probe the OPTIONAL engine itself: arw.storm imports cleanly with
+        # only stdlib+pydantic (the knowledge_storm import is lazy inside
+        # run_storm_research), so importing arw.storm would resolve
+        # successfully even when the engine is absent (review P2).  Probing
+        # knowledge_storm makes resolution-time absence detection real.
+        import knowledge_storm  # type: ignore[import-not-found]  # noqa: F401 -- optional probe
+
+        from arw.storm import run_storm_research
+
+        return run_storm_research
+
+    router.register_optional("research.deep_survey", _storm_adapter)
+
+    if store_path is not None:
+        from arw.kernel.capabilities import CapabilityUnavailable
+
+        def _local_store_files():
+            from arw_ext.local_store import LocalProjectionStore
+            from arw_ext.local_store.files import LocalStoreFilesAdapter
+
+            # Read-path resolution must not create or migrate the store: a
+            # missing DB file simply means the capability is unavailable.
+            if not Path(store_path).is_file():
+                raise CapabilityUnavailable(
+                    "files.local (no local store at the configured path)"
+                )
+            store = LocalProjectionStore(Path(store_path))
+            # Read-path resolution opens read-only: never migrate or mutate
+            # the store as a side effect of resolving a query capability.
+            store.open_readonly()
+            try:
+                return LocalStoreFilesAdapter(store)
+            except Exception:
+                store.close()
+                raise
+
+        router.register("files.local", _local_store_files)
+    elif files_control_root is not None:
         from arw.adapters.files import LocalFilesAdapter
         from arw.files import load_query_generation
         from arw.kernel.capabilities import CapabilityUnavailable
@@ -83,3 +130,21 @@ def local_store_health(store_path: Path) -> dict:
         return collect_health(store)
     finally:
         store.close()
+
+
+def declared_capabilities(plugin_manifest: Path) -> tuple[str, ...]:
+    """Return the capability set declared by the plugin manifest (task 2.1).
+
+    The manifest's ``interface.capabilities`` list is the operator-facing
+    declaration; the composition root intersects it with the registered
+    provider table at activation time so absent optional engines simply
+    never activate.
+    """
+    import json
+
+    try:
+        payload = json.loads(Path(plugin_manifest).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"unreadable plugin manifest {plugin_manifest}: {error}") from error
+    capabilities = payload.get("interface", {}).get("capabilities", [])
+    return tuple(str(item) for item in capabilities)

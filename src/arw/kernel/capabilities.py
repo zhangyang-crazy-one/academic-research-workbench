@@ -32,6 +32,25 @@ class CapabilityRouter:
     def register(self, capability: str, factory: Callable[[], Any]) -> None:
         self._providers[capability] = factory
 
+    def register_optional(self, capability: str, factory: Callable[[], Any]) -> None:
+        """Register a capability whose provider may be absent.
+
+        If the factory raises :class:`ImportError` / :class:`ModuleNotFoundError`
+        (an optional engine is not installed), resolution degrades to a typed
+        :class:`CapabilityUnavailable` instead of propagating the import
+        failure (task 2.2: graceful absence).
+        """
+
+        def _guarded() -> Any:
+            try:
+                return factory()
+            except (ImportError, ModuleNotFoundError) as error:
+                raise CapabilityUnavailable(
+                    f"{capability} (optional engine not installed: {error})"
+                ) from error
+
+        self._providers[capability] = _guarded
+
     def resolve(self, capability: str) -> Any:
         try:
             factory = self._providers[capability]

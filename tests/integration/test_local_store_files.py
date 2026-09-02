@@ -57,6 +57,7 @@ def _seed(
     store = LocalProjectionStore(tmp_path / "arw.db")
     store.open()
     ingest_files_generation(store.connection, generation)
+    store.connection.commit()  # persist the ingested projection (the store is not autocommit)
     return (
         LocalStoreFilesAdapter(store),
         LocalFilesAdapter(generation),
@@ -263,3 +264,192 @@ def test_root_denied_for_foreign_root(tmp_path: Path) -> None:
         assert exc_info.value.code == "root_denied"
     finally:
         store.close()
+
+
+# ---------------------------------------------------------------------------
+# Equivalence suite extension (PR5 task 3.1): list/read/outline/context parity
+# ---------------------------------------------------------------------------
+
+
+def _strip_tokens(payload: Any) -> Any:
+    """Recursively scrub HMAC-signed tokens (hit_id / next_cursor)."""
+
+    if isinstance(payload, dict):
+        return {
+            k: (None if k in {"hit_id", "next_cursor"} else _strip_tokens(v))
+            for k, v in payload.items()
+        }
+    if isinstance(payload, list):
+        return [_strip_tokens(item) for item in payload]
+    return payload
+
+
+def test_list_read_outline_context_parity_with_v1(tmp_path: Path) -> None:
+    """PR5 3.1: LocalStoreFilesAdapter == v1 LocalFilesAdapter on the shared
+    corpus across list/read/outline/context (not just search)."""
+
+    from arw.file_models import (
+        FilesContextRequest,
+        FilesListRequest,
+        FilesOutlineRequest,
+        FilesReadRequest,
+        LineRange,
+        SourceLocation,
+    )
+
+    store_adapter, v1_adapter, store, root_id = _seed(
+        tmp_path,
+        {
+            "notes/a.txt": "alpha\nbeta\ngamma\n",
+            "notes/cjk.md": "# 标题\n\n中文证据行\n",
+        },
+    )
+    generation_id = v1_adapter._server.generation.selected.generation_id
+    try:
+        # list_files parity (generation id differs by construction).
+        store_list = _strip_tokens(
+            store_adapter.list_files(
+                FilesListRequest(
+                    schema_version="1.0.0", root_id=root_id, max_files=50, cursor=None
+                )
+            ).model_dump(mode="json")
+        )
+        v1_list = _strip_tokens(
+            v1_adapter.list_files(
+                FilesListRequest(
+                    schema_version="1.0.0", root_id=root_id, max_files=50, cursor=None
+                )
+            ).model_dump(mode="json")
+        )
+        store_list["selected_generation_id"] = None
+        v1_list["selected_generation_id"] = None
+        assert store_list == v1_list
+
+        # read_file parity on the same file.
+        store_read = _strip_tokens(
+            store_adapter.read_file(
+                FilesReadRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    file_id=store_list["files"][0]["file_id"],
+                    relative_path="notes/a.txt",
+                    expected_digest=None,
+                    byte_range=None,
+                    line_range=LineRange(start_line=1, max_lines=10),
+                    cursor=None,
+                )
+            ).model_dump(mode="json")
+        )
+        v1_read = _strip_tokens(
+            v1_adapter.read_file(
+                FilesReadRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    file_id=store_list["files"][0]["file_id"],
+                    relative_path="notes/a.txt",
+                    expected_digest=None,
+                    byte_range=None,
+                    line_range=LineRange(start_line=1, max_lines=10),
+                    cursor=None,
+                )
+            ).model_dump(mode="json")
+        )
+        assert store_read == v1_read
+
+        # outline parity on the markdown file.
+        cjk = next(f for f in store_list["files"] if f["relative_path"] == "notes/cjk.md")
+        store_outline = _strip_tokens(
+            store_adapter.get_outline(
+                FilesOutlineRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    generation_id=generation_id,
+                    file_id=cjk["file_id"],
+                    expected_digest=cjk["indexed_digest"],
+                    max_nodes=50,
+                    cursor=None,
+                )
+            ).model_dump(mode="json")
+        )
+        # generation_id is validated against each adapter's own selection;
+        # blank it for the comparison.
+        v1_outline = _strip_tokens(
+            v1_adapter.get_outline(
+                FilesOutlineRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    generation_id=generation_id,
+                    file_id=cjk["file_id"],
+                    expected_digest=cjk["indexed_digest"],
+                    max_nodes=50,
+                    cursor=None,
+                )
+            ).model_dump(mode="json")
+        )
+        store_outline["generation_id"] = None
+        v1_outline["generation_id"] = None
+        assert store_outline == v1_outline
+
+        # context parity around the beta hit.
+        store_ctx = _strip_tokens(
+            store_adapter.get_context(
+                FilesContextRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    generation_id=generation_id,
+                    file_id=store_list["files"][0]["file_id"],
+                    expected_digest=store_list["files"][0]["indexed_digest"],
+                    hit_id=None,
+                    location=SourceLocation(
+                        start_byte=6, end_byte=10, start_line=2, end_line=2
+                    ),
+                    before_lines=1,
+                    after_lines=1,
+                )
+            ).model_dump(mode="json")
+        )
+        v1_ctx = _strip_tokens(
+            v1_adapter.get_context(
+                FilesContextRequest(
+                    schema_version="1.0.0",
+                    root_id=root_id,
+                    generation_id=generation_id,
+                    file_id=store_list["files"][0]["file_id"],
+                    expected_digest=store_list["files"][0]["indexed_digest"],
+                    hit_id=None,
+                    location=SourceLocation(
+                        start_byte=6, end_byte=10, start_line=2, end_line=2
+                    ),
+                    before_lines=1,
+                    after_lines=1,
+                )
+            ).model_dump(mode="json")
+        )
+        store_ctx["generation_id"] = None
+        v1_ctx["generation_id"] = None
+        assert store_ctx == v1_ctx
+    finally:
+        store.close()
+
+
+def test_default_router_prefers_local_store_when_store_path_given(tmp_path: Path) -> None:
+    """PR5 3.2: with a store_path whose store carries a files projection,
+    files.local resolves to the native adapter; without it, the v1 path
+    remains selectable."""
+
+    from arw.composition import default_router
+
+    store_adapter, _v1, store, _root_id = _seed(tmp_path, {"notes/a.txt": "alpha\n"})
+    try:
+        store_path = store.database_path
+        store.close()
+
+        router = default_router(store_path=store_path)
+        provider = router.resolve("files.local")
+        assert isinstance(provider, LocalStoreFilesAdapter)
+
+        # v1 path remains selectable by not passing store_path.
+        v1_router = default_router(files_control_root=tmp_path / "control")
+        assert "files.local" in v1_router.available()
+    finally:
+        pass

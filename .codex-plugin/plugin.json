@@ -20,8 +20,15 @@
     "developerName": "Academic Research Workbench contributors",
     "category": "Productivity",
     "capabilities": [
-      "Headless research routing",
-      "Auditable local execution"
+      "research",
+      "literature",
+      "experiment",
+      "evidence",
+      "files",
+      "graph",
+      "provenance",
+      "artifact",
+      "audit"
     ],
     "defaultPrompt": "Route this academic research task through the workbench."
   }

@@ -418,3 +418,68 @@ def test_apply_pending_migrations_is_safe_to_call_repeatedly(tmp_path: Path) -> 
         assert meta_before == meta_after
     finally:
         store.close()
+
+
+def test_open_readonly_does_not_create_or_migrate(tmp_path: Path) -> None:
+    """Read-path open: missing file faults; existing file is never mutated."""
+
+    from arw_ext.local_store import SchemaVersionUnsupportedError
+
+    # Missing file -> typed fault, and nothing is created.
+    missing = tmp_path / "absent.db"
+    store = LocalProjectionStore(missing)
+    with pytest.raises(StorePathUnsafeError):
+        store.open_readonly()
+    assert not missing.exists()
+
+    # A store at an OLDER schema version opens read-only WITHOUT migrating:
+    # the on-disk schema_version must be unchanged afterwards.
+    database = tmp_path / "old.db"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            "CREATE TABLE projection_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO projection_meta(key, value) VALUES (?, ?)",
+            ("schema_version", "0"),
+        )
+        connection.execute(
+            "INSERT INTO projection_meta(key, value) VALUES (?, ?)",
+            ("applied_migrations", ""),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    store = LocalProjectionStore(database)
+    snapshot = store.open_readonly()
+    try:
+        assert snapshot.schema_version == 0  # NOT migrated to supported
+    finally:
+        store.close()
+    inspect = sqlite3.connect(database)
+    try:
+        row = inspect.execute(
+            "SELECT value FROM projection_meta WHERE key = 'schema_version'"
+        ).fetchone()
+    finally:
+        inspect.close()
+    assert row is not None and row[0] == "0"  # still 0 on disk
+
+    # A NEWER store faults without mutation.
+    newer = tmp_path / "newer.db"
+    connection = sqlite3.connect(newer)
+    try:
+        connection.execute(
+            "CREATE TABLE projection_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO projection_meta(key, value) VALUES (?, ?)",
+            ("schema_version", str(supported_schema_version() + 1)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    with pytest.raises(SchemaVersionUnsupportedError):
+        LocalProjectionStore(newer).open_readonly()

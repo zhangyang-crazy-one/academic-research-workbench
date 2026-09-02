@@ -22,9 +22,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+from urllib.parse import quote
 
 from .errors import (
     LocalStoreError,
+    ProjectionMetaCorruptError,
+    SchemaVersionUnsupportedError,
     StoreOpenError,
     StorePathUnsafeError,
 )
@@ -196,6 +199,81 @@ class LocalProjectionStore:
         meta_rows = read_projection_meta(connection)
         schema_version = read_schema_version(meta_rows)
         from .migrations import applied_migrations
+
+        applied = tuple(applied_migrations(meta_rows))
+        projection_version = meta_rows.get("projection_version", "0")
+        generator_versions: dict[str, str] = {
+            key.removeprefix("generator_version."): value
+            for key, value in meta_rows.items()
+            if key.startswith("generator_version.")
+        }
+        self._connection = connection
+        self._snapshot = StoreSnapshot(
+            schema_version=schema_version,
+            projection_version=projection_version,
+            generator_versions=generator_versions,
+            applied_migrations=applied,
+            database_path=self._database_path,
+        )
+        return self._snapshot
+
+    def open_readonly(self) -> StoreSnapshot:
+        """Open an existing store read-only — no creation, no migrations.
+
+        Read-path consumers (the ``files.local`` capability resolution, the
+        status health read) must never create or mutate the store as a side
+        effect of resolving a query capability (review: ``open()`` applies
+        pending migrations, which is a write).  A missing file or a schema
+        newer than this binary is a typed fault; a schema OLDER than this
+        binary is served read-only without migrating (stale rows are a
+        projection concern, surfaced via health, not a read-time write).
+        """
+
+        if self._connection is not None:
+            assert self._snapshot is not None
+            return self._snapshot
+
+        resolved = _resolve_database_path(self._database_path)
+        if not resolved.exists() or not resolved.is_file():
+            raise StorePathUnsafeError(
+                f"database file does not exist: {resolved}"
+            )
+        if resolved.is_symlink():
+            raise StorePathUnsafeError(
+                f"database path is a symlink: {resolved}"
+            )
+        self._database_path = resolved
+
+        try:
+            # URI-encode the path: a literal ``?`` / ``#`` / ``%`` in a valid
+            # filesystem path would otherwise corrupt the SQLite URI (the
+            # read-only mode must bind the intended file, never another).
+            connection = sqlite3.connect(
+                f"file:{quote(str(self._database_path))}?mode=ro", uri=True
+            )
+        except sqlite3.Error as error:
+            raise StoreOpenError(f"sqlite read-only connect failed: {error}") from error
+
+        try:
+            meta_rows = read_projection_meta(connection)
+            schema_version = read_schema_version(meta_rows)
+        except (LocalStoreError, sqlite3.Error) as error:
+            connection.close()
+            if isinstance(error, sqlite3.Error):
+                raise ProjectionMetaCorruptError(
+                    f"projection_meta is unreadable: {error}"
+                ) from error
+            raise
+
+        from .migrations import applied_migrations, supported_schema_version
+
+        if schema_version > supported_schema_version():
+            connection.close()
+            raise SchemaVersionUnsupportedError(
+                f"database schema_version={schema_version} is newer than the "
+                f"supported maximum {supported_schema_version()}; upgrade the "
+                f"workbench binary before opening this store"
+            )
 
         applied = tuple(applied_migrations(meta_rows))
         projection_version = meta_rows.get("projection_version", "0")
