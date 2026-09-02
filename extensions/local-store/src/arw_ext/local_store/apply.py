@@ -290,7 +290,13 @@ def apply_projection(
     rows over the existing checkpoint; raises :class:`ApplyError` with code
     ``projection_stale`` when the stored checkpoint watermark is ahead of
     the input watermark.  Because every row id and checksum is a pure
-    function of (events, records), both modes converge to identical state.
+    function of (events, projection), both modes converge to identical state.
+
+    Contract: the supplied projection MUST cover the full ledger prefix
+    (the caller derives it from ``map_ledger_events(events)`` over ALL
+    events, not a suffix).  The ledger is append-only and entities never
+    disappear from a full-prefix projection, so upsert-only incremental
+    application is exact; partial inputs are a caller bug, not a mode.
     """
 
     if not events:
@@ -299,7 +305,17 @@ def apply_projection(
         )
 
     head_event = events[-1]
-    new_watermark = head_event.sequence
+    # The projection input is authoritative for the graph content AND its
+    # watermark/head: the checkpoint records the PROJECTION's ledger position
+    # so the receipt, the checkpoint, and query-side staleness checks agree
+    # by construction (review P1: the checkpoint previously recorded the
+    # event head, which diverges whenever the caller's event prefix is
+    # shorter/longer than the projection's).  The event list still drives
+    # provenance binding + the materialized run state; a mismatched prefix
+    # degrades provenance to unbound (surfaced as audit faults) rather than
+    # invalidating the projection.
+    new_watermark = projection.ledger_watermark
+    head_digest = projection.ledger_head_sha256
 
     if not incremental:
         _truncate_projection_tables(connection)
@@ -722,7 +738,7 @@ def apply_projection(
         (
             projection_name,
             new_watermark,
-            head_event.event_sha256,
+            head_digest,
             head_event.occurred_at,
             "1",
         ),
@@ -777,7 +793,7 @@ def apply_projection(
     return ApplyResult(
         projection_name=projection_name,
         last_ledger_sequence=new_watermark,
-        last_ledger_event_digest=head_event.event_sha256,
+        last_ledger_event_digest=head_digest,
         node_count=nodes_inserted,
         edge_count=edges_inserted,
         assertion_count=assertions_inserted,

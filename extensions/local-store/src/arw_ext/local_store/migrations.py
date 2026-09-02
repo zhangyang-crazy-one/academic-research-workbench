@@ -139,7 +139,12 @@ def applied_migrations(meta_rows: Mapping[str, str]) -> list[int]:
         try:
             out.append(int(token))
         except ValueError:
-            continue
+            # A malformed token means the meta row was hand-edited or
+            # torn; never silently drop it — the contiguity check depends
+            # on exact membership (review P2).
+            raise ProjectionMetaCorruptError(
+                f"applied_migrations contains a non-integer token: {token!r}"
+            ) from None
     return sorted(out)
 
 

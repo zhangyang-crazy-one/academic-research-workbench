@@ -43,6 +43,7 @@ from .apply import (
 from .query import execute_query
 from .receipts import (
     clear_audit_faults,
+    load_receipt,
     persist_audit_fault,
     persist_receipt,
     receipts_root,
@@ -130,6 +131,16 @@ class LocalStoreKnowledgeAdapter:
                 request,
                 "projection_corrupt",
                 "selected generation has no persisted receipt",
+            )
+        # The mutable tables commit before the receipt + pointer publish;
+        # a crash in between leaves the checkpoint ahead of the selected
+        # generation.  Never serve newer data under an older identity.
+        receipt = load_receipt(store.database_path, generation_id)
+        if receipt is None or receipt.ledger_watermark != selected_watermark:
+            return _unavailable(
+                request,
+                "projection_stale",
+                "selected generation watermark differs from the applied checkpoint",
             )
 
         return execute_query(
