@@ -18,6 +18,8 @@ def default_router(
     graph_control_root: Path | None = None,
     graph_root_id: str | None = None,
     store_path: Path | None = None,
+    files_root_id: str = "research-root",
+    plugin_manifest: Path | None = None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -84,7 +86,7 @@ def default_router(
 
         def _local_files():
             try:
-                generation = load_query_generation(files_control_root, "research-root")
+                generation = load_query_generation(files_control_root, files_root_id)
             except Exception as error:
                 raise CapabilityUnavailable(
                     "files.local (no synced generation; run `files sync` first)"
@@ -98,8 +100,18 @@ def default_router(
 
         router.register(
             "knowledge.graph",
-            lambda: GraphProjectionAdapter(GraphStore(graph_control_root, graph_root_id)),
+            lambda: GraphProjectionAdapter(
+                GraphStore(graph_control_root, graph_root_id)
+            ),
         )
+    if plugin_manifest is not None:
+        declared = set(declared_capabilities(plugin_manifest))
+        for capability in router.available():
+            broad = capability.split(".", 1)[0]
+            if broad not in declared:
+                # Undeclared capability: deregister so resolution reports
+                # capability-not-available rather than activating it.
+                router._providers.pop(capability)
     return router
 
 
@@ -145,6 +157,39 @@ def declared_capabilities(plugin_manifest: Path) -> tuple[str, ...]:
     try:
         payload = json.loads(Path(plugin_manifest).read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ValueError(f"unreadable plugin manifest {plugin_manifest}: {error}") from error
+        raise ValueError(
+            f"unreadable plugin manifest {plugin_manifest}: {error}"
+        ) from error
     capabilities = payload.get("interface", {}).get("capabilities", [])
     return tuple(str(item) for item in capabilities)
+
+
+def ingest_files_into_default_store(
+    control_root: Path, root_id: str, *, workspace_root: Path
+) -> int:
+    """Ingest the selected files generation into the default local store.
+
+    Called from the ``arw files sync/rebuild`` path after a new generation is
+    selected, so the native files provider actually has data to serve (PR5
+    review P1).  This is a WRITE path (sync), so creating the store at the
+    default per-user cache location is intended.  Returns the ingested row
+    count.
+    """
+    from arw.files import load_query_generation
+
+    generation = load_query_generation(control_root, root_id)
+
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.ingest import ingest_files_generation
+    from arw_ext.local_store.location import resolve_store_path
+
+    store_path = resolve_store_path(workspace_root)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store = LocalProjectionStore(store_path)
+    store.open()
+    try:
+        ingested = ingest_files_generation(store.connection, generation)
+        store.connection.commit()
+    finally:
+        store.close()
+    return ingested

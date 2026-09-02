@@ -65,6 +65,19 @@ def collect_health(store: LocalProjectionStore) -> dict[str, Any]:
         }
         for fault in checksum_faults
     ]
+    # Persisted provenance faults (unbound rows recorded by the apply path)
+    # are part of the health picture too — a clean checksum pass must not
+    # mask them (review P2).
+    from .receipts import load_audit_faults
+
+    persisted_faults = [
+        {
+            "code": fault.code,
+            "message": fault.message,
+            "affected_rows": fault.affected_rows,
+        }
+        for fault in load_audit_faults(store.database_path)
+    ]
 
     return {
         "schema_version": snapshot.schema_version,
@@ -74,6 +87,7 @@ def collect_health(store: LocalProjectionStore) -> dict[str, Any]:
         "counts": counts,
         "checksum_status": "ok" if not checksum_faults else "audit_fault",
         "checksum_faults": fault_list,
+        "provenance_faults": persisted_faults,
     }
 
 

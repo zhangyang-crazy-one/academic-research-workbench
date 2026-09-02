@@ -377,6 +377,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif args.files_command in {"sync", "rebuild", "repair"}:
                 method = getattr(service, args.files_command)
                 receipt = method(args.root_id, extractor_version=args.extractor_version)
+                # Feed the fresh generation into the local projection store so
+                # the native files provider actually has data to serve (review
+                # P1: previously nothing populated the store on this path).
+                if receipt.selected_generation_id is not None:
+                    from arw.composition import ingest_files_into_default_store
+
+                    ingest_files_into_default_store(
+                        args.control_root, args.root_id, workspace_root=Path.cwd()
+                    )
                 _write_json(receipt.model_dump(mode="json"))
             else:
                 _write_json(service.status(args.root_id))

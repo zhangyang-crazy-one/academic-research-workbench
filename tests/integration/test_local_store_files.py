@@ -357,7 +357,9 @@ def test_list_read_outline_context_parity_with_v1(tmp_path: Path) -> None:
         assert store_read == v1_read
 
         # outline parity on the markdown file.
-        cjk = next(f for f in store_list["files"] if f["relative_path"] == "notes/cjk.md")
+        cjk = next(
+            f for f in store_list["files"] if f["relative_path"] == "notes/cjk.md"
+        )
         store_outline = _strip_tokens(
             store_adapter.get_outline(
                 FilesOutlineRequest(
@@ -432,7 +434,9 @@ def test_list_read_outline_context_parity_with_v1(tmp_path: Path) -> None:
         store.close()
 
 
-def test_default_router_prefers_local_store_when_store_path_given(tmp_path: Path) -> None:
+def test_default_router_prefers_local_store_when_store_path_given(
+    tmp_path: Path,
+) -> None:
     """PR5 3.2: with a store_path whose store carries a files projection,
     files.local resolves to the native adapter; without it, the v1 path
     remains selectable."""
