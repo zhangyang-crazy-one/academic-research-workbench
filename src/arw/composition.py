@@ -40,8 +40,14 @@ def default_router(
     # Optional research engines degrade to capability-not-available receipts
     # when their extras are not installed (never an import error).
     def _storm_adapter():
-        from arw.adapters.workflow import ARSAdapter  # noqa: F401
-        from arw.storm import run_storm_research  # optional dependency-group
+        # Probe the OPTIONAL engine itself: arw.storm imports cleanly with
+        # only stdlib+pydantic (the knowledge_storm import is lazy inside
+        # run_storm_research), so importing arw.storm would resolve
+        # successfully even when the engine is absent (review P2).  Probing
+        # knowledge_storm makes resolution-time absence detection real.
+        import knowledge_storm  # type: ignore[import-not-found]  # noqa: F401 -- optional probe
+
+        from arw.storm import run_storm_research
 
         return run_storm_research
 
@@ -54,14 +60,19 @@ def default_router(
             from arw_ext.local_store import LocalProjectionStore
             from arw_ext.local_store.files import LocalStoreFilesAdapter
 
-            try:
-                store = LocalProjectionStore(Path(store_path))
-                store.open()
-                return LocalStoreFilesAdapter(store)
-            except Exception as error:
+            # Read-path resolution must not create or migrate the store: a
+            # missing DB file simply means the capability is unavailable.
+            if not Path(store_path).is_file():
                 raise CapabilityUnavailable(
-                    "files.local (no ingested files projection in the local store)"
-                ) from error
+                    "files.local (no local store at the configured path)"
+                )
+            store = LocalProjectionStore(Path(store_path))
+            store.open()
+            try:
+                return LocalStoreFilesAdapter(store)
+            except Exception:
+                store.close()
+                raise
 
         router.register("files.local", _local_store_files)
     elif files_control_root is not None:
