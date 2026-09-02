@@ -181,7 +181,7 @@ def declared_capabilities(plugin_manifest: Path) -> tuple[str, ...]:
 
 
 def ingest_files_into_default_store(
-    control_root: Path, root_id: str
+    control_root: Path, root_id: str, *, generation_id: str
 ) -> int:
     """Ingest the selected files generation into the default local store.
 
@@ -194,6 +194,14 @@ def ingest_files_into_default_store(
     from arw.files import load_query_generation
 
     generation = load_query_generation(control_root, root_id)
+    # Bind to the generation the sync JUST produced (its receipt carries the
+    # id), not whatever happens to be selected at read time — a concurrent
+    # sync must not shift this ingest onto another generation (review P2).
+    if generation.selected.generation_id != generation_id:
+        raise ValueError(
+            f"selected generation {generation.selected.generation_id} != "
+            f"sync-produced {generation_id}"
+        )
 
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.ingest import ingest_files_generation

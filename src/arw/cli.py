@@ -385,7 +385,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                     try:
                         ingest_files_into_default_store(
-                            args.control_root, args.root_id
+                            args.control_root,
+                            args.root_id,
+                            generation_id=receipt.selected_generation_id,
                         )
                     except Exception as error:
                         # Ingestion feeds the (disposable) projection; a
@@ -405,8 +407,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.composition import default_router
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
+        # The plugin manifest rides next to the CLI entry point; when it is
+        # present, its declared capability set gates activation (PR5).
+        manifest_path = (
+            Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
+        )
         router = default_router(
-            graph_control_root=args.control_root, graph_root_id=args.root_id
+            graph_control_root=args.control_root,
+            graph_root_id=args.root_id,
+            plugin_manifest=manifest_path if manifest_path.is_file() else None,
         )
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
