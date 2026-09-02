@@ -173,6 +173,7 @@ def _seed_initial_meta(connection: sqlite3.Connection) -> None:
     """
 
     try:
+        # pi-lens-ignore: python-sql-injection
         connection.executemany(
             "INSERT OR REPLACE INTO projection_meta(key, value) VALUES (?, ?)",
             projection_meta_initial_rows(),
