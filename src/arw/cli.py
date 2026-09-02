@@ -383,9 +383,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if receipt.selected_generation_id is not None:
                     from arw.composition import ingest_files_into_default_store
 
-                    ingest_files_into_default_store(
-                        args.control_root, args.root_id, workspace_root=Path.cwd()
-                    )
+                    try:
+                        ingest_files_into_default_store(
+                            args.control_root, args.root_id
+                        )
+                    except Exception as error:
+                        # Ingestion feeds the (disposable) projection; a
+                        # failure here must not fail the completed sync.
+                        print(
+                            f"arw: local-store ingest warning: {error}",
+                            file=sys.stderr,
+                        )
                 _write_json(receipt.model_dump(mode="json"))
             else:
                 _write_json(service.status(args.root_id))
@@ -518,10 +526,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         if checkpoints
                         else "none"
                     )
+                    provenance_faults = health.get("provenance_faults", [])
                     text += (
                         f"\nprojection schema: {health['schema_version']}"
                         f"\nprojection checkpoint: {watermark}"
                         f"\nprojection checksums: {health['checksum_status']}"
+                        f"\nprovenance faults: {len(provenance_faults)}"
                     )
                 sys.stdout.write(text)
             return 0

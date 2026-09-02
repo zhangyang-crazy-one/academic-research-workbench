@@ -106,11 +106,27 @@ def default_router(
         )
     if plugin_manifest is not None:
         declared = set(declared_capabilities(plugin_manifest))
+        # The manifest declares broad capability names (``files``, ``graph``,
+        # ...) while the router registers dotted identifiers
+        # (``files.local``, ``knowledge.graph``).  Map each manifest name to
+        # the router prefixes it enables; an undeclared capability is
+        # deregistered so resolution reports capability-not-available.
+        manifest_to_router: dict[str, tuple[str, ...]] = {
+            "research": ("research.literature", "research.deep_survey"),
+            "literature": ("research.literature",),
+            "experiment": ("research.experiment",),
+            "evidence": (),
+            "files": ("files.local", "files.search"),
+            "graph": ("knowledge.graph",),
+            "provenance": ("knowledge.provenance",),
+            "artifact": ("artifact.inspect", "artifact.sanitize"),
+            "audit": ("audit.replay",),
+        }
+        enabled: set[str] = set()
+        for name in declared:
+            enabled.update(manifest_to_router.get(name, ()))
         for capability in router.available():
-            broad = capability.split(".", 1)[0]
-            if broad not in declared:
-                # Undeclared capability: deregister so resolution reports
-                # capability-not-available rather than activating it.
+            if capability not in enabled:
                 router._providers.pop(capability)
     return router
 
@@ -165,7 +181,7 @@ def declared_capabilities(plugin_manifest: Path) -> tuple[str, ...]:
 
 
 def ingest_files_into_default_store(
-    control_root: Path, root_id: str, *, workspace_root: Path
+    control_root: Path, root_id: str
 ) -> int:
     """Ingest the selected files generation into the default local store.
 
@@ -183,7 +199,9 @@ def ingest_files_into_default_store(
     from arw_ext.local_store.ingest import ingest_files_generation
     from arw_ext.local_store.location import resolve_store_path
 
-    store_path = resolve_store_path(workspace_root)
+    # Key the default store by the REGISTERED root's canonical path, not the
+    # caller's working directory (sync may run from anywhere).
+    store_path = resolve_store_path(Path(generation.root.canonical_path))
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store = LocalProjectionStore(store_path)
     store.open()
