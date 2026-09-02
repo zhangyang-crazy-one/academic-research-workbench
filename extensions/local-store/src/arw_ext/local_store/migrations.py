@@ -178,6 +178,29 @@ def _seed_initial_meta(connection: sqlite3.Connection) -> None:
         ) from error
 
 
+def _execute_script(connection: sqlite3.Connection, script: str) -> None:
+    """Execute a multi-statement DDL script INSIDE the caller's transaction.
+
+    ``sqlite3.Connection.executescript`` issues an implicit COMMIT before
+    running, which would break the migration runner's all-or-nothing
+    guarantee.  Our scripts are plain DDL (no semicolons inside statements),
+    so splitting on ``;`` and executing statement-by-statement is exact.
+    """
+
+    # Strip ``--`` comment lines first: naive ``;`` splitting otherwise
+    # breaks on semicolons inside comments.  Our DDL contains no string
+    # literals with ``--`` or ``;`` so line-stripping + split is exact.
+    code_lines = []
+    for line in script.splitlines():
+        code, _, _comment = line.partition("--")
+        code_lines.append(code)
+    for statement in "\n".join(code_lines).split(";"):
+        stripped = statement.strip()
+        if stripped:
+            # pi-lens-ignore: python-sql-injection
+            connection.execute(stripped)
+
+
 def apply_pending_migrations(connection: sqlite3.Connection) -> int:
     """Apply every migration whose index is not yet recorded.
 
@@ -226,10 +249,21 @@ def apply_pending_migrations(connection: sqlite3.Connection) -> int:
         )
 
     already_applied = applied_migrations(meta_rows)
+    # The recorded migration list must be exactly the contiguous prefix
+    # 1..on_disk_version; anything else means the meta rows disagree with
+    # the actual schema state (e.g. a failed hand-edit) and we refuse to
+    # guess — the operator rebuilds the projection from canonical evidence.
+    expected_prefix = list(range(1, on_disk_version + 1))
+    if already_applied != expected_prefix:
+        raise ProjectionMetaCorruptError(
+            f"applied_migrations {already_applied} is not the contiguous "
+            f"prefix 1..{on_disk_version}; the store metadata is inconsistent"
+        )
     pending = [
         migration
         for migration in MIGRATIONS
-        if int(migration["version"]) not in set(already_applied)
+        # pi-lens-ignore: unchecked-throwing-call-python
+        if int(migration["version"]) > on_disk_version
     ]
     if not pending:
         # Existing DB at supported version: nothing to do.  Schema_version
@@ -247,7 +281,7 @@ def apply_pending_migrations(connection: sqlite3.Connection) -> int:
 
     try:
         for migration in pending:
-            connection.executescript(str(migration["sql"]))
+            _execute_script(connection, str(migration["sql"]))
         # Mark migrations applied (idempotent merge).
         merged = sorted(
             set(already_applied) | {int(migration["version"]) for migration in pending}
@@ -282,7 +316,7 @@ def initialize_fresh(connection: sqlite3.Connection) -> int:
         )
     try:
         for migration in MIGRATIONS:
-            connection.executescript(str(migration["sql"]))
+            _execute_script(connection, str(migration["sql"]))
         _seed_initial_meta(connection)
         _record_applied(
             connection,

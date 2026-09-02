@@ -47,7 +47,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from arw.graph_models import GraphProjectionInput, GraphProjectionManifest
+from arw.graph_models import (
+    GraphNode,
+    GraphProjectionInput,
+    GraphProjectionManifest,
+)
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.ledger.reducer import reduce_events
 from arw.kernel.state.models import (
@@ -63,7 +67,7 @@ from arw.kernel.state.models import (
 )
 
 from .errors import LocalStoreError
-from .projection import map_ledger_events, record_check_payload_digest
+from .projection import map_ledger_events
 from .receipts import AuditFault
 
 # ---------------------------------------------------------------------------
@@ -383,29 +387,118 @@ def apply_projection(
     # ------------------------------------------------------------------
     # Insert nodes + assertions + provenance
     # ------------------------------------------------------------------
-    record_by_entity_id: dict[str, dict[str, Any]] = {}
-
     schema_version = projection.schema_version
 
+    # ------------------------------------------------------------------
+    # Persist the supplied projection (P1: the GraphProjectionInput is the
+    # source of truth for WHAT is stored).  The mapper output supplies only
+    # provenance metadata (acceptance history per entity); the digest-based
+    # 3-tier binding (direct / indirect / unbound) covers entities the
+    # mapper does not know.
+    # ------------------------------------------------------------------
+    history_by_entity_id: dict[str, list[tuple[str, str, str, str, str]]] = {}
     for record in records:
-        entity_type = record["entity_type"]
-        entity_id = record["entity_id"]
-        source_digest = record["source_digest"]
-        payload_digest = record_check_payload_digest(record)
-        # pi-lens-ignore: unchecked-throwing-call-python
-        ledger_watermark = int(record.get("ledger_watermark", new_watermark))
-        supersession_state = record.get("supersession_state", "active")
-        attributes = record.get("payload", {})
+        history = record.get("_acceptance_history") or []
+        if history:
+            history_by_entity_id[record["entity_id"]] = list(history)
 
-        node_row = (
-            entity_type,
-            entity_id,
-            source_digest,
-            payload_digest,
-            supersession_state,
-            ledger_watermark,
-            _jsonify(attributes),
+    def _node_binding(node: GraphNode) -> tuple[str, str | None, str | None]:
+        """Return (origin, ledger_event_id, ledger_event_digest) for a node."""
+
+        history = history_by_entity_id.get(node.entity_id)
+        if history and history[-1][4] == node.source_digest:
+            return ("direct", history[-1][0], history[-1][1])
+        if node.source_digest in direct_lookup:
+            event_id, event_sha, _, _ = direct_lookup[node.source_digest]
+            return ("direct", event_id, event_sha)
+        if node.source_digest in indirect_lookup:
+            event_id, event_sha, _, _ = indirect_lookup[node.source_digest][0]
+            return ("indirect", event_id, event_sha)
+        return ("unbound", None, None)
+
+    def _persist_provenance(
+        *,
+        assertion_id: str,
+        node_or_edge_id: str,
+        source_digest: str,
+        source_locator: str,
+        origin: str,
+        ledger_event_id: str | None,
+        ledger_event_digest: str | None,
+        history: Sequence[tuple[str, str, str, str, str]],
+    ) -> None:
+        """Write one deterministic provenance row per acceptance (chained via
+        ``supersedes``) for direct bindings with history, else a single row."""
+
+        if origin == "direct" and history:
+            previous_prov_id: str | None = None
+            for h_event_id, h_event_sha, h_occurred_at, h_actor_id, _ in history:
+                prov_id = _provenance_id_for(assertion_id, h_event_id)
+                prov_checksum = sha256_hex(
+                    _provenance_identity_subset(
+                        schema_version=schema_version,
+                        provenance_id=prov_id,
+                        assertion_id=assertion_id,
+                        node_or_edge_id=node_or_edge_id,
+                        source_digest=source_digest,
+                    )
+                )
+                # pi-lens-ignore: python-sql-injection
+                cursor.execute(
+                    _PROVENANCE_UPSERT,
+                    (
+                        prov_id,
+                        assertion_id,
+                        node_or_edge_id,
+                        source_digest,
+                        source_locator,
+                        h_actor_id,
+                        h_occurred_at,
+                        h_event_id,
+                        h_event_sha,
+                        "1",
+                        prov_checksum,
+                        previous_prov_id,
+                        "direct",
+                    ),
+                )
+                previous_prov_id = prov_id
+            return
+        prov_id = _provenance_id_for(assertion_id, ledger_event_id or "unbound")
+        prov_checksum = sha256_hex(
+            _provenance_identity_subset(
+                schema_version=schema_version,
+                provenance_id=prov_id,
+                assertion_id=assertion_id,
+                node_or_edge_id=node_or_edge_id,
+                source_digest=source_digest,
+            )
         )
+        bound_event = event_index.get(ledger_event_id) if ledger_event_id else None
+        # pi-lens-ignore: python-sql-injection
+        cursor.execute(
+            _PROVENANCE_UPSERT,
+            (
+                prov_id,
+                assertion_id,
+                node_or_edge_id,
+                source_digest,
+                source_locator,
+                bound_event.actor_id if bound_event else None,
+                bound_event.occurred_at if bound_event else None,
+                ledger_event_id,
+                ledger_event_digest,
+                "1",
+                prov_checksum,
+                None,
+                origin,
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Nodes (from projection.nodes) + assertions + provenance
+    # ------------------------------------------------------------------
+    for node in projection.nodes:
         # pi-lens-ignore: python-sql-injection
         cursor.execute(
             """
@@ -420,65 +513,44 @@ def apply_projection(
                 ledger_watermark = excluded.ledger_watermark,
                 attributes_json = excluded.attributes_json
             """,
-            node_row,
+            (
+                node.entity_type,
+                node.entity_id,
+                node.source_digest,
+                node.payload_digest,
+                node.supersession_state,
+                node.ledger_watermark,
+                _jsonify(node.attributes),
+            ),
         )
         nodes_inserted += 1
-        record_by_entity_id[entity_id] = record
 
-        # Resolve the binding tier for THIS record.  ``direct`` requires the
-        # record's own acceptance digest to match its source_digest (the D3
-        # convention) and to appear in the direct lookup; otherwise the row
-        # falls back to indirect (first-in-sequence referencing event) and
-        # finally to unbound (NULL event ids + audit fault).
-        acceptance_digest = record.get("_acceptance_digest")
-        history: Sequence[tuple[str, str, str, str, str]] = (
-            record.get("_acceptance_history") or ()
-        )
-        origin: str
-        ledger_event_id: str | None
-        ledger_event_digest: str | None
-        if (
-            acceptance_digest is not None
-            and acceptance_digest == source_digest
-            and acceptance_digest in direct_lookup
-        ):
-            origin = "direct"
-            ledger_event_id = direct_lookup[acceptance_digest][0]
-            ledger_event_digest = direct_lookup[acceptance_digest][1]
-        elif source_digest in indirect_lookup:
-            origin = "indirect"
-            indirect_event_id, indirect_event_sha, _, _field = indirect_lookup[
-                source_digest
-            ][0]
-            ledger_event_id = indirect_event_id
-            ledger_event_digest = indirect_event_sha
-        else:
-            origin = "unbound"
-            ledger_event_id = None
-            ledger_event_digest = None
+        origin, ledger_event_id, ledger_event_digest = _node_binding(node)
+        if origin == "unbound":
             unbound_count += 1
             audit_faults.append(
                 AuditFault(
                     code="projection_unbound_provenance",
-                    message=f"source_digest {source_digest!r} for {entity_id} has no matching ledger event",
+                    message=f"source_digest {node.source_digest!r} for {node.entity_id} has no matching ledger event",
                     affected_rows=1,
                     projection_name=projection_name,
                     receipt_id=receipt_id,
                 )
             )
 
-        assertion_id = _node_assertion_id(entity_type, entity_id)
+        assertion_id = _node_assertion_id(node.entity_type, node.entity_id)
         checksum = sha256_hex(
             _node_identity_subset(
                 schema_version=schema_version,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                source_digest=source_digest,
-                payload_digest=payload_digest,
-                supersession_state=supersession_state,
-                ledger_watermark=ledger_watermark,
+                entity_type=node.entity_type,
+                entity_id=node.entity_id,
+                source_digest=node.source_digest,
+                payload_digest=node.payload_digest,
+                supersession_state=node.supersession_state,
+                ledger_watermark=node.ledger_watermark,
             )
         )
+        # pi-lens-ignore: python-sql-injection
         cursor.execute(
             """
             INSERT INTO assertions (assertion_id, entity_type, entity_id, edge_type,
@@ -493,254 +565,144 @@ def apply_projection(
             """,
             (
                 assertion_id,
-                entity_type,
-                entity_id,
-                supersession_state,
-                source_digest,
-                ledger_watermark,
+                node.entity_type,
+                node.entity_id,
+                node.supersession_state,
+                node.source_digest,
+                node.ledger_watermark,
+                "1",
+                checksum,
+            ),
+        )
+        assertions_inserted += 1
+        _persist_provenance(
+            assertion_id=assertion_id,
+            node_or_edge_id=node.entity_id,
+            source_digest=node.source_digest,
+            source_locator=f"{node.entity_type}://{node.entity_id}",
+            origin=origin,
+            ledger_event_id=ledger_event_id,
+            ledger_event_digest=ledger_event_digest,
+            history=history_by_entity_id.get(node.entity_id, []),
+        )
+
+    # ------------------------------------------------------------------
+    # Edges (from projection.edges) + assertions + provenance
+    # ------------------------------------------------------------------
+    for edge in projection.edges:
+        # pi-lens-ignore: python-sql-injection
+        cursor.execute(
+            """
+            INSERT INTO edges (edge_type, from_entity_id, to_entity_id,
+                               evidence_digest, source_digest, supersession_state,
+                               ledger_watermark, attributes_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(edge_type, from_entity_id, to_entity_id, evidence_digest) DO UPDATE SET
+                source_digest = excluded.source_digest,
+                supersession_state = excluded.supersession_state,
+                ledger_watermark = excluded.ledger_watermark,
+                attributes_json = excluded.attributes_json
+            """,
+            (
+                edge.edge_type,
+                edge.from_entity_id,
+                edge.to_entity_id,
+                edge.evidence_digest,
+                edge.source_digest,
+                edge.supersession_state,
+                edge.ledger_watermark,
+                _jsonify(edge.attributes),
+            ),
+        )
+        edges_inserted += 1
+
+        edge_node_or_edge_id = (
+            f"{edge.edge_type}:{edge.from_entity_id}->{edge.to_entity_id}:{edge.evidence_digest}"
+        )
+        assertion_id = _edge_assertion_id(
+            edge.edge_type, edge.from_entity_id, edge.to_entity_id, edge.evidence_digest
+        )
+        checksum = sha256_hex(
+            _edge_identity_subset(
+                schema_version=schema_version,
+                edge_type=edge.edge_type,
+                from_entity_id=edge.from_entity_id,
+                to_entity_id=edge.to_entity_id,
+                evidence_digest=edge.evidence_digest,
+                source_digest=edge.source_digest,
+                supersession_state=edge.supersession_state,
+                ledger_watermark=edge.ledger_watermark,
+            )
+        )
+        # pi-lens-ignore: python-sql-injection
+        cursor.execute(
+            """
+            INSERT INTO assertions (assertion_id, entity_type, entity_id, edge_type,
+                                    supersession_state, source_digest, ledger_watermark,
+                                    projection_version, record_checksum)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(assertion_id) DO UPDATE SET
+                supersession_state = excluded.supersession_state,
+                source_digest = excluded.source_digest,
+                ledger_watermark = excluded.ledger_watermark,
+                record_checksum = excluded.record_checksum
+            """,
+            (
+                assertion_id,
+                "Edge",
+                edge_node_or_edge_id,
+                edge.edge_type,
+                edge.supersession_state,
+                edge.source_digest,
+                edge.ledger_watermark,
                 "1",
                 checksum,
             ),
         )
         assertions_inserted += 1
 
-        # Provenance rows: deterministic id per (assertion, accepting event);
-        # one row per acceptance in the entity's history, chained newest →
-        # previous via ``supersedes``.  Indirect / unbound rows get a single
-        # row keyed by the referencing event (or the "unbound" qualifier).
-        if origin == "direct" and history:
-            previous_prov_id: str | None = None
-            for (
-                h_event_id,
-                h_event_sha,
-                h_occurred_at,
-                h_actor_id,
-                _h_digest,
-            ) in history:
-                prov_id = _provenance_id_for(assertion_id, h_event_id)
-                prov_checksum = sha256_hex(
-                    _provenance_identity_subset(
-                        schema_version=schema_version,
-                        provenance_id=prov_id,
-                        assertion_id=assertion_id,
-                        node_or_edge_id=entity_id,
-                        source_digest=source_digest,
-                    )
-                )
-                # pi-lens-ignore: python-sql-injection
-                cursor.execute(
-                    _PROVENANCE_UPSERT,
-                    (
-                        prov_id,
-                        assertion_id,
-                        entity_id,
-                        source_digest,
-                        f"{entity_type}://{entity_id}",
-                        h_actor_id,
-                        h_occurred_at,
-                        h_event_id,
-                        h_event_sha,
-                        "1",
-                        prov_checksum,
-                        previous_prov_id,
-                        "direct",
-                    ),
-                )
-                previous_prov_id = prov_id
+        # Edge provenance: bind to the FROM entity's latest acceptance when the
+        # edge source_digest follows the v1 inheritance convention; otherwise
+        # fall back to the digest lookups, then unbound.
+        from_history = history_by_entity_id.get(edge.from_entity_id, [])
+        if from_history and from_history[-1][4] == edge.source_digest:
+            edge_origin = "direct"
+            edge_ledger_event_id: str | None = from_history[-1][0]
+            edge_ledger_event_digest: str | None = from_history[-1][1]
+        elif edge.source_digest in direct_lookup:
+            edge_origin = "direct"
+            edge_ledger_event_id, edge_ledger_event_digest, _, _ = direct_lookup[
+                edge.source_digest
+            ]
+        elif edge.source_digest in indirect_lookup:
+            edge_origin = "indirect"
+            edge_ledger_event_id, edge_ledger_event_digest, _, _ = indirect_lookup[
+                edge.source_digest
+            ][0]
         else:
-            prov_id = _provenance_id_for(assertion_id, ledger_event_id or "unbound")
-            prov_checksum = sha256_hex(
-                _provenance_identity_subset(
-                    schema_version=schema_version,
-                    provenance_id=prov_id,
-                    assertion_id=assertion_id,
-                    node_or_edge_id=entity_id,
-                    source_digest=source_digest,
+            edge_origin = "unbound"
+            edge_ledger_event_id = None
+            edge_ledger_event_digest = None
+            unbound_count += 1
+            audit_faults.append(
+                AuditFault(
+                    code="projection_unbound_provenance",
+                    message=f"edge {edge.from_entity_id}->{edge.to_entity_id} ({edge.edge_type}) has no matching ledger event",
+                    affected_rows=1,
+                    projection_name=projection_name,
+                    receipt_id=receipt_id,
                 )
             )
-            bound_event = event_index.get(ledger_event_id) if ledger_event_id else None
-            # pi-lens-ignore: python-sql-injection
-            cursor.execute(
-                _PROVENANCE_UPSERT,
-                (
-                    prov_id,
-                    assertion_id,
-                    entity_id,
-                    source_digest,
-                    f"{entity_type}://{entity_id}",
-                    bound_event.actor_id if bound_event else None,
-                    bound_event.occurred_at if bound_event else None,
-                    ledger_event_id,
-                    ledger_event_digest,
-                    "1",
-                    prov_checksum,
-                    None,
-                    origin,
-                ),
-            )
-
-    # ------------------------------------------------------------------
-    # Insert edges + their provenance
-    # ------------------------------------------------------------------
-    for source_id, record in record_by_entity_id.items():
-        raw_edges = record.get("edges", []) or []
-        for raw_edge in raw_edges:
-            edge_type = raw_edge["edge_type"]
-            to_entity_id = raw_edge["to_entity_id"]
-            evidence = raw_edge.get("evidence")
-            evidence_digest = raw_edge.get("evidence_digest") or _digest_evidence(
-                evidence
-            )
-            edge_supersession_state = raw_edge.get("supersession_state", "active")
-            # pi-lens-ignore: unchecked-throwing-call-python
-            edge_watermark = int(raw_edge.get("ledger_watermark", new_watermark))
-            edge_attributes = raw_edge.get("attributes", {})
-
-            edge_row = (
-                edge_type,
-                source_id,
-                to_entity_id,
-                evidence_digest,
-                record["source_digest"],
-                edge_supersession_state,
-                edge_watermark,
-                _jsonify(edge_attributes),
-            )
-            # pi-lens-ignore: python-sql-injection
-            cursor.execute(
-                """
-                INSERT INTO edges (edge_type, from_entity_id, to_entity_id,
-                                   evidence_digest, source_digest, supersession_state,
-                                   ledger_watermark, attributes_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(edge_type, from_entity_id, to_entity_id, evidence_digest) DO UPDATE SET
-                    source_digest = excluded.source_digest,
-                    supersession_state = excluded.supersession_state,
-                    ledger_watermark = excluded.ledger_watermark,
-                    attributes_json = excluded.attributes_json
-                """,
-                edge_row,
-            )
-            edges_inserted += 1
-
-            edge_node_or_edge_id = (
-                f"{edge_type}:{source_id}->{to_entity_id}:{evidence_digest}"
-            )
-            assertion_id = _edge_assertion_id(
-                edge_type, source_id, to_entity_id, evidence_digest
-            )
-            checksum = sha256_hex(
-                _edge_identity_subset(
-                    schema_version=schema_version,
-                    edge_type=edge_type,
-                    from_entity_id=source_id,
-                    to_entity_id=to_entity_id,
-                    evidence_digest=evidence_digest,
-                    source_digest=record["source_digest"],
-                    supersession_state=edge_supersession_state,
-                    ledger_watermark=edge_watermark,
-                )
-            )
-            cursor.execute(
-                """
-                INSERT INTO assertions (assertion_id, entity_type, entity_id, edge_type,
-                                        supersession_state, source_digest, ledger_watermark,
-                                        projection_version, record_checksum)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(assertion_id) DO UPDATE SET
-                    supersession_state = excluded.supersession_state,
-                    source_digest = excluded.source_digest,
-                    ledger_watermark = excluded.ledger_watermark,
-                    record_checksum = excluded.record_checksum
-                """,
-                (
-                    assertion_id,
-                    "Edge",
-                    edge_node_or_edge_id,
-                    edge_type,
-                    edge_supersession_state,
-                    record["source_digest"],
-                    edge_watermark,
-                    "1",
-                    checksum,
-                ),
-            )
-            assertions_inserted += 1
-
-            # Edge provenance: edges bind to the FROM entity's latest
-            # acceptance (per D3-amended), falling back to indirect / unbound
-            # with the same audit-fault semantics as nodes.
-            from_history: Sequence[tuple[str, str, str, str, str]] = (
-                record.get("_acceptance_history") or ()
-            )
-            if (
-                from_history
-                and record.get("_acceptance_digest") == record["source_digest"]
-            ):
-                latest_event_id, latest_event_sha, latest_at, latest_actor, _ = (
-                    from_history[-1]
-                )
-                edge_origin = "direct"
-                edge_ledger_event_id: str | None = latest_event_id
-                edge_ledger_event_digest: str | None = latest_event_sha
-                edge_created_at: str | None = latest_at
-                edge_agent_id: str | None = latest_actor
-            elif record["source_digest"] in indirect_lookup:
-                evt_id, evt_sha, _, _field = indirect_lookup[record["source_digest"]][0]
-                edge_origin = "indirect"
-                edge_ledger_event_id = evt_id
-                edge_ledger_event_digest = evt_sha
-                edge_event = event_index.get(evt_id)
-                edge_created_at = edge_event.occurred_at if edge_event else None
-                edge_agent_id = edge_event.actor_id if edge_event else None
-            else:
-                edge_origin = "unbound"
-                edge_ledger_event_id = None
-                edge_ledger_event_digest = None
-                edge_created_at = None
-                edge_agent_id = None
-                unbound_count += 1
-                audit_faults.append(
-                    AuditFault(
-                        code="projection_unbound_provenance",
-                        message=f"edge {source_id}->{to_entity_id} ({edge_type}) has no matching ledger event",
-                        affected_rows=1,
-                        projection_name=projection_name,
-                        receipt_id=receipt_id,
-                    )
-                )
-
-            edge_prov_id = _provenance_id_for(
-                assertion_id, edge_ledger_event_id or "unbound"
-            )
-            edge_prov_checksum = sha256_hex(
-                _provenance_identity_subset(
-                    schema_version=schema_version,
-                    provenance_id=edge_prov_id,
-                    assertion_id=assertion_id,
-                    node_or_edge_id=edge_node_or_edge_id,
-                    source_digest=record["source_digest"],
-                )
-            )
-            # pi-lens-ignore: python-sql-injection
-            cursor.execute(
-                _PROVENANCE_UPSERT,
-                (
-                    edge_prov_id,
-                    assertion_id,
-                    edge_node_or_edge_id,
-                    record["source_digest"],
-                    f"Edge://{source_id}->{to_entity_id}",
-                    edge_agent_id,
-                    edge_created_at,
-                    edge_ledger_event_id,
-                    edge_ledger_event_digest,
-                    "1",
-                    edge_prov_checksum,
-                    None,
-                    edge_origin,
-                ),
-            )
+        _persist_provenance(
+            assertion_id=assertion_id,
+            node_or_edge_id=edge_node_or_edge_id,
+            source_digest=edge.source_digest,
+            source_locator=f"Edge://{edge.from_entity_id}->{edge.to_entity_id}",
+            origin=edge_origin,
+            ledger_event_id=edge_ledger_event_id,
+            ledger_event_digest=edge_ledger_event_digest,
+            history=[],
+        )
 
     # ------------------------------------------------------------------
     # Projection checkpoint
@@ -937,7 +899,8 @@ def build_graph_manifest(
     del (
         projection_name,
         last_ledger_event_digest,
-    )  # envelope fields come from projection
+        database_path_str,
+    )  # envelope fields come from projection; the DB file is mutable
     return GraphProjectionManifest(
         schema_version=projection.schema_version,
         generation_id=generation_id,
@@ -947,20 +910,12 @@ def build_graph_manifest(
         node_count=len(projection.nodes),
         edge_count=len(projection.edges),
         projection_algorithm=projection.projection_algorithm,
-        database_sha256=_database_digest(database_path_str),
+        # The local store's database is MUTABLE (unlike a v1 immutable
+        # generation directory), so a file digest is meaningless here and
+        # would break receipt idempotency for identical inputs (P2 review).
+        database_sha256=None,
         status="closed",
     )
-
-
-def _database_digest(database_path_str: str) -> str | None:
-    if not database_path_str:
-        return None
-    try:
-        from pathlib import Path
-
-        return sha256_hex(Path(database_path_str).read_bytes())
-    except OSError:
-        return None
 
 
 __all__ = [

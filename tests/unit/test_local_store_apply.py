@@ -17,12 +17,6 @@ from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
     verify_checksums,
 )
 
-from arw.graph_models import (
-    GRAPH_PROJECTION_ALGORITHM,
-    GRAPH_SCHEMA_VERSION,
-    GraphNode,
-    GraphProjectionInput,
-)
 from arw.kernel.core.canonical import canonical_event_bytes, sha256_hex
 from arw.kernel.ledger.journal import ReplayState
 from arw.kernel.state.models import (
@@ -150,31 +144,25 @@ def store(tmp_path: Path) -> LocalProjectionStore:
 
 
 def _graph_projection(events):
-    """Build a one-node/zero-edge GraphProjectionInput from the events."""
+    """Build the GraphProjectionInput via the real upstream path.
 
-    nodes = []
-    for event in events:
-        if event.event_type == "run.initialized":
-            nodes.append(
-                GraphNode(
-                    schema_version=GRAPH_SCHEMA_VERSION,
-                    entity_type="Run",
-                    entity_id=f"run-{RUN_ID.split('-', 1)[1]}",
-                    source_digest=event.payload.manifest_sha256,
-                    payload_digest=sha256_hex(b"run-payload"),
-                    supersession_state="active",
-                    ledger_watermark=event.sequence,
-                    attributes={"run_id": RUN_ID},
-                )
-            )
-            break
-    return GraphProjectionInput(
-        schema_version=GRAPH_SCHEMA_VERSION,
-        projection_algorithm=GRAPH_PROJECTION_ALGORITHM,
+    The projection is derived from the ledger events by the LedgerProjection
+    mapper + ``project_canonical_records`` — the same production path a sync
+    entry point uses — so the apply path under test receives the full graph,
+    not a hand-minimized subset.
+    """
+
+    from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
+        map_ledger_events,
+    )
+
+    from arw.graph_projection import project_canonical_records
+
+    records, _binding = map_ledger_events(events)
+    return project_canonical_records(
+        records,
         ledger_watermark=events[-1].sequence,
         ledger_head_sha256=events[-1].event_sha256,
-        nodes=nodes,
-        edges=[],
     )
 
 

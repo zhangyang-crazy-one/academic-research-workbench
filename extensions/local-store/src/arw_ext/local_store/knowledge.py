@@ -32,7 +32,7 @@ from arw.graph_models import (
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.ledger.journal import ReplayState
-from arw.kernel.ledger.reducer import reduce_events
+from arw.kernel.ledger.reducer import RuntimeState, reduce_events
 
 from .apply import (
     ApplyError,
@@ -120,12 +120,22 @@ class LocalStoreKnowledgeAdapter:
         selected_watermark = int(checkpoint[0])
 
         generation_id = self._receipt_generation_id()
+        if generation_id is None:
+            return _unavailable(
+                request, "projection_unavailable", "no receipted generation is selected"
+            )
         manifest_sha256 = self._manifest_sha256(generation_id)
+        if manifest_sha256 is None:
+            return _unavailable(
+                request,
+                "projection_corrupt",
+                "selected generation has no persisted receipt",
+            )
 
         return execute_query(
             connection,
             request,
-            selected_generation_id=generation_id or "knowledge-projection",
+            selected_generation_id=generation_id,
             selected_manifest_sha256=manifest_sha256,
             selected_ledger_watermark=selected_watermark,
         )
@@ -169,16 +179,6 @@ class LocalStoreKnowledgeAdapter:
                     projection_name=self._projection_name,
                     incremental=incremental,
                     receipt_id=generation_id,
-                )
-                # Record the selected generation pointer inside the same
-                # transaction so a rollback never leaves a dangling pointer.
-                cursor.execute(
-                    "INSERT INTO projection_meta(key, value) VALUES (?, ?) "
-                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (
-                        f"projection.{self._projection_name}.selected_generation_id",
-                        generation_id,
-                    ),
                 )
             except ApplyError:
                 cursor.execute("ROLLBACK")
@@ -232,6 +232,20 @@ class LocalStoreKnowledgeAdapter:
             reason_codes=[],
         )
         persist_receipt(store.database_path, receipt)
+
+        # The selected-generation pointer is written LAST, in its own
+        # transaction, only after the receipt sidecar exists on disk.  A
+        # crash between the apply COMMIT and this point leaves the pointer
+        # at the previous (fully-receipted) generation — never dangling.
+        cursor.execute(
+            "INSERT INTO projection_meta(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (
+                f"projection.{self._projection_name}.selected_generation_id",
+                generation_id,
+            ),
+        )
+        connection.commit()
         return receipt
 
     def _receipt_generation_id(self) -> str | None:
@@ -317,7 +331,7 @@ def _block_receipt(
     )
 
 
-def reducer_state_for_replay(run_state: ReplayState) -> object:
+def reducer_state_for_replay(run_state: ReplayState) -> RuntimeState:
     """Return the reducer state for a replay (helper for composition root)."""
 
     return reduce_events(run_state.workflow_definition_id, run_state.events)

@@ -26,8 +26,6 @@ from arw_ext.local_store.knowledge import (
 
 from arw.adapters.knowledge import GraphProjectionAdapter
 from arw.graph_models import (
-    GRAPH_SCHEMA_VERSION,
-    GraphNode,
     GraphProjectionInput,
     GraphQueryRequest,
 )
@@ -113,33 +111,23 @@ def _adapter(store: LocalProjectionStore, events) -> LocalStoreKnowledgeAdapter:
 
 
 def _graph_projection_input(events) -> GraphProjectionInput:
-    """Build a minimal GraphProjectionInput from the event prefix.
+    """Build the GraphProjectionInput via the real upstream path.
 
-    The apply path does not require this object to have full coverage of the
-    mapper's output — it only uses ``input_sha256`` / ``ledger_watermark`` /
-    ``ledger_head_sha256`` for the receipt.  The projection records
-    themselves come from the events via :func:`map_ledger_events`.
+    The projection is derived from the ledger events by the LedgerProjection
+    mapper + ``project_canonical_records`` — the same production path a sync
+    entry point uses — so the adapter under test receives the full graph,
+    not a hand-minimized subset.
     """
 
-    nodes = [
-        GraphNode(
-            schema_version=GRAPH_SCHEMA_VERSION,
-            entity_type="Run",
-            entity_id=f"run-{RUN_ID.split('-', 1)[1]}",
-            source_digest=HASH_A,
-            payload_digest=HASH_B,
-            supersession_state="active",
-            ledger_watermark=events[-1].sequence,
-            attributes={"run_id": RUN_ID},
-        )
-    ]
-    return GraphProjectionInput(
-        schema_version=GRAPH_SCHEMA_VERSION,
-        projection_algorithm="research-graph-projection-v1",
+    from arw_ext.local_store import (  # pyright: ignore[reportMissingImports]
+        map_ledger_events,
+    )
+
+    records, _binding = map_ledger_events(events)
+    return project_canonical_records(
+        records,
         ledger_watermark=events[-1].sequence,
         ledger_head_sha256=events[-1].event_sha256,
-        nodes=nodes,
-        edges=[],
     )
 
 

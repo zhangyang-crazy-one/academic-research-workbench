@@ -154,6 +154,22 @@ def ingest_files_generation(
             )
         ingested += 1
 
+    # Full-snapshot semantics: rows absent from this generation were deleted
+    # upstream (v1 rebuilds a generation on every sync); remove them from the
+    # store and both FTS indexes so re-ingest converges with the v1 selected
+    # generation (review P2: previously stale rows survived as phantom
+    # stale_metadata hits).
+    # Per-row membership check avoids a dynamic IN(...) clause entirely;
+    # ingest is a sync-time operation, not a hot path.
+    incoming_ids = {str(row[0]) for row in rows}
+    stale_rows = cursor.execute("SELECT file_id FROM files").fetchall()
+    for (stale_id,) in stale_rows:
+        if str(stale_id) in incoming_ids:
+            continue
+        cursor.execute("DELETE FROM files WHERE file_id = ?", (stale_id,))
+        cursor.execute("DELETE FROM files_fts WHERE file_id = ?", (stale_id,))
+        cursor.execute("DELETE FROM files_fts_trigram WHERE file_id = ?", (stale_id,))
+
     # Record the files-plane binding metadata (root identity + selected
     # generation + cursor secret) so the adapter can serve reads without the
     # v1 generation on hand.
