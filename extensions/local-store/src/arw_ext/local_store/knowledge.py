@@ -140,11 +140,17 @@ class LocalStoreKnowledgeAdapter:
         receipt = load_receipt(store.database_path, generation_id)
         manifest = load_manifest(store.database_path, generation_id)
         checkpoint_digest = str(checkpoint[1])
+        applied_row = connection.execute(
+            "SELECT value FROM projection_meta WHERE key = ?",
+            (f"projection.{self._projection_name}.applied_input_sha256",),
+        ).fetchone()
+        applied_input = None if applied_row is None else str(applied_row[0])
         if (
             receipt is None
             or manifest is None
             or receipt.ledger_watermark != selected_watermark
             or manifest.ledger_head_sha256 != checkpoint_digest
+            or receipt.input_sha256 != applied_input
         ):
             return _unavailable(
                 request,
@@ -182,12 +188,7 @@ class LocalStoreKnowledgeAdapter:
         try:
             cursor.execute("BEGIN")
             try:
-                events = list(self._run_state.events)
-                if not events:
-                    raise ApplyError(
-                        "apply requires at least run.initialized",
-                        code="apply_projection_invalid",
-                    )
+                events = self._validated_events()
                 # Apply path may consume the projection.input_sha256 identity
                 # to build the receipt; pass the projection through.
                 apply_result = apply_projection(
@@ -268,6 +269,33 @@ class LocalStoreKnowledgeAdapter:
         )
         connection.commit()
         return receipt
+
+    def _validated_events(self) -> list:
+        """Return the run's events, rejecting unvalidated/mismatched replays.
+
+        The events drive provenance binding, so they must be a replay-
+        validated, contiguous prefix of THIS run's ledger (review P1:
+        previously any caller-supplied ReplayState was trusted).
+        """
+
+        if not self._run_state.validated:
+            raise ApplyError(
+                "run_state is not replay-validated",
+                code="apply_projection_invalid",
+            )
+        events = list(self._run_state.events)
+        if not events:
+            raise ApplyError(
+                "apply requires at least run.initialized",
+                code="apply_projection_invalid",
+            )
+        for index, event in enumerate(events, start=1):
+            if event.run_id != self._run_id or event.sequence != index:
+                raise ApplyError(
+                    "run_state events do not form this run's contiguous prefix",
+                    code="apply_projection_invalid",
+                )
+        return events
 
     def _receipt_generation_id(self) -> str | None:
         """Return the selected generation id recorded by the last build.
