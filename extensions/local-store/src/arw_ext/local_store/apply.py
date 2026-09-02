@@ -746,7 +746,12 @@ def apply_projection(
     if incremental:
         current_nodes = {node.entity_id for node in projection.nodes}
         current_edges = {
-            (edge.edge_type, edge.from_entity_id, edge.to_entity_id, edge.evidence_digest)
+            (
+                edge.edge_type,
+                edge.from_entity_id,
+                edge.to_entity_id,
+                edge.evidence_digest,
+            )
             for edge in projection.edges
         }
         current_assertions = {
@@ -754,7 +759,10 @@ def apply_projection(
             for node in projection.nodes
         } | {
             _edge_assertion_id(
-                edge.edge_type, edge.from_entity_id, edge.to_entity_id, edge.evidence_digest
+                edge.edge_type,
+                edge.from_entity_id,
+                edge.to_entity_id,
+                edge.evidence_digest,
             )
             for edge in projection.edges
         }
@@ -764,7 +772,12 @@ def apply_projection(
         for row in cursor.execute(
             "SELECT edge_type, from_entity_id, to_entity_id, evidence_digest FROM edges"
         ).fetchall():
-            if (str(row[0]), str(row[1]), str(row[2]), str(row[3])) not in current_edges:
+            if (
+                str(row[0]),
+                str(row[1]),
+                str(row[2]),
+                str(row[3]),
+            ) not in current_edges:
                 cursor.execute(
                     "DELETE FROM edges WHERE edge_type = ? AND from_entity_id = ?"
                     " AND to_entity_id = ? AND evidence_digest = ?",

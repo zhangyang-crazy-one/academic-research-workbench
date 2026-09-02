@@ -489,11 +489,15 @@ copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
+for capability_skill in research literature experiment evidence files graph provenance artifact audit; do
+    copy_file "skills/${capability_skill}/SKILL.md"
+done
 copy_tree "skills/academic-research-suite"
 copy_file "hooks/hooks.json"
 copy_file "hooks/arw_hook.py" 0755
 copy_file "docs/runtime/durable-provenance.md"
 copy_file "docs/runtime/files-first-data-plane.md"
+copy_file "docs/runtime/plugin-first-routing.md"
 copy_file "docs/runtime/research-graph.md"
 copy_file "docs/runtime/scientific-integrity.md"
 copy_file "scripts/verify-phase-2" 0755
@@ -1274,6 +1278,7 @@ static_files = {
     "bin/arw",
     "docs/runtime/durable-provenance.md",
     "docs/runtime/files-first-data-plane.md",
+    "docs/runtime/plugin-first-routing.md",
     "docs/runtime/research-graph.md",
     "docs/runtime/scientific-integrity.md",
     "hooks/hooks.json",
@@ -1369,6 +1374,15 @@ static_files = {
     "share/arw/schemas/evidence-access-decision.schema.json",
     "share/arw/schemas/lifecycle-evidence.schema.json",
     "skills/academic-research-workbench/SKILL.md",
+    "skills/research/SKILL.md",
+    "skills/literature/SKILL.md",
+    "skills/experiment/SKILL.md",
+    "skills/evidence/SKILL.md",
+    "skills/files/SKILL.md",
+    "skills/graph/SKILL.md",
+    "skills/provenance/SKILL.md",
+    "skills/artifact/SKILL.md",
+    "skills/audit/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
     "tests/integration/test_phase2_durable_runtime.py",
