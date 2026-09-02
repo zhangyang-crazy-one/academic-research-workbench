@@ -21,7 +21,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from arw.graph_models import GraphProjectionManifest, GraphProjectionReceipt
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_hex,
+    strict_json_loads,
+)
 
 
 def _fsync_directory(path: Path) -> None:
@@ -171,9 +175,14 @@ def persist_audit_fault(database_path: Path, fault: AuditFault) -> Path:
 
     root = audit_root(database_path)
     root.mkdir(parents=True, exist_ok=True)
+    # Multiple faults from one build share the receipt_id; keying the file by
+    # receipt/code alone would overwrite all but the last (review P1).  The
+    # content digest keeps each distinct fault while staying idempotent for
+    # identical re-emitted faults.
+    payload = _serialize_audit_fault(fault)
     identifier = fault.receipt_id or f"{fault.projection_name}-{fault.code}"
-    target = root / f"{identifier}.json"
-    _atomic_write(target, _serialize_audit_fault(fault))
+    target = root / f"{identifier}-{sha256_hex(payload)[:12]}.json"
+    _atomic_write(target, payload)
     return target
 
 
@@ -194,11 +203,17 @@ def load_audit_faults(database_path: Path) -> tuple[AuditFault, ...]:
             continue
         if not isinstance(value, dict):
             continue
+        try:
+            affected = int(str(value.get("affected_rows", 0)))
+        except ValueError:
+            # A malformed sidecar (hand-edited/torn) must not crash the
+            # health read — skip it rather than failing the whole report.
+            continue
         out.append(
             AuditFault(
                 code=str(value.get("code", "audit_fault")),
                 message=str(value.get("message", "")),
-                affected_rows=int(str(value.get("affected_rows", 0))),
+                affected_rows=affected,
                 projection_name=str(value.get("projection_name", "knowledge")),
                 receipt_id=str(value["receipt_id"])
                 if isinstance(value.get("receipt_id"), str)

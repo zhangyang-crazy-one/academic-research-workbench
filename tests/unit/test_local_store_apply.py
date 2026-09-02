@@ -635,3 +635,34 @@ def test_c8f5a77e_regression_through_apply_path() -> None:
             projection=projection,
         )
         store.close()
+
+
+def test_multiple_faults_same_receipt_persist_distinct_files(tmp_path: Path) -> None:
+    """PR13 P1: two faults sharing a receipt_id must not overwrite each other."""
+
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        AuditFault,
+        load_audit_faults,
+        persist_audit_fault,
+    )
+
+    db = tmp_path / "arw.db"
+    fault_a = AuditFault(
+        code="projection_unbound_provenance",
+        message="fault A",
+        affected_rows=1,
+        projection_name="knowledge",
+        receipt_id="gen-1",
+    )
+    fault_b = AuditFault(
+        code="projection_unbound_provenance",
+        message="fault B",
+        affected_rows=1,
+        projection_name="knowledge",
+        receipt_id="gen-1",
+    )
+    persist_audit_fault(db, fault_a)
+    persist_audit_fault(db, fault_b)
+    loaded = load_audit_faults(db)
+    messages = {fault.message for fault in loaded}
+    assert messages == {"fault A", "fault B"}

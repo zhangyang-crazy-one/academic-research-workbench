@@ -18,6 +18,8 @@ def default_router(
     graph_control_root: Path | None = None,
     graph_root_id: str | None = None,
     store_path: Path | None = None,
+    files_root_id: str = "research-root",
+    plugin_manifest: Path | None = None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -84,7 +86,7 @@ def default_router(
 
         def _local_files():
             try:
-                generation = load_query_generation(files_control_root, "research-root")
+                generation = load_query_generation(files_control_root, files_root_id)
             except Exception as error:
                 raise CapabilityUnavailable(
                     "files.local (no synced generation; run `files sync` first)"
@@ -98,8 +100,34 @@ def default_router(
 
         router.register(
             "knowledge.graph",
-            lambda: GraphProjectionAdapter(GraphStore(graph_control_root, graph_root_id)),
+            lambda: GraphProjectionAdapter(
+                GraphStore(graph_control_root, graph_root_id)
+            ),
         )
+    if plugin_manifest is not None:
+        declared = set(declared_capabilities(plugin_manifest))
+        # The manifest declares broad capability names (``files``, ``graph``,
+        # ...) while the router registers dotted identifiers
+        # (``files.local``, ``knowledge.graph``).  Map each manifest name to
+        # the router prefixes it enables; an undeclared capability is
+        # deregistered so resolution reports capability-not-available.
+        manifest_to_router: dict[str, tuple[str, ...]] = {
+            "research": ("research.literature", "research.deep_survey"),
+            "literature": ("research.literature",),
+            "experiment": ("research.experiment",),
+            "evidence": (),
+            "files": ("files.local", "files.search"),
+            "graph": ("knowledge.graph",),
+            "provenance": ("knowledge.provenance",),
+            "artifact": ("artifact.inspect", "artifact.sanitize"),
+            "audit": ("audit.replay",),
+        }
+        enabled: set[str] = set()
+        for name in declared:
+            enabled.update(manifest_to_router.get(name, ()))
+        for capability in router.available():
+            if capability not in enabled:
+                router._providers.pop(capability)
     return router
 
 
@@ -145,6 +173,95 @@ def declared_capabilities(plugin_manifest: Path) -> tuple[str, ...]:
     try:
         payload = json.loads(Path(plugin_manifest).read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ValueError(f"unreadable plugin manifest {plugin_manifest}: {error}") from error
+        raise ValueError(
+            f"unreadable plugin manifest {plugin_manifest}: {error}"
+        ) from error
     capabilities = payload.get("interface", {}).get("capabilities", [])
     return tuple(str(item) for item in capabilities)
+
+
+def ingest_files_into_default_store(
+    control_root: Path, root_id: str, *, generation_id: str
+) -> int:
+    """Ingest the selected files generation into the default local store.
+
+    Called from the ``arw files sync/rebuild`` path after a new generation is
+    selected, so the native files provider actually has data to serve (PR5
+    review P1).  This is a WRITE path (sync), so creating the store at the
+    default per-user cache location is intended.
+
+    Overlapping syncs are handled by converging on the LATEST selected
+    generation: if the selection moves mid-ingest, the stale attempt rolls
+    back and the ingest retries against the new selection (bounded), so a
+    failed first attempt never leaves the pointer permanently ahead of the
+    cache (review P2, round 5).  Returns the ingested row count.
+    """
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.ingest import ingest_files_generation
+    from arw_ext.local_store.location import resolve_store_path
+
+    from arw.files import load_query_generation, load_selected_generation
+
+    target_generation_id = generation_id
+    attempts = 3
+    while True:
+        generation = load_query_generation(control_root, root_id)
+        # Bind to the generation the sync produced when it is still selected;
+        # otherwise follow the CURRENT selection (a newer sync won).
+        if generation.selected.generation_id != target_generation_id:
+            target_generation_id = generation.selected.generation_id
+
+        # Key the default store by the REGISTERED root's canonical path, not
+        # the caller's working directory (sync may run from anywhere).
+        store_path = resolve_store_path(Path(generation.root.canonical_path))
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        store = LocalProjectionStore(store_path)
+        store.open()
+        try:
+            ingested = ingest_files_generation(store.connection, generation)
+            # Re-read the selection pointer right before committing: a
+            # concurrent sync may have re-selected a newer generation while
+            # we ingested.  Committing stale rows would leave the store ahead
+            # of the control root's actual selection.
+            current = load_selected_generation(control_root, root_id)
+            if current.generation_id != target_generation_id:
+                store.connection.rollback()
+                attempts -= 1
+                if attempts <= 0:
+                    raise ValueError(
+                        "selected generation kept moving during ingest; "
+                        "giving up after bounded retries"
+                    )
+                target_generation_id = current.generation_id
+                continue
+            store.connection.commit()
+            return ingested
+        finally:
+            store.close()
+
+
+def local_store_files_provider(store_path: Path):
+    """Return the native files provider over an existing local store.
+
+    Read-only: opens with ``open_readonly`` (never creates/migrates/mutates
+    the store).  Raises ``CapabilityUnavailable`` when the store file is
+    absent or carries no ingested files projection — callers treat that as
+    "fall back to the v1 provider", not a crash.
+    """
+    from arw.kernel.capabilities import CapabilityUnavailable
+
+    if not Path(store_path).is_file():
+        raise CapabilityUnavailable(
+            "files.local (no local store at the configured path)"
+        )
+
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.files import LocalStoreFilesAdapter
+
+    store = LocalProjectionStore(Path(store_path))
+    store.open_readonly()
+    try:
+        return LocalStoreFilesAdapter(store)
+    except Exception:
+        store.close()
+        raise

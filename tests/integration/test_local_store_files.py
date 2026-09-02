@@ -357,7 +357,9 @@ def test_list_read_outline_context_parity_with_v1(tmp_path: Path) -> None:
         assert store_read == v1_read
 
         # outline parity on the markdown file.
-        cjk = next(f for f in store_list["files"] if f["relative_path"] == "notes/cjk.md")
+        cjk = next(
+            f for f in store_list["files"] if f["relative_path"] == "notes/cjk.md"
+        )
         store_outline = _strip_tokens(
             store_adapter.get_outline(
                 FilesOutlineRequest(
@@ -432,7 +434,9 @@ def test_list_read_outline_context_parity_with_v1(tmp_path: Path) -> None:
         store.close()
 
 
-def test_default_router_prefers_local_store_when_store_path_given(tmp_path: Path) -> None:
+def test_default_router_prefers_local_store_when_store_path_given(
+    tmp_path: Path,
+) -> None:
     """PR5 3.2: with a store_path whose store carries a files projection,
     files.local resolves to the native adapter; without it, the v1 path
     remains selectable."""
@@ -453,3 +457,67 @@ def test_default_router_prefers_local_store_when_store_path_given(tmp_path: Path
         assert "files.local" in v1_router.available()
     finally:
         pass
+
+
+def test_store_backed_files_mcp_serves_the_seeded_corpus(tmp_path: Path) -> None:
+    """PR15 round-5: the production read path (files_store_mcp) consumes the
+    populated store via the composition seam."""
+
+    import json
+    import subprocess
+    import sys
+
+    store_adapter, _v1, store, root_id = _seed(
+        tmp_path, {"notes/a.txt": "alpha\nbeta\ngamma\n"}
+    )
+    store_path = store.database_path
+    store.close()
+    del store_adapter
+
+    # The composition seam resolves the native provider read-only.
+    from arw.composition import local_store_files_provider
+
+    provider = local_store_files_provider(store_path)
+    result = provider.search_files(
+        FilesSearchRequest(
+            schema_version="1.0.0",
+            root_id=root_id,
+            mode="full_text",
+            query="beta",
+            max_hits=10,
+            max_snippet_bytes=200,
+            cursor=None,
+        )
+    )
+    assert [hit.relative_path for hit in result.hits] == ["notes/a.txt"]
+
+    # The MCP entry point serves the same content over stdio JSON-RPC.
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "search_files",
+            "arguments": {
+                "schema_version": "1.0.0",
+                "root_id": root_id,
+                "mode": "full_text",
+                "query": "beta",
+                "max_hits": 10,
+                "max_snippet_bytes": 200,
+                "cursor": None,
+            },
+        },
+    }
+    proc = subprocess.run(
+        [sys.executable, "-m", "arw.files_store_mcp", "--store", str(store_path)],
+        input=json.dumps(request) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    response = json.loads(proc.stdout.strip().splitlines()[-1])
+    payload = response["result"]["content"][0]["text"]
+    parsed = json.loads(payload)
+    assert [hit["relative_path"] for hit in parsed["hits"]] == ["notes/a.txt"]

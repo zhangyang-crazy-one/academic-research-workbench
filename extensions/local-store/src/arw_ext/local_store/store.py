@@ -235,13 +235,9 @@ class LocalProjectionStore:
 
         resolved = _resolve_database_path(self._database_path)
         if not resolved.exists() or not resolved.is_file():
-            raise StorePathUnsafeError(
-                f"database file does not exist: {resolved}"
-            )
+            raise StorePathUnsafeError(f"database file does not exist: {resolved}")
         if resolved.is_symlink():
-            raise StorePathUnsafeError(
-                f"database path is a symlink: {resolved}"
-            )
+            raise StorePathUnsafeError(f"database path is a symlink: {resolved}")
         self._database_path = resolved
 
         try:

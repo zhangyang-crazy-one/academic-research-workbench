@@ -377,6 +377,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif args.files_command in {"sync", "rebuild", "repair"}:
                 method = getattr(service, args.files_command)
                 receipt = method(args.root_id, extractor_version=args.extractor_version)
+                # Feed the fresh generation into the local projection store so
+                # the native files provider actually has data to serve (review
+                # P1: previously nothing populated the store on this path).
+                if receipt.selected_generation_id is not None:
+                    from arw.composition import ingest_files_into_default_store
+
+                    try:
+                        ingest_files_into_default_store(
+                            args.control_root,
+                            args.root_id,
+                            generation_id=receipt.selected_generation_id,
+                        )
+                    except Exception as error:
+                        # Ingestion feeds the (disposable) projection; a
+                        # failure here must not fail the completed sync.
+                        print(
+                            f"arw: local-store ingest warning: {error}",
+                            file=sys.stderr,
+                        )
                 _write_json(receipt.model_dump(mode="json"))
             else:
                 _write_json(service.status(args.root_id))
@@ -388,8 +407,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.composition import default_router
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
+        # The manifest's declared capability set gates activation (PR5).
+        # Resolution order: explicit env override (staged/installed plugin
+        # sets it), then the source-tree layout.  Never guess from the
+        # installed package location — that path differs per install.
+        manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
+        manifest_path = (
+            Path(manifest_env)
+            if manifest_env
+            else Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
+        )
         router = default_router(
-            graph_control_root=args.control_root, graph_root_id=args.root_id
+            graph_control_root=args.control_root,
+            graph_root_id=args.root_id,
+            plugin_manifest=manifest_path if manifest_path.is_file() else None,
         )
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
@@ -509,10 +540,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         if checkpoints
                         else "none"
                     )
+                    provenance_faults = health.get("provenance_faults", [])
                     text += (
                         f"\nprojection schema: {health['schema_version']}"
                         f"\nprojection checkpoint: {watermark}"
                         f"\nprojection checksums: {health['checksum_status']}"
+                        f"\nprovenance faults: {len(provenance_faults)}"
                     )
                 sys.stdout.write(text)
             return 0

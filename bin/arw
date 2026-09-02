@@ -38,7 +38,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|_files-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -235,6 +235,9 @@ PY
     ;;
   _files-mcp)
     exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
+    ;;
+  _files-store-mcp)
+    exec "$RUNTIME_PYTHON" -m arw.files_store_mcp "$@"
     ;;
   _graph-mcp)
     exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
