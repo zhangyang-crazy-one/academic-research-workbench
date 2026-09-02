@@ -147,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="UTC_TIMESTAMP",
         help="Evaluate dynamic freshness at an explicit YYYY-MM-DDTHH:MM:SSZ instant.",
     )
+    status.add_argument(
+        "--store",
+        type=Path,
+        default=None,
+        help="Also report local-store projection health for this store file.",
+    )
     for name, help_text in (
         ("transition", "Submit one registered lifecycle transition."),
         ("decision-request", "Record one pending human decision."),
@@ -481,10 +487,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                 recovery_health=replayed.recovery_health,
             )
             report = build_status_report(state)
+            # Purely additive: projection health appears only when --store is
+            # given, so the pinned v1 status envelope stays byte-identical
+            # for every existing invocation.
+            health = None
+            if getattr(args, "store", None) is not None:
+                from arw.composition import local_store_health
+
+                health = local_store_health(args.store)
             if args.json_output:
-                _write_json(report.model_dump(mode="json"))
+                payload = report.model_dump(mode="json")
+                if health is not None:
+                    payload["projection_health"] = health
+                _write_json(payload)
             else:
-                sys.stdout.write(render_status_text(report))
+                text = render_status_text(report)
+                if health is not None:
+                    checkpoints = health.get("checkpoints", [])
+                    watermark = (
+                        str(checkpoints[0]["last_ledger_sequence"])
+                        if checkpoints
+                        else "none"
+                    )
+                    text += (
+                        f"\nprojection schema: {health['schema_version']}"
+                        f"\nprojection checkpoint: {watermark}"
+                        f"\nprojection checksums: {health['checksum_status']}"
+                    )
+                sys.stdout.write(text)
             return 0
         if args.command == "orchestration-prepare":
             request = _load_request(args.request, LifecycleTransitionRequest)
