@@ -7,6 +7,8 @@ never imports adapters. This keeps the ports/adapters boundary enforceable
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from importlib import import_module
 from pathlib import Path
 
 from arw.kernel.capabilities import CapabilityRouter
@@ -20,6 +22,8 @@ def default_router(
     store_path: Path | None = None,
     files_root_id: str = "research-root",
     plugin_manifest: Path | None = None,
+    semantica_store_path: Path | None = None,
+    canonical_event_digests: Mapping[str, str] | None = None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -104,6 +108,17 @@ def default_router(
                 GraphStore(graph_control_root, graph_root_id)
             ),
         )
+    if semantica_store_path is not None:
+
+        def _semantica_provenance():
+            module = import_module("arw_semantica")
+            return module.SemanticaSQLiteAdapter(
+                semantica_store_path,
+                canonical_event_digests=canonical_event_digests or {},
+                audit_database_path=store_path,
+            )
+
+        router.register_optional("knowledge.provenance", _semantica_provenance)
     if plugin_manifest is not None:
         declared = set(declared_capabilities(plugin_manifest))
         # The manifest declares broad capability names (``files``, ``graph``,

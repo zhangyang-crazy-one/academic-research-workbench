@@ -29,7 +29,11 @@ storm = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arw", "extensions/local-store/src/arw_ext"]
+packages = [
+    "src/arw",
+    "extensions/local-store/src/arw_ext",
+    "extensions/semantica/src/arw_semantica",
+]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
