@@ -280,7 +280,11 @@ class SemanticaSQLiteAdapter:
                     for parent in parents:
                         if len(queue) + len(results) >= max_rows:
                             break
-                        if parent not in visited and parent not in queue:
+                        if (
+                            parent in by_entity
+                            and parent not in visited
+                            and parent not in queue
+                        ):
                             queue.append((parent, depth + 1))
         return results
 
@@ -379,10 +383,29 @@ class SemanticaSQLiteAdapter:
             ) == str(stored_checksum)
             if checksum_matches and payload_bytes is not None:
                 payload_value = _json_value(payload_bytes)
-                if isinstance(payload_value, dict) and payload_value.get(
-                    "record_id"
-                ) == str(record_id):
-                    continue
+                if isinstance(payload_value, dict):
+                    artifact_payload = dict(payload_value)
+                    artifact_payload.pop("ledger_event_id", None)
+                    artifact_payload.pop("ledger_event_digest", None)
+                    event_id = payload_value.get("ledger_event_id")
+                    expected_artifact_sha = self._accepted_artifact_sha256_by_event.get(
+                        str(event_id)
+                    )
+                    if (
+                        payload_value.get("record_id") == str(record_id)
+                        and self._canonical_event_digests.get(str(event_id))
+                        == payload_value.get("ledger_event_digest")
+                        and payload_value.get("artifact_id")
+                        in self._accepted_artifact_ids_by_event.get(
+                            str(event_id), frozenset()
+                        )
+                        and (
+                            not self._accepted_artifact_sha256_by_event
+                            or expected_artifact_sha
+                            == sha256_hex(canonical_json_bytes(artifact_payload))
+                        )
+                    ):
+                        continue
             detail = (
                 "payload has a non-BLOB SQLite storage class"
                 if payload_bytes is None
@@ -417,6 +440,13 @@ class SemanticaSQLiteAdapter:
         if record.artifact_id not in accepted_artifacts:
             raise UnboundProvenanceError(
                 "provenance artifact is not accepted by its canonical ledger event"
+            )
+        expected_artifact_sha = self._accepted_artifact_sha256_by_event.get(
+            record.ledger_event_id
+        )
+        if expected_artifact_sha is not None and record.checksum != expected_artifact_sha:
+            raise UnboundProvenanceError(
+                "provenance assertion differs from its accepted artifact content"
             )
 
     @staticmethod
