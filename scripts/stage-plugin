@@ -569,6 +569,7 @@ copy_file "MODIFICATIONS.md"
 copy_file "SBOM.cdx.json"
 copy_file "supply-chain/use-distribution.json"
 copy_file "supply-chain/license-verdict.json"
+copy_file "supply-chain/semantica-qualification.json"
 copy_file "vendor/source-manifest.json"
 copy_file "vendor/mcp-manifest.json"
 copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
@@ -1385,6 +1386,7 @@ static_files = {
     "skills/audit/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
+    "supply-chain/semantica-qualification.json",
     "tests/integration/test_phase2_durable_runtime.py",
     "uv.lock",
     "vendor/python/wheelhouse.lock.json",

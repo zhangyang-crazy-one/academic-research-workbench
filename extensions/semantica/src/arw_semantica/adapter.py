@@ -14,6 +14,7 @@ import sqlite3
 from collections import deque
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import Literal
 
 from arw_ext.local_store.location import is_network_filesystem
 from pydantic import Field
@@ -55,6 +56,7 @@ class UnboundProvenanceError(ValueError):
 class ProvenanceRecord(StrictModel):
     """One Lite-profile provenance assertion."""
 
+    schema_version: Literal["1.0.0"] = "1.0.0"
     record_id: StableRuntimeId
     entity_id: StableRuntimeId
     entity_type: str = Field(min_length=1, max_length=96)
@@ -353,8 +355,12 @@ class SemanticaSQLiteAdapter:
             checksum_matches = payload_bytes is not None and sha256_hex(
                 payload_bytes
             ) == str(stored_checksum)
-            if checksum_matches:
-                continue
+            if checksum_matches and payload_bytes is not None:
+                payload_value = _json_value(payload_bytes)
+                if isinstance(payload_value, dict) and payload_value.get(
+                    "record_id"
+                ) == str(record_id):
+                    continue
             detail = (
                 "payload has a non-BLOB SQLite storage class"
                 if payload_bytes is None
