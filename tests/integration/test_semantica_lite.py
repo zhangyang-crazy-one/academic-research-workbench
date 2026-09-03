@@ -10,14 +10,15 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from arw.cli import build_parser
+from arw.composition import default_router
+from arw.kernel.capabilities import CapabilityUnavailable
 from arw_semantica import (  # pyright: ignore[reportMissingImports]
     ProvenanceRecord,
     SemanticaSQLiteAdapter,
     UnboundProvenanceError,
 )
-
-from arw.composition import default_router
-from arw.kernel.capabilities import CapabilityUnavailable
 
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
@@ -101,6 +102,8 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
         json.loads(audit_paths[0].read_text(encoding="utf-8"))["code"]
         == "semantica_checksum_mismatch"
     )
+    assert audit_paths[0].name.startswith("semantica-")
+    assert not (tmp_path / "escaped").exists()
 
 
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
@@ -129,6 +132,47 @@ def test_lineage_enforces_max_rows_inside_one_entity(tmp_path: Path) -> None:
         )
     )
     assert len(adapter.lineage("claim.alpha", max_rows=1)) == 1
+
+
+def test_lineage_rejects_unchecked_sql_record_id(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET record_id = ? WHERE record_id = ?",
+            ("attacker-record", "prov-claim.alpha"),
+        )
+    with pytest.raises(RuntimeError, match="lineage payload"):
+        adapter.lineage("claim.alpha")
+
+
+def test_verify_turns_text_payload_into_audit_fault(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ? WHERE record_id = ?",
+            ("not-a-blob", "prov-claim.alpha"),
+        )
+    faults = adapter.verify()
+    assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
+
+
+def test_installed_cli_exposes_provenance_route(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "provenance",
+            "lineage",
+            "--run-root",
+            str(tmp_path / "run"),
+            "--store",
+            str(tmp_path / "projection.sqlite3"),
+            "--entity-id",
+            "claim.alpha",
+        ]
+    )
+    assert args.command == "provenance"
+    assert args.provenance_action == "lineage"
 
 
 def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:

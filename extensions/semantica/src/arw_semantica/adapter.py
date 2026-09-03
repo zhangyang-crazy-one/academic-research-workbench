@@ -196,14 +196,19 @@ class SemanticaSQLiteAdapter:
             record_value = _json_value(payload_bytes)
             if not isinstance(record_value, dict):
                 raise RuntimeError(f"corrupt Semantica payload for {record_id}")
+            payload_record_id = record_value.get("record_id")
             stored_entity_id = record_value.get("entity_id")
             parents_value = record_value.get("derived_from")
-            if not isinstance(stored_entity_id, str) or not isinstance(
-                parents_value, list
-            ) or not all(isinstance(parent, str) for parent in parents_value):
+            if (
+                not isinstance(payload_record_id, str)
+                or payload_record_id != str(record_id)
+                or not isinstance(stored_entity_id, str)
+                or not isinstance(parents_value, list)
+                or not all(isinstance(parent, str) for parent in parents_value)
+            ):
                 raise RuntimeError(f"corrupt Semantica lineage payload for {record_id}")
             by_entity.setdefault(stored_entity_id, []).append(
-                (str(record_id), tuple(parents_value), record_value, str(checksum))
+                (payload_record_id, tuple(parents_value), record_value, str(checksum))
             )
         queue: deque[tuple[str, int]] = deque([(entity_id, 0)])
         visited: set[str] = set()
@@ -256,12 +261,21 @@ class SemanticaSQLiteAdapter:
                 "SELECT record_id, payload, checksum FROM provenance_records ORDER BY record_id"
             ).fetchall()
         for record_id, payload, stored_checksum in rows:
-            expected = sha256_hex(bytes(payload))
-            if expected == str(stored_checksum):
+            payload_bytes = payload if isinstance(payload, bytes) else None
+            checksum_matches = (
+                payload_bytes is not None
+                and sha256_hex(payload_bytes) == str(stored_checksum)
+            )
+            if checksum_matches:
                 continue
+            detail = (
+                "payload has a non-BLOB SQLite storage class"
+                if payload_bytes is None
+                else "checksum mismatch"
+            )
             fault = AuditFault(
                 code="semantica_checksum_mismatch",
-                message=f"Semantica provenance record {record_id} checksum mismatch",
+                message=f"Semantica provenance record {record_id} {detail}",
                 affected_rows=1,
                 projection_name="knowledge.provenance",
                 receipt_id=(

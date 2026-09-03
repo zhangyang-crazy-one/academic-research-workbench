@@ -63,7 +63,7 @@ from arw.files_mcp import (
 )
 
 from .ingest import (
-    FILES_CURSOR_SECRET_KEY,
+    FILES_CURSOR_META_KEY,
     read_files_meta,
 )
 from .store import LocalProjectionStore
@@ -89,7 +89,7 @@ class LocalStoreFilesAdapter:
         self._root_id = meta["files.root_id"]
         self._canonical_path = meta["files.canonical_path"]
         self._generation_id = meta["files.selected_generation_id"]
-        secret = base64.b64decode(meta[FILES_CURSOR_SECRET_KEY])
+        secret = base64.b64decode(meta[FILES_CURSOR_META_KEY])
         self._codec = CursorCodec(secret=secret)
         # Hit anchors never expire (v1 parity: hit_codec uses a frozen clock).
         self._hit_codec = CursorCodec(secret=secret, clock=lambda: 0)
@@ -582,16 +582,19 @@ class LocalStoreFilesAdapter:
         elif not candidate_ids:
             rows = []
         else:
-            placeholders = ", ".join("?" for _ in sorted(candidate_ids))
-            rows = self._rows(
-                # pi-lens-ignore: sql-injection-vector
-                "SELECT file_id, relative_path, file_type, source_digest, index_state, degraded_reason, extraction_registration_sha256, body FROM files"
-                " WHERE index_state = 'indexed' AND body IS NOT NULL"
-                f"   AND file_id IN ({placeholders})"
-                " ORDER BY file_id",
-                tuple(sorted(candidate_ids)),
-                deadline=deadline,
-            )
+            candidate_id_set = set(candidate_ids)
+            rows = [
+                row
+                for row in self._rows(
+                    "SELECT file_id, relative_path, file_type, source_digest, "
+                    "index_state, degraded_reason, extraction_registration_sha256, body "
+                    "FROM files WHERE index_state = 'indexed' AND body IS NOT NULL "
+                    "ORDER BY file_id",
+                    (),
+                    deadline=deadline,
+                )
+                if str(row[0]) in candidate_id_set
+            ]
         ranked: list[_RankedMatch] = []
         for row in rows:
             if time.monotonic() > deadline:

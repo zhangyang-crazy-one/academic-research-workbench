@@ -35,6 +35,7 @@ from arw.kernel.execution.host_dispatch import (
 
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="arw",
@@ -255,15 +256,35 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--root-id", required=True)
         if name in {"sync", "rebuild", "repair"}:
             command.add_argument("--extractor-version", required=True)
+    provenance = subparsers.add_parser(
+        "provenance",
+        help="Operate the opt-in Semantica-compatible Lite provenance sidecar.",
+    )
+    provenance_actions = provenance.add_subparsers(
+        dest="provenance_action", required=True
+    )
+    for action in ("record", "lineage", "verify"):
+        command = provenance_actions.add_parser(action)
+        command.add_argument("--run-root", required=True, type=Path)
+        command.add_argument("--store", required=True, type=Path)
+        command.add_argument("--lock-timeout", type=float, default=0.2)
+        if action == "record":
+            command.add_argument("--record", required=True, type=Path)
+        elif action == "lineage":
+            command.add_argument("--entity-id", required=True)
+            command.add_argument("--max-depth", type=int, default=8)
+            command.add_argument("--max-rows", type=int, default=100)
     graph_mcp = subparsers.add_parser("_graph-mcp", help=argparse.SUPPRESS)
     graph_mcp.add_argument("--control-root", required=True, type=Path)
     graph_mcp.add_argument("--root-id", required=True)
     return parser
 
+
 def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--lock-timeout", type=float, default=0.2)
+
 
 def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--integration-lock", type=Path)
@@ -272,14 +293,17 @@ def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--codex-native-binary", type=Path)
     parser.add_argument("--host-canary-evidence", type=Path)
 
+
 def _write_rejection(error: Exception) -> None:
     from arw.kernel.state.models import Rejection
 
     rejection = Rejection(code="canonical-error", message=str(error))
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
+
 def _is_status_json_request(args: argparse.Namespace) -> bool:
     return args.command == "status" and bool(args.json_output)
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
@@ -358,6 +382,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
             from arw.composition import files_admin_service
+
             service = files_admin_service(args.control_root)
             if builder_value is not None:
                 service.native_builder = Path(builder_value)
@@ -424,6 +449,61 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
+    if args.command == "provenance":
+        from arw.composition import default_router
+        from arw.kernel.capabilities import CapabilityUnavailable
+        from arw.kernel.ledger.journal import replay_run
+        from arw.kernel.state.models import ArtifactAcceptedPayload
+
+        try:
+            replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            event_digests = {
+                event.event_id: event.event_sha256 for event in replayed.events
+            }
+            accepted_artifacts: dict[str, tuple[str, ...]] = {}
+            for event in replayed.events:
+                if isinstance(event.payload, ArtifactAcceptedPayload):
+                    accepted_artifacts[event.event_id] = (
+                        event.payload.artifact_id,
+                    )
+            sidecar_path = args.store.with_suffix(
+                args.store.suffix + ".semantica.sqlite3"
+            )
+            router = default_router(
+                store_path=args.store,
+                semantica_store_path=sidecar_path,
+                canonical_event_digests=event_digests,
+                accepted_artifact_ids_by_event=accepted_artifacts,
+            )
+            provider = router.resolve("knowledge.provenance")
+            if args.provenance_action == "record":
+                module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
+                record = module.ProvenanceRecord(
+                    **_load_object(args.record, label="provenance record")
+                )
+                _write_json({"checksum": provider.record(record)})
+            elif args.provenance_action == "lineage":
+                _write_json(
+                    {
+                        "rows": provider.lineage(
+                            args.entity_id,
+                            max_depth=args.max_depth,
+                            max_rows=args.max_rows,
+                        )
+                    }
+                )
+            else:
+                _write_json(
+                    {
+                        "audit_faults": [
+                            fault.__dict__ for fault in provider.verify()
+                        ]
+                    }
+                )
+            return 0
+        except (CapabilityUnavailable, CLIInputError, OSError, RuntimeError, ValueError) as error:
+            print(f"arw: provenance-error: {error}", file=sys.stderr)
+            return 65
 
     # Writable/runtime services are intentionally imported only after the two
     # read-only installed commands above have returned.
@@ -834,6 +914,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 65
 
     parser.error(f"unsupported command: {args.command}")
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

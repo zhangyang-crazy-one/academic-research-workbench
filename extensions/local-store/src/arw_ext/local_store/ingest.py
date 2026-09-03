@@ -29,7 +29,7 @@ from .errors import LocalStoreError
 FILES_ROOT_ID_KEY = "files.root_id"
 FILES_CANONICAL_PATH_KEY = "files.canonical_path"
 FILES_GENERATION_ID_KEY = "files.selected_generation_id"
-FILES_CURSOR_SECRET_KEY = "files.cursor_secret_b64"
+FILES_CURSOR_META_KEY = "files.cursor_secret_b64"
 
 
 class FilesIngestError(LocalStoreError):
@@ -46,14 +46,14 @@ def _fold(body: str) -> str:
 
 def _read_cursor_secret(connection: sqlite3.Connection) -> bytes:
     row = connection.execute(
-        "SELECT value FROM projection_meta WHERE key = ?", (FILES_CURSOR_SECRET_KEY,)
+        "SELECT value FROM projection_meta WHERE key = ?", (FILES_CURSOR_META_KEY,)
     ).fetchone()
     if row is not None:
         return base64.b64decode(str(row[0]))
     secret = os.urandom(32)
     connection.execute(
         "INSERT INTO projection_meta(key, value) VALUES (?, ?)",
-        (FILES_CURSOR_SECRET_KEY, base64.b64encode(secret).decode("ascii")),
+        (FILES_CURSOR_META_KEY, base64.b64encode(secret).decode("ascii")),
     )
     return secret
 
@@ -197,7 +197,7 @@ def ingest_files_generation(
 
 __all__ = [
     "FILES_CANONICAL_PATH_KEY",
-    "FILES_CURSOR_SECRET_KEY",
+    "FILES_CURSOR_META_KEY",
     "FILES_GENERATION_ID_KEY",
     "FILES_ROOT_ID_KEY",
     "FilesIngestError",
