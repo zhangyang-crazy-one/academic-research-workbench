@@ -10,6 +10,7 @@ Commands:
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
+  provenance     Operate the opt-in Semantica-compatible Lite sidecar.
   orchestration-prepare/orchestration-dispatch
                  Prepare or dispatch parent-owned Phase 4 assignments.
   orchestration-panel/orchestration-gate/orchestration-hook/orchestration-recover
@@ -38,7 +39,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
