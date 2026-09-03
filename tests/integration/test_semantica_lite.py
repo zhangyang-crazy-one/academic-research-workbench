@@ -44,6 +44,7 @@ def _adapter(tmp_path: Path) -> SemanticaSQLiteAdapter:
     return SemanticaSQLiteAdapter(
         tmp_path / "provenance.sqlite3",
         canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
         audit_database_path=tmp_path / "projection.sqlite3",
     )
 
@@ -57,6 +58,12 @@ def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -
         adapter.record(
             ProvenanceRecord(
                 **{**_record().canonical_payload(), "ledger_event_digest": "b" * 64}
+            )
+        )
+    with pytest.raises(UnboundProvenanceError, match="not accepted"):
+        adapter.record(
+            ProvenanceRecord(
+                **{**_record().canonical_payload(), "artifact_id": "forged-artifact"}
             )
         )
     with pytest.raises(UnboundProvenanceError, match="artifact id"):
@@ -82,8 +89,8 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     adapter.record(_record())
     with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
         connection.execute(
-            "UPDATE provenance_records SET payload = ? WHERE record_id = ?",
-            (b'{"tampered":true}', "prov-claim.alpha"),
+            "UPDATE provenance_records SET record_id = ?, payload = ? WHERE record_id = ?",
+            ("../../escaped", b'{"tampered":true}', "prov-claim.alpha"),
         )
 
     faults = adapter.verify()
@@ -96,6 +103,34 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     )
 
 
+def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record(entity_id="source.alpha"))
+    adapter.record(_record(entity_id="decision.alpha", derived_from=("source.alpha",)))
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET entity_id = ?, derived_from_json = ? "
+            "WHERE record_id = ?",
+            ("attacker.alpha", '["attacker.alpha"]', "prov-decision.alpha"),
+        )
+    assert [row["entity_id"] for row in adapter.lineage("decision.alpha")] == [
+        "decision.alpha",
+        "source.alpha",
+    ]
+    assert adapter.lineage("attacker.alpha") == []
+
+
+def test_lineage_enforces_max_rows_inside_one_entity(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    adapter.record(
+        ProvenanceRecord(
+            **{**_record().canonical_payload(), "record_id": "prov-claim-copy"}
+        )
+    )
+    assert len(adapter.lineage("claim.alpha", max_rows=1)) == 1
+
+
 def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
     manifest = tmp_path / "plugin.json"
     manifest.write_text(
@@ -104,6 +139,7 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
     router = default_router(
         semantica_store_path=tmp_path / "provenance.sqlite3",
         canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
         plugin_manifest=manifest,
     )
     assert "knowledge.provenance" in router.available()

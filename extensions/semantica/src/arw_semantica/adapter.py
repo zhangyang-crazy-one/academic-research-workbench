@@ -94,11 +94,16 @@ class SemanticaSQLiteAdapter:
         database_path: Path,
         *,
         canonical_event_digests: Mapping[str, str],
+        accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]],
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
     ) -> None:
         self._database_path = Path(database_path)
         self._canonical_event_digests = dict(canonical_event_digests)
+        self._accepted_artifact_ids_by_event = {
+            event_id: frozenset(artifact_ids)
+            for event_id, artifact_ids in accepted_artifact_ids_by_event.items()
+        }
         self._audit_database_path = audit_database_path or self._database_path
         self._graph_delegate = graph_provider or NullKnowledgeProvider()
         self._initialize()
@@ -179,18 +184,26 @@ class SemanticaSQLiteAdapter:
             raise ValueError("lineage bounds are outside the Lite profile limits")
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT record_id, entity_id, derived_from_json, payload, checksum "
-                "FROM provenance_records ORDER BY record_id"
+                "SELECT record_id, payload, checksum FROM provenance_records ORDER BY record_id"
             ).fetchall()
-        by_entity: dict[str, list[tuple[str, tuple[str, ...], bytes, str]]] = {}
-        for record_id, row_entity_id, parents_json, payload, checksum in rows:
-            parents_value = _json_value(str(parents_json))
-            if not isinstance(parents_value, list) or not all(
-                isinstance(parent, str) for parent in parents_value
-            ):
-                raise RuntimeError(f"corrupt Semantica parent list for {record_id}")
-            by_entity.setdefault(str(row_entity_id), []).append(
-                (str(record_id), tuple(parents_value), bytes(payload), str(checksum))
+        by_entity: dict[
+            str, list[tuple[str, tuple[str, ...], dict[str, object], str]]
+        ] = {}
+        for record_id, payload, checksum in rows:
+            payload_bytes = bytes(payload)
+            if sha256_hex(payload_bytes) != str(checksum):
+                raise RuntimeError(f"corrupt Semantica payload for {record_id}")
+            record_value = _json_value(payload_bytes)
+            if not isinstance(record_value, dict):
+                raise RuntimeError(f"corrupt Semantica payload for {record_id}")
+            stored_entity_id = record_value.get("entity_id")
+            parents_value = record_value.get("derived_from")
+            if not isinstance(stored_entity_id, str) or not isinstance(
+                parents_value, list
+            ) or not all(isinstance(parent, str) for parent in parents_value):
+                raise RuntimeError(f"corrupt Semantica lineage payload for {record_id}")
+            by_entity.setdefault(stored_entity_id, []).append(
+                (str(record_id), tuple(parents_value), record_value, str(checksum))
             )
         queue: deque[tuple[str, int]] = deque([(entity_id, 0)])
         visited: set[str] = set()
@@ -200,10 +213,9 @@ class SemanticaSQLiteAdapter:
             if current in visited:
                 continue
             visited.add(current)
-            for record_id, parents, payload, checksum in by_entity.get(current, []):
-                record_value = _json_value(payload)
-                if not isinstance(record_value, dict):
-                    raise RuntimeError(f"corrupt Semantica payload for {record_id}")
+            for record_id, parents, record_value, checksum in by_entity.get(current, []):
+                if len(results) >= max_rows:
+                    break
                 results.append(
                     {
                         "checksum": checksum,
@@ -213,7 +225,7 @@ class SemanticaSQLiteAdapter:
                         "record_id": record_id,
                     }
                 )
-                if depth < max_depth:
+                if depth < max_depth and len(results) < max_rows:
                     queue.extend((parent, depth + 1) for parent in parents)
         return results
 
@@ -252,7 +264,9 @@ class SemanticaSQLiteAdapter:
                 message=f"Semantica provenance record {record_id} checksum mismatch",
                 affected_rows=1,
                 projection_name="knowledge.provenance",
-                receipt_id=str(record_id),
+                receipt_id=(
+                    f"semantica-{sha256_hex(str(record_id).encode('utf-8'))[:24]}"
+                ),
             )
             persist_audit_fault(self._audit_database_path, fault)
             faults.append(fault)
@@ -267,6 +281,13 @@ class SemanticaSQLiteAdapter:
         if expected != record.ledger_event_digest:
             raise UnboundProvenanceError(
                 "provenance ledger binding is absent from the canonical event stream"
+            )
+        accepted_artifacts = self._accepted_artifact_ids_by_event.get(
+            record.ledger_event_id, frozenset()
+        )
+        if record.artifact_id not in accepted_artifacts:
+            raise UnboundProvenanceError(
+                "provenance artifact is not accepted by its canonical ledger event"
             )
 
     def _initialize(self) -> None:

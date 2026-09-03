@@ -24,6 +24,7 @@ def default_router(
     plugin_manifest: Path | None = None,
     semantica_store_path: Path | None = None,
     canonical_event_digests: Mapping[str, str] | None = None,
+    accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]] | None = None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -115,6 +116,7 @@ def default_router(
             return module.SemanticaSQLiteAdapter(
                 semantica_store_path,
                 canonical_event_digests=canonical_event_digests or {},
+                accepted_artifact_ids_by_event=accepted_artifact_ids_by_event or {},
                 audit_database_path=store_path,
             )
 
