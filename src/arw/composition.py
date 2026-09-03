@@ -117,7 +117,7 @@ def default_router(
                 semantica_store_path,
                 canonical_event_digests=canonical_event_digests or {},
                 accepted_artifact_ids_by_event=accepted_artifact_ids_by_event or {},
-                audit_database_path=store_path,
+                audit_database_path=semantica_store_path,
             )
 
         router.register_optional("knowledge.provenance", _semantica_provenance)

@@ -188,9 +188,7 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
         )
-    (tmp_path / "projection.sqlite3.audit").symlink_to(
-        target, target_is_directory=True
-    )
+    (tmp_path / "projection.sqlite3.audit").symlink_to(target, target_is_directory=True)
     with pytest.raises(ValueError, match="audit directory"):
         SemanticaSQLiteAdapter(
             tmp_path / "provenance.sqlite3",

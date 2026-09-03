@@ -485,15 +485,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                         _load_object(args.record, label="provenance record")
                     )
                 )
-                accepted = accepted_payloads.get(record.ledger_event_id)
-                if accepted is None or record.checksum != accepted.artifact_sha256:
+                if (
+                    record.ledger_event_id is not None
+                    or record.ledger_event_digest is not None
+                ):
                     raise ValueError(
-                        "provenance record bytes are not the accepted artifact content"
+                        "provenance artifact input must not contain acceptance binding"
                     )
+                matches = [
+                    (event_id, accepted)
+                    for event_id, accepted in accepted_payloads.items()
+                    if accepted.artifact_id == record.artifact_id
+                ]
+                if (
+                    len(matches) != 1
+                    or record.checksum != matches[0][1].artifact_sha256
+                ):
+                    raise ValueError(
+                        "provenance record bytes are not one accepted artifact content"
+                    )
+                event_id, accepted = matches[0]
+                record = record.model_copy(
+                    update={
+                        "ledger_event_id": event_id,
+                        "ledger_event_digest": event_digests[event_id],
+                    }
+                )
                 _write_json({"checksum": provider.record(record)})
             elif args.provenance_action == "rebuild":
-                provider.reset()
-                rebuilt = 0
+                records = []
                 for event_id, accepted in accepted_payloads.items():
                     manifest = load_artifact_manifest(
                         args.run_root, accepted.manifest_sha256
@@ -519,15 +539,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                     except ValidationError:
                         continue
                     if (
-                        record.ledger_event_id != event_id
+                        record.ledger_event_id is not None
+                        or record.ledger_event_digest is not None
                         or record.artifact_id != accepted.artifact_id
                         or record.checksum != accepted.artifact_sha256
                     ):
                         raise ValueError(
                             "accepted artifact does not match its provenance assertion"
                         )
-                    provider.record(record)
-                    rebuilt += 1
+                    records.append(
+                        record.model_copy(
+                            update={
+                                "ledger_event_id": event_id,
+                                "ledger_event_digest": event_digests[event_id],
+                            }
+                        )
+                    )
+                provider.rebuild(records)
+                rebuilt = len(records)
                 _write_json({"rebuilt_records": rebuilt})
             elif args.provenance_action == "lineage":
                 _write_json(

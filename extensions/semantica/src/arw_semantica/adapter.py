@@ -59,8 +59,8 @@ class ProvenanceRecord(StrictModel):
     entity_id: StableRuntimeId
     entity_type: str = Field(min_length=1, max_length=96)
     artifact_id: StableRuntimeId
-    ledger_event_id: EventId
-    ledger_event_digest: Sha256
+    ledger_event_id: EventId | None = None
+    ledger_event_digest: Sha256 | None = None
     activity_id: StableRuntimeId
     agent_id: ActorId
     created_at: UtcTimestamp
@@ -69,11 +69,20 @@ class ProvenanceRecord(StrictModel):
     )
     attributes: dict[str, object] = Field(default_factory=dict)
 
+    def artifact_payload(self) -> dict[str, object]:
+        return self.model_dump(
+            mode="json", exclude={"ledger_event_id", "ledger_event_digest"}
+        )
+
     def canonical_payload(self) -> dict[str, object]:
         return self.model_dump(mode="json")
 
     @property
     def checksum(self) -> str:
+        return sha256_hex(canonical_json_bytes(self.artifact_payload()))
+
+    @property
+    def binding_checksum(self) -> str:
         return sha256_hex(canonical_json_bytes(self.canonical_payload()))
 
 
@@ -126,6 +135,7 @@ class SemanticaSQLiteAdapter:
         return self._graph_delegate.delete_and_rebuild(projection)
 
     def query(self, request: GraphQueryRequest) -> GraphQueryResult:
+        # pi-lens-ignore: sql-injection-vector
         return self._graph_delegate.query(request)
 
     def record(self, record: ProvenanceRecord) -> str:
@@ -143,7 +153,7 @@ class SemanticaSQLiteAdapter:
                     (record.record_id,),
                 ).fetchone()
                 if existing is not None:
-                    if existing == (payload, record.checksum):
+                    if existing == (payload, record.binding_checksum):
                         connection.commit()
                         return record.checksum
                     raise UnboundProvenanceError(
@@ -174,7 +184,7 @@ class SemanticaSQLiteAdapter:
                         record.created_at,
                         json.dumps(list(record.derived_from), separators=(",", ":")),
                         payload,
-                        record.checksum,
+                        record.binding_checksum,
                     ),
                 )
                 connection.commit()
@@ -271,6 +281,47 @@ class SemanticaSQLiteAdapter:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute("DELETE FROM provenance_records")
+            connection.commit()
+
+    def rebuild(self, records: list[ProvenanceRecord]) -> None:
+        """Atomically replace this sidecar with fully validated canonical records."""
+        if len(records) > MAX_SIDECAR_RECORDS:
+            raise ValueError("Semantica sidecar record limit exceeded")
+        prepared: list[tuple[object, ...]] = []
+        for record in records:
+            self._validate_binding(record)
+            payload = canonical_json_bytes(record.canonical_payload())
+            if len(payload) > MAX_PROVENANCE_PAYLOAD_BYTES:
+                raise ValueError(
+                    "provenance payload exceeds the Lite profile byte limit"
+                )
+            prepared.append(
+                (
+                    record.record_id,
+                    record.entity_id,
+                    record.entity_type,
+                    record.artifact_id,
+                    record.ledger_event_id,
+                    record.ledger_event_digest,
+                    record.activity_id,
+                    record.agent_id,
+                    record.created_at,
+                    json.dumps(list(record.derived_from), separators=(",", ":")),
+                    payload,
+                    record.binding_checksum,
+                )
+            )
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("DELETE FROM provenance_records")
+            # pi-lens-ignore: sql-injection-vector
+            connection.executemany(
+                "INSERT INTO provenance_records "
+                "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
+                "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
+                "payload, checksum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                prepared,
+            )
             connection.commit()
 
     def verify(self) -> tuple[object, ...]:
