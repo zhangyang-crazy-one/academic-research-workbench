@@ -468,8 +468,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if isinstance(event.payload, ArtifactAcceptedPayload):
                     accepted_artifacts[event.event_id] = (event.payload.artifact_id,)
                     accepted_payloads[event.event_id] = event.payload
-            sidecar_path = args.store.with_suffix(
-                args.store.suffix + ".semantica.sqlite3"
+            sidecar_path = args.store.with_name(
+                f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
             )
             router = default_router(
                 store_path=args.store,
@@ -492,23 +492,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 _write_json({"checksum": provider.record(record)})
             elif args.provenance_action == "rebuild":
+                provider.reset()
                 rebuilt = 0
                 for event_id, accepted in accepted_payloads.items():
                     manifest = load_artifact_manifest(
                         args.run_root, accepted.manifest_sha256
                     )
+                    if manifest.media_type != "application/json":
+                        continue
                     content = (args.run_root / manifest.content_path).resolve()
                     if (
                         not content.is_relative_to(args.run_root.resolve())
                         or content.is_symlink()
-                        or sha256_hex(content.read_bytes()) != accepted.artifact_sha256
+                        or content.stat().st_size > 65_536
                     ):
+                        continue
+                    content_bytes = content.read_bytes()
+                    if sha256_hex(content_bytes) != accepted.artifact_sha256:
                         raise ValueError(
                             "accepted provenance artifact content is unsafe"
                         )
                     try:
                         record = module.ProvenanceRecord.model_validate_json(
-                            content.read_bytes()
+                            content_bytes
                         )
                     except ValidationError:
                         continue

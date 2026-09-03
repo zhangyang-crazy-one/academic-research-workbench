@@ -160,6 +160,46 @@ def test_verify_turns_text_payload_into_audit_fault(tmp_path: Path) -> None:
     assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
 
 
+def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "INSERT INTO provenance_records "
+            "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
+            "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
+            "payload, checksum) "
+            "SELECT ?, entity_id, entity_type, artifact_id, ledger_event_id, "
+            "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
+            "payload, checksum FROM provenance_records WHERE record_id = ?",
+            ("prov-forged", "prov-claim.alpha"),
+        )
+    adapter.reset()
+    assert adapter.lineage("claim.alpha") == []
+
+
+def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    (target / "nested").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="ancestor"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "link" / "nested" / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        )
+    (tmp_path / "projection.sqlite3.audit").symlink_to(
+        target, target_is_directory=True
+    )
+    with pytest.raises(ValueError, match="audit directory"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            audit_database_path=tmp_path / "projection.sqlite3",
+        )
+
+
 def test_installed_cli_exposes_provenance_route(tmp_path: Path) -> None:
     args = build_parser().parse_args(
         [

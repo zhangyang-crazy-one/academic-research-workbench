@@ -101,7 +101,12 @@ class SemanticaSQLiteAdapter:
             event_id: frozenset(artifact_ids)
             for event_id, artifact_ids in accepted_artifact_ids_by_event.items()
         }
-        self._audit_database_path = audit_database_path or self._database_path
+        self._audit_database_path = self._validate_database_path(
+            audit_database_path or self._database_path
+        )
+        audit_directory = Path(f"{self._audit_database_path}.audit")
+        if audit_directory.is_symlink():
+            raise ValueError("Semantica audit directory must not be a symlink")
         self._graph_delegate = graph_provider or NullKnowledgeProvider()
         self._initialize()
 
@@ -261,14 +266,33 @@ class SemanticaSQLiteAdapter:
                 decisions.append(row)
         return decisions
 
+    def reset(self) -> None:
+        """Atomically clear this run's rebuildable sidecar projection."""
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("DELETE FROM provenance_records")
+            connection.commit()
+
     def verify(self) -> tuple[object, ...]:
         """Detect tampering and persist a non-authoritative audit receipt."""
 
         from arw_ext.local_store.receipts import AuditFault, persist_audit_fault
 
         faults: list[AuditFault] = []
-        rows = self._records(limit=MAX_SIDECAR_RECORDS)
-        for record_id, payload, stored_checksum in rows:
+        for index, (record_id, payload, stored_checksum) in enumerate(
+            self._records(limit=MAX_SIDECAR_RECORDS + 1)
+        ):
+            if index == MAX_SIDECAR_RECORDS:
+                fault = AuditFault(
+                    code="semantica_verification_truncated",
+                    message="Semantica verification stopped at the Lite record limit",
+                    affected_rows=1,
+                    projection_name="knowledge.provenance",
+                    receipt_id="semantica-verification-truncated",
+                )
+                persist_audit_fault(self._audit_database_path, fault)
+                faults.append(fault)
+                break
             payload_bytes = (
                 payload
                 if isinstance(payload, bytes)
@@ -319,10 +343,10 @@ class SemanticaSQLiteAdapter:
     @staticmethod
     def _validate_database_path(path: Path) -> Path:
         candidate = path if path.is_absolute() else Path.cwd() / path
-        if candidate.is_symlink() or (
-            candidate.parent.exists() and candidate.parent.is_symlink()
+        if candidate.is_symlink() or any(
+            ancestor.is_symlink() for ancestor in candidate.parents
         ):
-            raise ValueError("Semantica sidecar path or parent must not be a symlink")
+            raise ValueError("Semantica sidecar path or ancestor must not be a symlink")
         if not candidate.parent.is_dir():
             raise ValueError("Semantica sidecar parent directory does not exist")
         if is_network_filesystem(candidate):
