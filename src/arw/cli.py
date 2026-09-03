@@ -464,10 +464,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             accepted_artifacts: dict[str, tuple[str, ...]] = {}
             accepted_payloads: dict[str, ArtifactAcceptedPayload] = {}
+            accepted_artifact_hashes: dict[str, str] = {}
             for event in replayed.events:
                 if isinstance(event.payload, ArtifactAcceptedPayload):
                     accepted_artifacts[event.event_id] = (event.payload.artifact_id,)
                     accepted_payloads[event.event_id] = event.payload
+                    accepted_artifact_hashes[event.event_id] = (
+                        event.payload.artifact_sha256
+                    )
             sidecar_path = args.store.with_name(
                 f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
             )
@@ -476,6 +480,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 semantica_store_path=sidecar_path,
                 canonical_event_digests=event_digests,
                 accepted_artifact_ids_by_event=accepted_artifacts,
+                accepted_artifact_sha256_by_event=accepted_artifact_hashes,
             )
             provider = router.resolve("knowledge.provenance")
             module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])

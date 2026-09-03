@@ -103,6 +103,7 @@ class SemanticaSQLiteAdapter:
         *,
         canonical_event_digests: Mapping[str, str],
         accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]],
+        accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
     ) -> None:
@@ -112,6 +113,9 @@ class SemanticaSQLiteAdapter:
             event_id: frozenset(artifact_ids)
             for event_id, artifact_ids in accepted_artifact_ids_by_event.items()
         }
+        self._accepted_artifact_sha256_by_event = dict(
+            accepted_artifact_sha256_by_event or {}
+        )
         self._audit_database_path = self._validate_database_path(
             audit_database_path or self._database_path
         )
@@ -204,7 +208,11 @@ class SemanticaSQLiteAdapter:
         by_entity: dict[
             str, list[tuple[str, tuple[str, ...], dict[str, object], str]]
         ] = {}
-        for record_id, payload, checksum in self._records(limit=MAX_SIDECAR_RECORDS):
+        for index, (record_id, payload, checksum) in enumerate(
+            self._records(limit=MAX_SIDECAR_RECORDS + 1)
+        ):
+            if index == MAX_SIDECAR_RECORDS:
+                raise RuntimeError("Semantica lineage exceeds the Lite record limit")
             if not isinstance(payload, bytes):
                 raise TypeError(f"corrupt Semantica payload storage for {record_id}")
             if len(payload) > MAX_PROVENANCE_PAYLOAD_BYTES or sha256_hex(
@@ -227,7 +235,21 @@ class SemanticaSQLiteAdapter:
                 or not all(isinstance(parent, str) for parent in parents_value)
             ):
                 raise RuntimeError(f"corrupt Semantica lineage payload for {record_id}")
-            if self._canonical_event_digests.get(str(event_id)) != event_digest:
+            artifact_payload = dict(record_value)
+            artifact_payload.pop("ledger_event_id", None)
+            artifact_payload.pop("ledger_event_digest", None)
+            accepted_artifacts = self._accepted_artifact_ids_by_event.get(
+                str(event_id), frozenset()
+            )
+            if (
+                self._canonical_event_digests.get(str(event_id)) != event_digest
+                or record_value.get("artifact_id") not in accepted_artifacts
+                or (
+                    self._accepted_artifact_sha256_by_event
+                    and self._accepted_artifact_sha256_by_event.get(str(event_id))
+                    != sha256_hex(canonical_json_bytes(artifact_payload))
+                )
+            ):
                 continue
             by_entity.setdefault(stored_entity_id, []).append(
                 (payload_record_id, tuple(parents_value), record_value, str(checksum))
