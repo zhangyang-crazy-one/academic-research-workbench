@@ -263,7 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
     provenance_actions = provenance.add_subparsers(
         dest="provenance_action", required=True
     )
-    for action in ("record", "lineage", "verify"):
+    for action in ("record", "lineage", "verify", "rebuild"):
         command = provenance_actions.add_parser(action)
         command.add_argument("--run-root", required=True, type=Path)
         command.add_argument("--store", required=True, type=Path)
@@ -452,7 +452,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "provenance":
         from arw.composition import default_router
         from arw.kernel.capabilities import CapabilityUnavailable
+        from arw.kernel.core.canonical import sha256_hex
         from arw.kernel.ledger.journal import replay_run
+        from arw.kernel.ledger.manifests import load_artifact_manifest
         from arw.kernel.state.models import ArtifactAcceptedPayload
 
         try:
@@ -461,11 +463,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 event.event_id: event.event_sha256 for event in replayed.events
             }
             accepted_artifacts: dict[str, tuple[str, ...]] = {}
+            accepted_payloads: dict[str, ArtifactAcceptedPayload] = {}
             for event in replayed.events:
                 if isinstance(event.payload, ArtifactAcceptedPayload):
-                    accepted_artifacts[event.event_id] = (
-                        event.payload.artifact_id,
-                    )
+                    accepted_artifacts[event.event_id] = (event.payload.artifact_id,)
+                    accepted_payloads[event.event_id] = event.payload
             sidecar_path = args.store.with_suffix(
                 args.store.suffix + ".semantica.sqlite3"
             )
@@ -476,12 +478,51 @@ def main(argv: Sequence[str] | None = None) -> int:
                 accepted_artifact_ids_by_event=accepted_artifacts,
             )
             provider = router.resolve("knowledge.provenance")
+            module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
             if args.provenance_action == "record":
-                module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
-                record = module.ProvenanceRecord(
-                    **_load_object(args.record, label="provenance record")
+                record = module.ProvenanceRecord.model_validate_json(
+                    canonical_json_bytes(
+                        _load_object(args.record, label="provenance record")
+                    )
                 )
+                accepted = accepted_payloads.get(record.ledger_event_id)
+                if accepted is None or record.checksum != accepted.artifact_sha256:
+                    raise ValueError(
+                        "provenance record bytes are not the accepted artifact content"
+                    )
                 _write_json({"checksum": provider.record(record)})
+            elif args.provenance_action == "rebuild":
+                rebuilt = 0
+                for event_id, accepted in accepted_payloads.items():
+                    manifest = load_artifact_manifest(
+                        args.run_root, accepted.manifest_sha256
+                    )
+                    content = (args.run_root / manifest.content_path).resolve()
+                    if (
+                        not content.is_relative_to(args.run_root.resolve())
+                        or content.is_symlink()
+                        or sha256_hex(content.read_bytes()) != accepted.artifact_sha256
+                    ):
+                        raise ValueError(
+                            "accepted provenance artifact content is unsafe"
+                        )
+                    try:
+                        record = module.ProvenanceRecord.model_validate_json(
+                            content.read_bytes()
+                        )
+                    except ValidationError:
+                        continue
+                    if (
+                        record.ledger_event_id != event_id
+                        or record.artifact_id != accepted.artifact_id
+                        or record.checksum != accepted.artifact_sha256
+                    ):
+                        raise ValueError(
+                            "accepted artifact does not match its provenance assertion"
+                        )
+                    provider.record(record)
+                    rebuilt += 1
+                _write_json({"rebuilt_records": rebuilt})
             elif args.provenance_action == "lineage":
                 _write_json(
                     {
@@ -494,14 +535,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             else:
                 _write_json(
-                    {
-                        "audit_faults": [
-                            fault.__dict__ for fault in provider.verify()
-                        ]
-                    }
+                    {"audit_faults": [fault.__dict__ for fault in provider.verify()]}
                 )
             return 0
-        except (CapabilityUnavailable, CLIInputError, OSError, RuntimeError, ValueError) as error:
+        except (
+            CapabilityUnavailable,
+            CLIInputError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as error:
             print(f"arw: provenance-error: {error}", file=sys.stderr)
             return 65
 

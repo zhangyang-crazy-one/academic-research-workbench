@@ -10,15 +10,15 @@ import sys
 from pathlib import Path
 
 import pytest
-
-from arw.cli import build_parser
-from arw.composition import default_router
-from arw.kernel.capabilities import CapabilityUnavailable
 from arw_semantica import (  # pyright: ignore[reportMissingImports]
     ProvenanceRecord,
     SemanticaSQLiteAdapter,
     UnboundProvenanceError,
 )
+
+from arw.cli import build_parser
+from arw.composition import default_router
+from arw.kernel.capabilities import CapabilityUnavailable
 
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
@@ -50,6 +50,10 @@ def _adapter(tmp_path: Path) -> SemanticaSQLiteAdapter:
     )
 
 
+def _record_from_payload(payload: dict[str, object]) -> ProvenanceRecord:
+    return ProvenanceRecord.model_validate_json(json.dumps(payload))
+
+
 def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     checksum = adapter.record(_record())
@@ -57,20 +61,18 @@ def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -
 
     with pytest.raises(UnboundProvenanceError, match="canonical event stream"):
         adapter.record(
-            ProvenanceRecord(
-                **{**_record().canonical_payload(), "ledger_event_digest": "b" * 64}
+            _record_from_payload(
+                {**_record().canonical_payload(), "ledger_event_digest": "b" * 64}
             )
         )
     with pytest.raises(UnboundProvenanceError, match="not accepted"):
         adapter.record(
-            ProvenanceRecord(
-                **{**_record().canonical_payload(), "artifact_id": "forged-artifact"}
+            _record_from_payload(
+                {**_record().canonical_payload(), "artifact_id": "forged-artifact"}
             )
         )
-    with pytest.raises(UnboundProvenanceError, match="artifact id"):
-        adapter.record(
-            ProvenanceRecord(**{**_record().canonical_payload(), "artifact_id": ""})
-        )
+    with pytest.raises(ValueError, match="artifact_id"):
+        _record_from_payload({**_record().canonical_payload(), "artifact_id": ""})
 
 
 def test_lineage_is_bounded_and_decision_filtered(tmp_path: Path) -> None:
@@ -127,8 +129,8 @@ def test_lineage_enforces_max_rows_inside_one_entity(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     adapter.record(_record())
     adapter.record(
-        ProvenanceRecord(
-            **{**_record().canonical_payload(), "record_id": "prov-claim-copy"}
+        _record_from_payload(
+            {**_record().canonical_payload(), "record_id": "prov-claim-copy"}
         )
     )
     assert len(adapter.lineage("claim.alpha", max_rows=1)) == 1

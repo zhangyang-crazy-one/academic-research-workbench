@@ -12,9 +12,11 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import deque
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
 from pathlib import Path
+
+from arw_ext.local_store.location import is_network_filesystem
+from pydantic import Field
 
 from arw.graph_models import (
     GraphProjectionInput,
@@ -23,7 +25,18 @@ from arw.graph_models import (
     GraphQueryResult,
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.state.models import (
+    ActorId,
+    EventId,
+    Sha256,
+    StableRuntimeId,
+    StrictModel,
+    UtcTimestamp,
+)
 from arw.ports.knowledge import KnowledgeProvider, NullKnowledgeProvider
+
+MAX_SIDECAR_RECORDS = 500
+MAX_PROVENANCE_PAYLOAD_BYTES = 65_536
 
 
 def _json_value(value: str | bytes) -> object:
@@ -39,41 +52,25 @@ class UnboundProvenanceError(ValueError):
     """Raised when a record lacks a verified ARW artifact/ledger binding."""
 
 
-@dataclass(frozen=True)
-class ProvenanceRecord:
-    """One Lite-profile provenance assertion.
+class ProvenanceRecord(StrictModel):
+    """One Lite-profile provenance assertion."""
 
-    ``ledger_event_id`` and ``ledger_event_digest`` identify the canonical
-    ARW event that admitted this assertion.  Their presence is validated
-    before the record reaches this rebuildable sidecar.
-    """
-
-    record_id: str
-    entity_id: str
-    entity_type: str
-    artifact_id: str
-    ledger_event_id: str
-    ledger_event_digest: str
-    activity_id: str
-    agent_id: str
-    created_at: str
-    derived_from: tuple[str, ...] = ()
-    attributes: Mapping[str, object] | None = None
+    record_id: StableRuntimeId
+    entity_id: StableRuntimeId
+    entity_type: str = Field(min_length=1, max_length=96)
+    artifact_id: StableRuntimeId
+    ledger_event_id: EventId
+    ledger_event_digest: Sha256
+    activity_id: StableRuntimeId
+    agent_id: ActorId
+    created_at: UtcTimestamp
+    derived_from: tuple[StableRuntimeId, ...] = Field(
+        default_factory=tuple, max_length=MAX_SIDECAR_RECORDS
+    )
+    attributes: dict[str, object] = Field(default_factory=dict)
 
     def canonical_payload(self) -> dict[str, object]:
-        return {
-            "activity_id": self.activity_id,
-            "agent_id": self.agent_id,
-            "artifact_id": self.artifact_id,
-            "attributes": dict(self.attributes or {}),
-            "created_at": self.created_at,
-            "derived_from": list(self.derived_from),
-            "entity_id": self.entity_id,
-            "entity_type": self.entity_type,
-            "ledger_event_digest": self.ledger_event_digest,
-            "ledger_event_id": self.ledger_event_id,
-            "record_id": self.record_id,
-        }
+        return self.model_dump(mode="json")
 
     @property
     def checksum(self) -> str:
@@ -98,7 +95,7 @@ class SemanticaSQLiteAdapter:
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
     ) -> None:
-        self._database_path = Path(database_path)
+        self._database_path = self._validate_database_path(Path(database_path))
         self._canonical_event_digests = dict(canonical_event_digests)
         self._accepted_artifact_ids_by_event = {
             event_id: frozenset(artifact_ids)
@@ -131,29 +128,34 @@ class SemanticaSQLiteAdapter:
 
         self._validate_binding(record)
         payload = canonical_json_bytes(record.canonical_payload())
+        if len(payload) > MAX_PROVENANCE_PAYLOAD_BYTES:
+            raise ValueError("provenance payload exceeds the Lite profile byte limit")
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    "SELECT payload, checksum FROM provenance_records WHERE record_id = ?",
+                    (record.record_id,),
+                ).fetchone()
+                if existing is not None:
+                    if existing == (payload, record.checksum):
+                        connection.commit()
+                        return record.checksum
+                    raise UnboundProvenanceError(
+                        "provenance record ID already binds different immutable content"
+                    )
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM provenance_records"
+                ).fetchone()
+                if count is None or int(count[0]) >= MAX_SIDECAR_RECORDS:
+                    raise ValueError("Semantica sidecar record limit exceeded")
                 connection.execute(
                     """
                     INSERT INTO provenance_records(
                         record_id, entity_id, entity_type, artifact_id,
                         ledger_event_id, ledger_event_digest, activity_id,
-                        agent_id, created_at, derived_from_json, payload,
-                        checksum
+                        agent_id, created_at, derived_from_json, payload, checksum
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(record_id) DO UPDATE SET
-                        entity_id = excluded.entity_id,
-                        entity_type = excluded.entity_type,
-                        artifact_id = excluded.artifact_id,
-                        ledger_event_id = excluded.ledger_event_id,
-                        ledger_event_digest = excluded.ledger_event_digest,
-                        activity_id = excluded.activity_id,
-                        agent_id = excluded.agent_id,
-                        created_at = excluded.created_at,
-                        derived_from_json = excluded.derived_from_json,
-                        payload = excluded.payload,
-                        checksum = excluded.checksum
                     """,
                     (
                         record.record_id,
@@ -182,23 +184,24 @@ class SemanticaSQLiteAdapter:
 
         if max_depth < 0 or max_depth > 8 or max_rows < 1 or max_rows > 500:
             raise ValueError("lineage bounds are outside the Lite profile limits")
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT record_id, payload, checksum FROM provenance_records ORDER BY record_id"
-            ).fetchall()
         by_entity: dict[
             str, list[tuple[str, tuple[str, ...], dict[str, object], str]]
         ] = {}
-        for record_id, payload, checksum in rows:
-            payload_bytes = bytes(payload)
-            if sha256_hex(payload_bytes) != str(checksum):
+        for record_id, payload, checksum in self._records(limit=MAX_SIDECAR_RECORDS):
+            if not isinstance(payload, bytes):
+                raise TypeError(f"corrupt Semantica payload storage for {record_id}")
+            if len(payload) > MAX_PROVENANCE_PAYLOAD_BYTES or sha256_hex(
+                payload
+            ) != str(checksum):
                 raise RuntimeError(f"corrupt Semantica payload for {record_id}")
-            record_value = _json_value(payload_bytes)
+            record_value = _json_value(payload)
             if not isinstance(record_value, dict):
-                raise RuntimeError(f"corrupt Semantica payload for {record_id}")
+                raise TypeError(f"corrupt Semantica payload for {record_id}")
             payload_record_id = record_value.get("record_id")
             stored_entity_id = record_value.get("entity_id")
             parents_value = record_value.get("derived_from")
+            event_id = record_value.get("ledger_event_id")
+            event_digest = record_value.get("ledger_event_digest")
             if (
                 not isinstance(payload_record_id, str)
                 or payload_record_id != str(record_id)
@@ -207,6 +210,8 @@ class SemanticaSQLiteAdapter:
                 or not all(isinstance(parent, str) for parent in parents_value)
             ):
                 raise RuntimeError(f"corrupt Semantica lineage payload for {record_id}")
+            if self._canonical_event_digests.get(str(event_id)) != event_digest:
+                continue
             by_entity.setdefault(stored_entity_id, []).append(
                 (payload_record_id, tuple(parents_value), record_value, str(checksum))
             )
@@ -218,7 +223,9 @@ class SemanticaSQLiteAdapter:
             if current in visited:
                 continue
             visited.add(current)
-            for record_id, parents, record_value, checksum in by_entity.get(current, []):
+            for record_id, parents, record_value, checksum in by_entity.get(
+                current, []
+            ):
                 if len(results) >= max_rows:
                     break
                 results.append(
@@ -231,7 +238,11 @@ class SemanticaSQLiteAdapter:
                     }
                 )
                 if depth < max_depth and len(results) < max_rows:
-                    queue.extend((parent, depth + 1) for parent in parents)
+                    for parent in parents:
+                        if len(queue) + len(results) >= max_rows:
+                            break
+                        if parent not in visited and parent not in queue:
+                            queue.append((parent, depth + 1))
         return results
 
     def decision_chain(
@@ -256,16 +267,17 @@ class SemanticaSQLiteAdapter:
         from arw_ext.local_store.receipts import AuditFault, persist_audit_fault
 
         faults: list[AuditFault] = []
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT record_id, payload, checksum FROM provenance_records ORDER BY record_id"
-            ).fetchall()
+        rows = self._records(limit=MAX_SIDECAR_RECORDS)
         for record_id, payload, stored_checksum in rows:
-            payload_bytes = payload if isinstance(payload, bytes) else None
-            checksum_matches = (
-                payload_bytes is not None
-                and sha256_hex(payload_bytes) == str(stored_checksum)
+            payload_bytes = (
+                payload
+                if isinstance(payload, bytes)
+                and len(payload) <= MAX_PROVENANCE_PAYLOAD_BYTES
+                else None
             )
+            checksum_matches = payload_bytes is not None and sha256_hex(
+                payload_bytes
+            ) == str(stored_checksum)
             if checksum_matches:
                 continue
             detail = (
@@ -303,6 +315,28 @@ class SemanticaSQLiteAdapter:
             raise UnboundProvenanceError(
                 "provenance artifact is not accepted by its canonical ledger event"
             )
+
+    @staticmethod
+    def _validate_database_path(path: Path) -> Path:
+        candidate = path if path.is_absolute() else Path.cwd() / path
+        if candidate.is_symlink() or (
+            candidate.parent.exists() and candidate.parent.is_symlink()
+        ):
+            raise ValueError("Semantica sidecar path or parent must not be a symlink")
+        if not candidate.parent.is_dir():
+            raise ValueError("Semantica sidecar parent directory does not exist")
+        if is_network_filesystem(candidate):
+            raise ValueError("Semantica sidecar must not use a network filesystem")
+        return candidate
+
+    def _records(self, *, limit: int) -> Iterator[tuple[object, object, object]]:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "SELECT record_id, payload, checksum FROM provenance_records "
+                "ORDER BY record_id LIMIT ?",
+                (limit,),
+            )
+            yield from cursor
 
     def _initialize(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)

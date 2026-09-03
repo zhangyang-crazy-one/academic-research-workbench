@@ -582,19 +582,18 @@ class LocalStoreFilesAdapter:
         elif not candidate_ids:
             rows = []
         else:
-            candidate_id_set = set(candidate_ids)
-            rows = [
-                row
-                for row in self._rows(
-                    "SELECT file_id, relative_path, file_type, source_digest, "
-                    "index_state, degraded_reason, extraction_registration_sha256, body "
-                    "FROM files WHERE index_state = 'indexed' AND body IS NOT NULL "
-                    "ORDER BY file_id",
-                    (),
-                    deadline=deadline,
+            rows = []
+            for candidate_id in sorted(candidate_ids):
+                rows.extend(
+                    self._rows(
+                        "SELECT file_id, relative_path, file_type, source_digest, "
+                        "index_state, degraded_reason, extraction_registration_sha256, body "
+                        "FROM files WHERE file_id = ? AND index_state = 'indexed' "
+                        "AND body IS NOT NULL",
+                        (candidate_id,),
+                        deadline=deadline,
+                    )
                 )
-                if str(row[0]) in candidate_id_set
-            ]
         ranked: list[_RankedMatch] = []
         for row in rows:
             if time.monotonic() > deadline:
