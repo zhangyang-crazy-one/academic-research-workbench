@@ -20,6 +20,7 @@ from arw_semantica import (  # pyright: ignore[reportMissingImports]
 from arw.cli import build_parser
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
+from arw.kernel.core.canonical import canonical_json_bytes
 
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
@@ -153,6 +154,53 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     adapter.rebuild([_record()])
     assert adapter.verify() == ()
     assert list((tmp_path / "projection.sqlite3.audit").glob("*.json")) == []
+
+
+def test_verify_reconciles_receipts_after_partial_repair(tmp_path: Path) -> None:
+    source = _record(entity_id="source.alpha")
+    decision = _record(entity_id="decision.alpha")
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute("UPDATE provenance_records SET payload = ?", (b"{}",))
+
+    assert len(adapter.verify()) == 2
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? "
+            "WHERE record_id = ?",
+            (
+                canonical_json_bytes(source.canonical_payload()),
+                source.binding_checksum,
+                source.record_id,
+            ),
+        )
+
+    faults = adapter.verify()
+    assert len(faults) == 1
+    assert decision.record_id in faults[0].message
+    assert len(list((tmp_path / "projection.sqlite3.audit").glob("*.json"))) == 1
+
+
+def test_verify_preserves_distinct_malformed_row_identities(tmp_path: Path) -> None:
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        for malformed_id in (b"first", b"second"):
+            connection.execute(
+                "INSERT INTO provenance_records SELECT ?, entity_id, entity_type, "
+                "artifact_id, ledger_event_id, ledger_event_digest, activity_id, "
+                "agent_id, created_at, derived_from_json, ?, ? "
+                "FROM provenance_records WHERE record_id = ?",
+                (malformed_id, b"{}", "0" * 64, record.record_id),
+            )
+
+    faults = adapter.verify()
+    assert len(faults) == 2
+    assert len({fault.receipt_id for fault in faults}) == 2
+    assert len(list((tmp_path / "projection.sqlite3.audit").glob("*.json"))) == 2
 
 
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:

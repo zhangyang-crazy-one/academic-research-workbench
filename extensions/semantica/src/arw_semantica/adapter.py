@@ -439,7 +439,6 @@ class SemanticaSQLiteAdapter:
                     projection_name="knowledge.provenance",
                     receipt_id="semantica-verification-truncated",
                 )
-                persist_audit_fault(self._audit_database_path, fault)
                 faults.append(fault)
                 break
             observed_record_ids.add(str(record_id))
@@ -500,7 +499,6 @@ class SemanticaSQLiteAdapter:
                     f"semantica-{sha256_hex(str(record_id).encode('utf-8'))[:24]}"
                 ),
             )
-            persist_audit_fault(self._audit_database_path, fault)
             faults.append(fault)
         for missing_record_id in sorted(
             set(self._expected_provenance_record_sha256) - observed_record_ids
@@ -518,10 +516,10 @@ class SemanticaSQLiteAdapter:
                     + sha256_hex(missing_record_id.encode("utf-8"))[:24]
                 ),
             )
-            persist_audit_fault(self._audit_database_path, fault)
             faults.append(fault)
-        if not faults:
-            self._clear_resolved_audit_faults()
+        self._clear_resolved_audit_faults()
+        for fault in faults:
+            persist_audit_fault(self._audit_database_path, fault)
         return tuple(faults)
 
     def _clear_resolved_audit_faults(self) -> None:
@@ -601,7 +599,8 @@ class SemanticaSQLiteAdapter:
                     "SELECT "
                     "CASE WHEN typeof(record_id) = 'text' "
                     "AND length(CAST(record_id AS BLOB)) <= 96 "
-                    "THEN record_id ELSE NULL END AS safe_record_id, "
+                    "THEN record_id ELSE '__arw_invalid_record_id_rowid__' "
+                    "|| printf('%016x', rowid) END AS safe_record_id, "
                     "CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
                     "THEN payload ELSE NULL END, "
                     "CASE WHEN typeof(checksum) = 'text' "
