@@ -225,8 +225,24 @@ def load_audit_faults(
     if max_bytes < 1 or max_bytes > DEFAULT_MAX_AUDIT_RECEIPT_BYTES:
         raise ValueError("audit receipt byte bound is outside the supported range")
     root = audit_root(database_path)
-    if not root.exists():
-        return ()
+    candidate = root if root.is_absolute() else Path.cwd() / root
+    current = Path(candidate.anchor)
+    for component in candidate.parts[1:]:
+        current /= component
+        try:
+            status = current.lstat()
+        except FileNotFoundError:
+            return ()
+        if stat.S_ISLNK(status.st_mode):
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message="audit receipt directory path contains a symlink",
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
+            )
+    root = candidate
     try:
         directory_descriptor = _open_directory_no_follow(root)
     except FileNotFoundError:

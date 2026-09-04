@@ -666,3 +666,17 @@ def test_multiple_faults_same_receipt_persist_distinct_files(tmp_path: Path) -> 
     loaded = load_audit_faults(db)
     messages = {fault.message for fault in loaded}
     assert messages == {"fault A", "fault B"}
+
+
+def test_load_audit_faults_surfaces_broken_symlink_root(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    audit_root(database).symlink_to(
+        tmp_path / "missing-audit-target", target_is_directory=True
+    )
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
