@@ -7,11 +7,14 @@ never imports adapters. This keeps the ports/adapters boundary enforceable
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from importlib import import_module
 from pathlib import Path
 
 from arw.kernel.capabilities import CapabilityRouter
+
+_PROVENANCE_PLATFORM_SUPPORTED = os.name != "nt"
 
 
 def default_router(
@@ -111,7 +114,7 @@ def default_router(
                 GraphStore(graph_control_root, graph_root_id)
             ),
         )
-    if semantica_store_path is not None:
+    if semantica_store_path is not None and _PROVENANCE_PLATFORM_SUPPORTED:
         if accepted_artifact_sha256_by_event is None:
             raise ValueError(
                 "accepted artifact digests are required when provenance is enabled"
@@ -128,9 +131,7 @@ def default_router(
                 canonical_event_digests=canonical_event_digests or {},
                 accepted_artifact_ids_by_event=accepted_artifact_ids_by_event or {},
                 accepted_artifact_sha256_by_event=accepted_artifact_sha256_by_event,
-                expected_provenance_record_sha256=(
-                    expected_provenance_record_sha256
-                ),
+                expected_provenance_record_sha256=(expected_provenance_record_sha256),
                 audit_database_path=semantica_store_path,
             )
 

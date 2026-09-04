@@ -453,6 +453,19 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
         absent.resolve("knowledge.provenance")
 
 
+def test_provenance_capability_is_explicitly_gated_off_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "arw.composition._PROVENANCE_PLATFORM_SUPPORTED", False
+    )
+    router = default_router(
+        semantica_store_path=tmp_path / "provenance.sqlite3"
+    )
+    with pytest.raises(CapabilityUnavailable):
+        router.resolve("knowledge.provenance")
+
+
 def test_sidecar_is_created_with_private_permissions(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     adapter.record(_record())

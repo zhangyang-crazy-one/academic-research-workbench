@@ -33,6 +33,12 @@ The capability is registered only when composition receives both an explicit
 `knowledge.provenance` returns `CapabilityUnavailable`; L0 operations remain
 available.
 
+The Lite provenance provider currently requires POSIX descriptor-relative
+filesystem primitives (`openat`/`dir_fd` and `O_NOFOLLOW`) for safe sidecar and
+audit operations. On Windows the composition root deliberately leaves
+`knowledge.provenance` unregistered, so resolution fails with
+`CapabilityUnavailable` rather than attempting an unsafe fallback.
+
 ## Explicit exclusions
 
 The default profile does **not** import or activate GraphRAG, FAISS, Neo4j,
