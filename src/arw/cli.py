@@ -579,8 +579,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise ValueError("accepted provenance artifact content is unsafe")
                 try:
                     record = module.ProvenanceRecord.model_validate_json(content_bytes)
-                except ValidationError:
-                    continue
+                except ValidationError as error:
+                    raise ValueError(
+                        "accepted provenance artifact is malformed"
+                    ) from error
                 if (
                     record.ledger_event_id is not None
                     or record.ledger_event_digest is not None

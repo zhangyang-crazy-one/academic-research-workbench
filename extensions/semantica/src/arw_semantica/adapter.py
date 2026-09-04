@@ -82,8 +82,14 @@ def _open_or_create_directory_no_follow(path: Path) -> int:
             | no_follow
         )
         try:
-            with suppress(FileExistsError):
+            created = False
+            try:
                 os.mkdir(path.name, mode=0o700, dir_fd=parent_descriptor)
+                created = True
+            except FileExistsError:
+                created = False
+            if created:
+                os.fsync(parent_descriptor)
             return os.open(path.name, flags, dir_fd=parent_descriptor)
         finally:
             os.close(parent_descriptor)
