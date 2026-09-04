@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sqlite3
 import stat
 from collections import deque
@@ -623,7 +624,7 @@ class SemanticaSQLiteAdapter:
                     f"{sha256_hex(identifier.encode('utf-8'))[:24]}-"
                     f"{sha256_hex(payload)[:12]}.json"
                 )
-                temporary = f".{target}.{os.getpid()}.tmp"
+                temporary = f".{target}.{os.getpid()}.{secrets.token_hex(16)}.tmp"
                 descriptor = os.open(
                     temporary,
                     os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
