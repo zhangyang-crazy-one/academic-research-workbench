@@ -520,7 +520,27 @@ class SemanticaSQLiteAdapter:
             )
             persist_audit_fault(self._audit_database_path, fault)
             faults.append(fault)
+        if not faults:
+            self._clear_resolved_audit_faults()
         return tuple(faults)
+
+    def _clear_resolved_audit_faults(self) -> None:
+        audit_directory = Path(f"{self._audit_database_path}.audit")
+        try:
+            status = audit_directory.lstat()
+            if not stat.S_ISDIR(status.st_mode):
+                raise RuntimeError("Semantica audit path is not a directory")
+            for path in audit_directory.iterdir():
+                if not (path.name.startswith("semantica-") and path.suffix == ".json"):
+                    continue
+                if path.is_symlink():
+                    raise RuntimeError("Semantica audit receipt must not be a symlink")
+                if path.is_file():
+                    path.unlink()
+        except OSError as error:
+            raise RuntimeError(
+                f"Semantica audit fault reconciliation failed: {error}"
+            ) from error
 
     def _validate_binding(self, record: ProvenanceRecord) -> None:
         if not record.artifact_id:

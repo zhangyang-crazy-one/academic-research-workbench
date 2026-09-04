@@ -150,6 +150,10 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     assert all(path.name.startswith("semantica-") for path in audit_paths)
     assert not (tmp_path / "escaped").exists()
 
+    adapter.rebuild([_record()])
+    assert adapter.verify() == ()
+    assert list((tmp_path / "projection.sqlite3.audit").glob("*.json")) == []
+
 
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
     source = _record(entity_id="source.alpha")
