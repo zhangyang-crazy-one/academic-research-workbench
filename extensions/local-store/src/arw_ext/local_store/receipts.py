@@ -314,6 +314,14 @@ def load_audit_faults(
             if not isinstance(value, dict):
                 out.append(unreadable_fault(name))
                 continue
+            _, separator, filename_digest = name.removesuffix(".json").rpartition("-")
+            if (
+                not separator
+                or filename_digest != sha256_hex(raw)[:12]
+                or canonical_json_bytes(value) != raw
+            ):
+                out.append(unreadable_fault(name))
+                continue
             try:
                 affected = int(str(value.get("affected_rows", 0)))
             except ValueError:

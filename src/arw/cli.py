@@ -311,7 +311,7 @@ def _read_bounded_regular_file(
     root: Path, relative_path: str, *, max_bytes: int
 ) -> bytes | None:
     """Read one confined regular file through a stable run-root descriptor."""
-    root = root.resolve()
+    root = root if root.is_absolute() else Path.cwd() / root
     relative = Path(relative_path)
     if (
         not relative.parts
@@ -332,8 +332,13 @@ def _read_bounded_regular_file(
     if not supports_stable_walk:
         raise OSError("stable descriptor-relative artifact reads are unsupported")
     directory_flags = descriptor_flags | getattr(os, "O_DIRECTORY", 0)
-    parent_descriptor = os.open(root, directory_flags)
+    parent_descriptor = os.open(Path(root.anchor), directory_flags)
     close_descriptors.append(parent_descriptor)
+    for component in root.parts[1:]:
+        parent_descriptor = os.open(
+            component, directory_flags, dir_fd=parent_descriptor
+        )
+        close_descriptors.append(parent_descriptor)
     for part in relative.parts[:-1]:
         parent_descriptor = os.open(part, directory_flags, dir_fd=parent_descriptor)
         close_descriptors.append(parent_descriptor)

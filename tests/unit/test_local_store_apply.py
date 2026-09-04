@@ -694,3 +694,28 @@ def test_load_audit_faults_surfaces_malformed_receipt(tmp_path: Path) -> None:
     (root / "broken.json").write_bytes(b"{")
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_rejects_noncanonical_digest_mismatch(
+    tmp_path: Path,
+) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        AuditFault,
+        load_audit_faults,
+        persist_audit_fault,
+    )
+
+    database = tmp_path / "arw.db"
+    path = persist_audit_fault(
+        database,
+        AuditFault(
+            code="projection_fault",
+            message="fault",
+            affected_rows=1,
+            projection_name="knowledge",
+            receipt_id="generation-1",
+        ),
+    )
+    path.write_bytes(b" " + path.read_bytes())
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
