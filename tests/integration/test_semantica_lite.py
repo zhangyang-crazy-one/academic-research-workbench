@@ -23,31 +23,65 @@ from arw.kernel.capabilities import CapabilityUnavailable
 
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
+SOURCE_EVENT_ID = "evt-00000000-0000-4000-8000-000000000002"
+DECISION_EVENT_ID = "evt-00000000-0000-4000-8000-000000000003"
+COPY_EVENT_ID = "evt-00000000-0000-4000-8000-000000000004"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _record(
-    *, entity_id: str = "claim.alpha", derived_from: tuple[str, ...] = ()
+    *,
+    entity_id: str = "claim.alpha",
+    derived_from: tuple[str, ...] = (),
+    record_id: str | None = None,
+    artifact_id: str | None = None,
+    event_id: str | None = None,
+    event_digest: str | None = None,
 ) -> ProvenanceRecord:
+    default_events = {
+        "claim.alpha": (EVENT_ID, EVENT_DIGEST, "artifact-alpha"),
+        "source.alpha": (SOURCE_EVENT_ID, "b" * 64, "artifact-source.alpha"),
+        "decision.alpha": (DECISION_EVENT_ID, "c" * 64, "artifact-decision.alpha"),
+    }
+    default_event_id, default_digest, default_artifact_id = default_events.get(
+        entity_id, (EVENT_ID, EVENT_DIGEST, "artifact-alpha")
+    )
     return ProvenanceRecord(
-        record_id=f"prov-{entity_id}",
+        schema_version="1.0.0",
+        record_id=record_id or f"prov-{entity_id}",
         entity_id=entity_id,
         entity_type="Decision" if entity_id == "decision.alpha" else "Claim",
-        artifact_id="artifact-alpha",
-        ledger_event_id=EVENT_ID,
-        ledger_event_digest=EVENT_DIGEST,
+        artifact_id=artifact_id or default_artifact_id,
+        ledger_event_id=event_id or default_event_id,
+        ledger_event_digest=event_digest or default_digest,
         activity_id="activity.extract",
         agent_id="agent.researcher",
         created_at="2026-09-02T00:00:00Z",
         derived_from=derived_from,
+        attributes={},
     )
 
 
-def _adapter(tmp_path: Path) -> SemanticaSQLiteAdapter:
+def _adapter(
+    tmp_path: Path, records: tuple[ProvenanceRecord, ...] | None = None
+) -> SemanticaSQLiteAdapter:
+    records = records or (
+        _record(),
+        _record(entity_id="source.alpha"),
+        _record(entity_id="decision.alpha", derived_from=("source.alpha",)),
+    )
     return SemanticaSQLiteAdapter(
         tmp_path / "provenance.sqlite3",
-        canonical_event_digests={EVENT_ID: EVENT_DIGEST},
-        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        canonical_event_digests={
+            str(record.ledger_event_id): str(record.ledger_event_digest)
+            for record in records
+        },
+        accepted_artifact_ids_by_event={
+            str(record.ledger_event_id): (record.artifact_id,) for record in records
+        },
+        accepted_artifact_sha256_by_event={
+            str(record.ledger_event_id): record.checksum for record in records
+        },
         audit_database_path=tmp_path / "projection.sqlite3",
     )
 
@@ -128,13 +162,16 @@ def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) ->
 
 
 def test_lineage_enforces_max_rows_inside_one_entity(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-    adapter.record(_record())
-    adapter.record(
-        _record_from_payload(
-            {**_record().canonical_payload(), "record_id": "prov-claim-copy"}
-        )
+    base = _record()
+    copy = _record(
+        record_id="prov-claim-copy",
+        artifact_id="artifact-copy",
+        event_id=COPY_EVENT_ID,
+        event_digest="d" * 64,
     )
+    adapter = _adapter(tmp_path, (base, copy))
+    adapter.record(base)
+    adapter.record(copy)
     assert len(adapter.lineage("claim.alpha", max_rows=1)) == 1
 
 
@@ -248,6 +285,7 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
             tmp_path / "link" / "nested" / "provenance.sqlite3",
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
         )
     (tmp_path / "projection.sqlite3.audit").symlink_to(target, target_is_directory=True)
     with pytest.raises(ValueError, match="audit directory"):
@@ -255,6 +293,7 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
             tmp_path / "provenance.sqlite3",
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
             audit_database_path=tmp_path / "projection.sqlite3",
         )
 
@@ -285,6 +324,7 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
         semantica_store_path=tmp_path / "provenance.sqlite3",
         canonical_event_digests={EVENT_ID: EVENT_DIGEST},
         accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
         plugin_manifest=manifest,
     )
     assert "knowledge.provenance" in router.available()

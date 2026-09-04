@@ -6,8 +6,9 @@ canonical.
 
 ## Lite profile
 
-The Lite adapter owns one run-scoped SQLite sidecar configured with WAL,
-`busy_timeout=5000`, and explicit transactions. It records only:
+The Lite adapter owns one run-scoped SQLite sidecar created with `0600`
+permissions and configured with WAL, `busy_timeout=5000`, and explicit
+transactions. It records only:
 
 - schema-versioned source artifact assertions;
 - replay-injected canonical ledger event ID and digest;
@@ -16,13 +17,16 @@ The Lite adapter owns one run-scoped SQLite sidecar configured with WAL,
 - bounded `derived_from` lineage.
 
 The immutable provenance artifact excludes acceptance-event fields, so its
-checksum is calculable before `artifact.accepted`. Replay injects the accepted
-event ID/digest and the adapter stores a separate binding checksum. `rebuild`
-validates bounded regular artifact files and atomically replaces the sidecar.
-`verify()` and `lineage()` compare stored rows with the replay-derived canonical
-record inventory; modified, malformed, extra, or missing rows fail closed and
-verification emits run-scoped ARW audit-fault receipts. Sidecar checksums never
-authorize canonical state transitions.
+checksum is calculable before `artifact.accepted`. Every checksum-bearing field is
+required by the published Draft 2020-12 `provenance-record.schema.json`; the
+schema is registered in the packaged schema inventory and build identity. Replay
+injects the accepted event ID/digest and the adapter stores a separate binding
+checksum. Accepted artifact digest mappings are mandatory whenever the capability
+is enabled. `rebuild` validates bounded regular artifact files and atomically
+replaces the sidecar. `verify()` and `lineage()` compare stored rows with the
+replay-derived canonical record inventory; modified, malformed, extra, or missing
+rows fail closed and verification emits run-scoped ARW audit-fault receipts.
+Sidecar checksums never authorize canonical state transitions.
 
 The capability is registered only when composition receives both an explicit
 `semantica_store_path` and the extension can be imported. Otherwise resolving

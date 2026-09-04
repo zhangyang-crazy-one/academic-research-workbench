@@ -56,19 +56,21 @@
     },
     "schema_version": {
       "const": "1.0.0",
-      "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
     }
   },
   "required": [
+    "schema_version",
     "record_id",
     "entity_id",
     "entity_type",
     "artifact_id",
     "activity_id",
     "agent_id",
-    "created_at"
+    "created_at",
+    "derived_from",
+    "attributes"
   ],
   "title": "Semantica-compatible Lite provenance record",
   "type": "object"

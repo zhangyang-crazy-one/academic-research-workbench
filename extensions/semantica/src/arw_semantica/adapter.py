@@ -58,7 +58,7 @@ class UnboundProvenanceError(ValueError):
 class ProvenanceRecord(StrictModel):
     """One Lite-profile provenance assertion."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.0"]
     record_id: StableRuntimeId
     entity_id: StableRuntimeId
     entity_type: str = Field(min_length=1, max_length=96)
@@ -68,10 +68,8 @@ class ProvenanceRecord(StrictModel):
     activity_id: StableRuntimeId
     agent_id: ActorId
     created_at: UtcTimestamp
-    derived_from: tuple[StableRuntimeId, ...] = Field(
-        default_factory=tuple, max_length=MAX_SIDECAR_RECORDS
-    )
-    attributes: dict[str, object] = Field(default_factory=dict)
+    derived_from: tuple[StableRuntimeId, ...] = Field(max_length=MAX_SIDECAR_RECORDS)
+    attributes: dict[str, object]
 
     def artifact_payload(self) -> dict[str, object]:
         return self.model_dump(
@@ -105,7 +103,7 @@ class SemanticaSQLiteAdapter:
         *,
         canonical_event_digests: Mapping[str, str],
         accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]],
-        accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
+        accepted_artifact_sha256_by_event: Mapping[str, str],
         expected_provenance_record_sha256: Mapping[str, str] | None = None,
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
@@ -117,8 +115,17 @@ class SemanticaSQLiteAdapter:
             for event_id, artifact_ids in accepted_artifact_ids_by_event.items()
         }
         self._accepted_artifact_sha256_by_event = dict(
-            accepted_artifact_sha256_by_event or {}
+            accepted_artifact_sha256_by_event
         )
+        missing_artifact_digests = (
+            set(self._accepted_artifact_ids_by_event)
+            - set(self._accepted_artifact_sha256_by_event)
+        )
+        if missing_artifact_digests:
+            raise ValueError(
+                "accepted artifact digests are required for provenance events: "
+                + ", ".join(sorted(missing_artifact_digests))
+            )
         self._expected_provenance_record_sha256 = dict(
             expected_provenance_record_sha256 or {}
         )
@@ -255,11 +262,8 @@ class SemanticaSQLiteAdapter:
             if (
                 self._canonical_event_digests.get(str(event_id)) != event_digest
                 or record_value.get("artifact_id") not in accepted_artifacts
-                or (
-                    self._accepted_artifact_sha256_by_event
-                    and self._accepted_artifact_sha256_by_event.get(str(event_id))
-                    != sha256_hex(canonical_json_bytes(artifact_payload))
-                )
+                or self._accepted_artifact_sha256_by_event.get(str(event_id))
+                != sha256_hex(canonical_json_bytes(artifact_payload))
             ):
                 continue
             by_entity.setdefault(stored_entity_id, []).append(
@@ -431,10 +435,7 @@ class SemanticaSQLiteAdapter:
                         in self._accepted_artifact_ids_by_event.get(
                             str(event_id), frozenset()
                         )
-                        and (
-                            not self._accepted_artifact_sha256_by_event
-                            or expected_artifact_sha == artifact_sha
-                        )
+                        and expected_artifact_sha == artifact_sha
                         and (
                             expected_record_sha is None
                             or expected_record_sha == artifact_sha
