@@ -18,6 +18,7 @@ unicode61 + trigram + NFKC-fold combination.
 from __future__ import annotations
 
 import base64
+import json
 import time
 import unicodedata
 from pathlib import Path
@@ -583,14 +584,18 @@ class LocalStoreFilesAdapter:
             rows = []
         else:
             rows = []
-            for candidate_id in sorted(candidate_ids):
+            sorted_candidate_ids = sorted(candidate_ids)
+            for start in range(0, len(sorted_candidate_ids), 500):
+                batch = sorted_candidate_ids[start : start + 500]
                 rows.extend(
                     self._rows(
                         "SELECT file_id, relative_path, file_type, source_digest, "
                         "index_state, degraded_reason, extraction_registration_sha256, body "
-                        "FROM files WHERE file_id = ? AND index_state = 'indexed' "
-                        "AND body IS NOT NULL",
-                        (candidate_id,),
+                        "FROM files WHERE file_id IN "
+                        "(SELECT value FROM json_each(?)) "
+                        "AND index_state = 'indexed' AND body IS NOT NULL "
+                        "ORDER BY file_id",
+                        (json.dumps(batch, separators=(",", ":")),),
                         deadline=deadline,
                     )
                 )

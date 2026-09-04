@@ -544,9 +544,11 @@ class SemanticaSQLiteAdapter:
         try:
             with self._connect() as connection:
                 cursor = connection.execute(
-                    "SELECT record_id, payload, checksum FROM provenance_records "
-                    "ORDER BY record_id LIMIT ?",
-                    (limit,),
+                    "SELECT record_id, "
+                    "CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
+                    "THEN payload ELSE NULL END, checksum "
+                    "FROM provenance_records ORDER BY record_id LIMIT ?",
+                    (MAX_PROVENANCE_PAYLOAD_BYTES, limit),
                 )
                 yield from cursor
         except sqlite3.Error as error:

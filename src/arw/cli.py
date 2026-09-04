@@ -559,6 +559,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "ledger_event_digest": event_digests[event_id],
                     }
                 )
+                if (
+                    len(canonical_json_bytes(bound_record.canonical_payload()))
+                    > 65_536
+                ):
+                    raise ValueError(
+                        "bound provenance payload exceeds the Lite limit"
+                    )
                 existing = canonical_records.get(bound_record.record_id)
                 if existing is not None and existing != bound_record:
                     raise ValueError("canonical provenance record ID collision")
@@ -583,11 +590,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             provider = router.resolve("knowledge.provenance")
             if args.provenance_action == "record":
-                record = module.ProvenanceRecord.model_validate_json(
-                    canonical_json_bytes(
-                        _load_object(args.record, label="provenance record")
-                    )
+                try:
+                    record_relative_path = args.record.resolve().relative_to(
+                        args.run_root.resolve()
+                    ).as_posix()
+                except ValueError as error:
+                    raise ValueError(
+                        "provenance record must be inside the selected run root"
+                    ) from error
+                record_bytes = _read_bounded_regular_file(
+                    args.run_root, record_relative_path, max_bytes=65_536
                 )
+                if record_bytes is None:
+                    raise ValueError("provenance record exceeds the Lite byte limit")
+                record = module.ProvenanceRecord.model_validate_json(record_bytes)
+                if canonical_json_bytes(record.artifact_payload()) != record_bytes:
+                    raise ValueError("provenance record bytes are not canonical JSON")
                 if (
                     record.ledger_event_id is not None
                     or record.ledger_event_digest is not None
