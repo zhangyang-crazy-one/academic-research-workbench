@@ -779,3 +779,19 @@ def test_load_audit_faults_handles_invalid_utf8_filename(tmp_path: Path) -> None
         os.close(descriptor)
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_converts_enumeration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from arw_ext.local_store import receipts  # pyright: ignore[reportMissingImports]
+
+    database = tmp_path / "arw.db"
+    receipts.audit_root(database).mkdir()
+
+    def fail_enumeration(_target: object) -> object:
+        raise OSError("enumeration denied")
+
+    monkeypatch.setattr(receipts.os, "scandir", fail_enumeration)
+    faults = receipts.load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]

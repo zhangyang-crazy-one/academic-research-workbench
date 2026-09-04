@@ -263,19 +263,32 @@ def load_audit_faults(
     try:
         names: list[str] = []
         scan_target = root if directory_descriptor is None else directory_descriptor
-        with os.scandir(scan_target) as entries:
-            for index, entry in enumerate(entries):
-                if index >= max_entries:
-                    return (
-                        AuditFault(
-                            code="audit_receipt_inventory_truncated",
-                            message="audit receipt inventory exceeds the configured limit",
-                            affected_rows=1,
-                            projection_name="knowledge",
-                        ),
-                    )
-                if entry.name.endswith(".json"):
-                    names.append(entry.name)
+        try:
+            with os.scandir(scan_target) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= max_entries:
+                        return (
+                            AuditFault(
+                                code="audit_receipt_inventory_truncated",
+                                message=(
+                                    "audit receipt inventory exceeds the "
+                                    "configured limit"
+                                ),
+                                affected_rows=1,
+                                projection_name="knowledge",
+                            ),
+                        )
+                    if entry.name.endswith(".json"):
+                        names.append(entry.name)
+        except OSError as error:
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message=f"audit receipt directory cannot be enumerated: {error}",
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
+            )
 
         out: list[AuditFault] = []
 
