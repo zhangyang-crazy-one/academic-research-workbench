@@ -404,18 +404,22 @@ class SemanticaSQLiteAdapter:
                     record.binding_checksum,
                 )
             )
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute("DELETE FROM provenance_records")
-            # pi-lens-ignore: sql-injection-vector
-            connection.executemany(
-                "INSERT INTO provenance_records "
-                "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
-                "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
-                "payload, checksum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                prepared,
-            )
-            connection.commit()
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute("DELETE FROM provenance_records")
+                # pi-lens-ignore: sql-injection-vector
+                connection.executemany(
+                    "INSERT INTO provenance_records "
+                    "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
+                    "ledger_event_digest, activity_id, agent_id, created_at, "
+                    "derived_from_json, payload, checksum) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    prepared,
+                )
+                connection.commit()
+        except sqlite3.Error as error:
+            raise RuntimeError(f"Semantica sidecar rebuild failed: {error}") from error
 
     def verify(self) -> tuple[object, ...]:
         """Detect tampering and persist a non-authoritative audit receipt."""
