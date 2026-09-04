@@ -273,6 +273,16 @@ def load_audit_faults(
                     names.append(entry.name)
 
         out: list[AuditFault] = []
+
+        def unreadable_fault(name: str) -> AuditFault:
+            return AuditFault(
+                code="audit_receipt_read_failed",
+                message=f"audit receipt {name} is unreadable or malformed",
+                affected_rows=1,
+                projection_name="knowledge",
+                receipt_id=("audit-read-" + sha256_hex(name.encode("utf-8"))[:24]),
+            )
+
         no_follow = getattr(os, "O_NOFOLLOW", 0)
         file_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | no_follow
         for name in sorted(names):
@@ -281,6 +291,7 @@ def load_audit_faults(
                 try:
                     status = os.fstat(descriptor)
                     if not stat.S_ISREG(status.st_mode) or status.st_size > max_bytes:
+                        out.append(unreadable_fault(name))
                         continue
                     chunks: list[bytes] = []
                     total = 0
@@ -291,18 +302,22 @@ def load_audit_faults(
                         chunks.append(chunk)
                         total += len(chunk)
                     if total > max_bytes:
+                        out.append(unreadable_fault(name))
                         continue
                     raw = b"".join(chunks)
                 finally:
                     os.close(descriptor)
                 value: Mapping[str, object] = strict_json_loads(raw)
             except (OSError, UnicodeError, ValueError):
+                out.append(unreadable_fault(name))
                 continue
             if not isinstance(value, dict):
+                out.append(unreadable_fault(name))
                 continue
             try:
                 affected = int(str(value.get("affected_rows", 0)))
             except ValueError:
+                out.append(unreadable_fault(name))
                 continue
             out.append(
                 AuditFault(

@@ -680,3 +680,17 @@ def test_load_audit_faults_surfaces_broken_symlink_root(tmp_path: Path) -> None:
     )
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_surfaces_malformed_receipt(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    (root / "broken.json").write_bytes(b"{")
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
