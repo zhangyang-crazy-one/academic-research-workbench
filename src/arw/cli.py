@@ -797,7 +797,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             if getattr(args, "store", None) is not None:
                 from arw.composition import local_store_health
 
-                health = local_store_health(args.store)
+                provenance_audit_database = args.store.with_name(
+                    f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
+                )
+                health = local_store_health(
+                    args.store,
+                    provenance_audit_database_path=provenance_audit_database,
+                )
             if args.json_output:
                 payload = report.model_dump(mode="json")
                 if health is not None:

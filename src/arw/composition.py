@@ -171,7 +171,9 @@ def files_admin_service(control_root: Path):
     return FilesAdminService(control_root)
 
 
-def local_store_health(store_path: Path) -> dict:
+def local_store_health(
+    store_path: Path, *, provenance_audit_database_path: Path | None = None
+) -> dict:
     """Projection-health summary for one local store (task 5.3).
 
     Composition-root seam: the kernel never imports ``arw_ext``; the CLI
@@ -186,7 +188,21 @@ def local_store_health(store_path: Path) -> dict:
     store = LocalProjectionStore(Path(store_path))
     store.open()
     try:
-        return collect_health(store)
+        health = collect_health(store)
+        if provenance_audit_database_path is not None:
+            from arw_ext.local_store.receipts import load_audit_faults
+
+            existing = list(health.get("provenance_faults", []))
+            existing.extend(
+                {
+                    "code": fault.code,
+                    "message": fault.message,
+                    "affected_rows": fault.affected_rows,
+                }
+                for fault in load_audit_faults(provenance_audit_database_path)
+            )
+            health["provenance_faults"] = existing
+        return health
     finally:
         store.close()
 

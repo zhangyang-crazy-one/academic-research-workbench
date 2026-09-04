@@ -629,6 +629,30 @@ class SemanticaSQLiteAdapter:
                 )
                 """
             )
+            expected_columns = {
+                "record_id": ("TEXT", 0, 1),
+                "entity_id": ("TEXT", 1, 0),
+                "entity_type": ("TEXT", 1, 0),
+                "artifact_id": ("TEXT", 1, 0),
+                "ledger_event_id": ("TEXT", 1, 0),
+                "ledger_event_digest": ("TEXT", 1, 0),
+                "activity_id": ("TEXT", 1, 0),
+                "agent_id": ("TEXT", 1, 0),
+                "created_at": ("TEXT", 1, 0),
+                "derived_from_json": ("TEXT", 1, 0),
+                "payload": ("BLOB", 1, 0),
+                "checksum": ("TEXT", 1, 0),
+            }
+            table_info = {
+                str(row[1]): (str(row[2]).upper(), row[3], row[5])
+                for row in connection.execute(
+                    "PRAGMA table_info(provenance_records)"
+                ).fetchall()
+            }
+            if table_info != expected_columns:
+                raise sqlite3.DatabaseError(
+                    "provenance_records schema constraints are incompatible"
+                )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS provenance_records_entity_idx "
                 "ON provenance_records(entity_id)"
