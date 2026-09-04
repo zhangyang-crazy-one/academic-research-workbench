@@ -42,6 +42,7 @@ from arw.ports.knowledge import KnowledgeProvider, NullKnowledgeProvider
 
 MAX_SIDECAR_RECORDS = 500
 MAX_PROVENANCE_PAYLOAD_BYTES = 65_536
+MAX_AUDIT_RECEIPTS = MAX_SIDECAR_RECORDS * 2 + 1
 
 
 def _json_value(value: str | bytes) -> object:
@@ -198,10 +199,11 @@ class SemanticaSQLiteAdapter:
                     raise UnboundProvenanceError(
                         "provenance record ID already binds different immutable content"
                     )
-                count = connection.execute(
-                    "SELECT COUNT(*) FROM provenance_records"
+                at_limit = connection.execute(
+                    "SELECT 1 FROM provenance_records LIMIT 1 OFFSET ?",
+                    (MAX_SIDECAR_RECORDS - 1,),
                 ).fetchone()
-                if count is None or int(count[0]) >= MAX_SIDECAR_RECORDS:
+                if at_limit is not None:
                     raise ValueError("Semantica sidecar record limit exceeded")
                 connection.execute(
                     """
@@ -531,7 +533,11 @@ class SemanticaSQLiteAdapter:
             status = audit_directory.lstat()
             if not stat.S_ISDIR(status.st_mode):
                 raise RuntimeError("Semantica audit path is not a directory")
-            for path in audit_directory.iterdir():
+            for index, path in enumerate(audit_directory.iterdir()):
+                if index >= MAX_AUDIT_RECEIPTS:
+                    raise RuntimeError(
+                        "Semantica audit receipt inventory exceeds the Lite limit"
+                    )
                 if not (path.name.startswith("semantica-") and path.suffix == ".json"):
                     continue
                 if path.is_symlink():
