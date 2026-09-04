@@ -199,7 +199,11 @@ def local_store_health(
                     "message": fault.message,
                     "affected_rows": fault.affected_rows,
                 }
-                for fault in load_audit_faults(provenance_audit_database_path)
+                for fault in load_audit_faults(
+                    provenance_audit_database_path,
+                    max_entries=1_001,
+                    max_bytes=65_536,
+                )
             )
             health["provenance_faults"] = existing
         return health

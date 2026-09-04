@@ -46,6 +46,29 @@ MAX_PROVENANCE_PAYLOAD_BYTES = 65_536
 MAX_AUDIT_RECEIPTS = MAX_SIDECAR_RECORDS * 2 + 1
 
 
+def _open_directory_no_follow(path: Path) -> int:
+    """Open an absolute directory by walking from a trusted root descriptor."""
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not path.is_absolute() or no_follow == 0 or os.open not in os.supports_dir_fd:
+        raise OSError("descriptor-relative directory walks are unsupported")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | no_follow
+    )
+    descriptor = os.open(Path(path.anchor), flags)
+    try:
+        for component in path.parts[1:]:
+            child_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def _json_value(value: str | bytes) -> object:
     """Parse a sidecar value, turning corrupt JSON into a typed read failure."""
 
@@ -524,20 +547,10 @@ class SemanticaSQLiteAdapter:
     def _replace_audit_faults(self, faults: tuple[AuditFault, ...]) -> None:
         audit_directory = Path(f"{self._audit_database_path}.audit")
         no_follow = getattr(os, "O_NOFOLLOW", 0)
-        if (
-            no_follow == 0
-            or os.open not in os.supports_dir_fd
-            or os.unlink not in os.supports_dir_fd
-        ):
+        if no_follow == 0 or os.unlink not in os.supports_dir_fd:
             raise RuntimeError("descriptor-relative audit persistence is unsupported")
-        directory_flags = (
-            os.O_RDONLY
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_DIRECTORY", 0)
-            | no_follow
-        )
         try:
-            directory_descriptor = os.open(audit_directory, directory_flags)
+            directory_descriptor = _open_directory_no_follow(audit_directory)
         except OSError as error:
             raise RuntimeError(
                 f"Semantica audit directory open failed: {error}"
