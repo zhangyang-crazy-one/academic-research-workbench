@@ -284,7 +284,12 @@ def load_audit_faults(
             )
 
         no_follow = getattr(os, "O_NOFOLLOW", 0)
-        file_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | no_follow
+        file_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+            | no_follow
+        )
         for name in sorted(names):
             try:
                 descriptor = os.open(name, file_flags, dir_fd=directory_descriptor)

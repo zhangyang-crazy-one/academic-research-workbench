@@ -7,6 +7,7 @@ provenance, supersession, unbound, tamper), and the c8f5a77e regression.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -717,5 +718,19 @@ def test_load_audit_faults_rejects_noncanonical_digest_mismatch(
         ),
     )
     path.write_bytes(b" " + path.read_bytes())
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    os.mkfifo(root / "blocked.json")
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]

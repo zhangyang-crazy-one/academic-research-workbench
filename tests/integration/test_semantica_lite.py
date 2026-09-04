@@ -95,6 +95,15 @@ def test_bounded_artifact_reader_rejects_run_root(tmp_path: Path) -> None:
         _read_bounded_regular_file(tmp_path, ".", max_bytes=1)
 
 
+def test_bounded_artifact_reader_rejects_fifo_without_blocking(
+    tmp_path: Path,
+) -> None:
+    fifo = tmp_path / "artifact.json"
+    os.mkfifo(fifo)
+    with pytest.raises(OSError, match="not a regular file"):
+        _read_bounded_regular_file(tmp_path, fifo.name, max_bytes=1)
+
+
 def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     checksum = adapter.record(_record())
@@ -389,6 +398,19 @@ def test_sidecar_rejects_active_triggers_before_record(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT COUNT(*) FROM provenance_records"
         ).fetchone() == (0,)
+
+
+def test_sidecar_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    os.mkfifo(database)
+    with pytest.raises(ValueError, match="private 0600 regular file"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
 
 
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:

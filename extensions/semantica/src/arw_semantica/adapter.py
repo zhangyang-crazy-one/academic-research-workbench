@@ -100,7 +100,7 @@ def _open_file_no_follow(path: Path, flags: int, mode: int = 0o600) -> int:
     try:
         return os.open(
             path.name,
-            flags | getattr(os, "O_NOFOLLOW", 0),
+            flags | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
             mode,
             dir_fd=parent_descriptor,
         )
@@ -656,6 +656,7 @@ class SemanticaSQLiteAdapter:
                         os.unlink(temporary, dir_fd=directory_descriptor)
                     raise
                 current_receipts.add(target)
+            os.fsync(directory_descriptor)
 
             with os.scandir(directory_descriptor) as entries:
                 for index, entry in enumerate(entries):

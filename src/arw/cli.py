@@ -324,7 +324,12 @@ def _read_bounded_regular_file(
     parent_descriptor: int | None = None
     leaf_name: str | None = None
     no_follow = getattr(os, "O_NOFOLLOW", 0)
-    descriptor_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | no_follow
+    descriptor_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | no_follow
+    )
     supports_stable_walk = (
         no_follow != 0
         and os.open in os.supports_dir_fd
