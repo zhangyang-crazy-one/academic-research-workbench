@@ -517,13 +517,16 @@ class SemanticaSQLiteAdapter:
                 ),
             )
             faults.append(fault)
-        self._clear_resolved_audit_faults()
-        for fault in faults:
-            persist_audit_fault(self._audit_database_path, fault)
+        current_receipts = frozenset(
+            persist_audit_fault(self._audit_database_path, fault).name
+            for fault in faults
+        )
+        self._remove_stale_audit_faults(current_receipts)
         return tuple(faults)
 
-    def _clear_resolved_audit_faults(self) -> None:
+    def _remove_stale_audit_faults(self, current_receipts: frozenset[str]) -> None:
         audit_directory = Path(f"{self._audit_database_path}.audit")
+        deleted = False
         try:
             status = audit_directory.lstat()
             if not stat.S_ISDIR(status.st_mode):
@@ -533,8 +536,15 @@ class SemanticaSQLiteAdapter:
                     continue
                 if path.is_symlink():
                     raise RuntimeError("Semantica audit receipt must not be a symlink")
-                if path.is_file():
+                if path.name not in current_receipts and path.is_file():
                     path.unlink()
+                    deleted = True
+            if deleted:
+                descriptor = os.open(audit_directory, os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
         except OSError as error:
             raise RuntimeError(
                 f"Semantica audit fault reconciliation failed: {error}"
@@ -606,7 +616,9 @@ class SemanticaSQLiteAdapter:
                     "CASE WHEN typeof(checksum) = 'text' "
                     "AND length(CAST(checksum AS BLOB)) = 64 "
                     "THEN checksum ELSE NULL END "
-                    "FROM provenance_records ORDER BY safe_record_id, rowid LIMIT ?",
+                    "FROM (SELECT rowid, record_id, payload, checksum "
+                    "FROM provenance_records ORDER BY record_id LIMIT ?) AS bounded "
+                    "ORDER BY safe_record_id, rowid",
                     (MAX_PROVENANCE_PAYLOAD_BYTES, limit),
                 )
                 yield from cursor
