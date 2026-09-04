@@ -7,8 +7,10 @@ canonical.
 ## Lite profile
 
 The Lite adapter owns one run-scoped SQLite sidecar created with `0600`
-permissions and configured with WAL, `busy_timeout=5000`, and explicit
-transactions. It records only:
+permissions and explicit transactions. It uses SQLite's in-memory journal and
+temporary store so no attacker-controlled `-wal`, `-shm`, or `-journal` path is
+opened; the disposable sidecar is rebuilt from canonical artifacts after an
+interrupted write. It records only:
 
 - schema-versioned source artifact assertions;
 - replay-injected canonical ledger event ID and digest;

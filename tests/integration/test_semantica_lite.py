@@ -431,6 +431,17 @@ def test_sidecar_rejects_hard_linked_database(tmp_path: Path) -> None:
         )
 
 
+def test_sidecar_rejects_hard_linked_auxiliary_file(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    external = tmp_path / "external-wal"
+    external.write_bytes(b"sentinel")
+    os.link(external, tmp_path / "provenance.sqlite3-wal")
+
+    with pytest.raises(ValueError, match="unexpected SQLite auxiliary file"):
+        adapter.record(_record())
+    assert external.read_bytes() == b"sentinel"
+
+
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
     target = tmp_path / "target"
     (target / "nested").mkdir(parents=True)

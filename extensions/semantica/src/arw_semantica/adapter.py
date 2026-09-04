@@ -840,6 +840,25 @@ class SemanticaSQLiteAdapter:
             )
             self._reject_active_triggers(connection)
 
+    @staticmethod
+    def _reject_sqlite_auxiliary_files(database_path: Path) -> None:
+        parent_descriptor = _open_directory_no_follow(database_path.parent)
+        try:
+            for suffix in ("-wal", "-shm", "-journal"):
+                try:
+                    os.stat(
+                        database_path.name + suffix,
+                        dir_fd=parent_descriptor,
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    continue
+                raise ValueError(
+                    "Semantica sidecar has an unexpected SQLite auxiliary file"
+                )
+        finally:
+            os.close(parent_descriptor)
+
     def _connect(self) -> sqlite3.Connection:
         flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
         descriptor = _open_file_no_follow(self._database_path, flags)
@@ -851,6 +870,14 @@ class SemanticaSQLiteAdapter:
                 or (os.name != "nt" and stat.S_IMODE(validated.st_mode) & 0o077)
             ):
                 raise ValueError("Semantica sidecar inode is unsafe")
+            header = os.pread(descriptor, 20, 0)
+            if (
+                len(header) >= 20
+                and header.startswith(b"SQLite format 3\x00")
+                and header[18:20] != b"\x01\x01"
+            ):
+                raise ValueError("legacy WAL-mode Semantica sidecar must be rebuilt")
+            self._reject_sqlite_auxiliary_files(self._database_path)
             fd_aliases = (
                 Path(f"/proc/self/fd/{descriptor}"),
                 Path(f"/dev/fd/{descriptor}"),
@@ -875,7 +902,8 @@ class SemanticaSQLiteAdapter:
                 raise ValueError("Semantica sidecar connection inode mismatch")
         finally:
             os.close(descriptor)
-        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA journal_mode=MEMORY")
+        connection.execute("PRAGMA temp_store=MEMORY")
         connection.execute("PRAGMA busy_timeout=5000")
         connection.execute("PRAGMA synchronous=NORMAL")
         return connection
