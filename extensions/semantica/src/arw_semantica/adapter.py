@@ -89,6 +89,19 @@ def _open_or_create_directory_no_follow(path: Path) -> int:
             os.close(parent_descriptor)
 
 
+def _open_file_no_follow(path: Path, flags: int, mode: int = 0o600) -> int:
+    parent_descriptor = _open_directory_no_follow(path.parent)
+    try:
+        return os.open(
+            path.name,
+            flags | getattr(os, "O_NOFOLLOW", 0),
+            mode,
+            dir_fd=parent_descriptor,
+        )
+    finally:
+        os.close(parent_descriptor)
+
+
 def _json_value(value: str | bytes) -> object:
     """Parse a sidecar value, turning corrupt JSON into a typed read failure."""
 
@@ -738,18 +751,16 @@ class SemanticaSQLiteAdapter:
             raise RuntimeError(f"Semantica sidecar read failed: {error}") from error
 
     def _initialize(self) -> None:
-        self._database_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            descriptor = os.open(
-                self._database_path,
-                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                0o600,
+            descriptor = _open_file_no_follow(
+                self._database_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY
             )
         except FileExistsError:
-            file_status = self._database_path.lstat()
-        else:
+            descriptor = _open_file_no_follow(self._database_path, os.O_RDONLY)
+        try:
+            file_status = os.fstat(descriptor)
+        finally:
             os.close(descriptor)
-            file_status = self._database_path.lstat()
         if not stat.S_ISREG(file_status.st_mode) or (
             os.name != "nt" and stat.S_IMODE(file_status.st_mode) & 0o077
         ):
@@ -808,9 +819,7 @@ class SemanticaSQLiteAdapter:
 
     def _connect(self) -> sqlite3.Connection:
         flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        descriptor = os.open(self._database_path, flags)
+        descriptor = _open_file_no_follow(self._database_path, flags)
         try:
             validated = os.fstat(descriptor)
             if not stat.S_ISREG(validated.st_mode) or (
@@ -822,9 +831,10 @@ class SemanticaSQLiteAdapter:
                 Path(f"/dev/fd/{descriptor}"),
             )
             connection_path = next(
-                (alias for alias in fd_aliases if alias.exists()),
-                self._database_path,
+                (alias for alias in fd_aliases if alias.exists()), None
             )
+            if connection_path is None:
+                raise RuntimeError("Semantica sidecar descriptor alias is unavailable")
             connection = sqlite3.connect(
                 f"file:{quote(str(connection_path))}?mode=rw",
                 uri=True,

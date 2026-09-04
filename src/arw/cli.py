@@ -313,8 +313,10 @@ def _read_bounded_regular_file(
     """Read one confined regular file through a stable run-root descriptor."""
     root = root.resolve()
     relative = Path(relative_path)
-    if relative.is_absolute() or any(
-        part in {"", ".", ".."} for part in relative.parts
+    if (
+        not relative.parts
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
     ):
         raise OSError("artifact path is not normalized and relative")
     close_descriptors: list[int] = []

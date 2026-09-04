@@ -17,7 +17,7 @@ from arw_semantica import (  # pyright: ignore[reportMissingImports]
     UnboundProvenanceError,
 )
 
-from arw.cli import build_parser
+from arw.cli import _read_bounded_regular_file, build_parser
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
 from arw.kernel.core.canonical import canonical_json_bytes
@@ -88,6 +88,11 @@ def _adapter(
 
 def _record_from_payload(payload: dict[str, object]) -> ProvenanceRecord:
     return ProvenanceRecord.model_validate_json(json.dumps(payload))
+
+
+def test_bounded_artifact_reader_rejects_run_root(tmp_path: Path) -> None:
+    with pytest.raises(OSError, match="normalized and relative"):
+        _read_bounded_regular_file(tmp_path, ".", max_bytes=1)
 
 
 def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -> None:
