@@ -781,8 +781,10 @@ class SemanticaSQLiteAdapter:
             file_status = os.fstat(descriptor)
         finally:
             os.close(descriptor)
-        if not stat.S_ISREG(file_status.st_mode) or (
-            os.name != "nt" and stat.S_IMODE(file_status.st_mode) & 0o077
+        if (
+            not stat.S_ISREG(file_status.st_mode)
+            or file_status.st_nlink != 1
+            or (os.name != "nt" and stat.S_IMODE(file_status.st_mode) & 0o077)
         ):
             raise ValueError("Semantica sidecar must be a private 0600 regular file")
         with self._connect() as connection:
@@ -843,8 +845,10 @@ class SemanticaSQLiteAdapter:
         descriptor = _open_file_no_follow(self._database_path, flags)
         try:
             validated = os.fstat(descriptor)
-            if not stat.S_ISREG(validated.st_mode) or (
-                os.name != "nt" and stat.S_IMODE(validated.st_mode) & 0o077
+            if (
+                not stat.S_ISREG(validated.st_mode)
+                or validated.st_nlink != 1
+                or (os.name != "nt" and stat.S_IMODE(validated.st_mode) & 0o077)
             ):
                 raise ValueError("Semantica sidecar inode is unsafe")
             fd_aliases = (

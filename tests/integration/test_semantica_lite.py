@@ -413,6 +413,24 @@ def test_sidecar_rejects_fifo_without_blocking(tmp_path: Path) -> None:
         )
 
 
+def test_sidecar_rejects_hard_linked_database(tmp_path: Path) -> None:
+    external = tmp_path / "external.sqlite3"
+    with sqlite3.connect(external) as connection:
+        connection.execute("CREATE TABLE external_data(value TEXT)")
+    external.chmod(0o600)
+    database = tmp_path / "provenance.sqlite3"
+    os.link(external, database)
+
+    with pytest.raises(ValueError, match="private 0600 regular file"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
+
+
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
     target = tmp_path / "target"
     (target / "nested").mkdir(parents=True)
