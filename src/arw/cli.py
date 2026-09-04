@@ -816,13 +816,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                 health = None
                 if getattr(args, "store", None) is not None:
                     from arw.composition import local_store_health
+                    from arw.kernel.ledger.manifests import load_artifact_manifest
+                    from arw.kernel.state.models import ArtifactAcceptedPayload
 
-                    provenance_audit_database = args.store.with_name(
+                    provenance_sidecar = args.store.with_name(
                         f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
+                    )
+                    provenance_expected = False
+                    for event in replayed.events:
+                        if not isinstance(event.payload, ArtifactAcceptedPayload):
+                            continue
+                        manifest = load_artifact_manifest(
+                            args.run_root, event.payload.manifest_sha256
+                        )
+                        if manifest.artifact_kind == PROVENANCE_ARTIFACT_KIND:
+                            provenance_expected = True
+                            break
+                    provenance_active = (
+                        provenance_expected
+                        or os.path.lexists(provenance_sidecar)
+                        or os.path.lexists(Path(f"{provenance_sidecar}.audit"))
                     )
                     health = local_store_health(
                         args.store,
-                        provenance_audit_database_path=provenance_audit_database,
+                        provenance_audit_database_path=(
+                            provenance_sidecar if provenance_active else None
+                        ),
                     )
             if args.json_output:
                 payload = report.model_dump(mode="json")

@@ -32,6 +32,10 @@ replay-derived canonical record inventory; modified, malformed, extra, or missin
 rows fail closed and verification emits run-scoped ARW audit-fault receipts.
 Sidecar checksums never authorize canonical state transitions.
 
+`status --store` never treats an empty audit directory as proof of current
+canonical equivalence. When provenance is active but no ledger-bound success
+receipt exists, health reports `semantica_health_unknown` rather than `clean`.
+
 The capability is registered only when composition receives both an explicit
 `semantica_store_path` and the extension can be imported. Otherwise resolving
 `knowledge.provenance` returns `CapabilityUnavailable`; L0 operations remain

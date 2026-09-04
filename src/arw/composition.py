@@ -194,18 +194,31 @@ def local_store_health(
             from arw_ext.local_store.receipts import load_audit_faults
 
             existing = list(health.get("provenance_faults", []))
-            existing.extend(
-                {
-                    "code": fault.code,
-                    "message": fault.message,
-                    "affected_rows": fault.affected_rows,
-                }
-                for fault in load_audit_faults(
-                    provenance_audit_database_path,
-                    max_entries=1_001,
-                    max_bytes=65_536,
-                )
+            persisted = load_audit_faults(
+                provenance_audit_database_path,
+                max_entries=1_001,
+                max_bytes=65_536,
             )
+            if not persisted:
+                existing.append(
+                    {
+                        "code": "semantica_health_unknown",
+                        "message": (
+                            "no ledger-bound Semantica verification receipt proves "
+                            "the current canonical inventory"
+                        ),
+                        "affected_rows": 0,
+                    }
+                )
+            else:
+                existing.extend(
+                    {
+                        "code": fault.code,
+                        "message": fault.message,
+                        "affected_rows": fault.affected_rows,
+                    }
+                    for fault in persisted
+                )
             health["provenance_faults"] = existing
         return health
     finally:
