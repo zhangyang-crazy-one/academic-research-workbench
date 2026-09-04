@@ -21,6 +21,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from arw_ext.local_store.location import is_network_filesystem
+from arw_ext.local_store.receipts import AuditFault
 from pydantic import Field
 
 from arw.graph_models import (
@@ -170,7 +171,7 @@ class SemanticaSQLiteAdapter:
         return self._graph_delegate.delete_and_rebuild(projection)
 
     def query(self, request: GraphQueryRequest) -> GraphQueryResult:
-        # pi-lens-ignore: sql-injection-vector
+        # pi-lens-ignore: python-sql-injection
         return self._graph_delegate.query(request)
 
     def record(self, record: ProvenanceRecord) -> str:
@@ -410,7 +411,7 @@ class SemanticaSQLiteAdapter:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute("DELETE FROM provenance_records")
-                # pi-lens-ignore: sql-injection-vector
+                # pi-lens-ignore: python-sql-injection
                 connection.executemany(
                     "INSERT INTO provenance_records "
                     "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
@@ -425,8 +426,6 @@ class SemanticaSQLiteAdapter:
 
     def verify(self) -> tuple[object, ...]:
         """Detect tampering and persist a non-authoritative audit receipt."""
-
-        from arw_ext.local_store.receipts import AuditFault, persist_audit_fault
 
         faults: list[AuditFault] = []
         observed_record_ids: set[str] = set()
@@ -519,42 +518,117 @@ class SemanticaSQLiteAdapter:
                 ),
             )
             faults.append(fault)
-        current_receipts = frozenset(
-            persist_audit_fault(self._audit_database_path, fault).name
-            for fault in faults
-        )
-        self._remove_stale_audit_faults(current_receipts)
+        self._replace_audit_faults(tuple(faults))
         return tuple(faults)
 
-    def _remove_stale_audit_faults(self, current_receipts: frozenset[str]) -> None:
+    def _replace_audit_faults(self, faults: tuple[AuditFault, ...]) -> None:
         audit_directory = Path(f"{self._audit_database_path}.audit")
-        deleted = False
+        no_follow = getattr(os, "O_NOFOLLOW", 0)
+        if (
+            no_follow == 0
+            or os.open not in os.supports_dir_fd
+            or os.unlink not in os.supports_dir_fd
+        ):
+            raise RuntimeError("descriptor-relative audit persistence is unsupported")
+        directory_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0)
+            | no_follow
+        )
         try:
-            status = audit_directory.lstat()
+            directory_descriptor = os.open(audit_directory, directory_flags)
+        except OSError as error:
+            raise RuntimeError(
+                f"Semantica audit directory open failed: {error}"
+            ) from error
+        try:
+            status = os.fstat(directory_descriptor)
             if not stat.S_ISDIR(status.st_mode):
                 raise RuntimeError("Semantica audit path is not a directory")
-            for index, path in enumerate(audit_directory.iterdir()):
-                if index >= MAX_AUDIT_RECEIPTS:
-                    raise RuntimeError(
-                        "Semantica audit receipt inventory exceeds the Lite limit"
-                    )
-                if not (path.name.startswith("semantica-") and path.suffix == ".json"):
-                    continue
-                if path.is_symlink():
-                    raise RuntimeError("Semantica audit receipt must not be a symlink")
-                if path.name not in current_receipts and path.is_file():
-                    path.unlink()
-                    deleted = True
-            if deleted:
-                descriptor = os.open(audit_directory, os.O_RDONLY)
+            if os.name != "nt" and stat.S_IMODE(status.st_mode) & 0o077:
+                raise RuntimeError("Semantica audit directory permissions are unsafe")
+
+            current_receipts: set[str] = set()
+            for fault in faults:
+                payload = canonical_json_bytes(
+                    {
+                        "schema_version": "1.0.0",
+                        "code": fault.code,
+                        "message": fault.message,
+                        "affected_rows": fault.affected_rows,
+                        "projection_name": fault.projection_name,
+                        "receipt_id": fault.receipt_id,
+                    }
+                )
+                identifier = fault.receipt_id or (
+                    f"{fault.projection_name}-{fault.code}"
+                )
+                target = (
+                    "semantica-"
+                    f"{sha256_hex(identifier.encode('utf-8'))[:24]}-"
+                    f"{sha256_hex(payload)[:12]}.json"
+                )
+                temporary = f".{target}.{os.getpid()}.tmp"
+                descriptor = os.open(
+                    temporary,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
+                    0o600,
+                    dir_fd=directory_descriptor,
+                )
                 try:
+                    remaining = memoryview(payload)
+                    while remaining:
+                        written = os.write(descriptor, remaining)
+                        if written <= 0:
+                            raise OSError("short Semantica audit receipt write")
+                        remaining = remaining[written:]
                     os.fsync(descriptor)
+                except BaseException:
+                    with suppress(OSError):
+                        os.unlink(temporary, dir_fd=directory_descriptor)
+                    raise
                 finally:
                     os.close(descriptor)
+                try:
+                    os.replace(
+                        temporary,
+                        target,
+                        src_dir_fd=directory_descriptor,
+                        dst_dir_fd=directory_descriptor,
+                    )
+                except BaseException:
+                    with suppress(OSError):
+                        os.unlink(temporary, dir_fd=directory_descriptor)
+                    raise
+                current_receipts.add(target)
+
+            with os.scandir(directory_descriptor) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= MAX_AUDIT_RECEIPTS:
+                        raise RuntimeError(
+                            "Semantica audit receipt inventory exceeds the Lite limit"
+                        )
+                    if not (
+                        entry.name.startswith("semantica-")
+                        and entry.name.endswith(".json")
+                    ):
+                        continue
+                    if entry.is_symlink():
+                        raise RuntimeError(
+                            "Semantica audit receipt must not be a symlink"
+                        )
+                    if entry.name not in current_receipts and entry.is_file(
+                        follow_symlinks=False
+                    ):
+                        os.unlink(entry.name, dir_fd=directory_descriptor)
+            os.fsync(directory_descriptor)
         except OSError as error:
             raise RuntimeError(
                 f"Semantica audit fault reconciliation failed: {error}"
             ) from error
+        finally:
+            os.close(directory_descriptor)
 
     def _validate_binding(self, record: ProvenanceRecord) -> None:
         if not record.artifact_id:
@@ -640,10 +714,10 @@ class SemanticaSQLiteAdapter:
                 0o600,
             )
         except FileExistsError:
-            pass
+            file_status = self._database_path.lstat()
         else:
             os.close(descriptor)
-        file_status = self._database_path.lstat()
+            file_status = self._database_path.lstat()
         if not stat.S_ISREG(file_status.st_mode) or (
             os.name != "nt" and stat.S_IMODE(file_status.st_mode) & 0o077
         ):
