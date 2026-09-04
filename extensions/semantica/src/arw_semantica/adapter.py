@@ -185,8 +185,10 @@ class SemanticaSQLiteAdapter:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
-                    "SELECT payload, checksum FROM provenance_records WHERE record_id = ?",
-                    (record.record_id,),
+                    "SELECT CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
+                    "THEN payload ELSE NULL END, checksum "
+                    "FROM provenance_records WHERE record_id = ?",
+                    (MAX_PROVENANCE_PAYLOAD_BYTES, record.record_id),
                 ).fetchone()
                 if existing is not None:
                     if existing == (payload, record.binding_checksum):
@@ -456,10 +458,7 @@ class SemanticaSQLiteAdapter:
                             str(event_id), frozenset()
                         )
                         and expected_artifact_sha == artifact_sha
-                        and (
-                            expected_record_sha is None
-                            or expected_record_sha == artifact_sha
-                        )
+                        and expected_record_sha == artifact_sha
                     ):
                         continue
             detail = (
@@ -524,6 +523,13 @@ class SemanticaSQLiteAdapter:
         ):
             raise UnboundProvenanceError(
                 "provenance assertion differs from its accepted artifact content"
+            )
+        expected_record_sha = self._expected_provenance_record_sha256.get(
+            record.record_id
+        )
+        if expected_record_sha != record.checksum:
+            raise UnboundProvenanceError(
+                "provenance record is absent from the canonical inventory"
             )
 
     @staticmethod
@@ -606,24 +612,40 @@ class SemanticaSQLiteAdapter:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        before = self._database_path.lstat()
-        if (
-            not stat.S_ISREG(before.st_mode)
-            or stat.S_IMODE(before.st_mode) & 0o077
-        ):
-            raise ValueError("Semantica sidecar inode is unsafe")
-        connection = sqlite3.connect(
-            f"file:{quote(str(self._database_path))}?mode=rw",
-            uri=True,
-            timeout=5.0,
-        )
-        after = self._database_path.lstat()
-        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or (
-            not stat.S_ISREG(after.st_mode)
-            or stat.S_IMODE(after.st_mode) & 0o077
-        ):
-            connection.close()
-            raise ValueError("Semantica sidecar inode changed during open")
+        flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(self._database_path, flags)
+        try:
+            validated = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(validated.st_mode)
+                or stat.S_IMODE(validated.st_mode) & 0o077
+            ):
+                raise ValueError("Semantica sidecar inode is unsafe")
+            fd_aliases = (
+                Path(f"/proc/self/fd/{descriptor}"),
+                Path(f"/dev/fd/{descriptor}"),
+            )
+            connection_path = next(
+                (alias for alias in fd_aliases if alias.exists()),
+                self._database_path,
+            )
+            connection = sqlite3.connect(
+                f"file:{quote(str(connection_path))}?mode=rw",
+                uri=True,
+                timeout=5.0,
+            )
+            database_row = connection.execute("PRAGMA database_list").fetchone()
+            if database_row is None:
+                connection.close()
+                raise ValueError("Semantica sidecar connection has no main database")
+            opened = Path(str(database_row[2])).stat()
+            if (validated.st_dev, validated.st_ino) != (opened.st_dev, opened.st_ino):
+                connection.close()
+                raise ValueError("Semantica sidecar connection inode mismatch")
+        finally:
+            os.close(descriptor)
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA busy_timeout=5000")
         connection.execute("PRAGMA synchronous=NORMAL")

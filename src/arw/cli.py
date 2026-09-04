@@ -310,19 +310,43 @@ def _is_status_json_request(args: argparse.Namespace) -> bool:
 def _read_bounded_regular_file(
     root: Path, relative_path: str, *, max_bytes: int
 ) -> bytes | None:
-    """Read one confined regular file without following its final symlink."""
+    """Read one confined regular file through a stable run-root descriptor."""
     root = root.resolve()
-    candidate = root / relative_path
-    if candidate.is_symlink() or any(
-        ancestor.is_symlink()
-        for ancestor in candidate.parents
-        if ancestor != root and ancestor.is_relative_to(root)
-    ):
-        raise OSError("artifact path contains a symlink")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    descriptor = os.open(candidate, flags)
+    relative = Path(relative_path)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise OSError("artifact path is not normalized and relative")
+    close_descriptors: list[int] = []
+    parent_descriptor: int | None = None
+    leaf_name: str | None = None
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    descriptor_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | no_follow
+    supports_stable_walk = (
+        no_follow != 0
+        and os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+    )
+    if supports_stable_walk:
+        directory_flags = descriptor_flags | getattr(os, "O_DIRECTORY", 0)
+        parent_descriptor = os.open(root, directory_flags)
+        close_descriptors.append(parent_descriptor)
+        for part in relative.parts[:-1]:
+            parent_descriptor = os.open(
+                part, directory_flags, dir_fd=parent_descriptor
+            )
+            close_descriptors.append(parent_descriptor)
+        leaf_name = relative.parts[-1]
+        descriptor = os.open(
+            leaf_name, descriptor_flags, dir_fd=parent_descriptor
+        )
+    else:
+        candidate = root / relative
+        if candidate.is_symlink() or any(
+            ancestor.is_symlink()
+            for ancestor in candidate.parents
+            if ancestor != root and ancestor.is_relative_to(root)
+        ):
+            raise OSError("artifact path contains a symlink")
+        descriptor = os.open(candidate, descriptor_flags)
     try:
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
@@ -338,7 +362,13 @@ def _read_bounded_regular_file(
             chunks.append(chunk)
             total += len(chunk)
         after = os.fstat(descriptor)
-        current = os.stat(candidate, follow_symlinks=False)
+        if parent_descriptor is not None and leaf_name is not None:
+            current = os.stat(
+                leaf_name, dir_fd=parent_descriptor, follow_symlinks=False
+            )
+        else:
+            current = os.stat(root / relative, follow_symlinks=False)
+
         def identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
             return (
                 value.st_dev,
@@ -347,12 +377,15 @@ def _read_bounded_regular_file(
                 value.st_size,
                 value.st_mtime_ns,
             )
+
         if identity(before) != identity(after) or identity(after) != identity(current):
             raise OSError("artifact changed during bounded read")
         content = b"".join(chunks)
         return None if len(content) > max_bytes else content
     finally:
         os.close(descriptor)
+        for directory_descriptor in reversed(close_descriptors):
+            os.close(directory_descriptor)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
