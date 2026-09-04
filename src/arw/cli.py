@@ -717,6 +717,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         JournalError,
         append_probe,
         initialize_run,
+        locked_replay,
         replay_run,
     )
     from arw.kernel.ledger.manifests import ManifestError
@@ -789,29 +790,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
-            replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
-            status_now = _parse_utc(args.at) or datetime.now(UTC)
-            state = reduce_events(
-                replayed.workflow_definition_id,
-                replayed.events,
-                now=status_now,
-                recovery_health=replayed.recovery_health,
-            )
-            report = build_status_report(state)
-            # Purely additive: projection health appears only when --store is
-            # given, so the pinned v1 status envelope stays byte-identical
-            # for every existing invocation.
-            health = None
-            if getattr(args, "store", None) is not None:
-                from arw.composition import local_store_health
+            with locked_replay(args.run_root, lock_timeout=args.lock_timeout) as (
+                _,
+                replayed,
+            ):
+                status_now = _parse_utc(args.at) or datetime.now(UTC)
+                state = reduce_events(
+                    replayed.workflow_definition_id,
+                    replayed.events,
+                    now=status_now,
+                    recovery_health=replayed.recovery_health,
+                )
+                report = build_status_report(state)
+                # Purely additive: projection health appears only when --store is
+                # given, so the pinned v1 status envelope stays byte-identical
+                # for every existing invocation.
+                health = None
+                if getattr(args, "store", None) is not None:
+                    from arw.composition import local_store_health
 
-                provenance_audit_database = args.store.with_name(
-                    f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
-                )
-                health = local_store_health(
-                    args.store,
-                    provenance_audit_database_path=provenance_audit_database,
-                )
+                    provenance_audit_database = args.store.with_name(
+                        f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
+                    )
+                    health = local_store_health(
+                        args.store,
+                        provenance_audit_database_path=provenance_audit_database,
+                    )
             if args.json_output:
                 payload = report.model_dump(mode="json")
                 if health is not None:
