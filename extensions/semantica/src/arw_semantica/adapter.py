@@ -278,13 +278,22 @@ class SemanticaSQLiteAdapter:
             accepted_artifacts = self._accepted_artifact_ids_by_event.get(
                 str(event_id), frozenset()
             )
+            artifact_sha = sha256_hex(canonical_json_bytes(artifact_payload))
             if (
                 self._canonical_event_digests.get(str(event_id)) != event_digest
                 or record_value.get("artifact_id") not in accepted_artifacts
                 or self._accepted_artifact_sha256_by_event.get(str(event_id))
-                != sha256_hex(canonical_json_bytes(artifact_payload))
+                != artifact_sha
             ):
                 continue
+            if (
+                self._expected_provenance_record_sha256.get(payload_record_id)
+                != artifact_sha
+            ):
+                raise RuntimeError(
+                    f"Semantica lineage record {payload_record_id} is outside "
+                    "the canonical inventory"
+                )
             by_entity.setdefault(stored_entity_id, []).append(
                 (payload_record_id, tuple(parents_value), record_value, str(checksum))
             )
@@ -553,10 +562,16 @@ class SemanticaSQLiteAdapter:
         try:
             with self._connect() as connection:
                 cursor = connection.execute(
-                    "SELECT record_id, "
+                    "SELECT "
+                    "CASE WHEN typeof(record_id) = 'text' "
+                    "AND length(CAST(record_id AS BLOB)) <= 96 "
+                    "THEN record_id ELSE NULL END, "
                     "CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
-                    "THEN payload ELSE NULL END, checksum "
-                    "FROM provenance_records ORDER BY record_id LIMIT ?",
+                    "THEN payload ELSE NULL END, "
+                    "CASE WHEN typeof(checksum) = 'text' "
+                    "AND length(CAST(checksum AS BLOB)) = 64 "
+                    "THEN checksum ELSE NULL END "
+                    "FROM provenance_records ORDER BY rowid LIMIT ?",
                     (MAX_PROVENANCE_PAYLOAD_BYTES, limit),
                 )
                 yield from cursor
