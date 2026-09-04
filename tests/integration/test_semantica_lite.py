@@ -396,10 +396,9 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
 
 def test_verify_rejects_audit_directory_swap_after_construction(
     tmp_path: Path,
- ) -> None:
+) -> None:
     adapter = _adapter(tmp_path)
     audit_directory = tmp_path / "projection.sqlite3.audit"
-    audit_directory.rmdir()
     target = tmp_path / "external-audit"
     target.mkdir()
     audit_directory.symlink_to(target, target_is_directory=True)

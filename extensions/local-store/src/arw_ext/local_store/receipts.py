@@ -225,6 +225,8 @@ def load_audit_faults(
     if max_bytes < 1 or max_bytes > DEFAULT_MAX_AUDIT_RECEIPT_BYTES:
         raise ValueError("audit receipt byte bound is outside the supported range")
     root = audit_root(database_path)
+    if not root.exists():
+        return ()
     try:
         directory_descriptor = _open_directory_no_follow(root)
     except FileNotFoundError:

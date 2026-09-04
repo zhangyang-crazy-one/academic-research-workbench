@@ -69,6 +69,26 @@ def _open_directory_no_follow(path: Path) -> int:
         raise
 
 
+def _open_or_create_directory_no_follow(path: Path) -> int:
+    try:
+        return _open_directory_no_follow(path)
+    except FileNotFoundError:
+        parent_descriptor = _open_directory_no_follow(path.parent)
+        no_follow = getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0)
+            | no_follow
+        )
+        try:
+            with suppress(FileExistsError):
+                os.mkdir(path.name, mode=0o700, dir_fd=parent_descriptor)
+            return os.open(path.name, flags, dir_fd=parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+
+
 def _json_value(value: str | bytes) -> object:
     """Parse a sidecar value, turning corrupt JSON into a typed read failure."""
 
@@ -161,15 +181,14 @@ class SemanticaSQLiteAdapter:
             audit_database_path or self._database_path
         )
         audit_directory = Path(f"{self._audit_database_path}.audit")
-        with suppress(FileExistsError):
-            audit_directory.mkdir(mode=0o700)
-        audit_status = audit_directory.lstat()
-        if not stat.S_ISDIR(audit_status.st_mode) or (
-            os.name != "nt" and stat.S_IMODE(audit_status.st_mode) & 0o077
-        ):
-            raise ValueError(
-                "Semantica audit directory must be a private 0700 directory"
-            )
+        if audit_directory.exists():
+            audit_status = audit_directory.lstat()
+            if not stat.S_ISDIR(audit_status.st_mode) or (
+                os.name != "nt" and stat.S_IMODE(audit_status.st_mode) & 0o077
+            ):
+                raise ValueError(
+                    "Semantica audit directory must be a private 0700 directory"
+                )
         self._graph_delegate = graph_provider or NullKnowledgeProvider()
         try:
             self._initialize()
@@ -550,7 +569,7 @@ class SemanticaSQLiteAdapter:
         if no_follow == 0 or os.unlink not in os.supports_dir_fd:
             raise RuntimeError("descriptor-relative audit persistence is unsupported")
         try:
-            directory_descriptor = _open_directory_no_follow(audit_directory)
+            directory_descriptor = _open_or_create_directory_no_follow(audit_directory)
         except OSError as error:
             raise RuntimeError(
                 f"Semantica audit directory open failed: {error}"
@@ -618,7 +637,7 @@ class SemanticaSQLiteAdapter:
 
             with os.scandir(directory_descriptor) as entries:
                 for index, entry in enumerate(entries):
-                    if index >= MAX_AUDIT_RECEIPTS:
+                    if index >= MAX_AUDIT_RECEIPTS * 2:
                         raise RuntimeError(
                             "Semantica audit receipt inventory exceeds the Lite limit"
                         )
