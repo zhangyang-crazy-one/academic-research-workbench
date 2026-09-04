@@ -795,19 +795,27 @@ class SemanticaSQLiteAdapter:
                     "SELECT "
                     "CASE WHEN typeof(record_id) = 'text' "
                     "AND length(CAST(record_id AS BLOB)) <= 96 "
-                    "THEN record_id ELSE '__arw_invalid_record_id_rowid__' "
-                    "|| printf('%016x', rowid) END AS safe_record_id, "
+                    "THEN CAST(record_id AS BLOB) ELSE NULL END AS record_id_bytes, "
                     "CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
                     "THEN payload ELSE NULL END, "
                     "CASE WHEN typeof(checksum) = 'text' "
                     "AND length(CAST(checksum AS BLOB)) = 64 "
-                    "THEN checksum ELSE NULL END "
+                    "THEN CAST(checksum AS BLOB) ELSE NULL END, rowid "
                     "FROM (SELECT rowid, record_id, payload, checksum "
                     "FROM provenance_records ORDER BY record_id LIMIT ?) AS bounded "
-                    "ORDER BY safe_record_id, rowid",
+                    "ORDER BY record_id_bytes, rowid",
                     (MAX_PROVENANCE_PAYLOAD_BYTES, limit),
                 )
-                yield from cursor
+                for record_id_bytes, payload, checksum_bytes, rowid in cursor:
+                    record_id = f"__arw_invalid_record_id_rowid__{int(rowid):016x}"
+                    if isinstance(record_id_bytes, bytes):
+                        with suppress(UnicodeDecodeError):
+                            record_id = record_id_bytes.decode("utf-8")
+                    checksum = None
+                    if isinstance(checksum_bytes, bytes):
+                        with suppress(UnicodeDecodeError):
+                            checksum = checksum_bytes.decode("ascii")
+                    yield record_id, payload, checksum
         except sqlite3.Error as error:
             raise RuntimeError(f"Semantica sidecar read failed: {error}") from error
 

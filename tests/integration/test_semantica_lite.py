@@ -217,6 +217,22 @@ def test_verify_preserves_distinct_malformed_row_identities(tmp_path: Path) -> N
     assert len(list((tmp_path / "projection.sqlite3.audit").glob("*.json"))) == 2
 
 
+def test_verify_sanitizes_invalid_utf8_sqlite_record_id(tmp_path: Path) -> None:
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET record_id = CAST(X'80' AS TEXT)"
+        )
+
+    faults = adapter.verify()
+    assert [fault.code for fault in faults] == [
+        "semantica_checksum_mismatch",
+        "semantica_missing_record",
+    ]
+
+
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
     source = _record(entity_id="source.alpha")
     decision = _record(
