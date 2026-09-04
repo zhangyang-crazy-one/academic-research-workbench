@@ -313,6 +313,7 @@ def load_audit_faults(
                 finally:
                     os.close(descriptor)
                 value: Mapping[str, object] = strict_json_loads(raw)
+                canonical_value = canonical_json_bytes(value)
             except (OSError, UnicodeError, ValueError):
                 out.append(unreadable_fault(name))
                 continue
@@ -323,7 +324,7 @@ def load_audit_faults(
             if (
                 not separator
                 or filename_digest != sha256_hex(raw)[:12]
-                or canonical_json_bytes(value) != raw
+                or canonical_value != raw
             ):
                 out.append(unreadable_fault(name))
                 continue

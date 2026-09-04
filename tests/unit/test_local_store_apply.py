@@ -7,6 +7,7 @@ provenance, supersession, unbound, tamper), and the c8f5a77e regression.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -732,5 +733,27 @@ def test_load_audit_faults_rejects_fifo_without_blocking(tmp_path: Path) -> None
     root = audit_root(database)
     root.mkdir()
     os.mkfifo(root / "blocked.json")
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_handles_lone_surrogate_as_unreadable(
+    tmp_path: Path,
+) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    raw = (
+        b'{"affected_rows":1,"code":"\\udcff","message":"fault",'
+        b'"projection_name":"knowledge","receipt_id":"bad",'
+        b'"schema_version":"1.0.0"}'
+    )
+    digest = hashlib.sha256(raw).hexdigest()[:12]
+    (root / f"bad-{digest}.json").write_bytes(raw)
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
