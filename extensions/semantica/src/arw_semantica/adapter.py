@@ -227,6 +227,10 @@ class SemanticaSQLiteAdapter:
             record_value = _json_value(payload)
             if not isinstance(record_value, dict):
                 raise TypeError(f"corrupt Semantica payload for {record_id}")
+            if canonical_json_bytes(record_value) != payload:
+                raise RuntimeError(
+                    f"noncanonical Semantica payload encoding for {record_id}"
+                )
             payload_record_id = record_value.get("record_id")
             stored_entity_id = record_value.get("entity_id")
             parents_value = record_value.get("derived_from")
@@ -398,9 +402,14 @@ class SemanticaSQLiteAdapter:
             if checksum_matches and payload_bytes is not None:
                 try:
                     payload_value = _json_value(payload_bytes)
-                except RuntimeError:
+                    canonical_payload_bytes = canonical_json_bytes(payload_value)
+                except (RuntimeError, TypeError, ValueError):
                     payload_value = None
-                if isinstance(payload_value, dict):
+                    canonical_payload_bytes = None
+                if (
+                    isinstance(payload_value, dict)
+                    and canonical_payload_bytes == payload_bytes
+                ):
                     artifact_payload = dict(payload_value)
                     artifact_payload.pop("ledger_event_id", None)
                     artifact_payload.pop("ledger_event_digest", None)

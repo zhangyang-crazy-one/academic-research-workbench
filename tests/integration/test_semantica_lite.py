@@ -199,6 +199,27 @@ def test_verify_turns_checksummed_invalid_json_into_audit_fault(
     ]
 
 
+def test_noncanonical_checksummed_payload_is_rejected(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    record = _record()
+    adapter.record(record)
+    reformatted = json.dumps(record.canonical_payload(), indent=2).encode("utf-8")
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? WHERE record_id = ?",
+            (
+                reformatted,
+                hashlib.sha256(reformatted).hexdigest(),
+                record.record_id,
+            ),
+        )
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_checksum_mismatch"
+    ]
+    with pytest.raises(RuntimeError, match="noncanonical"):
+        adapter.lineage(record.entity_id)
+
+
 def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     adapter.record(_record())
