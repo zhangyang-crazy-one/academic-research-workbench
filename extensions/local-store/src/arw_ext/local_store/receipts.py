@@ -243,22 +243,27 @@ def load_audit_faults(
                 ),
             )
     root = candidate
-    try:
-        directory_descriptor = _open_directory_no_follow(root)
-    except FileNotFoundError:
-        return ()
-    except OSError as error:
-        return (
-            AuditFault(
-                code="audit_receipt_read_failed",
-                message=f"audit receipt directory is unsafe or unreadable: {error}",
-                affected_rows=1,
-                projection_name="knowledge",
-            ),
-        )
+    directory_descriptor: int | None = None
+    if os.name != "nt":
+        try:
+            directory_descriptor = _open_directory_no_follow(root)
+        except FileNotFoundError:
+            return ()
+        except OSError as error:
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message=(
+                        f"audit receipt directory is unsafe or unreadable: {error}"
+                    ),
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
+            )
     try:
         names: list[str] = []
-        with os.scandir(directory_descriptor) as entries:
+        scan_target = root if directory_descriptor is None else directory_descriptor
+        with os.scandir(scan_target) as entries:
             for index, entry in enumerate(entries):
                 if index >= max_entries:
                     return (
@@ -292,12 +297,27 @@ def load_audit_faults(
         )
         for name in sorted(names):
             try:
-                descriptor = os.open(name, file_flags, dir_fd=directory_descriptor)
+                if directory_descriptor is None:
+                    receipt_path = root / name
+                    if receipt_path.is_symlink():
+                        raise OSError("audit receipt must not be a symlink")
+                    descriptor = os.open(receipt_path, file_flags)
+                else:
+                    descriptor = os.open(name, file_flags, dir_fd=directory_descriptor)
                 try:
                     status = os.fstat(descriptor)
                     if not stat.S_ISREG(status.st_mode) or status.st_size > max_bytes:
                         out.append(unreadable_fault(name))
                         continue
+                    if directory_descriptor is None:
+                        live = os.stat(root / name, follow_symlinks=False)
+                        if (
+                            live.st_dev != status.st_dev
+                            or live.st_ino != status.st_ino
+                            or live.st_mode != status.st_mode
+                        ):
+                            out.append(unreadable_fault(name))
+                            continue
                     chunks: list[bytes] = []
                     total = 0
                     while total <= max_bytes:
@@ -348,7 +368,8 @@ def load_audit_faults(
             )
         return tuple(out)
     finally:
-        os.close(directory_descriptor)
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)
 
 
 def clear_audit_faults(database_path: Path, *, receipt_id: str | None = None) -> int:

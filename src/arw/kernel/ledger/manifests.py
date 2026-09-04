@@ -346,6 +346,8 @@ def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Pa
 
 def _install(root: Path, relative_store: Path, manifest: StrictModel) -> Path:
     value, digest = manifest_bytes_and_sha256(manifest)
+    if len(value) > MAX_MANIFEST_BYTES:
+        raise ManifestError("manifest exceeds the byte limit")
     root = root.resolve()
     store = root
     for part in relative_store.parts:
