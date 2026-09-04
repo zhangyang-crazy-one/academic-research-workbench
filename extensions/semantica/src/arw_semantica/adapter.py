@@ -142,7 +142,10 @@ class SemanticaSQLiteAdapter:
         audit_status = audit_directory.lstat()
         if (
             not stat.S_ISDIR(audit_status.st_mode)
-            or stat.S_IMODE(audit_status.st_mode) & 0o077
+            or (
+                os.name != "nt"
+                and stat.S_IMODE(audit_status.st_mode) & 0o077
+            )
         ):
             raise ValueError(
                 "Semantica audit directory must be a private 0700 directory"
@@ -186,7 +189,10 @@ class SemanticaSQLiteAdapter:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
                     "SELECT CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
-                    "THEN payload ELSE NULL END, checksum "
+                    "THEN payload ELSE NULL END, "
+                    "CASE WHEN typeof(checksum) = 'text' "
+                    "AND length(CAST(checksum AS BLOB)) = 64 "
+                    "THEN checksum ELSE NULL END "
                     "FROM provenance_records WHERE record_id = ?",
                     (MAX_PROVENANCE_PAYLOAD_BYTES, record.record_id),
                 ).fetchone()
@@ -550,7 +556,10 @@ class SemanticaSQLiteAdapter:
             raise ValueError("Semantica sidecar path or ancestor must not be a symlink")
         if not candidate.parent.is_dir():
             raise ValueError("Semantica sidecar parent directory does not exist")
-        if stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022:
+        if (
+            os.name != "nt"
+            and stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022
+        ):
             raise ValueError(
                 "Semantica sidecar parent must not be group/world-writable"
             )
@@ -565,13 +574,13 @@ class SemanticaSQLiteAdapter:
                     "SELECT "
                     "CASE WHEN typeof(record_id) = 'text' "
                     "AND length(CAST(record_id AS BLOB)) <= 96 "
-                    "THEN record_id ELSE NULL END, "
+                    "THEN record_id ELSE NULL END AS safe_record_id, "
                     "CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
                     "THEN payload ELSE NULL END, "
                     "CASE WHEN typeof(checksum) = 'text' "
                     "AND length(CAST(checksum AS BLOB)) = 64 "
                     "THEN checksum ELSE NULL END "
-                    "FROM provenance_records ORDER BY rowid LIMIT ?",
+                    "FROM provenance_records ORDER BY safe_record_id, rowid LIMIT ?",
                     (MAX_PROVENANCE_PAYLOAD_BYTES, limit),
                 )
                 yield from cursor
@@ -593,7 +602,10 @@ class SemanticaSQLiteAdapter:
         file_status = self._database_path.lstat()
         if (
             not stat.S_ISREG(file_status.st_mode)
-            or stat.S_IMODE(file_status.st_mode) & 0o077
+            or (
+                os.name != "nt"
+                and stat.S_IMODE(file_status.st_mode) & 0o077
+            )
         ):
             raise ValueError(
                 "Semantica sidecar must be a private 0600 regular file"
@@ -635,7 +647,10 @@ class SemanticaSQLiteAdapter:
             validated = os.fstat(descriptor)
             if (
                 not stat.S_ISREG(validated.st_mode)
-                or stat.S_IMODE(validated.st_mode) & 0o077
+                or (
+                    os.name != "nt"
+                    and stat.S_IMODE(validated.st_mode) & 0o077
+                )
             ):
                 raise ValueError("Semantica sidecar inode is unsafe")
             fd_aliases = (
