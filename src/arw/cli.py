@@ -36,6 +36,7 @@ from arw.kernel.execution.host_dispatch import (
 )
 
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
+PROVENANCE_ARTIFACT_KIND = "provenance-record"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -561,14 +562,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 manifest = load_artifact_manifest(
                     args.run_root, accepted.manifest_sha256
                 )
-                if manifest.media_type != "application/json":
+                if manifest.artifact_kind != PROVENANCE_ARTIFACT_KIND:
                     continue
+                if manifest.media_type != "application/json":
+                    raise ValueError(
+                        "accepted provenance artifact must use application/json"
+                    )
                 content_bytes = _read_bounded_regular_file(
                     args.run_root, manifest.content_path, max_bytes=65_536
                 )
                 if content_bytes is None:
                     raise ValueError(
-                        "accepted JSON artifact exceeds the provenance Lite limit"
+                        "accepted provenance artifact exceeds the Lite limit"
                     )
                 if sha256_hex(content_bytes) != accepted.artifact_sha256:
                     raise ValueError("accepted provenance artifact content is unsafe")

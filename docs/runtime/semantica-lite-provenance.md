@@ -22,7 +22,9 @@ required by the published Draft 2020-12 `provenance-record.schema.json`; the
 schema is registered in the packaged schema inventory and build identity. Replay
 injects the accepted event ID/digest and the adapter stores a separate binding
 checksum. Accepted artifact digest mappings are mandatory whenever the capability
-is enabled. `rebuild` validates bounded regular artifact files and atomically
+is enabled. Canonical provenance manifests use the explicit
+`artifact_kind: provenance-record` discriminator; unrelated JSON artifacts are not
+classified by content guessing. `rebuild` validates bounded regular artifact files and atomically
 replaces the sidecar. `verify()` and `lineage()` compare stored rows with the
 replay-derived canonical record inventory; modified, malformed, extra, or missing
 rows fail closed and verification emits run-scoped ARW audit-fault receipts.
