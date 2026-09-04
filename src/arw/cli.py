@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import stat
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -305,6 +306,54 @@ def _is_status_json_request(args: argparse.Namespace) -> bool:
     return args.command == "status" and bool(args.json_output)
 
 
+def _read_bounded_regular_file(
+    root: Path, relative_path: str, *, max_bytes: int
+) -> bytes | None:
+    """Read one confined regular file without following its final symlink."""
+    root = root.resolve()
+    candidate = root / relative_path
+    if candidate.is_symlink() or any(
+        ancestor.is_symlink()
+        for ancestor in candidate.parents
+        if ancestor != root and ancestor.is_relative_to(root)
+    ):
+        raise OSError("artifact path contains a symlink")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(candidate, flags)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError("artifact is not a regular file")
+        if before.st_size > max_bytes:
+            return None
+        chunks: list[bytes] = []
+        total = 0
+        while total <= max_bytes:
+            chunk = os.read(descriptor, min(65_536, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        after = os.fstat(descriptor)
+        current = os.stat(candidate, follow_symlinks=False)
+        def identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
+            return (
+                value.st_dev,
+                value.st_ino,
+                value.st_mode,
+                value.st_size,
+                value.st_mtime_ns,
+            )
+        if identity(before) != identity(after) or identity(after) != identity(current):
+            raise OSError("artifact changed during bounded read")
+        content = b"".join(chunks)
+        return None if len(content) > max_bytes else content
+    finally:
+        os.close(descriptor)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -472,6 +521,44 @@ def main(argv: Sequence[str] | None = None) -> int:
                     accepted_artifact_hashes[event.event_id] = (
                         event.payload.artifact_sha256
                     )
+            module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
+            canonical_records: dict[str, Any] = {}
+            for event_id, accepted in accepted_payloads.items():
+                manifest = load_artifact_manifest(
+                    args.run_root, accepted.manifest_sha256
+                )
+                if manifest.media_type != "application/json":
+                    continue
+                content_bytes = _read_bounded_regular_file(
+                    args.run_root, manifest.content_path, max_bytes=65_536
+                )
+                if content_bytes is None:
+                    continue
+                if sha256_hex(content_bytes) != accepted.artifact_sha256:
+                    raise ValueError("accepted provenance artifact content is unsafe")
+                try:
+                    record = module.ProvenanceRecord.model_validate_json(content_bytes)
+                except ValidationError:
+                    continue
+                if (
+                    record.ledger_event_id is not None
+                    or record.ledger_event_digest is not None
+                    or record.artifact_id != accepted.artifact_id
+                    or record.checksum != accepted.artifact_sha256
+                ):
+                    raise ValueError(
+                        "accepted artifact does not match its provenance assertion"
+                    )
+                bound_record = record.model_copy(
+                    update={
+                        "ledger_event_id": event_id,
+                        "ledger_event_digest": event_digests[event_id],
+                    }
+                )
+                existing = canonical_records.get(bound_record.record_id)
+                if existing is not None and existing != bound_record:
+                    raise ValueError("canonical provenance record ID collision")
+                canonical_records[bound_record.record_id] = bound_record
             sidecar_path = args.store.with_name(
                 f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
             )
@@ -481,9 +568,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 canonical_event_digests=event_digests,
                 accepted_artifact_ids_by_event=accepted_artifacts,
                 accepted_artifact_sha256_by_event=accepted_artifact_hashes,
+                expected_provenance_record_sha256={
+                    record_id: record.checksum
+                    for record_id, record in canonical_records.items()
+                },
             )
             provider = router.resolve("knowledge.provenance")
-            module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
             if args.provenance_action == "record":
                 record = module.ProvenanceRecord.model_validate_json(
                     canonical_json_bytes(
@@ -518,51 +608,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 _write_json({"checksum": provider.record(record)})
             elif args.provenance_action == "rebuild":
-                records = []
-                for event_id, accepted in accepted_payloads.items():
-                    manifest = load_artifact_manifest(
-                        args.run_root, accepted.manifest_sha256
-                    )
-                    if manifest.media_type != "application/json":
-                        continue
-                    content = (args.run_root / manifest.content_path).resolve()
-                    if (
-                        not content.is_relative_to(args.run_root.resolve())
-                        or content.is_symlink()
-                        or content.stat().st_size > 65_536
-                    ):
-                        continue
-                    content_bytes = content.read_bytes()
-                    if sha256_hex(content_bytes) != accepted.artifact_sha256:
-                        raise ValueError(
-                            "accepted provenance artifact content is unsafe"
-                        )
-                    try:
-                        record = module.ProvenanceRecord.model_validate_json(
-                            content_bytes
-                        )
-                    except ValidationError:
-                        continue
-                    if (
-                        record.ledger_event_id is not None
-                        or record.ledger_event_digest is not None
-                        or record.artifact_id != accepted.artifact_id
-                        or record.checksum != accepted.artifact_sha256
-                    ):
-                        raise ValueError(
-                            "accepted artifact does not match its provenance assertion"
-                        )
-                    records.append(
-                        record.model_copy(
-                            update={
-                                "ledger_event_id": event_id,
-                                "ledger_event_digest": event_digests[event_id],
-                            }
-                        )
-                    )
-                provider.rebuild(records)
-                rebuilt = len(records)
-                _write_json({"rebuilt_records": rebuilt})
+                provider.rebuild(list(canonical_records.values()))
+                _write_json({"rebuilt_records": len(canonical_records)})
             elif args.provenance_action == "lineage":
                 _write_json(
                     {

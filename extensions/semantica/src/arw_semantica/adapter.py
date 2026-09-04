@@ -104,6 +104,7 @@ class SemanticaSQLiteAdapter:
         canonical_event_digests: Mapping[str, str],
         accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]],
         accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
+        expected_provenance_record_sha256: Mapping[str, str] | None = None,
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
     ) -> None:
@@ -115,6 +116,9 @@ class SemanticaSQLiteAdapter:
         }
         self._accepted_artifact_sha256_by_event = dict(
             accepted_artifact_sha256_by_event or {}
+        )
+        self._expected_provenance_record_sha256 = dict(
+            expected_provenance_record_sha256 or {}
         )
         self._audit_database_path = self._validate_database_path(
             audit_database_path or self._database_path
@@ -208,6 +212,7 @@ class SemanticaSQLiteAdapter:
         by_entity: dict[
             str, list[tuple[str, tuple[str, ...], dict[str, object], str]]
         ] = {}
+        observed_record_ids: set[str] = set()
         for index, (record_id, payload, checksum) in enumerate(
             self._records(limit=MAX_SIDECAR_RECORDS + 1)
         ):
@@ -253,6 +258,13 @@ class SemanticaSQLiteAdapter:
                 continue
             by_entity.setdefault(stored_entity_id, []).append(
                 (payload_record_id, tuple(parents_value), record_value, str(checksum))
+            )
+            observed_record_ids.add(payload_record_id)
+        missing = set(self._expected_provenance_record_sha256) - observed_record_ids
+        if missing:
+            raise RuntimeError(
+                "Semantica sidecar is missing canonical provenance records: "
+                + ", ".join(sorted(missing))
             )
         queue: deque[tuple[str, int]] = deque([(entity_id, 0)])
         visited: set[str] = set()
@@ -358,6 +370,7 @@ class SemanticaSQLiteAdapter:
         from arw_ext.local_store.receipts import AuditFault, persist_audit_fault
 
         faults: list[AuditFault] = []
+        observed_record_ids: set[str] = set()
         for index, (record_id, payload, stored_checksum) in enumerate(
             self._records(limit=MAX_SIDECAR_RECORDS + 1)
         ):
@@ -372,6 +385,7 @@ class SemanticaSQLiteAdapter:
                 persist_audit_fault(self._audit_database_path, fault)
                 faults.append(fault)
                 break
+            observed_record_ids.add(str(record_id))
             payload_bytes = (
                 payload
                 if isinstance(payload, bytes)
@@ -382,14 +396,21 @@ class SemanticaSQLiteAdapter:
                 payload_bytes
             ) == str(stored_checksum)
             if checksum_matches and payload_bytes is not None:
-                payload_value = _json_value(payload_bytes)
+                try:
+                    payload_value = _json_value(payload_bytes)
+                except RuntimeError:
+                    payload_value = None
                 if isinstance(payload_value, dict):
                     artifact_payload = dict(payload_value)
                     artifact_payload.pop("ledger_event_id", None)
                     artifact_payload.pop("ledger_event_digest", None)
+                    artifact_sha = sha256_hex(canonical_json_bytes(artifact_payload))
                     event_id = payload_value.get("ledger_event_id")
                     expected_artifact_sha = self._accepted_artifact_sha256_by_event.get(
                         str(event_id)
+                    )
+                    expected_record_sha = self._expected_provenance_record_sha256.get(
+                        str(record_id)
                     )
                     if (
                         payload_value.get("record_id") == str(record_id)
@@ -401,8 +422,11 @@ class SemanticaSQLiteAdapter:
                         )
                         and (
                             not self._accepted_artifact_sha256_by_event
-                            or expected_artifact_sha
-                            == sha256_hex(canonical_json_bytes(artifact_payload))
+                            or expected_artifact_sha == artifact_sha
+                        )
+                        and (
+                            expected_record_sha is None
+                            or expected_record_sha == artifact_sha
                         )
                     ):
                         continue
@@ -418,6 +442,24 @@ class SemanticaSQLiteAdapter:
                 projection_name="knowledge.provenance",
                 receipt_id=(
                     f"semantica-{sha256_hex(str(record_id).encode('utf-8'))[:24]}"
+                ),
+            )
+            persist_audit_fault(self._audit_database_path, fault)
+            faults.append(fault)
+        for missing_record_id in sorted(
+            set(self._expected_provenance_record_sha256) - observed_record_ids
+        ):
+            fault = AuditFault(
+                code="semantica_missing_record",
+                message=(
+                    "Semantica sidecar is missing canonical provenance record "
+                    f"{missing_record_id}"
+                ),
+                affected_rows=1,
+                projection_name="knowledge.provenance",
+                receipt_id=(
+                    "semantica-missing-"
+                    + sha256_hex(missing_record_id.encode("utf-8"))[:24]
                 ),
             )
             persist_audit_fault(self._audit_database_path, fault)
@@ -444,7 +486,10 @@ class SemanticaSQLiteAdapter:
         expected_artifact_sha = self._accepted_artifact_sha256_by_event.get(
             record.ledger_event_id
         )
-        if expected_artifact_sha is not None and record.checksum != expected_artifact_sha:
+        if (
+            expected_artifact_sha is not None
+            and record.checksum != expected_artifact_sha
+        ):
             raise UnboundProvenanceError(
                 "provenance assertion differs from its accepted artifact content"
             )

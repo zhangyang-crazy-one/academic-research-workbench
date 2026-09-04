@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -158,6 +159,44 @@ def test_verify_turns_text_payload_into_audit_fault(tmp_path: Path) -> None:
         )
     faults = adapter.verify()
     assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
+
+
+def test_verify_reports_missing_canonical_record_and_lineage_fails_closed(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    adapter = SemanticaSQLiteAdapter(
+        tmp_path / "provenance.sqlite3",
+        canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        accepted_artifact_sha256_by_event={EVENT_ID: record.checksum},
+        expected_provenance_record_sha256={record.record_id: record.checksum},
+        audit_database_path=tmp_path / "projection.sqlite3",
+    )
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute("DELETE FROM provenance_records")
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_missing_record"
+    ]
+    with pytest.raises(RuntimeError, match="missing canonical provenance"):
+        adapter.lineage(record.entity_id)
+
+
+def test_verify_turns_checksummed_invalid_json_into_audit_fault(
+    tmp_path: Path,
+) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    invalid = b"not-json"
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? WHERE record_id = ?",
+            (invalid, hashlib.sha256(invalid).hexdigest(), "prov-claim.alpha"),
+        )
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_checksum_mismatch"
+    ]
 
 
 def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
