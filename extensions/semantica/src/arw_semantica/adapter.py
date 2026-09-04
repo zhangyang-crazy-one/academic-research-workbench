@@ -15,6 +15,7 @@ import sqlite3
 import stat
 from collections import deque
 from collections.abc import Iterator, Mapping
+from contextlib import suppress
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
@@ -136,10 +137,23 @@ class SemanticaSQLiteAdapter:
             audit_database_path or self._database_path
         )
         audit_directory = Path(f"{self._audit_database_path}.audit")
-        if audit_directory.is_symlink():
-            raise ValueError("Semantica audit directory must not be a symlink")
+        with suppress(FileExistsError):
+            audit_directory.mkdir(mode=0o700)
+        audit_status = audit_directory.lstat()
+        if (
+            not stat.S_ISDIR(audit_status.st_mode)
+            or stat.S_IMODE(audit_status.st_mode) & 0o077
+        ):
+            raise ValueError(
+                "Semantica audit directory must be a private 0700 directory"
+            )
         self._graph_delegate = graph_provider or NullKnowledgeProvider()
-        self._initialize()
+        try:
+            self._initialize()
+        except sqlite3.Error as error:
+            raise RuntimeError(
+                f"Semantica sidecar initialization failed: {error}"
+            ) from error
 
     # KnowledgeProvider: graph semantics remain owned by the supplied,
     # replaceable graph provider. The Semantica sidecar adds accountability.
@@ -527,13 +541,16 @@ class SemanticaSQLiteAdapter:
         return candidate
 
     def _records(self, *, limit: int) -> Iterator[tuple[object, object, object]]:
-        with self._connect() as connection:
-            cursor = connection.execute(
-                "SELECT record_id, payload, checksum FROM provenance_records "
-                "ORDER BY record_id LIMIT ?",
-                (limit,),
-            )
-            yield from cursor
+        try:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    "SELECT record_id, payload, checksum FROM provenance_records "
+                    "ORDER BY record_id LIMIT ?",
+                    (limit,),
+                )
+                yield from cursor
+        except sqlite3.Error as error:
+            raise RuntimeError(f"Semantica sidecar read failed: {error}") from error
 
     def _initialize(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)

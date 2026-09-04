@@ -8,6 +8,7 @@ import os
 import stat
 import sys
 from collections.abc import Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
@@ -502,12 +503,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.composition import default_router
         from arw.kernel.capabilities import CapabilityUnavailable
         from arw.kernel.core.canonical import sha256_hex
-        from arw.kernel.ledger.journal import replay_run
+        from arw.kernel.ledger.journal import locked_replay
         from arw.kernel.ledger.manifests import load_artifact_manifest
         from arw.kernel.state.models import ArtifactAcceptedPayload
 
+        lock_stack = ExitStack()
         try:
-            replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
+            _, replayed = lock_stack.enter_context(
+                locked_replay(args.run_root, lock_timeout=args.lock_timeout)
+            )
             event_digests = {
                 event.event_id: event.event_sha256 for event in replayed.events
             }
@@ -639,6 +643,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ) as error:
             print(f"arw: provenance-error: {error}", file=sys.stderr)
             return 65
+        finally:
+            lock_stack.close()
 
     # Writable/runtime services are intentionally imported only after the two
     # read-only installed commands above have returned.

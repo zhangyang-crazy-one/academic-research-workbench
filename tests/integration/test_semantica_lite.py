@@ -136,6 +136,7 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
     audit_paths = list((tmp_path / "projection.sqlite3.audit").glob("*.json"))
     assert len(audit_paths) == 1
+    assert audit_paths[0].parent.stat().st_mode & 0o777 == 0o700
     assert (
         json.loads(audit_paths[0].read_text(encoding="utf-8"))["code"]
         == "semantica_checksum_mismatch"
@@ -274,6 +275,34 @@ def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
         )
     adapter.reset()
     assert adapter.lineage("claim.alpha") == []
+
+
+def test_sidecar_rejects_writable_audit_directory(tmp_path: Path) -> None:
+    audit_directory = tmp_path / "projection.sqlite3.audit"
+    audit_directory.mkdir(mode=0o700)
+    audit_directory.chmod(0o777)
+    with pytest.raises(ValueError, match="private 0700"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            audit_database_path=tmp_path / "projection.sqlite3",
+        )
+
+
+def test_tampered_sidecar_schema_is_a_provenance_error(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE provenance_records (record_id TEXT)")
+    database.chmod(0o600)
+    with pytest.raises(RuntimeError, match="initialization failed"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+        )
 
 
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
