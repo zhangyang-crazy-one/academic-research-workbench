@@ -119,9 +119,8 @@ class SemanticaSQLiteAdapter:
         self._accepted_artifact_sha256_by_event = dict(
             accepted_artifact_sha256_by_event
         )
-        missing_artifact_digests = (
-            set(self._accepted_artifact_ids_by_event)
-            - set(self._accepted_artifact_sha256_by_event)
+        missing_artifact_digests = set(self._accepted_artifact_ids_by_event) - set(
+            self._accepted_artifact_sha256_by_event
         )
         if missing_artifact_digests:
             raise ValueError(
@@ -140,12 +139,8 @@ class SemanticaSQLiteAdapter:
         with suppress(FileExistsError):
             audit_directory.mkdir(mode=0o700)
         audit_status = audit_directory.lstat()
-        if (
-            not stat.S_ISDIR(audit_status.st_mode)
-            or (
-                os.name != "nt"
-                and stat.S_IMODE(audit_status.st_mode) & 0o077
-            )
+        if not stat.S_ISDIR(audit_status.st_mode) or (
+            os.name != "nt" and stat.S_IMODE(audit_status.st_mode) & 0o077
         ):
             raise ValueError(
                 "Semantica audit directory must be a private 0700 directory"
@@ -291,7 +286,10 @@ class SemanticaSQLiteAdapter:
                 or self._accepted_artifact_sha256_by_event.get(str(event_id))
                 != artifact_sha
             ):
-                continue
+                raise RuntimeError(
+                    f"Semantica lineage record {payload_record_id} has an "
+                    "invalid canonical binding"
+                )
             if (
                 self._expected_provenance_record_sha256.get(payload_record_id)
                 != artifact_sha
@@ -374,6 +372,14 @@ class SemanticaSQLiteAdapter:
         """Atomically replace this sidecar with fully validated canonical records."""
         if len(records) > MAX_SIDECAR_RECORDS:
             raise ValueError("Semantica sidecar record limit exceeded")
+        input_inventory = {record.record_id: record.checksum for record in records}
+        if (
+            len(input_inventory) != len(records)
+            or input_inventory != self._expected_provenance_record_sha256
+        ):
+            raise ValueError(
+                "rebuild input does not match the canonical provenance inventory"
+            )
         prepared: list[tuple[object, ...]] = []
         for record in records:
             self._validate_binding(record)
@@ -556,10 +562,7 @@ class SemanticaSQLiteAdapter:
             raise ValueError("Semantica sidecar path or ancestor must not be a symlink")
         if not candidate.parent.is_dir():
             raise ValueError("Semantica sidecar parent directory does not exist")
-        if (
-            os.name != "nt"
-            and stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022
-        ):
+        if os.name != "nt" and stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022:
             raise ValueError(
                 "Semantica sidecar parent must not be group/world-writable"
             )
@@ -600,16 +603,10 @@ class SemanticaSQLiteAdapter:
         else:
             os.close(descriptor)
         file_status = self._database_path.lstat()
-        if (
-            not stat.S_ISREG(file_status.st_mode)
-            or (
-                os.name != "nt"
-                and stat.S_IMODE(file_status.st_mode) & 0o077
-            )
+        if not stat.S_ISREG(file_status.st_mode) or (
+            os.name != "nt" and stat.S_IMODE(file_status.st_mode) & 0o077
         ):
-            raise ValueError(
-                "Semantica sidecar must be a private 0600 regular file"
-            )
+            raise ValueError("Semantica sidecar must be a private 0600 regular file")
         with self._connect() as connection:
             connection.execute(
                 """
@@ -669,12 +666,8 @@ class SemanticaSQLiteAdapter:
         descriptor = os.open(self._database_path, flags)
         try:
             validated = os.fstat(descriptor)
-            if (
-                not stat.S_ISREG(validated.st_mode)
-                or (
-                    os.name != "nt"
-                    and stat.S_IMODE(validated.st_mode) & 0o077
-                )
+            if not stat.S_ISREG(validated.st_mode) or (
+                os.name != "nt" and stat.S_IMODE(validated.st_mode) & 0o077
             ):
                 raise ValueError("Semantica sidecar inode is unsafe")
             fd_aliases = (

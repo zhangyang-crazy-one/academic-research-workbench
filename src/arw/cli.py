@@ -313,7 +313,9 @@ def _read_bounded_regular_file(
     """Read one confined regular file through a stable run-root descriptor."""
     root = root.resolve()
     relative = Path(relative_path)
-    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+    if relative.is_absolute() or any(
+        part in {"", ".", ".."} for part in relative.parts
+    ):
         raise OSError("artifact path is not normalized and relative")
     close_descriptors: list[int] = []
     parent_descriptor: int | None = None
@@ -325,28 +327,16 @@ def _read_bounded_regular_file(
         and os.open in os.supports_dir_fd
         and os.stat in os.supports_dir_fd
     )
-    if supports_stable_walk:
-        directory_flags = descriptor_flags | getattr(os, "O_DIRECTORY", 0)
-        parent_descriptor = os.open(root, directory_flags)
+    if not supports_stable_walk:
+        raise OSError("stable descriptor-relative artifact reads are unsupported")
+    directory_flags = descriptor_flags | getattr(os, "O_DIRECTORY", 0)
+    parent_descriptor = os.open(root, directory_flags)
+    close_descriptors.append(parent_descriptor)
+    for part in relative.parts[:-1]:
+        parent_descriptor = os.open(part, directory_flags, dir_fd=parent_descriptor)
         close_descriptors.append(parent_descriptor)
-        for part in relative.parts[:-1]:
-            parent_descriptor = os.open(
-                part, directory_flags, dir_fd=parent_descriptor
-            )
-            close_descriptors.append(parent_descriptor)
-        leaf_name = relative.parts[-1]
-        descriptor = os.open(
-            leaf_name, descriptor_flags, dir_fd=parent_descriptor
-        )
-    else:
-        candidate = root / relative
-        if candidate.is_symlink() or any(
-            ancestor.is_symlink()
-            for ancestor in candidate.parents
-            if ancestor != root and ancestor.is_relative_to(root)
-        ):
-            raise OSError("artifact path contains a symlink")
-        descriptor = os.open(candidate, descriptor_flags)
+    leaf_name = relative.parts[-1]
+    descriptor = os.open(leaf_name, descriptor_flags, dir_fd=parent_descriptor)
     try:
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
@@ -592,13 +582,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "ledger_event_digest": event_digests[event_id],
                     }
                 )
-                if (
-                    len(canonical_json_bytes(bound_record.canonical_payload()))
-                    > 65_536
-                ):
-                    raise ValueError(
-                        "bound provenance payload exceeds the Lite limit"
-                    )
+                if len(canonical_json_bytes(bound_record.canonical_payload())) > 65_536:
+                    raise ValueError("bound provenance payload exceeds the Lite limit")
                 existing = canonical_records.get(bound_record.record_id)
                 if existing is not None and existing != bound_record:
                     raise ValueError("canonical provenance record ID collision")
@@ -624,9 +609,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             provider = router.resolve("knowledge.provenance")
             if args.provenance_action == "record":
                 try:
-                    record_relative_path = args.record.resolve().relative_to(
-                        args.run_root.resolve()
-                    ).as_posix()
+                    record_relative_path = (
+                        args.record.resolve()
+                        .relative_to(args.run_root.resolve())
+                        .as_posix()
+                    )
                 except ValueError as error:
                     raise ValueError(
                         "provenance record must be inside the selected run root"
