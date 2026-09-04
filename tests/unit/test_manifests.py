@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 RUN_ID = "run-00000000-0000-4000-8000-000000000401"
 HASH_A = "a" * 64
 HASH_B = "b" * 64
@@ -15,7 +14,10 @@ HASH_E = "e" * 64
 
 
 def _assignment_and_attempt():
-    from arw.kernel.state.orchestration_models import AttemptDescriptor, ImmutableAssignment
+    from arw.kernel.state.orchestration_models import (
+        AttemptDescriptor,
+        ImmutableAssignment,
+    )
 
     assignment = ImmutableAssignment.model_validate(
         {
@@ -84,7 +86,7 @@ def _assignment_and_attempt():
 
 def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) -> bytes:
     from arw.kernel.core.canonical import canonical_json_bytes
-    from arw.kernel.state.orchestration_models import ProposedArtifact, WorkerProposal
+    from arw.kernel.state.orchestration_models import WorkerProposal
 
     proposal = WorkerProposal.model_validate(
         {
@@ -126,9 +128,15 @@ def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) ->
 
 
 def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None:
-    from arw.kernel.ledger.manifests import install_artifact_manifest, manifest_bytes_and_sha256
-    from arw.kernel.state.models import ArtifactManifest
+    from arw.kernel.ledger.manifests import (
+        MAX_MANIFEST_BYTES,
+        ManifestError,
+        install_artifact_manifest,
+        load_artifact_manifest,
+        manifest_bytes_and_sha256,
+    )
     from arw.kernel.policy.schema_registry import validate_instance
+    from arw.kernel.state.models import ArtifactManifest
 
     root = tmp_path / "run"
     root.mkdir()
@@ -158,10 +166,18 @@ def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None
     assert installed.read_bytes() == canonical
     assert hashlib.sha256(installed.read_bytes()).hexdigest() == digest
     assert install_artifact_manifest(root, manifest) == installed
+    installed.write_bytes(b" " * (MAX_MANIFEST_BYTES + 1))
+    with pytest.raises(ManifestError, match="byte limit"):
+        load_artifact_manifest(root, digest)
 
 
-@pytest.mark.parametrize("path", ["../outside.txt", "/tmp/outside.txt", "a/../outside.txt"])
-def test_content_validation_rejects_non_normalized_paths(tmp_path: Path, path: str) -> None:
+@pytest.mark.parametrize(
+    "path",
+    ["../outside.txt", "/tmp/outside.txt", "a/../outside.txt"],  # pi-lens-ignore: S108
+)
+def test_content_validation_rejects_non_normalized_paths(
+    tmp_path: Path, path: str
+) -> None:
     from arw.kernel.ledger.manifests import ManifestError, validate_content_file
 
     root = tmp_path / "run"
@@ -202,7 +218,9 @@ def test_assignment_attempt_tree_is_write_once_and_rejects_replacement_or_symlin
     installed = install_assignment_manifest(root, assignment)
     assert installed == root / "assignments" / f"{assignment.assignment_id}.json"
     attempt_assignment = materialize_attempt_tree(root, assignment, attempt)
-    assert attempt_assignment == root / "attempts" / attempt.attempt_id / "assignment.json"
+    assert (
+        attempt_assignment == root / "attempts" / attempt.attempt_id / "assignment.json"
+    )
     assert attempt_assignment.read_bytes() == installed.read_bytes()
     assert materialize_attempt_tree(root, assignment, attempt) == attempt_assignment
 
@@ -218,8 +236,12 @@ def test_assignment_attempt_tree_is_write_once_and_rejects_replacement_or_symlin
         install_assignment_manifest(root, assignment)
 
 
-@pytest.mark.parametrize("assignment_id", ["../outside", "nested/assignment", "/absolute"])
-def test_assignment_loader_rejects_path_traversal_ids(tmp_path: Path, assignment_id: str) -> None:
+@pytest.mark.parametrize(
+    "assignment_id", ["../outside", "nested/assignment", "/absolute"]
+)
+def test_assignment_loader_rejects_path_traversal_ids(
+    tmp_path: Path, assignment_id: str
+) -> None:
     from arw.kernel.ledger.manifests import ManifestError, load_assignment_manifest
 
     root = tmp_path / "run"
@@ -228,8 +250,14 @@ def test_assignment_loader_rejects_path_traversal_ids(tmp_path: Path, assignment
         load_assignment_manifest(root, assignment_id)
 
 
-def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(tmp_path: Path) -> None:
-    from arw.kernel.ledger.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
+def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(
+    tmp_path: Path,
+) -> None:
+    from arw.kernel.ledger.manifests import (
+        ManifestError,
+        admit_raw_proposal,
+        materialize_attempt_tree,
+    )
 
     root = tmp_path / "run"
     root.mkdir()
@@ -252,8 +280,14 @@ def test_raw_proposal_admission_is_bounded_direct_and_content_addressed(tmp_path
 
 
 @pytest.mark.parametrize("kind", ["symlink", "oversized", "echo-mismatch", "replaced"])
-def test_raw_proposal_admission_rejects_untrusted_file_variants(tmp_path: Path, kind: str) -> None:
-    from arw.kernel.ledger.manifests import ManifestError, admit_raw_proposal, materialize_attempt_tree
+def test_raw_proposal_admission_rejects_untrusted_file_variants(
+    tmp_path: Path, kind: str
+) -> None:
+    from arw.kernel.ledger.manifests import (
+        ManifestError,
+        admit_raw_proposal,
+        materialize_attempt_tree,
+    )
 
     root = tmp_path / "run"
     root.mkdir()
@@ -269,13 +303,20 @@ def test_raw_proposal_admission_rejects_untrusted_file_variants(tmp_path: Path, 
     elif kind == "oversized":
         proposal_path.write_bytes(raw + (b"x" * 128))
     elif kind == "echo-mismatch":
-        proposal_path.write_bytes(_proposal_bytes(assignment, attempt, assignment_id="assignment.other-001"))
+        proposal_path.write_bytes(
+            _proposal_bytes(assignment, attempt, assignment_id="assignment.other-001")
+        )
     else:
         proposal_path.write_bytes(raw)
         first = admit_raw_proposal(root, assignment=assignment, attempt=attempt)
         proposal_path.write_bytes(raw + b"\n")
         with pytest.raises(ManifestError, match="digest|replaced|canonical"):
-            admit_raw_proposal(root, assignment=assignment, attempt=attempt, expected_sha256=first.sha256)
+            admit_raw_proposal(
+                root,
+                assignment=assignment,
+                attempt=attempt,
+                expected_sha256=first.sha256,
+            )
         return
 
     with pytest.raises(ManifestError):

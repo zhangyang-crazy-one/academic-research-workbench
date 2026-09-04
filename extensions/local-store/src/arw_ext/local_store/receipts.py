@@ -277,7 +277,7 @@ def load_audit_faults(
         def unreadable_fault(name: str) -> AuditFault:
             return AuditFault(
                 code="audit_receipt_read_failed",
-                message=f"audit receipt {ascii(name)} is unreadable or malformed",
+                message=f"audit receipt {name!a} is unreadable or malformed",
                 affected_rows=1,
                 projection_name="knowledge",
                 receipt_id=("audit-read-" + sha256_hex(os.fsencode(name))[:24]),
@@ -385,8 +385,8 @@ __all__ = [
     "audit_root",
     "clear_audit_faults",
     "list_receipts",
-    "load_manifest",
     "load_audit_faults",
+    "load_manifest",
     "load_receipt",
     "persist_audit_fault",
     "persist_manifest",
