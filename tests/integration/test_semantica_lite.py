@@ -23,6 +23,7 @@ from arw.kernel.capabilities import CapabilityUnavailable
 
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _record(
@@ -292,6 +293,34 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
     absent = default_router()
     with pytest.raises(CapabilityUnavailable):
         absent.resolve("knowledge.provenance")
+
+
+def test_sidecar_is_created_with_private_permissions(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    assert adapter.lineage("claim.alpha") == []
+    assert (tmp_path / "provenance.sqlite3").stat().st_mode & 0o777 == 0o600
+    (tmp_path / "provenance.sqlite3").chmod(0o644)
+    with pytest.raises(ValueError, match="private 0600"):
+        _adapter(tmp_path)
+
+
+def test_provenance_artifact_schema_is_byte_stable() -> None:
+    generated = ProvenanceRecord.model_json_schema(mode="validation")
+    properties = generated["properties"]
+    assert isinstance(properties, dict)
+    properties.pop("ledger_event_id")
+    properties.pop("ledger_event_digest")
+    generated["$id"] = (
+        "https://academic-research-workbench.local/schemas/v1/"
+        "provenance-record.schema.json"
+    )
+    generated["title"] = "Semantica-compatible Lite provenance record"
+    checked_in = json.loads(
+        (REPOSITORY_ROOT / "schemas/v1/provenance-record.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert generated == checked_in
 
 
 def test_lite_import_activates_no_heavy_modules() -> None:

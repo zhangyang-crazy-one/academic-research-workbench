@@ -509,6 +509,7 @@ copy_file "schemas/v1/mcp-read-request.schema.json"
 copy_file "schemas/v1/mcp-read-result.schema.json"
 copy_file "schemas/v1/build-identity.schema.json"
 copy_file "schemas/v1/version-report.schema.json"
+copy_as "schemas/v1/provenance-record.schema.json" "share/arw/schemas/provenance-record.schema.json"
 copy_file "schemas/v1/assignment.schema.json"
 copy_file "schemas/v1/gate-decision.schema.json"
 copy_file "schemas/v1/hook-observation.schema.json"
@@ -1356,6 +1357,7 @@ static_files = {
     "share/arw/schemas/status.schema.json",
     "share/arw/schemas/transition-request.schema.json",
     "share/arw/schemas/version-report.schema.json",
+    "share/arw/schemas/provenance-record.schema.json",
     # Phase 4 contracts are regenerated into the exact staged schema tree.
     "share/arw/schemas/assignment.schema.json",
     "share/arw/schemas/gate-decision.schema.json",

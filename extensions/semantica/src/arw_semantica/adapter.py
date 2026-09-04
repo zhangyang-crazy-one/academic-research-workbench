@@ -10,7 +10,9 @@ source of authority.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import stat
 from collections import deque
 from collections.abc import Iterator, Mapping
 from pathlib import Path
@@ -527,6 +529,24 @@ class SemanticaSQLiteAdapter:
 
     def _initialize(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(
+                self._database_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+        except FileExistsError:
+            pass
+        else:
+            os.close(descriptor)
+        file_status = self._database_path.lstat()
+        if (
+            not stat.S_ISREG(file_status.st_mode)
+            or stat.S_IMODE(file_status.st_mode) & 0o077
+        ):
+            raise ValueError(
+                "Semantica sidecar must be a private 0600 regular file"
+            )
         with self._connect() as connection:
             connection.execute(
                 """
