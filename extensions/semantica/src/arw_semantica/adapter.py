@@ -245,6 +245,7 @@ class SemanticaSQLiteAdapter:
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                self._reject_active_triggers(connection)
                 existing = connection.execute(
                     "SELECT CASE WHEN typeof(payload) = 'blob' AND length(payload) <= ? "
                     "THEN payload ELSE NULL END, "
@@ -429,6 +430,7 @@ class SemanticaSQLiteAdapter:
         """Atomically clear this run's rebuildable sidecar projection."""
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._reject_active_triggers(connection)
             connection.execute("DELETE FROM provenance_records")
             connection.commit()
 
@@ -471,6 +473,7 @@ class SemanticaSQLiteAdapter:
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                self._reject_active_triggers(connection)
                 connection.execute("DELETE FROM provenance_records")
                 # pi-lens-ignore: python-sql-injection
                 connection.executemany(
@@ -681,6 +684,16 @@ class SemanticaSQLiteAdapter:
         finally:
             os.close(directory_descriptor)
 
+    @staticmethod
+    def _reject_active_triggers(connection: sqlite3.Connection) -> None:
+        trigger = connection.execute(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'trigger' LIMIT 1"
+        ).fetchone()
+        if trigger is not None:
+            raise sqlite3.DatabaseError(
+                "Semantica sidecar contains unsupported active triggers"
+            )
+
     def _validate_binding(self, record: ProvenanceRecord) -> None:
         if not record.artifact_id:
             raise UnboundProvenanceError("provenance record has no ARW artifact id")
@@ -822,6 +835,7 @@ class SemanticaSQLiteAdapter:
                 "CREATE INDEX IF NOT EXISTS provenance_records_ledger_idx "
                 "ON provenance_records(ledger_event_id)"
             )
+            self._reject_active_triggers(connection)
 
     def _connect(self) -> sqlite3.Connection:
         flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0)

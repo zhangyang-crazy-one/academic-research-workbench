@@ -375,6 +375,22 @@ def test_tampered_sidecar_schema_is_a_provenance_error(tmp_path: Path) -> None:
         )
 
 
+def test_sidecar_rejects_active_triggers_before_record(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "CREATE TRIGGER rewrite_provenance AFTER INSERT ON provenance_records "
+            "BEGIN DELETE FROM provenance_records WHERE record_id = NEW.record_id; END"
+        )
+
+    with pytest.raises(RuntimeError, match="unsupported active triggers"):
+        adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM provenance_records"
+        ).fetchone() == (0,)
+
+
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
     target = tmp_path / "target"
     (target / "nested").mkdir(parents=True)
