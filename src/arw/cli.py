@@ -567,7 +567,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.run_root, manifest.content_path, max_bytes=65_536
                 )
                 if content_bytes is None:
-                    continue
+                    raise ValueError(
+                        "accepted JSON artifact exceeds the provenance Lite limit"
+                    )
                 if sha256_hex(content_bytes) != accepted.artifact_sha256:
                     raise ValueError("accepted provenance artifact content is unsafe")
                 try:
