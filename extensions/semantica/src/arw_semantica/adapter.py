@@ -106,7 +106,7 @@ class SemanticaSQLiteAdapter:
         canonical_event_digests: Mapping[str, str],
         accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]],
         accepted_artifact_sha256_by_event: Mapping[str, str],
-        expected_provenance_record_sha256: Mapping[str, str] | None = None,
+        expected_provenance_record_sha256: Mapping[str, str],
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
     ) -> None:
@@ -129,7 +129,7 @@ class SemanticaSQLiteAdapter:
                 + ", ".join(sorted(missing_artifact_digests))
             )
         self._expected_provenance_record_sha256 = dict(
-            expected_provenance_record_sha256 or {}
+            expected_provenance_record_sha256
         )
         if len(self._expected_provenance_record_sha256) > MAX_SIDECAR_RECORDS:
             raise ValueError("canonical provenance inventory exceeds the Lite limit")
@@ -294,10 +294,12 @@ class SemanticaSQLiteAdapter:
                 + ", ".join(sorted(missing))
             )
         queue: deque[tuple[str, int]] = deque([(entity_id, 0)])
+        queued_entity_ids = {entity_id}
         visited: set[str] = set()
         results: list[dict[str, object]] = []
         while queue and len(results) < max_rows:
             current, depth = queue.popleft()
+            queued_entity_ids.discard(current)
             if current in visited:
                 continue
             visited.add(current)
@@ -322,9 +324,10 @@ class SemanticaSQLiteAdapter:
                         if (
                             parent in by_entity
                             and parent not in visited
-                            and parent not in queue
+                            and parent not in queued_entity_ids
                         ):
                             queue.append((parent, depth + 1))
+                            queued_entity_ids.add(parent)
         return results
 
     def decision_chain(

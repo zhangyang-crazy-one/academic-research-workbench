@@ -116,6 +116,10 @@ def default_router(
             raise ValueError(
                 "accepted artifact digests are required when provenance is enabled"
             )
+        if expected_provenance_record_sha256 is None:
+            raise ValueError(
+                "canonical provenance inventory is required when provenance is enabled"
+            )
 
         def _semantica_provenance():
             module = import_module("arw_semantica")
@@ -125,7 +129,7 @@ def default_router(
                 accepted_artifact_ids_by_event=accepted_artifact_ids_by_event or {},
                 accepted_artifact_sha256_by_event=accepted_artifact_sha256_by_event,
                 expected_provenance_record_sha256=(
-                    expected_provenance_record_sha256 or {}
+                    expected_provenance_record_sha256
                 ),
                 audit_database_path=semantica_store_path,
             )

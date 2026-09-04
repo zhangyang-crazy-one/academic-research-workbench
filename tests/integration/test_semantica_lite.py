@@ -65,11 +65,7 @@ def _record(
 def _adapter(
     tmp_path: Path, records: tuple[ProvenanceRecord, ...] | None = None
 ) -> SemanticaSQLiteAdapter:
-    records = records or (
-        _record(),
-        _record(entity_id="source.alpha"),
-        _record(entity_id="decision.alpha", derived_from=("source.alpha",)),
-    )
+    records = records or (_record(),)
     return SemanticaSQLiteAdapter(
         tmp_path / "provenance.sqlite3",
         canonical_event_digests={
@@ -81,6 +77,9 @@ def _adapter(
         },
         accepted_artifact_sha256_by_event={
             str(record.ledger_event_id): record.checksum for record in records
+        },
+        expected_provenance_record_sha256={
+            record.record_id: record.checksum for record in records
         },
         audit_database_path=tmp_path / "projection.sqlite3",
     )
@@ -112,9 +111,13 @@ def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -
 
 
 def test_lineage_is_bounded_and_decision_filtered(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-    adapter.record(_record(entity_id="source.alpha"))
-    adapter.record(_record(entity_id="decision.alpha", derived_from=("source.alpha",)))
+    source = _record(entity_id="source.alpha")
+    decision = _record(
+        entity_id="decision.alpha", derived_from=("source.alpha",)
+    )
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
 
     lineage = adapter.lineage("decision.alpha")
     assert [row["entity_id"] for row in lineage] == ["decision.alpha", "source.alpha"]
@@ -133,22 +136,29 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
         )
 
     faults = adapter.verify()
-    assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
+    assert [fault.code for fault in faults] == [
+        "semantica_checksum_mismatch",
+        "semantica_missing_record",
+    ]
     audit_paths = list((tmp_path / "projection.sqlite3.audit").glob("*.json"))
-    assert len(audit_paths) == 1
+    assert len(audit_paths) == 2
     assert audit_paths[0].parent.stat().st_mode & 0o777 == 0o700
-    assert (
-        json.loads(audit_paths[0].read_text(encoding="utf-8"))["code"]
-        == "semantica_checksum_mismatch"
-    )
-    assert audit_paths[0].name.startswith("semantica-")
+    assert {
+        json.loads(path.read_text(encoding="utf-8"))["code"]
+        for path in audit_paths
+    } == {"semantica_checksum_mismatch", "semantica_missing_record"}
+    assert all(path.name.startswith("semantica-") for path in audit_paths)
     assert not (tmp_path / "escaped").exists()
 
 
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
-    adapter = _adapter(tmp_path)
-    adapter.record(_record(entity_id="source.alpha"))
-    adapter.record(_record(entity_id="decision.alpha", derived_from=("source.alpha",)))
+    source = _record(entity_id="source.alpha")
+    decision = _record(
+        entity_id="decision.alpha", derived_from=("source.alpha",)
+    )
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
     with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
         connection.execute(
             "UPDATE provenance_records SET entity_id = ?, derived_from_json = ? "
@@ -274,7 +284,8 @@ def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
             ("prov-forged", "prov-claim.alpha"),
         )
     adapter.reset()
-    assert adapter.lineage("claim.alpha") == []
+    with pytest.raises(RuntimeError, match="missing canonical provenance"):
+        adapter.lineage("claim.alpha")
 
 
 def test_sidecar_rejects_writable_audit_directory(tmp_path: Path) -> None:
@@ -287,6 +298,7 @@ def test_sidecar_rejects_writable_audit_directory(tmp_path: Path) -> None:
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
             accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
             audit_database_path=tmp_path / "projection.sqlite3",
         )
 
@@ -302,6 +314,7 @@ def test_tampered_sidecar_schema_is_a_provenance_error(tmp_path: Path) -> None:
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
             accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
         )
 
 
@@ -315,6 +328,7 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
             accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
         )
     (tmp_path / "projection.sqlite3.audit").symlink_to(target, target_is_directory=True)
     with pytest.raises(ValueError, match="audit directory"):
@@ -323,6 +337,7 @@ def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) 
             canonical_event_digests={EVENT_ID: EVENT_DIGEST},
             accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
             accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
             audit_database_path=tmp_path / "projection.sqlite3",
         )
 
@@ -354,6 +369,9 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
         canonical_event_digests={EVENT_ID: EVENT_DIGEST},
         accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
         accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+        expected_provenance_record_sha256={
+            _record().record_id: _record().checksum
+        },
         plugin_manifest=manifest,
     )
     assert "knowledge.provenance" in router.available()
@@ -366,7 +384,8 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
 
 def test_sidecar_is_created_with_private_permissions(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
-    assert adapter.lineage("claim.alpha") == []
+    adapter.record(_record())
+    assert len(adapter.lineage("claim.alpha")) == 1
     assert (tmp_path / "provenance.sqlite3").stat().st_mode & 0o777 == 0o600
     (tmp_path / "provenance.sqlite3").chmod(0o644)
     with pytest.raises(ValueError, match="private 0600"):
