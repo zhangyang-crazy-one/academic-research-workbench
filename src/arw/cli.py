@@ -675,7 +675,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "ledger_event_digest": event_digests[event_id],
                     }
                 )
-                _write_json({"checksum": provider.record(record)})
+                checksum = provider.record(record)
+                provider.verify()
+                _write_json({"checksum": checksum})
             elif args.provenance_action == "rebuild":
                 provider.rebuild(list(canonical_records.values()))
                 if provider.verify():
