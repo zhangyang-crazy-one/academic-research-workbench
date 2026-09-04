@@ -17,6 +17,7 @@ from collections import deque
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 from arw_ext.local_store.location import is_network_filesystem
 from pydantic import Field
@@ -129,6 +130,8 @@ class SemanticaSQLiteAdapter:
         self._expected_provenance_record_sha256 = dict(
             expected_provenance_record_sha256 or {}
         )
+        if len(self._expected_provenance_record_sha256) > MAX_SIDECAR_RECORDS:
+            raise ValueError("canonical provenance inventory exceeds the Lite limit")
         self._audit_database_path = self._validate_database_path(
             audit_database_path or self._database_path
         )
@@ -515,6 +518,10 @@ class SemanticaSQLiteAdapter:
             raise ValueError("Semantica sidecar path or ancestor must not be a symlink")
         if not candidate.parent.is_dir():
             raise ValueError("Semantica sidecar parent directory does not exist")
+        if stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022:
+            raise ValueError(
+                "Semantica sidecar parent must not be group/world-writable"
+            )
         if is_network_filesystem(candidate):
             raise ValueError("Semantica sidecar must not use a network filesystem")
         return candidate
@@ -577,7 +584,24 @@ class SemanticaSQLiteAdapter:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(str(self._database_path), timeout=5.0)
+        before = self._database_path.lstat()
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_IMODE(before.st_mode) & 0o077
+        ):
+            raise ValueError("Semantica sidecar inode is unsafe")
+        connection = sqlite3.connect(
+            f"file:{quote(str(self._database_path))}?mode=rw",
+            uri=True,
+            timeout=5.0,
+        )
+        after = self._database_path.lstat()
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or (
+            not stat.S_ISREG(after.st_mode)
+            or stat.S_IMODE(after.st_mode) & 0o077
+        ):
+            connection.close()
+            raise ValueError("Semantica sidecar inode changed during open")
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA busy_timeout=5000")
         connection.execute("PRAGMA synchronous=NORMAL")

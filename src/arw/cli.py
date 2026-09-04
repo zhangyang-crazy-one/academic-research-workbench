@@ -559,6 +559,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if existing is not None and existing != bound_record:
                     raise ValueError("canonical provenance record ID collision")
                 canonical_records[bound_record.record_id] = bound_record
+                if len(canonical_records) > 500:
+                    raise ValueError(
+                        "canonical provenance inventory exceeds the Lite limit"
+                    )
             sidecar_path = args.store.with_name(
                 f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
             )
