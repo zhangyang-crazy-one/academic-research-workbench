@@ -129,7 +129,7 @@ def _proposal_bytes(assignment, attempt, *, assignment_id: str | None = None) ->
 
 def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None:
     from arw.kernel.ledger.manifests import (
-        MAX_MANIFEST_BYTES,
+        MAX_LEGACY_MANIFEST_BYTES,
         ManifestError,
         install_artifact_manifest,
         load_artifact_manifest,
@@ -166,7 +166,7 @@ def test_artifact_manifest_has_canonical_content_address(tmp_path: Path) -> None
     assert installed.read_bytes() == canonical
     assert hashlib.sha256(installed.read_bytes()).hexdigest() == digest
     assert install_artifact_manifest(root, manifest) == installed
-    installed.write_bytes(b" " * (MAX_MANIFEST_BYTES + 1))
+    installed.write_bytes(b" " * (MAX_LEGACY_MANIFEST_BYTES + 1))
     with pytest.raises(ManifestError, match="byte limit"):
         load_artifact_manifest(root, digest)
 

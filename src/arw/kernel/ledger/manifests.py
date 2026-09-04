@@ -48,6 +48,7 @@ ManifestModel = TypeVar("ManifestModel", bound=StrictModel)
 
 MAX_PROPOSAL_BYTES = 1_048_576
 MAX_MANIFEST_BYTES = 1_048_576
+MAX_LEGACY_MANIFEST_BYTES = 16_777_216
 
 _STABLE_RUNTIME_ID = TypeAdapter(StableRuntimeId)
 
@@ -396,8 +397,8 @@ def _load(  # noqa: UP047 -- keep compatibility with the configured type checker
         raise ManifestError("manifest path is missing or unsafe")
     try:
         with path.open("rb") as handle:
-            raw = handle.read(MAX_MANIFEST_BYTES + 1)
-        if len(raw) > MAX_MANIFEST_BYTES:
+            raw = handle.read(MAX_LEGACY_MANIFEST_BYTES + 1)
+        if len(raw) > MAX_LEGACY_MANIFEST_BYTES:
             raise ManifestError("manifest exceeds the byte limit")
         value = strict_json_loads(raw)
         manifest = model.model_validate(value)
