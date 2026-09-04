@@ -277,10 +277,10 @@ def load_audit_faults(
         def unreadable_fault(name: str) -> AuditFault:
             return AuditFault(
                 code="audit_receipt_read_failed",
-                message=f"audit receipt {name} is unreadable or malformed",
+                message=f"audit receipt {ascii(name)} is unreadable or malformed",
                 affected_rows=1,
                 projection_name="knowledge",
-                receipt_id=("audit-read-" + sha256_hex(name.encode("utf-8"))[:24]),
+                receipt_id=("audit-read-" + sha256_hex(os.fsencode(name))[:24]),
             )
 
         no_follow = getattr(os, "O_NOFOLLOW", 0)

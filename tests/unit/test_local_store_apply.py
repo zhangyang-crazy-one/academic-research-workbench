@@ -757,3 +757,25 @@ def test_load_audit_faults_handles_lone_surrogate_as_unreadable(
     (root / f"bad-{digest}.json").write_bytes(raw)
     faults = load_audit_faults(database)
     assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_handles_invalid_utf8_filename(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    descriptor = os.open(
+        os.fsencode(root) + b"/broken-\xff.json",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    try:
+        os.write(descriptor, b"{")
+    finally:
+        os.close(descriptor)
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
