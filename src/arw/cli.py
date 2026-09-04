@@ -616,6 +616,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             sidecar_path = args.store.with_name(
                 f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
             )
+            if args.provenance_action == "rebuild":
+                module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
             router = default_router(
                 store_path=args.store,
                 semantica_store_path=sidecar_path,
@@ -676,6 +678,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _write_json({"checksum": provider.record(record)})
             elif args.provenance_action == "rebuild":
                 provider.rebuild(list(canonical_records.values()))
+                if provider.verify():
+                    raise RuntimeError(
+                        "rebuilt Semantica sidecar failed canonical verification"
+                    )
                 _write_json({"rebuilt_records": len(canonical_records)})
             elif args.provenance_action == "lineage":
                 _write_json(

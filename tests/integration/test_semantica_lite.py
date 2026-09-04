@@ -442,6 +442,24 @@ def test_sidecar_rejects_hard_linked_auxiliary_file(tmp_path: Path) -> None:
     assert external.read_bytes() == b"sentinel"
 
 
+def test_prepare_rebuild_recovers_corrupt_sidecar_and_clears_faults(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    database.write_bytes(b"corrupt")
+    database.chmod(0o600)
+    audit_directory = tmp_path / "projection.sqlite3.audit"
+    audit_directory.mkdir(mode=0o700)
+    (audit_directory / "semantica-stale.json").write_bytes(b"{}")
+
+    SemanticaSQLiteAdapter.prepare_rebuild(database)
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.rebuild([record])
+    assert adapter.verify() == ()
+    assert list(audit_directory.iterdir()) == []
+
+
 def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
     target = tmp_path / "target"
     (target / "nested").mkdir(parents=True)

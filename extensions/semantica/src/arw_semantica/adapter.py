@@ -731,6 +731,47 @@ class SemanticaSQLiteAdapter:
             )
 
     @staticmethod
+    def prepare_rebuild(database_path: Path) -> None:
+        """Remove only rebuildable sidecar entries through a trusted parent fd."""
+        candidate = (
+            database_path if database_path.is_absolute() else Path.cwd() / database_path
+        )
+        if any(ancestor.is_symlink() for ancestor in candidate.parents):
+            raise ValueError("Semantica sidecar ancestor must not be a symlink")
+        if not candidate.parent.is_dir():
+            raise ValueError("Semantica sidecar parent directory does not exist")
+        if os.name != "nt" and stat.S_IMODE(candidate.parent.stat().st_mode) & 0o022:
+            raise ValueError(
+                "Semantica sidecar parent must not be group/world-writable"
+            )
+        if is_network_filesystem(candidate):
+            raise ValueError("Semantica sidecar must not use a network filesystem")
+        parent_descriptor = _open_directory_no_follow(candidate.parent)
+        try:
+            for suffix in ("", "-wal", "-shm", "-journal"):
+                try:
+                    os.unlink(candidate.name + suffix, dir_fd=parent_descriptor)
+                except FileNotFoundError:
+                    continue
+            audit_name = candidate.name + ".audit"
+            try:
+                audit_status = os.stat(
+                    audit_name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                audit_status = None
+            if audit_status is not None:
+                if stat.S_ISLNK(audit_status.st_mode):
+                    os.unlink(audit_name, dir_fd=parent_descriptor)
+                elif not stat.S_ISDIR(audit_status.st_mode):
+                    raise ValueError("Semantica audit path is not a directory")
+            os.fsync(parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+
+    @staticmethod
     def _validate_database_path(path: Path) -> Path:
         candidate = path if path.is_absolute() else Path.cwd() / path
         if candidate.is_symlink() or any(
