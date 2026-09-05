@@ -82,3 +82,20 @@ release permission remain separate gates.
   five-tool baseline versus seven-tool target.
 - [PR #15](https://github.com/zhangyang-crazy-one/academic-research-workbench/pull/15):
   store transport, allowed roots, installed routing, and graph manifest binding.
+
+## Latest-head follow-up (`f744460` review)
+
+- P1 `3939364471`: installed store reads now also bind the canonical selected
+  generation ID; a stale ingestion cache raises `stale_ingested_cache` (exit 78),
+  rather than silently serving an older inventory.
+- P2 `3939364472`: exit 69 is reserved for genuinely missing store paths.
+  Non-regular entries, broken-symlink/non-directory ancestors, and I/O errors
+  fail closed (78). Genuinely uncreated nested cache directories still allow
+  the documented fallback. Thirteen regression cases were added.
+- Final serial regression selection: 687 passed. Clean-index snapshot schema,
+  supply-chain inventory, and graph-install tests: 33 passed. The first snapshot
+  staging attempt lacked the existing pinned legal verdict fixture; rerunning
+  with that unchanged evidence restored passed without relaxing any gate.
+- Clean-index license gate: technical PASS / release BLOCKED. SBOM wheel hashes
+  come from task-only staged source, not unrelated dirty working-tree changes.
+- Latest-head Codex review and CI must pass again before merge.

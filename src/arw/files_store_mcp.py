@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -97,13 +98,14 @@ def build_parser() -> argparse.ArgumentParser:
 def _resolve_allowed_root(
     control_root: Path | None,
     root_id: str | None,
-) -> tuple[Path, str]:
-    """Return (allowed_root, root_id) from the authoritative registration.
+) -> tuple[Path, str, str]:
+    """Return (allowed_root, root_id, generation_id) from the authoritative registration.
 
-    Refuses the suggested ``<control_root>/<root_id>`` formula and instead
-    reads ``root.json`` via :func:`load_query_generation` so the registered
-    canonical_path is the one the parent wrote at register time (the only
-    authoritative source).
+    The generation_id returned here is the one ``selected-generation.json``
+    names as the canonical selection at startup time.  The adapter MUST
+    bind against this exact generation; an older cache ingested before the
+    canonical selection advanced must be refused as a non-fallback
+    security error rather than silently serving outdated content.
     """
     if control_root is None or root_id is None:
         raise ValueError(
@@ -111,7 +113,11 @@ def _resolve_allowed_root(
             "to read live files without an external allowed-root anchor"
         )
     generation = load_query_generation(control_root, root_id)
-    return Path(generation.root.canonical_path), generation.root.root_id
+    return (
+        Path(generation.root.canonical_path),
+        generation.root.root_id,
+        generation.selected.generation_id,
+    )
 
 
 def _open_store_adapter(
@@ -119,13 +125,16 @@ def _open_store_adapter(
     *,
     allowed_root: Path,
     expected_root_id: str,
+    expected_generation_id: str,
 ):
     """Open the store read-only and construct the adapter with the security check.
 
-    The adapter verifies the cache's recorded ``canonical_path`` and
-    ``root_id`` match the externally configured anchors before any live
-    read; this prevents the cache from being used to redirect reads
-    outside the registered root.
+    The adapter verifies the cache's recorded ``canonical_path``,
+    ``root_id``, and ``selected_generation_id`` all match the externally
+    configured anchors before any live read; this prevents a stale cache
+    from being used to serve outdated content after the canonical
+    selection advanced, and prevents the cache from being used to
+    redirect reads outside the registered root.
     """
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.files import LocalStoreFilesAdapter
@@ -137,6 +146,7 @@ def _open_store_adapter(
             store,
             allowed_root=allowed_root,
             expected_root_id=expected_root_id,
+            expected_generation_id=expected_generation_id,
         )
     except Exception:
         store.close()
@@ -340,6 +350,108 @@ def _handle(adapter, request: object) -> dict[str, object] | None:
 STORE_ABSENT_EXIT_CODE = 69
 
 
+def _classify_store_path(store_path: Path) -> str:
+    """Return one of ``"absent"`` / ``"unsafe"`` / ``"regular"`` for ``store_path``.
+
+    P2 safety classifier: ``Path.is_file()`` returns False for both
+    genuinely-missing paths and existing-but-non-regular paths (a
+    directory, FIFO, broken symlink, device, socket, or anything else
+    that is not a regular file).  Reserving STORE_ABSENT (69) for the
+    former means the shim's legacy fallback can fire only when there
+    really is no store file to read; the latter is a configuration
+    error and must surface as 78 so the shim does not silently route
+    through the v1 reader.
+
+    The classifier uses lexical ``lstat`` on every path component (no
+    ``Path.resolve()`` — symlinks are inspected, not followed).  This
+    disambiguates the three classes the review pinned:
+
+    * ``"absent"`` — the final component does not exist AND every
+      existing lexical ancestor is a directory (so ``arw files sync``
+      could create the cache here).  Permission or I/O errors raise
+      ``"unsafe"``, NOT ``"absent"`` — a directory we cannot stat is
+      not a "store not set up yet" state.
+    * ``"unsafe"`` — some lexical ancestor is a non-directory (regular
+      file, FIFO, device, socket) OR a symlink OR there is a
+      ``NotADirectoryError`` / ``PermissionError`` / other ``OSError``
+      at any step.  None of these can host a regular-file cache, and
+      the canonical cache layout never produces them, so they are
+      always operator error (a broken symlink ancestor in particular
+      looks like ``ENOENT`` on the full path but is NOT genuine
+      absence).
+    * ``"regular"`` — the full path is a regular file that we can read.
+
+    A symlink AT the full path itself is reported as ``"unsafe"`` even
+    when the eventual target is a healthy regular file: ``lstat`` only
+    sees the symlink, and ``Path.resolve()`` is intentionally avoided
+    so the classifier is pure and reproducible.
+    """
+    try:
+        result = store_path.lstat()
+    except FileNotFoundError:
+        # ENOENT on the final path: either the file is missing OR an
+        # ancestor is missing/broken.  Walk lexical ancestors to
+        # disambiguate.
+        return _classify_via_ancestor_walk(store_path)
+    except (NotADirectoryError, PermissionError, OSError):
+        # ENOTDIR: some lexical ancestor is a non-directory (lstat
+        # could not traverse the path).  EACCES / EIO: stat failed for
+        # reasons that have nothing to do with "store not set up yet".
+        # Both are operator error, NOT STORE_ABSENT.
+        return "unsafe"
+    # Full path exists lexically.  Symlinks and non-regular entries at
+    # the store path itself are rejected (the layout never produces
+    # them; surfacing as 78 keeps the v1 fallback out of the picture).
+    if stat.S_ISLNK(result.st_mode):
+        return "unsafe"
+    if stat.S_ISREG(result.st_mode):
+        return "regular"
+    return "unsafe"
+
+
+def _classify_via_ancestor_walk(store_path: Path) -> str:
+    """Disambiguate ``ENOENT`` on the full path via lexical ancestor walk.
+
+    Walk ``store_path.parents`` from the immediate parent up to the
+    root, calling ``lstat`` on each component (no ``Path.resolve()``).
+    Every existing lexical ancestor must be a directory:
+
+    * directory → keep walking up; this prefix is fine.
+    * symlink, regular file, FIFO, device, etc. → the cache layout is
+      wrong; return ``"unsafe"`` (a broken symlink ancestor shows up
+      here, because the kernel returned ``FileNotFoundError`` on the
+      full path but the immediate prefix exists lexically as a
+      symlink).
+    * ``FileNotFoundError`` on a particular prefix → that prefix
+      itself does not exist lexically.  Do NOT short-circuit to
+      ``"absent"`` — a higher prefix could still be a symlink or
+      non-directory, in which case the whole chain is unsafe.  Only
+      when the walk reaches the root with no drift found is the path
+      genuinely uncreated (``"absent"``).
+    * ``NotADirectoryError``, ``PermissionError``, other ``OSError`` at
+      any step → configuration that cannot be inspected safely;
+      return ``"unsafe"``.
+    """
+    for ancestor in store_path.parents:
+        try:
+            result = ancestor.lstat()
+        except FileNotFoundError:
+            # Keep walking — the immediate prefix is missing but a
+            # higher prefix could still be a symlink / non-directory.
+            continue
+        except (NotADirectoryError, PermissionError, OSError):
+            return "unsafe"
+        # Lexical existence only; no ``Path.resolve()``.  A symlink or
+        # non-directory at any ancestor position is configuration drift
+        # in the canonical cache layout — operator error, not "store
+        # not set up yet", and the v1 fallback must not fire.
+        if not stat.S_ISDIR(result.st_mode):
+            return "unsafe"
+    # Walked every ancestor up to the root with no drift found; only
+    # the final file itself is missing.
+    return "absent"
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments.count("--store") > 1:
@@ -385,9 +497,12 @@ def main(argv: list[str] | None = None) -> int:
     # Resolve the external security anchors from the authoritative
     # ``root.json`` registration (refuses the ``<control_root>/<root_id>``
     # formula — the registered canonical_path is the only authoritative
-    # source for where live reads may anchor).
+    # source for where live reads may anchor).  ``expected_generation_id``
+    # is the canonical selection at startup time; the adapter MUST bind
+    # against it so a stale cache cannot serve outdated content after the
+    # selection advances.
     try:
-        allowed_root, expected_root_id = _resolve_allowed_root(
+        allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
             args.control_root, args.root_id
         )
     except (OSError, FilesAdminError, ValueError) as error:
@@ -435,12 +550,24 @@ def main(argv: list[str] | None = None) -> int:
     # Pre-protocol STORE_ABSENT: the resolved store is missing on disk.
     # Signaled before any stdin consumption so the launcher can detect
     # "store not yet populated" cleanly without touching the transport.
-    if not store_path.is_file():
+    # Reserve this signal for genuinely absent paths only — an existing
+    # but non-regular path (directory, FIFO, broken symlink, etc.) is
+    # a configuration error and must surface as 78 with NO fallback so a
+    # misconfigured install cannot route through the v1 reader.
+    store_state = _classify_store_path(store_path)
+    if store_state == "absent":
         print(
             f"files-store-mcp: STORE_ABSENT: store not found at {store_path}",
             file=sys.stderr,
         )
         return STORE_ABSENT_EXIT_CODE
+    if store_state == "unsafe":
+        print(
+            "files-store-mcp: startup-error: store_path_unsafe: "
+            f"store path is not a regular file: {store_path}",
+            file=sys.stderr,
+        )
+        return 78
 
     try:
         _enforce_capability_gate(store_path)
@@ -456,6 +583,7 @@ def main(argv: list[str] | None = None) -> int:
             store_path,
             allowed_root=allowed_root,
             expected_root_id=expected_root_id,
+            expected_generation_id=expected_generation_id,
         )
     except Exception as error:  # noqa: BLE001 - startup boundary
         code = getattr(error, "code", "store_unavailable")

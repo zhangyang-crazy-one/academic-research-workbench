@@ -44,6 +44,7 @@ from arw.files_store_mcp import (
     _handle,
     _open_store_adapter,
     _resolve_allowed_root,
+    STORE_ABSENT_EXIT_CODE,
     build_parser,
 )
 
@@ -548,15 +549,22 @@ def test_resolve_allowed_root_reads_authoritative_registration(tmp_path: Path) -
 
     The brief explicitly distrusts the suggested
     ``<control_root>/<root_id>`` formula.  This test pins that we read
-    ``root.json`` so the canonical_path matches the registered one.
+    ``root.json`` so the canonical_path matches the registered one and
+    that the returned generation_id matches the selected generation
+    recorded in ``selected-generation.json`` (P1 fix: the previously
+    discarded generation_id is now bound to the adapter so a stale
+    cache cannot silently serve outdated content).
     """
-    _, control, root_id, _ = _seed_corpus(
+    _, control, root_id, generation_id = _seed_corpus(
         tmp_path,
         corpus={"notes/a.txt": "alpha\nbeta\n"},
     )
-    allowed_root, resolved_root_id = _resolve_allowed_root(control, root_id)
+    allowed_root, resolved_root_id, resolved_generation_id = _resolve_allowed_root(
+        control, root_id
+    )
     assert allowed_root == (tmp_path / "root").resolve()
     assert resolved_root_id == root_id
+    assert resolved_generation_id == generation_id
 
 
 # ---------------------------------------------------------------------------
@@ -644,9 +652,14 @@ def test_open_store_adapter_uses_registered_canonical_path(tmp_path: Path) -> No
         corpus={"notes/a.txt": "alpha\nbeta\n"},
     )
     store_path = tmp_path / "arw.db"
-    allowed_root, expected_root_id = _resolve_allowed_root(control, root_id)
+    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+        control, root_id
+    )
     adapter = _open_store_adapter(
-        store_path, allowed_root=allowed_root, expected_root_id=expected_root_id
+        store_path,
+        allowed_root=allowed_root,
+        expected_root_id=expected_root_id,
+        expected_generation_id=expected_generation_id,
     )
     try:
         assert adapter._canonical_path == str((tmp_path / "root").resolve())
@@ -1157,6 +1170,616 @@ def test_store_absent_does_not_bypass_denied_manifest_gate(
     )
     # No JSON-RPC traffic — denial is pre-transport.
     assert completed.stdout.strip() == b""
+
+
+# ---------------------------------------------------------------------------
+# Finding #6 (PR16 P1): cache selected_generation_id binding
+# ---------------------------------------------------------------------------
+
+
+def test_constructor_rejects_stale_ingested_cache(tmp_path: Path) -> None:
+    """If the cache's ``files.selected_generation_id`` is OLDER than the
+    canonical selection at startup, the adapter refuses to start.
+
+    P1 fix: previously ``_resolve_allowed_root`` discarded the
+    selected.generation_id, so the adapter only cross-checked
+    canonical_path and root_id.  After the canonical selection advanced
+    (e.g. ``files sync`` ran again and a new generation was promoted),
+    a still-older cache would silently serve outdated content because
+    no caller would bind cursors against the new generation.  The fix
+    carries the authoritative generation_id through the adapter
+    constructor; a stale cache surfaces as a typed
+    ``stale_ingested_cache`` error before any live read.
+    """
+    root, control, root_id, first_generation_id = _seed_corpus(
+        tmp_path,
+        corpus={"notes/a.txt": "alpha\n"},
+    )
+    store_path = tmp_path / "arw.db"
+
+    # Advance the canonical selection by mutating the live corpus and
+    # re-syncing; the new selected generation has a new generation_id
+    # AND a new database file path, but the OLD store file at
+    # ``store_path`` still carries ``files.selected_generation_id ==
+    # first_generation_id`` because we never re-ingested.
+    (root / "notes/b.txt").write_text("bravo\n", encoding="utf-8")
+    service = _service_factory(control)
+    receipt = service.sync("research-root", extractor_version="1.0.0")
+    assert receipt.selected_generation_id is not None
+    advanced_generation_id = receipt.selected_generation_id
+    assert advanced_generation_id != first_generation_id
+
+    # Resolving the allowed root now sees the advanced generation; the
+    # cache on disk still carries the OLD one.
+    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+        control, root_id
+    )
+    assert expected_generation_id == advanced_generation_id
+
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            LocalStoreFilesAdapter(
+                store,
+                allowed_root=allowed_root,
+                expected_root_id=expected_root_id,
+                expected_generation_id=expected_generation_id,
+            )
+        assert caught.value.code == "stale_ingested_cache", (
+            f"stale cache must surface as stale_ingested_cache (non-fallback "
+            f"security error); got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
+
+
+def test_constructor_accepts_matching_generation_id(tmp_path: Path) -> None:
+    """Positive control: when the cache and the canonical selection
+    agree on ``selected_generation_id``, the adapter constructs fine.
+
+    Without a generation_id binding, an outdated cache would silently
+    survive — this test pins that the binding is enforced (the positive
+    case remains the working case).
+    """
+    _, control, root_id, generation_id = _seed_corpus(
+        tmp_path,
+        corpus={"notes/a.txt": "alpha\n"},
+    )
+    store_path = tmp_path / "arw.db"
+    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+        control, root_id
+    )
+    assert expected_generation_id == generation_id
+
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    try:
+        adapter = LocalStoreFilesAdapter(
+            store,
+            allowed_root=allowed_root,
+            expected_root_id=expected_root_id,
+            expected_generation_id=expected_generation_id,
+        )
+        assert adapter._generation_id == generation_id
+    finally:
+        store.close()
+
+
+def test_subprocess_stale_ingested_cache_exits_78_no_fallback(
+    tmp_path: Path,
+) -> None:
+    """Stale cache → store MCP exits 78 (NOT 69) and the shim MUST NOT
+    fall back to the v1 reader.  The shim's only fallback is STORE_ABSENT
+    (69); a stale cache is a non-fallback security error.
+
+    This is the real-shim, no-fallback test the brief requested: the
+    shim is invoked as a subprocess, sees 78 from the store MCP, and the
+    exit code propagates without routing through the v1 reader.
+    """
+    control, store_path = _seed_corpus_with_root_id(tmp_path, "research-root")
+    root = tmp_path / "root"
+    root_id = "research-root"
+    first_generation_id = None  # unused on this branch (the cache has not been re-ingested)
+    store_path = tmp_path / "arw.db"
+    (root / "notes/b.txt").write_text("bravo\n", encoding="utf-8")
+    service = _service_factory(control)
+    service.sync("research-root", extractor_version="1.0.0")
+
+    plugin_root = _stage_stub_plugin(tmp_path)
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
+
+    completed = _invoke_shim(
+        plugin_root=plugin_root,
+        control_root=control,
+        root_id=root_id,
+        store_path=store_path,
+        stdin_payload=request,
+    )
+    assert completed.returncode == 78, (
+        f"stale cache must propagate 78 (no v1 fallback; a 0 exit would "
+        f"indicate a successful v1 fallback); got {completed.returncode}; "
+        f"stderr={completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    assert "stale_ingested_cache" in stderr_text, (
+        f"stale cache should surface as stale_ingested_cache, got "
+        f"stderr={stderr_text!r}"
+    )
+    # Pre-transport: no JSON-RPC traffic.
+    assert completed.stdout.strip() == b"", (
+        "stale cache is signaled pre-transport; no JSON-RPC output expected"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finding #7 (PR16 P2): STORE_ABSENT must not fire on non-regular paths
+# ---------------------------------------------------------------------------
+
+
+def test_classify_store_path_handles_directory_fifo_and_broken_symlink(
+    tmp_path: Path,
+) -> None:
+    """``_classify_store_path`` distinguishes absent from non-regular.
+
+    The P2 fix replaces the bare ``store_path.is_file()`` check with a
+    three-way classifier: only genuinely absent paths get the
+    STORE_ABSENT (69) signal; existing-but-non-regular paths (directory,
+    FIFO, broken symlink) are surfaced as a 78 configuration error so
+    the shim's legacy fallback cannot route around them.
+    """
+    from arw.files_store_mcp import _classify_store_path
+
+    # Truly absent path → STORE_ABSENT.
+    assert _classify_store_path(tmp_path / "absent.db") == "absent"
+
+    # Existing directory → unsafe (NOT absent).
+    as_directory = tmp_path / "a_directory"
+    as_directory.mkdir()
+    assert _classify_store_path(as_directory) == "unsafe"
+
+    # Existing FIFO → unsafe (NOT absent).
+    as_fifo = tmp_path / "a_fifo"
+    os.mkfifo(as_fifo)
+    assert _classify_store_path(as_fifo) == "unsafe"
+
+    # Existing broken symlink → unsafe (NOT absent).  A symlink whose
+    # target never existed must not be treated as "store not set up
+    # yet" — it is a configuration error.
+    as_broken_symlink = tmp_path / "broken_link.db"
+    as_broken_symlink.symlink_to(tmp_path / "never_existed.db")
+    assert _classify_store_path(as_broken_symlink) == "unsafe"
+
+    # Existing regular file → regular.
+    as_regular = tmp_path / "regular.db"
+    as_regular.write_text("x", encoding="utf-8")
+    assert _classify_store_path(as_regular) == "regular"
+
+
+def test_classify_store_path_handles_ancestor_layout_drift(tmp_path: Path) -> None:
+    """The classifier must reject non-directory / symlink ancestors as
+    ``"unsafe"`` even when the full path ``lstat`` itself returns
+    ``FileNotFoundError`` (the reviewer's edge case).
+
+    Three failure modes are pinned here so a regression in any one of
+    them is caught explicitly:
+
+    1. Non-directory ancestor (regular file under ``tmp_path``).
+       ``Path.lstat(full)`` raises ``NotADirectoryError``; the old
+       classifier collapsed that into ``"absent"`` (STORE_ABSENT 69).
+    2. Broken symlink ancestor.  ``Path.lstat(full)`` raises
+       ``FileNotFoundError`` because the kernel cannot traverse the
+       dangling link; the old classifier returned ``"absent"`` and
+       the shim fell back to v1, hiding the misconfiguration.
+    3. Healthy symlink ancestor.  Same path: ``lstat(full)`` returns
+       ``FileNotFoundError`` because the symlink's target does not
+       exist, but ``lstat`` of the immediate prefix sees the symlink
+       (S_IFLNK) lexically and must classify the path as ``"unsafe"``.
+
+    Permission errors are exercised by ``test_classify_store_path_permission_error_*``
+    below; nested uncreated cache directories (the genuinely-absent
+    case the classifier MUST preserve) are exercised in
+    ``test_classify_store_path_preserves_uncreated_nested_cache_dir``.
+    """
+    from arw.files_store_mcp import _classify_store_path
+
+    # 1. Non-directory ancestor: a regular file used as an ancestor.
+    file_as_ancestor = tmp_path / "a_file"
+    file_as_ancestor.write_text("ancestor content", encoding="utf-8")
+    descendant_of_file = file_as_ancestor / "store.db"
+    assert _classify_store_path(descendant_of_file) == "unsafe", (
+        f"non-directory ancestor must classify as unsafe; got "
+        f"{_classify_store_path(descendant_of_file)!r}"
+    )
+
+    # 2. Broken symlink ancestor: a dangling link in the chain.
+    broken_link = tmp_path / "broken_link"
+    broken_link.symlink_to(tmp_path / "never_created_target")
+    descendant_of_broken = broken_link / "store.db"
+    assert _classify_store_path(descendant_of_broken) == "unsafe", (
+        f"broken symlink ancestor must classify as unsafe (NOT absent); "
+        f"got {_classify_store_path(descendant_of_broken)!r}"
+    )
+
+    # Positive control: same shape of test (deeper path, all ancestors
+    # absent), but WITHOUT a symlink at the ancestor position — the
+    # classifier must classify this as ``"absent"`` so the v1 fallback
+    # is allowed on a clean first run.
+    assert _classify_store_path(
+        tmp_path / "never_here" / "deeper" / "store.db"
+    ) == "absent", (
+        "an uncreated nested cache dir with no symlink ancestor must "
+        "remain absent (so STORE_ABSENT and the v1 fallback can fire)"
+    )
+
+    # Symlink at the immediate-ancestor position with deeper missing
+    # components: still ``"unsafe"`` because the lexical walk sees the
+    # symlink first, regardless of how deep the missing components are.
+    deeper_below_link = tmp_path / "broken_link" / "deeper" / "store.db"
+    assert _classify_store_path(deeper_below_link) == "unsafe", (
+        f"symlink at the immediate-ancestor position must classify as "
+        f"unsafe regardless of deeper missing components; got "
+        f"{_classify_store_path(deeper_below_link)!r}"
+    )
+
+
+def test_classify_store_path_preserves_uncreated_nested_cache_dir(
+    tmp_path: Path,
+) -> None:
+    """Positive control: a deeply nested uncreated cache directory is
+    still classified as ``"absent"`` so the shim's STORE_ABSENT (69)
+    legacy fallback can fire on first-run deployments.
+
+    Without this positive control, the lexical walk could regress to
+    either (a) always reporting ``"unsafe"`` (forcing operator
+    intervention for a clean first-run state) or (b) always reporting
+    ``"absent"`` (letting configuration drift route through v1).
+    """
+    from arw.files_store_mcp import _classify_store_path
+
+    nested_absent = tmp_path / "nested" / "deep" / "store.db"
+    # The directory chain above ``nested_absent`` does not exist yet
+    # — this is the genuine "store not set up yet" state.
+    assert _classify_store_path(nested_absent) == "absent", (
+        f"uncreated nested cache dir must remain absent; got "
+        f"{_classify_store_path(nested_absent)!r}"
+    )
+
+    # And a single-level absent path (the existing coverage) still
+    # classifies as absent.
+    assert _classify_store_path(tmp_path / "absent.db") == "absent"
+
+
+def test_classify_store_path_permission_error_is_unsafe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permission error during lstat classifies as ``"unsafe"``, NOT
+    ``"absent"`` — the reviewer's explicit guard against a blanket
+    ``OSError -> absent`` rule.
+
+    Mocking ``Path.lstat`` is sufficient here: the function under
+    test only inspects ``stat`` modes, so reproducing a permission
+    error in user-space (no chmod-0 fixtures, no cleanup races) keeps
+    the test deterministic across hosts.
+    """
+    from arw import files_store_mcp as module_under_test
+
+    def _permission_error(self: Path):  # noqa: ANN001 - bound to Path
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(Path, "lstat", _permission_error)
+    # Both an absent path and a path with a non-directory layout must
+    # classify as ``"unsafe"`` when lstat raises PermissionError —
+    # never ``"absent"``, regardless of which component raised it.
+    assert module_under_test._classify_store_path(tmp_path / "absent.db") == "unsafe"
+    non_dir = tmp_path / "file.db"
+    non_dir.write_text("x", encoding="utf-8")
+    assert module_under_test._classify_store_path(non_dir) == "unsafe"
+
+
+@pytest.mark.parametrize(
+    "make_path",
+    [
+        ("directory",),
+        ("fifo",),
+        ("broken_symlink",),
+    ],
+)
+def test_subprocess_nonregular_store_path_exits_78_no_fallback(
+    tmp_path: Path, make_path: tuple[str, ...]
+) -> None:
+    """An existing non-regular store path is rejected with 78 (NOT 69),
+    and the shim must NOT fall back to the v1 reader.
+
+    The shim's only fallback path is STORE_ABSENT (69); a configuration
+    error at the store-path layer (directory, FIFO, broken symlink) is
+    pre-transport and must propagate.  Each parametrized case pins one
+    path kind so a regression that only catches one kind cannot hide.
+    """
+    root = tmp_path / "root"
+    root.mkdir(parents=True)
+    (root / "notes").mkdir(parents=True)
+    (root / "notes/a.txt").write_text("alpha\n", encoding="utf-8")
+    control = tmp_path / "control"
+    service = _service_factory(control)
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
+    service.sync("research-root", extractor_version="2.0.0")
+    target = tmp_path / f"misconfigured-{make_path[0]}.db"
+    if make_path[0] == "directory":
+        target.mkdir()
+    elif make_path[0] == "fifo":
+        os.mkfifo(target)
+    elif make_path[0] == "broken_symlink":
+        target.symlink_to(tmp_path / "never_existed.db")
+    else:
+        raise AssertionError(f"unknown fixture kind: {make_path!r}")
+
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
+    completed = _invoke_store_mcp(
+        arguments=[
+            "--store",
+            str(target),
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+        ],
+        stdin_payload=request,
+    )
+    assert completed.returncode == 78, (
+        f"non-regular store path ({make_path[0]}) must surface as 78 "
+        f"(no v1 fallback), got {completed.returncode}; stderr="
+        f"{completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    # The pre-transport error names the failure mode so an operator can
+    # distinguish STORE_ABSENT (clean absence, fallback allowed) from a
+    # misconfigured path (configuration error, no fallback).
+    assert "STORE_ABSENT" not in stderr_text, (
+        "non-regular path must NOT be reported as STORE_ABSENT; the "
+        "fallback-eligible signal is reserved for genuine absence. "
+        f"stderr={stderr_text!r}"
+    )
+    assert "store_path_unsafe" in stderr_text, (
+        f"non-regular path should surface as store_path_unsafe, got "
+        f"stderr={stderr_text!r}"
+    )
+    # Pre-transport: no JSON-RPC traffic.
+    assert completed.stdout.strip() == b"", (
+        f"non-regular store path ({make_path[0]}) is signaled pre-transport; "
+        f"no JSON-RPC output expected, got stdout={completed.stdout!r}"
+    )
+
+
+def test_subprocess_nonregular_ancestor_exits_78_no_fallback(
+    tmp_path: Path,
+) -> None:
+    """A non-directory ancestor (regular file used as a parent
+    directory) surfaces as 78 (NOT 69) and the shim MUST NOT fall
+    back to the v1 reader.
+
+    This is the reviewer's edge case: ``Path.lstat(full_path)``
+    raises ``NotADirectoryError`` because the kernel cannot traverse
+    a regular file as if it were a directory.  Without the lexical
+    ancestor walk, the previous classifier grouped that with
+    ``FileNotFoundError`` and reported STORE_ABSENT (69) — silently
+    routing a misconfigured path through the legacy reader.
+    """
+    root = tmp_path / "root"
+    root.mkdir(parents=True)
+    (root / "notes").mkdir(parents=True)
+    (root / "notes/a.txt").write_text("alpha\n", encoding="utf-8")
+    control = tmp_path / "control"
+    service = _service_factory(control)
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
+    service.sync("research-root", extractor_version="2.0.0")
+
+    # Regular file as an ancestor.
+    file_as_dir = tmp_path / "looks_like_a_directory"
+    file_as_dir.write_text("not a directory", encoding="utf-8")
+    store_under_file = file_as_dir / "store.db"
+
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
+    completed = _invoke_store_mcp(
+        arguments=[
+            "--store",
+            str(store_under_file),
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+        ],
+        stdin_payload=request,
+    )
+    assert completed.returncode == 78, (
+        f"non-directory ancestor must surface as 78 (no v1 fallback), "
+        f"got {completed.returncode}; stderr="
+        f"{completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    assert "STORE_ABSENT" not in stderr_text, (
+        "non-directory ancestor must NOT trigger STORE_ABSENT; the "
+        "fallback-eligible signal is reserved for genuine absence. "
+        f"stderr={stderr_text!r}"
+    )
+    assert "store_path_unsafe" in stderr_text, (
+        f"non-directory ancestor should surface as store_path_unsafe, "
+        f"got stderr={stderr_text!r}"
+    )
+    assert completed.stdout.strip() == b"", (
+        "non-directory ancestor is signaled pre-transport; no JSON-RPC "
+        f"output expected, got stdout={completed.stdout!r}"
+    )
+
+
+def test_subprocess_broken_symlink_ancestor_exits_78_no_fallback(
+    tmp_path: Path,
+) -> None:
+    """A broken symlink in the ancestor chain surfaces as 78 (NOT 69)
+    and the shim MUST NOT fall back to the v1 reader.
+
+    This is the second reviewer's edge case: ``Path.lstat(full_path)``
+    raises ``FileNotFoundError`` (the kernel cannot traverse the
+    dangling link), which the previous classifier collapsed into
+    STORE_ABSENT (69).  The lexical walk sees the symlink at the
+    immediate prefix and rejects the path as configuration drift.
+    """
+    root = tmp_path / "root"
+    root.mkdir(parents=True)
+    (root / "notes").mkdir(parents=True)
+    (root / "notes/a.txt").write_text("alpha\n", encoding="utf-8")
+    control = tmp_path / "control"
+    service = _service_factory(control)
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
+    service.sync("research-root", extractor_version="2.0.0")
+
+    broken_ancestor = tmp_path / "broken_ancestor"
+    broken_ancestor.symlink_to(tmp_path / "absent_target_dir")
+    store_under_broken = broken_ancestor / "store.db"
+
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
+    completed = _invoke_store_mcp(
+        arguments=[
+            "--store",
+            str(store_under_broken),
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+        ],
+        stdin_payload=request,
+    )
+    assert completed.returncode == 78, (
+        f"broken symlink ancestor must surface as 78 (no v1 fallback), "
+        f"got {completed.returncode}; stderr="
+        f"{completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    assert "STORE_ABSENT" not in stderr_text, (
+        "broken symlink ancestor must NOT trigger STORE_ABSENT; that "
+        "signal is reserved for genuine absence. "
+        f"stderr={stderr_text!r}"
+    )
+    assert "store_path_unsafe" in stderr_text, (
+        f"broken symlink ancestor should surface as store_path_unsafe, "
+        f"got stderr={stderr_text!r}"
+    )
+    assert completed.stdout.strip() == b"", (
+        "broken symlink ancestor is signaled pre-transport; no JSON-RPC "
+        f"output expected, got stdout={completed.stdout!r}"
+    )
+
+
+def test_subprocess_uncreated_nested_cache_dir_still_absent(
+    tmp_path: Path,
+) -> None:
+    """Positive control: a deeply nested uncreated cache directory
+    still exits 69 (STORE_ABSENT) so the shim's v1 fallback can fire
+    on first-run deployments.
+
+    Without this positive control the classifier could regress to
+    always-unsafe and block the legacy reader on a clean first-run
+    state.  This test pins the path the lexical walk must NOT block:
+    ``<tmp_path>/nested/deep/store.db`` with no intermediate
+    components created.
+    """
+    root = tmp_path / "root"
+    root.mkdir(parents=True)
+    (root / "notes").mkdir(parents=True)
+    (root / "notes/a.txt").write_text("alpha\n", encoding="utf-8")
+    control = tmp_path / "control"
+    service = _service_factory(control)
+    service.register_root(
+        root_id="research-root", root_path=root, policy_id="research-files-v1"
+    )
+    service.sync("research-root", extractor_version="2.0.0")
+
+    absent_store = tmp_path / "nested" / "deep" / "store.db"
+    # Sanity check: nothing under ``nested`` exists yet.
+    assert not (tmp_path / "nested").exists()
+
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
+    completed = _invoke_store_mcp(
+        arguments=[
+            "--store",
+            str(absent_store),
+            "--control-root",
+            str(control),
+            "--root-id",
+            "research-root",
+        ],
+        stdin_payload=request,
+    )
+    assert completed.returncode == STORE_ABSENT_EXIT_CODE, (
+        f"uncreated nested cache dir must signal STORE_ABSENT (69); "
+        f"got {completed.returncode}; stderr="
+        f"{completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    assert "STORE_ABSENT" in stderr_text, (
+        f"uncreated nested cache dir must surface as STORE_ABSENT; "
+        f"got stderr={stderr_text!r}"
+    )
+    assert "store_path_unsafe" not in stderr_text, (
+        f"uncreated nested cache dir must NOT be flagged as unsafe; "
+        f"got stderr={stderr_text!r}"
+    )
 
 
 # ---------------------------------------------------------------------------

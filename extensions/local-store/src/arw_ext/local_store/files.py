@@ -84,6 +84,7 @@ class LocalStoreFilesAdapter:
         *,
         allowed_root: Path | str | None = None,
         expected_root_id: str | None = None,
+        expected_generation_id: str | None = None,
     ) -> None:
         store.assert_open()
         meta = read_files_meta(store.connection)
@@ -134,6 +135,27 @@ class LocalStoreFilesAdapter:
                 raise FileProviderError(
                     "root_denied",
                     "cache root_id does not match the registered root_id",
+                )
+        # Startup-time generation binding: when the caller supplies an
+        # externally configured expected_generation_id (the canonical
+        # selection at the moment the MCP process started), require that
+        # the cache's recorded ``files.selected_generation_id`` matches
+        # exactly.  Without this check, the MCP could keep serving an
+        # older ingested projection after the canonical selection has
+        # advanced — a silent staleness that the request-time
+        # ``_check_generation`` cannot catch (clients binding cursors to
+        # the new selection would never reach the cache's stale
+        # generation in the first place).  Use a distinct error code
+        # (``stale_ingested_cache``) so the MCP entry point can map this
+        # to a non-fallback security failure (78), distinguishable from
+        # the generic ``root_denied`` family.
+        if expected_generation_id is not None:
+            if self._generation_id != expected_generation_id:
+                raise FileProviderError(
+                    "stale_ingested_cache",
+                    "cache selected_generation_id does not match the "
+                    "canonical selection at startup time; re-ingest the "
+                    "current generation before serving live reads",
                 )
         secret = base64.b64decode(meta[FILES_CURSOR_META_KEY])
         self._codec = CursorCodec(secret=secret)
