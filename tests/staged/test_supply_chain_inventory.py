@@ -35,6 +35,7 @@ LEGAL_FILES = {
     "SBOM.cdx.json",
     "supply-chain/use-distribution.json",
     "supply-chain/license-verdict.json",
+    "supply-chain/semantica-qualification.json",
     "vendor/source-manifest.json",
     "vendor/mcp-manifest.json",
 }

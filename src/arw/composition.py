@@ -7,9 +7,14 @@ never imports adapters. This keeps the ports/adapters boundary enforceable
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
+from importlib import import_module
 from pathlib import Path
 
 from arw.kernel.capabilities import CapabilityRouter
+
+_PROVENANCE_PLATFORM_SUPPORTED = os.name != "nt"
 
 
 def default_router(
@@ -20,6 +25,11 @@ def default_router(
     store_path: Path | None = None,
     files_root_id: str = "research-root",
     plugin_manifest: Path | None = None,
+    semantica_store_path: Path | None = None,
+    canonical_event_digests: Mapping[str, str] | None = None,
+    accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]] | None = None,
+    accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
+    expected_provenance_record_sha256: Mapping[str, str] | None = None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -104,6 +114,28 @@ def default_router(
                 GraphStore(graph_control_root, graph_root_id)
             ),
         )
+    if semantica_store_path is not None and _PROVENANCE_PLATFORM_SUPPORTED:
+        if accepted_artifact_sha256_by_event is None:
+            raise ValueError(
+                "accepted artifact digests are required when provenance is enabled"
+            )
+        if expected_provenance_record_sha256 is None:
+            raise ValueError(
+                "canonical provenance inventory is required when provenance is enabled"
+            )
+
+        def _semantica_provenance():
+            module = import_module("arw_semantica")
+            return module.SemanticaSQLiteAdapter(
+                semantica_store_path,
+                canonical_event_digests=canonical_event_digests or {},
+                accepted_artifact_ids_by_event=accepted_artifact_ids_by_event or {},
+                accepted_artifact_sha256_by_event=accepted_artifact_sha256_by_event,
+                expected_provenance_record_sha256=(expected_provenance_record_sha256),
+                audit_database_path=semantica_store_path,
+            )
+
+        router.register_optional("knowledge.provenance", _semantica_provenance)
     if plugin_manifest is not None:
         declared = set(declared_capabilities(plugin_manifest))
         # The manifest declares broad capability names (``files``, ``graph``,
@@ -140,7 +172,9 @@ def files_admin_service(control_root: Path):
     return FilesAdminService(control_root)
 
 
-def local_store_health(store_path: Path) -> dict:
+def local_store_health(
+    store_path: Path, *, provenance_audit_database_path: Path | None = None
+) -> dict:
     """Projection-health summary for one local store (task 5.3).
 
     Composition-root seam: the kernel never imports ``arw_ext``; the CLI
@@ -155,7 +189,36 @@ def local_store_health(store_path: Path) -> dict:
     store = LocalProjectionStore(Path(store_path))
     store.open()
     try:
-        return collect_health(store)
+        health = collect_health(store)
+        if provenance_audit_database_path is not None:
+            from arw_ext.local_store.receipts import load_audit_faults
+
+            existing = list(health.get("provenance_faults", []))
+            persisted = load_audit_faults(
+                provenance_audit_database_path,
+                max_entries=1_001,
+                max_bytes=65_536,
+            )
+            existing.append(
+                {
+                    "code": "semantica_health_unknown",
+                    "message": (
+                        "no ledger-bound Semantica verification receipt proves "
+                        "the current canonical inventory"
+                    ),
+                    "affected_rows": 0,
+                }
+            )
+            existing.extend(
+                {
+                    "code": fault.code,
+                    "message": fault.message,
+                    "affected_rows": fault.affected_rows,
+                }
+                for fault in persisted
+            )
+            health["provenance_faults"] = existing
+        return health
     finally:
         store.close()
 

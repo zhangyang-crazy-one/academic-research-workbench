@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "component_id": "semantica-compatible-lite",
+  "upstream_review": {
+    "repository": "https://github.com/semantica-agi/semantica",
+    "reviewed_commit": "e90bd048",
+    "wheel": "semantica-0.6.7-py3-none-any.whl",
+    "wheel_sha256": "94786f20cd2c91144247d78c1baa2256160709c2fe6c332118c1f95d80232204",
+    "reviewed_sources": [
+      {
+        "path": "semantica/provenance/schemas.py",
+        "sha256": "89fa15470f9a6a64ea729801a5b437efe2a19df1474ca6f13855493f745672d0"
+      },
+      {
+        "path": "semantica/provenance/integrity.py",
+        "sha256": "7af67d2e8526a93a7124f52c0b489d75e53ba77e592d80d6c119d0fdde19692e"
+      }
+    ]
+  },
+  "implementation": {
+    "kind": "independent_semantica_compatible_lite",
+    "upstream_source_materialized": false,
+    "upstream_source_copied": false,
+    "upstream_source_distributed": false,
+    "patches": []
+  },
+  "license": {
+    "upstream_spdx": "MIT",
+    "classification": "SATISFIED",
+    "evidence": "wheel METADATA",
+    "existing_technical_license_gate": "PASS"
+  },
+  "dependency_inventory": {
+    "full_pypi_package_hard_dependency_count": 127,
+    "lite_runtime_dependencies": ["Python standard library", "ARW core ports/contracts"],
+    "excluded": ["torch", "transformers", "spacy", "sentence-transformers", "FAISS", "GraphRAG", "Neo4j", "FalkorDB", "REST", "MCP", "Explorer/UI"]
+  },
+  "persistence_caveats": [
+    "Upstream pipeline and Explorer paths are outside this Lite profile.",
+    "ARW validates artifact and canonical ledger bindings before sidecar admission.",
+    "A sidecar checksum never authorizes an ARW transition."
+  ],
+  "verdict": "PASS"
+}

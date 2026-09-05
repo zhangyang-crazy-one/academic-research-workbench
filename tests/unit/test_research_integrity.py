@@ -11,8 +11,8 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from arw.kernel.policy import research_integrity
 from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.policy import research_integrity
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -46,9 +46,11 @@ ARS_ENTRY_SCHEMA = _load_json_object(
     / "skills/academic-research-suite/ars/shared/contracts/passport/"
     "literature_corpus_entry.schema.json"
 )
+# The locked environment lacks jsonschema's optional date-time checker.
+# Use the project's registered RFC 3339 checker for schema-side assertions.
 ARS_ENTRY_VALIDATOR = Draft202012Validator(
     ARS_ENTRY_SCHEMA,
-    format_checker=Draft202012Validator.FORMAT_CHECKER,
+    format_checker=research_integrity._FORMAT_CHECKER,
 )
 ARS_SIGNAL_SCHEMA = _load_json_object(
     Path(__file__).resolve().parents[2]
@@ -57,7 +59,7 @@ ARS_SIGNAL_SCHEMA = _load_json_object(
 )
 ARS_SIGNAL_VALIDATOR = Draft202012Validator(
     ARS_SIGNAL_SCHEMA,
-    format_checker=Draft202012Validator.FORMAT_CHECKER,
+    format_checker=research_integrity._FORMAT_CHECKER,
 )
 VALID_BIBLIOGRAPHIC_SIGNAL = _load_json_object(
     Path(__file__).resolve().parents[2]
@@ -427,12 +429,12 @@ def test_bridge_enforces_authoritative_patterns_formats_and_nested_null_rules(
 def test_date_time_validation_does_not_depend_on_optional_format_extra(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The bridge rejects malformed dates even when schema format checks are disabled."""
     monkeypatch.setattr(
         research_integrity._FORMAT_CHECKER, "conforms", lambda *_args: True
     )
-    _assert_authoritative_rejection_is_enforced(
-        {**ARS_ENTRY, "obtained_at": "yesterday"}
-    )
+    with pytest.raises(ValueError, match="ARS literature entry"):
+        _bridge({**ARS_ENTRY, "obtained_at": "yesterday"})
 
 
 def test_bridge_validates_each_bibliographic_integrity_signal_before_hashing() -> None:

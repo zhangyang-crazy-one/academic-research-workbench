@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import os
 import stat
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Literal, TypeVar
+from typing import Literal, TypeVar
 
 from pydantic import TypeAdapter, ValidationError
 
-from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_hex,
+    strict_json_loads,
+)
+from arw.kernel.ledger.reducer import RuntimeState
 from arw.kernel.state.models import (
     ArtifactAcceptedPayload,
     ArtifactManifest,
@@ -23,11 +29,10 @@ from arw.kernel.state.models import (
     StableRuntimeId,
     StrictModel,
 )
-from arw.kernel.ledger.reducer import RuntimeState
 from arw.kernel.state.orchestration_models import (
+    MAX_OUTPUT_BYTES,
     AttemptDescriptor,
     ImmutableAssignment,
-    MAX_OUTPUT_BYTES,
     ProposalValidationError,
     WorkerProposal,
     canonical_orchestration_model_bytes,
@@ -42,6 +47,8 @@ class ManifestError(RuntimeError):
 ManifestModel = TypeVar("ManifestModel", bound=StrictModel)
 
 MAX_PROPOSAL_BYTES = 1_048_576
+MAX_MANIFEST_BYTES = 1_048_576
+MAX_LEGACY_MANIFEST_BYTES = 16_777_216
 
 _STABLE_RUNTIME_ID = TypeAdapter(StableRuntimeId)
 
@@ -49,7 +56,9 @@ _STABLE_RUNTIME_ID = TypeAdapter(StableRuntimeId)
 class RawProposalEvidence(StrictModel):
     """A retained raw proposal plus its parent-validation result."""
 
-    schema_version: Literal["arw.raw-proposal-evidence.v1"] = "arw.raw-proposal-evidence.v1"
+    schema_version: Literal["arw.raw-proposal-evidence.v1"] = (
+        "arw.raw-proposal-evidence.v1"
+    )
     attempt_id: str
     assignment_id: str
     relative_path: str
@@ -88,10 +97,19 @@ def _safe_directory(root: Path, parts: tuple[str, ...], *, create: bool) -> Path
                 cursor.mkdir()
                 _fsync_directory(cursor.parent)
             except OSError as error:
-                raise ManifestError(f"cannot create manifest directory: {error}") from error
+                raise ManifestError(
+                    f"cannot create manifest directory: {error}"
+                ) from error
         else:
             raise ManifestError("manifest directory is missing")
     return cursor
+
+
+def _raise_on_content_collision(
+    path: Path, value: bytes, message: str, error: FileExistsError
+) -> None:
+    if path.is_symlink() or not path.is_file() or path.read_bytes() != value:
+        raise ManifestError(message) from error
 
 
 def _write_once(path: Path, value: bytes) -> Path:
@@ -114,16 +132,18 @@ def _write_once(path: Path, value: bytes) -> Path:
                 handle.flush()
                 os.fsync(handle.fileno())
         except Exception:
-            try:
+            with suppress(OSError):
                 os.close(descriptor)
-            except OSError:
-                pass
             raise
         try:
             os.link(temporary, path, follow_symlinks=False)
-        except FileExistsError:
-            if path.is_symlink() or not path.is_file() or path.read_bytes() != value:
-                raise ManifestError("immutable manifest replacement or content collision")
+        except FileExistsError as error:
+            _raise_on_content_collision(
+                path,
+                value,
+                "immutable manifest replacement or content collision",
+                error,
+            )
         _fsync_directory(path.parent)
         return path
     except ManifestError:
@@ -157,7 +177,9 @@ def load_assignment_manifest(root: Path, assignment_id: str) -> ImmutableAssignm
     if path.is_symlink() or not path.is_file():
         raise ManifestError("assignment manifest is missing or unsafe")
     try:
-        assignment = ImmutableAssignment.model_validate(strict_json_loads(path.read_bytes()))
+        assignment = ImmutableAssignment.model_validate(
+            strict_json_loads(path.read_bytes())
+        )
     except (OSError, UnicodeError, ValueError, ValidationError) as error:
         raise ManifestError(f"assignment manifest is invalid: {error}") from error
     canonical = canonical_orchestration_model_bytes(assignment)
@@ -196,7 +218,9 @@ def _read_direct_file(path: Path, *, max_bytes: int) -> bytes:
     try:
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     except OSError as error:
-        raise ManifestError(f"proposal path cannot be opened safely: {error}") from error
+        raise ManifestError(
+            f"proposal path cannot be opened safely: {error}"
+        ) from error
     try:
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
@@ -239,7 +263,9 @@ def admit_raw_proposal(
     if attempt.assignment_id != assignment.assignment_id:
         raise ManifestError("proposal attempt does not match assignment")
     _safe_directory(root, ("attempts", attempt.attempt_id), create=False)
-    result_root = _safe_directory(root, ("attempts", attempt.attempt_id, "result"), create=False)
+    result_root = _safe_directory(
+        root, ("attempts", attempt.attempt_id, "result"), create=False
+    )
     proposal_path = result_root / "proposal.json"
     raw = _read_direct_file(proposal_path, max_bytes=max_bytes)
     digest = sha256_hex(raw)
@@ -311,7 +337,9 @@ def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Pa
     except OSError as error:
         raise ManifestError(f"artifact content is unavailable: {error}") from error
     if not resolved.is_relative_to(root) or not stat.S_ISREG(mode):
-        raise ManifestError("artifact content must be a regular file under the run root")
+        raise ManifestError(
+            "artifact content must be a regular file under the run root"
+        )
     if sha256_hex(resolved.read_bytes()) != expected_sha256:
         raise ManifestError("artifact content digest mismatch")
     return resolved
@@ -319,6 +347,8 @@ def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Pa
 
 def _install(root: Path, relative_store: Path, manifest: StrictModel) -> Path:
     value, digest = manifest_bytes_and_sha256(manifest)
+    if len(value) > MAX_MANIFEST_BYTES:
+        raise ManifestError("manifest exceeds the byte limit")
     root = root.resolve()
     store = root
     for part in relative_store.parts:
@@ -343,9 +373,13 @@ def _install(root: Path, relative_store: Path, manifest: StrictModel) -> Path:
             os.fsync(handle.fileno())
         try:
             os.link(temporary, target)
-        except FileExistsError:
-            if target.is_symlink() or not target.is_file() or target.read_bytes() != value:
-                raise ManifestError("content-address collision during publication")
+        except FileExistsError as error:
+            _raise_on_content_collision(
+                target,
+                value,
+                "content-address collision during publication",
+                error,
+            )
         _fsync_directory(store)
     finally:
         temporary.unlink(missing_ok=True)
@@ -356,14 +390,25 @@ def install_artifact_manifest(root: Path, manifest: ArtifactManifest) -> Path:
     return _install(root, Path("manifests/artifacts/sha256"), manifest)
 
 
-def _load(path: Path, model: type[ManifestModel]) -> ManifestModel:
+def _load(  # noqa: UP047 -- keep compatibility with the configured type checker
+    path: Path, model: type[ManifestModel]
+) -> ManifestModel:
     if path.is_symlink() or not path.is_file():
         raise ManifestError("manifest path is missing or unsafe")
     try:
-        raw = path.read_bytes()
+        with path.open("rb") as handle:
+            raw = handle.read(MAX_LEGACY_MANIFEST_BYTES + 1)
+        if len(raw) > MAX_LEGACY_MANIFEST_BYTES:
+            raise ManifestError("manifest exceeds the byte limit")
         value = strict_json_loads(raw)
         manifest = model.model_validate(value)
-    except (OSError, UnicodeError, ValueError, ValidationError) as error:
+    except (
+        OSError,
+        RecursionError,
+        UnicodeError,
+        ValueError,
+        ValidationError,
+    ) as error:
         raise ManifestError(f"manifest is invalid: {error}") from error
     canonical, digest = manifest_bytes_and_sha256(manifest)
     if raw != canonical or path.name != f"{digest}.json":
@@ -372,7 +417,9 @@ def _load(path: Path, model: type[ManifestModel]) -> ManifestModel:
 
 
 def load_artifact_manifest(root: Path, digest: str) -> ArtifactManifest:
-    return _load(root / "manifests/artifacts/sha256" / f"{digest}.json", ArtifactManifest)
+    return _load(
+        root / "manifests/artifacts/sha256" / f"{digest}.json", ArtifactManifest
+    )
 
 
 def install_material_passport(root: Path, passport: MaterialPassport) -> Path:
@@ -415,7 +462,9 @@ def validate_accepted_event_manifests(
                 or manifest.content_sha256 != event.payload.artifact_sha256
                 or manifest.attempt_id != event.payload.attempt_id
             ):
-                raise ManifestError("artifact acceptance event differs from its manifest")
+                raise ManifestError(
+                    "artifact acceptance event differs from its manifest"
+                )
         elif event.event_type == "passport.accepted":
             assert isinstance(event.payload, PassportAcceptedPayload)
             passport = load_material_passport(root, event.payload.passport_sha256)
@@ -430,7 +479,9 @@ def validate_accepted_event_manifests(
                 != event.payload.supersedes_passport_sha256
                 or passport.fresh_until != event.payload.fresh_until
             ):
-                raise ManifestError("Passport acceptance event differs from its manifest")
+                raise ManifestError(
+                    "Passport acceptance event differs from its manifest"
+                )
 
 
 def validate_event_manifest_semantics(
@@ -445,8 +496,13 @@ def validate_event_manifest_semantics(
     if event.event_type == "artifact.accepted":
         assert isinstance(event.payload, ArtifactAcceptedPayload)
         manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
-        if manifest.created_at != event.occurred_at or manifest.producer_id != event.actor_id:
-            raise ManifestError("artifact manifest producer or timestamp differs from its event")
+        if (
+            manifest.created_at != event.occurred_at
+            or manifest.producer_id != event.actor_id
+        ):
+            raise ManifestError(
+                "artifact manifest producer or timestamp differs from its event"
+            )
         if manifest.attempt_id is None:
             if manifest.base_revision != state_before.accepted_revision:
                 raise ManifestError("artifact manifest base revision is not current")
@@ -471,7 +527,9 @@ def validate_event_manifest_semantics(
                 or manifest.base_revision != attempt.base_revision
                 or manifest.consumed_sha256 != attempt.consumed_sha256
             ):
-                raise ManifestError("artifact manifest does not match its active attempt")
+                raise ManifestError(
+                    "artifact manifest does not match its active attempt"
+                )
         return
 
     if event.event_type != "passport.accepted":
@@ -507,4 +565,6 @@ def validate_event_manifest_semantics(
         passport.created_by == event.actor_id,
     )
     if not all(checks):
-        raise ManifestError("Passport manifest does not bind the accepted checkpoint state")
+        raise ManifestError(
+            "Passport manifest does not bind the accepted checkpoint state"
+        )

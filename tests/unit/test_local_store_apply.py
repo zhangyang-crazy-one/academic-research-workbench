@@ -7,6 +7,8 @@ provenance, supersession, unbound, tamper), and the c8f5a77e regression.
 
 from __future__ import annotations
 
+import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -666,3 +668,130 @@ def test_multiple_faults_same_receipt_persist_distinct_files(tmp_path: Path) -> 
     loaded = load_audit_faults(db)
     messages = {fault.message for fault in loaded}
     assert messages == {"fault A", "fault B"}
+
+
+def test_load_audit_faults_surfaces_broken_symlink_root(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    audit_root(database).symlink_to(
+        tmp_path / "missing-audit-target", target_is_directory=True
+    )
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_surfaces_malformed_receipt(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    (root / "broken.json").write_bytes(b"{")
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_rejects_noncanonical_digest_mismatch(
+    tmp_path: Path,
+) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        AuditFault,
+        load_audit_faults,
+        persist_audit_fault,
+    )
+
+    database = tmp_path / "arw.db"
+    path = persist_audit_fault(
+        database,
+        AuditFault(
+            code="projection_fault",
+            message="fault",
+            affected_rows=1,
+            projection_name="knowledge",
+            receipt_id="generation-1",
+        ),
+    )
+    path.write_bytes(b" " + path.read_bytes())
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    os.mkfifo(root / "blocked.json")
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_handles_lone_surrogate_as_unreadable(
+    tmp_path: Path,
+) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    raw = (
+        b'{"affected_rows":1,"code":"\\udcff","message":"fault",'
+        b'"projection_name":"knowledge","receipt_id":"bad",'
+        b'"schema_version":"1.0.0"}'
+    )
+    digest = hashlib.sha256(raw).hexdigest()[:12]
+    (root / f"bad-{digest}.json").write_bytes(raw)
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_handles_invalid_utf8_filename(tmp_path: Path) -> None:
+    from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
+        audit_root,
+        load_audit_faults,
+    )
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir()
+    descriptor = os.open(
+        os.fsencode(root) + b"/broken-\xff.json",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    try:
+        os.write(descriptor, b"{")
+    finally:
+        os.close(descriptor)
+    faults = load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]
+
+
+def test_load_audit_faults_converts_enumeration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from arw_ext.local_store import receipts  # pyright: ignore[reportMissingImports]
+
+    database = tmp_path / "arw.db"
+    receipts.audit_root(database).mkdir()
+
+    def fail_enumeration(_target: object) -> object:
+        raise OSError("enumeration denied")
+
+    monkeypatch.setattr(receipts.os, "scandir", fail_enumeration)
+    faults = receipts.load_audit_faults(database)
+    assert [fault.code for fault in faults] == ["audit_receipt_read_failed"]

@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import stat
 import sys
 from collections.abc import Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
@@ -34,6 +36,8 @@ from arw.kernel.execution.host_dispatch import (
 )
 
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
+PROVENANCE_ARTIFACT_KIND = "provenance-record"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -255,15 +259,35 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--root-id", required=True)
         if name in {"sync", "rebuild", "repair"}:
             command.add_argument("--extractor-version", required=True)
+    provenance = subparsers.add_parser(
+        "provenance",
+        help="Operate the opt-in Semantica-compatible Lite provenance sidecar.",
+    )
+    provenance_actions = provenance.add_subparsers(
+        dest="provenance_action", required=True
+    )
+    for action in ("record", "lineage", "verify", "rebuild"):
+        command = provenance_actions.add_parser(action)
+        command.add_argument("--run-root", required=True, type=Path)
+        command.add_argument("--store", required=True, type=Path)
+        command.add_argument("--lock-timeout", type=float, default=0.2)
+        if action == "record":
+            command.add_argument("--record", required=True, type=Path)
+        elif action == "lineage":
+            command.add_argument("--entity-id", required=True)
+            command.add_argument("--max-depth", type=int, default=8)
+            command.add_argument("--max-rows", type=int, default=100)
     graph_mcp = subparsers.add_parser("_graph-mcp", help=argparse.SUPPRESS)
     graph_mcp.add_argument("--control-root", required=True, type=Path)
     graph_mcp.add_argument("--root-id", required=True)
     return parser
 
+
 def _add_run_request_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--lock-timeout", type=float, default=0.2)
+
 
 def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--integration-lock", type=Path)
@@ -272,14 +296,120 @@ def _add_integration_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--codex-native-binary", type=Path)
     parser.add_argument("--host-canary-evidence", type=Path)
 
+
 def _write_rejection(error: Exception) -> None:
     from arw.kernel.state.models import Rejection
 
     rejection = Rejection(code="canonical-error", message=str(error))
     sys.stderr.buffer.write(canonical_json_bytes(rejection.model_dump(mode="json")))
 
+
 def _is_status_json_request(args: argparse.Namespace) -> bool:
     return args.command == "status" and bool(args.json_output)
+
+
+def _provenance_sidecar_path(store: Path, run_id: str) -> Path:
+    """Keep sidecar and audit basenames bounded without losing store identity."""
+    from arw.kernel.core.canonical import sha256_hex
+
+    name = store.name
+    suffix = f".{run_id}.semantica.sqlite3"
+    # SQLite safety probes create sibling files using -wal/-shm/-journal; the
+    # ``-journal`` suffix is two bytes longer than the ``.audit`` directory
+    # suffix, so it is the strict upper bound for the sidecar basename.
+    auxiliary_suffix = f"{suffix}-journal"
+    hashed_prefix = "__arw_store_sha256__"
+    # Reserve the hashed namespace so a literal store name cannot alias it.
+    if (
+        name.startswith(hashed_prefix)
+        or len(os.fsencode(f"{name}{auxiliary_suffix}")) > 255
+    ):
+        name = hashed_prefix + sha256_hex(os.fsencode(name))
+    return store.with_name(f"{name}{suffix}")
+
+
+def _read_bounded_regular_file(
+    root: Path, relative_path: str, *, max_bytes: int
+) -> bytes | None:
+    """Read one confined regular file through a stable run-root descriptor."""
+    root = root if root.is_absolute() else Path.cwd() / root
+    relative = Path(relative_path)
+    if (
+        not relative.parts
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise OSError("artifact path is not normalized and relative")
+    close_descriptors: list[int] = []
+    parent_descriptor: int | None = None
+    leaf_name: str | None = None
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    descriptor_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | no_follow
+    )
+    supports_stable_walk = (
+        no_follow != 0
+        and os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+    )
+    if not supports_stable_walk:
+        raise OSError("stable descriptor-relative artifact reads are unsupported")
+    directory_flags = descriptor_flags | getattr(os, "O_DIRECTORY", 0)
+    parent_descriptor = os.open(Path(root.anchor), directory_flags)
+    close_descriptors.append(parent_descriptor)
+    for component in root.parts[1:]:
+        parent_descriptor = os.open(
+            component, directory_flags, dir_fd=parent_descriptor
+        )
+        close_descriptors.append(parent_descriptor)
+    for part in relative.parts[:-1]:
+        parent_descriptor = os.open(part, directory_flags, dir_fd=parent_descriptor)
+        close_descriptors.append(parent_descriptor)
+    leaf_name = relative.parts[-1]
+    descriptor = os.open(leaf_name, descriptor_flags, dir_fd=parent_descriptor)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError("artifact is not a regular file")
+        if before.st_size > max_bytes:
+            return None
+        chunks: list[bytes] = []
+        total = 0
+        while total <= max_bytes:
+            chunk = os.read(descriptor, min(65_536, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        after = os.fstat(descriptor)
+        if parent_descriptor is not None and leaf_name is not None:
+            current = os.stat(
+                leaf_name, dir_fd=parent_descriptor, follow_symlinks=False
+            )
+        else:
+            current = os.stat(root / relative, follow_symlinks=False)
+
+        def identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
+            return (
+                value.st_dev,
+                value.st_ino,
+                value.st_mode,
+                value.st_size,
+                value.st_mtime_ns,
+            )
+
+        if identity(before) != identity(after) or identity(after) != identity(current):
+            raise OSError("artifact changed during bounded read")
+        content = b"".join(chunks)
+        return None if len(content) > max_bytes else content
+    finally:
+        os.close(descriptor)
+        for directory_descriptor in reversed(close_descriptors):
+            os.close(directory_descriptor)
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
@@ -358,6 +488,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             builder_value = os.environ.get("ARW_FILES_NATIVE_BUILDER")
             from arw.composition import files_admin_service
+
             service = files_admin_service(args.control_root)
             if builder_value is not None:
                 service.native_builder = Path(builder_value)
@@ -408,22 +539,235 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
         # The manifest's declared capability set gates activation (PR5).
-        # Resolution order: explicit env override (staged/installed plugin
-        # sets it), then the source-tree layout.  Never guess from the
-        # installed package location — that path differs per install.
+        # Resolution order:
+        #   1. Explicit ``ARW_PLUGIN_MANIFEST`` (the installed launcher binds
+        #      it to ``$PLUGIN_ROOT/.codex-plugin/plugin.json``).
+        #   2. ``ARW_PLUGIN_ROOT`` set without ``ARW_PLUGIN_MANIFEST`` —
+        #      installed mode but no manifest binding, which is a launcher
+        #      configuration error.  Defaulting to ``plugin_manifest=None``
+        #      here would skip the gating block in ``default_router`` and
+        #      leave every registered provider available regardless of the
+        #      manifest's declared set (PR15 follow-up).
+        #   3. Source-development fallback: the in-tree ``.codex-plugin/plugin.json``
+        #      beside ``src/arw/cli.py``.  Preserved so dev runs keep working
+        #      without an installed root.
         manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
-        manifest_path = (
-            Path(manifest_env)
-            if manifest_env
-            else Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
-        )
+        plugin_root_env = os.environ.get("ARW_PLUGIN_ROOT")
+        if manifest_env:
+            manifest_path = Path(manifest_env)
+            if not manifest_path.is_file():
+                print(
+                    "arw: plugin-manifest-unreadable: "
+                    f"{manifest_env}",
+                    file=sys.stderr,
+                )
+                return 65
+        elif plugin_root_env:
+            print(
+                "arw: plugin-manifest-missing: installed mode requires "
+                "ARW_PLUGIN_MANIFEST pointing at .codex-plugin/plugin.json",
+                file=sys.stderr,
+            )
+            return 65
+        else:
+            manifest_path = (
+                Path(__file__).resolve().parents[2]
+                / ".codex-plugin"
+                / "plugin.json"
+            )
+            if not manifest_path.is_file():
+                manifest_path = None
         router = default_router(
             graph_control_root=args.control_root,
             graph_root_id=args.root_id,
-            plugin_manifest=manifest_path if manifest_path.is_file() else None,
+            plugin_manifest=manifest_path,
         )
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
+    if args.command == "provenance":
+        from arw.composition import default_router
+        from arw.kernel.capabilities import CapabilityUnavailable
+        from arw.kernel.core.canonical import sha256_hex
+        from arw.kernel.ledger.journal import locked_replay
+        from arw.kernel.ledger.manifests import load_artifact_manifest
+        from arw.kernel.state.models import ArtifactAcceptedPayload
+
+        lock_stack = ExitStack()
+        try:
+            _, replayed = lock_stack.enter_context(
+                locked_replay(args.run_root, lock_timeout=args.lock_timeout)
+            )
+            event_digests = {
+                event.event_id: event.event_sha256 for event in replayed.events
+            }
+            accepted_artifacts: dict[str, tuple[str, ...]] = {}
+            accepted_payloads: dict[str, ArtifactAcceptedPayload] = {}
+            accepted_artifact_hashes: dict[str, str] = {}
+            for event in replayed.events:
+                if isinstance(event.payload, ArtifactAcceptedPayload):
+                    accepted_artifacts[event.event_id] = (event.payload.artifact_id,)
+                    accepted_payloads[event.event_id] = event.payload
+                    accepted_artifact_hashes[event.event_id] = (
+                        event.payload.artifact_sha256
+                    )
+            module = __import__("arw_semantica", fromlist=["ProvenanceRecord"])
+            canonical_records: dict[str, Any] = {}
+            for event_id, accepted in accepted_payloads.items():
+                manifest = load_artifact_manifest(
+                    args.run_root, accepted.manifest_sha256
+                )
+                if manifest.artifact_kind != PROVENANCE_ARTIFACT_KIND:
+                    continue
+                if manifest.media_type != "application/json":
+                    raise ValueError(
+                        "accepted provenance artifact must use application/json"
+                    )
+                content_bytes = _read_bounded_regular_file(
+                    args.run_root, manifest.content_path, max_bytes=65_536
+                )
+                if content_bytes is None:
+                    raise ValueError(
+                        "accepted provenance artifact exceeds the Lite limit"
+                    )
+                if sha256_hex(content_bytes) != accepted.artifact_sha256:
+                    raise ValueError("accepted provenance artifact content is unsafe")
+                try:
+                    record = module.ProvenanceRecord.model_validate_json(content_bytes)
+                except ValidationError as error:
+                    raise ValueError(
+                        "accepted provenance artifact is malformed"
+                    ) from error
+                if (
+                    record.ledger_event_id is not None
+                    or record.ledger_event_digest is not None
+                    or record.artifact_id != accepted.artifact_id
+                    or record.checksum != accepted.artifact_sha256
+                ):
+                    raise ValueError(
+                        "accepted artifact does not match its provenance assertion"
+                    )
+                bound_record = record.model_copy(
+                    update={
+                        "ledger_event_id": event_id,
+                        "ledger_event_digest": event_digests[event_id],
+                    }
+                )
+                if len(canonical_json_bytes(bound_record.canonical_payload())) > 65_536:
+                    raise ValueError("bound provenance payload exceeds the Lite limit")
+                existing = canonical_records.get(bound_record.record_id)
+                if existing is not None and existing != bound_record:
+                    raise ValueError("canonical provenance record ID collision")
+                canonical_records[bound_record.record_id] = bound_record
+                if len(canonical_records) > 500:
+                    raise ValueError(
+                        "canonical provenance inventory exceeds the Lite limit"
+                    )
+            sidecar_path = _provenance_sidecar_path(args.store, replayed.run_id)
+            if args.provenance_action == "rebuild":
+                module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
+            router = default_router(
+                store_path=args.store,
+                semantica_store_path=sidecar_path,
+                canonical_event_digests=event_digests,
+                accepted_artifact_ids_by_event=accepted_artifacts,
+                accepted_artifact_sha256_by_event=accepted_artifact_hashes,
+                expected_provenance_record_sha256={
+                    record_id: record.checksum
+                    for record_id, record in canonical_records.items()
+                },
+            )
+            provider = router.resolve("knowledge.provenance")
+            if args.provenance_action == "record":
+                try:
+                    record_relative_path = (
+                        args.record.resolve()
+                        .relative_to(args.run_root.resolve())
+                        .as_posix()
+                    )
+                except ValueError as error:
+                    raise ValueError(
+                        "provenance record must be inside the selected run root"
+                    ) from error
+                record_bytes = _read_bounded_regular_file(
+                    args.run_root, record_relative_path, max_bytes=65_536
+                )
+                if record_bytes is None:
+                    raise ValueError("provenance record exceeds the Lite byte limit")
+                record = module.ProvenanceRecord.model_validate_json(record_bytes)
+                if canonical_json_bytes(record.artifact_payload()) != record_bytes:
+                    raise ValueError("provenance record bytes are not canonical JSON")
+                if (
+                    record.ledger_event_id is not None
+                    or record.ledger_event_digest is not None
+                ):
+                    raise ValueError(
+                        "provenance artifact input must not contain acceptance binding"
+                    )
+                matches = [
+                    (event_id, accepted)
+                    for event_id, accepted in accepted_payloads.items()
+                    if accepted.artifact_id == record.artifact_id
+                ]
+                if (
+                    len(matches) != 1
+                    or record.checksum != matches[0][1].artifact_sha256
+                ):
+                    raise ValueError(
+                        "provenance record bytes are not one accepted artifact content"
+                    )
+                event_id, accepted = matches[0]
+                record = record.model_copy(
+                    update={
+                        "ledger_event_id": event_id,
+                        "ledger_event_digest": event_digests[event_id],
+                    }
+                )
+                checksum = provider.record(record)
+                faults = provider.verify()
+                if faults:
+                    raise RuntimeError(
+                        "recorded Semantica sidecar failed canonical verification: "
+                        + ", ".join(fault.code for fault in faults)
+                    )
+                _write_json({"checksum": checksum})
+            elif args.provenance_action == "rebuild":
+                provider.rebuild(list(canonical_records.values()))
+                if provider.verify():
+                    raise RuntimeError(
+                        "rebuilt Semantica sidecar failed canonical verification"
+                    )
+                _write_json({"rebuilt_records": len(canonical_records)})
+            elif args.provenance_action == "lineage":
+                _write_json(
+                    {
+                        "rows": provider.lineage(
+                            args.entity_id,
+                            max_depth=args.max_depth,
+                            max_rows=args.max_rows,
+                        )
+                    }
+                )
+            else:
+                faults = provider.verify()
+                _write_json({"audit_faults": [fault.__dict__ for fault in faults]})
+                if faults:
+                    raise RuntimeError(
+                        "Semantica sidecar failed canonical verification: "
+                        + ", ".join(fault.code for fault in faults)
+                    )
+            return 0
+        except (
+            CapabilityUnavailable,
+            CLIInputError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as error:
+            print(f"arw: provenance-error: {error}", file=sys.stderr)
+            return 65
+        finally:
+            lock_stack.close()
 
     # Writable/runtime services are intentionally imported only after the two
     # read-only installed commands above have returned.
@@ -437,6 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         JournalError,
         append_probe,
         initialize_run,
+        locked_replay,
         replay_run,
     )
     from arw.kernel.ledger.manifests import ManifestError
@@ -509,23 +854,51 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
-            replayed = replay_run(args.run_root, lock_timeout=args.lock_timeout)
-            status_now = _parse_utc(args.at) or datetime.now(UTC)
-            state = reduce_events(
-                replayed.workflow_definition_id,
-                replayed.events,
-                now=status_now,
-                recovery_health=replayed.recovery_health,
-            )
-            report = build_status_report(state)
-            # Purely additive: projection health appears only when --store is
-            # given, so the pinned v1 status envelope stays byte-identical
-            # for every existing invocation.
-            health = None
-            if getattr(args, "store", None) is not None:
-                from arw.composition import local_store_health
+            with locked_replay(args.run_root, lock_timeout=args.lock_timeout) as (
+                _,
+                replayed,
+            ):
+                status_now = _parse_utc(args.at) or datetime.now(UTC)
+                state = reduce_events(
+                    replayed.workflow_definition_id,
+                    replayed.events,
+                    now=status_now,
+                    recovery_health=replayed.recovery_health,
+                )
+                report = build_status_report(state)
+                # Purely additive: projection health appears only when --store is
+                # given, so the pinned v1 status envelope stays byte-identical
+                # for every existing invocation.
+                health = None
+                if getattr(args, "store", None) is not None:
+                    from arw.composition import local_store_health
+                    from arw.kernel.ledger.manifests import load_artifact_manifest
+                    from arw.kernel.state.models import ArtifactAcceptedPayload
 
-                health = local_store_health(args.store)
+                    provenance_sidecar = _provenance_sidecar_path(
+                        args.store, replayed.run_id
+                    )
+                    provenance_expected = False
+                    for event in replayed.events:
+                        if not isinstance(event.payload, ArtifactAcceptedPayload):
+                            continue
+                        manifest = load_artifact_manifest(
+                            args.run_root, event.payload.manifest_sha256
+                        )
+                        if manifest.artifact_kind == PROVENANCE_ARTIFACT_KIND:
+                            provenance_expected = True
+                            break
+                    provenance_active = (
+                        provenance_expected
+                        or os.path.lexists(provenance_sidecar)
+                        or os.path.lexists(Path(f"{provenance_sidecar}.audit"))
+                    )
+                    health = local_store_health(
+                        args.store,
+                        provenance_audit_database_path=(
+                            provenance_sidecar if provenance_active else None
+                        ),
+                    )
             if args.json_output:
                 payload = report.model_dump(mode="json")
                 if health is not None:
@@ -834,6 +1207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 65
 
     parser.error(f"unsupported command: {args.command}")
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

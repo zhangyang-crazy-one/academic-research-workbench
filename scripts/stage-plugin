@@ -509,6 +509,7 @@ copy_file "schemas/v1/mcp-read-request.schema.json"
 copy_file "schemas/v1/mcp-read-result.schema.json"
 copy_file "schemas/v1/build-identity.schema.json"
 copy_file "schemas/v1/version-report.schema.json"
+copy_as "schemas/v1/provenance-record.schema.json" "share/arw/schemas/provenance-record.schema.json"
 copy_file "schemas/v1/assignment.schema.json"
 copy_file "schemas/v1/gate-decision.schema.json"
 copy_file "schemas/v1/hook-observation.schema.json"
@@ -569,6 +570,7 @@ copy_file "MODIFICATIONS.md"
 copy_file "SBOM.cdx.json"
 copy_file "supply-chain/use-distribution.json"
 copy_file "supply-chain/license-verdict.json"
+copy_file "supply-chain/semantica-qualification.json"
 copy_file "vendor/source-manifest.json"
 copy_file "vendor/mcp-manifest.json"
 copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
@@ -1355,6 +1357,7 @@ static_files = {
     "share/arw/schemas/status.schema.json",
     "share/arw/schemas/transition-request.schema.json",
     "share/arw/schemas/version-report.schema.json",
+    "share/arw/schemas/provenance-record.schema.json",
     # Phase 4 contracts are regenerated into the exact staged schema tree.
     "share/arw/schemas/assignment.schema.json",
     "share/arw/schemas/gate-decision.schema.json",
@@ -1385,6 +1388,7 @@ static_files = {
     "skills/audit/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
+    "supply-chain/semantica-qualification.json",
     "tests/integration/test_phase2_durable_runtime.py",
     "uv.lock",
     "vendor/python/wheelhouse.lock.json",

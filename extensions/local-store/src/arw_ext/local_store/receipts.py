@@ -16,6 +16,7 @@ Receipts are persisted as the canonical JSON bytes produced by
 from __future__ import annotations
 
 import os
+import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,32 @@ from arw.kernel.core.canonical import (
     sha256_hex,
     strict_json_loads,
 )
+
+DEFAULT_MAX_AUDIT_ENTRIES = 4_096
+DEFAULT_MAX_AUDIT_RECEIPT_BYTES = 65_536
+
+
+def _open_directory_no_follow(path: Path) -> int:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if no_follow == 0 or os.open not in os.supports_dir_fd:
+        raise OSError("descriptor-relative directory walks are unsupported")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | no_follow
+    )
+    descriptor = os.open(Path(candidate.anchor), flags)
+    for component in candidate.parts[1:]:
+        try:
+            child_descriptor = os.open(component, flags, dir_fd=descriptor)
+        except OSError:
+            os.close(descriptor)
+            raise
+        os.close(descriptor)
+        descriptor = child_descriptor
+    return descriptor
 
 
 def _fsync_directory(path: Path) -> None:
@@ -186,41 +213,176 @@ def persist_audit_fault(database_path: Path, fault: AuditFault) -> Path:
     return target
 
 
-def load_audit_faults(database_path: Path) -> tuple[AuditFault, ...]:
-    """Load every persisted audit fault in deterministic (filename) order."""
-
+def load_audit_faults(
+    database_path: Path,
+    *,
+    max_entries: int = DEFAULT_MAX_AUDIT_ENTRIES,
+    max_bytes: int = DEFAULT_MAX_AUDIT_RECEIPT_BYTES,
+) -> tuple[AuditFault, ...]:
+    """Load bounded audit faults through a no-follow directory descriptor."""
+    if max_entries < 1 or max_entries > DEFAULT_MAX_AUDIT_ENTRIES:
+        raise ValueError("audit entry bound is outside the supported range")
+    if max_bytes < 1 or max_bytes > DEFAULT_MAX_AUDIT_RECEIPT_BYTES:
+        raise ValueError("audit receipt byte bound is outside the supported range")
     root = audit_root(database_path)
-    if not root.is_dir():
-        return ()
-    out: list[AuditFault] = []
-    for path in sorted(root.iterdir()):
-        if path.suffix != ".json" or not path.is_file():
-            continue
+    candidate = root if root.is_absolute() else Path.cwd() / root
+    current = Path(candidate.anchor)
+    for component in candidate.parts[1:]:
+        current /= component
         try:
-            raw = path.read_bytes()
-            value: Mapping[str, object] = strict_json_loads(raw)
-        except (OSError, UnicodeError, ValueError):
-            continue
-        if not isinstance(value, dict):
-            continue
-        try:
-            affected = int(str(value.get("affected_rows", 0)))
-        except ValueError:
-            # A malformed sidecar (hand-edited/torn) must not crash the
-            # health read — skip it rather than failing the whole report.
-            continue
-        out.append(
-            AuditFault(
-                code=str(value.get("code", "audit_fault")),
-                message=str(value.get("message", "")),
-                affected_rows=affected,
-                projection_name=str(value.get("projection_name", "knowledge")),
-                receipt_id=str(value["receipt_id"])
-                if isinstance(value.get("receipt_id"), str)
-                else None,
+            status = current.lstat()
+        except FileNotFoundError:
+            return ()
+        if stat.S_ISLNK(status.st_mode):
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message="audit receipt directory path contains a symlink",
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
             )
+    root = candidate
+    directory_descriptor: int | None = None
+    if os.name != "nt":
+        try:
+            directory_descriptor = _open_directory_no_follow(root)
+        except FileNotFoundError:
+            return ()
+        except OSError as error:
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message=(
+                        f"audit receipt directory is unsafe or unreadable: {error}"
+                    ),
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
+            )
+    try:
+        names: list[str] = []
+        scan_target = root if directory_descriptor is None else directory_descriptor
+        try:
+            with os.scandir(scan_target) as entries:
+                for index, entry in enumerate(entries):
+                    if index >= max_entries:
+                        return (
+                            AuditFault(
+                                code="audit_receipt_inventory_truncated",
+                                message=(
+                                    "audit receipt inventory exceeds the "
+                                    "configured limit"
+                                ),
+                                affected_rows=1,
+                                projection_name="knowledge",
+                            ),
+                        )
+                    if entry.name.endswith(".json"):
+                        names.append(entry.name)
+        except OSError as error:
+            return (
+                AuditFault(
+                    code="audit_receipt_read_failed",
+                    message=f"audit receipt directory cannot be enumerated: {error}",
+                    affected_rows=1,
+                    projection_name="knowledge",
+                ),
+            )
+
+        out: list[AuditFault] = []
+
+        def unreadable_fault(name: str) -> AuditFault:
+            return AuditFault(
+                code="audit_receipt_read_failed",
+                message=f"audit receipt {name!a} is unreadable or malformed",
+                affected_rows=1,
+                projection_name="knowledge",
+                receipt_id=("audit-read-" + sha256_hex(os.fsencode(name))[:24]),
+            )
+
+        no_follow = getattr(os, "O_NOFOLLOW", 0)
+        file_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+            | no_follow
         )
-    return tuple(out)
+        for name in sorted(names):
+            try:
+                if directory_descriptor is None:
+                    receipt_path = root / name
+                    if receipt_path.is_symlink():
+                        raise OSError("audit receipt must not be a symlink")
+                    descriptor = os.open(receipt_path, file_flags)
+                else:
+                    descriptor = os.open(name, file_flags, dir_fd=directory_descriptor)
+                try:
+                    status = os.fstat(descriptor)
+                    if not stat.S_ISREG(status.st_mode) or status.st_size > max_bytes:
+                        out.append(unreadable_fault(name))
+                        continue
+                    if directory_descriptor is None:
+                        live = os.stat(root / name, follow_symlinks=False)
+                        if (
+                            live.st_dev != status.st_dev
+                            or live.st_ino != status.st_ino
+                            or live.st_mode != status.st_mode
+                        ):
+                            out.append(unreadable_fault(name))
+                            continue
+                    chunks: list[bytes] = []
+                    total = 0
+                    while total <= max_bytes:
+                        chunk = os.read(descriptor, min(16_384, max_bytes + 1 - total))
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        total += len(chunk)
+                    if total > max_bytes:
+                        out.append(unreadable_fault(name))
+                        continue
+                    raw = b"".join(chunks)
+                finally:
+                    os.close(descriptor)
+                value: Mapping[str, object] = strict_json_loads(raw)
+                canonical_value = canonical_json_bytes(value)
+            except (OSError, UnicodeError, ValueError):
+                out.append(unreadable_fault(name))
+                continue
+            if not isinstance(value, dict):
+                out.append(unreadable_fault(name))
+                continue
+            _, separator, filename_digest = name.removesuffix(".json").rpartition("-")
+            if (
+                not separator
+                or filename_digest != sha256_hex(raw)[:12]
+                or canonical_value != raw
+            ):
+                out.append(unreadable_fault(name))
+                continue
+            try:
+                affected = int(str(value.get("affected_rows", 0)))
+            except ValueError:
+                out.append(unreadable_fault(name))
+                continue
+            out.append(
+                AuditFault(
+                    code=str(value.get("code", "audit_fault")),
+                    message=str(value.get("message", "")),
+                    affected_rows=affected,
+                    projection_name=str(value.get("projection_name", "knowledge")),
+                    receipt_id=(
+                        str(value["receipt_id"])
+                        if isinstance(value.get("receipt_id"), str)
+                        else None
+                    ),
+                )
+            )
+        return tuple(out)
+    finally:
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)
 
 
 def clear_audit_faults(database_path: Path, *, receipt_id: str | None = None) -> int:
@@ -257,8 +419,8 @@ __all__ = [
     "audit_root",
     "clear_audit_faults",
     "list_receipts",
-    "load_manifest",
     "load_audit_faults",
+    "load_manifest",
     "load_receipt",
     "persist_audit_fault",
     "persist_manifest",
