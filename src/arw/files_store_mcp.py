@@ -126,6 +126,8 @@ def _open_store_adapter(
     allowed_root: Path,
     expected_root_id: str,
     expected_generation_id: str,
+    control_root: Path | None = None,
+    root_id: str | None = None,
 ):
     """Open the store read-only and construct the adapter with the security check.
 
@@ -135,6 +137,14 @@ def _open_store_adapter(
     from being used to serve outdated content after the canonical
     selection advanced, and prevents the cache from being used to
     redirect reads outside the registered root.
+
+    When ``control_root`` + ``root_id`` are supplied the adapter also
+    re-reads ``selected-generation.json`` on every per-request snapshot
+    (the long-lived process protection; the constructor check above is
+    only the startup gate).  They are optional for back-compat with
+    direct callers / tests that synthesize the projection without a
+    registered root — in that case the per-request guard falls back to
+    cache metadata only.
     """
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.files import LocalStoreFilesAdapter
@@ -147,6 +157,14 @@ def _open_store_adapter(
             allowed_root=allowed_root,
             expected_root_id=expected_root_id,
             expected_generation_id=expected_generation_id,
+            # Per-request canonical-selection revalidation: pass the
+            # authoritative control root + root id so the adapter can
+            # re-read ``selected-generation.json`` on every request and
+            # fail closed if the canonical selection advances after the
+            # MCP process started (long-lived process protection; the
+            # constructor check above is only the startup gate).
+            canonical_root=control_root,
+            root_id=root_id,
         )
     except Exception:
         store.close()
@@ -584,6 +602,8 @@ def main(argv: list[str] | None = None) -> int:
             allowed_root=allowed_root,
             expected_root_id=expected_root_id,
             expected_generation_id=expected_generation_id,
+            control_root=args.control_root,
+            root_id=args.root_id,
         )
     except Exception as error:  # noqa: BLE001 - startup boundary
         code = getattr(error, "code", "store_unavailable")

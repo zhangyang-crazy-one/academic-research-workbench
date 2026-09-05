@@ -84,6 +84,7 @@ def _adapter_on_seeded_corpus(
     store = LocalProjectionStore(tmp_path / "arw.db")
     store.open()
     ingested = ingest_files_generation(store.connection, generation)
+    store.connection.commit()
     assert ingested == 3
     adapter = LocalStoreFilesAdapter(store)
 

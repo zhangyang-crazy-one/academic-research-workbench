@@ -99,3 +99,20 @@ release permission remain separate gates.
 - Clean-index license gate: technical PASS / release BLOCKED. SBOM wheel hashes
   come from task-only staged source, not unrelated dirty working-tree changes.
 - Latest-head Codex review and CI must pass again before merge.
+
+## Long-lived readers (`0249df5` review)
+
+- P1 `3939599512`: all five file operations use a dedicated read-only SQLite
+  transaction and validate canonical selection before and after assembling the
+  result. Drift returns `stale_query_generation`; callers restart the reader.
+- Per-adapter serialization prevents concurrent native callers sharing a request
+  connection. Success and failure both release the connection and request lock.
+- Canonical selection reads are capped at 64 KiB, descriptor-relative, no-follow,
+  and nonblocking. Unsupported secure primitives fail closed rather than silently
+  downgrading. Post-start FIFO, symlink, ancestor-symlink, and oversized-file
+  substitutions are covered alongside real second-connection WAL commits.
+- The compatibility fixture explicitly commits its seeded projection before
+  testing the independent read snapshot; runtime isolation is not weakened.
+- Serial regression selection: 706 passed; subsequent type-only correction
+  rechecked with 58 focused tests. Clean-index license technical PASS / release
+  BLOCKED. Latest-head Codex review and CI remain required before merge.

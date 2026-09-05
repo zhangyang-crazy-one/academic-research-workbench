@@ -18,11 +18,17 @@ unicode61 + trigram + NFKC-fold combination.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
+import os
+import stat
+import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
+
+import sqlite3
 
 from pydantic import ValidationError
 
@@ -85,6 +91,8 @@ class LocalStoreFilesAdapter:
         allowed_root: Path | str | None = None,
         expected_root_id: str | None = None,
         expected_generation_id: str | None = None,
+        canonical_root: Path | str | None = None,
+        root_id: str | None = None,
     ) -> None:
         store.assert_open()
         meta = read_files_meta(store.connection)
@@ -97,6 +105,45 @@ class LocalStoreFilesAdapter:
         self._root_id = meta["files.root_id"]
         self._canonical_path = meta["files.canonical_path"]
         self._generation_id = meta["files.selected_generation_id"]
+        # Per-request canonical-selection revalidation: when the caller
+        # supplies the registered control root + root id (the same
+        # anchor ``files_store_mcp`` resolved through the authoritative
+        # ``root.json`` registration at startup), every operation will
+        # re-read ``selected-generation.json`` from disk at the start
+        # and end of the request, comparing it against the generation
+        # the adapter is bound to.  This is the long-lived process
+        # protection: the constructor check covers startup; the
+        # per-request check catches a canonical ``sync`` advancing the
+        # selection after the process started.  The arguments are
+        # optional so the constructor stays backwards-compatible for
+        # tests that synthesize the projection directly without a
+        # registered root.
+        if canonical_root is not None or root_id is not None:
+            if canonical_root is None or root_id is None:
+                raise FileProviderError(
+                    "root_denied",
+                    "canonical_root and root_id must be supplied together",
+                )
+            self._canonical_root = Path(canonical_root)
+            self._canonical_root_id = str(root_id)
+        else:
+            self._canonical_root = None
+            self._canonical_root_id = None
+        # Per-instance request lock: the MCP reads stdin sequentially so
+        # only one request is in flight at a time, but native callers
+        # (Python code driving the adapter directly from threads or async
+        # tasks) can be concurrent.  ``self._request_conn`` is an instance
+        # attribute that ``_request_connection`` reads; without this
+        # lock two concurrent callers would cross-wire each other's
+        # snapshot connection.  Held for the duration of
+        # ``_with_query_snapshot`` so the request_conn read/write and the
+        # BEGIN / COMMIT / ROLLBACK all observe a consistent state.  A
+        # plain ``Lock`` is sufficient because the current operations do
+        # not nest (each public op runs its own wrapper); if nesting is
+        # ever introduced, swap for ``RLock`` and the cleanup pattern
+        # still works because ``self._request_conn`` is reset to ``None``
+        # INSIDE the lock, before it is released.
+        self._request_lock = threading.Lock()
         # Defense in depth: the cache's stored canonical_path is mutable on
         # disk, so an attacker who rewrites the projection could redirect
         # live reads anywhere on the filesystem.  When the caller passes an
@@ -185,7 +232,7 @@ class LocalStoreFilesAdapter:
     ) -> list[tuple]:
         if time.monotonic() > deadline:
             raise ToolError("timeout", "query exceeded the server deadline")
-        cursor = self._store.connection.execute(sql, parameters)
+        cursor = self._request_connection().execute(sql, parameters)
         return cursor.fetchall()
 
     def _indexed_from_row(self, row: tuple) -> _IndexedFile:
@@ -249,6 +296,189 @@ class LocalStoreFilesAdapter:
                 "request does not bind the store-selected files generation",
             )
 
+    # ------------------------------------------------------------------
+    # Per-request generation revalidation (PR16 long-lived protection)
+    # ------------------------------------------------------------------
+
+    def _open_query_snapshot(self) -> sqlite3.Connection:
+        """Acquire a fresh read-only connection for one request's snapshot.
+
+        Each per-request reader opens its OWN connection (separate from
+        the long-lived store connection used at construction) so it can
+        issue an explicit ``BEGIN`` and observe a consistent point-in-time
+        snapshot.  Without a dedicated connection, two reads on the
+        shared connection would not be inside any transaction and a
+        writer could replace rows between them.
+        """
+
+        return self._store.open_snapshot_connection()
+
+    def _request_connection(self) -> sqlite3.Connection:
+        """Return the per-request snapshot connection, falling back to the long-lived store connection.
+
+        While a request is in flight, :meth:`_with_query_snapshot` sets
+        ``self._request_conn`` to a fresh read-only connection with an
+        explicit ``BEGIN`` so every ``_rows`` call observes the same
+        snapshot.  Outside a request (the constructor and tests that
+        never go through the snapshot wrapper), fall back to the
+        long-lived store connection so the helpers stay backwards-
+        compatible.
+        """
+
+        request_conn = getattr(self, "_request_conn", None)
+        if request_conn is not None:
+            return request_conn
+        return self._store.connection
+
+    def _with_query_snapshot(self, fn, *args, **kwargs):  # noqa: ANN001, ANN202
+        """Run ``fn`` inside a per-request snapshot with revalidation gates.
+
+        The wrapper issues ``BEGIN`` on a fresh read-only connection,
+        runs the pre-check (cache metadata + canonical selection), invokes
+        ``fn`` (which performs all reads through
+        :meth:`_request_connection` so they share the same snapshot),
+        runs the post-check, and ``COMMIT``s.  Any exception triggers a
+        ``ROLLBACK`` and re-raise; the connection is always closed.
+
+        ``ToolError`` raised by the revalidation gates is wrapped to
+        :class:`FileProviderError` with the same code so the MCP layer
+        surfaces a typed failure (the per-tool envelope mapper in
+        ``files_store_mcp`` already maps every ``FileProviderError`` to
+        ``isError=True``).  The inner ``fn`` already wraps its own
+        ``ToolError`` via :meth:`_wrap`; the outer wrap is a defensive
+        measure so the pre/post checks land at the same boundary as
+        tool errors.
+
+        The whole body runs under ``self._request_lock`` so concurrent
+        native callers (Python code driving the adapter from threads)
+        cannot cross-wire ``self._request_conn``; the request_conn
+        pointer is set to the snapshot at the start and reset to
+        ``None`` BEFORE the lock is released, so a thread waiting on
+        the lock cannot observe a half-cleared state.  ``snapshot.close()``
+        runs in the outer ``finally`` after the lock is released; the
+        connection is no longer reachable via ``self._request_conn`` by
+        then, so a newly-acquired thread opens its own snapshot.
+
+        Used by all five public operations so a writer who re-ingests the
+        cache or advances the canonical selection cannot interleave rows
+        from two generations inside a single response, and so concurrent
+        native callers cannot observe each other's snapshot.
+        """
+
+        def _gate(snapshot_conn: sqlite3.Connection) -> None:
+            try:
+                self._revalidate_query_generation(snapshot_conn)
+            except ToolError as error:
+                raise FileProviderError(error.code, str(error)) from error
+
+        snapshot = self._open_query_snapshot()
+        try:
+            with self._request_lock:
+                self._request_conn = snapshot
+                try:
+                    snapshot.execute("BEGIN")
+                    _gate(snapshot)
+                    result = fn(*args, **kwargs)
+                    _gate(snapshot)
+                    snapshot.execute("COMMIT")
+                    # Clear BEFORE releasing the lock so a waiting
+                    # thread cannot observe the prior request's
+                    # connection.
+                    self._request_conn = None
+                    return result
+                except Exception:
+                    with contextlib.suppress(sqlite3.Error):
+                        snapshot.execute("ROLLBACK")
+                    self._request_conn = None
+                    raise
+        finally:
+            snapshot.close()
+
+    def _read_canonical_generation_id(self) -> str:
+        """Re-read the canonical ``selected-generation.json`` from disk.
+
+        Returns the ``generation_id`` field the canonical root currently
+        names as the selected generation.  When the adapter was
+        constructed without a registered control root, fall back to the
+        bound generation (skip the canonical re-check; the cache
+        metadata check still runs, and the constructor check already
+        bound the cache to that generation).
+        """
+
+        if self._canonical_root is None or self._canonical_root_id is None:
+            return self._generation_id
+        selected_path = (
+            self._canonical_root
+            / "roots"
+            / self._canonical_root_id
+            / "selected-generation.json"
+        )
+        try:
+            payload = _read_canonical_selection_safe(
+                selected_path, max_bytes=MAX_CANONICAL_SELECTION_BYTES
+            )
+        except (OSError, ValueError, UnicodeError) as error:
+            # Canonical selection is gone or unreadable — a writer has
+            # rotated the registration, or an attacker has swapped the
+            # path for a FIFO/symlink/oversize file.  Fail closed rather
+            # than silently keep serving the stale cache.
+            raise ToolError(
+                "stale_query_generation",
+                f"canonical selected-generation.json is unreadable: {error}",
+            ) from error
+        except RecursionError as error:
+            # Pathological JSON that blows Python's recursion limit;
+            # json.JSONDecodeError is a ValueError, but defensive
+            # against a future pure-Python fallback.
+            raise ToolError(
+                "stale_query_generation",
+                f"canonical selected-generation.json is malformed: {error}",
+            ) from error
+        generation_id = payload.get("generation_id")
+        if not isinstance(generation_id, str) or not generation_id:
+            raise ToolError(
+                "stale_query_generation",
+                "canonical selected-generation.json has no generation_id",
+            )
+        return generation_id
+
+    def _revalidate_query_generation(self, snapshot_conn) -> None:
+        """Per-request guard: cache metadata AND canonical selection unchanged.
+
+        Runs once at the start of each request (before any row reads) and
+        again just before the result is assembled.  Both checks share the
+        caller's snapshot connection, so a writer who re-ingests the cache
+        mid-request cannot interleave rows from two generations.
+
+        Raises :class:`ToolError` with code ``stale_query_generation`` on
+        any drift.  The MCP layer maps this to ``FileProviderError`` with
+        the same code, and the per-tool envelope returns ``isError=True``
+        because ``stale_query_generation`` is not in the v1
+        ``_SUCCESS_STATUSES`` set — the caller is told to restart the
+        reader with the new generation.
+        """
+
+        meta = read_files_meta(snapshot_conn)
+        if meta is None or "files.root_id" not in meta:
+            raise ToolError(
+                "stale_query_generation",
+                "cache metadata disappeared mid-request; restart the reader",
+            )
+        cached_generation = meta.get("files.selected_generation_id")
+        if cached_generation != self._generation_id:
+            raise ToolError(
+                "stale_query_generation",
+                f"cache selected_generation_id advanced to {cached_generation!r}; "
+                "restart the reader against the new generation",
+            )
+        canonical_generation = self._read_canonical_generation_id()
+        if canonical_generation != self._generation_id:
+            raise ToolError(
+                "stale_query_generation",
+                f"canonical selection advanced to {canonical_generation!r}; "
+                "restart the reader against the new generation",
+            )
+
     def _wrap(self, fn, *args, **kwargs):  # noqa: ANN001, ANN202
         try:
             return fn(*args, **kwargs)
@@ -262,7 +492,9 @@ class LocalStoreFilesAdapter:
 
     def list_files(self, request: FilesListRequest) -> FilesListResult:
         self._check_root(request.root_id)
-        return self._wrap(self._list_files, request, deadline=self._deadline())
+        return self._with_query_snapshot(
+            lambda: self._wrap(self._list_files, request, deadline=self._deadline())
+        )
 
     def _list_files(
         self, request: FilesListRequest, *, deadline: float
@@ -365,14 +597,20 @@ class LocalStoreFilesAdapter:
         self, request: FilesReadRequest
     ) -> FilesReadSuccess | FilesReadStale | FilesReadDenied:
         self._check_root(request.root_id)
-        return self._wrap(self._read_file, request, deadline=self._deadline())
+        return self._with_query_snapshot(
+            lambda: self._wrap(self._read_file, request, deadline=self._deadline())
+        )
 
     def _read_denied(
-        self, request: FilesReadRequest, status: str, code: str, message: str
+        self,
+        request: FilesReadRequest,
+        status: Literal["denied", "encoding_error", "budget_exceeded", "timeout"],
+        code: str,
+        message: str,
     ) -> FilesReadDenied:
         return FilesReadDenied(
             schema_version="1.0.0",
-            status=status,  # type: ignore[arg-type]
+            status=status,
             root_id=request.root_id,
             file_id=request.file_id,
             relative_path=request.relative_path,
@@ -548,7 +786,9 @@ class LocalStoreFilesAdapter:
 
     def search_files(self, request: FilesSearchRequest) -> FilesSearchResult:
         self._check_root(request.root_id)
-        return self._wrap(self._search_files, request, deadline=self._deadline())
+        return self._with_query_snapshot(
+            lambda: self._wrap(self._search_files, request, deadline=self._deadline())
+        )
 
     @staticmethod
     def _normalize_query(mode: str, query: str) -> tuple[str, list[str]]:
@@ -838,7 +1078,9 @@ class LocalStoreFilesAdapter:
 
     def get_outline(self, request: FilesOutlineRequest) -> FilesOutlineResult:
         self._check_root(request.root_id)
-        return self._wrap(self._get_outline, request, deadline=self._deadline())
+        return self._with_query_snapshot(
+            lambda: self._wrap(self._get_outline, request, deadline=self._deadline())
+        )
 
     def _get_outline(
         self, request: FilesOutlineRequest, *, deadline: float
@@ -935,7 +1177,9 @@ class LocalStoreFilesAdapter:
 
     def get_context(self, request: FilesContextRequest) -> FilesContextResult:
         self._check_root(request.root_id)
-        return self._wrap(self._get_context, request, deadline=self._deadline())
+        return self._with_query_snapshot(
+            lambda: self._wrap(self._get_context, request, deadline=self._deadline())
+        )
 
     def _get_context(
         self, request: FilesContextRequest, *, deadline: float
@@ -1064,3 +1308,204 @@ def _context_window(
 
 
 __all__ = ["LocalStoreFilesAdapter"]
+
+
+# ---------------------------------------------------------------------------
+# Canonical selection reader (P1 DoS hardening)
+# ---------------------------------------------------------------------------
+
+
+#: 64 KiB cap for ``selected-generation.json``.  The canonical selection
+#: is a small JSON object (``root_id``, ``generation_id``,
+#: ``generation_manifest_sha256``) — 64 KiB is comfortably larger than the
+#: legitimate payload and small enough to refuse a piped-in DoS payload
+#: (a writer who pipes gigabytes through this path would block the
+#: bounded read, then be rejected).
+MAX_CANONICAL_SELECTION_BYTES = 65_536
+
+
+def _read_canonical_selection_safe(
+    path: Path,
+    *,
+    max_bytes: int = MAX_CANONICAL_SELECTION_BYTES,
+) -> dict[str, object]:
+    """Read and parse a small canonical JSON file with TOCTOU-resistant checks.
+
+    Returns the parsed dict; raises :class:`OSError` on filesystem
+    failures, :class:`UnicodeError` on malformed UTF-8, and
+    :class:`ValueError` on malformed JSON.  The caller (the per-request
+    revalidation gate) maps all three to a typed
+    ``stale_query_generation`` failure so a poisoned canonical path
+    fails closed without leaking the underlying cause to clients.
+
+    Defenses (P1 review comment — never rely on ``Path.is_file()``
+    then ``Path.read_text()``; a TOCTOU window lets a writer swap a
+    regular file for a FIFO / symlink / device between the check and
+    the read):
+
+    * **Platform primitives required** — ``O_NOFOLLOW``, ``O_NONBLOCK``,
+      ``O_DIRECTORY``, AND ``os.open`` in ``os.supports_dir_fd`` must
+      ALL be available.  The helper does NOT silently default missing
+      flags to ``0``: a FIFO at the leaf can block at ``os.open`` (NOT
+      at ``os.read``) before any ``fstat`` runs, so falling back to a
+      non-``O_NONBLOCK`` open would still hang the reader on a hostile
+      FIFO.  When any primitive is missing the helper raises
+      ``OSError`` with an explicit "platform unsupported" message and
+      the caller maps it to ``stale_query_generation`` so the reader
+      fails closed rather than running a partially-protected path.
+    * **Ancestor walk with ``O_NOFOLLOW`` via ``dir_fd``** — a leaf
+      ``O_NOFOLLOW`` does NOT protect a symlink swap on an ancestor
+      directory component (the swap happens BEFORE the leaf open, so
+      the leaf open follows the redirected directory).  The helper
+      walks each component from the path's anchor (filesystem root or
+      drive) down to the leaf's parent, opening every intermediate
+      directory with ``O_RDONLY | O_NOFOLLOW | O_DIRECTORY | O_CLOEXEC``
+      and threading ``dir_fd`` through each step.  A symlink swap on
+      any ancestor is rejected at walk time.  This pattern matches the
+      existing vetted ``_open_directory_no_follow`` in
+      ``extensions/local-store/src/arw_ext/local_store/receipts.py``.
+    * **Leaf open with ``O_NOFOLLOW | O_NONBLOCK``** — the leaf is
+      opened relative to its parent directory's descriptor so a
+      symlink at the leaf itself is also rejected, and ``O_NONBLOCK``
+      prevents the FIFO-at-leaf DoS where ``os.open`` would block
+      waiting for a writer.
+    * **fstat ``S_ISREG``** — the descriptor must point at a regular
+      file; FIFO, socket, device, directory are rejected before any
+      read so the bounded read cannot block on a non-regular entry.
+    * **Bounded read** — at most ``max_bytes + 1`` bytes are read; a
+      file larger than ``max_bytes`` is rejected (DoS guard).
+    * **TOCTOU check** — the post-read ``fstat`` is compared against
+      the parent-directory's ``fstatat`` (via ``os.fstatat`` /
+      ``os.stat`` with ``dir_fd``) so an unlink-and-replace of the
+      leaf mid-read is detected.
+    * **Strict UTF-8 decode** — malformed byte sequences raise
+      ``UnicodeError`` rather than being silently replaced.
+    * **Strict JSON parse** — :class:`RecursionError` is also caught
+      so a pathological deeply-nested payload (a future pure-Python
+      JSON fallback could hit it) is rejected as a typed failure
+      rather than crashing the reader.
+    """
+
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if no_follow == 0:
+        raise OSError(
+            "canonical selection reader requires O_NOFOLLOW; platform unsupported"
+        )
+    nonblock = getattr(os, "O_NONBLOCK", 0)
+    if nonblock == 0:
+        # FIFO at the leaf blocks at ``os.open`` (waiting for a writer)
+        # BEFORE any ``fstat`` runs, so ``O_NONBLOCK`` is not optional.
+        # Fail closed rather than silently accepting a hang vector.
+        raise OSError(
+            "canonical selection reader requires O_NONBLOCK; platform unsupported"
+        )
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if directory_flag == 0:
+        raise OSError(
+            "canonical selection reader requires O_DIRECTORY; platform unsupported"
+        )
+    if os.open not in os.supports_dir_fd:
+        # ``dir_fd``-anchored directory walks are the only safe way to
+        # reject ancestor symlink swaps; without them the helper cannot
+        # guarantee no-follow on every component.
+        raise OSError(
+            "canonical selection reader requires os.open(dir_fd=); platform unsupported"
+        )
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if path.is_absolute():
+        anchor_path = Path(candidate.anchor)
+        components = candidate.parts[1:]
+    else:
+        anchor_path = Path.cwd()
+        components = candidate.parts
+    if not components:
+        raise OSError("canonical selection path has no components")
+
+    dir_flags = os.O_RDONLY | no_follow | directory_flag | cloexec
+    leaf_flags = os.O_RDONLY | no_follow | nonblock | cloexec
+
+    # Walk from the anchor down to the leaf's PARENT directory,
+    # opening each directory component with O_NOFOLLOW so a symlink
+    # swap mid-walk is rejected at walk time.  Then open the leaf
+    # relative to its parent directory's descriptor so the leaf open
+    # is also no-follow and no-block.
+    dir_descriptor = os.open(anchor_path, dir_flags)
+    try:
+        for component in components[:-1]:
+            try:
+                next_descriptor = os.open(
+                    component, dir_flags, dir_fd=dir_descriptor
+                )
+            except OSError:
+                raise
+            os.close(dir_descriptor)
+            dir_descriptor = next_descriptor
+
+        leaf_descriptor = os.open(
+            components[-1], leaf_flags, dir_fd=dir_descriptor
+        )
+    finally:
+        os.close(dir_descriptor)
+
+    try:
+        before = os.fstat(leaf_descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError(
+                f"canonical selection is not a regular file: mode={oct(before.st_mode)}"
+            )
+        if before.st_size > max_bytes:
+            raise OSError(
+                f"canonical selection exceeds {max_bytes} bytes: size={before.st_size}"
+            )
+        chunks: list[bytes] = []
+        total = 0
+        while total <= max_bytes:
+            chunk = os.read(leaf_descriptor, min(16_384, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        if total > max_bytes:
+            raise OSError(
+                f"canonical selection exceeded {max_bytes} bytes during read"
+            )
+        # TOCTOU check: re-fstat the leaf and compare to the parent-
+        # directory fstatat of the leaf name (no-follow).  An unlink-
+        # and-replace of the leaf during the read surfaces as a
+        # mismatch in dev/ino/mode.
+        after = os.fstat(leaf_descriptor)
+        path_now = os.stat(path, follow_symlinks=False)
+        if (
+            before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or (after.st_dev, after.st_ino) != (path_now.st_dev, path_now.st_ino)
+        ):
+            raise OSError("canonical selection changed during read")
+        raw = b"".join(chunks)
+    finally:
+        os.close(leaf_descriptor)
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"canonical selection is not valid UTF-8: {error}") from error
+
+    try:
+        payload = json.loads(text)
+    except ValueError as error:
+        raise ValueError(f"canonical selection is not valid JSON: {error}") from error
+    except RecursionError as error:
+        # Defensive: CPython's _json C extension has its own nesting
+        # limit, but a future pure-Python fallback could hit
+        # RecursionError on deeply-nested input.
+        raise ValueError(
+            f"canonical selection is pathologically nested: {error}"
+        ) from error
+
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"canonical selection must be a JSON object, got {type(payload).__name__}"
+        )
+    return payload
