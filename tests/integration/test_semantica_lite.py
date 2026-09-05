@@ -400,6 +400,42 @@ def test_tampered_sidecar_schema_is_a_provenance_error(tmp_path: Path) -> None:
         )
 
 
+def test_record_rejects_hidden_conflict_ignore_policy(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE provenance_records (
+                record_id TEXT PRIMARY KEY,
+                entity_id TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                artifact_id TEXT NOT NULL,
+                ledger_event_id TEXT NOT NULL,
+                ledger_event_digest TEXT NOT NULL,
+                activity_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                derived_from_json TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                checksum TEXT NOT NULL,
+                UNIQUE(entity_id) ON CONFLICT IGNORE
+            )
+            """
+        )
+    database.chmod(0o600)
+    first = _record()
+    second = _record(
+        record_id="prov-claim-copy",
+        artifact_id="artifact-copy",
+        event_id=COPY_EVENT_ID,
+        event_digest="d" * 64,
+    )
+    adapter = _adapter(tmp_path, (first, second))
+    adapter.record(first)
+    with pytest.raises(RuntimeError, match="insert did not persist"):
+        adapter.record(second)
+
+
 def test_sidecar_rejects_active_triggers_before_record(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:

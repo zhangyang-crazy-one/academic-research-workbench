@@ -292,6 +292,19 @@ class SemanticaSQLiteAdapter:
                         record.binding_checksum,
                     ),
                 )
+                inserted = connection.execute(
+                    "SELECT CASE WHEN typeof(payload) = 'blob' "
+                    "AND length(payload) <= ? THEN payload ELSE NULL END, "
+                    "CASE WHEN typeof(checksum) = 'text' "
+                    "AND length(CAST(checksum AS BLOB)) = 64 "
+                    "THEN checksum ELSE NULL END "
+                    "FROM provenance_records WHERE record_id = ?",
+                    (MAX_PROVENANCE_PAYLOAD_BYTES, record.record_id),
+                ).fetchone()
+                if inserted != (payload, record.binding_checksum):
+                    raise sqlite3.DatabaseError(
+                        "Semantica sidecar insert did not persist immutable content"
+                    )
                 connection.commit()
         except sqlite3.Error as error:
             raise RuntimeError(f"semantica sidecar write failed: {error}") from error
