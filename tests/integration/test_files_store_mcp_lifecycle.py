@@ -1515,6 +1515,8 @@ def test_startup_unsupported_security_primitives_exits_78(
         f"stderr must direct the operator to the legacy reader config; "
         f"got {stderr_text!r}"
     )
+    assert "ARW_FILES_LEGACY_READER=1" in stderr_text
+    assert "ARW_FILES_USE_LEGACY_READER" not in stderr_text
     # The MCP loop never entered — no JSON-RPC response on stdout.
     assert completed.stdout == b"", (
         f"stdout must be empty (no initialize response); got "

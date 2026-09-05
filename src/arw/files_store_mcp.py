@@ -23,10 +23,12 @@ import argparse
 import os
 import stat
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from arw.composition import declared_capabilities
 from arw.file_contracts import CursorError
 from arw.file_models import (
     FilesContextRequest,
@@ -36,7 +38,6 @@ from arw.file_models import (
     FilesSearchRequest,
 )
 from arw.files import FilesAdminError, load_query_generation
-from arw.composition import declared_capabilities
 from arw.files_mcp import TOOL_MODELS, _tool_envelope
 from arw.kernel.capabilities import CapabilityUnavailable
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
@@ -270,10 +271,8 @@ def _enforce_capability_gate(store_path: Path) -> None:
     # The resolved adapter is discarded (we re-open the store below with
     # the security anchors); this only validates the gate, not the adapter.
     resolved = router.resolve("files.local")
-    try:
+    with suppress(Exception):
         resolved._store.close()  # noqa: SLF001 — internal teardown
-    except Exception:
-        pass
 
 
 def _check_manifest_declares_files() -> None:
@@ -566,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
             "files-store-mcp: startup-error: unsupported_security_primitives: "
             f"missing {platform_reason}; the per-request canonical selection "
             "reader cannot run on this platform. Configure the v1 files "
-            "MCP via the legacy reader (set ARW_FILES_USE_LEGACY_READER=1) "
+            "MCP via the legacy reader (set ARW_FILES_LEGACY_READER=1) "
             "or run on a POSIX platform that exposes O_NOFOLLOW.",
             file=sys.stderr,
         )
