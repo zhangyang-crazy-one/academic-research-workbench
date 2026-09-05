@@ -614,7 +614,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "canonical provenance inventory exceeds the Lite limit"
                     )
             sidecar_path = args.store.with_name(
-                f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
+                f"{args.store.name}.{replayed.run_id}.semantica.sqlite3"
             )
             if args.provenance_action == "rebuild":
                 module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
@@ -820,7 +820,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     from arw.kernel.state.models import ArtifactAcceptedPayload
 
                     provenance_sidecar = args.store.with_name(
-                        f"{args.store.stem}.{replayed.run_id}.semantica.sqlite3"
+                        f"{args.store.name}.{replayed.run_id}.semantica.sqlite3"
                     )
                     provenance_expected = False
                     for event in replayed.events:
