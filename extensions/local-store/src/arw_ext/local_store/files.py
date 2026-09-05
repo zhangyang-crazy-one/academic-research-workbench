@@ -78,7 +78,13 @@ class LocalStoreFilesAdapter:
     :func:`arw_ext.local_store.ingest.ingest_files_generation`.
     """
 
-    def __init__(self, store: LocalProjectionStore) -> None:
+    def __init__(
+        self,
+        store: LocalProjectionStore,
+        *,
+        allowed_root: Path | str | None = None,
+        expected_root_id: str | None = None,
+    ) -> None:
         store.assert_open()
         meta = read_files_meta(store.connection)
         if meta is None or "files.root_id" not in meta:
@@ -90,6 +96,45 @@ class LocalStoreFilesAdapter:
         self._root_id = meta["files.root_id"]
         self._canonical_path = meta["files.canonical_path"]
         self._generation_id = meta["files.selected_generation_id"]
+        # Defense in depth: the cache's stored canonical_path is mutable on
+        # disk, so an attacker who rewrites the projection could redirect
+        # live reads anywhere on the filesystem.  When the caller passes an
+        # externally configured allowed root (the registered root resolved
+        # through the authoritative ``root.json`` registration), require
+        # that the cache's canonical_path resolves inside it AND matches the
+        # registered root id.  Without these checks the adapter still works
+        # (back-compat for tests that synthesize the projection directly);
+        # the MCP entry point refuses to construct without them.
+        if allowed_root is not None or expected_root_id is not None:
+            if allowed_root is None or expected_root_id is None:
+                raise FileProviderError(
+                    "root_denied",
+                    "allowed_root and expected_root_id must be supplied together",
+                )
+            try:
+                registered = Path(allowed_root).resolve(strict=False)
+            except OSError as error:
+                raise FileProviderError(
+                    "root_denied",
+                    f"allowed root is not resolvable: {error}",
+                ) from error
+            try:
+                claimed = Path(self._canonical_path).resolve(strict=False)
+            except OSError as error:
+                raise FileProviderError(
+                    "root_denied",
+                    f"cache canonical_path is not resolvable: {error}",
+                ) from error
+            if claimed != registered:
+                raise FileProviderError(
+                    "root_denied",
+                    "cache canonical_path does not match the registered root",
+                )
+            if self._root_id != expected_root_id:
+                raise FileProviderError(
+                    "root_denied",
+                    "cache root_id does not match the registered root_id",
+                )
         secret = base64.b64decode(meta[FILES_CURSOR_META_KEY])
         self._codec = CursorCodec(secret=secret)
         # Hit anchors never expire (v1 parity: hit_codec uses a frozen clock).

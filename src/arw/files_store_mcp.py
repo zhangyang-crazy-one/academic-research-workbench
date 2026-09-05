@@ -9,13 +9,22 @@ installed read path consumed it).
 
 The MCP layer is a thin transport adapter: it parses JSON-RPC, dispatches to
 the provider, and serializes the result.  No business logic lives here.
+
+Capability gating: the production path goes through the same
+``default_router`` graph uses, so the manifest's declared capability set
+gates activation here too.  Without that gate, the launcher could enable the
+files read path against a plugin manifest that does not declare ``files``,
+which would diverge from graph's enforcement (PR15 follow-up).
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from arw.file_contracts import CursorError
 from arw.file_models import (
@@ -25,7 +34,10 @@ from arw.file_models import (
     FilesReadRequest,
     FilesSearchRequest,
 )
+from arw.files import FilesAdminError, load_query_generation
+from arw.composition import declared_capabilities
 from arw.files_mcp import TOOL_MODELS, _tool_envelope
+from arw.kernel.capabilities import CapabilityUnavailable
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 
 # Reuse the v1 MCP request/response contract; the provider is the only
@@ -38,11 +50,199 @@ _DISPATCH = {
     "get_context": ("get_context", FilesContextRequest),
 }
 
+# Per-tool isError mapping (PR15 wire parity with v1 ``FilesMcpServer.handle_tool``).
+# Only ``read_file`` consults ``result.status``; the other four tools always
+# return isError=False — that means ``degraded`` / ``no_structure`` /
+# ``stale_conflict`` etc. for outline/context are delivered as
+# NOT-isError envelopes.  Anything that raises stays isError=True.
+_SUCCESS_STATUSES = {"ok", "stale_conflict", "encoding_error"}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="academic-research-files-store")
-    parser.add_argument("--store", required=True, type=Path)
+    parser.add_argument(
+        "--store",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the local projection store. Optional: when omitted, "
+            "the store path is resolved via ``resolve_store_path`` keyed by "
+            "the registered canonical root (the authoritative source in "
+            "``root.json``). When the resolved path does not exist on disk "
+            "the server exits with STORE_ABSENT (69) before consuming stdin."
+        ),
+    )
+    parser.add_argument(
+        "--control-root",
+        type=Path,
+        default=None,
+        help=(
+            "Authoritative control root whose ``root.json`` registers the "
+            "research root. Required for the production read path so the "
+            "store's recorded canonical_path cannot redirect live reads."
+        ),
+    )
+    parser.add_argument(
+        "--root-id",
+        default=None,
+        help=(
+            "Registered root ID under --control-root. Required together with "
+            "--control-root so the adapter verifies the store's recorded "
+            "root_id matches the registered root."
+        ),
+    )
     return parser
+
+
+def _resolve_allowed_root(
+    control_root: Path | None,
+    root_id: str | None,
+) -> tuple[Path, str]:
+    """Return (allowed_root, root_id) from the authoritative registration.
+
+    Refuses the suggested ``<control_root>/<root_id>`` formula and instead
+    reads ``root.json`` via :func:`load_query_generation` so the registered
+    canonical_path is the one the parent wrote at register time (the only
+    authoritative source).
+    """
+    if control_root is None or root_id is None:
+        raise ValueError(
+            "control_root and root_id must be supplied together; refusing "
+            "to read live files without an external allowed-root anchor"
+        )
+    generation = load_query_generation(control_root, root_id)
+    return Path(generation.root.canonical_path), generation.root.root_id
+
+
+def _open_store_adapter(
+    store_path: Path,
+    *,
+    allowed_root: Path,
+    expected_root_id: str,
+):
+    """Open the store read-only and construct the adapter with the security check.
+
+    The adapter verifies the cache's recorded ``canonical_path`` and
+    ``root_id`` match the externally configured anchors before any live
+    read; this prevents the cache from being used to redirect reads
+    outside the registered root.
+    """
+    from arw_ext.local_store import LocalProjectionStore
+    from arw_ext.local_store.files import LocalStoreFilesAdapter
+
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    try:
+        return LocalStoreFilesAdapter(
+            store,
+            allowed_root=allowed_root,
+            expected_root_id=expected_root_id,
+        )
+    except Exception:
+        store.close()
+        raise
+
+
+def _resolve_plugin_manifest() -> Path | None:
+    """Resolve the plugin manifest path the same way ``_graph-mcp`` does.
+
+    Order (per PR5 / PR15 follow-up):
+
+    1. Explicit ``ARW_PLUGIN_MANIFEST`` — installed launcher binding.
+    2. ``ARW_PLUGIN_ROOT`` set without ``ARW_PLUGIN_MANIFEST`` — installed
+       mode with a missing manifest binding; the router will skip gating,
+       so we surface a configuration error instead of silently passing.
+    3. Source-development fallback: ``.codex-plugin/plugin.json`` beside
+       ``src/arw/cli.py`` (or beside this file if that lookup fails).
+    """
+    manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
+    if manifest_env:
+        manifest_path = Path(manifest_env)
+        if not manifest_path.is_file():
+            raise FilesAdminError(
+                "plugin_manifest_unreadable",
+                f"plugin manifest is not a readable file: {manifest_env}",
+            )
+        return manifest_path
+    if os.environ.get("ARW_PLUGIN_ROOT"):
+        raise FilesAdminError(
+            "plugin_manifest_missing",
+            "installed mode requires ARW_PLUGIN_MANIFEST pointing at "
+            ".codex-plugin/plugin.json",
+        )
+    # Source-tree fallback — the in-tree plugin.json sits at the repo root
+    # next to ``pyproject.toml``; reach it from this file.
+    here = Path(__file__).resolve()
+    for ancestor in (here, *here.parents):
+        candidate = ancestor.parent / ".codex-plugin" / "plugin.json"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _enforce_capability_gate(store_path: Path) -> None:
+    """Validate ``files.local`` is declared in the active plugin manifest.
+
+    Mirrors the graph launcher's gating: the manifest's declared capability
+    set must include ``files`` for the read path to activate.  When the
+    capability is absent (either not registered or deregistered by the
+    manifest), ``CapabilityUnavailable`` is raised and the process exits
+    cleanly — there is no fallback to an undeclared capability.
+    """
+    try:
+        manifest_path = _resolve_plugin_manifest()
+    except FilesAdminError as error:
+        raise CapabilityUnavailable(
+            f"files.local ({error.code}: {error})"
+        ) from error
+
+    from arw.composition import default_router
+
+    router = default_router(
+        store_path=store_path,
+        plugin_manifest=manifest_path,
+    )
+    # Resolve through the router to honor the manifest's capability gating.
+    # The resolved adapter is discarded (we re-open the store below with
+    # the security anchors); this only validates the gate, not the adapter.
+    resolved = router.resolve("files.local")
+    try:
+        resolved._store.close()  # noqa: SLF001 — internal teardown
+    except Exception:
+        pass
+
+
+def _check_manifest_declares_files() -> None:
+    """Pre-check that the active plugin manifest declares ``files``.
+
+    Runs BEFORE the STORE_ABSENT (69) detection so the shim's
+    store-absent→legacy fallback can never bypass a manifest that has
+    explicitly withheld the ``files`` capability.  The full gate
+    (``_enforce_capability_gate``) still runs after STORE_ABSENT — this
+    pre-check is purely a fail-closed ordering fix; it does not touch the
+    store, so it works whether or not the store file is present.
+
+    Source-tree development runs (no ``ARW_PLUGIN_ROOT``) have no manifest
+    binding and intentionally skip gating here; the full gate handles
+    that path the same way.
+    """
+    try:
+        manifest_path = _resolve_plugin_manifest()
+    except FilesAdminError as error:
+        raise CapabilityUnavailable(
+            f"files.local ({error.code}: {error})"
+        ) from error
+
+    if manifest_path is None:
+        # Source-tree mode: no manifest binding, no gate.
+        return
+
+    declared = set(declared_capabilities(manifest_path))
+    if "files" not in declared:
+        raise CapabilityUnavailable(
+            "files.local (manifest does not declare 'files' capability; "
+            "STORE_ABSENT fallback must not bypass an explicit denial)"
+        )
 
 
 def _handle(adapter, request: object) -> dict[str, object] | None:
@@ -91,19 +291,33 @@ def _handle(adapter, request: object) -> dict[str, object] | None:
                 method_name, model = entry
                 try:
                     parsed = model.model_validate(arguments)
-                    result_model = getattr(adapter, method_name)(parsed)
-                    payload = result_model.model_dump(mode="json")
-                    is_error = getattr(result_model, "status", "ok") not in {
-                        "ok",
-                        "stale_conflict",
-                        "encoding_error",
-                    }
-                    result = _tool_envelope(payload, error=is_error)
-                except Exception as error:  # noqa: BLE001 - envelope boundary
-                    code = getattr(error, "code", "tool_error")
+                except ValidationError as error:
+                    # Wire parity with v1 ``FilesMcpServer.handle_tool``:
+                    # argument validation failures are reported as
+                    # ``invalid_request``, not the generic ``tool_error``.
                     result = _tool_envelope(
-                        {"error_code": code, "message": str(error)}, error=True
+                        {"error_code": "invalid_request", "message": str(error)},
+                        error=True,
                     )
+                else:
+                    try:
+                        result_model = getattr(adapter, method_name)(parsed)
+                        payload = result_model.model_dump(mode="json")
+                        # Per-tool isError mapping (v1 parity): only
+                        # ``read_file`` consults ``result.status``; the
+                        # other four tools deliver degraded/no_structure/etc.
+                        # as NOT-isError envelopes so downstream MCP
+                        # clients can still inspect the body.
+                        if method_name == "read_file":
+                            is_error = getattr(result_model, "status", "ok") not in _SUCCESS_STATUSES
+                        else:
+                            is_error = False
+                        result = _tool_envelope(payload, error=is_error)
+                    except Exception as error:  # noqa: BLE001 - envelope boundary
+                        code = getattr(error, "code", "tool_error")
+                        result = _tool_envelope(
+                            {"error_code": code, "message": str(error)}, error=True
+                        )
         else:
             return {
                 "jsonrpc": "2.0",
@@ -117,24 +331,144 @@ def _handle(adapter, request: object) -> dict[str, object] | None:
     return {"jsonrpc": "2.0", "id": identifier, "result": result}
 
 
+# Pre-protocol exit code: STORE_ABSENT — the resolved store file does not
+# exist on disk.  Surfaced before any stdin consumption so the launcher can
+# treat "store not set up yet" as a normal first-run state and (optionally)
+# fall back to the v1 reader; the cap is dedicated so other startup
+# failures (capability denial, root mismatch, corruption, generic 78) are
+# distinguishable from a clean absence and never trigger that fallback.
+STORE_ABSENT_EXIT_CODE = 69
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments.count("--store") != 1:
+    if arguments.count("--store") > 1:
         print(
-            "files-store-mcp: startup-error: exactly one --store is required",
+            "files-store-mcp: startup-error: --store must appear at most once",
+            file=sys.stderr,
+        )
+        return 64
+    if (
+        "--control-root" not in arguments
+        or "--root-id" not in arguments
+    ):
+        print(
+            "files-store-mcp: startup-error: --control-root and --root-id "
+            "are required (production read path is fail-closed without them)",
+            file=sys.stderr,
+        )
+        return 64
+    if (
+        ("--control-root" in arguments)
+        != ("--root-id" in arguments)
+    ):
+        print(
+            "files-store-mcp: startup-error: --control-root and --root-id "
+            "must be supplied together",
+            file=sys.stderr,
+        )
+        return 64
+    if arguments.count("--control-root") != 1:
+        print(
+            "files-store-mcp: startup-error: exactly one --control-root is required",
+            file=sys.stderr,
+        )
+        return 64
+    if arguments.count("--root-id") != 1:
+        print(
+            "files-store-mcp: startup-error: exactly one --root-id is required",
             file=sys.stderr,
         )
         return 64
     args = build_parser().parse_args(arguments)
-    # Composition-root seam: construct the native provider over the store.
-    from arw.composition import local_store_files_provider
+
+    # Resolve the external security anchors from the authoritative
+    # ``root.json`` registration (refuses the ``<control_root>/<root_id>``
+    # formula — the registered canonical_path is the only authoritative
+    # source for where live reads may anchor).
+    try:
+        allowed_root, expected_root_id = _resolve_allowed_root(
+            args.control_root, args.root_id
+        )
+    except (OSError, FilesAdminError, ValueError) as error:
+        code = getattr(error, "code", "control_root_unsafe")
+        print(
+            f"files-store-mcp: startup-error: {code}: {error}",
+            file=sys.stderr,
+        )
+        return 78
+
+    # Resolve the store path: explicit --store wins, otherwise default via
+    # ``resolve_store_path`` keyed by the registered canonical root.  The
+    # default location is the per-user cache; a network filesystem error is
+    # surfaced as 78 (config error) so the launcher treats it the same as
+    # any other startup failure (never a fallback trigger).
+    if args.store is None:
+        from arw_ext.local_store.location import resolve_store_path
+
+        try:
+            store_path = resolve_store_path(allowed_root)
+        except (OSError, ValueError) as error:
+            code = getattr(error, "code", "store_location_unsafe")
+            print(
+                f"files-store-mcp: startup-error: {code}: {error}",
+                file=sys.stderr,
+            )
+            return 78
+    else:
+        store_path = args.store
+
+    # Pre-check: a manifest that has explicitly withheld ``files`` MUST
+    # block STORE_ABSENT fallback.  This pre-check does not touch the
+    # store, so it works whether or not the file is present — its sole
+    # job is to make sure a manifest denial can never be reached through
+    # the store-absent → legacy fallback path.
+    try:
+        _check_manifest_declares_files()
+    except CapabilityUnavailable as error:
+        print(
+            f"files-store-mcp: startup-error: capability_unavailable: {error}",
+            file=sys.stderr,
+        )
+        return 78
+
+    # Pre-protocol STORE_ABSENT: the resolved store is missing on disk.
+    # Signaled before any stdin consumption so the launcher can detect
+    # "store not yet populated" cleanly without touching the transport.
+    if not store_path.is_file():
+        print(
+            f"files-store-mcp: STORE_ABSENT: store not found at {store_path}",
+            file=sys.stderr,
+        )
+        return STORE_ABSENT_EXIT_CODE
 
     try:
-        adapter = local_store_files_provider(args.store)
+        _enforce_capability_gate(store_path)
+    except CapabilityUnavailable as error:
+        print(
+            f"files-store-mcp: startup-error: capability_unavailable: {error}",
+            file=sys.stderr,
+        )
+        return 78
+
+    try:
+        adapter = _open_store_adapter(
+            store_path,
+            allowed_root=allowed_root,
+            expected_root_id=expected_root_id,
+        )
     except Exception as error:  # noqa: BLE001 - startup boundary
         code = getattr(error, "code", "store_unavailable")
-        print(f"files-store-mcp: startup-error: {code}: {error}", file=sys.stderr)
+        print(
+            f"files-store-mcp: startup-error: {code}: {error}",
+            file=sys.stderr,
+        )
         return 78
+    _run_loop(adapter)
+    return 0
+
+
+def _run_loop(adapter) -> None:
     for raw_line in sys.stdin.buffer:
         try:
             request = strict_json_loads(raw_line)
@@ -149,7 +483,6 @@ def main(argv: list[str] | None = None) -> int:
         if response is not None:
             sys.stdout.buffer.write(canonical_json_bytes(response))
             sys.stdout.buffer.flush()
-    return 0
 
 
 if __name__ == "__main__":

@@ -510,7 +510,17 @@ def test_store_backed_files_mcp_serves_the_seeded_corpus(tmp_path: Path) -> None
         },
     }
     proc = subprocess.run(
-        [sys.executable, "-m", "arw.files_store_mcp", "--store", str(store_path)],
+        [
+            sys.executable,
+            "-m",
+            "arw.files_store_mcp",
+            "--store",
+            str(store_path),
+            "--control-root",
+            str(tmp_path / "control"),
+            "--root-id",
+            root_id,
+        ],
         input=json.dumps(request) + "\n",
         capture_output=True,
         text=True,

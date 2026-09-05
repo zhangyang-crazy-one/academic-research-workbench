@@ -687,9 +687,16 @@ class SemanticaSQLiteAdapter:
                         raise RuntimeError(
                             "Semantica audit receipt must not be a symlink"
                         )
-                    if entry.name not in current_receipts and entry.is_file(
-                        follow_symlinks=False
-                    ):
+                    # A Semantica-named entry that is not a regular file would
+                    # be silently ignored by an ``is_file`` check, leaving
+                    # ``verify()`` to report success while the status loader
+                    # fails to read the directory. Fail reconciliation instead
+                    # of recursively pruning directories.
+                    if not entry.is_file(follow_symlinks=False):
+                        raise RuntimeError(
+                            "Semantica audit receipt must be a regular file"
+                        )
+                    if entry.name not in current_receipts:
                         os.unlink(entry.name, dir_fd=directory_descriptor)
             os.fsync(directory_descriptor)
         except OSError as error:

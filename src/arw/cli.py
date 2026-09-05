@@ -314,11 +314,15 @@ def _provenance_sidecar_path(store: Path, run_id: str) -> Path:
 
     name = store.name
     suffix = f".{run_id}.semantica.sqlite3"
+    # SQLite safety probes create sibling files using -wal/-shm/-journal; the
+    # ``-journal`` suffix is two bytes longer than the ``.audit`` directory
+    # suffix, so it is the strict upper bound for the sidecar basename.
+    auxiliary_suffix = f"{suffix}-journal"
     hashed_prefix = "__arw_store_sha256__"
     # Reserve the hashed namespace so a literal store name cannot alias it.
     if (
         name.startswith(hashed_prefix)
-        or len(os.fsencode(f"{name}{suffix}.audit")) > 255
+        or len(os.fsencode(f"{name}{auxiliary_suffix}")) > 255
     ):
         name = hashed_prefix + sha256_hex(os.fsencode(name))
     return store.with_name(f"{name}{suffix}")
@@ -535,19 +539,48 @@ def main(argv: Sequence[str] | None = None) -> int:
         from arw.graph_mcp import GraphMcpServer, run_stdio
 
         # The manifest's declared capability set gates activation (PR5).
-        # Resolution order: explicit env override (staged/installed plugin
-        # sets it), then the source-tree layout.  Never guess from the
-        # installed package location — that path differs per install.
+        # Resolution order:
+        #   1. Explicit ``ARW_PLUGIN_MANIFEST`` (the installed launcher binds
+        #      it to ``$PLUGIN_ROOT/.codex-plugin/plugin.json``).
+        #   2. ``ARW_PLUGIN_ROOT`` set without ``ARW_PLUGIN_MANIFEST`` —
+        #      installed mode but no manifest binding, which is a launcher
+        #      configuration error.  Defaulting to ``plugin_manifest=None``
+        #      here would skip the gating block in ``default_router`` and
+        #      leave every registered provider available regardless of the
+        #      manifest's declared set (PR15 follow-up).
+        #   3. Source-development fallback: the in-tree ``.codex-plugin/plugin.json``
+        #      beside ``src/arw/cli.py``.  Preserved so dev runs keep working
+        #      without an installed root.
         manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
-        manifest_path = (
-            Path(manifest_env)
-            if manifest_env
-            else Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
-        )
+        plugin_root_env = os.environ.get("ARW_PLUGIN_ROOT")
+        if manifest_env:
+            manifest_path = Path(manifest_env)
+            if not manifest_path.is_file():
+                print(
+                    "arw: plugin-manifest-unreadable: "
+                    f"{manifest_env}",
+                    file=sys.stderr,
+                )
+                return 65
+        elif plugin_root_env:
+            print(
+                "arw: plugin-manifest-missing: installed mode requires "
+                "ARW_PLUGIN_MANIFEST pointing at .codex-plugin/plugin.json",
+                file=sys.stderr,
+            )
+            return 65
+        else:
+            manifest_path = (
+                Path(__file__).resolve().parents[2]
+                / ".codex-plugin"
+                / "plugin.json"
+            )
+            if not manifest_path.is_file():
+                manifest_path = None
         router = default_router(
             graph_control_root=args.control_root,
             graph_root_id=args.root_id,
-            plugin_manifest=manifest_path if manifest_path.is_file() else None,
+            plugin_manifest=manifest_path,
         )
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
