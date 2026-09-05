@@ -723,7 +723,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     }
                 )
                 checksum = provider.record(record)
-                provider.verify()
+                faults = provider.verify()
+                if faults:
+                    raise RuntimeError(
+                        "recorded Semantica sidecar failed canonical verification: "
+                        + ", ".join(fault.code for fault in faults)
+                    )
                 _write_json({"checksum": checksum})
             elif args.provenance_action == "rebuild":
                 provider.rebuild(list(canonical_records.values()))
@@ -743,9 +748,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     }
                 )
             else:
-                _write_json(
-                    {"audit_faults": [fault.__dict__ for fault in provider.verify()]}
-                )
+                faults = provider.verify()
+                _write_json({"audit_faults": [fault.__dict__ for fault in faults]})
+                if faults:
+                    raise RuntimeError(
+                        "Semantica sidecar failed canonical verification: "
+                        + ", ".join(fault.code for fault in faults)
+                    )
             return 0
         except (
             CapabilityUnavailable,

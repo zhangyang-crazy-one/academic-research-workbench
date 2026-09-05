@@ -118,6 +118,29 @@ def _json_value(value: str | bytes) -> object:
         raise RuntimeError("corrupt Semantica sidecar JSON") from error
 
 
+def _quote_identifier(identifier: str) -> str:
+    """Safely quote a SQLite identifier for embedding in a PRAGMA statement.
+
+    SQLite ``PRAGMA index_info(<name>)`` does not accept bound parameters,
+    so the name must be embedded directly. The set of valid characters for
+    an SQLite identifier is a strict subset of ASCII; reject anything else
+    before quoting so a hostile ``sqlite_schema`` row cannot inject SQL.
+    """
+
+    if not identifier or not all(
+        ch.isalnum() or ch == "_" for ch in identifier
+    ):
+        raise ValueError(f"refusing to quote unsafe identifier: {identifier!r}")
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _normalize_sql(statement: str) -> str:
+    """Collapse whitespace so CREATE TABLE statements can be matched against
+    forbidden ``ON CONFLICT`` clauses regardless of formatting."""
+
+    return " ".join(statement.split())
+
+
 class UnboundProvenanceError(ValueError):
     """Raised when a record lacks a verified ARW artifact/ledger binding."""
 
@@ -269,6 +292,13 @@ class SemanticaSQLiteAdapter:
                 ).fetchone()
                 if at_limit is not None:
                     raise ValueError("Semantica sidecar record limit exceeded")
+                count_before = self._bounded_row_count(
+                    connection, limit=MAX_SIDECAR_RECORDS + 1
+                )
+                if count_before > MAX_SIDECAR_RECORDS:
+                    raise ValueError(
+                        "Semantica sidecar row inventory exceeds the Lite limit"
+                    )
                 connection.execute(
                     """
                     INSERT INTO provenance_records(
@@ -304,6 +334,17 @@ class SemanticaSQLiteAdapter:
                 if inserted != (payload, record.binding_checksum):
                     raise sqlite3.DatabaseError(
                         "Semantica sidecar insert did not persist immutable content"
+                    )
+                count_after = self._bounded_row_count(
+                    connection, limit=MAX_SIDECAR_RECORDS + 1
+                )
+                if count_after > MAX_SIDECAR_RECORDS:
+                    raise ValueError(
+                        "Semantica sidecar row inventory exceeds the Lite limit"
+                    )
+                if count_after != count_before + 1:
+                    raise sqlite3.DatabaseError(
+                        "Semantica sidecar insert silently altered row inventory"
                     )
                 connection.commit()
         except sqlite3.Error as error:
@@ -716,6 +757,113 @@ class SemanticaSQLiteAdapter:
                 "Semantica sidecar contains unsupported active triggers"
             )
 
+    @staticmethod
+    def _bounded_row_count(
+        connection: sqlite3.Connection, *, limit: int
+    ) -> int:
+        """Count rows with a hard ``limit`` so a malicious sidecar that
+        holds millions of rows cannot exhaust the ``record()`` transaction
+        budget via an unbounded scan. Returns ``limit`` when the sidecar
+        actually has more than ``limit`` rows so the caller can detect and
+        reject the oversized inventory.
+        """
+
+        result = connection.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM provenance_records LIMIT ?)",
+            (limit,),
+        ).fetchone()
+        if result is None:
+            return 0
+        return int(result[0])
+
+    @staticmethod
+    def _validate_index_contract(connection: sqlite3.Connection) -> None:
+        """Reject sidecars whose provenance_records table carries extra UNIQUE
+        constraints that could enable a silent delete on a subsequent insert.
+
+        We allow:
+        * the implicit PRIMARY KEY auto-index on ``record_id`` (origin ``pk``,
+          unique 1, columns ``[record_id]``);
+        * the two non-unique ``CREATE INDEX`` statements we issue on
+          ``entity_id`` and ``ledger_event_id`` (origin ``c``, unique 0);
+        * inline ``UNIQUE(col)`` constraints on the table itself. These create
+          ``sqlite_autoindex_*`` entries with origin ``u``. They alone do not
+          change plain ``INSERT`` semantics — a UNIQUE collision raises
+          ``IntegrityError`` and ``record()``'s post-insert reread check
+          catches the silent-drop case (``ON CONFLICT IGNORE``). The
+          silent-delete case (``ON CONFLICT REPLACE``) is rejected separately
+          by ``_reject_unsupported_conflict_clauses``.
+
+        We reject:
+        * ``CREATE UNIQUE INDEX`` statements (origin ``c``, unique 1) — these
+          create a separate index outside the table contract that, when
+          combined with ``INSERT OR REPLACE``, would silently delete prior
+          rows on a collision;
+        * a PRIMARY KEY on any non-``record_id`` column;
+        * a compound PRIMARY KEY.
+        """
+
+        index_rows = connection.execute(
+            "SELECT name, \"unique\", origin FROM "
+            "pragma_index_list('provenance_records') LIMIT 32"
+        ).fetchall()
+        for row in index_rows:
+            index_name = str(row[0])
+            is_unique = bool(row[1])
+            origin = str(row[2]).lower()
+            if origin == "pk":
+                columns = [
+                    str(info[2])
+                    for info in connection.execute(
+                        "SELECT seqno, cid, name FROM "
+                        f"pragma_index_info({_quote_identifier(index_name)}) "
+                        "LIMIT 32"
+                    ).fetchall()
+                ]
+                if columns != ["record_id"]:
+                    raise sqlite3.DatabaseError(
+                        "Semantica sidecar has an unexpected PRIMARY KEY column"
+                    )
+                continue
+            if origin == "c" and is_unique:
+                raise sqlite3.DatabaseError(
+                    "Semantica sidecar has an unsupported UNIQUE INDEX: "
+                    f"{index_name}"
+                )
+
+    @staticmethod
+    def _reject_unsupported_conflict_clauses(connection: sqlite3.Connection) -> None:
+        """Reject CREATE TABLE statements that declare a non-ABORT conflict
+        resolution that could silently delete prior rows on a UNIQUE
+        collision. ``ON CONFLICT REPLACE`` is the headline case: combined with
+        any UNIQUE column it changes plain ``INSERT`` semantics so that an
+        existing row is removed before the new one is stored.
+        ``ON CONFLICT FAIL`` and ``ON CONFLICT ROLLBACK`` are rejected for
+        parity with the Lite contract (the sidecar's transaction guarantees
+        assume ABORT). ``ON CONFLICT IGNORE`` is allowed here because the
+        silent-drop case it produces is already caught by ``record()``'s
+        post-insert reread check (preserves the regression test in
+        ``test_semantica_lite.py``)."""
+
+        statement = connection.execute(
+            "SELECT sql FROM sqlite_schema "
+            "WHERE type = 'table' AND name = 'provenance_records' "
+            "AND sql IS NOT NULL LIMIT 1"
+        ).fetchone()
+        if statement is None:
+            return
+        normalized = _normalize_sql(str(statement[0]))
+        for forbidden in (
+            "ON CONFLICT REPLACE",
+            "ON CONFLICT FAIL",
+            "ON CONFLICT ROLLBACK",
+        ):
+            if forbidden in normalized:
+                raise sqlite3.DatabaseError(
+                    "Semantica sidecar declares an unsupported conflict "
+                    f"resolution: {forbidden}"
+                )
+
     def _validate_binding(self, record: ProvenanceRecord) -> None:
         if not record.artifact_id:
             raise UnboundProvenanceError("provenance record has no ARW artifact id")
@@ -900,6 +1048,8 @@ class SemanticaSQLiteAdapter:
                 raise sqlite3.DatabaseError(
                     "provenance_records schema constraints are incompatible"
                 )
+            self._reject_unsupported_conflict_clauses(connection)
+            self._validate_index_contract(connection)
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS provenance_records_entity_idx "
                 "ON provenance_records(entity_id)"
@@ -908,6 +1058,7 @@ class SemanticaSQLiteAdapter:
                 "CREATE INDEX IF NOT EXISTS provenance_records_ledger_idx "
                 "ON provenance_records(ledger_event_id)"
             )
+            self._validate_index_contract(connection)
             self._reject_active_triggers(connection)
 
     @staticmethod

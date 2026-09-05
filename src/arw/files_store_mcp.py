@@ -95,18 +95,48 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _platform_supports_canonical_reader() -> tuple[bool, str]:
+    """Probe whether the running platform exposes the primitives the
+    per-request canonical selection reader requires.
+
+    Returns ``(True, "")`` when the platform can run the secure reader
+    (Linux / macOS with ``O_NOFOLLOW``, ``O_NONBLOCK``, ``O_DIRECTORY``,
+    and ``os.open(dir_fd=...)`` support) or ``(False, reason)`` when any
+    primitive is missing.  The caller (``main``) maps ``False`` to a
+    distinct startup error before consuming stdin so the service does
+    not advertise all five tools and then refuse each request with
+    ``stale_query_generation``.
+    """
+
+    missing: list[str] = []
+    if getattr(os, "O_NOFOLLOW", 0) == 0:
+        missing.append("O_NOFOLLOW")
+    if getattr(os, "O_NONBLOCK", 0) == 0:
+        missing.append("O_NONBLOCK")
+    if getattr(os, "O_DIRECTORY", 0) == 0:
+        missing.append("O_DIRECTORY")
+    if os.open not in os.supports_dir_fd:
+        missing.append("os.open(dir_fd=...)")
+    if missing:
+        return False, ", ".join(missing)
+    return True, ""
+
+
 def _resolve_allowed_root(
     control_root: Path | None,
     root_id: str | None,
-) -> tuple[Path, str, str]:
-    """Return (allowed_root, root_id, generation_id) from the authoritative registration.
+) -> tuple[Path, str, str, str]:
+    """Return (allowed_root, root_id, generation_id, generation_manifest_sha256)
+    from the authoritative registration.
 
-    The generation_id returned here is the one ``selected-generation.json``
-    names as the canonical selection at startup time.  The adapter MUST
-    bind against this exact generation; an older cache ingested before the
-    canonical selection advanced must be refused as a non-fallback
-    security error rather than silently serving outdated content.
+    The ``generation_manifest_sha256`` is the digest ``selected-generation.json``
+    binds to the named generation; the per-request reader compares this
+    digest (alongside ``root_id`` and ``generation_id``) so a writer who
+    edits the pointer file to point at a different generation while
+    keeping the same generation_id is still refused (the digest would
+    not match).
     """
+
     if control_root is None or root_id is None:
         raise ValueError(
             "control_root and root_id must be supplied together; refusing "
@@ -117,6 +147,7 @@ def _resolve_allowed_root(
         Path(generation.root.canonical_path),
         generation.root.root_id,
         generation.selected.generation_id,
+        generation.selected.generation_manifest_sha256,
     )
 
 
@@ -126,6 +157,7 @@ def _open_store_adapter(
     allowed_root: Path,
     expected_root_id: str,
     expected_generation_id: str,
+    expected_generation_manifest_sha256: str,
     control_root: Path | None = None,
     root_id: str | None = None,
 ):
@@ -138,14 +170,17 @@ def _open_store_adapter(
     selection advanced, and prevents the cache from being used to
     redirect reads outside the registered root.
 
-    When ``control_root`` + ``root_id`` are supplied the adapter also
-    re-reads ``selected-generation.json`` on every per-request snapshot
-    (the long-lived process protection; the constructor check above is
-    only the startup gate).  They are optional for back-compat with
-    direct callers / tests that synthesize the projection without a
-    registered root — in that case the per-request guard falls back to
-    cache metadata only.
+    The per-request canonical revalidation (when ``control_root`` +
+    ``root_id`` are supplied) additionally compares the
+    ``generation_manifest_sha256`` recorded at startup against the one
+    the canonical file names, so a writer who edits the pointer file
+    to point at a different generation while keeping the same
+    ``generation_id`` is still refused — the digest would not match.
+
+    The arguments are optional for back-compat with direct callers /
+    tests that synthesize the projection without a registered root.
     """
+
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.files import LocalStoreFilesAdapter
 
@@ -165,6 +200,7 @@ def _open_store_adapter(
             # constructor check above is only the startup gate).
             canonical_root=control_root,
             root_id=root_id,
+            expected_generation_manifest_sha256=expected_generation_manifest_sha256,
         )
     except Exception:
         store.close()
@@ -512,6 +548,30 @@ def main(argv: list[str] | None = None) -> int:
         return 64
     args = build_parser().parse_args(arguments)
 
+    # Platform support probe (P1 review #3939835815): the per-request
+    # canonical selection reader requires ``O_NOFOLLOW``, ``O_NONBLOCK``,
+    # ``O_DIRECTORY``, and ``os.open(dir_fd=...)``.  Windows (and some
+    # BSDs) do not expose ``O_NOFOLLOW`` / ``O_NONBLOCK``, and the
+    # ancestor-swap defense requires ``O_DIRECTORY`` plus
+    # ``os.supports_dir_fd``.  When any primitive is missing the reader
+    # would fail closed on EVERY request, so we refuse to start the
+    # service BEFORE consuming stdin.  The exit code 78 (config error)
+    # is distinct from STORE_ABSENT (69) and from missing-anchor (64)
+    # so the launcher can distinguish an unsupported platform from a
+    # missing store / bad args and route the operator to the legacy
+    # reader instead of silently failing every tool call.
+    platform_ok, platform_reason = _platform_supports_canonical_reader()
+    if not platform_ok:
+        print(
+            "files-store-mcp: startup-error: unsupported_security_primitives: "
+            f"missing {platform_reason}; the per-request canonical selection "
+            "reader cannot run on this platform. Configure the v1 files "
+            "MCP via the legacy reader (set ARW_FILES_USE_LEGACY_READER=1) "
+            "or run on a POSIX platform that exposes O_NOFOLLOW.",
+            file=sys.stderr,
+        )
+        return 78
+
     # Resolve the external security anchors from the authoritative
     # ``root.json`` registration (refuses the ``<control_root>/<root_id>``
     # formula — the registered canonical_path is the only authoritative
@@ -520,9 +580,12 @@ def main(argv: list[str] | None = None) -> int:
     # against it so a stale cache cannot serve outdated content after the
     # selection advances.
     try:
-        allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
-            args.control_root, args.root_id
-        )
+        (
+            allowed_root,
+            expected_root_id,
+            expected_generation_id,
+            expected_generation_manifest_sha256,
+        ) = _resolve_allowed_root(args.control_root, args.root_id)
     except (OSError, FilesAdminError, ValueError) as error:
         code = getattr(error, "code", "control_root_unsafe")
         print(
@@ -602,6 +665,7 @@ def main(argv: list[str] | None = None) -> int:
             allowed_root=allowed_root,
             expected_root_id=expected_root_id,
             expected_generation_id=expected_generation_id,
+            expected_generation_manifest_sha256=expected_generation_manifest_sha256,
             control_root=args.control_root,
             root_id=args.root_id,
         )

@@ -116,3 +116,20 @@ release permission remain separate gates.
 - Serial regression selection: 706 passed; subsequent type-only correction
   rechecked with 58 focused tests. Clean-index license technical PASS / release
   BLOCKED. Latest-head Codex review and CI remain required before merge.
+
+## Complete bindings and conflict-policy follow-up (`1fdbc1f` review)
+
+- P1 `3939835815`: unsupported secure-reader primitives are rejected at startup
+  (exit 78), before stdin/initialize; the error points to explicit legacy-reader
+  configuration. This is capability rejection, not a claim of a Windows-native
+  secure reader. Unsupported-platform behavior is simulated in a subprocess.
+- P1 `3939835826`: strict, duplicate-key-rejecting selection validation now binds
+  root ID, generation ID, and manifest digest to the loader-validated startup
+  selection. Canonical-root callers cannot omit the trusted digest.
+- P2 `3939835833`: incompatible unique/conflict policies are rejected; bounded
+  inventory counts inside the write transaction detect silent replacement and
+  roll back. Legitimate distinct records sharing an entity remain supported.
+- `provenance record` no longer discards verification faults. Both record and
+  verify return exit 65 on faults; verify retains structured fault JSON.
+- Serial regression selection: 731 passed. Seven touched Python files confirmed
+  primary-LSP clean. No expected-failure markers hide the CLI regression.

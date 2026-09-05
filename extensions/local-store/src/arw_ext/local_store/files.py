@@ -93,6 +93,7 @@ class LocalStoreFilesAdapter:
         expected_generation_id: str | None = None,
         canonical_root: Path | str | None = None,
         root_id: str | None = None,
+        expected_generation_manifest_sha256: str | None = None,
     ) -> None:
         store.assert_open()
         meta = read_files_meta(store.connection)
@@ -124,11 +125,31 @@ class LocalStoreFilesAdapter:
                     "root_denied",
                     "canonical_root and root_id must be supplied together",
                 )
+            # Strict pointer binding (P1 review #3939835826): when the
+            # caller supplies the canonical root anchor, the digest
+            # MUST be supplied too so the per-request reader can
+            # compare against the trusted startup baseline.  A
+            # partially-bound native call (canonical_root + root_id
+            # without a digest) is rejected here rather than silently
+            # degraded; the new constructor contract requires all three
+            # fields together.  Callers who do NOT supply
+            # canonical_root stay on the legacy cache-only path.
+            if expected_generation_manifest_sha256 is None:
+                raise FileProviderError(
+                    "root_denied",
+                    "expected_generation_manifest_sha256 must be supplied "
+                    "together with canonical_root and root_id for strict "
+                    "pointer binding",
+                )
             self._canonical_root = Path(canonical_root)
             self._canonical_root_id = str(root_id)
+            self._expected_generation_manifest_sha256 = (
+                expected_generation_manifest_sha256
+            )
         else:
             self._canonical_root = None
             self._canonical_root_id = None
+            self._expected_generation_manifest_sha256 = None
         # Per-instance request lock: the MCP reads stdin sequentially so
         # only one request is in flight at a time, but native callers
         # (Python code driving the adapter directly from threads or async
@@ -403,6 +424,16 @@ class LocalStoreFilesAdapter:
         bound generation (skip the canonical re-check; the cache
         metadata check still runs, and the constructor check already
         bound the cache to that generation).
+
+        Strict pointer binding (P1 review #3939835826): the file is
+        parsed against the strict ``SelectedGeneration`` model (extra
+        fields forbidden), then ``root_id``, ``generation_id``, AND
+        ``generation_manifest_sha256`` are all compared against the
+        values bound at startup.  A writer who edits the pointer file
+        to point at a different generation while keeping the same
+        ``generation_id`` is still refused because the manifest digest
+        would not match; a writer who simply renames a field or adds a
+        spurious one is refused by the strict model parse.
         """
 
         if self._canonical_root is None or self._canonical_root_id is None:
@@ -434,13 +465,39 @@ class LocalStoreFilesAdapter:
                 "stale_query_generation",
                 f"canonical selected-generation.json is malformed: {error}",
             ) from error
-        generation_id = payload.get("generation_id")
-        if not isinstance(generation_id, str) or not generation_id:
+        # Strict model parse: missing fields and extra fields both
+        # raise ValidationError (extra="forbid"); the helper maps
+        # ValueError → stale_query_generation below.
+        from arw.files import SelectedGeneration
+
+        try:
+            parsed = SelectedGeneration.model_validate(payload)
+        except (ValueError, RecursionError) as error:
             raise ToolError(
                 "stale_query_generation",
-                "canonical selected-generation.json has no generation_id",
+                f"canonical selected-generation.json is not a valid pointer: {error}",
+            ) from error
+        if parsed.root_id != self._canonical_root_id:
+            raise ToolError(
+                "stale_query_generation",
+                f"canonical pointer root_id advanced to {parsed.root_id!r}",
             )
-        return generation_id
+        if parsed.generation_id != self._generation_id:
+            raise ToolError(
+                "stale_query_generation",
+                f"canonical pointer generation_id advanced to {parsed.generation_id!r}",
+            )
+        if (
+            self._expected_generation_manifest_sha256 is not None
+            and parsed.generation_manifest_sha256
+            != self._expected_generation_manifest_sha256
+        ):
+            raise ToolError(
+                "stale_query_generation",
+                "canonical pointer generation_manifest_sha256 does not match "
+                "the startup binding",
+            )
+        return parsed.generation_id
 
     def _revalidate_query_generation(self, snapshot_conn) -> None:
         """Per-request guard: cache metadata AND canonical selection unchanged.
@@ -1493,7 +1550,14 @@ def _read_canonical_selection_safe(
         raise ValueError(f"canonical selection is not valid UTF-8: {error}") from error
 
     try:
-        payload = json.loads(text)
+        # Strict JSON parse (matches the kernel canonical reader):
+        # rejects non-finite numbers AND duplicate object keys.
+        # Duplicate keys are dangerous here because the model validator
+        # would only see the last value, silently accepting a writer
+        # who sets the same field twice with conflicting values.
+        from arw.kernel.core.canonical import strict_json_loads
+
+        payload = strict_json_loads(text)
     except ValueError as error:
         raise ValueError(f"canonical selection is not valid JSON: {error}") from error
     except RecursionError as error:

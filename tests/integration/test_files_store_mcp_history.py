@@ -559,7 +559,7 @@ def test_resolve_allowed_root_reads_authoritative_registration(tmp_path: Path) -
         tmp_path,
         corpus={"notes/a.txt": "alpha\nbeta\n"},
     )
-    allowed_root, resolved_root_id, resolved_generation_id = _resolve_allowed_root(
+    allowed_root, resolved_root_id, resolved_generation_id, _resolved_manifest_sha256 = _resolve_allowed_root(
         control, root_id
     )
     assert allowed_root == (tmp_path / "root").resolve()
@@ -652,7 +652,7 @@ def test_open_store_adapter_uses_registered_canonical_path(tmp_path: Path) -> No
         corpus={"notes/a.txt": "alpha\nbeta\n"},
     )
     store_path = tmp_path / "arw.db"
-    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+    allowed_root, expected_root_id, expected_generation_id, _expected_manifest_sha256 = _resolve_allowed_root(
         control, root_id
     )
     adapter = _open_store_adapter(
@@ -660,6 +660,7 @@ def test_open_store_adapter_uses_registered_canonical_path(tmp_path: Path) -> No
         allowed_root=allowed_root,
         expected_root_id=expected_root_id,
         expected_generation_id=expected_generation_id,
+        expected_generation_manifest_sha256=_expected_manifest_sha256,
     )
     try:
         assert adapter._canonical_path == str((tmp_path / "root").resolve())
@@ -1211,7 +1212,7 @@ def test_constructor_rejects_stale_ingested_cache(tmp_path: Path) -> None:
 
     # Resolving the allowed root now sees the advanced generation; the
     # cache on disk still carries the OLD one.
-    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+    allowed_root, expected_root_id, expected_generation_id, _expected_manifest_sha256 = _resolve_allowed_root(
         control, root_id
     )
     assert expected_generation_id == advanced_generation_id
@@ -1247,7 +1248,7 @@ def test_constructor_accepts_matching_generation_id(tmp_path: Path) -> None:
         corpus={"notes/a.txt": "alpha\n"},
     )
     store_path = tmp_path / "arw.db"
-    allowed_root, expected_root_id, expected_generation_id = _resolve_allowed_root(
+    allowed_root, expected_root_id, expected_generation_id, _expected_manifest_sha256 = _resolve_allowed_root(
         control, root_id
     )
     assert expected_generation_id == generation_id

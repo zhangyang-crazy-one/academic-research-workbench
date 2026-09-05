@@ -38,9 +38,10 @@ import tempfile
 import threading
 import uuid
 from pathlib import Path
-from typing import Callable
 
 import pytest
+from arw_ext.local_store import LocalProjectionStore, LocalStoreFilesAdapter
+from arw_ext.local_store.ingest import ingest_files_generation
 
 from arw.adapters.files import FileProviderError
 from arw.file_models import (
@@ -50,9 +51,6 @@ from arw.file_models import (
     SourceLocation,
 )
 from arw.files import FilesAdminService, load_query_generation
-
-from arw_ext.local_store import LocalProjectionStore, LocalStoreFilesAdapter
-from arw_ext.local_store.ingest import ingest_files_generation
 
 
 def _service_factory(control: Path) -> FilesAdminService:
@@ -72,8 +70,13 @@ def _seed(
     *,
     corpus: dict[str, str],
     store_path: Path | None = None,
-) -> tuple[Path, Path, str, str, Path]:
-    """Register a root, sync once, ingest.  Returns (root, control, root_id, generation_id, store_path)."""
+) -> tuple[Path, Path, str, str, str, Path]:
+    """Return root, control, root ID, generation ID, manifest digest, and store path.
+
+    The fifth tuple element (generation_manifest_sha256) is also returned
+    so the bound adapter can be constructed with the strict pointer
+    binding required by the per-request reader.
+    """
 
     root = tmp_path / "root"
     for relative_path, content in corpus.items():
@@ -94,7 +97,14 @@ def _seed(
     ingest_files_generation(store.connection, generation)
     store.connection.commit()
     store.close()
-    return root, control, "lifecycle-root", receipt.selected_generation_id, store_path
+    return (
+        root,
+        control,
+        "lifecycle-root",
+        receipt.selected_generation_id,
+        generation.selected.generation_manifest_sha256,
+        store_path,
+    )
 
 
 def _open_bound_adapter(
@@ -103,6 +113,7 @@ def _open_bound_adapter(
     control_root: Path | None = None,
     root_id: str | None = None,
     expected_generation_id: str | None = None,
+    expected_generation_manifest_sha256: str | None = None,
 ) -> LocalStoreFilesAdapter:
     """Open the store and build an adapter bound to ``expected_generation_id``.
 
@@ -119,6 +130,7 @@ def _open_bound_adapter(
         canonical_root=control_root,
         root_id=root_id,
         expected_generation_id=expected_generation_id,
+        expected_generation_manifest_sha256=expected_generation_manifest_sha256,
     )
 
 
@@ -170,7 +182,7 @@ def test_reingest_between_calls_keeps_bound_adapter_serving(tmp_path: Path) -> N
     refuses on actual drift, not on every call.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha alpha alpha\n", "notes/b.txt": "beta\n"},
     )
@@ -179,6 +191,7 @@ def test_reingest_between_calls_keeps_bound_adapter_serving(tmp_path: Path) -> N
         control_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     first = adapter.list_files(_list_request(root_id))
@@ -208,7 +221,7 @@ def test_advanced_canonical_selection_fails_closed(tmp_path: Path) -> None:
     so the operator restarts the MCP process with the new anchor.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
@@ -217,6 +230,7 @@ def test_advanced_canonical_selection_fails_closed(tmp_path: Path) -> None:
         control_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
     # Sanity: the bound adapter serves the original generation.
     listed = adapter.list_files(_list_request(root_id))
@@ -266,7 +280,7 @@ def test_mid_query_canonical_flip_fails_closed(tmp_path: Path, monkeypatch) -> N
     response that could mix the two generations.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
@@ -275,6 +289,7 @@ def test_mid_query_canonical_flip_fails_closed(tmp_path: Path, monkeypatch) -> N
         control_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     # Drive a list_files call but flip the canonical reader between
@@ -325,7 +340,7 @@ def test_mid_query_cache_metadata_flip_fails_closed(
     refuse to return a response that mixes the two generations.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
@@ -334,6 +349,7 @@ def test_mid_query_cache_metadata_flip_fails_closed(
         control_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     from arw_ext.local_store import files as adapter_module
@@ -386,7 +402,7 @@ def test_per_request_snapshot_connection_is_isolated(
     the per-request reads.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
@@ -397,6 +413,7 @@ def test_per_request_snapshot_connection_is_isolated(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     opened_connections: list[sqlite3.Connection] = []
@@ -452,7 +469,7 @@ def test_every_operation_runs_per_request_revalidation(
     operations to fail closed with ``stale_query_generation``.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha alpha alpha\n", "notes/b.txt": "beta\n"},
     )
@@ -461,6 +478,7 @@ def test_every_operation_runs_per_request_revalidation(
         control_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     listed = adapter.list_files(_list_request(root_id))
@@ -567,7 +585,7 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
     commit and the canonical file rewrite land on real storage.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha alpha alpha\n", "notes/b.txt": "beta\n"},
     )
@@ -592,6 +610,7 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     selected_path = (
@@ -717,7 +736,7 @@ def test_two_native_callers_no_cross_connection_contamination(
     success.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={
             "notes/a.txt": "alpha alpha alpha\n",
@@ -731,6 +750,7 @@ def test_two_native_callers_no_cross_connection_contamination(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     captured: list[tuple[str, sqlite3.Connection]] = []
@@ -814,7 +834,7 @@ def test_snapshot_closed_after_error(
     the adapter.
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
@@ -825,6 +845,7 @@ def test_snapshot_closed_after_error(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     captured_connections: list[sqlite3.Connection] = []
@@ -871,16 +892,20 @@ def test_snapshot_closed_after_error(
 # ---------------------------------------------------------------------------
 
 
-def _seed_minimal_for_canonical_reader(tmp_path: Path) -> tuple[Path, Path, str, str, Path]:
+def _seed_minimal_for_canonical_reader(
+    tmp_path: Path,
+) -> tuple[Path, Path, str, str, str, Path]:
     """Seed a control + store so the adapter can be constructed; the canonical
     path may then be replaced with a hostile entry (FIFO / symlink / oversize).
+
+    Returns (tmp, control, root_id, generation_id, manifest_sha256, store_path).
     """
 
-    _root, control, root_id, generation_id, store_path = _seed(
+    _root, control, root_id, generation_id, manifest_sha256, store_path = _seed(
         tmp_path,
         corpus={"notes/a.txt": "alpha\n"},
     )
-    return tmp_path, control, root_id, generation_id, store_path
+    return tmp_path, control, root_id, generation_id, manifest_sha256, store_path
 
 
 def test_canonical_reader_rejects_symlink(
@@ -893,7 +918,7 @@ def test_canonical_reader_rejects_symlink(
     ``stale_query_generation``.
     """
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
@@ -911,6 +936,7 @@ def test_canonical_reader_rejects_symlink(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     with pytest.raises(FileProviderError) as caught:
@@ -931,7 +957,7 @@ def test_canonical_reader_rejects_oversize_file(
 
     from arw_ext.local_store.files import MAX_CANONICAL_SELECTION_BYTES
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
@@ -944,6 +970,7 @@ def test_canonical_reader_rejects_oversize_file(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     with pytest.raises(FileProviderError) as caught:
@@ -962,7 +989,7 @@ def test_canonical_reader_rejects_malformed_utf8(
     ``stale_query_generation``.
     """
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
@@ -975,6 +1002,7 @@ def test_canonical_reader_rejects_malformed_utf8(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     with pytest.raises(FileProviderError) as caught:
@@ -988,7 +1016,7 @@ def test_canonical_reader_rejects_malformed_json(
 ) -> None:
     """Malformed JSON in the canonical selection is rejected."""
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
@@ -1001,6 +1029,7 @@ def test_canonical_reader_rejects_malformed_json(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     with pytest.raises(FileProviderError) as caught:
@@ -1025,7 +1054,7 @@ def test_canonical_reader_rejects_fifo_without_hanging(
     not hang the test suite.
     """
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
@@ -1093,7 +1122,7 @@ def test_canonical_reader_rejects_swapped_symlink_parent(
 
     import shutil
 
-    _, control, root_id, generation_id, store_path = _seed_minimal_for_canonical_reader(
+    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
         tmp_path
     )
 
@@ -1121,6 +1150,7 @@ def test_canonical_reader_rejects_swapped_symlink_parent(
         canonical_root=control,
         root_id=root_id,
         expected_generation_id=generation_id,
+        expected_generation_manifest_sha256=manifest_sha256,
     )
 
     with pytest.raises(FileProviderError) as caught:
@@ -1133,3 +1163,360 @@ def test_canonical_reader_rejects_swapped_symlink_parent(
     # The reader must NOT have read the rogue payload (the symlink
     # walk rejected the swap before any leaf read).
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# Scenario 8: strict pointer binding (P1 review #3939835826).
+# ---------------------------------------------------------------------------
+
+
+def _seed_with_pointer(
+    tmp_path: Path,
+    *,
+    pointer_overrides: dict[str, object] | None = None,
+    pointer_drops: tuple[str, ...] = (),
+) -> tuple[Path, str, str, str, Path]:
+    """Seed a control + store with a custom selected-generation.json payload.
+
+    The seed function runs FilesAdminService.sync (which writes a real
+    pointer) and then OVERWRITES ``selected-generation.json`` with a
+    pointer that starts from the original four required fields and
+    applies the caller-supplied overrides + drops.  The trusted
+    startup digest is read from the ORIGINAL pointer (the one written
+    by sync) and threaded through so the per-request strict binding
+    can compare against it.
+
+    ``pointer_drops`` is a tuple of field names to REMOVE from the
+    baseline pointer (used by the missing-field regression tests).
+    ``pointer_overrides`` replaces fields verbatim (used by the
+    wrong-field and unknown-field tests).
+    """
+
+    import shutil as _shutil
+
+    _root, control, root_id, original_gen_id, original_digest, store_path = _seed(
+        tmp_path,
+        corpus={"notes/a.txt": "alpha\n"},
+    )
+    baseline = {
+        "schema_version": "1.0.0",
+        "root_id": root_id,
+        "generation_id": original_gen_id,
+        "generation_manifest_sha256": original_digest,
+        "selected_at": "2026-09-05T00:00:00Z",
+    }
+    payload: dict[str, object] = {**baseline}
+    for field_name in pointer_drops:
+        payload.pop(field_name, None)
+    if pointer_overrides:
+        payload.update(pointer_overrides)
+    selected_path = control / "roots" / root_id / "selected-generation.json"
+    selected_path.write_text(json.dumps(payload), encoding="utf-8")
+    _ = _shutil
+    return tmp_path, root_id, original_gen_id, original_digest, store_path
+
+
+def test_pointer_binding_missing_root_id_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer without ``root_id`` is rejected.
+
+    The strict ``SelectedGeneration`` model requires ``root_id``;
+    parsing the pointer raises ``ValidationError`` which the
+    per-request reader maps to ``stale_query_generation``.
+    """
+
+    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+        tmp_path,
+        pointer_drops=("root_id",),
+    )
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=tmp / "control",
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation"
+    store.close()
+
+
+def test_pointer_binding_missing_digest_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer without ``generation_manifest_sha256`` is rejected."""
+
+    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+        tmp_path,
+        pointer_drops=("generation_manifest_sha256",),
+    )
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=tmp / "control",
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation"
+    store.close()
+
+
+def test_pointer_binding_wrong_root_id_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer naming a different ``root_id`` is rejected (caught by explicit comparison)."""
+
+    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+        tmp_path,
+        pointer_overrides={"root_id": "another-root"},
+    )
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=tmp / "control",
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation"
+    store.close()
+
+
+def test_pointer_binding_wrong_digest_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer naming a different ``generation_manifest_sha256`` is rejected.
+
+    Proves the digest comparison is enforced (not just the model shape):
+    a writer who edits the pointer to point at a different generation
+    while keeping the same ``generation_id`` is still refused because
+    the digest does not match the startup binding.
+    """
+
+    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+        tmp_path,
+        pointer_overrides={"generation_manifest_sha256": "f" * 64},
+    )
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=tmp / "control",
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation"
+    store.close()
+
+
+def test_pointer_binding_unknown_field_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer with an unknown field is rejected by the strict model parse.
+
+    ``StrictFileModel`` configures ``extra="forbid"``; the
+    ``SelectedGeneration`` subclass inherits that.  ``model_validate``
+    raises ``ValidationError`` for any extra field; the per-request
+    reader maps it to ``stale_query_generation`` so a writer cannot
+    smuggle unknown state through the pointer.
+    """
+
+    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+        tmp_path,
+        pointer_overrides={"attacker_controlled_field": "should-be-rejected"},
+    )
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=tmp / "control",
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation"
+    store.close()
+
+
+def test_pointer_binding_duplicate_keys_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pointer with duplicate JSON object keys is rejected.
+
+    ``strict_json_loads`` (from ``arw.kernel.core.canonical``) installs
+    an ``object_pairs_hook`` that rejects duplicate keys BEFORE the
+    Pydantic model validator runs.  This is critical because plain
+    ``json.loads`` silently keeps the last value, which would let a
+    writer who sets ``generation_manifest_sha256`` twice (once with
+    the trusted digest, once with an attacker's) bypass the strict
+    pointer binding — the model validator would only see the
+    attacker's value.
+
+    The test writes a pointer with ``generation_manifest_sha256``
+    appearing twice (the trusted digest first, then an attacker's
+    digest) and asserts the per-request reader refuses with
+    ``stale_query_generation``.
+    """
+
+    _, control, root_id, gen_id, digest, store_path = _seed(
+        tmp_path, corpus={"notes/a.txt": "alpha\n"}
+    )
+    selected_path = control / "roots" / root_id / "selected-generation.json"
+    # Duplicate ``generation_manifest_sha256`` key in the raw JSON.
+    # ``json.dumps`` silently deduplicates (the last value wins), so
+    # we write the file as raw TEXT with the duplicate preserved.
+    # strict_json_loads' ``object_pairs_hook`` rejects the duplicate
+    # BEFORE the Pydantic validator runs; plain ``json.loads`` would
+    # silently keep the second value and let the model validator
+    # see whatever the attacker chose to set last.
+    duplicate_pointer = (
+        '{'
+        '"schema_version": "1.0.0", '
+        f'"root_id": {json.dumps(root_id)}, '
+        f'"generation_id": {json.dumps(gen_id)}, '
+        f'"generation_manifest_sha256": {json.dumps(digest)}, '
+        '"selected_at": "2026-09-05T00:00:00Z", '
+        f'"generation_manifest_sha256": {json.dumps("f" * 64)}'
+        '}'
+    )
+    selected_path.write_text(duplicate_pointer, encoding="utf-8")
+
+    store = LocalProjectionStore(store_path)
+    store.open_readonly()
+    adapter = LocalStoreFilesAdapter(
+        store,
+        canonical_root=control,
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=digest,
+    )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "stale_query_generation", (
+        f"expected stale_query_generation on duplicate-key pointer; "
+        f"got {caught.value.code!r}"
+    )
+    store.close()
+
+
+# ---------------------------------------------------------------------------
+# Scenario 9: startup unsupported-primitive guard (P1 review #3939835815).
+# ---------------------------------------------------------------------------
+
+
+def test_startup_unsupported_security_primitives_exits_78(
+    tmp_path: Path,
+) -> None:
+    """When the platform lacks the secure-reader primitives, main() exits 78
+    BEFORE consuming stdin so the service does not advertise all five
+    tools and then fail each request.
+
+    The probe is monkeypatched IN-PROCESS via ``python -c`` (the
+    subprocess re-imports ``arw.files_store_mcp`` so the
+    monkeypatched module attribute is honoured on the subprocess
+    side).  Production code does NOT consult any environment variable
+    or test hook — the probe is the only path and it consults the real
+    ``os`` module.
+
+    Asserts:
+
+    * exit code 78 (config error, distinct from STORE_ABSENT 69 and
+      missing-anchor 64),
+    * stderr contains ``unsupported_security_primitives``,
+    * stderr mentions the legacy reader (actionable instruction),
+    * stdout is empty (no JSON-RPC response — the service never
+      entered ``_run_loop`` and never consumed stdin).
+    """
+
+    # Stage a valid registration + store so the only failure is the
+    # platform check (everything AFTER the platform check would
+    # otherwise succeed).
+    _, control, root_id, generation_id, _manifest_sha256, store_path = _seed(
+        tmp_path, corpus={"notes/a.txt": "alpha\n"}
+    )
+
+    # A valid initialize JSON-RPC request on stdin.  If the service
+    # accidentally consumed stdin (i.e. entered ``_run_loop``) it would
+    # write a JSON-RPC response to stdout and we would assert empty
+    # stdout below.
+    initialize_payload = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        )
+        + "\n"
+    ).encode("utf-8")
+
+    # The helper script is invoked via ``python -c`` so the subprocess
+    # imports a fresh ``arw.files_store_mcp`` module and runs
+    # ``main(...)`` against the simulated unsupported platform.
+    # The script monkeypatches the module attribute BEFORE calling
+    # ``main`` so the probe returns ``False`` on the very first
+    # ``main()`` call.
+    helper_script = (
+        "import sys\n"
+        "from arw import files_store_mcp as _mcp\n"
+        # Simulate an unsupported platform: stub the probe to fail.
+        "_mcp._platform_supports_canonical_reader = "
+        "lambda: (False, 'O_NOFOLLOW (simulated by test)')\n"
+        # Call main with the same args the test would pass on the
+        # command line.  sys.exit propagates the exit code.
+        f"sys.exit(_mcp.main(["
+        f"'--control-root', {str(control)!r}, "
+        f"'--root-id', {root_id!r}, "
+        f"'--store', {str(store_path)!r}, "
+        f"]))\n"
+    )
+
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "TMPDIR": os.environ.get("TMPDIR", tempfile.gettempdir()),
+    }
+    environment.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [sys.executable, "-c", helper_script],
+        input=initialize_payload,
+        capture_output=True,
+        env=environment,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 78, (
+        f"expected exit 78 for unsupported platform; got {completed.returncode}; "
+        f"stderr={completed.stderr.decode('utf-8', errors='replace')!r}"
+    )
+    stderr_text = completed.stderr.decode("utf-8", errors="replace")
+    assert "unsupported_security_primitives" in stderr_text, (
+        f"stderr must name the unsupported primitives; got {stderr_text!r}"
+    )
+    assert "legacy reader" in stderr_text.lower(), (
+        f"stderr must direct the operator to the legacy reader config; "
+        f"got {stderr_text!r}"
+    )
+    # The MCP loop never entered — no JSON-RPC response on stdout.
+    assert completed.stdout == b"", (
+        f"stdout must be empty (no initialize response); got "
+        f"{completed.stdout.decode('utf-8', errors='replace')!r}"
+    )
