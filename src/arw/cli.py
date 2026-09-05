@@ -308,6 +308,22 @@ def _is_status_json_request(args: argparse.Namespace) -> bool:
     return args.command == "status" and bool(args.json_output)
 
 
+def _provenance_sidecar_path(store: Path, run_id: str) -> Path:
+    """Keep sidecar and audit basenames bounded without losing store identity."""
+    from arw.kernel.core.canonical import sha256_hex
+
+    name = store.name
+    suffix = f".{run_id}.semantica.sqlite3"
+    hashed_prefix = "__arw_store_sha256__"
+    # Reserve the hashed namespace so a literal store name cannot alias it.
+    if (
+        name.startswith(hashed_prefix)
+        or len(os.fsencode(f"{name}{suffix}.audit")) > 255
+    ):
+        name = hashed_prefix + sha256_hex(os.fsencode(name))
+    return store.with_name(f"{name}{suffix}")
+
+
 def _read_bounded_regular_file(
     root: Path, relative_path: str, *, max_bytes: int
 ) -> bytes | None:
@@ -613,9 +629,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise ValueError(
                         "canonical provenance inventory exceeds the Lite limit"
                     )
-            sidecar_path = args.store.with_name(
-                f"{args.store.name}.{replayed.run_id}.semantica.sqlite3"
-            )
+            sidecar_path = _provenance_sidecar_path(args.store, replayed.run_id)
             if args.provenance_action == "rebuild":
                 module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
             router = default_router(
@@ -819,8 +833,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     from arw.kernel.ledger.manifests import load_artifact_manifest
                     from arw.kernel.state.models import ArtifactAcceptedPayload
 
-                    provenance_sidecar = args.store.with_name(
-                        f"{args.store.name}.{replayed.run_id}.semantica.sqlite3"
+                    provenance_sidecar = _provenance_sidecar_path(
+                        args.store, replayed.run_id
                     )
                     provenance_expected = False
                     for event in replayed.events:
