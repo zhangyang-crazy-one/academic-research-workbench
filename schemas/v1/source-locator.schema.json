@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "ByteChunk": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "byte_chunk",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "ByteChunk",
+      "type": "object"
+    },
+    "LineRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "lines",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    },
+    "MarkdownSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "markdown_section",
+          "title": "Kind",
+          "type": "string"
+        },
+        "heading": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "occurrence": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Occurrence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "heading",
+        "occurrence"
+      ],
+      "title": "MarkdownSection",
+      "type": "object"
+    },
+    "TextPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text_page",
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "page"
+      ],
+      "title": "TextPage",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.source-locator.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Source Artifact Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "source_event_id": {
+      "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Source Event Id",
+      "type": "string"
+    },
+    "source_event_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Event Sha256",
+      "type": "string"
+    },
+    "producing_activity_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Producing Activity Id",
+      "type": "string"
+    },
+    "location": {
+      "discriminator": {
+        "mapping": {
+          "byte_chunk": "#/$defs/ByteChunk",
+          "lines": "#/$defs/LineRange",
+          "markdown_section": "#/$defs/MarkdownSection",
+          "text_page": "#/$defs/TextPage"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LineRange"
+        },
+        {
+          "$ref": "#/$defs/TextPage"
+        },
+        {
+          "$ref": "#/$defs/MarkdownSection"
+        },
+        {
+          "$ref": "#/$defs/ByteChunk"
+        }
+      ],
+      "title": "Location"
+    },
+    "quote_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Quote Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_artifact_id",
+    "source_sha256",
+    "source_event_id",
+    "source_event_sha256",
+    "producing_activity_id",
+    "location",
+    "quote_sha256"
+  ],
+  "title": "SourceLocator",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/source-locator.schema.json"
+}

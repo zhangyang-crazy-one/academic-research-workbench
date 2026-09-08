@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-09-05T01:00:00Z
-last_activity: 2026-09-05 -- Completed quick task 260905-ce2; PR16 sidecar filename bounds verified, merge remains pending review and CI
+last_updated: 2026-09-08T07:23:35Z
+last_activity: 2026-09-08 -- Synchronized OpenSpec delivery evidence and GitHub issue 6/8/9/11 checklists
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Milestone complete
+**Current focus:** OpenSpec and issues #6/#8/#9/#11 are synchronized; #6 precise-locator and writing work remain pending. PR17 remains review-ready at af07ffa on main 5ae79de (quick260908-l40).
 
 ## Current Position
 
 Phase: 7
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-07-16
+Last activity: 2026-09-08 -- Quick 260908-l40 documentation and issue synchronization complete
 
 Progress: [██████████] 100%
 
@@ -82,9 +82,15 @@ Progress: [██████████] 100%
 
 ### Quick Tasks Completed
 
+- [260908-l40](./quick/260908-l40-sync-openspec-delivery-status-and-issue-/) — Reconciled 19 OpenSpec documents and published task checklists for issues #6/#8/#9/#11. #6 has 10/12 original acceptance items on main; added three pending precise-locator tasks (Semantica 15/18). PR17 text tasks remain pending merge remotely; strict OpenSpec 12/12 PASS. All issues remain open; original source changes preserved.
+
+- [260908-grs](./quick/260908-grs-close-pr16-review-gaps-and-merge-then-up/) — Merged PR16 and snapshot follow-up PR18 after exact-head CI; final main `5ae79de`. Updated PR17 normally to `af07ffa`, with 849 integrated, 59 compatibility/package and 114 formal-worktree focused checks passing; final three CI jobs passed. Original dirty work preserved; PR17 remains open for review.
+
+- [260908-f21](./quick/260908-f21-complete-watermark-openspec-acceptance-a/) — Completed OpenSpec paper/watermark acceptance and missing designs; implemented bounded Unicode inspection/explicit derived cleanup in `3d7f295`. Focused 56, compatibility 56 and broader regression 650 passed; isolated wheel smoke passed. Binary metadata/C2PA and statistical writing remain planned; prior working-tree changes preserved.
+
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
 - [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
-- [260905-ce2](./quick/260905-ce2-pr16-bounded-provenance-sidecar-filename/) — Extended to historical PR closure: store-MCP wire/root/routing fixes, installed manifest binding, sidecar boundary/reconciliation guards, and date-test/spec correction. Final serial checks: 674 regression + 33 schema/staged tests passed; clean-index license technical PASS / release BLOCKED. Evidence: `docs/runtime/pr-history-review-closure.md`. PR #16 merge remains pending latest-head Codex review/CI.
+- [260905-ce2](./quick/260905-ce2-pr16-bounded-provenance-sidecar-filename/) — Extended to historical PR closure: store-MCP wire/root/routing fixes, installed manifest binding, sidecar boundary/reconciliation guards, and date-test/spec correction. Final serial checks: 674 regression + 33 schema/staged tests passed; clean-index license technical PASS / release BLOCKED. Evidence: `docs/runtime/pr-history-review-closure.md`. PR #16 and the snapshot follow-up PR #18 are now merged; final evidence is recorded in quick 260908-grs.
 
 ### Decisions
 
@@ -157,6 +163,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-16T03:55:45.377Z
-Stopped at: Phase 7 technical qualification verified; release legal gates remain blocked
+Last session: 2026-09-08T07:23:35Z
+Stopped at: Quick 260908-l40 complete; OpenSpec and four issue checklists synchronized, PR17 remains open
 Resume file: None

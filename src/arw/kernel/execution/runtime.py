@@ -445,7 +445,7 @@ class RuntimeCommandService:
 
         def validate(state, replayed):
             if any(
-                event.event_type == "artifact.accepted"
+                event.event_type in {"artifact.accepted", "research_artifact_accepted"}
                 and isinstance(event.payload, ArtifactAcceptedPayload)
                 and event.payload.artifact_id == request.artifact_id
                 for event in replayed.events
@@ -482,6 +482,21 @@ class RuntimeCommandService:
                 )
             except ManifestError as error:
                 return "artifact-content-invalid", str(error)
+            if request.artifact_kind == "provenance-record":
+                from arw.kernel.ledger.source_locations import read_retained_bytes, validate_precise_provenance
+                from arw.kernel.core.canonical import strict_json_loads
+                try:
+                    raw = read_retained_bytes(self.run_root, request.content_path, max_bytes=65_536)
+                    from arw.kernel.core.canonical import sha256_hex
+                    if sha256_hex(raw) != request.content_sha256:
+                        return "source-locator-invalid", "provenance changed during validation"
+                    payload = strict_json_loads(raw)
+                    if isinstance(payload, dict) and payload.get("schema_version") == "2.0.0":
+                        if request.media_type != "application/json":
+                            return "source-locator-invalid", "precise provenance requires application/json"
+                        validate_precise_provenance(self.run_root, raw, replayed.events, artifact_id=request.artifact_id)
+                except (ValueError, RuntimeError) as error:
+                    return "source-locator-invalid", str(error)
             manifest = ArtifactManifest(
                 schema_version=request.schema_version,
                 run_id=request.run_id,

@@ -953,7 +953,7 @@ def _event_acceptance_digest(event: CanonicalEvent) -> str | None:
                 {"from_stage": payload.from_stage, "to_stage": payload.to_stage}
             )
         )
-    if event.event_type == "artifact.accepted" and isinstance(
+    if event.event_type in {"artifact.accepted", "research_artifact_accepted"} and isinstance(
         payload, ArtifactAcceptedPayload
     ):
         return payload.manifest_sha256

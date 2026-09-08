@@ -127,7 +127,7 @@ def _record_for_event(event: CanonicalEvent) -> dict[str, Any] | None:
             ),
         }
 
-    if event.event_type == "artifact.accepted":
+    if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
         if not isinstance(payload, ArtifactAcceptedPayload):
             return None
         return {

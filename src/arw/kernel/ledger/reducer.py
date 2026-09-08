@@ -395,6 +395,11 @@ def reduce_events(
             raise ReducerError(str(error)) from error
         if not actor_can_commit(role, category):
             raise ReducerError(f"actor role {role!r} is not authorized for {category}")
+        from arw.kernel.state.research_artifact import validate_artifact_event_progress
+        try:
+            validate_artifact_event_progress(events[:event_index], event)
+        except ValueError as error:
+            raise ReducerError(str(error)) from error
         payload = event.payload
         if event.event_type == "run.initialized":
             if revision != 0:
@@ -1036,7 +1041,7 @@ def reduce_events(
             if payload.attempt_id not in attempts:
                 raise ReducerError("attempt is not active")
             attempts.pop(payload.attempt_id)
-        elif event.event_type == "artifact.accepted":
+        elif event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
             assert isinstance(payload, ArtifactAcceptedPayload)
             if payload.artifact_id in artifact_ids:
                 raise ReducerError("artifact ID was already used")

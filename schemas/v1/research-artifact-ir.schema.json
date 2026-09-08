@@ -1,0 +1,468 @@
+{
+  "$defs": {
+    "FigureAnnotation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "caption",
+            "manuscript_reference",
+            "citation",
+            "note"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "text",
+        "binding_id"
+      ],
+      "title": "FigureAnnotation",
+      "type": "object"
+    },
+    "FigureEdge": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "uses",
+            "produces",
+            "precedes",
+            "derived_from",
+            "associated_with",
+            "causes"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "relation",
+        "label",
+        "binding_id"
+      ],
+      "title": "FigureEdge",
+      "type": "object"
+    },
+    "FigureGroup": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxItems": 40,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "members"
+      ],
+      "title": "FigureGroup",
+      "type": "object"
+    },
+    "FigureNode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "claim",
+            "evidence",
+            "method",
+            "experiment",
+            "result",
+            "artifact",
+            "activity",
+            "agent"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "binding_id",
+        "confidence"
+      ],
+      "title": "FigureNode",
+      "type": "object"
+    },
+    "Presentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "enum": [
+            "blue",
+            "monochrome"
+          ],
+          "title": "Theme",
+          "type": "string"
+        },
+        "direction": {
+          "const": "top_to_bottom",
+          "title": "Direction",
+          "type": "string"
+        },
+        "font_family": {
+          "const": "Noto Sans CJK SC, sans-serif",
+          "title": "Font Family",
+          "type": "string"
+        }
+      },
+      "required": [
+        "theme",
+        "direction",
+        "font_family"
+      ],
+      "title": "Presentation",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "ResearchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ledger_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Ledger Event Id",
+          "type": "string"
+        },
+        "ledger_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Event Sha256",
+          "type": "string"
+        },
+        "json_pointer": {
+          "maxLength": 512,
+          "pattern": "^(|/.*)$",
+          "title": "Json Pointer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "artifact_id",
+        "sha256",
+        "ledger_event_id",
+        "ledger_event_sha256",
+        "json_pointer"
+      ],
+      "title": "ResearchBinding",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.research-artifact-ir.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "enum": [
+        "methodology_figure",
+        "evidence_graph_view"
+      ],
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 180,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "author_target": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Author Target",
+      "type": "string"
+    },
+    "publication_critical": {
+      "title": "Publication Critical",
+      "type": "boolean"
+    },
+    "research_bindings": {
+      "items": {
+        "$ref": "#/$defs/ResearchBinding"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Research Bindings",
+      "type": "array"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/FigureNode"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/FigureEdge"
+      },
+      "maxItems": 60,
+      "title": "Edges",
+      "type": "array"
+    },
+    "groups": {
+      "items": {
+        "$ref": "#/$defs/FigureGroup"
+      },
+      "maxItems": 10,
+      "title": "Groups",
+      "type": "array"
+    },
+    "annotations": {
+      "items": {
+        "$ref": "#/$defs/FigureAnnotation"
+      },
+      "maxItems": 20,
+      "title": "Annotations",
+      "type": "array"
+    },
+    "presentation": {
+      "$ref": "#/$defs/Presentation"
+    },
+    "renderer_hints": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    }
+  },
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "artifact_kind",
+    "title",
+    "author_target",
+    "publication_critical",
+    "research_bindings",
+    "nodes",
+    "edges",
+    "groups",
+    "annotations",
+    "presentation",
+    "renderer_hints",
+    "validation_policy"
+  ],
+  "title": "ResearchArtifactIR",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-artifact-ir.schema.json"
+}

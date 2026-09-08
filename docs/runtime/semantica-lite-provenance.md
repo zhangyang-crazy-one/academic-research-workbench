@@ -60,3 +60,34 @@ A full Semantica profile needs a separate approved change that adds explicit
 capabilities (for example `knowledge.provenance_rdf_export` or
 `knowledge.semantic_search`), a new supply-chain/license qualification, and
 independent tests. It must not silently widen the Lite import surface.
+
+
+## Complete traceability contract (provenance 2.0.0)
+
+The parent artifact-accept command validates `provenance-record` payloads with
+`schema_version: 2.0.0` before appending acceptance. `source_locator` binds the
+source artifact and SHA-256, its already accepted event ID/digest, the producing
+activity, an exact location, and the selected quote SHA-256. The source must be
+retained under the run root and match its canonical acceptance. The assertion's
+own acceptance binding is added only after append, avoiding a future-event hash
+cycle. Locator fields participate in both artifact and sidecar checksums.
+
+Supported locations are one-based inclusive text line ranges; one-based pages
+in UTF-8 text separated by form feed; Markdown ATX sections selected by heading
+and occurrence; and zero-based half-open byte chunks. Section spans include the
+heading and end before the next heading of equal or higher level. Text locations
+preserve exact UTF-8 bytes and newline spelling. Binary PDF page inference is
+not performed: retain an accepted text extraction or use an exact byte chunk.
+Reads are capped at 8 MiB and reject symlinks, traversal and nonregular files.
+
+Lineage and rebuild resolve v2 locations against retained sources again. They
+fail closed on source or locator drift. Legacy 1.0.0 records retain their original
+schema and checksum and return `traceability: legacy_incomplete`; v2 returns
+`complete` only after resolution. Removing the optional sidecar does not remove
+historical event decoders or accepted source evidence.
+
+Validation: 159 focused Semantica, locator, compatibility and schema tests passed
+on 2026-09-08; all 18 locator tests passed again after the final input-digest recheck. The source-locator
+suite covers actual parent admission, CLI lineage, sidecar deletion/rebuild,
+locator tampering with a recomputed checksum, changed source bytes, unknown and
+malformed locations, out-of-range spans, UTF-8/CRLF, and legacy byte stability.

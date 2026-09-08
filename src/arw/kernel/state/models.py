@@ -172,6 +172,34 @@ class ArtifactAcceptedPayload(StrictModel):
     attempt_id: StableRuntimeId | None = None
 
 
+class ResearchArtifactStagePayload(StrictModel):
+    artifact_id: StableRuntimeId
+    ir_sha256: Sha256
+    renderer_identity_digest: Sha256
+    receipt_sha256: Sha256
+    source_event_sha256: list[Sha256]
+
+
+class ResearchArtifactAcceptedPayload(ArtifactAcceptedPayload):
+    ir_sha256: Sha256
+    renderer_identity_digest: Sha256
+    source_event_sha256: list[Sha256]
+    supersedes: StableRuntimeId | None = None
+
+
+class ResearchArtifactSupersededPayload(StrictModel):
+    artifact_id: StableRuntimeId
+    supersedes: StableRuntimeId
+    accepting_event_id: EventId
+
+
+RESEARCH_ARTIFACT_EVENT_TYPES = (
+    "research_artifact_ir_frozen", "research_artifact_rendered",
+    "research_artifact_validated", "research_artifact_accepted",
+    "research_artifact_superseded",
+)
+
+
 class PassportAcceptedPayload(StrictModel):
     passport_sha256: Sha256
     parent_passport_sha256: Sha256 | None
@@ -663,14 +691,22 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
     "resume.accepted": ResumeAcceptedPayload,
     "recovery.completed": RecoveryCompletedPayload,
     **PHASE4_EVENT_PAYLOAD_TYPES,
+    "research_artifact_ir_frozen": ResearchArtifactStagePayload,
+    "research_artifact_rendered": ResearchArtifactStagePayload,
+    "research_artifact_validated": ResearchArtifactStagePayload,
+    "research_artifact_accepted": ResearchArtifactAcceptedPayload,
+    "research_artifact_superseded": ResearchArtifactSupersededPayload,
 }
 
 
 class CanonicalEvent(StrictModel):
     """One hash-chained event accepted by the canonical writer."""
 
-    schema_version: Literal["1.0.0"]
+    schema_version: Literal["1.0.0", "1.1.0"]
     event_type: Literal[
+        "research_artifact_ir_frozen", "research_artifact_rendered",
+        "research_artifact_validated", "research_artifact_accepted",
+        "research_artifact_superseded",
         "run.initialized",
         "baseline.probe_recorded",
         "lifecycle.transitioned",
@@ -710,7 +746,10 @@ class CanonicalEvent(StrictModel):
     actor_role: ActorRole | None = None
     prev_event_sha256: Sha256
     payload: (
-        RunInitializedPayload
+        ResearchArtifactStagePayload
+        | ResearchArtifactAcceptedPayload
+        | ResearchArtifactSupersededPayload
+        | RunInitializedPayload
         | BaselineProbePayload
         | LifecycleTransitionedPayload
         | HumanDecisionRequestedPayload
@@ -742,6 +781,11 @@ class CanonicalEvent(StrictModel):
 
     @model_validator(mode="after")
     def valid_variant_and_revision(self) -> Self:
+        from arw.kernel.state.event_versions import event_schema_version
+        if self.schema_version != event_schema_version(self.event_type):
+            raise ValueError("event schema version does not match its registered family")
+        if self.event_type in RESEARCH_ARTIFACT_EVENT_TYPES and self.actor_role != "parent_control_plane":
+            raise ValueError("research artifact events require the parent writer")
         expected_payload = EVENT_PAYLOAD_TYPES[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("event_type and payload variant do not match")

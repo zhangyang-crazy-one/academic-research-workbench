@@ -1,0 +1,380 @@
+{
+  "$defs": {
+    "OutputDigest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "OutputDigest",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "ResearchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ledger_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Ledger Event Id",
+          "type": "string"
+        },
+        "ledger_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Event Sha256",
+          "type": "string"
+        },
+        "json_pointer": {
+          "maxLength": 512,
+          "pattern": "^(|/.*)$",
+          "title": "Json Pointer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "artifact_id",
+        "sha256",
+        "ledger_event_id",
+        "ledger_event_sha256",
+        "json_pointer"
+      ],
+      "title": "ResearchBinding",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    },
+    "ValidationResults": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationResults",
+      "type": "object"
+    },
+    "VisualReviewer": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "evidence_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Artifact Id",
+          "type": "string"
+        },
+        "evidence_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Evidence Event Id",
+          "type": "string"
+        },
+        "evidence_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Event Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_id",
+        "version",
+        "identity_digest",
+        "evidence_artifact_id",
+        "evidence_event_id",
+        "evidence_event_sha256"
+      ],
+      "title": "VisualReviewer",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "receipt_version": {
+      "const": "arw.research-artifact-receipt.v1",
+      "title": "Receipt Version",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "enum": [
+        "methodology_figure",
+        "evidence_graph_view"
+      ],
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "ir_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ir Sha256",
+      "type": "string"
+    },
+    "renderer": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/ResearchBinding"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/OutputDigest"
+      },
+      "title": "Outputs",
+      "type": "array"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "validation": {
+      "$ref": "#/$defs/ValidationResults"
+    },
+    "qualification": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ],
+      "title": "Qualification",
+      "type": "string"
+    },
+    "purpose": {
+      "enum": [
+        "publication-critical",
+        "exploratory"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "visual_reviewer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualReviewer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Reason Codes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt_version",
+    "artifact_id",
+    "artifact_kind",
+    "ir_sha256",
+    "renderer",
+    "inputs",
+    "outputs",
+    "validation_policy",
+    "validation",
+    "qualification",
+    "purpose",
+    "visual_reviewer",
+    "reason_codes"
+  ],
+  "title": "ResearchArtifactReceipt",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-artifact-receipt.schema.json"
+}

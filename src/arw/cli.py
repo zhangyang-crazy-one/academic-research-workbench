@@ -55,15 +55,17 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument(
             "--root",
             type=Path,
-            required=True,
+            required=operation == "sanitize",
             help="Existing allowed source root; symlink ancestors are rejected.",
         )
         command.add_argument(
             "--path",
-            required=True,
+            required=operation == "sanitize",
             help="Normalized relative source path; input limit 1 MiB.",
         )
         if operation == "inspect":
+            command.add_argument("artifact_id", nargs="?")
+            command.add_argument("--run-root", type=Path)
             command.add_argument(
                 "--detector",
                 action="append",
@@ -104,6 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="Explicit provenance request; unsupported in this UTF-8 slice.",
             )
+    from arw.cli_research_artifact import configure
+    configure(artifact_commands)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -490,6 +494,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     / "plugin.json"
                 )
                 manifest_path = candidate if candidate.is_file() else None
+            research_mode = args.artifact_command not in {"inspect", "sanitize"} or (args.artifact_command == "inspect" and args.artifact_id is not None)
+            if research_mode:
+                from arw.cli_research_artifact import handle
+                capability = "research.artifact.inspect" if args.artifact_command in {"inspect", "doctor"} else "research.artifact.reproduce" if args.artifact_command == "reproduce" else "research.artifact.compile"
+                provider = default_router(plugin_manifest=manifest_path).resolve(capability)
+                result = handle(args, provider)
+                _write_json(result)
+                return 65 if result.get("qualification") == "FAIL" or result.get("status") == "FAIL" else 0
+            if args.root is None or args.path is None:
+                raise ValueError("source inspection requires --root and --path")
             provider = default_router(plugin_manifest=manifest_path).resolve(
                 f"artifact.{args.artifact_command}"
             )
@@ -689,8 +703,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest_path = Path(manifest_env)
             if not manifest_path.is_file():
                 print(
-                    "arw: plugin-manifest-unreadable: "
-                    f"{manifest_env}",
+                    f"arw: plugin-manifest-unreadable: {manifest_env}",
                     file=sys.stderr,
                 )
                 return 65
@@ -703,9 +716,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65
         else:
             manifest_path = (
-                Path(__file__).resolve().parents[2]
-                / ".codex-plugin"
-                / "plugin.json"
+                Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
             )
             if not manifest_path.is_file():
                 manifest_path = None
@@ -764,7 +775,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if sha256_hex(content_bytes) != accepted.artifact_sha256:
                     raise ValueError("accepted provenance artifact content is unsafe")
                 try:
-                    record = module.ProvenanceRecord.model_validate_json(content_bytes)
+                    record = module.decode_provenance(content_bytes)
                 except ValidationError as error:
                     raise ValueError(
                         "accepted provenance artifact is malformed"
@@ -797,7 +808,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             sidecar_path = _provenance_sidecar_path(args.store, replayed.run_id)
             if args.provenance_action == "rebuild":
                 module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
+            from arw.kernel.ledger.source_locations import resolve_source_locator
+
             router = default_router(
+                source_locator_resolver=lambda locator: resolve_source_locator(args.run_root, locator, replayed.events),
                 store_path=args.store,
                 semantica_store_path=sidecar_path,
                 canonical_event_digests=event_digests,
@@ -825,7 +839,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 if record_bytes is None:
                     raise ValueError("provenance record exceeds the Lite byte limit")
-                record = module.ProvenanceRecord.model_validate_json(record_bytes)
+                record = module.decode_provenance(record_bytes)
                 if canonical_json_bytes(record.artifact_payload()) != record_bytes:
                     raise ValueError("provenance record bytes are not canonical JSON")
                 if (
@@ -986,7 +1000,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
-            with locked_replay(args.run_root, lock_timeout=args.lock_timeout) as (
+            with locked_replay(
+                args.run_root, lock_timeout=args.lock_timeout, read_only=True
+            ) as (
                 _,
                 replayed,
             ):

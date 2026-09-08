@@ -7,6 +7,8 @@ embedding, graph-server, REST/MCP, or Explorer/UI surface.
 
 __all__ = [
     "ProvenanceRecord",
+    "PreciseProvenanceRecord",
+    "decode_provenance",
     "SemanticaSQLiteAdapter",
     "UnboundProvenanceError",
 ]
