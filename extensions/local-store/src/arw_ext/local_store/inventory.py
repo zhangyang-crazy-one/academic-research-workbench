@@ -8,14 +8,15 @@ materializes text. Byte, VM-step and time limits bound both inventory scans.
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
+import stat
 import struct
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
-from urllib.parse import quote
 
 from arw.files import FilesAdminError, FilesQueryGeneration, load_query_generation
 
@@ -26,6 +27,9 @@ MAX_INVENTORY_BODY_BYTES: Final[int] = 100 * 1024 * 1024
 MAX_INVENTORY_ROW_BYTES: Final[int] = 2 * MAX_INVENTORY_BODY_BYTES + 1024
 MAX_INVENTORY_AGGREGATE_BYTES: Final[int] = 256 * 1024 * 1024
 MAX_INVENTORY_VM_STEPS: Final[int] = 50_000_000
+# Startup query limit for the complete serialized database, independent of
+# the per-row/aggregate fingerprint limits. Canonical ingestion is unchanged.
+MAX_CANONICAL_DATABASE_BYTES: Final[int] = 256 * 1024 * 1024
 _UNINITIALISED_FINGERPRINT: Final[str] = "uninitialised"
 _CANONICAL_COLUMNS = (
     "file_id",
@@ -179,21 +183,118 @@ def _fingerprint(
     return hasher.hexdigest()
 
 
+def _verified_canonical_bytes(
+    generation: FilesQueryGeneration, *, deadline: float
+) -> bytes:
+    """Read and hash one safe descriptor before admitting any SQLite bytes."""
+
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    nonblock = getattr(os, "O_NONBLOCK", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not (no_follow and nonblock and directory) or os.open not in os.supports_dir_fd:
+        raise InventoryError("safe canonical database descriptor reads are unsupported")
+    path = Path(generation.database_path).absolute()
+    components = path.parts[1:]
+    if not components or ".." in components:
+        raise InventoryError("canonical database path is unsafe")
+    directory_fd: int | None = None
+    descriptor: int | None = None
+    directory_flags = os.O_RDONLY | no_follow | directory | getattr(os, "O_CLOEXEC", 0)
+    try:
+        _check_deadline(deadline)
+        directory_fd = os.open(path.anchor, directory_flags)
+        for component in components[:-1]:
+            _check_deadline(deadline)
+            child = os.open(component, directory_flags, dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd = child
+        descriptor = os.open(
+            components[-1],
+            os.O_RDONLY | no_follow | nonblock | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=directory_fd,
+        )
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise InventoryError("canonical database is not a regular file")
+        if before.st_size > MAX_CANONICAL_DATABASE_BYTES:
+            raise InventoryBudgetExceeded(
+                "canonical database exceeds the snapshot byte limit"
+            )
+        chunks: list[bytes] = []
+        hasher = hashlib.sha256()
+        total = 0
+        while total < before.st_size:
+            _check_deadline(deadline)
+            chunk = os.read(descriptor, min(1 << 20, before.st_size - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            hasher.update(chunk)
+            chunks.append(chunk)
+        _check_deadline(deadline)
+        after = os.fstat(descriptor)
+        path_now = os.stat(components[-1], dir_fd=directory_fd, follow_symlinks=False)
+
+        def identity(value: os.stat_result) -> tuple[int, ...]:
+            return (
+                value.st_dev,
+                value.st_ino,
+                value.st_mode,
+                value.st_size,
+                value.st_mtime_ns,
+                value.st_ctime_ns,
+            )
+
+        if identity(before) != identity(after) or identity(after) != identity(path_now):
+            raise InventoryTampered("canonical database changed during snapshot read")
+        if (
+            total != before.st_size
+            or hasher.hexdigest() != generation.manifest.database_sha256
+        ):
+            raise InventoryTampered(
+                "canonical database digest differs from the verified manifest"
+            )
+        raw = b"".join(chunks)
+        # Canonical generations use journal_mode=DELETE. A WAL database needs
+        # additional unbound sidecar bytes and cannot be admitted as this image.
+        if raw[18:20] != b"\x01\x01":
+            raise InventoryError("WAL or unsupported canonical database journal format")
+        _check_deadline(deadline)
+        return raw
+    except OSError as error:
+        raise InventoryError("canonical database is unavailable or unsafe") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
 def compute_expected_inventory_fingerprint(
     generation: FilesQueryGeneration, *, deadline: float = float("inf")
 ) -> str:
-    """Hash the canonical database path verified by load_query_generation."""
+    """Query a private image of the exact database bytes bound by the manifest."""
 
-    path = Path(generation.database_path)
-    if path.is_symlink() or not path.is_file():
-        raise InventoryError("canonical database is absent or unsafe")
+    _check_deadline(deadline)
     try:
-        connection = sqlite3.connect(f"file:{quote(str(path))}?mode=ro", uri=True)
+        connection = sqlite3.connect(":memory:")
     except sqlite3.Error as error:
-        raise InventoryError("canonical database is unreadable") from error
+        raise InventoryError("canonical snapshot connection is unavailable") from error
     try:
+        deserialize = getattr(connection, "deserialize", None)
+        if not callable(deserialize):
+            raise InventoryError(
+                "canonical snapshot requires SQLite deserialize support"
+            )
+        raw = _verified_canonical_bytes(generation, deadline=deadline)
+        deserialize(raw)
+        # SQLite now reads only private memory, never the canonical pathname,
+        # its live inode, or a subsequently introduced WAL/SHM sidecar.
+        connection.execute("PRAGMA query_only=ON")
         connection.execute("BEGIN")
         return _fingerprint(connection, canonical=True, deadline=deadline)
+    except sqlite3.Error as error:
+        raise InventoryError("canonical snapshot is unreadable") from error
     finally:
         connection.close()
 
