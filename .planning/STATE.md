@@ -5,7 +5,7 @@ milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
 last_updated: 2026-09-08T03:16:06Z
-last_activity: 2026-09-08 -- Completed quick task 260908-f21; OpenSpec paper/watermark acceptance and text artifact slice, commit 3d7f295
+last_activity: 2026-09-08 -- Shipped text artifact slice as PR17 from independent main-based worktree; historical PR16 fixes remain uncommitted/unmerged
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** v2 OpenSpec continuation — artifact text slice complete; binary sanitation and writing remain planned
+**Current focus:** PR17 shipping/CI on feat/artifact-integrity-text-pr; PR16 review closure still pending (see quick260908-f21 PR-AUDIT.md)
 
 ## Current Position
 
