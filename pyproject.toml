@@ -35,6 +35,9 @@ packages = [
     "extensions/artifact-integrity/src/arw_artifact_integrity",
 ]
 
+[tool.hatch.build.hooks.custom]
+path = "build_hooks.py"
+
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
 testpaths = ["tests"]
