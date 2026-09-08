@@ -9,11 +9,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from pathlib import Path
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from arw.kernel.artifacts.integrity import IntegrityEvaluation, IntegrityReceipt
+from arw.kernel.state.models import CanonicalEvent
+from arw.kernel.state.research_artifact import (
+    RendererIdentity,
+    ResearchArtifactIR,
+    ValidationResults,
+    VisualReviewer,
+)
 
 
 class ArtifactDiagnosticModel(BaseModel):
@@ -80,3 +88,38 @@ class ArtifactInspector(Protocol):
     def inspect_bytes(
         self, content: bytes, *, detectors: Sequence[str] | None = None
     ) -> ArtifactInspection: ...
+
+
+class ArtifactIRBuilder(Protocol):
+    """Build an IR using bounded projection lookups and canonical evidence."""
+
+    def build(
+        self,
+        specification: dict[str, object],
+        *,
+        run_root: Path,
+        store_path: Path | None = None,
+    ) -> ResearchArtifactIR: ...
+
+
+class ArtifactRenderer(Protocol):
+    """Render with a pinned identity and deterministic normalization policy."""
+
+    @property
+    def identity(self) -> RendererIdentity: ...
+
+    def render(self, ir: ResearchArtifactIR) -> bytes: ...
+
+
+class ArtifactValidator(Protocol):
+    """Return distinct schema, provenance, semantic, render and visual outcomes."""
+
+    def validate(
+        self,
+        ir: ResearchArtifactIR,
+        output: bytes,
+        *,
+        run_root: Path,
+        events: Sequence[CanonicalEvent],
+        visual_review_id: str | None = None,
+    ) -> tuple[ValidationResults, tuple[str, ...], VisualReviewer | None, bool]: ...

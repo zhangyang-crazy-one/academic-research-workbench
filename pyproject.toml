@@ -34,6 +34,7 @@ packages = [
     "extensions/local-store/src/arw_ext",
     "extensions/semantica/src/arw_semantica",
     "extensions/artifact-integrity/src/arw_artifact_integrity",
+    "extensions/research-artifact/src/arw_research_artifact",
 ]
 
 [tool.hatch.build.hooks.custom]

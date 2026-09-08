@@ -55,15 +55,17 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument(
             "--root",
             type=Path,
-            required=True,
+            required=operation == "sanitize",
             help="Existing allowed source root; symlink ancestors are rejected.",
         )
         command.add_argument(
             "--path",
-            required=True,
+            required=operation == "sanitize",
             help="Normalized relative source path; input limit 1 MiB.",
         )
         if operation == "inspect":
+            command.add_argument("artifact_id", nargs="?")
+            command.add_argument("--run-root", type=Path)
             command.add_argument(
                 "--detector",
                 action="append",
@@ -104,6 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="Explicit provenance request; unsupported in this UTF-8 slice.",
             )
+    from arw.cli_research_artifact import configure
+    configure(artifact_commands)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -490,6 +494,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     / "plugin.json"
                 )
                 manifest_path = candidate if candidate.is_file() else None
+            research_mode = args.artifact_command not in {"inspect", "sanitize"} or (args.artifact_command == "inspect" and args.artifact_id is not None)
+            if research_mode:
+                from arw.cli_research_artifact import handle
+                capability = "research.artifact.inspect" if args.artifact_command in {"inspect", "doctor"} else "research.artifact.reproduce" if args.artifact_command == "reproduce" else "research.artifact.compile"
+                provider = default_router(plugin_manifest=manifest_path).resolve(capability)
+                result = handle(args, provider)
+                _write_json(result)
+                return 65 if result.get("qualification") == "FAIL" or result.get("status") == "FAIL" else 0
+            if args.root is None or args.path is None:
+                raise ValueError("source inspection requires --root and --path")
             provider = default_router(plugin_manifest=manifest_path).resolve(
                 f"artifact.{args.artifact_command}"
             )

@@ -1,0 +1,12 @@
+{
+  "migration": 1,
+  "event_schema_version": "1.1.0",
+  "historical_action": "retain bytes; add reader variants",
+  "event_types": [
+    "research_artifact_ir_frozen",
+    "research_artifact_rendered",
+    "research_artifact_validated",
+    "research_artifact_accepted",
+    "research_artifact_superseded"
+  ]
+}

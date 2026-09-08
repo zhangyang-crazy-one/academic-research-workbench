@@ -445,7 +445,7 @@ class RuntimeCommandService:
 
         def validate(state, replayed):
             if any(
-                event.event_type == "artifact.accepted"
+                event.event_type in {"artifact.accepted", "research_artifact_accepted"}
                 and isinstance(event.payload, ArtifactAcceptedPayload)
                 and event.payload.artifact_id == request.artifact_id
                 for event in replayed.events

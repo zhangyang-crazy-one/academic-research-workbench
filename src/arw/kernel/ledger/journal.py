@@ -410,7 +410,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 raise JournalError("first journal event does not bind the manifest bytes")
         elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {"artifact.accepted", "passport.accepted"}:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
             try:
                 validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:
@@ -422,7 +422,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
                 (*events, event),
             )
-            if event.event_type in {"artifact.accepted", "passport.accepted"}:
+            if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
                 if reduced_state is None:
                     raise ManifestError("accepted manifest has no prior runtime state")
                 validate_event_manifest_semantics(root, event, reduced_state)
@@ -660,6 +660,8 @@ def build_runtime_event(
 ) -> CanonicalEvent:
     """Construct one canonical event using only writer-owned chain fields."""
 
+    from arw.kernel.state.event_versions import event_schema_version
+
     payload_value = (
         payload.model_dump(mode="json")
         if hasattr(payload, "model_dump")
@@ -667,7 +669,7 @@ def build_runtime_event(
     )
     return _event_from_unsigned(
         {
-            "schema_version": "1.0.0",
+            "schema_version": event_schema_version(event_type),
             "event_type": event_type,
             "event_id": event_id,
             "command_id": command_id,

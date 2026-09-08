@@ -453,7 +453,7 @@ def validate_accepted_event_manifests(
     """Verify every immutable manifest selected by an accepted event."""
 
     for event in events:
-        if event.event_type == "artifact.accepted":
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
             assert isinstance(event.payload, ArtifactAcceptedPayload)
             manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
             if (
@@ -493,7 +493,7 @@ def validate_event_manifest_semantics(
 
     from arw.kernel.ledger.workflows import require_workflow
 
-    if event.event_type == "artifact.accepted":
+    if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
         assert isinstance(event.payload, ArtifactAcceptedPayload)
         manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
         if (

@@ -47,6 +47,10 @@ def default_router(
 
     router = CapabilityRouter()
     router.register("research.literature", ARSAdapter)
+    def _research_artifact():
+        return import_module("arw_research_artifact.service").ResearchArtifactService()
+    for capability in ("research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"):
+        router.register_optional(capability, _research_artifact)
 
     def _artifact_integrity():
         module = import_module("arw_artifact_integrity.service")
@@ -158,7 +162,7 @@ def default_router(
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
             "provenance": ("knowledge.provenance",),
-            "artifact": ("artifact.inspect", "artifact.sanitize"),
+            "artifact": ("artifact.inspect", "artifact.sanitize", "research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"),
             "audit": ("audit.replay",),
         }
         enabled: set[str] = set()
