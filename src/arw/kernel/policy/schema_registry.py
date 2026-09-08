@@ -29,6 +29,9 @@ from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
     generate_phase4_schema_documents,
 )
+from arw.kernel.state.provenance import provenance_schema_documents
+
+PROVENANCE_SCHEMA_NAMES = tuple(provenance_schema_documents())
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "build-identity.schema.json",
@@ -70,6 +73,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + QUALIFICATION_SCHEMA_NAMES
     + RESEARCH_INTEGRITY_SCHEMA_NAMES
     + AUDIT_SCHEMA_NAMES
+    + PROVENANCE_SCHEMA_NAMES
 )
 
 
@@ -186,6 +190,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             raise SchemaRegistryError(
                 f"{RESEARCH_INTEGRITY_SCHEMA_NAME} differs from its model projection"
             )
+    if name in PROVENANCE_SCHEMA_NAMES and candidate != provenance_schema_documents()[name]:
+        raise SchemaRegistryError(f"{name} differs from its model projection")
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
@@ -216,6 +222,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = integration_lock_schema_document()
         elif name == RESEARCH_INTEGRITY_SCHEMA_NAME:
             document = research_integrity_contracts_schema_document()
+        elif name in PROVENANCE_SCHEMA_NAMES:
+            document = provenance_schema_documents()[name]
         else:
             document = _load_document(name)
         rendered = _canonical_schema_bytes(document)

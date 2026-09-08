@@ -18,12 +18,10 @@ from collections import deque
 from collections.abc import Iterator, Mapping
 from contextlib import suppress
 from pathlib import Path
-from typing import Literal
 from urllib.parse import quote
 
 from arw_ext.local_store.location import is_network_filesystem
 from arw_ext.local_store.receipts import AuditFault
-from pydantic import Field
 
 from arw.graph_models import (
     GraphProjectionInput,
@@ -32,13 +30,10 @@ from arw.graph_models import (
     GraphQueryResult,
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-from arw.kernel.state.models import (
-    ActorId,
-    EventId,
-    Sha256,
-    StableRuntimeId,
-    StrictModel,
-    UtcTimestamp,
+from arw.kernel.state.provenance import (
+    PreciseProvenanceRecord,
+    ProvenanceRecord,
+    decode_provenance,
 )
 from arw.ports.knowledge import KnowledgeProvider, NullKnowledgeProvider
 
@@ -145,39 +140,6 @@ class UnboundProvenanceError(ValueError):
     """Raised when a record lacks a verified ARW artifact/ledger binding."""
 
 
-class ProvenanceRecord(StrictModel):
-    """One Lite-profile provenance assertion."""
-
-    schema_version: Literal["1.0.0"]
-    record_id: StableRuntimeId
-    entity_id: StableRuntimeId
-    entity_type: str = Field(min_length=1, max_length=96)
-    artifact_id: StableRuntimeId
-    ledger_event_id: EventId | None = None
-    ledger_event_digest: Sha256 | None = None
-    activity_id: StableRuntimeId
-    agent_id: ActorId
-    created_at: UtcTimestamp
-    derived_from: tuple[StableRuntimeId, ...] = Field(max_length=MAX_SIDECAR_RECORDS)
-    attributes: dict[str, object]
-
-    def artifact_payload(self) -> dict[str, object]:
-        return self.model_dump(
-            mode="json", exclude={"ledger_event_id", "ledger_event_digest"}
-        )
-
-    def canonical_payload(self) -> dict[str, object]:
-        return self.model_dump(mode="json")
-
-    @property
-    def checksum(self) -> str:
-        return sha256_hex(canonical_json_bytes(self.artifact_payload()))
-
-    @property
-    def binding_checksum(self) -> str:
-        return sha256_hex(canonical_json_bytes(self.canonical_payload()))
-
-
 class SemanticaSQLiteAdapter:
     """KnowledgeProvider delegate plus a canonical-bound provenance sidecar.
 
@@ -197,7 +159,9 @@ class SemanticaSQLiteAdapter:
         expected_provenance_record_sha256: Mapping[str, str],
         audit_database_path: Path | None = None,
         graph_provider: KnowledgeProvider | None = None,
+        source_locator_resolver=None,
     ) -> None:
+        self._source_locator_resolver = source_locator_resolver
         self._database_path = self._validate_database_path(Path(database_path))
         self._canonical_event_digests = dict(canonical_event_digests)
         self._accepted_artifact_ids_by_event = {
@@ -418,6 +382,7 @@ class SemanticaSQLiteAdapter:
                     f"Semantica lineage record {payload_record_id} is outside "
                     "the canonical inventory"
                 )
+            self._validate_locator(decode_provenance(payload))
             by_entity.setdefault(stored_entity_id, []).append(
                 (payload_record_id, tuple(parents_value), record_value, str(checksum))
             )
@@ -446,6 +411,7 @@ class SemanticaSQLiteAdapter:
                 results.append(
                     {
                         "checksum": checksum,
+                        "traceability": "complete" if record_value.get("schema_version") == "2.0.0" else "legacy_incomplete",
                         "depth": depth,
                         "entity_id": current,
                         "record": record_value,
@@ -604,7 +570,12 @@ class SemanticaSQLiteAdapter:
                         and expected_artifact_sha == artifact_sha
                         and expected_record_sha == artifact_sha
                     ):
-                        continue
+                        try:
+                            self._validate_locator(decode_provenance(payload_bytes))
+                        except (ValueError, RuntimeError):
+                            pass
+                        else:
+                            continue
             detail = (
                 "payload has a non-BLOB SQLite storage class"
                 if payload_bytes is None
@@ -864,7 +835,14 @@ class SemanticaSQLiteAdapter:
                     f"resolution: {forbidden}"
                 )
 
+    def _validate_locator(self, record: ProvenanceRecord) -> None:
+        if isinstance(record, PreciseProvenanceRecord):
+            if self._source_locator_resolver is None:
+                raise UnboundProvenanceError("precise provenance requires canonical source resolution")
+            self._source_locator_resolver(record.source_locator)
+
     def _validate_binding(self, record: ProvenanceRecord) -> None:
+        self._validate_locator(record)
         if not record.artifact_id:
             raise UnboundProvenanceError("provenance record has no ARW artifact id")
         if not record.ledger_event_id or not record.ledger_event_digest:

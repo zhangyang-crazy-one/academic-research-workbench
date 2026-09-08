@@ -30,6 +30,7 @@ def default_router(
     accepted_artifact_ids_by_event: Mapping[str, tuple[str, ...]] | None = None,
     accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
     expected_provenance_record_sha256: Mapping[str, str] | None = None,
+    source_locator_resolver=None,
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -138,6 +139,7 @@ def default_router(
                 accepted_artifact_sha256_by_event=accepted_artifact_sha256_by_event,
                 expected_provenance_record_sha256=(expected_provenance_record_sha256),
                 audit_database_path=semantica_store_path,
+                source_locator_resolver=source_locator_resolver,
             )
 
         router.register_optional("knowledge.provenance", _semantica_provenance)

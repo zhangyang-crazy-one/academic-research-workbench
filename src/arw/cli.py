@@ -761,7 +761,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if sha256_hex(content_bytes) != accepted.artifact_sha256:
                     raise ValueError("accepted provenance artifact content is unsafe")
                 try:
-                    record = module.ProvenanceRecord.model_validate_json(content_bytes)
+                    record = module.decode_provenance(content_bytes)
                 except ValidationError as error:
                     raise ValueError(
                         "accepted provenance artifact is malformed"
@@ -794,7 +794,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             sidecar_path = _provenance_sidecar_path(args.store, replayed.run_id)
             if args.provenance_action == "rebuild":
                 module.SemanticaSQLiteAdapter.prepare_rebuild(sidecar_path)
+            from arw.kernel.ledger.source_locations import resolve_source_locator
+
             router = default_router(
+                source_locator_resolver=lambda locator: resolve_source_locator(args.run_root, locator, replayed.events),
                 store_path=args.store,
                 semantica_store_path=sidecar_path,
                 canonical_event_digests=event_digests,
@@ -822,7 +825,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 if record_bytes is None:
                     raise ValueError("provenance record exceeds the Lite byte limit")
-                record = module.ProvenanceRecord.model_validate_json(record_bytes)
+                record = module.decode_provenance(record_bytes)
                 if canonical_json_bytes(record.artifact_payload()) != record_bytes:
                     raise ValueError("provenance record bytes are not canonical JSON")
                 if (

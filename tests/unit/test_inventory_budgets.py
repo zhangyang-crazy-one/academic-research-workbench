@@ -22,10 +22,10 @@ def _cache() -> sqlite3.Connection:
     )
     connection.execute(
         "CREATE VIRTUAL TABLE files_fts_trigram USING fts5("
-        'file_id UNINDEXED, body_nfkc_folded, tokenize="trigram")'
+        'file_id UNINDEXED, relative_path UNINDEXED, body_nfkc_folded, tokenize="trigram")'
     )
     connection.execute(
-        "INSERT INTO files_fts_trigram SELECT file_id, body_nfkc_folded FROM files"
+        "INSERT INTO files_fts_trigram SELECT file_id, relative_path, body_nfkc_folded FROM files"
     )
     return connection
 
