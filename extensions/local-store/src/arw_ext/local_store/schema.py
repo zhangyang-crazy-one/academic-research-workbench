@@ -27,7 +27,7 @@ from __future__ import annotations
 
 # The schema version this migration produces.  Bumping it is a NORMAL schema
 # change; never edit this constant after migration 0001 has shipped.
-SCHEMA_VERSION: str = "2"
+SCHEMA_VERSION: str = "3"
 
 # Initial projection_version (= 0).  Projection versions are independent of
 # schema versions; the Semantica-lite lane (PR4 task 5.1+) bumps this without
@@ -262,9 +262,23 @@ MIGRATION_0002_SQL: str = """
 ALTER TABLE files ADD COLUMN body TEXT;
 """
 
+# Ordinary tables only: minimal migration does not load sqlite-vec. The
+# optional adapter creates the dimension-bound vec0 table on explicit build.
+MIGRATION_0003_SQL: str = """
+CREATE TABLE semantic_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE semantic_documents (
+    rowid INTEGER PRIMARY KEY,
+    artifact_id TEXT NOT NULL UNIQUE,
+    event_id TEXT NOT NULL,
+    event_digest TEXT NOT NULL,
+    source_digest TEXT NOT NULL
+);
+"""
+
 MIGRATIONS: tuple[dict[str, str | int], ...] = (
     {"version": 1, "sql": MIGRATION_0001_SQL},
     {"version": 2, "sql": MIGRATION_0002_SQL},
+    {"version": 3, "sql": MIGRATION_0003_SQL},
 )
 
 # Tables and indexes the migration runner must be able to enumerate from
@@ -273,6 +287,8 @@ MIGRATIONS: tuple[dict[str, str | int], ...] = (
 EXPECTED_TABLES: frozenset[str] = frozenset(
     {
         "projection_meta",
+        "semantic_meta",
+        "semantic_documents",
         "materialized_run_state",
         "artifacts",
         "files",

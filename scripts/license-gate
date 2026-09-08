@@ -303,12 +303,16 @@ def generate_sbom(
         evidence_root,
         4,
         "uv-cyclonedx-export",
-        ["uv", "export", "--frozen", "--format", "cyclonedx1.5", "--output-file", str(raw_path)],
+        ["uv", "export", "--frozen", "--all-extras", "--format", "cyclonedx1.5", "--output-file", str(raw_path)],
         cwd=PROJECT_ROOT,
     )
     sbom = read_json(raw_path)
     sbom["metadata"]["timestamp"] = receipt["created_at"]
     components = {item["bom-ref"]: item for item in sbom.get("components", [])}
+    for item in components.values():
+        if item.get("name") == "sqlite-vec":
+            item.update(scope="optional", licenses=[{"expression": "MIT OR Apache-2.0"}])
+
     for component in manifest["components"]:
         components[f"source:{component['id']}"] = {
             "type": "library",
