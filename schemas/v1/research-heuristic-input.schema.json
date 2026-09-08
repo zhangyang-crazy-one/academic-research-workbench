@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "Applicability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "call_budget": {
+          "minimum": 0,
+          "title": "Call Budget",
+          "type": "integer"
+        },
+        "metric": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Metric",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "output_budget": {
+          "minimum": 0,
+          "title": "Output Budget",
+          "type": "integer"
+        },
+        "retrieval_coverage": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Retrieval Coverage",
+          "type": "string"
+        },
+        "task": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "model",
+        "retrieval_coverage",
+        "call_budget",
+        "output_budget",
+        "metric"
+      ],
+      "title": "Applicability",
+      "type": "object"
+    },
+    "UnknownEvidence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation_id",
+        "rationale"
+      ],
+      "title": "UnknownEvidence",
+      "type": "object"
+    }
+  },
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-heuristic-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applicability": {
+      "$ref": "#/$defs/Applicability"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "counterexample_observation_ids": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Counterexample Observation Ids",
+      "type": "array"
+    },
+    "domain": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Domain",
+      "type": "string"
+    },
+    "domain_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Domain Id"
+    },
+    "evaluation_coverage": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Evaluation Coverage",
+      "type": "string"
+    },
+    "heuristic_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Heuristic Id",
+      "type": "string"
+    },
+    "input_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Digest"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "output_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Digest"
+    },
+    "producer": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Producer",
+      "type": "string"
+    },
+    "producer_version": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Producer Version",
+      "type": "string"
+    },
+    "proposed_action": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Proposed Action",
+      "type": "string"
+    },
+    "scope": {
+      "default": "project",
+      "enum": [
+        "run",
+        "project",
+        "domain",
+        "global"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "search_coverage": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Search Coverage",
+      "type": "string"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    },
+    "supporting_observation_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Supporting Observation Ids",
+      "type": "array"
+    },
+    "trigger": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Trigger",
+      "type": "string"
+    },
+    "unknown": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/UnknownEvidence"
+      },
+      "maxItems": 64,
+      "title": "Unknown",
+      "type": "array"
+    }
+  },
+  "required": [
+    "heuristic_id",
+    "domain",
+    "trigger",
+    "proposed_action",
+    "applicability",
+    "confidence",
+    "supporting_observation_ids",
+    "search_coverage",
+    "evaluation_coverage",
+    "producer",
+    "producer_version"
+  ],
+  "title": "HeuristicInput",
+  "type": "object"
+}

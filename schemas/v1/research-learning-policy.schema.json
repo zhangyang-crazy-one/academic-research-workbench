@@ -1,0 +1,103 @@
+{
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-learning-policy.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "formula_id": {
+      "anyOf": [
+        {
+          "const": "supporting-fraction",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Formula Id"
+    },
+    "formula_version": {
+      "anyOf": [
+        {
+          "const": "1",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Formula Version"
+    },
+    "independence": {
+      "const": "one-sample-per-run-v1",
+      "default": "one-sample-per-run-v1",
+      "title": "Independence",
+      "type": "string"
+    },
+    "metric": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Metric",
+      "type": "string"
+    },
+    "minimum_delta": {
+      "title": "Minimum Delta",
+      "type": "number"
+    },
+    "mode": {
+      "enum": [
+        "replay",
+        "held-out",
+        "shadow",
+        "A-B",
+        "human-review",
+        "benchmark"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "policy_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "run_subset": {
+      "items": {
+        "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "title": "Run Subset",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "arw.learning-policy.v1",
+      "default": "arw.learning-policy.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "use_confidence": {
+      "default": false,
+      "title": "Use Confidence",
+      "type": "boolean"
+    },
+    "version": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "policy_id",
+    "version",
+    "mode",
+    "run_subset",
+    "metric",
+    "minimum_delta"
+  ],
+  "title": "EvaluationPolicy",
+  "type": "object"
+}

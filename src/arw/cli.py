@@ -110,6 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure(artifact_commands)
     from arw.cli_memory import configure as configure_memory
     configure_memory(subparsers)
+    from arw.cli_learning import configure as configure_learning
+    configure_learning(subparsers)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -483,6 +485,16 @@ def _read_bounded_regular_file(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "learn":
+        from arw.cli_learning import handle
+        from arw.kernel.capabilities import CapabilityUnavailable
+        try:
+            result = handle(args)
+            _write_json(result)
+            return 65 if result.get("status") == "error" else 0
+        except (ValueError, RuntimeError, OSError) as error:
+            _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "learning_invalid")})
+            return 65
     if args.command == "memory":
         from arw.cli_memory import handle
         from arw.kernel.capabilities import CapabilityUnavailable
