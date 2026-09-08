@@ -1,0 +1,665 @@
+"""Semantica Lite provenance integration tests."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from arw_semantica import (  # pyright: ignore[reportMissingImports]
+    ProvenanceRecord,
+    SemanticaSQLiteAdapter,
+    UnboundProvenanceError,
+)
+
+from arw.cli import _read_bounded_regular_file, build_parser
+from arw.composition import default_router
+from arw.kernel.capabilities import CapabilityUnavailable
+from arw.kernel.core.canonical import canonical_json_bytes
+
+EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
+EVENT_DIGEST = "a" * 64
+SOURCE_EVENT_ID = "evt-00000000-0000-4000-8000-000000000002"
+DECISION_EVENT_ID = "evt-00000000-0000-4000-8000-000000000003"
+COPY_EVENT_ID = "evt-00000000-0000-4000-8000-000000000004"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _record(
+    *,
+    entity_id: str = "claim.alpha",
+    derived_from: tuple[str, ...] = (),
+    record_id: str | None = None,
+    artifact_id: str | None = None,
+    event_id: str | None = None,
+    event_digest: str | None = None,
+) -> ProvenanceRecord:
+    default_events = {
+        "claim.alpha": (EVENT_ID, EVENT_DIGEST, "artifact-alpha"),
+        "source.alpha": (SOURCE_EVENT_ID, "b" * 64, "artifact-source.alpha"),
+        "decision.alpha": (DECISION_EVENT_ID, "c" * 64, "artifact-decision.alpha"),
+    }
+    default_event_id, default_digest, default_artifact_id = default_events.get(
+        entity_id, (EVENT_ID, EVENT_DIGEST, "artifact-alpha")
+    )
+    return ProvenanceRecord(
+        schema_version="1.0.0",
+        record_id=record_id or f"prov-{entity_id}",
+        entity_id=entity_id,
+        entity_type="Decision" if entity_id == "decision.alpha" else "Claim",
+        artifact_id=artifact_id or default_artifact_id,
+        ledger_event_id=event_id or default_event_id,
+        ledger_event_digest=event_digest or default_digest,
+        activity_id="activity.extract",
+        agent_id="agent.researcher",
+        created_at="2026-09-02T00:00:00Z",
+        derived_from=derived_from,
+        attributes={},
+    )
+
+
+def _adapter(
+    tmp_path: Path, records: tuple[ProvenanceRecord, ...] | None = None
+) -> SemanticaSQLiteAdapter:
+    records = records or (_record(),)
+    return SemanticaSQLiteAdapter(
+        tmp_path / "provenance.sqlite3",
+        canonical_event_digests={
+            str(record.ledger_event_id): str(record.ledger_event_digest)
+            for record in records
+        },
+        accepted_artifact_ids_by_event={
+            str(record.ledger_event_id): (record.artifact_id,) for record in records
+        },
+        accepted_artifact_sha256_by_event={
+            str(record.ledger_event_id): record.checksum for record in records
+        },
+        expected_provenance_record_sha256={
+            record.record_id: record.checksum for record in records
+        },
+        audit_database_path=tmp_path / "projection.sqlite3",
+    )
+
+
+def _record_from_payload(payload: dict[str, object]) -> ProvenanceRecord:
+    return ProvenanceRecord.model_validate_json(json.dumps(payload))
+
+
+def test_bounded_artifact_reader_rejects_run_root(tmp_path: Path) -> None:
+    with pytest.raises(OSError, match="normalized and relative"):
+        _read_bounded_regular_file(tmp_path, ".", max_bytes=1)
+
+
+def test_bounded_artifact_reader_rejects_fifo_without_blocking(
+    tmp_path: Path,
+) -> None:
+    fifo = tmp_path / "artifact.json"
+    os.mkfifo(fifo)
+    with pytest.raises(OSError, match="not a regular file"):
+        _read_bounded_regular_file(tmp_path, fifo.name, max_bytes=1)
+
+
+def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    checksum = adapter.record(_record())
+    assert len(checksum) == 64
+
+    with pytest.raises(UnboundProvenanceError, match="canonical event stream"):
+        adapter.record(
+            _record_from_payload(
+                {**_record().canonical_payload(), "ledger_event_digest": "b" * 64}
+            )
+        )
+    with pytest.raises(UnboundProvenanceError, match="not accepted"):
+        adapter.record(
+            _record_from_payload(
+                {**_record().canonical_payload(), "artifact_id": "forged-artifact"}
+            )
+        )
+    with pytest.raises(ValueError, match="artifact_id"):
+        _record_from_payload({**_record().canonical_payload(), "artifact_id": ""})
+
+
+def test_lineage_is_bounded_and_decision_filtered(tmp_path: Path) -> None:
+    source = _record(entity_id="source.alpha")
+    decision = _record(
+        entity_id="decision.alpha", derived_from=("source.alpha",)
+    )
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
+
+    lineage = adapter.lineage("decision.alpha")
+    assert [row["entity_id"] for row in lineage] == ["decision.alpha", "source.alpha"]
+    assert [row["entity_id"] for row in adapter.decision_chain("decision.alpha")] == [
+        "decision.alpha"
+    ]
+
+
+def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET record_id = ?, payload = ? WHERE record_id = ?",
+            ("../../escaped", b'{"tampered":true}', "prov-claim.alpha"),
+        )
+
+    faults = adapter.verify()
+    assert [fault.code for fault in faults] == [
+        "semantica_checksum_mismatch",
+        "semantica_missing_record",
+    ]
+    audit_paths = list((tmp_path / "projection.sqlite3.audit").glob("*.json"))
+    assert len(audit_paths) == 2
+    assert audit_paths[0].parent.stat().st_mode & 0o777 == 0o700
+    assert {
+        json.loads(path.read_text(encoding="utf-8"))["code"]
+        for path in audit_paths
+    } == {"semantica_checksum_mismatch", "semantica_missing_record"}
+    assert all(path.name.startswith("semantica-") for path in audit_paths)
+    assert not (tmp_path / "escaped").exists()
+
+    adapter.rebuild([_record()])
+    assert adapter.verify() == ()
+    assert list((tmp_path / "projection.sqlite3.audit").glob("*.json")) == []
+
+
+def test_verify_reconciles_receipts_after_partial_repair(tmp_path: Path) -> None:
+    source = _record(entity_id="source.alpha")
+    decision = _record(entity_id="decision.alpha")
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute("UPDATE provenance_records SET payload = ?", (b"{}",))
+
+    assert len(adapter.verify()) == 2
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? "
+            "WHERE record_id = ?",
+            (
+                canonical_json_bytes(source.canonical_payload()),
+                source.binding_checksum,
+                source.record_id,
+            ),
+        )
+
+    faults = adapter.verify()
+    assert len(faults) == 1
+    assert decision.record_id in faults[0].message
+    assert len(list((tmp_path / "projection.sqlite3.audit").glob("*.json"))) == 1
+
+
+def test_verify_preserves_distinct_malformed_row_identities(tmp_path: Path) -> None:
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        for malformed_id in (b"first", b"second"):
+            connection.execute(
+                "INSERT INTO provenance_records SELECT ?, entity_id, entity_type, "
+                "artifact_id, ledger_event_id, ledger_event_digest, activity_id, "
+                "agent_id, created_at, derived_from_json, ?, ? "
+                "FROM provenance_records WHERE record_id = ?",
+                (malformed_id, b"{}", "0" * 64, record.record_id),
+            )
+
+    faults = adapter.verify()
+    assert len(faults) == 2
+    assert len({fault.receipt_id for fault in faults}) == 2
+    assert len(list((tmp_path / "projection.sqlite3.audit").glob("*.json"))) == 2
+
+
+def test_verify_sanitizes_invalid_utf8_sqlite_record_id(tmp_path: Path) -> None:
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET record_id = CAST(X'80' AS TEXT)"
+        )
+
+    faults = adapter.verify()
+    assert [fault.code for fault in faults] == [
+        "semantica_checksum_mismatch",
+        "semantica_missing_record",
+    ]
+
+
+def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
+    source = _record(entity_id="source.alpha")
+    decision = _record(
+        entity_id="decision.alpha", derived_from=("source.alpha",)
+    )
+    adapter = _adapter(tmp_path, (source, decision))
+    adapter.record(source)
+    adapter.record(decision)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET entity_id = ?, derived_from_json = ? "
+            "WHERE record_id = ?",
+            ("attacker.alpha", '["attacker.alpha"]', "prov-decision.alpha"),
+        )
+    assert [row["entity_id"] for row in adapter.lineage("decision.alpha")] == [
+        "decision.alpha",
+        "source.alpha",
+    ]
+    assert adapter.lineage("attacker.alpha") == []
+
+
+def test_lineage_enforces_max_rows_inside_one_entity(tmp_path: Path) -> None:
+    base = _record()
+    copy = _record(
+        record_id="prov-claim-copy",
+        artifact_id="artifact-copy",
+        event_id=COPY_EVENT_ID,
+        event_digest="d" * 64,
+    )
+    adapter = _adapter(tmp_path, (base, copy))
+    adapter.record(base)
+    adapter.record(copy)
+    assert len(adapter.lineage("claim.alpha", max_rows=1)) == 1
+
+
+def test_lineage_rejects_unchecked_sql_record_id(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET record_id = ? WHERE record_id = ?",
+            ("attacker-record", "prov-claim.alpha"),
+        )
+    with pytest.raises(RuntimeError, match="lineage payload"):
+        adapter.lineage("claim.alpha")
+
+
+def test_verify_turns_text_payload_into_audit_fault(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ? WHERE record_id = ?",
+            ("not-a-blob", "prov-claim.alpha"),
+        )
+    faults = adapter.verify()
+    assert [fault.code for fault in faults] == ["semantica_checksum_mismatch"]
+
+
+def test_verify_reports_missing_canonical_record_and_lineage_fails_closed(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    adapter = SemanticaSQLiteAdapter(
+        tmp_path / "provenance.sqlite3",
+        canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        accepted_artifact_sha256_by_event={EVENT_ID: record.checksum},
+        expected_provenance_record_sha256={record.record_id: record.checksum},
+        audit_database_path=tmp_path / "projection.sqlite3",
+    )
+    adapter.record(record)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute("DELETE FROM provenance_records")
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_missing_record"
+    ]
+    with pytest.raises(RuntimeError, match="missing canonical provenance"):
+        adapter.lineage(record.entity_id)
+
+
+def test_verify_turns_checksummed_invalid_json_into_audit_fault(
+    tmp_path: Path,
+) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    invalid = b"not-json"
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? WHERE record_id = ?",
+            (invalid, hashlib.sha256(invalid).hexdigest(), "prov-claim.alpha"),
+        )
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_checksum_mismatch"
+    ]
+
+
+def test_noncanonical_checksummed_payload_is_rejected(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    record = _record()
+    adapter.record(record)
+    reformatted = json.dumps(record.canonical_payload(), indent=2).encode("utf-8")
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "UPDATE provenance_records SET payload = ?, checksum = ? WHERE record_id = ?",
+            (
+                reformatted,
+                hashlib.sha256(reformatted).hexdigest(),
+                record.record_id,
+            ),
+        )
+    assert [fault.code for fault in adapter.verify()] == [
+        "semantica_checksum_mismatch"
+    ]
+    with pytest.raises(RuntimeError, match="noncanonical"):
+        adapter.lineage(record.entity_id)
+
+
+def test_reset_removes_noncanonical_sidecar_rows(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "INSERT INTO provenance_records "
+            "(record_id, entity_id, entity_type, artifact_id, ledger_event_id, "
+            "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
+            "payload, checksum) "
+            "SELECT ?, entity_id, entity_type, artifact_id, ledger_event_id, "
+            "ledger_event_digest, activity_id, agent_id, created_at, derived_from_json, "
+            "payload, checksum FROM provenance_records WHERE record_id = ?",
+            ("prov-forged", "prov-claim.alpha"),
+        )
+    adapter.reset()
+    with pytest.raises(RuntimeError, match="missing canonical provenance"):
+        adapter.lineage("claim.alpha")
+
+
+def test_sidecar_rejects_writable_audit_directory(tmp_path: Path) -> None:
+    audit_directory = tmp_path / "projection.sqlite3.audit"
+    audit_directory.mkdir(mode=0o700)
+    audit_directory.chmod(0o777)
+    with pytest.raises(ValueError, match="private 0700"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+            audit_database_path=tmp_path / "projection.sqlite3",
+        )
+
+
+def test_tampered_sidecar_schema_is_a_provenance_error(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE provenance_records (record_id TEXT)")
+    database.chmod(0o600)
+    with pytest.raises(RuntimeError, match="initialization failed"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
+
+
+def test_record_rejects_hidden_conflict_ignore_policy(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE provenance_records (
+                record_id TEXT PRIMARY KEY,
+                entity_id TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                artifact_id TEXT NOT NULL,
+                ledger_event_id TEXT NOT NULL,
+                ledger_event_digest TEXT NOT NULL,
+                activity_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                derived_from_json TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                checksum TEXT NOT NULL,
+                UNIQUE(entity_id) ON CONFLICT IGNORE
+            )
+            """
+        )
+    database.chmod(0o600)
+    first = _record()
+    second = _record(
+        record_id="prov-claim-copy",
+        artifact_id="artifact-copy",
+        event_id=COPY_EVENT_ID,
+        event_digest="d" * 64,
+    )
+    adapter = _adapter(tmp_path, (first, second))
+    adapter.record(first)
+    with pytest.raises(RuntimeError, match="insert did not persist"):
+        adapter.record(second)
+
+
+def test_sidecar_rejects_active_triggers_before_record(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        connection.execute(
+            "CREATE TRIGGER rewrite_provenance AFTER INSERT ON provenance_records "
+            "BEGIN DELETE FROM provenance_records WHERE record_id = NEW.record_id; END"
+        )
+
+    with pytest.raises(RuntimeError, match="unsupported active triggers"):
+        adapter.record(_record())
+    with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM provenance_records"
+        ).fetchone() == (0,)
+
+
+def test_sidecar_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    os.mkfifo(database)
+    with pytest.raises(ValueError, match="private 0600 regular file"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
+
+
+def test_sidecar_rejects_hard_linked_database(tmp_path: Path) -> None:
+    external = tmp_path / "external.sqlite3"
+    with sqlite3.connect(external) as connection:
+        connection.execute("CREATE TABLE external_data(value TEXT)")
+    external.chmod(0o600)
+    database = tmp_path / "provenance.sqlite3"
+    os.link(external, database)
+
+    with pytest.raises(ValueError, match="private 0600 regular file"):
+        SemanticaSQLiteAdapter(
+            database,
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
+
+
+def test_sidecar_rejects_hard_linked_auxiliary_file(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    external = tmp_path / "external-wal"
+    external.write_bytes(b"sentinel")
+    os.link(external, tmp_path / "provenance.sqlite3-wal")
+
+    with pytest.raises(ValueError, match="unexpected SQLite auxiliary file"):
+        adapter.record(_record())
+    assert external.read_bytes() == b"sentinel"
+
+
+def test_prepare_rebuild_recovers_corrupt_sidecar_and_clears_faults(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "provenance.sqlite3"
+    database.write_bytes(b"corrupt")
+    database.chmod(0o600)
+    audit_directory = tmp_path / "projection.sqlite3.audit"
+    audit_directory.mkdir(mode=0o700)
+    (audit_directory / "semantica-stale.json").write_bytes(b"{}")
+
+    SemanticaSQLiteAdapter.prepare_rebuild(database)
+    record = _record()
+    adapter = _adapter(tmp_path, (record,))
+    adapter.rebuild([record])
+    assert adapter.verify() == ()
+    assert list(audit_directory.iterdir()) == []
+
+
+def test_sidecar_rejects_symlinked_ancestor_and_audit_directory(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    (target / "nested").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="ancestor"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "link" / "nested" / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+        )
+    (tmp_path / "projection.sqlite3.audit").symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="audit directory"):
+        SemanticaSQLiteAdapter(
+            tmp_path / "provenance.sqlite3",
+            canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+            accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+            accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+            expected_provenance_record_sha256={},
+            audit_database_path=tmp_path / "projection.sqlite3",
+        )
+
+
+def test_verify_rejects_audit_directory_swap_after_construction(
+    tmp_path: Path,
+) -> None:
+    adapter = _adapter(tmp_path)
+    audit_directory = tmp_path / "projection.sqlite3.audit"
+    target = tmp_path / "external-audit"
+    target.mkdir()
+    audit_directory.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(RuntimeError, match="audit directory open failed"):
+        adapter.verify()
+    assert list(target.iterdir()) == []
+
+
+def test_installed_cli_exposes_provenance_route(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "provenance",
+            "lineage",
+            "--run-root",
+            str(tmp_path / "run"),
+            "--store",
+            str(tmp_path / "projection.sqlite3"),
+            "--entity-id",
+            "claim.alpha",
+        ]
+    )
+    assert args.command == "provenance"
+    assert args.provenance_action == "lineage"
+
+
+def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
+    manifest = tmp_path / "plugin.json"
+    manifest.write_text(
+        '{"interface":{"capabilities":["provenance"]}}', encoding="utf-8"
+    )
+    router = default_router(
+        semantica_store_path=tmp_path / "provenance.sqlite3",
+        canonical_event_digests={EVENT_ID: EVENT_DIGEST},
+        accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
+        accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
+        expected_provenance_record_sha256={
+            _record().record_id: _record().checksum
+        },
+        plugin_manifest=manifest,
+    )
+    assert "knowledge.provenance" in router.available()
+    assert isinstance(router.resolve("knowledge.provenance"), SemanticaSQLiteAdapter)
+
+    absent = default_router()
+    with pytest.raises(CapabilityUnavailable):
+        absent.resolve("knowledge.provenance")
+
+
+def test_provenance_capability_is_explicitly_gated_off_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "arw.composition._PROVENANCE_PLATFORM_SUPPORTED", False
+    )
+    router = default_router(
+        semantica_store_path=tmp_path / "provenance.sqlite3"
+    )
+    with pytest.raises(CapabilityUnavailable):
+        router.resolve("knowledge.provenance")
+
+
+def test_sidecar_is_created_with_private_permissions(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    adapter.record(_record())
+    assert len(adapter.lineage("claim.alpha")) == 1
+    assert (tmp_path / "provenance.sqlite3").stat().st_mode & 0o777 == 0o600
+    (tmp_path / "provenance.sqlite3").chmod(0o644)
+    with pytest.raises(ValueError, match="private 0600"):
+        _adapter(tmp_path)
+
+
+def test_provenance_artifact_schema_is_byte_stable() -> None:
+    generated = ProvenanceRecord.model_json_schema(mode="validation")
+    properties = generated["properties"]
+    assert isinstance(properties, dict)
+    properties.pop("ledger_event_id")
+    properties.pop("ledger_event_digest")
+    generated["$id"] = (
+        "https://academic-research-workbench.local/schemas/v1/"
+        "provenance-record.schema.json"
+    )
+    generated["title"] = "Semantica-compatible Lite provenance record"
+    checked_in = json.loads(
+        (REPOSITORY_ROOT / "schemas/v1/provenance-record.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert generated == checked_in
+
+
+def test_lite_import_activates_no_heavy_modules() -> None:
+    project = Path(__file__).resolve().parents[2]
+    env = {**os.environ, "PYTHONPATH": str(project / "extensions/semantica/src")}
+    probe = """
+import importlib.util
+import json
+import sys
+import arw_semantica
+_ = arw_semantica.SemanticaSQLiteAdapter
+blocked = {name.split('.', 1)[0] for name in sys.modules} & {
+    'faiss', 'neo4j', 'falkordb', 'torch', 'transformers',
+    'sentence_transformers', 'spacy', 'fastapi', 'mcp',
+}
+print(json.dumps({
+    "blocked": sorted(blocked),
+    "upstream_semantica_installed": importlib.util.find_spec("semantica") is not None,
+}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "blocked": [],
+        "upstream_semantica_installed": False,
+    }

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.31.0"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -29,7 +29,14 @@ storm = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arw", "extensions/local-store/src/arw_ext"]
+packages = [
+    "src/arw",
+    "extensions/local-store/src/arw_ext",
+    "extensions/semantica/src/arw_semantica",
+]
+
+[tool.hatch.build.hooks.custom]
+path = "build_hooks.py"
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]

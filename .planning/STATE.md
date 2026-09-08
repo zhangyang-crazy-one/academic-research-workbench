@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-08-26T22:26:15+08:00
-last_activity: 2026-08-26 -- Completed verified quick task 260826-9p7: research-integrity bridge, layered lock diagnostics, root-hook gate, and CJK ingestion
+last_updated: 2026-09-05T01:00:00Z
+last_activity: 2026-09-05 -- Completed quick task 260905-ce2; PR16 sidecar filename bounds verified, merge remains pending review and CI
 progress:
   total_phases: 8
   completed_phases: 8
@@ -45,7 +45,7 @@ Progress: [██████████] 100%
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
+| ------- | ------- | ------- | ---------- |
 | 01 | 7 | 347 min | 50 min |
 | 02 | 5 | 107 min | 21 min |
 | 03 | 5 | 168 min | 34 min |
@@ -84,6 +84,7 @@ Progress: [██████████] 100%
 
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
 - [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
+- [260905-ce2](./quick/260905-ce2-pr16-bounded-provenance-sidecar-filename/) — Extended to historical PR closure: store-MCP wire/root/routing fixes, installed manifest binding, sidecar boundary/reconciliation guards, and date-test/spec correction. Final serial checks: 674 regression + 33 schema/staged tests passed; clean-index license technical PASS / release BLOCKED. Evidence: `docs/runtime/pr-history-review-closure.md`. PR #16 merge remains pending latest-head Codex review/CI.
 
 ### Decisions
 

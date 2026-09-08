@@ -288,6 +288,42 @@ class LocalProjectionStore:
         )
         return self._snapshot
 
+    def open_snapshot_connection(self) -> sqlite3.Connection:
+        """Open a fresh read-only connection for one per-request snapshot.
+
+        A long-lived adapter shares a single connection across requests;
+        SQLite on a read-only connection does not establish a transaction
+        snapshot automatically (no implicit BEGIN), so two requests on the
+        same connection can observe different states if the cache is
+        rewritten between them.  Per-request readers therefore need a
+        dedicated connection so they can issue an explicit ``BEGIN`` and
+        observe a consistent point-in-time snapshot.
+
+        The returned connection is opened with ``mode=ro`` (writes are
+        rejected by SQLite itself, so this never acquires a write lock);
+        callers issue ``BEGIN`` / ``COMMIT`` / ``ROLLBACK`` themselves to
+        bound the snapshot.  Close the connection when finished — it is
+        not owned by this store instance and will not be released by
+        :meth:`close`.
+
+        Used by :class:`LocalStoreFilesAdapter` to satisfy the P1 review
+        requirement that per-request reads cannot mix generations when
+        the canonical ``selected-generation.json`` advances or the cache
+        rows are re-ingested mid-query.
+        """
+
+        if self._connection is None:
+            raise StoreOpenError(
+                "store is not open; call open() or open_readonly() before "
+                "requesting a snapshot connection"
+            )
+        # URI-encode the path so any literal ``?`` / ``#`` / ``%`` in the
+        # filesystem path does not corrupt the SQLite URI.
+        connection = sqlite3.connect(
+            f"file:{quote(str(self._database_path))}?mode=ro", uri=True
+        )
+        return connection
+
     def _cleanup_fresh_file(self, is_fresh: bool) -> None:
         """Best-effort removal of a half-built fresh database file."""
 

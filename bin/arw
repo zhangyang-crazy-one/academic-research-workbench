@@ -10,6 +10,7 @@ Commands:
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
+  provenance     Operate the opt-in Semantica-compatible Lite sidecar.
   orchestration-prepare/orchestration-dispatch
                  Prepare or dispatch parent-owned Phase 4 assignments.
   orchestration-panel/orchestration-gate/orchestration-hook/orchestration-recover
@@ -38,7 +39,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -237,9 +238,26 @@ PY
     exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
     ;;
   _files-store-mcp)
+    # The store-backed files MCP server inherits the same installed-mode
+    # manifest posture as _graph-mcp: refuse to start the server when the
+    # bundled manifest is absent so a tampered install cannot silently
+    # bypass file capability gating (PR15 follow-up, store-MCP symmetry).
+    [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
+      || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" -m arw.files_store_mcp "$@"
     ;;
   _graph-mcp)
+    # The graph MCP server only stays fail-closed when the installed
+    # manifest is bound explicitly: in wheel mode the cli.py source-tree
+    # fallback would miss and default_router would skip capability gating
+    # (PR15 follow-up).  Refuse to start the server if the bundled manifest
+    # is missing; a tampered install must not silently gain graph access.
+    [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
+      || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
     ;;
   files)
