@@ -1431,6 +1431,21 @@ phase5_schema_names = {
     "graph-query-result.schema.json",
 }
 static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
+extension_schema_names = {
+    "source-locator.schema.json",
+    "provenance-record-v2.schema.json",
+    "research-artifact-ir.schema.json",
+    "research-artifact-receipt.schema.json",
+    "research-memory.schema.json",
+    "research-memory-input.schema.json",
+    "research-memory-query.schema.json",
+    "research-learning-observation.schema.json",
+    "research-heuristic.schema.json",
+    "research-heuristic-input.schema.json",
+    "research-learning-policy.schema.json",
+    "research-learning-sample.schema.json",
+}
+static_files.update(f"share/arw/schemas/{name}" for name in extension_schema_names)
 ars_source = project_root / "skills/academic-research-suite"
 if not ars_source.is_dir() or ars_source.is_symlink():
     raise SystemExit("bundled ARS source tree is missing or unsafe")
