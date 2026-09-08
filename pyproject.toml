@@ -40,6 +40,7 @@ packages = [
     "extensions/research-artifact/src/arw_research_artifact",
     "extensions/research-memory/src/arw_research_memory",
     "extensions/research-learning/src/arw_research_learning",
+    "extensions/academic-humanization/src/arw_writing",
 ]
 
 [tool.hatch.build.hooks.custom]

@@ -62,7 +62,9 @@ def test_kernel_never_imports_cli() -> None:
         for module in _imports_of(path):
             if module == "arw.cli" or module.startswith("arw.cli."):
                 violations.append(f"{path.relative_to(KERNEL_ROOT.parent)}: {module}")
-    assert not violations, "kernel must not import the CLI layer:\n" + "\n".join(violations)
+    assert not violations, "kernel must not import the CLI layer:\n" + "\n".join(
+        violations
+    )
 
 
 SRC_ROOT = KERNEL_ROOT.parent
@@ -126,12 +128,23 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
 
     from .normalize import read_golden_json
 
-    golden = read_golden_json(
-        Path(__file__).parent / "golden" / "kernel_edges.json"
-    )
+    golden = read_golden_json(Path(__file__).parent / "golden" / "kernel_edges.json")
     assert _kernel_edges() == golden["edges"], (
         "kernel subpackage edge set drifted; new coupling is forbidden, "
         "decoupling must update the pinned baseline deliberately"
     )
     # Keep the json import honest even if the golden read is refactored.
     assert _json.dumps(_kernel_edges(), sort_keys=True)
+
+
+def test_kernel_and_cli_never_import_writing_engine():
+    paths = [*KERNEL_ROOT.rglob("*.py"), *SRC_ROOT.glob("cli*.py")]
+    violations = [
+        str(path)
+        for path in paths
+        if any(
+            module == "arw_writing" or module.startswith("arw_writing.")
+            for module in _imports_of(path)
+        )
+    ]
+    assert not violations
