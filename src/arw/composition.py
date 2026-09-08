@@ -31,6 +31,7 @@ def default_router(
     accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
     expected_provenance_record_sha256: Mapping[str, str] | None = None,
     source_locator_resolver=None,
+    writing_run_root=None,
     semantic_run_root=None,
     embedding_backend=None,
     learning_project_root=None,
@@ -53,6 +54,15 @@ def default_router(
     from arw.adapters.workflow import ARSAdapter
 
     router = CapabilityRouter()
+    from arw.ports.writing import CAPABILITIES as WRITING_CAPABILITIES
+    def _writing():
+        module = import_module("arw_writing.service")
+        if writing_run_root is None:
+            from arw.kernel.capabilities import CapabilityUnavailable
+            raise CapabilityUnavailable("writing (explicit run root required)")
+        return module.WritingService(writing_run_root)
+    for capability in WRITING_CAPABILITIES:
+        router.register_optional(capability, _writing)
     def _semantic():
         module = import_module("arw_ext.local_store.semantic")
         # Probe before configuration checks so a minimal install receives the
@@ -188,6 +198,7 @@ def default_router(
             "evidence": (),
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
+            "writing": WRITING_CAPABILITIES,
             "semantic": ("knowledge.semantic_search",),
             "provenance": ("knowledge.provenance",),
             "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),

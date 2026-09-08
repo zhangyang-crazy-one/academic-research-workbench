@@ -489,7 +489,7 @@ copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
-for capability_skill in research literature experiment evidence files graph provenance artifact audit; do
+for capability_skill in writing research literature experiment evidence files graph provenance artifact audit; do
     copy_file "skills/${capability_skill}/SKILL.md"
 done
 copy_tree "skills/academic-research-suite"
@@ -1378,6 +1378,7 @@ static_files = {
     "share/arw/schemas/lifecycle-evidence.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "skills/research/SKILL.md",
+    "skills/writing/SKILL.md",
     "skills/literature/SKILL.md",
     "skills/experiment/SKILL.md",
     "skills/evidence/SKILL.md",

@@ -31,7 +31,8 @@
       "memory",
       "learning",
       "semantic",
-      "audit"
+      "audit",
+      "writing"
     ],
     "defaultPrompt": "Route this academic research task through the workbench."
   }
