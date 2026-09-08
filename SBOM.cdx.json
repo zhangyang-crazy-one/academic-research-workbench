@@ -2385,7 +2385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a87f72ac61f07681a499598828fa4a2f0736f10106de952e3575b3c9ddabd191"
+          "content": "7e2515ba258bbf3e3fa36673fb79826038a1a92296a0f2a4e7837b2eaa0ef9bd"
         }
       ],
       "licenses": [
@@ -3078,21 +3078,34 @@
       "version": "v0.9.0-2-gee68144"
     },
     {
-      "bom-ref": "trove-classifiers-22@2026.6.1.19",
+      "bom-ref": "sqlite-vec-22@0.1.9",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "sqlite-vec",
+      "purl": "pkg:pypi/sqlite-vec@0.1.9",
+      "scope": "optional",
+      "type": "library",
+      "version": "0.1.9"
+    },
+    {
+      "bom-ref": "trove-classifiers-23@2026.6.1.19",
       "name": "trove-classifiers",
       "purl": "pkg:pypi/trove-classifiers@2026.6.1.19",
       "type": "library",
       "version": "2026.6.1.19"
     },
     {
-      "bom-ref": "typing-extensions-23@4.16.0",
+      "bom-ref": "typing-extensions-24@4.16.0",
       "name": "typing-extensions",
       "purl": "pkg:pypi/typing-extensions@4.16.0",
       "type": "library",
       "version": "4.16.0"
     },
     {
-      "bom-ref": "typing-inspection-24@0.4.2",
+      "bom-ref": "typing-inspection-25@0.4.2",
       "name": "typing-inspection",
       "purl": "pkg:pypi/typing-inspection@0.4.2",
       "type": "library",
@@ -3108,7 +3121,8 @@
         "portalocker-13@3.2.0",
         "pydantic-14@2.13.4",
         "pytest-17@9.1.1",
-        "pyyaml-19@6.0.3"
+        "pyyaml-19@6.0.3",
+        "sqlite-vec-22@0.1.9"
       ],
       "ref": "academic-research-workbench-1@0.1.0"
     },
@@ -3126,7 +3140,7 @@
         "packaging-9@26.2",
         "pathspec-10@1.1.1",
         "pluggy-12@1.6.0",
-        "trove-classifiers-22@2026.6.1.19"
+        "trove-classifiers-23@2026.6.1.19"
       ],
       "ref": "hatchling-5@1.31.0"
     },
@@ -3170,14 +3184,14 @@
       "dependsOn": [
         "annotated-types-2@0.7.0",
         "pydantic-core-15@2.46.4",
-        "typing-extensions-23@4.16.0",
-        "typing-inspection-24@0.4.2"
+        "typing-extensions-24@4.16.0",
+        "typing-inspection-25@0.4.2"
       ],
       "ref": "pydantic-14@2.13.4"
     },
     {
       "dependsOn": [
-        "typing-extensions-23@4.16.0"
+        "typing-extensions-24@4.16.0"
       ],
       "ref": "pydantic-core-15@2.46.4"
     },
@@ -3211,16 +3225,19 @@
       "ref": "rpds-py-21@2026.6.3"
     },
     {
-      "ref": "trove-classifiers-22@2026.6.1.19"
+      "ref": "sqlite-vec-22@0.1.9"
     },
     {
-      "ref": "typing-extensions-23@4.16.0"
+      "ref": "trove-classifiers-23@2026.6.1.19"
+    },
+    {
+      "ref": "typing-extensions-24@4.16.0"
     },
     {
       "dependsOn": [
-        "typing-extensions-23@4.16.0"
+        "typing-extensions-24@4.16.0"
       ],
-      "ref": "typing-inspection-24@0.4.2"
+      "ref": "typing-inspection-25@0.4.2"
     }
   ],
   "metadata": {
