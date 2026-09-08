@@ -200,6 +200,35 @@ RESEARCH_ARTIFACT_EVENT_TYPES = (
 )
 
 
+class ResearchMemoryPayload(StrictModel):
+    memory_id: StableRuntimeId
+    project_id: StableRuntimeId
+    source_run_id: RunId
+    kind: Literal["context", "handoff", "decision_note", "lesson", "blocker", "experiment_note", "source_note", "reproduction_note"]
+    scope: Literal["run", "project", "team", "user"]
+    content_digest: Sha256
+    document_sha256: Sha256
+    source_harness: Literal["codex", "claude", "cursor", "other"]
+    source_event_ids: list[EventId] = Field(max_length=64)
+    source_artifact_ids: list[StableRuntimeId] = Field(max_length=64)
+    previous_memory_event_sha256: Sha256 | None = None
+    prior_status: Literal["created", "active", "superseded", "rejected", "distilled"] | None = None
+    status: Literal["created", "active", "superseded", "rejected", "distilled"]
+    prior_trust: Literal["unreviewed", "advisory", "verified"] | None = None
+    trust: Literal["unreviewed", "advisory", "verified"]
+    successor_memory_id: StableRuntimeId | None = None
+    authorization_artifact_id: StableRuntimeId | None = None
+    authorization_event_id: EventId | None = None
+    authorization_sha256: Sha256 | None = None
+
+
+RESEARCH_MEMORY_EVENT_TYPES = (
+    "research_memory_created", "research_handoff_created", "research_memory_superseded",
+    "research_memory_rejected", "research_memory_distilled", "research_memory_activated",
+    "research_memory_verified",
+)
+
+
 class PassportAcceptedPayload(StrictModel):
     passport_sha256: Sha256
     parent_passport_sha256: Sha256 | None
@@ -691,6 +720,7 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
     "resume.accepted": ResumeAcceptedPayload,
     "recovery.completed": RecoveryCompletedPayload,
     **PHASE4_EVENT_PAYLOAD_TYPES,
+    **{name: ResearchMemoryPayload for name in RESEARCH_MEMORY_EVENT_TYPES},
     "research_artifact_ir_frozen": ResearchArtifactStagePayload,
     "research_artifact_rendered": ResearchArtifactStagePayload,
     "research_artifact_validated": ResearchArtifactStagePayload,
@@ -702,8 +732,11 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
 class CanonicalEvent(StrictModel):
     """One hash-chained event accepted by the canonical writer."""
 
-    schema_version: Literal["1.0.0", "1.1.0"]
+    schema_version: Literal["1.0.0", "1.1.0", "1.2.0"]
     event_type: Literal[
+        "research_memory_created", "research_handoff_created", "research_memory_superseded",
+        "research_memory_rejected", "research_memory_distilled", "research_memory_activated",
+        "research_memory_verified",
         "research_artifact_ir_frozen", "research_artifact_rendered",
         "research_artifact_validated", "research_artifact_accepted",
         "research_artifact_superseded",
@@ -746,7 +779,8 @@ class CanonicalEvent(StrictModel):
     actor_role: ActorRole | None = None
     prev_event_sha256: Sha256
     payload: (
-        ResearchArtifactStagePayload
+        ResearchMemoryPayload
+        | ResearchArtifactStagePayload
         | ResearchArtifactAcceptedPayload
         | ResearchArtifactSupersededPayload
         | RunInitializedPayload
@@ -786,6 +820,11 @@ class CanonicalEvent(StrictModel):
             raise ValueError("event schema version does not match its registered family")
         if self.event_type in RESEARCH_ARTIFACT_EVENT_TYPES and self.actor_role != "parent_control_plane":
             raise ValueError("research artifact events require the parent writer")
+        if self.event_type in RESEARCH_MEMORY_EVENT_TYPES:
+            if self.actor_role != "parent_control_plane":
+                raise ValueError("memory events require the parent writer")
+            from arw.kernel.state.memory_event_rules import validate_memory_event
+            validate_memory_event(self.event_type, self.payload)
         expected_payload = EVENT_PAYLOAD_TYPES[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("event_type and payload variant do not match")

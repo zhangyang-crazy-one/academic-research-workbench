@@ -1,0 +1,16 @@
+"""Memory is advisory context. This port cannot promote it into research policy."""
+
+from typing import Protocol
+
+from arw.kernel.state.models import RuntimeCommandRequest
+from arw.kernel.state.research_memory import MemoryInput, MemoryQuery
+
+
+class MemoryProvider(Protocol):
+    def save(
+        self, value: MemoryInput, *, request: RuntimeCommandRequest
+    ) -> dict[str, object]: ...
+    def search(self, query: MemoryQuery) -> dict[str, object]: ...
+    def read(self, memory_id: str, *, query: MemoryQuery) -> dict[str, object]: ...
+    def list(self, query: MemoryQuery) -> dict[str, object]: ...
+    def doctor(self) -> dict[str, object]: ...
