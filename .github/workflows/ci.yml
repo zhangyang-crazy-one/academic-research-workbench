@@ -143,11 +143,20 @@ jobs:
         run: |
           uv build --out-dir dist
           python - <<'PY'
+          import hashlib
+          import json
           from pathlib import Path
           from zipfile import ZipFile
 
           wheels = list(Path('dist').glob('*.whl'))
           assert len(wheels) == 1, wheels
+          wheel = wheels[0]
+          components = json.loads(Path('SBOM.cdx.json').read_text())['components']
+          component = next(item for item in components
+                           if item['bom-ref'] == 'first-party-wheel:' + wheel.name)
+          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+          assert component['hashes'] == [{'alg': 'SHA-256', 'content': digest}], \
+              'First-party SBOM digest does not match the built wheel'
           with ZipFile(wheels[0]) as archive:
               names = archive.namelist()
           forbidden = (
