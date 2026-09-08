@@ -111,6 +111,15 @@ jobs:
           uv run pytest -q
           tests/integration/test_artifact_integrity_cli.py
           tests/integration/test_artifact_sanitize.py
+      - name: Run research artifact, memory and learning regressions
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: >-
+          uv run pytest -q
+          tests/integration/test_research_artifacts.py
+          tests/integration/test_research_memory.py
+          tests/integration/test_research_learning.py
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
