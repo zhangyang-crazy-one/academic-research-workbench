@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-09-05T01:00:00Z
-last_activity: 2026-09-05 -- Completed quick task 260905-ce2; PR16 sidecar filename bounds verified, merge remains pending review and CI
+last_updated: 2026-09-08T03:16:06Z
+last_activity: 2026-09-08 -- Completed quick task 260908-f21; OpenSpec paper/watermark acceptance and text artifact slice, commit 3d7f295
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** Milestone complete
+**Current focus:** v2 OpenSpec continuation — artifact text slice complete; binary sanitation and writing remain planned
 
 ## Current Position
 
@@ -81,6 +81,8 @@ Progress: [██████████] 100%
 - Phase 04.1 inserted after Phase 4: Phase 4 Qualification Closure, ARS Integration Lock, and Installed Host Verification (URGENT)
 
 ### Quick Tasks Completed
+
+- [260908-f21](./quick/260908-f21-complete-watermark-openspec-acceptance-a/) — Completed OpenSpec paper/watermark acceptance and missing designs; implemented bounded Unicode inspection/explicit derived cleanup in `3d7f295`. Focused 56, compatibility 56 and broader regression 650 passed; isolated wheel smoke passed. Binary metadata/C2PA and statistical writing remain planned; prior working-tree changes preserved.
 
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
 - [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
