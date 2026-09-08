@@ -12,19 +12,22 @@ from typing import Any
 import jsonschema
 from referencing import Registry, Resource
 
-from arw.kernel.artifacts.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
 from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
-from arw.kernel.policy.integration_lock import integration_lock_schema_document
-from arw.kernel.artifacts.integrity import PHASE6_SCHEMA_NAMES, generate_phase6_schema_documents
-from arw.kernel.state.orchestration_models import (
-    PHASE4_SCHEMA_NAMES,
-    generate_phase4_schema_documents,
+from arw.kernel.artifacts.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
+from arw.kernel.artifacts.integrity import (
+    PHASE6_SCHEMA_NAMES,
+    generate_phase6_schema_documents,
 )
+from arw.kernel.policy.integration_lock import integration_lock_schema_document
 from arw.kernel.policy.research_integrity import (
     ResearchIntegrityError,
     research_integrity_contracts_schema_document,
     validate_research_integrity_contract_instance,
+)
+from arw.kernel.state.orchestration_models import (
+    PHASE4_SCHEMA_NAMES,
+    generate_phase4_schema_documents,
 )
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
@@ -52,6 +55,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
         "decision-request.schema.json",
         "material-passport.schema.json",
         "passport-pointer.schema.json",
+        "provenance-record.schema.json",
         "rejection.schema.json",
         "recovery-receipt.schema.json",
         "recovery-request.schema.json",

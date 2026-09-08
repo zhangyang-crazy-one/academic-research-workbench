@@ -70,9 +70,12 @@ Note on the seven-tool research contract (`list_files`, `read_file`,
 `ingest_research_manifest`, `sync_research_run`): that is the v2 TARGET
 surface for the FileProvider port, not a v1 reality — neither the five-tool
 Python read-only profile nor the pinned native graph-profile binary
-implements it today. This baseline therefore freezes actual v1 behavior; the
-seven-tool contract is introduced and pinned by the `ports-and-adapters`
-change, at which point this section's fixtures extend to cover it.
+implements it today. The completed `ports-and-adapters` change preserves the
+five-query FileProvider contract (`list_files`, `read_file`, `search_files`,
+`get_outline`, `get_context`). Research-manifest ingestion/synchronization and
+any naming changes require a separate, explicitly qualified additive contract;
+they are not delivered merely by defining the existing provider port. This
+baseline continues to freeze the implemented surfaces until that work lands.
 
 ## I5 — Projection rebuildability
 

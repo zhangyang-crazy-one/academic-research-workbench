@@ -15,8 +15,44 @@ if [[ -n "${ARW_FILES_CONTROL_ROOT:-}" || -n "${ARW_FILES_ROOT_ID:-}" ]]; then
     || { printf 'file-base-mcp: ARW_FILES_ROOT_ID is invalid\n' >&2; exit 64; }
   unset PYTHONPATH PYTHONHOME VIRTUAL_ENV LD_PRELOAD
   export PYTHONDONTWRITEBYTECODE=1
-  exec "$PLUGIN_ROOT/bin/arw" _files-mcp \
-    --control-root "$ARW_FILES_CONTROL_ROOT" --root-id "$ARW_FILES_ROOT_ID"
+  # Legacy compatibility is preserved ONLY when the operator explicitly
+  # selects the v1 reader (ARW_FILES_LEGACY_READER=1); default dispatch
+  # goes through the store-backed MCP, which is the production read path.
+  # The store MCP is the single source of truth for capability gating,
+  # root anchoring, and the store-absent signal (STORE_ABSENT, exit 69)
+  # surfaced before stdin consumption; we do NOT fall back on generic
+  # 78, capability denial, root mismatch, corruption, or after transport
+  # has started.
+  if [[ "${ARW_FILES_LEGACY_READER:-}" == "1" ]]; then
+    exec "$PLUGIN_ROOT/bin/arw" _files-mcp \
+      --control-root "$ARW_FILES_CONTROL_ROOT" --root-id "$ARW_FILES_ROOT_ID"
+  fi
+  # Dispatch into the store-backed MCP first.  When it returns
+  # STORE_ABSENT (exit 69 — store file absent on disk, signaled
+  # pre-stdin by the server itself) the shim falls back to the v1
+  # reader so first-run deployments that have not yet populated a
+  # projection keep working.  Any other non-zero exit is propagated
+  # verbatim — those signal configuration/security failures and
+  # must never silently route through an undeclared reader.
+  store_args=(--control-root "$ARW_FILES_CONTROL_ROOT" --root-id "$ARW_FILES_ROOT_ID")
+  if [[ -n "${ARW_FILES_STORE:-}" ]]; then
+    # Operator-supplied explicit store path; otherwise the store MCP
+    # resolves the per-user cache keyed by the registered canonical root.
+    store_args+=(--store "$ARW_FILES_STORE")
+  fi
+  # ``set -e`` would otherwise exit the shim on the store MCP's
+  # non-zero status before we can branch on STORE_ABSENT (69).  The
+  # legacy-compatibility fallback path is the only place where a
+  # non-zero exit is allowed to influence routing.
+  set +e
+  "$PLUGIN_ROOT/bin/arw" _files-store-mcp "${store_args[@]}" "$@"
+  status=$?
+  set -e
+  if [[ $status -eq 69 ]]; then
+    exec "$PLUGIN_ROOT/bin/arw" _files-mcp \
+      --control-root "$ARW_FILES_CONTROL_ROOT" --root-id "$ARW_FILES_ROOT_ID" "$@"
+  fi
+  exit $status
 fi
 
 missing=()

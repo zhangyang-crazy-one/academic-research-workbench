@@ -1,5 +1,5 @@
 {
-  "extraPaths": ["src", "extensions/local-store/src"],
+  "extraPaths": ["src", "extensions/local-store/src", "extensions/semantica/src"],
   "venvPath": ".",
   "venv": ".venv"
 }

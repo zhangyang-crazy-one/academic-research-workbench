@@ -32,6 +32,7 @@ storm = [
 packages = [
     "src/arw",
     "extensions/local-store/src/arw_ext",
+    "extensions/semantica/src/arw_semantica",
     "extensions/artifact-integrity/src/arw_artifact_integrity",
 ]
 

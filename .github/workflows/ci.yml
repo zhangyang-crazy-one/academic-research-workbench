@@ -91,6 +91,26 @@ jobs:
           tests/integration/test_orchestration_panels.py
           tests/integration/test_orchestration_replay.py
           tests/integration/test_phase4_verifier.py
+      - name: Run store inventory and audit regressions
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: >-
+          uv run pytest -q
+          tests/integration/test_files_store_inventory_binding.py
+          tests/integration/test_files_store_mcp_history.py
+          tests/integration/test_files_store_mcp_lifecycle.py
+          tests/integration/test_semantica_conflict_policies.py
+          tests/integration/test_semantica_lite.py
+          tests/integration/test_semantica_audit_reconciliation.py
+      - name: Run artifact inspection and acceptance regressions
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: >-
+          uv run pytest -q
+          tests/integration/test_artifact_integrity_cli.py
+          tests/integration/test_artifact_sanitize.py
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
