@@ -156,7 +156,7 @@ jobs:
                            if item['bom-ref'] == 'first-party-wheel:' + wheel.name)
           digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
           assert component['hashes'] == [{'alg': 'SHA-256', 'content': digest}], \
-              'First-party SBOM digest does not match the built wheel'
+              f"First-party wheel digest {digest} differs from {component['hashes']}"
           with ZipFile(wheels[0]) as archive:
               names = archive.namelist()
           forbidden = (
@@ -182,6 +182,7 @@ jobs:
             '(^|/)(\.env|credentials|secrets)(/|$)' \
             dist/source/files.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: academic-research-workbench-ci-${{ github.sha }}
           path: dist/
