@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-09-08T03:16:06Z
-last_activity: 2026-09-08 -- Shipped text artifact slice as PR17 from independent main-based worktree; historical PR16 fixes remain uncommitted/unmerged
+last_updated: 2026-09-08T06:36:00Z
+last_activity: 2026-09-08 -- Merged repair PR16 and snapshot follow-up PR18; PR17 af07ffa qualified on final main 5ae79de
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** PR17 shipping/CI on feat/artifact-integrity-text-pr; PR16 review closure still pending (see quick260908-f21 PR-AUDIT.md)
+**Current focus:** PR17 is review-ready at af07ffa on final main 5ae79de; repair PR16 and snapshot follow-up PR18 are merged, with all PR checks passing (see quick260908-grs).
 
 ## Current Position
 
 Phase: 7
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-07-16
+Last activity: 2026-09-08 -- Quick 260908-grs integration complete
 
 Progress: [██████████] 100%
 
@@ -82,11 +82,13 @@ Progress: [██████████] 100%
 
 ### Quick Tasks Completed
 
+- [260908-grs](./quick/260908-grs-close-pr16-review-gaps-and-merge-then-up/) — Merged PR16 and snapshot follow-up PR18 after exact-head CI; final main `5ae79de`. Updated PR17 normally to `af07ffa`, with 849 integrated, 59 compatibility/package and 114 formal-worktree focused checks passing; final three CI jobs passed. Original dirty work preserved; PR17 remains open for review.
+
 - [260908-f21](./quick/260908-f21-complete-watermark-openspec-acceptance-a/) — Completed OpenSpec paper/watermark acceptance and missing designs; implemented bounded Unicode inspection/explicit derived cleanup in `3d7f295`. Focused 56, compatibility 56 and broader regression 650 passed; isolated wheel smoke passed. Binary metadata/C2PA and statistical writing remain planned; prior working-tree changes preserved.
 
 - 260812-d7w — Added class-aware paragraph, one-/two-column float scheduling, and full rendered-page inspection contracts to academic-paper format export; validated source and a temporary stage. The digest-bound installed cache was restored unchanged and awaits the next qualified install.
 - [260826-9p7](./quick/260826-9p7-implement-arw-research-integrity-bridge-/) — Added layered integration-lock diagnostics, direct root-hook supply-chain gating, strict ARS-to-ARW source/span/claim contracts, safe CJK filename ingestion, and fresh-checkout CI/layout-contract closure. Independent re-verification passed 6/6 must-haves through code commit `c986e8f`; release remains legally BLOCKED.
-- [260905-ce2](./quick/260905-ce2-pr16-bounded-provenance-sidecar-filename/) — Extended to historical PR closure: store-MCP wire/root/routing fixes, installed manifest binding, sidecar boundary/reconciliation guards, and date-test/spec correction. Final serial checks: 674 regression + 33 schema/staged tests passed; clean-index license technical PASS / release BLOCKED. Evidence: `docs/runtime/pr-history-review-closure.md`. PR #16 merge remains pending latest-head Codex review/CI.
+- [260905-ce2](./quick/260905-ce2-pr16-bounded-provenance-sidecar-filename/) — Extended to historical PR closure: store-MCP wire/root/routing fixes, installed manifest binding, sidecar boundary/reconciliation guards, and date-test/spec correction. Final serial checks: 674 regression + 33 schema/staged tests passed; clean-index license technical PASS / release BLOCKED. Evidence: `docs/runtime/pr-history-review-closure.md`. PR #16 and the snapshot follow-up PR #18 are now merged; final evidence is recorded in quick 260908-grs.
 
 ### Decisions
 
@@ -159,6 +161,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-16T03:55:45.377Z
-Stopped at: Phase 7 technical qualification verified; release legal gates remain blocked
+Last session: 2026-09-08T06:36:00Z
+Stopped at: Quick 260908-grs complete; PR16/18 merged and PR17 updated with passing final-head CI
 Resume file: None
