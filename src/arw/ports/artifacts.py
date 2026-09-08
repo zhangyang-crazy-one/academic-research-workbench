@@ -9,9 +9,61 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Protocol
+from typing import Literal, Protocol
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from arw.kernel.artifacts.integrity import IntegrityEvaluation, IntegrityReceipt
+
+
+class ArtifactDiagnosticModel(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+
+class DetectorResult(ArtifactDiagnosticModel):
+    status: Literal[
+        "detected", "not_detected", "unsupported", "unknown", "not_applicable"
+    ]
+    reason_code: str
+
+
+class UnicodeFinding(ArtifactDiagnosticModel):
+    codepoint: str
+    category: Literal["invisible", "bidi", "tag", "exotic_space"]
+    character_offset: int = Field(ge=0)
+    byte_offset: int = Field(ge=0)
+
+
+class ArtifactInspection(ArtifactDiagnosticModel):
+    schema_version: Literal["arw.artifact-inspection.v1"] = "arw.artifact-inspection.v1"
+    inspector_version: Literal["unicode-explicit.v1"] = "unicode-explicit.v1"
+    status: Literal["inspected", "unsupported"]
+    reason_code: str
+    content_sha256: str | None
+    input_bytes: int = Field(ge=0)
+    detectors: dict[str, DetectorResult]
+    findings: list[UnicodeFinding] = Field(default_factory=list, max_length=256)
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    total_findings: int = Field(default=0, ge=0)
+    truncated: bool = False
+    interpretation: str = (
+        "Potential explicit signals only; not watermark absence or authorship proof."
+    )
+
+
+class UnicodeSanitization(ArtifactDiagnosticModel):
+    schema_version: Literal["arw.unicode-sanitization.v1"] = (
+        "arw.unicode-sanitization.v1"
+    )
+    policy_version: Literal["selected-codepoint-removal.v1"] = (
+        "selected-codepoint-removal.v1"
+    )
+    selected_codepoints: list[str]
+    derived_text: str
+    removed_counts: dict[str, int]
+    only_selected_changed: bool
+    before: ArtifactInspection
+    after: ArtifactInspection
 
 
 class ArtifactInspector(Protocol):
@@ -24,3 +76,7 @@ class ArtifactInspector(Protocol):
         input_sha256: Sequence[str] | None,
         now: datetime | str | None = None,
     ) -> IntegrityEvaluation: ...
+
+    def inspect_bytes(
+        self, content: bytes, *, detectors: Sequence[str] | None = None
+    ) -> ArtifactInspection: ...

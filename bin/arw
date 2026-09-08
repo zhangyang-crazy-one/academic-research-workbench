@@ -39,7 +39,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|artifact|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -259,6 +259,13 @@ PY
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
+    ;;
+  artifact)
+    [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
+      || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
+    exec "$RUNTIME_PYTHON" -m arw.cli artifact "$@"
     ;;
   files)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"

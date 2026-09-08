@@ -45,6 +45,65 @@ def build_parser() -> argparse.ArgumentParser:
         description="Academic Research Workbench control plane.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    artifact = subparsers.add_parser(
+        "artifact",
+        help="Inspect explicit signals or accept selected derived UTF-8 cleanup.",
+    )
+    artifact_commands = artifact.add_subparsers(dest="artifact_command", required=True)
+    for operation in ("inspect", "sanitize"):
+        command = artifact_commands.add_parser(operation)
+        command.add_argument(
+            "--root",
+            type=Path,
+            required=True,
+            help="Existing allowed source root; symlink ancestors are rejected.",
+        )
+        command.add_argument(
+            "--path",
+            required=True,
+            help="Normalized relative source path; input limit 1 MiB.",
+        )
+        if operation == "inspect":
+            command.add_argument(
+                "--detector",
+                action="append",
+                default=None,
+                help="Additional named detector status; Unicode is always scanned, unimplemented detectors remain unsupported.",
+            )
+        else:
+            command.add_argument(
+                "--run-root",
+                type=Path,
+                required=True,
+                help="Existing canonical segmented run. Creates arw-sanitize-SHA256(command_id).receipt.json and .txt here, never replaces files.",
+            )
+            command.add_argument(
+                "--request",
+                type=Path,
+                required=True,
+                help="Bounded (64 KiB) ArtifactAcceptanceRequest JSON: schema_version, run_id, event_id, command_id, expected_revision, occurred_at, actor_id, actor_role, artifact_id, artifact_kind, media_type, content_path, content_sha256, base_revision, consumed_sha256; optional attempt_id. Kind/type/path/hash are derived from the actual receipt bundle; consumed hashes must name known canonical provenance.",
+            )
+            command.add_argument(
+                "--privacy",
+                action="store_true",
+                help="Explicit authorization for selected derived Unicode removal.",
+            )
+            command.add_argument(
+                "--remove-codepoint",
+                action="append",
+                default=[],
+                help="Explicit marker selection, e.g. U+200B; repeat for multiple characters. No blanket normalization.",
+            )
+            command.add_argument(
+                "--treatment",
+                default="unicode",
+                help="Only unicode is implemented; metadata and other treatments fail explicitly.",
+            )
+            command.add_argument(
+                "--strip-provenance",
+                action="store_true",
+                help="Explicit provenance request; unsupported in this UTF-8 slice.",
+            )
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -414,6 +473,79 @@ def _read_bounded_regular_file(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "artifact":
+        from arw.composition import default_router
+        from arw.kernel.capabilities import CapabilityUnavailable
+
+        try:
+            manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
+            if manifest_env:
+                manifest_path = Path(manifest_env)
+            elif os.environ.get("ARW_PLUGIN_ROOT"):
+                raise ValueError("plugin_manifest_missing")
+            else:
+                candidate = (
+                    Path(__file__).resolve().parents[2]
+                    / ".codex-plugin"
+                    / "plugin.json"
+                )
+                manifest_path = candidate if candidate.is_file() else None
+            provider = default_router(plugin_manifest=manifest_path).resolve(
+                f"artifact.{args.artifact_command}"
+            )
+            if args.artifact_command == "inspect":
+                result = provider.inspect(args.root, args.path, detectors=args.detector)
+                _write_json(result.model_dump(mode="json"))
+                return 0 if result.status == "inspected" else 65
+            result = provider.sanitize(
+                args.root,
+                args.path,
+                run_root=args.run_root,
+                request=provider.load_acceptance_request(args.request),
+                privacy=args.privacy,
+                remove_codepoints=args.remove_codepoint,
+                strip_provenance=args.strip_provenance,
+                treatment=args.treatment,
+            )
+            _write_json(result)
+            return 0 if result["accepted"] else 65
+        except (CapabilityUnavailable, ValueError, OSError, RuntimeError) as error:
+            code = getattr(error, "code", None)
+            if isinstance(error, CapabilityUnavailable):
+                code, status = "capability_not_available", "unavailable"
+            else:
+                # Only stable extension codes are exposed, never request text.
+                if code is None:
+                    code = (
+                        str(error)
+                        if str(error)
+                        in {
+                            "plugin_manifest_missing",
+                            "explicit_codepoint_selection_required",
+                            "invalid_codepoint_selection",
+                            "unsupported_codepoint_selection",
+                            "unsupported_container",
+                            "invalid_utf8",
+                            "binary_nul",
+                        }
+                        else "invalid_request_or_access"
+                    )
+                status = (
+                    "unknown"
+                    if "interrupted" in code or "post_acceptance" in code
+                    else "unsupported"
+                    if "unsupported" in code
+                    else "rejected"
+                )
+            _write_json(
+                {
+                    "schema_version": "arw.artifact-operation-error.v1",
+                    "accepted": False,
+                    "status": status,
+                    "reason_code": code,
+                }
+            )
+            return 65
 
     if args.command == "route":
         if not args.json_output:
