@@ -540,6 +540,7 @@ copy_as "schemas/v1/audit-dossier.schema.json" "share/arw/schemas/audit-dossier.
 copy_as "schemas/v1/lifecycle-evidence.schema.json" "share/arw/schemas/lifecycle-evidence.schema.json"
 copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
+copy_file "extensions/file-base-mcp/bin/provider" 0755
 copy_file "scripts/file-base-graph-mcp" 0755
 copy_as ".file-base/bin/file-base" "libexec/file-base-mcp" 0755
 copy_file ".file-base/build-evidence.json"
@@ -1312,6 +1313,7 @@ static_files = {
     "schemas/v1/lifecycle-evidence.schema.json",
     "schemas/v1/audit-dossier.schema.json",
     "scripts/file-base-mcp",
+    "extensions/file-base-mcp/bin/provider",
     "scripts/file-base-graph-mcp",
     "scripts/verify-phase-2",
     "scripts/verify-phase-6",

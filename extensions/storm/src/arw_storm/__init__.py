@@ -437,3 +437,22 @@ def run_storm_research(config: StormConfig) -> StormRunReceipt:
         receipt.model_dump_json(indent=2) + "\n", encoding="utf-8"
     )
     return receipt
+
+
+class StormWorkflowProvider:
+    """WorkflowProvider-compatible execution adapter; no canonical workflow registered.
+
+    STORM produces advisory files outside the run state machine. Advertising a
+    canonical definition here would falsely imply scientific admission.
+    """
+    def registry(self):
+        return ()
+
+    def resolve(self, definition_id):
+        return None
+
+    def run(self, config):
+        return run_storm_research(config)
+
+    def __call__(self, config):
+        return self.run(config)

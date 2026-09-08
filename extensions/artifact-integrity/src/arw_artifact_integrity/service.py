@@ -236,11 +236,18 @@ class ArtifactIntegrityService(ArtifactIntegrityInspector):
         remove_codepoints: Sequence[str],
         strip_provenance: bool = False,
         treatment: str = "unicode",
+        remove_metadata: Sequence[str] = (),
     ):
         # Check authorization and request type before any filesystem mutation.
         if privacy is not True:
             raise ArtifactOperationError("privacy_authorization_required")
-        if strip_provenance or treatment != "unicode":
+        if treatment == "metadata":
+            if remove_codepoints:
+                raise ArtifactOperationError("mixed_treatment_selection")
+            request = ArtifactAcceptanceRequest.model_validate(request.model_dump(mode="json"))
+            from .binary_service import sanitize_binary
+            return sanitize_binary(self, root, relative, run_root=run_root, request=request, selection=remove_metadata, strip=strip_provenance)
+        if remove_metadata or strip_provenance or treatment != "unicode":
             raise ArtifactOperationError("unsupported_treatment")
         request = ArtifactAcceptanceRequest.model_validate(
             request.model_dump(mode="json")

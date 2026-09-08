@@ -22,34 +22,8 @@ from arw.kernel.policy.integration_lock import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-_QUALIFICATION_CANDIDATES = (
-    (
-        REPOSITORY_ROOT / "build/stage/phase-07-live-route-fix",
-        REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix",
-    ),
-    (
-        REPOSITORY_ROOT / "build/stage/phase-07-live-bundled",
-        REPOSITORY_ROOT / "build/evidence/phase-07-live-bundled",
-    ),
-    (
-        REPOSITORY_ROOT / "build/stage/phase-07-qualified",
-        REPOSITORY_ROOT / "build/evidence/phase-07",
-    ),
-)
-
-
-def _qualification_inputs() -> tuple[Path, Path, Path]:
-    discovered = discover_bundled_qualification()
-    if discovered is not None:
-        return discovered
-    return (
-        REPOSITORY_ROOT / "build/stage/phase-07-live-route-fix",
-        REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix/integration-lock.json",
-        REPOSITORY_ROOT / "build/evidence/phase-07-live-route-fix/canary.json",
-    )
-
-
-STAGE_ROOT, LOCK_PATH, CANARY_PATH = _qualification_inputs()
+_QUALIFICATION_INPUTS = discover_bundled_qualification()
+STAGE_ROOT, LOCK_PATH, CANARY_PATH = _QUALIFICATION_INPUTS or (None, None, None)
 
 
 def _digest(path: Path) -> str:
@@ -58,9 +32,8 @@ def _digest(path: Path) -> str:
 
 @pytest.fixture(scope="module")
 def qualified_stage() -> Path:
-    for path in (STAGE_ROOT, LOCK_PATH, CANARY_PATH):
-        if not path.exists():
-            pytest.skip(f"Phase 7 retained qualification input is missing: {path}")
+    if _QUALIFICATION_INPUTS is None:
+        pytest.skip("no retained Phase 7 qualification verifies against the current runtime and host")
     return STAGE_ROOT
 
 

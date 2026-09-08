@@ -99,13 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument(
                 "--treatment",
                 default="unicode",
-                help="Only unicode is implemented; metadata and other treatments fail explicitly.",
+                choices=("unicode", "metadata"),
+                help="Selected Unicode markers or format-specific metadata blocks/fields.",
             )
             command.add_argument(
                 "--strip-provenance",
                 action="store_true",
-                help="Explicit provenance request; unsupported in this UTF-8 slice.",
+                help="Separate authorization to remove provenance/attribution when metadata treatment requires it.",
             )
+            command.add_argument("--remove-metadata", action="append", default=[], choices=("exif", "xmp", "pdf_properties", "docx_properties"), help="Explicit binary metadata family; repeat for multiple families.")
     from arw.cli_research_artifact import configure
     configure(artifact_commands)
     from arw.cli_memory import configure as configure_memory
@@ -571,6 +573,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 remove_codepoints=args.remove_codepoint,
                 strip_provenance=args.strip_provenance,
                 treatment=args.treatment,
+                remove_metadata=args.remove_metadata,
             )
             _write_json(result)
             return 0 if result["accepted"] else 65
@@ -644,7 +647,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "storm":
-        from arw.storm import StormConfig, StormRunError, run_storm_research
+        from arw.composition import storm_components
+        StormConfig, StormRunError, run_storm_research = storm_components()
 
         config_kwargs: dict[str, Any] = {
             "topic": args.topic,
