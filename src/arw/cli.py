@@ -689,8 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest_path = Path(manifest_env)
             if not manifest_path.is_file():
                 print(
-                    "arw: plugin-manifest-unreadable: "
-                    f"{manifest_env}",
+                    f"arw: plugin-manifest-unreadable: {manifest_env}",
                     file=sys.stderr,
                 )
                 return 65
@@ -703,9 +702,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65
         else:
             manifest_path = (
-                Path(__file__).resolve().parents[2]
-                / ".codex-plugin"
-                / "plugin.json"
+                Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
             )
             if not manifest_path.is_file():
                 manifest_path = None
@@ -986,7 +983,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(state.public_dict())
             return 0
         if args.command == "status":
-            with locked_replay(args.run_root, lock_timeout=args.lock_timeout) as (
+            with locked_replay(
+                args.run_root, lock_timeout=args.lock_timeout, read_only=True
+            ) as (
                 _,
                 replayed,
             ):

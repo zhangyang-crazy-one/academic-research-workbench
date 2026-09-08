@@ -630,13 +630,13 @@ def replay_run(run_root: Path, *, lock_timeout: float = 0.2) -> ReplayState:
 
 @contextmanager
 def locked_replay(
-    run_root: Path, *, lock_timeout: float = 0.2
+    run_root: Path, *, lock_timeout: float = 0.2, read_only: bool = False
 ) -> Iterator[tuple[Path, ReplayState]]:
     """Yield one accepted state while holding the sole canonical writer lock."""
 
     root = require_existing_run_root(run_root)
     try:
-        with _lock(root, lock_timeout):
+        with (_read_lock if read_only else _lock)(root, lock_timeout):
             # This guarded seam runs only after the OS lock is acquired.  It
             # lets the parent matrix prove lock acquisition/owner-death
             # behavior without exposing a request-controlled bypass.

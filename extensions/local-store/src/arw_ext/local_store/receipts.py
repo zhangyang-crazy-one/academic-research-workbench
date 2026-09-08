@@ -15,6 +15,7 @@ Receipts are persisted as the canonical JSON bytes produced by
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from collections.abc import Mapping
@@ -30,6 +31,30 @@ from arw.kernel.core.canonical import (
 
 DEFAULT_MAX_AUDIT_ENTRIES = 4_096
 DEFAULT_MAX_AUDIT_RECEIPT_BYTES = 65_536
+# Aggregate canonical UTF-8 output budget for ``load_audit_faults``.  The
+# composition root serializes the returned faults into the ``arw status``
+# health payload, so without a ceiling one ``max_entries=1001`` load of
+# 65 KiB receipts could retain/emit ~63 MiB.  256 KiB keeps a status run
+# bounded while still surfacing thousands of faults.  Operators who need a
+# higher ceiling must opt in explicitly via ``max_output_bytes``.
+DEFAULT_MAX_AUDIT_OUTPUT_BYTES = 262_144
+# Reserved bytes for the typed truncation marker so the marker itself
+# always fits inside the declared limit even when the very last kept
+# entry consumes the rest of the budget.  Sized for the *full* canonical
+# marker (5 ``AuditFault`` fields incl. ``receipt_id=null``) plus list
+# wrap (``[`` + ``]`` + ``,`` + ``\n`` = 4 bytes), so the invariant
+# ``len(canonical(marker)) + 4 <= reserve`` holds across every
+# enumerated/kept/max_output_bytes combination permitted by the
+# validation bounds above.
+_AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES = 256
+_AUDIT_OUTPUT_LIST_OPEN_BYTES = 1  # leading '['
+_AUDIT_OUTPUT_LIST_SEP_BYTES = 1  # ',' between entries
+_AUDIT_OUTPUT_LIST_CLOSE_BYTES = 2  # trailing ']' + '\n'
+# Distinct fault code so callers can pattern-match aggregate-output
+# truncation (this budget) versus inventory-count truncation (existing
+# ``audit_receipt_inventory_truncated`` raised when the directory contains
+# more than ``max_entries`` files).
+AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE = "audit_receipt_output_truncated"
 
 
 def _open_directory_no_follow(path: Path) -> int:
@@ -197,6 +222,96 @@ def _serialize_audit_fault(fault: AuditFault) -> bytes:
     return canonical_json_bytes(payload)
 
 
+def _audit_output_entry_bytes(fault: AuditFault) -> int:
+    """Return the canonical UTF-8 byte size of one fault as the loader
+    retains it — full dataclass, not the composition-root status
+    projection.
+
+    The composition-root ``local_store_health`` serializer in
+    ``arw.composition`` drops ``receipt_id`` and ``projection_name``
+    when emitting the status list, but the loader *retains* the full
+    ``AuditFault`` instance — including attacker-controlled
+    ``receipt_id`` values bounded only by ``max_bytes``.  Sizing on the
+    projection alone would let 1001 receipts with a multi-KB
+    ``receipt_id`` and tiny ``message`` retain ~50 MB while emitting
+    only a few KB to the operator.  By sizing the full canonical shape
+    (matching ``_serialize_audit_fault`` minus the ``schema_version``
+    envelope, which is metadata not bound to any individual entry),
+    this helper bounds both the retained tuple footprint and the
+    eventual status serialization — the projection is always a subset
+    of the dataclass.
+    """
+
+    payload = {
+        "affected_rows": fault.affected_rows,
+        "code": fault.code,
+        "message": fault.message,
+        "projection_name": fault.projection_name,
+        "receipt_id": fault.receipt_id,
+    }
+    return len(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+
+
+def _audit_output_truncation_fault(
+    *, enumerated: int, kept: int, max_output_bytes: int
+) -> AuditFault:
+    """Return the deterministic, fixed-form truncation marker.
+
+    The message layout is bounded by ``_AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES``:
+    enumerated/kept values come from ``max_entries`` (≤ 4 096) and the
+    budget value is ``max_output_bytes`` (≤ ``DEFAULT_MAX_AUDIT_OUTPUT_BYTES``),
+    so the literal length is a small fixed constant for any caller.
+    """
+
+    return AuditFault(
+        code=AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE,
+        message=(
+            f"audit receipt output truncated: enumerated={enumerated} "
+            f"kept={kept} max_output_bytes={max_output_bytes}"
+        ),
+        affected_rows=1,
+        projection_name="knowledge",
+    )
+
+
+def _bounded_early_return(
+    fault: AuditFault, *, max_output_bytes: int
+) -> tuple[AuditFault, ...]:
+    """Wrap ``fault`` as a 1-tuple bounded by ``max_output_bytes``.
+
+    Every early-return path in :func:`load_audit_faults` routes through
+    this helper so no fault tuple can bypass the output-budget
+    invariant — if the fault's own canonical size would exceed the
+    declared ceiling (e.g. an ``OSError`` carrying a long ``strerror``),
+    the helper substitutes a single ``audit_receipt_output_truncated``
+    marker so the operator still sees a typed budget fault instead of a
+    silent overflow.
+    """
+
+    size = (
+        _audit_output_entry_bytes(fault)
+        + _AUDIT_OUTPUT_LIST_OPEN_BYTES
+        + _AUDIT_OUTPUT_LIST_CLOSE_BYTES
+    )
+    if size <= max_output_bytes:
+        return (fault,)
+    return (
+        _audit_output_truncation_fault(
+            enumerated=0,
+            kept=0,
+            max_output_bytes=max_output_bytes,
+        ),
+    )
+
+
 def persist_audit_fault(database_path: Path, fault: AuditFault) -> Path:
     """Persist one audit fault as canonical JSON; returns the written path."""
 
@@ -218,12 +333,28 @@ def load_audit_faults(
     *,
     max_entries: int = DEFAULT_MAX_AUDIT_ENTRIES,
     max_bytes: int = DEFAULT_MAX_AUDIT_RECEIPT_BYTES,
+    max_output_bytes: int = DEFAULT_MAX_AUDIT_OUTPUT_BYTES,
 ) -> tuple[AuditFault, ...]:
-    """Load bounded audit faults through a no-follow directory descriptor."""
+    """Load bounded audit faults through a no-follow directory descriptor.
+
+    The aggregate canonical UTF-8 size of the returned tuple is bounded by
+    ``max_output_bytes`` (default 256 KiB).  When adding another fault
+    would exceed the budget, the loader appends one typed truncation
+    marker — :data:`AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE` — and stops
+    reading further entries.  The marker always fits inside the declared
+    ceiling; the final canonical JSON serialization never exceeds the
+    declared bound.  The budget covers both valid receipt faults and
+    generated malformed-receipt faults (``unreadable_fault``).
+    """
     if max_entries < 1 or max_entries > DEFAULT_MAX_AUDIT_ENTRIES:
         raise ValueError("audit entry bound is outside the supported range")
     if max_bytes < 1 or max_bytes > DEFAULT_MAX_AUDIT_RECEIPT_BYTES:
         raise ValueError("audit receipt byte bound is outside the supported range")
+    if max_output_bytes < _AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES + 1:
+        raise ValueError("audit output budget is below the truncation reserve")
+    max_output_bytes_cap = DEFAULT_MAX_AUDIT_OUTPUT_BYTES * 4
+    if max_output_bytes > max_output_bytes_cap:
+        raise ValueError("audit output budget exceeds the supported ceiling")
     root = audit_root(database_path)
     candidate = root if root.is_absolute() else Path.cwd() / root
     current = Path(candidate.anchor)
@@ -234,13 +365,14 @@ def load_audit_faults(
         except FileNotFoundError:
             return ()
         if stat.S_ISLNK(status.st_mode):
-            return (
+            return _bounded_early_return(
                 AuditFault(
                     code="audit_receipt_read_failed",
                     message="audit receipt directory path contains a symlink",
                     affected_rows=1,
                     projection_name="knowledge",
                 ),
+                max_output_bytes=max_output_bytes,
             )
     root = candidate
     directory_descriptor: int | None = None
@@ -250,7 +382,7 @@ def load_audit_faults(
         except FileNotFoundError:
             return ()
         except OSError as error:
-            return (
+            return _bounded_early_return(
                 AuditFault(
                     code="audit_receipt_read_failed",
                     message=(
@@ -259,6 +391,7 @@ def load_audit_faults(
                     affected_rows=1,
                     projection_name="knowledge",
                 ),
+                max_output_bytes=max_output_bytes,
             )
     try:
         names: list[str] = []
@@ -267,7 +400,7 @@ def load_audit_faults(
             with os.scandir(scan_target) as entries:
                 for index, entry in enumerate(entries):
                     if index >= max_entries:
-                        return (
+                        return _bounded_early_return(
                             AuditFault(
                                 code="audit_receipt_inventory_truncated",
                                 message=(
@@ -277,17 +410,19 @@ def load_audit_faults(
                                 affected_rows=1,
                                 projection_name="knowledge",
                             ),
+                            max_output_bytes=max_output_bytes,
                         )
                     if entry.name.endswith(".json"):
                         names.append(entry.name)
         except OSError as error:
-            return (
+            return _bounded_early_return(
                 AuditFault(
                     code="audit_receipt_read_failed",
                     message=f"audit receipt directory cannot be enumerated: {error}",
                     affected_rows=1,
                     projection_name="knowledge",
                 ),
+                max_output_bytes=max_output_bytes,
             )
 
         out: list[AuditFault] = []
@@ -308,7 +443,17 @@ def load_audit_faults(
             | getattr(os, "O_NONBLOCK", 0)
             | no_follow
         )
-        for name in sorted(names):
+
+        def decode_audit_fault(name: str) -> AuditFault:
+            """Parse one receipt file into an :class:`AuditFault`.
+
+            Returns either the canonicalized receipt payload or a typed
+            ``audit_receipt_read_failed`` marker when the file is missing,
+            oversized, non-regular, symlinked, or non-canonical.  The
+            caller is responsible for the output-budget gate; this helper
+            is side-effect-free aside from the read syscall itself.
+            """
+
             try:
                 if directory_descriptor is None:
                     receipt_path = root / name
@@ -320,8 +465,7 @@ def load_audit_faults(
                 try:
                     status = os.fstat(descriptor)
                     if not stat.S_ISREG(status.st_mode) or status.st_size > max_bytes:
-                        out.append(unreadable_fault(name))
-                        continue
+                        return unreadable_fault(name)
                     if directory_descriptor is None:
                         live = os.stat(root / name, follow_symlinks=False)
                         if (
@@ -329,8 +473,7 @@ def load_audit_faults(
                             or live.st_ino != status.st_ino
                             or live.st_mode != status.st_mode
                         ):
-                            out.append(unreadable_fault(name))
-                            continue
+                            return unreadable_fault(name)
                     chunks: list[bytes] = []
                     total = 0
                     while total <= max_bytes:
@@ -340,45 +483,60 @@ def load_audit_faults(
                         chunks.append(chunk)
                         total += len(chunk)
                     if total > max_bytes:
-                        out.append(unreadable_fault(name))
-                        continue
+                        return unreadable_fault(name)
                     raw = b"".join(chunks)
                 finally:
                     os.close(descriptor)
                 value: Mapping[str, object] = strict_json_loads(raw)
                 canonical_value = canonical_json_bytes(value)
             except (OSError, UnicodeError, ValueError):
-                out.append(unreadable_fault(name))
-                continue
+                return unreadable_fault(name)
             if not isinstance(value, dict):
-                out.append(unreadable_fault(name))
-                continue
+                return unreadable_fault(name)
             _, separator, filename_digest = name.removesuffix(".json").rpartition("-")
             if (
                 not separator
                 or filename_digest != sha256_hex(raw)[:12]
                 or canonical_value != raw
             ):
-                out.append(unreadable_fault(name))
-                continue
+                return unreadable_fault(name)
             try:
                 affected = int(str(value.get("affected_rows", 0)))
             except ValueError:
-                out.append(unreadable_fault(name))
-                continue
-            out.append(
-                AuditFault(
-                    code=str(value.get("code", "audit_fault")),
-                    message=str(value.get("message", "")),
-                    affected_rows=affected,
-                    projection_name=str(value.get("projection_name", "knowledge")),
-                    receipt_id=(
-                        str(value["receipt_id"])
-                        if isinstance(value.get("receipt_id"), str)
-                        else None
-                    ),
-                )
+                return unreadable_fault(name)
+            return AuditFault(
+                code=str(value.get("code", "audit_fault")),
+                message=str(value.get("message", "")),
+                affected_rows=affected,
+                projection_name=str(value.get("projection_name", "knowledge")),
+                receipt_id=(
+                    str(value["receipt_id"])
+                    if isinstance(value.get("receipt_id"), str)
+                    else None
+                ),
             )
+
+        used_bytes = 0
+        for enumerated, name in enumerate(sorted(names), start=1):
+            candidate = decode_audit_fault(name)
+            entry_bytes = _audit_output_entry_bytes(candidate)
+            projected = entry_bytes + (
+                _AUDIT_OUTPUT_LIST_SEP_BYTES if out else _AUDIT_OUTPUT_LIST_OPEN_BYTES
+            )
+            if (
+                used_bytes + projected + _AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES
+                > max_output_bytes
+            ):
+                out.append(
+                    _audit_output_truncation_fault(
+                        enumerated=enumerated,
+                        kept=len(out),
+                        max_output_bytes=max_output_bytes,
+                    )
+                )
+                break
+            out.append(candidate)
+            used_bytes += projected
         return tuple(out)
     finally:
         if directory_descriptor is not None:
