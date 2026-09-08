@@ -91,6 +91,18 @@ jobs:
           tests/integration/test_orchestration_panels.py
           tests/integration/test_orchestration_replay.py
           tests/integration/test_phase4_verifier.py
+      - name: Run store inventory and audit regressions
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: >-
+          uv run pytest -q
+          tests/integration/test_files_store_inventory_binding.py
+          tests/integration/test_files_store_mcp_history.py
+          tests/integration/test_files_store_mcp_lifecycle.py
+          tests/integration/test_semantica_conflict_policies.py
+          tests/integration/test_semantica_lite.py
+          tests/integration/test_semantica_audit_reconciliation.py
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
@@ -143,11 +155,20 @@ jobs:
         run: |
           uv build --out-dir dist
           python - <<'PY'
+          import hashlib
+          import json
           from pathlib import Path
           from zipfile import ZipFile
 
           wheels = list(Path('dist').glob('*.whl'))
           assert len(wheels) == 1, wheels
+          wheel = wheels[0]
+          components = json.loads(Path('SBOM.cdx.json').read_text())['components']
+          component = next(item for item in components
+                           if item['bom-ref'] == 'first-party-wheel:' + wheel.name)
+          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+          assert component['hashes'] == [{'alg': 'SHA-256', 'content': digest}], \
+              f"First-party wheel digest {digest} differs from {component['hashes']}"
           with ZipFile(wheels[0]) as archive:
               names = archive.namelist()
           forbidden = (
@@ -173,6 +194,7 @@ jobs:
             '(^|/)(\.env|credentials|secrets)(/|$)' \
             dist/source/files.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: academic-research-workbench-ci-${{ github.sha }}
           path: dist/

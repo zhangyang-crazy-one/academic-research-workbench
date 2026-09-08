@@ -21,14 +21,13 @@ import base64
 import contextlib
 import json
 import os
+import sqlite3
 import stat
 import threading
 import time
 import unicodedata
 from pathlib import Path
 from typing import Literal, cast
-
-import sqlite3
 
 from pydantic import ValidationError
 
@@ -72,6 +71,13 @@ from arw.files_mcp import (
 from .ingest import (
     FILES_CURSOR_META_KEY,
     read_files_meta,
+)
+from .inventory import (
+    InventoryError,
+    anchor_via_loader,
+    verified_fts_candidate_ids,
+    verify_actual_inventory,
+    verify_fts_trigram_consistency,
 )
 from .store import LocalProjectionStore
 
@@ -150,6 +156,10 @@ class LocalStoreFilesAdapter:
             self._canonical_root = None
             self._canonical_root_id = None
             self._expected_generation_manifest_sha256 = None
+            # Legacy / rootless API: no canonical anchor means no
+            # inventory fingerprint binding.  The per-request check
+            # short-circuits when this sentinel is observed.
+            self._expected_inventory_fingerprint = "uninitialised"
         # Per-instance request lock: the MCP reads stdin sequentially so
         # only one request is in flight at a time, but native callers
         # (Python code driving the adapter directly from threads or async
@@ -225,6 +235,30 @@ class LocalStoreFilesAdapter:
                     "canonical selection at startup time; re-ingest the "
                     "current generation before serving live reads",
                 )
+        # Bind rows to loader-verified canonical artifacts after rejecting a
+        # stale cache. Failure to reach the canonical anchor must fail closed;
+        # only the rootless legacy API may skip inventory binding.
+        if self._canonical_root is not None:
+            anchor_generation_id = (
+                expected_generation_id
+                if expected_generation_id is not None
+                else self._generation_id
+            )
+            try:
+                self._expected_inventory_fingerprint = anchor_via_loader(
+                    self._canonical_root,
+                    root_id,
+                    expected_generation_id=anchor_generation_id,
+                    expected_generation_manifest_sha256=(
+                        self._expected_generation_manifest_sha256
+                    ),
+                )
+            except InventoryError as error:
+                # An unreachable anchor cannot authorize any cache contents.
+                raise FileProviderError(
+                    "root_denied",
+                    f"canonical inventory is unreadable: {error}",
+                ) from error
         secret = base64.b64decode(meta[FILES_CURSOR_META_KEY])
         self._codec = CursorCodec(secret=secret)
         # Hit anchors never expire (v1 parity: hit_codec uses a frozen clock).
@@ -351,45 +385,52 @@ class LocalStoreFilesAdapter:
             return request_conn
         return self._store.connection
 
-    def _with_query_snapshot(self, fn, *args, **kwargs):  # noqa: ANN001, ANN202
-        """Run ``fn`` inside a per-request snapshot with revalidation gates.
+    def _with_query_snapshot(
+        self,
+        *,
+        deadline: float,
+        op,
+    ):  # noqa: ANN001, ANN202
+        """Verify metadata and inventory, then query one locked read snapshot.
 
-        The wrapper issues ``BEGIN`` on a fresh read-only connection,
-        runs the pre-check (cache metadata + canonical selection), invokes
-        ``fn`` (which performs all reads through
-        :meth:`_request_connection` so they share the same snapshot),
-        runs the post-check, and ``COMMIT``s.  Any exception triggers a
-        ``ROLLBACK`` and re-raise; the connection is always closed.
-
-        ``ToolError`` raised by the revalidation gates is wrapped to
-        :class:`FileProviderError` with the same code so the MCP layer
-        surfaces a typed failure (the per-tool envelope mapper in
-        ``files_store_mcp`` already maps every ``FileProviderError`` to
-        ``isError=True``).  The inner ``fn`` already wraps its own
-        ``ToolError`` via :meth:`_wrap`; the outer wrap is a defensive
-        measure so the pre/post checks land at the same boundary as
-        tool errors.
-
-        The whole body runs under ``self._request_lock`` so concurrent
-        native callers (Python code driving the adapter from threads)
-        cannot cross-wire ``self._request_conn``; the request_conn
-        pointer is set to the snapshot at the start and reset to
-        ``None`` BEFORE the lock is released, so a thread waiting on
-        the lock cannot observe a half-cleared state.  ``snapshot.close()``
-        runs in the outer ``finally`` after the lock is released; the
-        connection is no longer reachable via ``self._request_conn`` by
-        then, so a newly-acquired thread opens its own snapshot.
-
-        Used by all five public operations so a writer who re-ingests the
-        cache or advances the canonical selection cannot interleave rows
-        from two generations inside a single response, and so concurrent
-        native callers cannot observe each other's snapshot.
+        All five operations share one deadline for validation and their query.
+        The instance lock prevents concurrent callers replacing _request_conn.
+        Canonical selection is checked again before releasing the response.
         """
 
         def _gate(snapshot_conn: sqlite3.Connection) -> None:
             try:
                 self._revalidate_query_generation(snapshot_conn)
             except ToolError as error:
+                raise FileProviderError(error.code, str(error)) from error
+
+        def _inventory_check(
+            snapshot_conn: sqlite3.Connection, deadline: float
+        ) -> None:
+            """Bind query-visible rows and FTS content to the canonical anchor.
+
+            Verification and the tool body use the same snapshot and deadline.
+            The rootless legacy API has no canonical inventory to compare.
+            """
+
+            if self._expected_inventory_fingerprint == "uninitialised":
+                return
+            try:
+                verify_actual_inventory(
+                    snapshot_conn,
+                    self._expected_inventory_fingerprint,
+                    deadline=deadline,
+                )
+                verify_fts_trigram_consistency(snapshot_conn, deadline=deadline)
+            except InventoryError as error:
+                # All InventoryError subclasses (tamper, budget,
+                # generic) become typed ``FileProviderError`` with the
+                # same code so the MCP layer surfaces a typed failure
+                # via ``_tool_envelope(error=True)``.  Using the
+                # ``code`` attribute keeps the failure surface
+                # distinguishable from ``stale_query_generation``
+                # (which is metadata-only) and from the existing
+                # ``stale_ingested_cache`` (which is startup-only).
                 raise FileProviderError(error.code, str(error)) from error
 
         snapshot = self._open_query_snapshot()
@@ -399,7 +440,8 @@ class LocalStoreFilesAdapter:
                 try:
                     snapshot.execute("BEGIN")
                     _gate(snapshot)
-                    result = fn(*args, **kwargs)
+                    _inventory_check(snapshot, deadline)
+                    result = op(deadline)
                     _gate(snapshot)
                     snapshot.execute("COMMIT")
                     # Clear BEFORE releasing the lock so a waiting
@@ -550,7 +592,10 @@ class LocalStoreFilesAdapter:
     def list_files(self, request: FilesListRequest) -> FilesListResult:
         self._check_root(request.root_id)
         return self._with_query_snapshot(
-            lambda: self._wrap(self._list_files, request, deadline=self._deadline())
+            deadline=self._deadline(),
+            op=lambda deadline: self._wrap(
+                self._list_files, request, deadline=deadline
+            ),
         )
 
     def _list_files(
@@ -655,7 +700,8 @@ class LocalStoreFilesAdapter:
     ) -> FilesReadSuccess | FilesReadStale | FilesReadDenied:
         self._check_root(request.root_id)
         return self._with_query_snapshot(
-            lambda: self._wrap(self._read_file, request, deadline=self._deadline())
+            deadline=self._deadline(),
+            op=lambda deadline: self._wrap(self._read_file, request, deadline=deadline),
         )
 
     def _read_denied(
@@ -844,7 +890,10 @@ class LocalStoreFilesAdapter:
     def search_files(self, request: FilesSearchRequest) -> FilesSearchResult:
         self._check_root(request.root_id)
         return self._with_query_snapshot(
-            lambda: self._wrap(self._search_files, request, deadline=self._deadline())
+            deadline=self._deadline(),
+            op=lambda deadline: self._wrap(
+                self._search_files, request, deadline=deadline
+            ),
         )
 
     @staticmethod
@@ -897,12 +946,15 @@ class LocalStoreFilesAdapter:
                 candidate_ids = ids if candidate_ids is None else candidate_ids & ids
             return candidate_ids if candidate_ids is not None else set()
         phrases = " ".join('"' + term.replace('"', '""') + '"' for term in long_terms)
-        rows = self._rows(
-            "SELECT file_id FROM files_fts_trigram WHERE files_fts_trigram MATCH ?",
-            (f"body_nfkc_folded : {phrases}",),
-            deadline=deadline,
-        )
-        return {str(row[0]) for row in rows}
+        try:
+            return verified_fts_candidate_ids(
+                self._request_connection(),
+                match_query=f"body_nfkc_folded : {phrases}",
+                terms=long_terms,
+                deadline=deadline,
+            )
+        except InventoryError as error:
+            raise FileProviderError(error.code, str(error)) from error
 
     def _rank_search_rows(
         self,
@@ -1136,7 +1188,10 @@ class LocalStoreFilesAdapter:
     def get_outline(self, request: FilesOutlineRequest) -> FilesOutlineResult:
         self._check_root(request.root_id)
         return self._with_query_snapshot(
-            lambda: self._wrap(self._get_outline, request, deadline=self._deadline())
+            deadline=self._deadline(),
+            op=lambda deadline: self._wrap(
+                self._get_outline, request, deadline=deadline
+            ),
         )
 
     def _get_outline(
@@ -1235,7 +1290,10 @@ class LocalStoreFilesAdapter:
     def get_context(self, request: FilesContextRequest) -> FilesContextResult:
         self._check_root(request.root_id)
         return self._with_query_snapshot(
-            lambda: self._wrap(self._get_context, request, deadline=self._deadline())
+            deadline=self._deadline(),
+            op=lambda deadline: self._wrap(
+                self._get_context, request, deadline=deadline
+            ),
         )
 
     def _get_context(
@@ -1492,17 +1550,13 @@ def _read_canonical_selection_safe(
     try:
         for component in components[:-1]:
             try:
-                next_descriptor = os.open(
-                    component, dir_flags, dir_fd=dir_descriptor
-                )
+                next_descriptor = os.open(component, dir_flags, dir_fd=dir_descriptor)
             except OSError:
                 raise
             os.close(dir_descriptor)
             dir_descriptor = next_descriptor
 
-        leaf_descriptor = os.open(
-            components[-1], leaf_flags, dir_fd=dir_descriptor
-        )
+        leaf_descriptor = os.open(components[-1], leaf_flags, dir_fd=dir_descriptor)
     finally:
         os.close(dir_descriptor)
 
@@ -1525,9 +1579,7 @@ def _read_canonical_selection_safe(
             chunks.append(chunk)
             total += len(chunk)
         if total > max_bytes:
-            raise OSError(
-                f"canonical selection exceeded {max_bytes} bytes during read"
-            )
+            raise OSError(f"canonical selection exceeded {max_bytes} bytes during read")
         # TOCTOU check: re-fstat the leaf and compare to the parent-
         # directory fstatat of the leaf name (no-follow).  An unlink-
         # and-replace of the leaf during the read surfaces as a
