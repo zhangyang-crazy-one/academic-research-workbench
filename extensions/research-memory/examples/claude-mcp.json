@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "arw-memory": {
+      "command": "python",
+      "args": ["-m", "arw.memory_mcp", "--project-root", "/absolute/approved/project", "--harness", "claude"]
+    }
+  }
+}

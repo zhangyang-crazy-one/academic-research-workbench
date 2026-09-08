@@ -74,6 +74,13 @@ CAPABILITIES: tuple[str, ...] = (
     "research.artifact.inspect",
     "research.artifact.reproduce",
     "research.deep_survey",
+    "research.memory.save",
+    "research.memory.search",
+    "research.memory.read",
+    "research.memory.list",
+    "research.memory.doctor",
+    "research.memory.handoff",
+
     "research.experiment",
     "artifact.inspect",
     "artifact.sanitize",

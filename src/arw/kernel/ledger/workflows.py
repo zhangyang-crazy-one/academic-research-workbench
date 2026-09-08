@@ -225,8 +225,8 @@ def actor_can_commit(role: ActorRole, category: EventCategory) -> bool:
 
 
 def event_category(event_type: str) -> EventCategory:
-    from arw.kernel.state.models import RESEARCH_ARTIFACT_EVENT_TYPES
-    if event_type in RESEARCH_ARTIFACT_EVENT_TYPES:
+    from arw.kernel.state.models import RESEARCH_ARTIFACT_EVENT_TYPES, RESEARCH_MEMORY_EVENT_TYPES
+    if event_type in (*RESEARCH_ARTIFACT_EVENT_TYPES, *RESEARCH_MEMORY_EVENT_TYPES):
         return "orchestration"
     if event_type == "run.initialized":
         return "initialization"

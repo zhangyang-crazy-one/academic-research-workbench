@@ -108,6 +108,8 @@ def build_parser() -> argparse.ArgumentParser:
             )
     from arw.cli_research_artifact import configure
     configure(artifact_commands)
+    from arw.cli_memory import configure as configure_memory
+    configure_memory(subparsers)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -233,6 +235,10 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         command = subparsers.add_parser(name, help=help_text)
         _add_run_request_arguments(command)
+        if name == "resume":
+            command.add_argument("--memory-handoff")
+            command.add_argument("--memory-project-root", type=Path)
+            command.add_argument("--memory-max-tokens", type=int, default=4096)
     orchestration_prepare = subparsers.add_parser(
         "orchestration-prepare",
         help="Freeze a Phase 4 parent run and materialize immutable assignments.",
@@ -477,6 +483,16 @@ def _read_bounded_regular_file(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "memory":
+        from arw.cli_memory import handle
+        from arw.kernel.capabilities import CapabilityUnavailable
+        try:
+            result = handle(args)
+            _write_json(result)
+            return 65 if result.get("status") == "FAIL" else 0
+        except (ValueError, RuntimeError, OSError) as error:
+            _write_json({"status": "error", "code": ("CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "memory_request_invalid"))})
+            return 65
     if args.command == "artifact":
         from arw.composition import default_router
         from arw.kernel.capabilities import CapabilityUnavailable
@@ -1329,8 +1345,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             service = RuntimeCommandService(
                 args.run_root, lock_timeout=args.lock_timeout
             )
+            handoff = None
+            if args.command == "resume" and args.memory_handoff:
+                try:
+                    if args.memory_project_root is None:
+                        raise ValueError("handoff resume requires explicit project root")
+                    from arw.composition import default_router
+                    from arw.kernel.state.research_memory import MemoryQuery
+                    manifest = os.environ.get("ARW_PLUGIN_MANIFEST")
+                    if os.environ.get("ARW_PLUGIN_ROOT") and not manifest:
+                        raise ValueError("plugin_manifest_missing")
+                    memory = default_router(memory_project_root=args.memory_project_root,
+                        memory_run_root=args.run_root,
+                        plugin_manifest=Path(manifest) if manifest else None).resolve("research.memory.handoff")
+                    handoff = memory.resume_handoff(args.memory_handoff,
+                        query=MemoryQuery(max_tokens=args.memory_max_tokens))
+                except (ValueError, RuntimeError, OSError) as error:
+                    _write_json({"status": "error", "code": getattr(error, "code", "memory_request_invalid")})
+                    return 65
             outcome = getattr(service, method_name)(request)
-            _write_json(outcome.model_dump(mode="json"))
+            result = outcome.model_dump(mode="json")
+            if handoff is not None:
+                if not outcome.accepted:
+                    handoff = {**handoff, "next_concrete_action": None, "requires_reconciliation": True, "resume_accepted": False}
+                result["memory_handoff"] = handoff
+            _write_json(result)
             return 0 if outcome.accepted else 65
         if args.command == "passport-pointer-rebuild":
             pointer = RuntimeCommandService(

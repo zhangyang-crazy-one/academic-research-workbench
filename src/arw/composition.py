@@ -31,6 +31,9 @@ def default_router(
     accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
     expected_provenance_record_sha256: Mapping[str, str] | None = None,
     source_locator_resolver=None,
+    memory_project_root=None,
+    memory_run_root=None,
+    memory_harness="codex",
 ) -> CapabilityRouter:
     """The default routing table (local files + graph + ARS + integrity).
 
@@ -47,6 +50,11 @@ def default_router(
 
     router = CapabilityRouter()
     router.register("research.literature", ARSAdapter)
+    def _research_memory():
+        return import_module("arw_research_memory.service").ResearchMemoryService(memory_project_root, run_root=memory_run_root, harness=memory_harness)
+    for operation in ("save", "search", "read", "list", "doctor", "handoff"):
+        router.register_optional(f"research.memory.{operation}", _research_memory)
+
     def _research_artifact():
         return import_module("arw_research_artifact.service").ResearchArtifactService()
     for capability in ("research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"):
@@ -162,6 +170,7 @@ def default_router(
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
             "provenance": ("knowledge.provenance",),
+            "memory": tuple(f"research.memory.{op}" for op in ("save", "search", "read", "list", "doctor", "handoff")),
             "artifact": ("artifact.inspect", "artifact.sanitize", "research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"),
             "audit": ("audit.replay",),
         }
@@ -339,3 +348,11 @@ def local_store_files_provider(store_path: Path):
     except Exception:
         store.close()
         raise
+
+
+def initialize_memory_project(root, project_id=None):
+    from arw.kernel.capabilities import CapabilityUnavailable
+    try:
+        return import_module("arw_research_memory.project").initialize_project(root, project_id)
+    except ImportError as error:
+        raise CapabilityUnavailable("research.memory.save") from error

@@ -1,0 +1,14 @@
+{
+  "migration": 2,
+  "event_schema_version": "1.2.0",
+  "historical_action": "retain bytes; add reader variants",
+  "event_types": [
+    "research_memory_created",
+    "research_handoff_created",
+    "research_memory_superseded",
+    "research_memory_rejected",
+    "research_memory_distilled",
+    "research_memory_activated",
+    "research_memory_verified"
+  ]
+}
