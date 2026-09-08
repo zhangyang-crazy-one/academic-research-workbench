@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from arw.storm import StormConfig, StormRunError, sanitize_topic
+from arw_storm import StormConfig, StormRunError, sanitize_topic
 
 
 def test_sanitize_topic() -> None:
@@ -44,7 +44,7 @@ def test_config_requires_tavily_key_for_tavily_retriever(monkeypatch: pytest.Mon
 
 
 def test_run_requires_at_least_one_stage(tmp_path: Path) -> None:
-    from arw.storm import run_storm_research
+    from arw_storm import run_storm_research
 
     config = StormConfig(
         topic="t",
@@ -148,7 +148,7 @@ def test_run_storm_research_writes_receipt_with_mocked_storm(
     monkeypatch.setenv("TAVILY_API_KEY", "test-tavily-key")
     _install_fake_storm_modules()
 
-    from arw.storm import run_storm_research
+    from arw_storm import run_storm_research
 
     config = StormConfig(
         topic="Deep RL", output_dir=tmp_path / "storm", backend="litellm"
@@ -172,7 +172,7 @@ def test_run_storm_research_duckduckgo_needs_no_tavily_key(
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     _install_fake_storm_modules()
 
-    from arw.storm import run_storm_research
+    from arw_storm import run_storm_research
 
     config = StormConfig(
         topic="Deep RL",
@@ -188,15 +188,15 @@ def test_session_backend_resolves_current_session_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Session backend uses the current agent session's model config."""
-    from arw.storm import SessionModelConfig
+    from arw_storm import SessionModelConfig
 
     monkeypatch.setattr(
-        "arw.storm.resolve_session_model",
+        "arw_storm.resolve_session_model",
         lambda: SessionModelConfig(
             provider="openai-codex", model="gpt-5.6-terra", access_token="tok"
         ),
     )
-    from arw.storm import _build_lm_configs, StormConfig
+    from arw_storm import _build_lm_configs, StormConfig
 
     lm_configs, effective_model = _build_lm_configs(
         StormConfig(topic="t", output_dir=tmp_path / "storm", backend="session")
@@ -209,8 +209,8 @@ def test_session_backend_resolves_current_session_model(
 def test_session_backend_fails_closed_without_credential(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("arw.storm.resolve_session_model", lambda: None)
-    from arw.storm import _build_lm_configs, StormConfig, StormRunError
+    monkeypatch.setattr("arw_storm.resolve_session_model", lambda: None)
+    from arw_storm import _build_lm_configs, StormConfig, StormRunError
 
     with pytest.raises(StormRunError, match="no session model credential"):
         _build_lm_configs(

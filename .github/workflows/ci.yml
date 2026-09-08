@@ -35,7 +35,7 @@ jobs:
           version: "0.11.28"
           enable-cache: true
       - name: Sync locked development environment
-        run: uv sync --frozen --all-groups --extra semantic --python "${{ matrix.python-version }}"
+        run: uv sync --frozen --all-groups --extra semantic --extra artifact-formats --python "${{ matrix.python-version }}"
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -120,6 +120,8 @@ jobs:
           tests/integration/test_research_artifacts.py
           tests/integration/test_research_memory.py
           tests/integration/test_research_learning.py tests/integration/test_writing.py
+      - name: Run binary format and provider-extraction regressions
+        run: uv run --frozen --extra artifact-formats pytest -q tests/integration/test_binary_metadata.py tests/integration/test_extension_extraction.py tests/unit/test_storm.py
       - name: Run optional offline semantic retrieval regressions
         env:
           PYTHONNOUSERSITE: "1"

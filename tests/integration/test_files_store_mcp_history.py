@@ -814,6 +814,10 @@ def _stage_stub_plugin(tmp_path: Path) -> Path:
     shim_dst = scripts_dir / "file-base-mcp"
     shim_dst.write_text(shim_src.read_text())
     shim_dst.chmod(0o755)
+    provider_dst = plugin_root / "extensions/file-base-mcp/bin/provider"
+    provider_dst.parent.mkdir(parents=True)
+    provider_dst.write_bytes((REPOSITORY_ROOT / "extensions/file-base-mcp/bin/provider").read_bytes())
+    provider_dst.chmod(0o755)
 
     return plugin_root
 

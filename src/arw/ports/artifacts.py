@@ -59,6 +59,23 @@ class ArtifactInspection(ArtifactDiagnosticModel):
     )
 
 
+class BinaryArtifactInspection(ArtifactDiagnosticModel):
+    schema_version: Literal["arw.binary-inspection.v1"] = "arw.binary-inspection.v1"
+    inspector_version: Literal["format-presence.v1"] = "format-presence.v1"
+    status: Literal["inspected", "unsupported"]
+    reason_code: str
+    content_sha256: str
+    input_bytes: int
+    detectors: dict[str, DetectorResult]
+    format: str | None = None
+    dependency_versions: dict[str, str] = Field(default_factory=dict)
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    total_findings: int = 0
+    truncated: bool = False
+    verification: dict[str, str | int] = Field(default_factory=dict)
+    interpretation: str = "Format-specific metadata presence only; signatures not validated; not watermark absence or authorship proof."
+
+
 class UnicodeSanitization(ArtifactDiagnosticModel):
     schema_version: Literal["arw.unicode-sanitization.v1"] = (
         "arw.unicode-sanitization.v1"
@@ -87,7 +104,7 @@ class ArtifactInspector(Protocol):
 
     def inspect_bytes(
         self, content: bytes, *, detectors: Sequence[str] | None = None
-    ) -> ArtifactInspection: ...
+    ) -> ArtifactInspection | BinaryArtifactInspection: ...
 
 
 class ArtifactIRBuilder(Protocol):

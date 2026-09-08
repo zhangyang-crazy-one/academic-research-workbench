@@ -310,6 +310,8 @@ def generate_sbom(
     sbom["metadata"]["timestamp"] = receipt["created_at"]
     components = {item["bom-ref"]: item for item in sbom.get("components", [])}
     for item in components.values():
+        if item.get("name") in {"pypdf", "pillow"}:
+            item.update(scope="optional", licenses=[{"expression": "BSD-3-Clause" if item["name"] == "pypdf" else "MIT-CMU"}])
         if item.get("name") == "sqlite-vec":
             item.update(scope="optional", licenses=[{"expression": "MIT OR Apache-2.0"}])
 

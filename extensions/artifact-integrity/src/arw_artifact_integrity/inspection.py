@@ -66,6 +66,11 @@ class ArtifactIntegrityInspector(ArtifactIntegrityAdapter):
             raise TypeError("inspection requires bytes")
         if detectors is not None and len(detectors) > 32:
             raise ValueError("invalid or excessive detector selection")
+        if detectors is not None and any(not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) for name in detectors):
+            raise ValueError("invalid detector selection")
+        if len(content) <= MAX_INPUT_BYTES and content.startswith((b"%PDF-", b"PK", b"\x89PNG", b"\xff\xd8")):
+            from .binary import inspect_binary
+            return inspect_binary(content, detectors)
         reason = "scanned_unicode_only"
         text = None
         if len(content) > MAX_INPUT_BYTES:

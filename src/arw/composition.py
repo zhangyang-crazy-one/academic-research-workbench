@@ -51,7 +51,6 @@ def default_router(
     proven); the v1 file-base generation path remains selectable by simply
     not passing ``store_path``.
     """
-    from arw.adapters.workflow import ARSAdapter
 
     router = CapabilityRouter()
     from arw.ports.writing import CAPABILITIES as WRITING_CAPABILITIES
@@ -73,7 +72,7 @@ def default_router(
             raise CapabilityUnavailable("knowledge.semantic_search (explicit model/run/store required)")
         return module.LocalSemanticRetriever(store_path, semantic_run_root, embedding_backend)
     router.register_optional("knowledge.semantic_search", _semantic)
-    router.register("research.literature", ARSAdapter)
+    router.register_optional("research.literature", lambda: import_module("arw_ars").ARSAdapter())
     def _research_learning():
         return import_module("arw_research_learning.service").ResearchLearningService(learning_project_root, run_root=learning_run_root)
     for capability in ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"):
@@ -99,16 +98,8 @@ def default_router(
     # Optional research engines degrade to capability-not-available receipts
     # when their extras are not installed (never an import error).
     def _storm_adapter():
-        # Probe the OPTIONAL engine itself: arw.storm imports cleanly with
-        # only stdlib+pydantic (the knowledge_storm import is lazy inside
-        # run_storm_research), so importing arw.storm would resolve
-        # successfully even when the engine is absent (review P2).  Probing
-        # knowledge_storm makes resolution-time absence detection real.
-        import knowledge_storm  # type: ignore[import-not-found]  # noqa: F401 -- optional probe
-
-        from arw.storm import run_storm_research
-
-        return run_storm_research
+        import_module("knowledge_storm")
+        return import_module("arw_storm").StormWorkflowProvider()
 
     router.register_optional("research.deep_survey", _storm_adapter)
 
@@ -398,3 +389,13 @@ def configured_semantic_provider(store_path, run_root, model_path, model_digest)
     except ImportError as error:
         raise CapabilityUnavailable("knowledge.semantic_search (install semantic extra)") from error
     return default_router(store_path=store_path, semantic_run_root=run_root, embedding_backend=backend).resolve("knowledge.semantic_search")
+
+
+def storm_components():
+    """CLI-only composition seam; optional dependencies stay inside the engine."""
+    from arw.kernel.capabilities import CapabilityUnavailable
+    try:
+        module = import_module("arw_storm")
+    except ImportError as error:
+        raise CapabilityUnavailable("research.deep_survey") from error
+    return module.StormConfig, module.StormRunError, module.run_storm_research
