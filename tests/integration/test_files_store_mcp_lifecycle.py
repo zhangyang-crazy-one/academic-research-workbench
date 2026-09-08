@@ -143,7 +143,9 @@ def _list_request(root_id: str) -> FilesListRequest:
     )
 
 
-def _outline_request(root_id: str, generation_id: str, *, file_id: str, digest: str) -> FilesOutlineRequest:
+def _outline_request(
+    root_id: str, generation_id: str, *, file_id: str, digest: str
+) -> FilesOutlineRequest:
     return FilesOutlineRequest(
         schema_version="1.0.0",
         root_id=root_id,
@@ -195,13 +197,19 @@ def test_reingest_between_calls_keeps_bound_adapter_serving(tmp_path: Path) -> N
     )
 
     first = adapter.list_files(_list_request(root_id))
-    assert {entry.relative_path for entry in first.files} == {"notes/a.txt", "notes/b.txt"}
+    assert {entry.relative_path for entry in first.files} == {
+        "notes/a.txt",
+        "notes/b.txt",
+    }
     assert first.selected_generation_id == generation_id
 
     # No operator action between calls: canonical selection and cache
     # metadata are unchanged, so the bound adapter keeps serving.
     second = adapter.list_files(_list_request(root_id))
-    assert {entry.relative_path for entry in second.files} == {"notes/a.txt", "notes/b.txt"}
+    assert {entry.relative_path for entry in second.files} == {
+        "notes/a.txt",
+        "notes/b.txt",
+    }
     assert second.selected_generation_id == generation_id
 
 
@@ -504,9 +512,7 @@ def test_every_operation_runs_per_request_revalidation(
                 "adversarial flip detected by test injection",
             )
 
-    monkeypatch.setattr(
-        adapter, "_revalidate_query_generation", flipping_revalidator
-    )
+    monkeypatch.setattr(adapter, "_revalidate_query_generation", flipping_revalidator)
 
     if operation == "list_files":
         request = _list_request(root_id)
@@ -526,9 +532,7 @@ def test_every_operation_runs_per_request_revalidation(
             file_id=file_id,
             expected_digest=digest,
             hit_id=None,
-            location=SourceLocation(
-                start_byte=0, end_byte=1, start_line=1, end_line=1
-            ),
+            location=SourceLocation(start_byte=0, end_byte=1, start_line=1, end_line=1),
             before_lines=1,
             after_lines=1,
         )
@@ -595,9 +599,9 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
     # snapshot connection) inherits WAL semantics.
     setup_store = LocalProjectionStore(store_path)
     setup_store.open()
-    journal_mode = setup_store.connection.execute(
-        "PRAGMA journal_mode=WAL"
-    ).fetchone()[0]
+    journal_mode = setup_store.connection.execute("PRAGMA journal_mode=WAL").fetchone()[
+        0
+    ]
     assert journal_mode.lower() == "wal", (
         f"expected WAL journal mode; got {journal_mode!r}"
     )
@@ -613,9 +617,7 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
         expected_generation_manifest_sha256=manifest_sha256,
     )
 
-    selected_path = (
-        control / "roots" / root_id / "selected-generation.json"
-    )
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     advanced_generation = generation_id + "_ADV"
     reader_call_count = {"value": 0}
 
@@ -651,14 +653,10 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
             writer.close()
         payload = json.loads(selected_path.read_text(encoding="utf-8"))
         payload["generation_id"] = advanced_generation
-        selected_path.write_text(
-            json.dumps(payload), encoding="utf-8"
-        )
+        selected_path.write_text(json.dumps(payload), encoding="utf-8")
         return advanced_generation
 
-    monkeypatch.setattr(
-        adapter, "_read_canonical_generation_id", in_flight_advancer
-    )
+    monkeypatch.setattr(adapter, "_read_canonical_generation_id", in_flight_advancer)
 
     with pytest.raises(FileProviderError) as caught:
         adapter.list_files(_list_request(root_id))
@@ -687,9 +685,7 @@ def test_wal_mode_second_connection_commit_during_query_drops_result(
         verify_store.close()
 
     # The canonical file advance must persist across reads.
-    advanced_payload = json.loads(
-        selected_path.read_text(encoding="utf-8")
-    )
+    advanced_payload = json.loads(selected_path.read_text(encoding="utf-8"))
     assert advanced_payload["generation_id"] == advanced_generation
 
     store.close()
@@ -775,9 +771,7 @@ def test_two_native_callers_no_cross_connection_contamination(
         barrier.wait()
         adapter.search_files(_search_request(root_id))
 
-    list_thread = threading.Thread(
-        target=call_list_files, name="list-files-caller"
-    )
+    list_thread = threading.Thread(target=call_list_files, name="list-files-caller")
     search_thread = threading.Thread(
         target=call_search_files, name="search-files-caller"
     )
@@ -863,9 +857,7 @@ def test_snapshot_closed_after_error(
     def failing_reader() -> str:
         raise ToolError("stale_query_generation", "test forced failure")
 
-    monkeypatch.setattr(
-        adapter, "_read_canonical_generation_id", failing_reader
-    )
+    monkeypatch.setattr(adapter, "_read_canonical_generation_id", failing_reader)
 
     with pytest.raises(FileProviderError) as caught:
         adapter.list_files(_list_request(root_id))
@@ -911,24 +903,24 @@ def _seed_minimal_for_canonical_reader(
 def test_canonical_reader_rejects_symlink(
     tmp_path: Path,
 ) -> None:
-    """A symlink at the canonical selection path is rejected.
+    """A post-start symlink at the canonical selection path is rejected.
 
     ``O_NOFOLLOW`` on open prevents the symlink from being followed, so
     the read fails fast.  The per-request guard catches it and surfaces
     ``stale_query_generation``.
+
+    Post-start tamper coverage: the adapter is constructed against the
+    valid sync-written pointer (so the loader-anchored inventory
+    binding succeeds), THEN the pointer is replaced with a symlink to
+    a poisoned target.  The per-request reader must catch the swap.
     """
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
-    selected_path.unlink()
-    target = tmp_path / "regular.json"
-    target.write_text(
-        json.dumps({"generation_id": "spoofed"}), encoding="utf-8"
-    )
-    selected_path.symlink_to(target)
 
+    # Construct the adapter BEFORE the post-start tamper.
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
@@ -939,10 +931,20 @@ def test_canonical_reader_rejects_symlink(
         expected_generation_manifest_sha256=manifest_sha256,
     )
 
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    # Apply the post-start tamper: swap the pointer with a symlink.
+    selected_path.unlink()
+    target = tmp_path / "regular.json"
+    target.write_text(json.dumps({"generation_id": "spoofed"}), encoding="utf-8")
+    selected_path.symlink_to(target)
+
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_canonical_reader_rejects_oversize_file(
@@ -953,15 +955,17 @@ def test_canonical_reader_rejects_oversize_file(
     A writer cannot exhaust the reader's memory by piping a gigabyte
     payload through the canonical path; the bounded read detects the
     oversize and the guard surfaces ``stale_query_generation``.
+
+    Post-start tamper coverage: the adapter is constructed first, then
+    the pointer is overwritten with an oversize payload.
     """
 
     from arw_ext.local_store.files import MAX_CANONICAL_SELECTION_BYTES
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
-    selected_path.write_bytes(b"{ " + b"a" * (MAX_CANONICAL_SELECTION_BYTES + 1) + b" }")
 
     store = LocalProjectionStore(store_path)
     store.open_readonly()
@@ -972,11 +976,18 @@ def test_canonical_reader_rejects_oversize_file(
         expected_generation_id=generation_id,
         expected_generation_manifest_sha256=manifest_sha256,
     )
+    selected_path.write_bytes(
+        b"{ " + b"a" * (MAX_CANONICAL_SELECTION_BYTES + 1) + b" }"
+    )
 
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_canonical_reader_rejects_malformed_utf8(
@@ -987,13 +998,15 @@ def test_canonical_reader_rejects_malformed_utf8(
     The safe reader decodes strict UTF-8 and raises ``ValueError`` on
     any malformed byte sequence; the guard catches it and surfaces
     ``stale_query_generation``.
+
+    Post-start tamper coverage: the adapter is constructed first, then
+    the pointer is overwritten with malformed UTF-8 bytes.
     """
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
-    selected_path.write_bytes(b'{"generation_id": "\xff\xfe"}')
 
     store = LocalProjectionStore(store_path)
     store.open_readonly()
@@ -1004,23 +1017,31 @@ def test_canonical_reader_rejects_malformed_utf8(
         expected_generation_id=generation_id,
         expected_generation_manifest_sha256=manifest_sha256,
     )
+    selected_path.write_bytes(b'{"generation_id": "\xff\xfe"}')
 
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_canonical_reader_rejects_malformed_json(
     tmp_path: Path,
 ) -> None:
-    """Malformed JSON in the canonical selection is rejected."""
+    """Malformed JSON in the canonical selection is rejected.
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    Post-start tamper coverage: the adapter is constructed first, then
+    the pointer is overwritten with malformed JSON bytes.
+    """
+
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
-    selected_path.write_bytes(b"{ this is not valid json }")
 
     store = LocalProjectionStore(store_path)
     store.open_readonly()
@@ -1031,11 +1052,16 @@ def test_canonical_reader_rejects_malformed_json(
         expected_generation_id=generation_id,
         expected_generation_manifest_sha256=manifest_sha256,
     )
+    selected_path.write_bytes(b"{ this is not valid json }")
 
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_canonical_reader_rejects_fifo_without_hanging(
@@ -1054,8 +1080,8 @@ def test_canonical_reader_rejects_fifo_without_hanging(
     not hang the test suite.
     """
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
     selected_path.unlink()
@@ -1110,39 +1136,34 @@ def test_canonical_reader_rejects_fifo_without_hanging(
 def test_canonical_reader_rejects_swapped_symlink_parent(
     tmp_path: Path,
 ) -> None:
-    """A symlink swap on the leaf's parent directory is rejected.
+    """A post-start symlink swap on the canonical root is caught.
 
-    ``O_NOFOLLOW`` on the leaf alone does not protect a swap on an
-    ancestor directory component: ``os.open`` resolves the full path
-    first, and if any ancestor is a symlink the leaf open follows the
-    redirected tree.  The reader walks each ancestor with ``O_NOFOLLOW``
-    via ``dir_fd`` anchoring, so the swap is rejected at walk time
-    before any leaf read.
+    Genuine post-start threat coverage: the adapter is constructed
+    against a VALID canonical root (so the inventory anchor succeeds
+    and the adapter is bound to the immutable generation artifacts),
+    THEN the attacker swaps ``control/roots/<root_id>`` with a
+    symlink to a rogue tree containing a poisoned pointer.  The
+    per-request reader's O_NOFOLLOW ancestor walk must catch the
+    swap on the NEXT request and refuse with ``stale_query_generation``.
+
+    This test complements the strict-anchor startup test
+    (``test_strict_anchor_rejects_missing_generation_with_intact_pointer``
+    in test_files_store_inventory_binding.py) which covers the
+    STARTUP-time threat where the canonical root is already swapped
+    when the constructor runs.  Together they cover both the
+    start-time and post-start attack windows.
     """
 
     import shutil
 
-    _, control, root_id, generation_id, manifest_sha256, store_path = _seed_minimal_for_canonical_reader(
-        tmp_path
+    _, control, root_id, generation_id, manifest_sha256, store_path = (
+        _seed_minimal_for_canonical_reader(tmp_path)
     )
 
-    # Create a rogue directory containing a poisoned
-    # selected-generation.json the attacker would like the reader to
-    # pick up.
-    rogue = tmp_path / "rogue_root"
-    rogue.mkdir()
-    (rogue / "selected-generation.json").write_text(
-        json.dumps({"generation_id": "spoofed_via_parent_swap"}),
-        encoding="utf-8",
-    )
-
-    # Replace ``control/roots/<root_id>`` with a symlink to the rogue
-    # directory.  shutil.rmtree is needed because the seeded root_id
-    # directory contains other files (cursor.key, root.json, etc.).
-    real_root_dir = control / "roots" / root_id
-    shutil.rmtree(real_root_dir)
-    real_root_dir.symlink_to(rogue)
-
+    # Step 1: construct the adapter BEFORE the swap, against a
+    # valid canonical root.  The inventory anchor runs at
+    # construction and binds the expected fingerprint to the
+    # loader-verified canonical database_path.
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
@@ -1153,16 +1174,37 @@ def test_canonical_reader_rejects_swapped_symlink_parent(
         expected_generation_manifest_sha256=manifest_sha256,
     )
 
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation", (
-        f"expected stale_query_generation on symlink-parent swap; "
-        f"got {caught.value.code!r}"
+    # Step 2: attacker swaps ``control/roots/<root_id>`` with a
+    # symlink to a rogue tree containing a poisoned
+    # ``selected-generation.json`` (and NO ``generations/<gen_id>``
+    # directory, so any per-request reader would not find the
+    # anchored generation).
+    rogue = tmp_path / "rogue_root"
+    rogue.mkdir()
+    (rogue / "selected-generation.json").write_text(
+        json.dumps({"generation_id": "spoofed_via_parent_swap"}),
+        encoding="utf-8",
     )
+    real_root_dir = control / "roots" / root_id
+    shutil.rmtree(real_root_dir)
+    real_root_dir.symlink_to(rogue)
 
-    # The reader must NOT have read the rogue payload (the symlink
-    # walk rejected the swap before any leaf read).
-    store.close()
+    # Step 3: the NEXT request must fail closed via the per-request
+    # reader's O_NOFOLLOW ancestor walk (not via the inventory
+    # anchor — the anchor was bound at construction when the root
+    # was valid; the per-request reader is the post-start tamper
+    # detector).
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"per-request reader must detect post-start symlink swap; "
+            f"got {caught.value.code!r}"
+        )
+        # The reader must NOT have read the rogue payload (the
+        # symlink walk rejected the swap before any leaf read).
+    finally:
+        store.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1175,24 +1217,32 @@ def _seed_with_pointer(
     *,
     pointer_overrides: dict[str, object] | None = None,
     pointer_drops: tuple[str, ...] = (),
-) -> tuple[Path, str, str, str, Path]:
-    """Seed a control + store with a custom selected-generation.json payload.
+) -> tuple[Path, str, str, str, Path, dict[str, object]]:
+    """Seed a control + store with a custom pointer payload (NOT applied).
 
     The seed function runs FilesAdminService.sync (which writes a real
-    pointer) and then OVERWRITES ``selected-generation.json`` with a
-    pointer that starts from the original four required fields and
-    applies the caller-supplied overrides + drops.  The trusted
-    startup digest is read from the ORIGINAL pointer (the one written
-    by sync) and threaded through so the per-request strict binding
-    can compare against it.
+    pointer) and then COMPUTES a poison pointer that starts from the
+    original four required fields and applies the caller-supplied
+    overrides + drops.  The poison payload is RETURNED (not applied
+    to disk) so the test can:
 
-    ``pointer_drops`` is a tuple of field names to REMOVE from the
-    baseline pointer (used by the missing-field regression tests).
-    ``pointer_overrides`` replaces fields verbatim (used by the
-    wrong-field and unknown-field tests).
+    1. Construct the bound adapter FIRST (against the valid
+       ``selected-generation.json`` that ``sync`` wrote — the
+       loader-anchored inventory anchor succeeds).
+    2. THEN overwrite ``selected-generation.json`` with the poison
+       payload to simulate a post-start canonical-pointer tamper.
+    3. Fire a request; the per-request reader's strict-pointer
+       binding + O_NOFOLLOW ancestor walk must catch the tamper
+       and surface ``stale_query_generation``.
+
+    The trusted startup digest is read from the ORIGINAL pointer
+    (the one written by sync, untouched) and threaded through so
+    the adapter's loader-anchored inventory binding can compare
+    against it.
+
+    Returns (tmp_path, root_id, original_generation_id,
+    original_manifest_sha256, store_path, poison_payload).
     """
-
-    import shutil as _shutil
 
     _root, control, root_id, original_gen_id, original_digest, store_path = _seed(
         tmp_path,
@@ -1210,10 +1260,12 @@ def _seed_with_pointer(
         payload.pop(field_name, None)
     if pointer_overrides:
         payload.update(pointer_overrides)
-    selected_path = control / "roots" / root_id / "selected-generation.json"
-    selected_path.write_text(json.dumps(payload), encoding="utf-8")
-    _ = _shutil
-    return tmp_path, root_id, original_gen_id, original_digest, store_path
+    # NOTE: pointer is NOT applied to disk here.  The caller is
+    # responsible for constructing the adapter first (against the
+    # valid sync-written pointer) and THEN overwriting the pointer
+    # to test the per-request reader's strict-pointer binding.
+    _ = control
+    return tmp_path, root_id, original_gen_id, original_digest, store_path, payload
 
 
 def test_pointer_binding_missing_root_id_rejected(
@@ -1221,28 +1273,39 @@ def test_pointer_binding_missing_root_id_rejected(
 ) -> None:
     """A pointer without ``root_id`` is rejected.
 
-    The strict ``SelectedGeneration`` model requires ``root_id``;
-    parsing the pointer raises ``ValidationError`` which the
-    per-request reader maps to ``stale_query_generation``.
+    Post-start tamper coverage: the adapter is constructed against the
+    valid ``sync``-written pointer (so the loader-anchored inventory
+    binding succeeds), THEN the pointer is overwritten with the poison
+    payload (drops ``root_id``).  The per-request reader's strict
+    pointer binding catches the drop and surfaces
+    ``stale_query_generation``.
     """
 
-    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+    tmp, root_id, gen_id, digest, store_path, poison_payload = _seed_with_pointer(
         tmp_path,
         pointer_drops=("root_id",),
     )
+    control = tmp / "control"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
         store,
-        canonical_root=tmp / "control",
+        canonical_root=control,
         root_id=root_id,
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    # Apply the poison AFTER adapter construction (post-start tamper).
+    selected_path.write_text(json.dumps(poison_payload), encoding="utf-8")
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_pointer_binding_missing_digest_rejected(
@@ -1250,47 +1313,61 @@ def test_pointer_binding_missing_digest_rejected(
 ) -> None:
     """A pointer without ``generation_manifest_sha256`` is rejected."""
 
-    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+    tmp, root_id, gen_id, digest, store_path, poison_payload = _seed_with_pointer(
         tmp_path,
         pointer_drops=("generation_manifest_sha256",),
     )
+    control = tmp / "control"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
         store,
-        canonical_root=tmp / "control",
+        canonical_root=control,
         root_id=root_id,
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    selected_path.write_text(json.dumps(poison_payload), encoding="utf-8")
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_pointer_binding_wrong_root_id_rejected(
     tmp_path: Path,
 ) -> None:
-    """A pointer naming a different ``root_id`` is rejected (caught by explicit comparison)."""
+    """A pointer naming a different ``root_id`` is rejected."""
 
-    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+    tmp, root_id, gen_id, digest, store_path, poison_payload = _seed_with_pointer(
         tmp_path,
         pointer_overrides={"root_id": "another-root"},
     )
+    control = tmp / "control"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
         store,
-        canonical_root=tmp / "control",
+        canonical_root=control,
         root_id=root_id,
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    selected_path.write_text(json.dumps(poison_payload), encoding="utf-8")
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_pointer_binding_wrong_digest_rejected(
@@ -1304,23 +1381,30 @@ def test_pointer_binding_wrong_digest_rejected(
     the digest does not match the startup binding.
     """
 
-    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+    tmp, root_id, gen_id, digest, store_path, poison_payload = _seed_with_pointer(
         tmp_path,
         pointer_overrides={"generation_manifest_sha256": "f" * 64},
     )
+    control = tmp / "control"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
         store,
-        canonical_root=tmp / "control",
+        canonical_root=control,
         root_id=root_id,
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    selected_path.write_text(json.dumps(poison_payload), encoding="utf-8")
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_pointer_binding_unknown_field_rejected(
@@ -1335,23 +1419,30 @@ def test_pointer_binding_unknown_field_rejected(
     smuggle unknown state through the pointer.
     """
 
-    tmp, root_id, gen_id, digest, store_path = _seed_with_pointer(
+    tmp, root_id, gen_id, digest, store_path, poison_payload = _seed_with_pointer(
         tmp_path,
         pointer_overrides={"attacker_controlled_field": "should-be-rejected"},
     )
+    control = tmp / "control"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
         store,
-        canonical_root=tmp / "control",
+        canonical_root=control,
         root_id=root_id,
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation"
-    store.close()
+    selected_path.write_text(json.dumps(poison_payload), encoding="utf-8")
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation; got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 def test_pointer_binding_duplicate_keys_rejected(
@@ -1368,9 +1459,10 @@ def test_pointer_binding_duplicate_keys_rejected(
     pointer binding — the model validator would only see the
     attacker's value.
 
-    The test writes a pointer with ``generation_manifest_sha256``
-    appearing twice (the trusted digest first, then an attacker's
-    digest) and asserts the per-request reader refuses with
+    Post-start tamper coverage: the adapter is constructed against
+    the valid sync-written pointer, THEN the pointer is overwritten
+    with the duplicate-keys payload (the trusted digest first, then
+    an attacker's digest).  The per-request reader must refuse with
     ``stale_query_generation``.
     """
 
@@ -1378,25 +1470,8 @@ def test_pointer_binding_duplicate_keys_rejected(
         tmp_path, corpus={"notes/a.txt": "alpha\n"}
     )
     selected_path = control / "roots" / root_id / "selected-generation.json"
-    # Duplicate ``generation_manifest_sha256`` key in the raw JSON.
-    # ``json.dumps`` silently deduplicates (the last value wins), so
-    # we write the file as raw TEXT with the duplicate preserved.
-    # strict_json_loads' ``object_pairs_hook`` rejects the duplicate
-    # BEFORE the Pydantic validator runs; plain ``json.loads`` would
-    # silently keep the second value and let the model validator
-    # see whatever the attacker chose to set last.
-    duplicate_pointer = (
-        '{'
-        '"schema_version": "1.0.0", '
-        f'"root_id": {json.dumps(root_id)}, '
-        f'"generation_id": {json.dumps(gen_id)}, '
-        f'"generation_manifest_sha256": {json.dumps(digest)}, '
-        '"selected_at": "2026-09-05T00:00:00Z", '
-        f'"generation_manifest_sha256": {json.dumps("f" * 64)}'
-        '}'
-    )
-    selected_path.write_text(duplicate_pointer, encoding="utf-8")
 
+    # Construct the adapter BEFORE the post-start tamper.
     store = LocalProjectionStore(store_path)
     store.open_readonly()
     adapter = LocalStoreFilesAdapter(
@@ -1406,13 +1481,33 @@ def test_pointer_binding_duplicate_keys_rejected(
         expected_generation_id=gen_id,
         expected_generation_manifest_sha256=digest,
     )
-    with pytest.raises(FileProviderError) as caught:
-        adapter.list_files(_list_request(root_id))
-    assert caught.value.code == "stale_query_generation", (
-        f"expected stale_query_generation on duplicate-key pointer; "
-        f"got {caught.value.code!r}"
+
+    # Apply the post-start tamper: overwrite with the duplicate-keys
+    # pointer.  ``json.dumps`` silently deduplicates (the last value
+    # wins), so we write the file as raw TEXT with the duplicate
+    # preserved.  strict_json_loads' ``object_pairs_hook`` rejects
+    # the duplicate BEFORE the Pydantic validator runs.
+    duplicate_pointer = (
+        "{"
+        '"schema_version": "1.0.0", '
+        f'"root_id": {json.dumps(root_id)}, '
+        f'"generation_id": {json.dumps(gen_id)}, '
+        f'"generation_manifest_sha256": {json.dumps(digest)}, '
+        '"selected_at": "2026-09-05T00:00:00Z", '
+        f'"generation_manifest_sha256": {json.dumps("f" * 64)}'
+        "}"
     )
-    store.close()
+    selected_path.write_text(duplicate_pointer, encoding="utf-8")
+
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            adapter.list_files(_list_request(root_id))
+        assert caught.value.code == "stale_query_generation", (
+            f"expected stale_query_generation on duplicate-key pointer; "
+            f"got {caught.value.code!r}"
+        )
+    finally:
+        store.close()
 
 
 # ---------------------------------------------------------------------------

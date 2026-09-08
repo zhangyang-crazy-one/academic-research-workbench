@@ -31,6 +31,7 @@ from arw.kernel.core.canonical import (
 
 DEFAULT_MAX_AUDIT_ENTRIES = 4_096
 DEFAULT_MAX_AUDIT_RECEIPT_BYTES = 65_536
+DEFAULT_MAX_AUDIT_INPUT_BYTES = 4 * 1024 * 1024
 # Aggregate canonical UTF-8 output budget for ``load_audit_faults``.  The
 # composition root serializes the returned faults into the ``arw status``
 # health payload, so without a ceiling one ``max_entries=1001`` load of
@@ -267,7 +268,7 @@ def _audit_output_truncation_fault(
 
     The message layout is bounded by ``_AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES``:
     enumerated/kept values come from ``max_entries`` (≤ 4 096) and the
-    budget value is ``max_output_bytes`` (≤ ``DEFAULT_MAX_AUDIT_OUTPUT_BYTES``),
+    budget value is ``max_output_bytes`` (≤ four times the default),
     so the literal length is a small fixed constant for any caller.
     """
 
@@ -334,6 +335,7 @@ def load_audit_faults(
     max_entries: int = DEFAULT_MAX_AUDIT_ENTRIES,
     max_bytes: int = DEFAULT_MAX_AUDIT_RECEIPT_BYTES,
     max_output_bytes: int = DEFAULT_MAX_AUDIT_OUTPUT_BYTES,
+    max_input_bytes: int = DEFAULT_MAX_AUDIT_INPUT_BYTES,
 ) -> tuple[AuditFault, ...]:
     """Load bounded audit faults through a no-follow directory descriptor.
 
@@ -345,11 +347,16 @@ def load_audit_faults(
     ceiling; the final canonical JSON serialization never exceeds the
     declared bound.  The budget covers both valid receipt faults and
     generated malformed-receipt faults (``unreadable_fault``).
+    Raw input reads are independently capped by ``max_input_bytes`` (4 MiB
+    by default), including malformed payloads and fields discarded by parsing.
+    Reaching that ceiling retains prior faults and adds a typed input marker.
     """
     if max_entries < 1 or max_entries > DEFAULT_MAX_AUDIT_ENTRIES:
         raise ValueError("audit entry bound is outside the supported range")
     if max_bytes < 1 or max_bytes > DEFAULT_MAX_AUDIT_RECEIPT_BYTES:
         raise ValueError("audit receipt byte bound is outside the supported range")
+    if not 1 <= max_input_bytes <= DEFAULT_MAX_AUDIT_INPUT_BYTES:
+        raise ValueError("audit input byte bound is outside the supported range")
     if max_output_bytes < _AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES + 1:
         raise ValueError("audit output budget is below the truncation reserve")
     max_output_bytes_cap = DEFAULT_MAX_AUDIT_OUTPUT_BYTES * 4
@@ -444,6 +451,11 @@ def load_audit_faults(
             | no_follow
         )
 
+        input_bytes = 0
+
+        class InputBudgetExceeded(Exception):
+            pass
+
         def decode_audit_fault(name: str) -> AuditFault:
             """Parse one receipt file into an :class:`AuditFault`.
 
@@ -454,6 +466,7 @@ def load_audit_faults(
             is side-effect-free aside from the read syscall itself.
             """
 
+            nonlocal input_bytes
             try:
                 if directory_descriptor is None:
                     receipt_path = root / name
@@ -466,6 +479,8 @@ def load_audit_faults(
                     status = os.fstat(descriptor)
                     if not stat.S_ISREG(status.st_mode) or status.st_size > max_bytes:
                         return unreadable_fault(name)
+                    if status.st_size > max_input_bytes - input_bytes:
+                        raise InputBudgetExceeded
                     if directory_descriptor is None:
                         live = os.stat(root / name, follow_symlinks=False)
                         if (
@@ -477,11 +492,19 @@ def load_audit_faults(
                     chunks: list[bytes] = []
                     total = 0
                     while total <= max_bytes:
-                        chunk = os.read(descriptor, min(16_384, max_bytes + 1 - total))
+                        remaining = max_input_bytes - input_bytes
+                        if remaining == 0:
+                            if total == status.st_size == os.fstat(descriptor).st_size:
+                                break
+                            raise InputBudgetExceeded
+                        chunk = os.read(
+                            descriptor, min(16_384, max_bytes + 1 - total, remaining)
+                        )
                         if not chunk:
                             break
                         chunks.append(chunk)
                         total += len(chunk)
+                        input_bytes += len(chunk)
                     if total > max_bytes:
                         return unreadable_fault(name)
                     raw = b"".join(chunks)
@@ -517,8 +540,19 @@ def load_audit_faults(
             )
 
         used_bytes = 0
-        for enumerated, name in enumerate(sorted(names), start=1):
-            candidate = decode_audit_fault(name)
+        for enumerated, name in enumerate(sorted(names), 1):
+            try:
+                candidate = decode_audit_fault(name)
+            except InputBudgetExceeded:
+                out.append(
+                    AuditFault(
+                        code="audit_receipt_input_truncated",
+                        message=f"audit receipt input truncated: max_input_bytes={max_input_bytes}",
+                        affected_rows=1,
+                        projection_name="knowledge",
+                    )
+                )
+                break
             entry_bytes = _audit_output_entry_bytes(candidate)
             projected = entry_bytes + (
                 _AUDIT_OUTPUT_LIST_SEP_BYTES if out else _AUDIT_OUTPUT_LIST_OPEN_BYTES

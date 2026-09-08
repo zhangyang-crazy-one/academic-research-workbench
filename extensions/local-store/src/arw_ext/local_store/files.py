@@ -75,6 +75,7 @@ from .ingest import (
 from .inventory import (
     InventoryError,
     anchor_via_loader,
+    verified_fts_candidate_ids,
     verify_actual_inventory,
     verify_fts_trigram_consistency,
 )
@@ -234,35 +235,9 @@ class LocalStoreFilesAdapter:
                     "canonical selection at startup time; re-ingest the "
                     "current generation before serving live reads",
                 )
-        # Inventory fingerprint (PR16 Codex P1 3940050812): the
-        # expected inventory is rooted in the IMMUTABLE on-disk
-        # ``generation-manifest.json`` + ``files.sqlite3`` (whose
-        # SHA-256s are already validated by the caller and held in
-        # ``expected_generation_manifest_sha256``), NOT in
-        # ``projection_meta``.  The anchor uses ``expected_generation_id``
-        # when supplied (the caller's trusted canonical selection at
-        # startup, validated above) so the fingerprint is derived from
-        # the SAME generation directory the caller trusts.
-        #
-        # **SECURITY (strict anchor)** — when the caller supplies
-        # ``canonical_root + root_id`` (the production trust path) the
-        # constructor MUST fail closed if the anchor cannot be derived:
-        # a generation directory deleted while
-        # ``selected-generation.json`` remains intact would otherwise
-        # let a writer serve a tampered cache because the per-request
-        # reader's strict-pointer binding would still pass (the pointer
-        # file is unchanged) while the anchor is unreachable.  The
-        # sentinel fallback is reserved EXCLUSIVELY for the truly
-        # rootless legacy API (the branch where ``canonical_root`` is
-        # None) where no canonical anchor is supplied at all.
-        #
-        # The anchor runs AFTER the ``expected_generation_id`` cross-check
-        # so a stale cache (cache's ``selected_generation_id`` differs
-        # from the caller's expectation) surfaces as
-        # ``stale_ingested_cache`` first — not as an anchor failure with
-        # the wrong error code.  The anchor is also the LAST check before
-        # the cursor secret is decoded, so a malformed anchor cannot leave
-        # the adapter half-initialised with a stale codec.
+        # Bind rows to loader-verified canonical artifacts after rejecting a
+        # stale cache. Failure to reach the canonical anchor must fail closed;
+        # only the rootless legacy API may skip inventory binding.
         if self._canonical_root is not None:
             anchor_generation_id = (
                 expected_generation_id
@@ -279,19 +254,7 @@ class LocalStoreFilesAdapter:
                     ),
                 )
             except InventoryError as error:
-                # FAIL CLOSED.  No silent fallback to the
-                # ``"uninitialised"`` sentinel when the caller has
-                # supplied a canonical anchor: a writer who deletes
-                # the canonical generation directory while leaving
-                # ``selected-generation.json`` intact would otherwise
-                # produce a tampered cache that slips past BOTH the
-                # per-request reader's strict-pointer binding (the
-                # pointer file is unchanged) AND the inventory check
-                # (the anchor is silently skipped).  The manifest SHA
-                # check INSIDE :func:`anchor_via_loader` is the
-                # trust anchor; when it cannot reach the on-disk
-                # artifacts, the caller cannot trust the cache to be
-                # the projection of those artifacts.
+                # An unreachable anchor cannot authorize any cache contents.
                 raise FileProviderError(
                     "root_denied",
                     f"canonical inventory is unreadable: {error}",
@@ -428,7 +391,12 @@ class LocalStoreFilesAdapter:
         deadline: float,
         op,
     ):  # noqa: ANN001, ANN202
-        """Run inventory validation and the operation in one read snapshot and deadline."""
+        """Verify metadata and inventory, then query one locked read snapshot.
+
+        All five operations share one deadline for validation and their query.
+        The instance lock prevents concurrent callers replacing _request_conn.
+        Canonical selection is checked again before releasing the response.
+        """
 
         def _gate(snapshot_conn: sqlite3.Connection) -> None:
             try:
@@ -439,7 +407,11 @@ class LocalStoreFilesAdapter:
         def _inventory_check(
             snapshot_conn: sqlite3.Connection, deadline: float
         ) -> None:
-            """Bind snapshot rows and trigram content to the canonical inventory."""
+            """Bind query-visible rows and FTS content to the canonical anchor.
+
+            Verification and the tool body use the same snapshot and deadline.
+            The rootless legacy API has no canonical inventory to compare.
+            """
 
             if self._expected_inventory_fingerprint == "uninitialised":
                 return
@@ -974,12 +946,15 @@ class LocalStoreFilesAdapter:
                 candidate_ids = ids if candidate_ids is None else candidate_ids & ids
             return candidate_ids if candidate_ids is not None else set()
         phrases = " ".join('"' + term.replace('"', '""') + '"' for term in long_terms)
-        rows = self._rows(
-            "SELECT file_id FROM files_fts_trigram WHERE files_fts_trigram MATCH ?",
-            (f"body_nfkc_folded : {phrases}",),
-            deadline=deadline,
-        )
-        return {str(row[0]) for row in rows}
+        try:
+            return verified_fts_candidate_ids(
+                self._request_connection(),
+                match_query=f"body_nfkc_folded : {phrases}",
+                terms=long_terms,
+                deadline=deadline,
+            )
+        except InventoryError as error:
+            raise FileProviderError(error.code, str(error)) from error
 
     def _rank_search_rows(
         self,

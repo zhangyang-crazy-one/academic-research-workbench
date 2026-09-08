@@ -27,23 +27,26 @@ performance budget guard monkeypatched to a low ceiling.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
+import os
+import shutil
 import sqlite3
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 from urllib.parse import quote
 
 import pytest
+from arw_ext.local_store import LocalProjectionStore
+from arw_ext.local_store import inventory as inventory_module
+from arw_ext.local_store.files import LocalStoreFilesAdapter
+from arw_ext.local_store.ingest import ingest_files_generation
 
 from arw.adapters.files import FileProviderError
 from arw.file_models import FilesListRequest, SourceLocation
 from arw.files import FilesAdminService, load_query_generation
-
-from arw_ext.local_store import LocalProjectionStore
-from arw_ext.local_store.files import LocalStoreFilesAdapter
-from arw_ext.local_store.ingest import ingest_files_generation
-from arw_ext.local_store import inventory as inventory_module
 
 
 def _service_factory(control: Path) -> FilesAdminService:
@@ -137,9 +140,7 @@ def _open_writable_cache(store_path: Path) -> sqlite3.Connection:
     would not see them on this process).
     """
 
-    return sqlite3.connect(
-        f"file:{quote(str(store_path))}?mode=rwc", uri=True
-    )
+    return sqlite3.connect(f"file:{quote(str(store_path))}?mode=rwc", uri=True)
 
 
 # ---------------------------------------------------------------------------
@@ -314,13 +315,12 @@ def test_mutated_column_refused(
             )
         elif mutation == "source_digest":
             cache.execute(
-                "UPDATE files SET source_digest = 'f' * 64 "
-                "WHERE relative_path = 'notes/b.txt'"
+                "UPDATE files SET source_digest = ? WHERE relative_path = 'notes/b.txt'",
+                ("f" * 64,),
             )
         elif mutation == "body":
             cache.execute(
-                "UPDATE files SET body = 'TAMPERED' "
-                "WHERE relative_path = 'notes/b.txt'"
+                "UPDATE files SET body = 'TAMPERED' WHERE relative_path = 'notes/b.txt'"
             )
             cache.execute(
                 "UPDATE files SET body_nfkc_folded = 'tampered' "
@@ -687,9 +687,7 @@ def test_aggregate_byte_budget_refuses_large_corpus(
 # ---------------------------------------------------------------------------
 
 
-def _outline_request(
-    root_id: str, generation_id: str, *, file_id: str, digest: str
-):
+def _outline_request(root_id: str, generation_id: str, *, file_id: str, digest: str):
     from arw.file_models import FilesOutlineRequest
 
     return FilesOutlineRequest(
@@ -775,6 +773,7 @@ def test_every_operation_runs_inventory_check(
     """
 
     from arw_ext.local_store import files as adapter_module
+
     from arw.file_models import SourceLocation
 
     _root, control, root_id, gen_id, manifest_sha256, store_path = _seed(
@@ -814,7 +813,9 @@ def test_every_operation_runs_inventory_check(
         adapter.search_files(_search_request(root_id))
     elif operation == "read_file":
         adapter.read_file(
-            _read_request(root_id, file_id=file_id, relative_path=relative_path, digest=digest)
+            _read_request(
+                root_id, file_id=file_id, relative_path=relative_path, digest=digest
+            )
         )
     elif operation == "get_outline":
         adapter.get_outline(
@@ -834,6 +835,162 @@ def test_every_operation_runs_inventory_check(
         f"{operation} must run the inventory check exactly once; "
         f"got {call_count['value']}"
     )
+
+    cache = _open_writable_cache(store_path)
+    try:
+        cache.execute("UPDATE files SET source_digest = ?", ("f" * 64,))
+        cache.commit()
+    finally:
+        cache.close()
+    requests = {
+        "list_files": _list_request(root_id),
+        "search_files": _search_request(root_id),
+        "read_file": _read_request(
+            root_id, file_id=file_id, relative_path=relative_path, digest=digest
+        ),
+        "get_outline": _outline_request(
+            root_id, gen_id, file_id=file_id, digest=digest
+        ),
+        "get_context": _context_request(
+            root_id,
+            gen_id,
+            file_id=file_id,
+            digest=digest,
+            location=SourceLocation(start_byte=0, end_byte=1, start_line=1, end_line=1),
+        ),
+    }
+    with pytest.raises(FileProviderError) as caught:
+        getattr(adapter, operation)(requests[operation])
+    assert caught.value.code == "inventory_tampered"
+
+
+def test_null_cannot_replace_canonical_empty_body(tmp_path: Path) -> None:
+    _, control, root_id, gen_id, manifest, path = _seed(
+        tmp_path, corpus={"empty.txt": ""}
+    )
+    adapter = _open_bound_adapter(
+        path,
+        control_root=control,
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=manifest,
+    )
+    with _open_writable_cache(path) as cache:
+        cache.execute("UPDATE files SET body = NULL, body_nfkc_folded = NULL")
+        cache.execute("DELETE FROM files_fts_trigram")
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "inventory_tampered"
+
+
+@pytest.mark.parametrize("query", ["中文证据", "alpha beta", 'a"b', "no-match"])
+def test_bound_search_preserves_multilingual_and_quoted_queries(
+    tmp_path: Path, query: str
+) -> None:
+    _, control, root_id, gen_id, manifest, path = _seed(
+        tmp_path, corpus={"a.txt": '中文证据 alpha beta a"b'}
+    )
+    adapter = _open_bound_adapter(
+        path,
+        control_root=control,
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=manifest,
+    )
+    request = _search_request(root_id).model_copy(update={"query": query})
+    result = adapter.search_files(request)
+    assert bool(result.hits) is (query != "no-match")
+
+
+def test_fts_validation_honors_expired_deadline(tmp_path: Path) -> None:
+    _, _, _, _, _, path = _seed(tmp_path, corpus={"a.txt": "alpha"})
+    with (
+        sqlite3.connect(path) as connection,
+        pytest.raises(inventory_module.InventoryBudgetExceeded),
+    ):
+        inventory_module.verify_fts_trigram_consistency(connection, deadline=0)
+
+
+def test_fts_shadow_postings_cannot_silently_hide_canonical_hits(
+    tmp_path: Path,
+) -> None:
+    _, control, root_id, gen_id, manifest, path = _seed(
+        tmp_path, corpus={"a.txt": "alpha alpha"}
+    )
+    adapter = _open_bound_adapter(
+        path,
+        control_root=control,
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=manifest,
+    )
+    assert adapter.search_files(_search_request(root_id)).hits
+    with sqlite3.connect(":memory:") as empty, _open_writable_cache(path) as cache:
+        empty.execute(
+            "CREATE VIRTUAL TABLE blank USING fts5(file_id UNINDEXED, relative_path UNINDEXED, body_nfkc_folded, tokenize='trigram')"
+        )
+        for suffix in ("data", "idx", "docsize"):
+            rows = empty.execute(f"SELECT * FROM blank_{suffix}").fetchall()
+            cache.execute(f"DELETE FROM files_fts_trigram_{suffix}")
+            for row in rows:
+                placeholders = ",".join("?" for _ in row)
+                cache.execute(
+                    f"INSERT INTO files_fts_trigram_{suffix} VALUES ({placeholders})",
+                    row,
+                )
+        assert (
+            cache.execute("SELECT count(*) FROM files_fts_trigram").fetchone()[0] == 1
+        )
+        assert (
+            cache.execute(
+                "SELECT count(*) FROM files_fts_trigram WHERE files_fts_trigram MATCH 'alpha'"
+            ).fetchone()[0]
+            == 0
+        )
+    with pytest.raises(FileProviderError) as caught:
+        adapter.search_files(_search_request(root_id))
+    assert caught.value.code == "inventory_tampered"
+
+
+def test_inventory_vm_step_guard_uses_runtime_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, gen_id, manifest, path = _seed(
+        tmp_path, corpus={"a.txt": "alpha"}
+    )
+    adapter = _open_bound_adapter(
+        path,
+        control_root=control,
+        root_id=root_id,
+        expected_generation_id=gen_id,
+        expected_generation_manifest_sha256=manifest,
+    )
+    monkeypatch.setattr(inventory_module, "MAX_INVENTORY_VM_STEPS", 1)
+    with pytest.raises(FileProviderError) as caught:
+        adapter.list_files(_list_request(root_id))
+    assert caught.value.code == "inventory_budget_exceeded"
+
+
+def test_oversized_body_is_rejected_before_python_text_materialization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, _, _, _, _, path = _seed(tmp_path, corpus={"a.txt": "alpha"})
+    with sqlite3.connect(path) as connection:
+        connection.execute("UPDATE files SET body = ?", ("X" * 2048,))
+        monkeypatch.setattr(inventory_module, "MAX_INVENTORY_BODY_BYTES", 1024)
+        original = connection.text_factory
+
+        def refuse_large_text(payload: bytes) -> str:
+            assert len(payload) <= 1024, (
+                "oversized cell materialized before budget guard"
+            )
+            return original(payload)
+
+        connection.text_factory = refuse_large_text
+        with pytest.raises(inventory_module.InventoryBudgetExceeded):
+            inventory_module.compute_actual_inventory_fingerprint(
+                connection, deadline=float("inf")
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -949,8 +1106,6 @@ def test_installed_factory_derives_fingerprint_via_load_query_generation(
       (the fingerprint derivation path is wired correctly).
     """
 
-    import shutil
-
     from arw_ext.local_store import LocalProjectionStore
     from arw_ext.local_store.files import LocalStoreFilesAdapter
 
@@ -1041,3 +1196,279 @@ def test_installed_factory_derives_fingerprint_via_load_query_generation(
         }
     finally:
         store.close()
+
+
+def _change_canonical_body(database: Path, mode: str) -> None:
+    target = database
+    if mode == "replace":
+        target = database.with_name("replacement.sqlite3")
+        shutil.copyfile(database, target)
+    with sqlite3.connect(target) as connection:
+        connection.execute("UPDATE files SET body = 'forgedclaim target evidence'")
+    if mode == "replace":
+        os.replace(target, database)
+
+
+@pytest.mark.parametrize("mode", ["replace", "in_place"])
+def test_canonical_snapshot_rejects_change_after_loader_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    root, control, root_id, gen_id, manifest, cache_path = _seed(
+        tmp_path, corpus={"real.txt": "trusted original content\n"}
+    )
+    generation = load_query_generation(control, root_id)
+    manifest_path = generation.generation_path / "generation-manifest.json"
+    selected_path = control / "roots" / root_id / "selected-generation.json"
+    before = (manifest_path.read_bytes(), selected_path.read_bytes())
+    real_loader = inventory_module.load_query_generation
+
+    def load_then_tamper(*args, **kwargs):
+        verified = real_loader(*args, **kwargs)
+        assert (
+            hashlib.sha256(verified.database_path.read_bytes()).hexdigest()
+            == verified.manifest.database_sha256
+        )
+        _change_canonical_body(verified.database_path, mode)
+        with sqlite3.connect(cache_path) as cache:
+            metadata = cache.execute(
+                "SELECT * FROM projection_meta ORDER BY key"
+            ).fetchall()
+            cache.execute(
+                "UPDATE files SET body = 'forgedclaim target evidence', body_nfkc_folded = 'forgedclaim target evidence'"
+            )
+            cache.execute(
+                "UPDATE files_fts SET body_nfkc_folded = 'forgedclaim target evidence'"
+            )
+            cache.execute(
+                "UPDATE files_fts_trigram SET body_nfkc_folded = 'forgedclaim target evidence'"
+            )
+            assert (
+                cache.execute("SELECT * FROM projection_meta ORDER BY key").fetchall()
+                == metadata
+            )
+        return verified
+
+    monkeypatch.setattr(inventory_module, "load_query_generation", load_then_tamper)
+    store = LocalProjectionStore(cache_path)
+    store.open_readonly()
+    try:
+        with pytest.raises(FileProviderError) as caught:
+            LocalStoreFilesAdapter(
+                store,
+                allowed_root=root,
+                expected_root_id=root_id,
+                canonical_root=control,
+                root_id=root_id,
+                expected_generation_id=gen_id,
+                expected_generation_manifest_sha256=manifest,
+            )
+        assert caught.value.code == "root_denied"
+        assert "digest" in str(caught.value)
+        assert (manifest_path.read_bytes(), selected_path.read_bytes()) == before
+        assert (root / "real.txt").read_text() == "trusted original content\n"
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("mode", ["replace", "in_place"])
+def test_canonical_snapshot_isolates_changes_after_verified_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    expected = inventory_module.compute_expected_inventory_fingerprint(generation)
+    real_fingerprint = inventory_module._fingerprint
+
+    def fingerprint_after_change(connection, **kwargs):
+        _change_canonical_body(generation.database_path, mode)
+        return real_fingerprint(connection, **kwargs)
+
+    monkeypatch.setattr(inventory_module, "_fingerprint", fingerprint_after_change)
+    assert (
+        inventory_module.compute_expected_inventory_fingerprint(generation) == expected
+    )
+    assert (
+        hashlib.sha256(generation.database_path.read_bytes()).hexdigest()
+        != generation.manifest.database_sha256
+    )
+
+
+def test_canonical_snapshot_rejects_wal_database(
+    tmp_path: Path,
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    writer = sqlite3.connect(generation.database_path)
+    try:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        writer.execute("UPDATE files SET body = 'uncheckpointed body'")
+        writer.commit()
+        # Give the helper the actual main-file digest so this tests the WAL
+        # format exclusion, independently of an ordinary digest mismatch.
+        wal_generation = replace(
+            generation,
+            manifest=generation.manifest.model_copy(
+                update={
+                    "database_sha256": hashlib.sha256(
+                        generation.database_path.read_bytes()
+                    ).hexdigest()
+                }
+            ),
+        )
+        assert generation.database_path.with_name("files.sqlite3-wal").is_file()
+        with pytest.raises(inventory_module.InventoryError, match="WAL"):
+            inventory_module.compute_expected_inventory_fingerprint(wal_generation)
+    finally:
+        writer.close()
+
+
+def test_canonical_snapshot_requires_deserialize_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    opened = []
+
+    class NoDeserializeConnection:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    connection = NoDeserializeConnection()
+
+    def connect(target, **kwargs):
+        opened.append(target)
+        return connection
+
+    monkeypatch.setattr(inventory_module.sqlite3, "connect", connect)
+    with pytest.raises(inventory_module.InventoryError, match="deserialize"):
+        inventory_module.compute_expected_inventory_fingerprint(generation)
+    assert opened == [":memory:"]
+    assert connection.closed
+
+
+def test_canonical_snapshot_requires_safe_descriptor_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    with pytest.raises(inventory_module.InventoryError, match="unsupported"):
+        inventory_module.compute_expected_inventory_fingerprint(generation)
+
+
+def test_canonical_snapshot_raw_budget_precedes_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    cap = generation.database_path.stat().st_size - 1
+    monkeypatch.setattr(
+        inventory_module, "MAX_CANONICAL_DATABASE_BYTES", cap, raising=False
+    )
+    calls = []
+    real_read = os.read
+
+    def read(fd, count):
+        calls.append(count)
+        return real_read(fd, count)
+
+    monkeypatch.setattr(os, "read", read)
+    with pytest.raises(inventory_module.InventoryBudgetExceeded):
+        inventory_module.compute_expected_inventory_fingerprint(generation)
+    assert not calls
+
+
+def test_canonical_snapshot_raw_read_shares_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    clock = [1.0]
+    real_read = os.read
+
+    def read(fd, count):
+        payload = real_read(fd, count)
+        clock[0] = 10.0
+        return payload
+
+    monkeypatch.setattr(os, "read", read)
+    monkeypatch.setattr(inventory_module.time, "monotonic", lambda: clock[0])
+    with pytest.raises(inventory_module.InventoryBudgetExceeded):
+        inventory_module.compute_expected_inventory_fingerprint(generation, deadline=5)
+
+
+def test_canonical_snapshot_exact_raw_budget_and_query_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    expected = inventory_module.compute_expected_inventory_fingerprint(generation)
+    monkeypatch.setattr(
+        inventory_module,
+        "MAX_CANONICAL_DATABASE_BYTES",
+        generation.database_path.stat().st_size,
+        raising=False,
+    )
+    real_fingerprint = inventory_module._fingerprint
+
+    def check_query_only(connection, **kwargs):
+        assert connection.execute("PRAGMA query_only").fetchone()[0] == 1
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            connection.execute("DELETE FROM files")
+        return real_fingerprint(connection, **kwargs)
+
+    monkeypatch.setattr(inventory_module, "_fingerprint", check_query_only)
+    assert (
+        inventory_module.compute_expected_inventory_fingerprint(generation) == expected
+    )
+
+
+@pytest.mark.parametrize("mode", ["replace", "in_place"])
+def test_canonical_snapshot_rejects_changes_during_descriptor_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    real_read = os.read
+    changed = False
+
+    def read_then_change(fd, count):
+        nonlocal changed
+        chunk = real_read(fd, count)
+        if not changed:
+            changed = True
+            _change_canonical_body(generation.database_path, mode)
+        return chunk
+
+    monkeypatch.setattr(os, "read", read_then_change)
+    with pytest.raises(inventory_module.InventoryTampered, match="changed during"):
+        inventory_module.compute_expected_inventory_fingerprint(generation)
+    assert changed
+
+
+def test_canonical_snapshot_ignores_new_wal_after_verified_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, control, root_id, _, _, _ = _seed(tmp_path, corpus={"a.txt": "trusted original"})
+    generation = load_query_generation(control, root_id)
+    expected = inventory_module.compute_expected_inventory_fingerprint(generation)
+    real_fingerprint = inventory_module._fingerprint
+
+    def fingerprint_with_new_wal(connection, **kwargs):
+        writer = sqlite3.connect(generation.database_path)
+        try:
+            writer.execute("PRAGMA journal_mode=WAL")
+            writer.execute("UPDATE files SET body = 'uncheckpointed forged body'")
+            writer.commit()
+            assert generation.database_path.with_name("files.sqlite3-wal").is_file()
+            return real_fingerprint(connection, **kwargs)
+        finally:
+            writer.close()
+
+    monkeypatch.setattr(inventory_module, "_fingerprint", fingerprint_with_new_wal)
+    assert (
+        inventory_module.compute_expected_inventory_fingerprint(generation) == expected
+    )

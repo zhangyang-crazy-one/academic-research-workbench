@@ -46,6 +46,7 @@ def default_router(
 
     router = CapabilityRouter()
     router.register("research.literature", ARSAdapter)
+
     def _artifact_integrity():
         module = import_module("arw_artifact_integrity.service")
         return module.ArtifactIntegrityService()

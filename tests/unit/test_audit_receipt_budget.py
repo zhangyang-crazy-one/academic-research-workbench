@@ -15,12 +15,9 @@ the suite runs in well under a second on a developer laptop.
 from __future__ import annotations
 
 import json
-import os
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-
 from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImports]
     AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE,
     DEFAULT_MAX_AUDIT_OUTPUT_BYTES,
@@ -29,14 +26,13 @@ from arw_ext.local_store.receipts import (  # pyright: ignore[reportMissingImpor
     load_audit_faults,
     persist_audit_fault,
 )
+
 from arw.kernel.core.canonical import (  # pyright: ignore[reportMissingImports]
     canonical_json_bytes,
     sha256_hex,
 )
 
-
 _AUDIT_OUTPUT_WRAP_OVERHEAD = 4  # '[' + ']' + ',' separators + '\n'
-
 
 
 def _serialized_list_bytes(faults: tuple[AuditFault, ...]) -> int:
@@ -50,9 +46,7 @@ def _serialized_list_bytes(faults: tuple[AuditFault, ...]) -> int:
         }
         for fault in faults
     ]
-    return len(
-        canonical_json_bytes(payload)
-    )
+    return len(canonical_json_bytes(payload))
 
 
 def _seed_valid_receipts(database: Path, count: int, *, message: str) -> None:
@@ -92,15 +86,43 @@ def test_default_output_budget_is_documented_constant() -> None:
     assert faults == ()
 
 
+def test_input_budget_counts_discarded_fields_and_stops_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from arw_ext.local_store import receipts
+
+    database = tmp_path / "arw.db"
+    root = audit_root(database)
+    root.mkdir(parents=True)
+    for index in range(12):
+        raw = canonical_json_bytes(
+            {"code": "fault", "message": "small", "ignored": "x" * 4000}
+        )
+        (root / f"{index:02d}-{sha256_hex(raw)[:12]}.json").write_bytes(raw)
+    read_bytes = 0
+    real_read = receipts.os.read
+
+    def track_read(fd: int, count: int) -> bytes:
+        nonlocal read_bytes
+        chunk = real_read(fd, count)
+        read_bytes += len(chunk)
+        return chunk
+
+    monkeypatch.setattr(receipts.os, "read", track_read)
+    faults = receipts.load_audit_faults(database, max_input_bytes=9000)
+    assert read_bytes <= 9000
+    assert len(faults) == 3
+    assert faults[0].message == "small"
+    assert faults[-1].code == "audit_receipt_input_truncated"
+    assert _serialized_list_bytes(faults) <= DEFAULT_MAX_AUDIT_OUTPUT_BYTES
+
+
 def test_load_audit_faults_rejects_output_budget_below_reserve(tmp_path: Path) -> None:
     from arw_ext.local_store import receipts  # pyright: ignore[reportMissingImports]
 
     database = tmp_path / "arw.db"
     with pytest.raises(ValueError, match="truncation reserve"):
         receipts.load_audit_faults(database, max_output_bytes=1)
-
-
-
 
 
 def test_load_audit_faults_rejects_output_budget_above_ceiling(tmp_path: Path) -> None:
@@ -126,13 +148,11 @@ def test_budget_truncates_when_receipts_exceed_aggregate(tmp_path: Path) -> None
     kept_messages = [fault.message for fault in faults[:-1]]
     assert kept_messages, "at least one valid fault must survive the budget gate"
     assert all(message.startswith("m-") for message in kept_messages)
-    assert faults[-1].message.startswith(
-        "audit receipt output truncated: enumerated="
-    )
+    assert faults[-1].message.startswith("audit receipt output truncated: enumerated=")
     assert faults[-1].message.endswith(f"max_output_bytes={budget}")
-    assert int(
-        faults[-1].message.split("kept=", 1)[1].split(" ", 1)[0]
-    ) == len(kept_messages)
+    assert int(faults[-1].message.split("kept=", 1)[1].split(" ", 1)[0]) == len(
+        kept_messages
+    )
 
 
 def test_truncation_marker_is_typed_and_distinct(tmp_path: Path) -> None:
@@ -143,12 +163,8 @@ def test_truncation_marker_is_typed_and_distinct(tmp_path: Path) -> None:
     database = tmp_path / "arw.db"
     _seed_valid_receipts(database, count=20, message="m")
     faults = load_audit_faults(database, max_output_bytes=600)
-    assert any(
-        fault.code == AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE for fault in faults
-    )
-    assert "audit_receipt_inventory_truncated" not in {
-        fault.code for fault in faults
-    }
+    assert any(fault.code == AUDIT_RECEIPT_OUTPUT_TRUNCATED_CODE for fault in faults)
+    assert "audit_receipt_inventory_truncated" not in {fault.code for fault in faults}
 
 
 def test_budget_keeps_every_receipt_when_under_limit(tmp_path: Path) -> None:
@@ -208,13 +224,17 @@ def test_budget_serialization_uses_canonical_shape(tmp_path: Path) -> None:
         }
         for fault in faults
     ]
-    assert canonical_json_bytes(projected).decode("utf-8") == json.dumps(
-        projected,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ) + "\n"
+    assert (
+        canonical_json_bytes(projected).decode("utf-8")
+        == json.dumps(
+            projected,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    )
 
 
 def test_budget_covers_malformed_receipt_generated_faults(tmp_path: Path) -> None:
@@ -311,17 +331,14 @@ def test_budget_helpers_exported_for_windows_branch(
     out: list[AuditFault] = []
     used = 0
     enumerated = 0
-    for candidate in candidates:
-        enumerated += 1
+    for enumerated, candidate in enumerate(candidates, 1):
         projected = receipts._audit_output_entry_bytes(candidate) + (
             receipts._AUDIT_OUTPUT_LIST_SEP_BYTES
             if out
             else receipts._AUDIT_OUTPUT_LIST_OPEN_BYTES
         )
         if (
-            used
-            + projected
-            + receipts._AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES
+            used + projected + receipts._AUDIT_OUTPUT_TRUNCATION_FAULT_RESERVE_BYTES
             > 600
         ):
             out.append(

@@ -13,7 +13,7 @@ subject to latest-head Codex review and CI before merge.
 | 4 | 75 original findings: 35 P1, 40 P2 | Current source fixes present; all reply-named fixing commits reachable |
 | 5 | 4: 2 P1, 2 P2 | Current source fixes present |
 | 7 | 6: 2 P1, 4 P2 | Current source fixes present |
-| 10 | 1 P1 | Current source fix present |
+| 10 | 1 P1 | Original source fix present; the September 8 audit found a new built-wheel/SBOM mismatch, addressed by the packaging follow-up below |
 | 12 | 2 P2 | Root-ID parameterization fixed; local OpenSpec now distinguishes the frozen five-tool surface from the future seven-tool target |
 | 13 | 6: 4 P1, 2 P2 | Fixed, including projection data/head propagation, transactional migrations, deletion sweep, and fault persistence |
 | 14 | 2: 1 P1, 1 P2 | Provider registration and capability-name mapping fixed in PR #15 |
@@ -133,3 +133,53 @@ release permission remain separate gates.
   verify return exit 65 on faults; verify retains structured fault JSON.
 - Serial regression selection: 731 passed. Seven touched Python files confirmed
   primary-LSP clean. No expected-failure markers hide the CLI regression.
+
+## Inventory, receipt budgets and reproducible packaging
+
+The follow-up to review comments `3940050812` and `3940050813` binds cached
+file rows to the loader-verified canonical generation and bounds aggregate
+audit receipt input and output. Cache metadata alone does not establish that
+the rows or search index represent the selected generation.
+
+Each canonical file request validates a typed inventory fingerprint in its
+read-only transaction. Search also checks FTS recall against the verified
+folded body text: replacing shadow postings with an empty index must produce
+an integrity error rather than a successful empty result. Inventory checks
+and query execution share the five-second request deadline. Oversized
+inventories return a typed budget failure; this does not invalidate canonical
+evidence or authorize a read-path index repair.
+
+Audit loading defaults to at most 4 MiB of receipt input and 256 KiB of
+canonical fault output, with explicit truncation faults. The output limit
+includes retained receipt identifiers and generated fault messages.
+
+Wheel construction pins Hatchling 1.31.0 and stores sorted ZIP members without
+compression, preserving payload bytes and RECORD while eliminating differences
+between host compression libraries. CI compares the actual first-party wheel
+SHA-256 with the checked-in SBOM. The dependent technical-evidence hash is
+refreshed from that SBOM; no legal-use declaration or release authorization is
+changed.
+
+The completed FileProvider interface is the existing five-operation contract
+listed above and in `v2-invariants.md`. Future research-manifest ingestion and
+sync operations require their own qualification.
+
+### Canonical database snapshot binding
+
+The canonical inventory anchor must query the exact database bytes whose
+SHA-256 matches the selected generation manifest. A loader check followed by
+reopening the original pathname leaves a substitution window: changed database
+rows can become the expected fingerprint even though the manifest and selection
+have not changed.
+
+Canonical fingerprint construction therefore reads through one safely opened
+descriptor, enforces a separate 256 MiB raw-database limit, checks the manifest
+digest, and queries a private SQLite byte snapshot with writes disabled. It does
+not reopen the canonical pathname for SQL or consult sibling WAL files. This is
+a startup query limit; the existing per-request row, aggregate, FTS and deadline
+limits remain in effect. Missing safe-descriptor or SQLite deserialization
+capabilities produce an explicit startup failure.
+
+The regression boundary includes both pathname replacement and in-place edits
+after loader validation, plus replacement after the private bytes are captured.
+The latter cannot change the fingerprint derived from the verified snapshot.

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.31.0"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -35,6 +35,9 @@ packages = [
     "extensions/semantica/src/arw_semantica",
     "extensions/artifact-integrity/src/arw_artifact_integrity",
 ]
+
+[tool.hatch.build.hooks.custom]
+path = "build_hooks.py"
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
