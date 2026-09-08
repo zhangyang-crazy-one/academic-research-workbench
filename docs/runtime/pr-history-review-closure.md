@@ -163,3 +163,23 @@ changed.
 The completed FileProvider interface is the existing five-operation contract
 listed above and in `v2-invariants.md`. Future research-manifest ingestion and
 sync operations require their own qualification.
+
+### Canonical database snapshot binding
+
+The canonical inventory anchor must query the exact database bytes whose
+SHA-256 matches the selected generation manifest. A loader check followed by
+reopening the original pathname leaves a substitution window: changed database
+rows can become the expected fingerprint even though the manifest and selection
+have not changed.
+
+Canonical fingerprint construction therefore reads through one safely opened
+descriptor, enforces a separate 256 MiB raw-database limit, checks the manifest
+digest, and queries a private SQLite byte snapshot with writes disabled. It does
+not reopen the canonical pathname for SQL or consult sibling WAL files. This is
+a startup query limit; the existing per-request row, aggregate, FTS and deadline
+limits remain in effect. Missing safe-descriptor or SQLite deserialization
+capabilities produce an explicit startup failure.
+
+The regression boundary includes both pathname replacement and in-place edits
+after loader validation, plus replacement after the private bytes are captured.
+The latter cannot change the fingerprint derived from the verified snapshot.
