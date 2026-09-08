@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: milestone_complete
 stopped_at: Milestone complete (Phase 7 was final phase)
-last_updated: 2026-09-08T06:36:00Z
-last_activity: 2026-09-08 -- Merged repair PR16 and snapshot follow-up PR18; PR17 af07ffa qualified on final main 5ae79de
+last_updated: 2026-09-08T07:23:35Z
+last_activity: 2026-09-08 -- Synchronized OpenSpec delivery evidence and GitHub issue 6/8/9/11 checklists
 progress:
   total_phases: 8
   completed_phases: 8
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-12)
 
 **Core value:** Every research run must be reproducible, resumable, and auditable from source files through claims, experiments, review gates, and final artifacts.
-**Current focus:** PR17 is review-ready at af07ffa on final main 5ae79de; repair PR16 and snapshot follow-up PR18 are merged, with all PR checks passing (see quick260908-grs).
+**Current focus:** OpenSpec and issues #6/#8/#9/#11 are synchronized; #6 precise-locator and writing work remain pending. PR17 remains review-ready at af07ffa on main 5ae79de (quick260908-l40).
 
 ## Current Position
 
 Phase: 7
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-09-08 -- Quick 260908-grs integration complete
+Last activity: 2026-09-08 -- Quick 260908-l40 documentation and issue synchronization complete
 
 Progress: [██████████] 100%
 
@@ -81,6 +81,8 @@ Progress: [██████████] 100%
 - Phase 04.1 inserted after Phase 4: Phase 4 Qualification Closure, ARS Integration Lock, and Installed Host Verification (URGENT)
 
 ### Quick Tasks Completed
+
+- [260908-l40](./quick/260908-l40-sync-openspec-delivery-status-and-issue-/) — Reconciled 19 OpenSpec documents and published task checklists for issues #6/#8/#9/#11. #6 has 10/12 original acceptance items on main; added three pending precise-locator tasks (Semantica 15/18). PR17 text tasks remain pending merge remotely; strict OpenSpec 12/12 PASS. All issues remain open; original source changes preserved.
 
 - [260908-grs](./quick/260908-grs-close-pr16-review-gaps-and-merge-then-up/) — Merged PR16 and snapshot follow-up PR18 after exact-head CI; final main `5ae79de`. Updated PR17 normally to `af07ffa`, with 849 integrated, 59 compatibility/package and 114 formal-worktree focused checks passing; final three CI jobs passed. Original dirty work preserved; PR17 remains open for review.
 
@@ -161,6 +163,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-08T06:36:00Z
-Stopped at: Quick 260908-grs complete; PR16/18 merged and PR17 updated with passing final-head CI
+Last session: 2026-09-08T07:23:35Z
+Stopped at: Quick 260908-l40 complete; OpenSpec and four issue checklists synchronized, PR17 remains open
 Resume file: None
