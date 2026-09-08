@@ -14,6 +14,9 @@ dependencies = [
     "pydantic>=2.13.4",
 ]
 
+[project.optional-dependencies]
+semantic = ["sqlite-vec==0.1.9"]
+
 [dependency-groups]
 dev = ["hatchling>=1.31.0", "PyYAML>=6.0.3", "pytest>=9.1.1"]
 ars-test = [

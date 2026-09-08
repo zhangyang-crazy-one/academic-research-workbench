@@ -35,7 +35,7 @@ jobs:
           version: "0.11.28"
           enable-cache: true
       - name: Sync locked development environment
-        run: uv sync --frozen --all-groups --python "${{ matrix.python-version }}"
+        run: uv sync --frozen --all-groups --extra semantic --python "${{ matrix.python-version }}"
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -120,6 +120,11 @@ jobs:
           tests/integration/test_research_artifacts.py
           tests/integration/test_research_memory.py
           tests/integration/test_research_learning.py
+      - name: Run optional offline semantic retrieval regressions
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: uv run --frozen --extra semantic pytest -q tests/integration/test_semantic_retrieval.py
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:

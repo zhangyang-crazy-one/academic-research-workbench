@@ -30,6 +30,7 @@
       "artifact",
       "memory",
       "learning",
+      "semantic",
       "audit"
     ],
     "defaultPrompt": "Route this academic research task through the workbench."

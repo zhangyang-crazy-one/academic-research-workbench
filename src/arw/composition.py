@@ -31,6 +31,8 @@ def default_router(
     accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
     expected_provenance_record_sha256: Mapping[str, str] | None = None,
     source_locator_resolver=None,
+    semantic_run_root=None,
+    embedding_backend=None,
     learning_project_root=None,
     learning_run_root=None,
     memory_project_root=None,
@@ -51,6 +53,16 @@ def default_router(
     from arw.adapters.workflow import ARSAdapter
 
     router = CapabilityRouter()
+    def _semantic():
+        module = import_module("arw_ext.local_store.semantic")
+        # Probe before configuration checks so a minimal install receives the
+        # ordinary optional-engine fault and never opens a store.
+        import_module("sqlite_vec")
+        from arw.kernel.capabilities import CapabilityUnavailable
+        if store_path is None or semantic_run_root is None or embedding_backend is None:
+            raise CapabilityUnavailable("knowledge.semantic_search (explicit model/run/store required)")
+        return module.LocalSemanticRetriever(store_path, semantic_run_root, embedding_backend)
+    router.register_optional("knowledge.semantic_search", _semantic)
     router.register("research.literature", ARSAdapter)
     def _research_learning():
         return import_module("arw_research_learning.service").ResearchLearningService(learning_project_root, run_root=learning_run_root)
@@ -176,6 +188,7 @@ def default_router(
             "evidence": (),
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
+            "semantic": ("knowledge.semantic_search",),
             "provenance": ("knowledge.provenance",),
             "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),
             "memory": tuple(f"research.memory.{op}" for op in ("save", "search", "read", "list", "doctor", "handoff")),
@@ -364,3 +377,13 @@ def initialize_memory_project(root, project_id=None):
         return import_module("arw_research_memory.project").initialize_project(root, project_id)
     except ImportError as error:
         raise CapabilityUnavailable("research.memory.save") from error
+
+
+def configured_semantic_provider(store_path, run_root, model_path, model_digest):
+    from arw.kernel.capabilities import CapabilityUnavailable
+    try:
+        import_module("sqlite_vec")
+        backend = import_module("arw_ext.local_store.local_embedding").LocalTokenEmbedding(model_path, expected_digest=model_digest)
+    except ImportError as error:
+        raise CapabilityUnavailable("knowledge.semantic_search (install semantic extra)") from error
+    return default_router(store_path=store_path, semantic_run_root=run_root, embedding_backend=backend).resolve("knowledge.semantic_search")

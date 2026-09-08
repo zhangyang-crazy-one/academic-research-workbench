@@ -110,6 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure(artifact_commands)
     from arw.cli_memory import configure as configure_memory
     configure_memory(subparsers)
+    from arw.cli_semantic import configure as configure_semantic
+    configure_semantic(subparsers)
     from arw.cli_learning import configure as configure_learning
     configure_learning(subparsers)
     route = subparsers.add_parser(
@@ -485,6 +487,15 @@ def _read_bounded_regular_file(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "semantic":
+        from arw.cli_semantic import handle
+        from arw.kernel.capabilities import CapabilityUnavailable
+        try:
+            _write_json(handle(args))
+            return 0
+        except (ValueError, RuntimeError, OSError) as error:
+            _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "semantic_invalid"), "message": str(error)[:512]})
+            return 2
     if args.command == "learn":
         from arw.cli_learning import handle
         from arw.kernel.capabilities import CapabilityUnavailable
