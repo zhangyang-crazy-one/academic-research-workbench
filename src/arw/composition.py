@@ -42,12 +42,16 @@ def default_router(
     proven); the v1 file-base generation path remains selectable by simply
     not passing ``store_path``.
     """
-    from arw.adapters.artifacts import ArtifactIntegrityAdapter
     from arw.adapters.workflow import ARSAdapter
 
     router = CapabilityRouter()
     router.register("research.literature", ARSAdapter)
-    router.register("artifact.inspect", ArtifactIntegrityAdapter)
+    def _artifact_integrity():
+        module = import_module("arw_artifact_integrity.service")
+        return module.ArtifactIntegrityService()
+
+    router.register_optional("artifact.inspect", _artifact_integrity)
+    router.register_optional("artifact.sanitize", _artifact_integrity)
 
     # Optional research engines degrade to capability-not-available receipts
     # when their extras are not installed (never an import error).
