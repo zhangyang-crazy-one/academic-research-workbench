@@ -1,0 +1,412 @@
+[
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000001",
+    "event_id": "evt-00000000-0000-4000-8000-000000000001",
+    "event_sha256": "6c47937349bc09488dac294fce03c3eab34f01efbf869367ebb669c5cc5f8ba4",
+    "event_type": "run.initialized",
+    "expected_revision": 0,
+    "occurred_at": "2026-09-08T00:00:00Z",
+    "payload": {
+      "manifest_sha256": "fc7c9b78105b074c9b2f71a0744f3b8b71bc0e24b3fe5290fa2334369940fc41"
+    },
+    "prev_event_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resulting_revision": 1,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.0.0",
+    "sequence": 1
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000002",
+    "event_id": "evt-00000000-0000-4000-8000-000000000002",
+    "event_sha256": "6b870d7fb50c96b7baafd6ed940a88610d7f6924acf14f54980f52e44259faaa",
+    "event_type": "artifact.accepted",
+    "expected_revision": 1,
+    "occurred_at": "2026-09-08T00:01:00Z",
+    "payload": {
+      "artifact_id": "artifact.source",
+      "artifact_sha256": "205373db8a032c499720e5724b533112640d0eead8d0e163591564f617638bc6",
+      "attempt_id": null,
+      "manifest_sha256": "5c886ee5cd77ea36f3181f71dc478fe91e6e7f561aa83914f34bbba077daddc5"
+    },
+    "prev_event_sha256": "6c47937349bc09488dac294fce03c3eab34f01efbf869367ebb669c5cc5f8ba4",
+    "resulting_revision": 2,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.0.0",
+    "sequence": 2
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000100",
+    "event_id": "evt-00000000-0000-4000-8000-000000000100",
+    "event_sha256": "efe973421cab48b180d3e7273a0c9cc3b6fe2328012cbb5082058aff0b5927f3",
+    "event_type": "learning_observation_recorded",
+    "expected_revision": 2,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "43eb6860e4164249de746f210db50562c95cf26244628cd0e9eb564d567bb394",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": null,
+      "from_scope": null,
+      "previous_event_sha256": null,
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "observation-00000000-0000-4000-8000-000000000100",
+      "scope": "project",
+      "source_digests": [
+        "205373db8a032c499720e5724b533112640d0eead8d0e163591564f617638bc6"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000002"
+      ],
+      "status": "recorded",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "6b870d7fb50c96b7baafd6ed940a88610d7f6924acf14f54980f52e44259faaa",
+    "resulting_revision": 3,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 3
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000101",
+    "event_id": "evt-00000000-0000-4000-8000-000000000101",
+    "event_sha256": "16586f0b38b6d85569c0d03b149ab7bce9c4251dfb354222981ff385ff0d02f0",
+    "event_type": "research_heuristic_proposed",
+    "expected_revision": 3,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "e21e09977449ba2653ad9b210e0c27b62db8b37806d2bf1ddc0e8b81baf94c6f",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": null,
+      "from_scope": null,
+      "previous_event_sha256": null,
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "heuristic.retrieval",
+      "scope": "project",
+      "source_digests": [
+        "efe973421cab48b180d3e7273a0c9cc3b6fe2328012cbb5082058aff0b5927f3"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000100"
+      ],
+      "status": "candidate",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "efe973421cab48b180d3e7273a0c9cc3b6fe2328012cbb5082058aff0b5927f3",
+    "resulting_revision": 4,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 4
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000111",
+    "event_id": "evt-00000000-0000-4000-8000-000000000111",
+    "event_sha256": "d8bd5f0c4bfa5ebaac8824990136056811904d5e98066078cce47aa3ccfa0487",
+    "event_type": "artifact.accepted",
+    "expected_revision": 4,
+    "occurred_at": "2026-09-08T00:01:00Z",
+    "payload": {
+      "artifact_id": "artifact.policy1",
+      "artifact_sha256": "2854b9b70ebcb2192307b4d1f41727b7b1ba140f3a290c33939758d2fb06a6f6",
+      "attempt_id": null,
+      "manifest_sha256": "5e684bc0c1d6b41e252fe63e935418f58ad14ca60de2895bea62c4bf136e838f"
+    },
+    "prev_event_sha256": "16586f0b38b6d85569c0d03b149ab7bce9c4251dfb354222981ff385ff0d02f0",
+    "resulting_revision": 5,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.0.0",
+    "sequence": 5
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000121",
+    "event_id": "evt-00000000-0000-4000-8000-000000000121",
+    "event_sha256": "8d63ca2a3d5498520992a3336a4326e6cb897b8d4c0ff59a1fd91b10a9306bc9",
+    "event_type": "artifact.accepted",
+    "expected_revision": 5,
+    "occurred_at": "2026-09-08T00:01:00Z",
+    "payload": {
+      "artifact_id": "artifact.sample1",
+      "artifact_sha256": "3d9977c9d710e3d6c6096feb914671d7ca6219394934364c73718632714e84be",
+      "attempt_id": null,
+      "manifest_sha256": "19646ad88ade883e858af96f30514650c52e7da41d4ea271e9146597cb11ff71"
+    },
+    "prev_event_sha256": "d8bd5f0c4bfa5ebaac8824990136056811904d5e98066078cce47aa3ccfa0487",
+    "resulting_revision": 6,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.0.0",
+    "sequence": 6
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000130",
+    "event_id": "evt-00000000-0000-4000-8000-000000000130",
+    "event_sha256": "7c4cf446de037763e50a6400ca0c3b2e828598425e79db05bbe300b1d83c5ec4",
+    "event_type": "research_heuristic_evaluated",
+    "expected_revision": 6,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "35e3d6a542a187563477742aaf41ac8a524a7df8830da8cee74db7cfa6123e4e",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": "35e3d6a542a187563477742aaf41ac8a524a7df8830da8cee74db7cfa6123e4e",
+      "from_scope": null,
+      "previous_event_sha256": "16586f0b38b6d85569c0d03b149ab7bce9c4251dfb354222981ff385ff0d02f0",
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "heuristic.retrieval",
+      "scope": "project",
+      "source_digests": [
+        "2854b9b70ebcb2192307b4d1f41727b7b1ba140f3a290c33939758d2fb06a6f6",
+        "3d9977c9d710e3d6c6096feb914671d7ca6219394934364c73718632714e84be"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000111",
+        "evt-00000000-0000-4000-8000-000000000121"
+      ],
+      "status": "evaluated",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "8d63ca2a3d5498520992a3336a4326e6cb897b8d4c0ff59a1fd91b10a9306bc9",
+    "resulting_revision": 7,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 7
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000131",
+    "event_id": "evt-00000000-0000-4000-8000-000000000131",
+    "event_sha256": "8174dab04c6aed505a868fe0bdcc624ba03d3c3d5cf722611613a59b5ea1d6cc",
+    "event_type": "research_heuristic_qualified",
+    "expected_revision": 7,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "99762e2a371ccecb91dd362ce14138e8a60f15715f9e8a8e1def356aa85685d2",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": "35e3d6a542a187563477742aaf41ac8a524a7df8830da8cee74db7cfa6123e4e",
+      "from_scope": null,
+      "previous_event_sha256": "7c4cf446de037763e50a6400ca0c3b2e828598425e79db05bbe300b1d83c5ec4",
+      "project_id": "project.learning",
+      "qualification_receipt_id": "99762e2a371ccecb91dd362ce14138e8a60f15715f9e8a8e1def356aa85685d2",
+      "record_id": "heuristic.retrieval",
+      "scope": "project",
+      "source_digests": [
+        "2854b9b70ebcb2192307b4d1f41727b7b1ba140f3a290c33939758d2fb06a6f6"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000111"
+      ],
+      "status": "qualified",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "7c4cf446de037763e50a6400ca0c3b2e828598425e79db05bbe300b1d83c5ec4",
+    "resulting_revision": 8,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 8
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000140",
+    "event_id": "evt-00000000-0000-4000-8000-000000000140",
+    "event_sha256": "6677481e1965063d2bfe33b7f214023ae53ed3c0b634e78bce768daae71be307",
+    "event_type": "artifact.accepted",
+    "expected_revision": 8,
+    "occurred_at": "2026-09-08T00:01:00Z",
+    "payload": {
+      "artifact_id": "artifact.approval",
+      "artifact_sha256": "079e64cd3a1e10cd6ff58913b5ee50cee944ccadf88872afaaf73857dbdb26c4",
+      "attempt_id": null,
+      "manifest_sha256": "f5b904966019dc81a8ec6ba703d5c1a9d7bb2b62a3e959b3d64ce9984c7219ce"
+    },
+    "prev_event_sha256": "8174dab04c6aed505a868fe0bdcc624ba03d3c3d5cf722611613a59b5ea1d6cc",
+    "resulting_revision": 9,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.0.0",
+    "sequence": 9
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000141",
+    "event_id": "evt-00000000-0000-4000-8000-000000000141",
+    "event_sha256": "fba4d381a4dc1d639e25d94c90e00506ba270b0283d03b4c0f1d9cf82c0208cf",
+    "event_type": "research_heuristic_promoted",
+    "expected_revision": 9,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": "artifact.approval",
+      "consent": true,
+      "content_digest": "f338375e6b45813f70d5ef1f2ffc37068009d943a12c31492e9a002e2f6f371e",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": "35e3d6a542a187563477742aaf41ac8a524a7df8830da8cee74db7cfa6123e4e",
+      "from_scope": "project",
+      "previous_event_sha256": "8174dab04c6aed505a868fe0bdcc624ba03d3c3d5cf722611613a59b5ea1d6cc",
+      "project_id": "project.learning",
+      "qualification_receipt_id": "99762e2a371ccecb91dd362ce14138e8a60f15715f9e8a8e1def356aa85685d2",
+      "record_id": "heuristic.retrieval",
+      "scope": "project",
+      "source_digests": [
+        "2854b9b70ebcb2192307b4d1f41727b7b1ba140f3a290c33939758d2fb06a6f6",
+        "079e64cd3a1e10cd6ff58913b5ee50cee944ccadf88872afaaf73857dbdb26c4"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000111",
+        "evt-00000000-0000-4000-8000-000000000140"
+      ],
+      "status": "promoted",
+      "successor_id": null,
+      "supporting_projects": [
+        "project.learning"
+      ],
+      "supporting_runs": [
+        "run-00000000-0000-4000-8000-000000000099"
+      ]
+    },
+    "prev_event_sha256": "6677481e1965063d2bfe33b7f214023ae53ed3c0b634e78bce768daae71be307",
+    "resulting_revision": 10,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 10
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000142",
+    "event_id": "evt-00000000-0000-4000-8000-000000000142",
+    "event_sha256": "1345ec2967fd9e6ba7ff2c6bd5419416c52a558221b95221322817bdfdd3c821",
+    "event_type": "research_heuristic_proposed",
+    "expected_revision": 10,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "4307a42247f679abb66666bdf28ba9734a49d85d1e32906695e33ae6fac97a8a",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": null,
+      "from_scope": null,
+      "previous_event_sha256": null,
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "heuristic.successor",
+      "scope": "project",
+      "source_digests": [
+        "efe973421cab48b180d3e7273a0c9cc3b6fe2328012cbb5082058aff0b5927f3"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000100"
+      ],
+      "status": "candidate",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "fba4d381a4dc1d639e25d94c90e00506ba270b0283d03b4c0f1d9cf82c0208cf",
+    "resulting_revision": 11,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 11
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-03a68264-6783-41c6-97af-ba217473eeb2",
+    "event_id": "evt-03a68264-6783-41c6-97af-ba217473eeb2",
+    "event_sha256": "82224697492eaa1294bf4a816c62f805b395f2fca252602bfb31400f22b4a93d",
+    "event_type": "research_heuristic_superseded",
+    "expected_revision": 11,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "0e97e83dc8738c4c70111cb8390db59e1151ac5c0a3a06420856b0dd1766a0f5",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": null,
+      "from_scope": null,
+      "previous_event_sha256": "fba4d381a4dc1d639e25d94c90e00506ba270b0283d03b4c0f1d9cf82c0208cf",
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "heuristic.retrieval",
+      "scope": "project",
+      "source_digests": [
+        "1345ec2967fd9e6ba7ff2c6bd5419416c52a558221b95221322817bdfdd3c821"
+      ],
+      "source_event_ids": [
+        "evt-00000000-0000-4000-8000-000000000142"
+      ],
+      "status": "superseded",
+      "successor_id": "heuristic.successor",
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "1345ec2967fd9e6ba7ff2c6bd5419416c52a558221b95221322817bdfdd3c821",
+    "resulting_revision": 12,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 12
+  },
+  {
+    "actor_id": "parent.runtime",
+    "actor_role": "parent_control_plane",
+    "command_id": "cmd-00000000-0000-4000-8000-000000000143",
+    "event_id": "evt-00000000-0000-4000-8000-000000000143",
+    "event_sha256": "a23c87982481c11e496174f8d7ef558ab650d1141a727f7d44cd24233fbd01eb",
+    "event_type": "research_heuristic_rejected",
+    "expected_revision": 12,
+    "occurred_at": "2026-09-08T00:02:00Z",
+    "payload": {
+      "approval_artifact_id": null,
+      "consent": false,
+      "content_digest": "ecffd49acff3265f06d0abfe8a9b91dbd78babd0d522b86db4a833de80b873ae",
+      "counterexample_ids": [],
+      "evaluation_receipt_id": null,
+      "from_scope": null,
+      "previous_event_sha256": "1345ec2967fd9e6ba7ff2c6bd5419416c52a558221b95221322817bdfdd3c821",
+      "project_id": "project.learning",
+      "qualification_receipt_id": null,
+      "record_id": "heuristic.successor",
+      "scope": "project",
+      "source_digests": [],
+      "source_event_ids": [],
+      "status": "rejected",
+      "successor_id": null,
+      "supporting_projects": [],
+      "supporting_runs": []
+    },
+    "prev_event_sha256": "82224697492eaa1294bf4a816c62f805b395f2fca252602bfb31400f22b4a93d",
+    "resulting_revision": 13,
+    "run_id": "run-00000000-0000-4000-8000-000000000099",
+    "schema_version": "1.3.0",
+    "sequence": 13
+  }
+]

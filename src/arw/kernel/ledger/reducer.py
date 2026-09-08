@@ -398,6 +398,8 @@ def reduce_events(
         from arw.kernel.state.research_artifact import validate_artifact_event_progress
         try:
             validate_artifact_event_progress(events[:event_index], event)
+            from arw.kernel.state.learning_event_rules import validate_learning_progress
+            validate_learning_progress(events[:event_index], event)
         except ValueError as error:
             raise ReducerError(str(error)) from error
         payload = event.payload

@@ -36,6 +36,7 @@ packages = [
     "extensions/artifact-integrity/src/arw_artifact_integrity",
     "extensions/research-artifact/src/arw_research_artifact",
     "extensions/research-memory/src/arw_research_memory",
+    "extensions/research-learning/src/arw_research_learning",
 ]
 
 [tool.hatch.build.hooks.custom]

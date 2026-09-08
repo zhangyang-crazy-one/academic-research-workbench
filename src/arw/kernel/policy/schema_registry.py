@@ -34,6 +34,10 @@ from arw.kernel.state.research_artifact import research_artifact_schema_document
 
 from arw.kernel.state.research_memory import research_memory_schema_documents
 
+from arw.kernel.state.research_learning import learning_schema_documents
+
+LEARNING_SCHEMA_NAMES = tuple(learning_schema_documents())
+
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
 PROVENANCE_SCHEMA_NAMES = tuple(provenance_schema_documents())
@@ -80,6 +84,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + RESEARCH_INTEGRITY_SCHEMA_NAMES
     + AUDIT_SCHEMA_NAMES
     + PROVENANCE_SCHEMA_NAMES
+    + LEARNING_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
 )
@@ -200,6 +205,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             )
     if name in PROVENANCE_SCHEMA_NAMES and candidate != provenance_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
+    if name in LEARNING_SCHEMA_NAMES and candidate != learning_schema_documents()[name]:
+        raise SchemaRegistryError("learning schema drift")
     if name in RESEARCH_MEMORY_SCHEMA_NAMES and candidate != research_memory_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESEARCH_ARTIFACT_SCHEMA_NAMES and candidate != research_artifact_schema_documents()[name]:
@@ -234,6 +241,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = integration_lock_schema_document()
         elif name == RESEARCH_INTEGRITY_SCHEMA_NAME:
             document = research_integrity_contracts_schema_document()
+        elif name in LEARNING_SCHEMA_NAMES:
+            document = learning_schema_documents()[name]
         elif name in RESEARCH_MEMORY_SCHEMA_NAMES:
             document = research_memory_schema_documents()[name]
         elif name in RESEARCH_ARTIFACT_SCHEMA_NAMES:

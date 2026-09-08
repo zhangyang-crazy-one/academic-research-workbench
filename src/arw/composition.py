@@ -31,6 +31,8 @@ def default_router(
     accepted_artifact_sha256_by_event: Mapping[str, str] | None = None,
     expected_provenance_record_sha256: Mapping[str, str] | None = None,
     source_locator_resolver=None,
+    learning_project_root=None,
+    learning_run_root=None,
     memory_project_root=None,
     memory_run_root=None,
     memory_harness="codex",
@@ -50,6 +52,11 @@ def default_router(
 
     router = CapabilityRouter()
     router.register("research.literature", ARSAdapter)
+    def _research_learning():
+        return import_module("arw_research_learning.service").ResearchLearningService(learning_project_root, run_root=learning_run_root)
+    for capability in ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"):
+        router.register_optional(capability, _research_learning)
+
     def _research_memory():
         return import_module("arw_research_memory.service").ResearchMemoryService(memory_project_root, run_root=memory_run_root, harness=memory_harness)
     for operation in ("save", "search", "read", "list", "doctor", "handoff"):
@@ -170,6 +177,7 @@ def default_router(
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
             "provenance": ("knowledge.provenance",),
+            "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),
             "memory": tuple(f"research.memory.{op}" for op in ("save", "search", "read", "list", "doctor", "handoff")),
             "artifact": ("artifact.inspect", "artifact.sanitize", "research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"),
             "audit": ("audit.replay",),

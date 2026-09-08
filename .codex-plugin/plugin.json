@@ -29,6 +29,7 @@
       "provenance",
       "artifact",
       "memory",
+      "learning",
       "audit"
     ],
     "defaultPrompt": "Route this academic research task through the workbench."
