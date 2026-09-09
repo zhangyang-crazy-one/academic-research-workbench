@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
 FORBIDDEN_FRAGMENTS = ("Paper4Master", "Examination", str(Path.home()), str(REPOSITORY_ROOT))
@@ -116,3 +115,53 @@ def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> N
     assert summary["source_imported"] is False
     assert summary["network_isolation"] == "linux-user-network-namespace"
     assert summary["inherited_pythonpath"] is False
+def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
+    stage_script = _required_executable("scripts/stage-plugin")
+    stage_root = tmp_path / "stage" / PLUGIN_NAME
+    isolated_home = tmp_path / "isolated-home"
+    default_codex_home = isolated_home / ".codex"
+    default_codex_home.mkdir(parents=True)
+    environment = {
+        "HOME": str(isolated_home),
+        "PATH": os.environ["PATH"],
+        "PYTHONNOUSERSITE": "1",
+        "PIP_NO_INDEX": "1",
+        "UV_OFFLINE": "1",
+    }
+
+    staged = subprocess.run(
+        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert staged.returncode == 0, staged.stderr
+
+    help_result = subprocess.run(
+        [str(stage_root / "bin/arw"), "status", "--help"],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stderr
+    assert "usage: arw status" in help_result.stdout
+    assert (default_codex_home / "arw" / "runtime").is_dir()
+
+
+def test_installed_cli_reports_actionable_error_without_home(tmp_path: Path) -> None:
+    launcher = REPOSITORY_ROOT / "bin/arw"
+    result = subprocess.run(
+        [str(launcher), "status", "--help"],
+        cwd=tmp_path,
+        env={"PATH": os.environ["PATH"]},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 78
+    assert "bootstrap-config" in result.stderr
+    assert "HOME" in result.stderr

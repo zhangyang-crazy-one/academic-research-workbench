@@ -89,7 +89,12 @@ export PYTHONNOUSERSITE=1
 export PIP_NO_INDEX=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-[[ -n "${CODEX_HOME:-}" ]] || fail "bootstrap-config" "CODEX_HOME is required" 78
+ARW_CODEX_HOME="${CODEX_HOME:-}"
+if [[ -z "$ARW_CODEX_HOME" ]]; then
+  [[ -n "${HOME:-}" ]] \
+    || fail "bootstrap-config" "CODEX_HOME is unset and HOME is unavailable to resolve the default Codex directory" 78
+  ARW_CODEX_HOME="$HOME/.codex"
+fi
 [[ -f "$LOCK_PATH" ]] || fail "wheelhouse-lock-missing" "installed wheelhouse lock is missing" 66
 [[ -d "$WHEELHOUSE_DIR" ]] || fail "wheelhouse-missing" "installed wheelhouse is missing" 66
 
@@ -147,7 +152,7 @@ PY
 INSTALL_REQUIREMENTS="$PLUGIN_ROOT/$(
   "$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["install_requirements"]["path"])' "$LOCK_PATH"
 )"
-RUNTIME_PARENT="$CODEX_HOME/arw/runtime"
+RUNTIME_PARENT="$ARW_CODEX_HOME/arw/runtime"
 RUNTIME_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY"
 RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python"
 COMPLETE_MARKER="$RUNTIME_ROOT/completed"
