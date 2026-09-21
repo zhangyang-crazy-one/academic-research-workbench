@@ -118,6 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_semantic(subparsers)
     from arw.cli_learning import configure as configure_learning
     configure_learning(subparsers)
+    from arw.cli_submission import configure as configure_submission
+    configure_submission(subparsers)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -491,6 +493,46 @@ def _read_bounded_regular_file(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "submission":
+        from arw.cli_submission import handle
+        from arw.kernel.capabilities import CapabilityUnavailable
+        from arw.kernel.execution.submission import SubmissionWorkflowError
+
+        try:
+            result = handle(args)
+            _write_json(result)
+            if args.submission_command in {"check", "status"}:
+                return 0
+            if isinstance(result, dict) and "accepted" in result:
+                return 0 if result["accepted"] else 65
+            if isinstance(result, dict) and "gate" in result:
+                gate = result["gate"]
+                return 0 if gate.get("accepted") else 65
+            return 0
+        except (CapabilityUnavailable, SubmissionWorkflowError, ValueError, RuntimeError, OSError) as error:
+            _write_json(
+                {
+                    "schema_version": "arw.submission-operation-error.v1",
+                    "status": "unavailable"
+                    if isinstance(error, CapabilityUnavailable)
+                    else "rejected",
+                    "reason_code": (
+                        "capability_not_available"
+                        if isinstance(error, CapabilityUnavailable)
+                        else "invalid_submission_request"
+                    ),
+                    # Submission payloads can contain private author fields or
+                    # instruction-bearing letters.  Keep the CLI envelope
+                    # bounded and non-echoing; detailed evidence stays in the
+                    # parent-owned retained artifact and journal.
+                    "message": (
+                        "submission capability is not available"
+                        if isinstance(error, CapabilityUnavailable)
+                        else "submission request was rejected"
+                    ),
+                }
+            )
+            return 65
     if args.command == "writing":
         from arw.cli_writing import handle
         from arw.kernel.capabilities import CapabilityUnavailable
@@ -721,7 +763,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             args.root_id,
                             generation_id=receipt.selected_generation_id,
                         )
-                    except Exception as error:
+                    except Exception as error:  # noqa: BLE001 - projection ingest is advisory
                         # Ingestion feeds the (disposable) projection; a
                         # failure here must not fail the completed sync.
                         print(
@@ -1130,7 +1172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 raw_assignments = strict_json_loads(args.assignments.read_bytes())
                 if not isinstance(raw_assignments, list):
-                    raise ValueError("--assignments must contain a JSON array")
+                    raise TypeError("--assignments must contain a JSON array")
                 assignments = tuple(
                     AssignmentSpec(**item)
                     for item in raw_assignments

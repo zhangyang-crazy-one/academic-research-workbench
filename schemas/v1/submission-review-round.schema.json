@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "ReviewComment": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "comment_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Comment Id",
+          "type": "string"
+        },
+        "submission_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Submission Id",
+          "type": "string"
+        },
+        "round_number": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Round Number",
+          "type": "integer"
+        },
+        "parent_comment_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Comment Id"
+        },
+        "source_locator": {
+          "$ref": "#/$defs/ReviewLocator"
+        },
+        "quote": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "original_order": {
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Original Order",
+          "type": "integer"
+        },
+        "depends_on": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Depends On",
+          "type": "array"
+        }
+      },
+      "required": [
+        "comment_id",
+        "submission_id",
+        "round_number",
+        "source_locator",
+        "quote",
+        "original_order"
+      ],
+      "title": "ReviewComment",
+      "type": "object"
+    },
+    "ReviewLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "locator_type": {
+          "enum": [
+            "heading",
+            "line",
+            "page",
+            "json_pointer",
+            "paragraph"
+          ],
+          "title": "Locator Type",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "manuscript_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manuscript Sha256"
+        },
+        "render_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Render Sha256"
+        }
+      },
+      "required": [
+        "locator_type",
+        "value"
+      ],
+      "title": "ReviewLocator",
+      "type": "object"
+    },
+    "SubmissionArtifactReference": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reference to an already accepted parent artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "manifest_sha256",
+        "content_sha256",
+        "accepting_event_id"
+      ],
+      "title": "SubmissionArtifactReference",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.submission-review-round.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "round_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Round Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "round_number": {
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Round Number",
+      "type": "integer"
+    },
+    "source_letter": {
+      "$ref": "#/$defs/SubmissionArtifactReference"
+    },
+    "comments": {
+      "items": {
+        "$ref": "#/$defs/ReviewComment"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Comments",
+      "type": "array"
+    },
+    "imported_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Imported At",
+      "type": "string"
+    },
+    "imported_by": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Imported By",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "round_id",
+    "submission_id",
+    "round_number",
+    "source_letter",
+    "comments",
+    "imported_at",
+    "imported_by"
+  ],
+  "title": "ReviewRound",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/submission-review-round.schema.json"
+}

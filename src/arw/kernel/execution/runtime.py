@@ -22,42 +22,11 @@ from arw.kernel.ledger.manifests import (
     ManifestError,
     install_artifact_manifest,
     install_material_passport,
+    load_artifact_manifest,
     load_material_passport,
     validate_accepted_event_manifests,
     validate_content_file,
     write_passport_pointer,
-)
-from arw.kernel.state.models import (
-    ArtifactAcceptanceRequest,
-    ArtifactAcceptedPayload,
-    ArtifactManifest,
-    AttemptCloseRequest,
-    AttemptClosedPayload,
-    AttemptStartRequest,
-    AttemptStartedPayload,
-    CanonicalEvent,
-    HumanDecisionRequest,
-    HumanDecisionRequestedPayload,
-    HumanDecisionResolveRequest,
-    HumanDecisionResolvedPayload,
-    ExperimentProvenanceAcceptedPayload,
-    LifecycleTransitionRequest,
-    LifecycleTransitionedPayload,
-    MaterialPassport,
-    PassportAcceptedPayload,
-    PassportAttemptSnapshot,
-    PassportDecisionSnapshot,
-    PassportPointer,
-    PHASE4_EVENT_PAYLOAD_TYPES,
-    PHASE4_EVENT_TYPES,
-    CheckpointRequest,
-    Rejection,
-    RecoveryCompletedPayload,
-    RecoveryRequest,
-    ResumeAcceptedPayload,
-    ResumeRequest,
-    RuntimeCommandRequest,
-    StrictModel,
 )
 from arw.kernel.ledger.recovery import (
     RecoveryError,
@@ -72,8 +41,41 @@ from arw.kernel.ledger.workflows import (
     require_transition,
     require_workflow,
 )
+from arw.kernel.state.models import (
+    PHASE4_EVENT_PAYLOAD_TYPES,
+    PHASE4_EVENT_TYPES,
+    ArtifactAcceptanceRequest,
+    ArtifactAcceptedPayload,
+    ArtifactManifest,
+    AttemptClosedPayload,
+    AttemptCloseRequest,
+    AttemptStartedPayload,
+    AttemptStartRequest,
+    CanonicalEvent,
+    CheckpointRequest,
+    ExperimentProvenanceAcceptedPayload,
+    HumanDecisionRequest,
+    HumanDecisionRequestedPayload,
+    HumanDecisionResolvedPayload,
+    HumanDecisionResolveRequest,
+    LifecycleTransitionedPayload,
+    LifecycleTransitionRequest,
+    MaterialPassport,
+    PassportAcceptedPayload,
+    PassportAttemptSnapshot,
+    PassportDecisionSnapshot,
+    PassportPointer,
+    RecoveryCompletedPayload,
+    RecoveryRequest,
+    Rejection,
+    ResumeAcceptedPayload,
+    ResumeRequest,
+    RuntimeCommandRequest,
+    StrictModel,
+)
 
 _logger = logging.getLogger("arw.kernel.execution.runtime")
+_MAX_SUBMISSION_JSON_BYTES = 256 * 1024
 
 
 def _discard_orphan(root: Path, relative: str, digest: str | None) -> None:
@@ -104,7 +106,7 @@ class CommandOutcome(StrictModel):
     rejection: Rejection | None = None
 
     @model_validator(mode="after")
-    def accepted_or_rejected(self) -> "CommandOutcome":
+    def accepted_or_rejected(self) -> CommandOutcome:
         if self.accepted and (self.event is None or self.rejection is not None):
             raise ValueError("accepted outcomes require only an event")
         if not self.accepted and (self.event is not None or self.rejection is None):
@@ -482,9 +484,15 @@ class RuntimeCommandService:
                 )
             except ManifestError as error:
                 return "artifact-content-invalid", str(error)
+            submission_error = self._validate_submission_artifact(request, replayed, state)
+            if submission_error is not None:
+                return submission_error
             if request.artifact_kind == "provenance-record":
-                from arw.kernel.ledger.source_locations import read_retained_bytes, validate_precise_provenance
                 from arw.kernel.core.canonical import strict_json_loads
+                from arw.kernel.ledger.source_locations import (
+                    read_retained_bytes,
+                    validate_precise_provenance,
+                )
                 try:
                     raw = read_retained_bytes(self.run_root, request.content_path, max_bytes=65_536)
                     from arw.kernel.core.canonical import sha256_hex
@@ -535,6 +543,298 @@ class RuntimeCommandService:
             ),
             rollback=rollback,
         )
+
+    def _validate_submission_artifact(self, request, replayed, state):
+        """Validate reserved submission kinds before generic artifact admission."""
+
+        from arw.kernel.execution.submission import (
+            SUBMISSION_ARTIFACT_MODELS,
+            SubmissionWorkflowError,
+            validate_submission_payload,
+        )
+        from arw.kernel.ledger.source_locations import read_retained_bytes
+        from arw.kernel.state.submission import (
+            JournalRequirementsSnapshot,
+            ReviewResponse,
+            ReviewRound,
+            SubmissionCheckReport,
+            SubmissionPacket,
+            SubmissionResultObservation,
+            SubmissionVerifierObservation,
+            confirmation_gate_id,
+            response_subject_sha256,
+        )
+
+        model_type = SUBMISSION_ARTIFACT_MODELS.get(request.artifact_kind)
+        if model_type is None:
+            return None
+        try:
+            raw = read_retained_bytes(
+                self.run_root,
+                request.content_path,
+                max_bytes=_MAX_SUBMISSION_JSON_BYTES,
+            )
+            value = validate_submission_payload(request.artifact_kind, raw)
+        except (ManifestError, OSError, ValueError, UnicodeError, SubmissionWorkflowError) as error:
+            return "submission-contract-invalid", str(error)[:2048]
+        if getattr(value, "run_id", request.run_id) != request.run_id:
+            return "submission-run-mismatch", "submission payload run_id differs from request"
+
+        accepted: dict[str, tuple[str, str, str]] = {}
+        accepted_kinds: dict[str, str] = {}
+        packets: dict[str, list[tuple[int, str]]] = {}
+        packet_values: dict[str, list[tuple[int, str, SubmissionPacket]]] = {}
+        review_comments: dict[str, set[str]] = {}
+        review_comment_rounds: dict[tuple[str, str], int] = {}
+        response_records: dict[str, tuple[str, str, str, str]] = {}
+        response_heads: dict[tuple[str, str], tuple[str, str, ReviewResponse]] = {}
+        accepted_content_sha256: set[str] = set()
+        accepted_manifest_sha256: set[str] = set()
+        for event in replayed.events:
+            if event.event_type != "artifact.accepted" or not isinstance(
+                event.payload, ArtifactAcceptedPayload
+            ):
+                continue
+            try:
+                manifest = load_artifact_manifest(
+                    self.run_root, event.payload.manifest_sha256
+                )
+            except ManifestError:
+                continue
+            accepted[event.payload.artifact_id] = (
+                event.payload.manifest_sha256,
+                event.payload.artifact_sha256,
+                event.event_id,
+            )
+            accepted_kinds[event.payload.artifact_id] = manifest.artifact_kind
+            accepted_content_sha256.add(event.payload.artifact_sha256)
+            accepted_manifest_sha256.add(event.payload.manifest_sha256)
+            if manifest.artifact_kind in {"submission-packet", "submission-review-round"}:
+                try:
+                    previous = validate_submission_payload(
+                        manifest.artifact_kind,
+                        read_retained_bytes(
+                            self.run_root,
+                            manifest.content_path,
+                            max_bytes=_MAX_SUBMISSION_JSON_BYTES,
+                        ),
+                    )
+                except (ManifestError, OSError, ValueError, UnicodeError):
+                    continue
+                if isinstance(previous, SubmissionPacket):
+                    packets.setdefault(previous.submission_id, []).append(
+                        (previous.packet_version, event.payload.manifest_sha256)
+                    )
+                    packet_values.setdefault(previous.submission_id, []).append(
+                        (
+                            previous.packet_version,
+                            event.payload.manifest_sha256,
+                            previous,
+                        )
+                    )
+                if isinstance(previous, ReviewRound):
+                    review_comments.setdefault(previous.submission_id, set()).update(
+                        item.comment_id for item in previous.comments
+                    )
+                    for item in previous.comments:
+                        review_comment_rounds[(previous.submission_id, item.comment_id)] = (
+                            item.round_number
+                        )
+            if manifest.artifact_kind == "submission-response":
+                try:
+                    response = validate_submission_payload(
+                        manifest.artifact_kind,
+                        read_retained_bytes(
+                            self.run_root,
+                            manifest.content_path,
+                            max_bytes=_MAX_SUBMISSION_JSON_BYTES,
+                        ),
+                    )
+                except (ManifestError, OSError, ValueError, UnicodeError):
+                    continue
+                if isinstance(response, ReviewResponse):
+                    response_records[response.response_id] = (
+                        response.submission_id,
+                        response.comment_id,
+                        event.payload.manifest_sha256,
+                        event.event_id,
+                    )
+                    response_heads[(response.submission_id, response.comment_id)] = (
+                        response.response_id,
+                        event.payload.manifest_sha256,
+                        response,
+                    )
+
+        def require_reference(reference, *, expected_kind: str | None = None):
+            found = accepted.get(reference.artifact_id)
+            if found is None:
+                return "submission-reference-unknown", (
+                    f"submission reference is not accepted: {reference.artifact_id}"
+                )
+            if (
+                found[0] != reference.manifest_sha256
+                or found[1] != reference.content_sha256
+                or found[2] != reference.accepting_event_id
+            ):
+                return "submission-reference-digest-mismatch", (
+                    f"submission reference digest mismatch: {reference.artifact_id}"
+                )
+            if expected_kind is not None and accepted_kinds.get(reference.artifact_id) != expected_kind:
+                return "submission-reference-kind-mismatch", (
+                    f"submission reference kind mismatch: {reference.artifact_id}"
+                )
+            return None
+
+        def require_packet(submission_id: str, packet_manifest: str | None = None):
+            candidates = packets.get(submission_id, [])
+            if not candidates:
+                return "submission-packet-unknown", "submission has no accepted packet"
+            if packet_manifest is not None and packet_manifest not in {
+                item[1] for item in candidates
+            }:
+                return "submission-packet-unknown", "referenced packet manifest is not accepted"
+            return None
+
+        if isinstance(value, SubmissionPacket):
+            for reference in (
+                value.manuscript,
+                value.policy_snapshot,
+                *tuple(item.artifact for item in value.components),
+                *value.audit_evidence,
+                *value.response_evidence,
+            ):
+                expected_kind = (
+                    "journal-requirements"
+                    if reference is value.policy_snapshot
+                    else None
+                )
+                error = require_reference(reference, expected_kind=expected_kind)
+                if error:
+                    return error
+            predecessors = packets.get(value.submission_id, [])
+            if value.packet_version == 1:
+                if predecessors:
+                    return "submission-predecessor-stale", "initial packet already has an accepted head"
+            else:
+                current_predecessor = max(predecessors, key=lambda item: item[0], default=None)
+                if current_predecessor is None or value.predecessor_manifest_sha256 != current_predecessor[1]:
+                    return "submission-predecessor-stale", "packet predecessor is not the accepted current history"
+                if value.packet_version != current_predecessor[0] + 1:
+                    return "submission-predecessor-stale", "packet version is not monotonic"
+            return None
+        if isinstance(value, JournalRequirementsSnapshot):
+            for reference in value.retained_source_artifacts:
+                error = require_reference(reference)
+                if error:
+                    return error
+            return None
+        if isinstance(value, ReviewRound):
+            error = require_packet(value.submission_id)
+            if error:
+                return error
+            if any(
+                item.comment_id in review_comments.get(value.submission_id, set())
+                for item in value.comments
+            ):
+                return "duplicate-review-import", "review comment identity is already accepted"
+            return require_reference(value.source_letter)
+        if isinstance(value, ReviewResponse):
+            error = require_packet(value.submission_id)
+            if error:
+                return error
+            if value.comment_id not in review_comments.get(value.submission_id, set()):
+                return "review-comment-unknown", "response references an unaccepted review comment"
+            expected_round = review_comment_rounds.get((value.submission_id, value.comment_id))
+            if expected_round != value.round_number:
+                return "review-round-mismatch", "response round does not match the accepted comment"
+            if value.response_id in response_records:
+                return "submission-response-identity-reused", "response ID is already accepted"
+            current_response = response_heads.get((value.submission_id, value.comment_id))
+            if current_response is None:
+                if value.predecessor_response_id is not None:
+                    return "submission-response-predecessor-stale", "response predecessor is not accepted"
+            elif value.predecessor_response_id != current_response[0]:
+                return "submission-response-predecessor-stale", "response predecessor is not the accepted current response"
+            if value.status in {"addressed", "not_adopted"}:
+                decision = next(
+                    (
+                        item
+                        for item in state.human_decision_history
+                        if item.decision_id == value.author_decision_id
+                    ),
+                    None,
+                )
+                expected_scope = (
+                    f"submission:{value.submission_id}:response:{value.comment_id}"
+                )
+                if decision is None:
+                    return "author-decision-unknown", "response closure requires an accepted human decision"
+                if (
+                    decision.scope != expected_scope
+                    or decision.gate_id != confirmation_gate_id(expected_scope)
+                    or decision.subject_sha256 != response_subject_sha256(value)
+                ):
+                    return "author-decision-scope-invalid", "response closure decision is not bound to this response"
+            current_packets = packet_values.get(value.submission_id, [])
+            current_packet = max(current_packets, key=lambda item: item[0], default=None)
+            if current_packet is not None:
+                for locator in value.locations:
+                    if locator.manuscript_sha256 != current_packet[2].manuscript.content_sha256:
+                        return "submission-location-stale", "response location is not bound to the current manuscript"
+                    if (
+                        locator.render_sha256 is not None
+                        and locator.render_sha256 not in accepted_content_sha256
+                    ):
+                        return "submission-location-render-unknown", "response render locator is not accepted"
+            for reference in value.evidence:
+                error = require_reference(reference)
+                if error:
+                    return error
+            if value.patch is not None:
+                if value.patch.block_manifest_sha256 not in accepted_manifest_sha256:
+                    return "submission-patch-manifest-unknown", "patch block manifest is not accepted"
+                error = require_reference(value.patch.apply_report)
+                if error:
+                    return error
+                if current_packet is not None:
+                    if value.patch.base_manuscript_sha256 != current_packet[2].manuscript.content_sha256:
+                        return "submission-patch-base-stale", "patch base does not match the current manuscript"
+                    if (
+                        value.patch.candidate_manuscript_sha256
+                        not in accepted_content_sha256
+                        and value.patch.candidate_manuscript_sha256
+                        != current_packet[2].manuscript.content_sha256
+                    ):
+                        return "submission-patch-candidate-unknown", "patch candidate is not an accepted artifact"
+            return None
+        if isinstance(value, SubmissionCheckReport):
+            error = require_packet(value.submission_id, value.packet_manifest_sha256)
+            if error:
+                return error
+            for check in value.checks:
+                for reference in check.evidence:
+                    error = require_reference(reference)
+                    if error:
+                        return error
+            return None
+        if isinstance(value, SubmissionVerifierObservation):
+            error = require_packet(value.submission_id, value.packet_manifest_sha256)
+            if error:
+                return error
+            for check in value.checks:
+                for reference in check.evidence:
+                    error = require_reference(reference)
+                    if error:
+                        return error
+            return None
+        if isinstance(value, SubmissionResultObservation):
+            error = require_packet(value.submission_id, value.packet_manifest_sha256)
+            if error:
+                return error
+            if value.receipt is not None:
+                return require_reference(value.receipt)
+            return None
+        return None
 
     def create_checkpoint(self, request: CheckpointRequest) -> CommandOutcome:
         digest_holder: dict[str, str] = {}

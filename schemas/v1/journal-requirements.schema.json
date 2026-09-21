@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "JournalRequirement": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "check_kind": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Check Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "description",
+        "check_kind"
+      ],
+      "title": "JournalRequirement",
+      "type": "object"
+    },
+    "SubmissionArtifactReference": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reference to an already accepted parent artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "manifest_sha256",
+        "content_sha256",
+        "accepting_event_id"
+      ],
+      "title": "SubmissionArtifactReference",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.journal-requirements.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "journal_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Journal Id",
+      "type": "string"
+    },
+    "journal_name": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Journal Name",
+      "type": "string"
+    },
+    "article_type": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Article Type",
+      "type": "string"
+    },
+    "official_source_urls": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Official Source Urls",
+      "type": "array"
+    },
+    "retained_source_artifacts": {
+      "items": {
+        "$ref": "#/$defs/SubmissionArtifactReference"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Retained Source Artifacts",
+      "type": "array"
+    },
+    "captured_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "verified_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Verified At",
+      "type": "string"
+    },
+    "valid_until": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid Until"
+    },
+    "requirements": {
+      "items": {
+        "$ref": "#/$defs/JournalRequirement"
+      },
+      "maxItems": 256,
+      "title": "Requirements",
+      "type": "array"
+    },
+    "unknown_requirements": {
+      "default": [],
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Unknown Requirements",
+      "type": "array"
+    },
+    "verifier_id": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Verifier Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "journal_id",
+    "journal_name",
+    "article_type",
+    "official_source_urls",
+    "retained_source_artifacts",
+    "captured_at",
+    "verified_at",
+    "requirements",
+    "verifier_id"
+  ],
+  "title": "JournalRequirementsSnapshot",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/journal-requirements.schema.json"
+}

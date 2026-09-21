@@ -31,10 +31,12 @@ from arw.kernel.state.orchestration_models import (
 )
 from arw.kernel.state.provenance import provenance_schema_documents
 from arw.kernel.state.research_artifact import research_artifact_schema_documents
-
-from arw.kernel.state.research_memory import research_memory_schema_documents
-
 from arw.kernel.state.research_learning import learning_schema_documents
+from arw.kernel.state.research_memory import research_memory_schema_documents
+from arw.kernel.state.submission import (
+    SUBMISSION_SCHEMA_NAMES,
+    submission_schema_documents,
+)
 
 LEARNING_SCHEMA_NAMES = tuple(learning_schema_documents())
 
@@ -87,6 +89,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + LEARNING_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
+    + SUBMISSION_SCHEMA_NAMES
 )
 
 
@@ -211,6 +214,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESEARCH_ARTIFACT_SCHEMA_NAMES and candidate != research_artifact_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
+    if name in SUBMISSION_SCHEMA_NAMES and candidate != submission_schema_documents()[name]:
+        raise SchemaRegistryError(f"{name} differs from its submission model projection")
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
@@ -230,6 +235,7 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
     generated: list[tuple[str, str]] = []
     phase4_documents = generate_phase4_schema_documents()
     phase6_documents = generate_phase6_schema_documents()
+    submission_documents = submission_schema_documents()
     for name in SCHEMA_NAMES:
         if name in PHASE4_SCHEMA_NAMES:
             document = phase4_documents[name]
@@ -249,6 +255,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = research_artifact_schema_documents()[name]
         elif name in PROVENANCE_SCHEMA_NAMES:
             document = provenance_schema_documents()[name]
+        elif name in SUBMISSION_SCHEMA_NAMES:
+            document = submission_documents[name]
         else:
             document = _load_document(name)
         rendered = _canonical_schema_bytes(document)

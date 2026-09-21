@@ -10,7 +10,8 @@
     "academic-research",
     "audit",
     "reproducibility",
-    "claude-code"
+    "claude-code",
+    "submission"
   ],
   "hooks": "./hooks/claude-hooks.json",
   "mcpServers": "./.mcp.json"

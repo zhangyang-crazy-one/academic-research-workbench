@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "SubmissionArtifactReference": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reference to an already accepted parent artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "manifest_sha256",
+        "content_sha256",
+        "accepting_event_id"
+      ],
+      "title": "SubmissionArtifactReference",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.submission-result-observation.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "observation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "packet_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Manifest Sha256",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "unverified",
+        "not_submitted",
+        "awaiting_human_submit",
+        "submitted"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "attribution": {
+      "enum": [
+        "user_confirmation",
+        "platform_receipt"
+      ],
+      "title": "Attribution",
+      "type": "string"
+    },
+    "recorded_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "external_time": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "External Time"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SubmissionArtifactReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "deviation_codes": {
+      "default": [],
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Deviation Codes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "observation_id",
+    "submission_id",
+    "packet_manifest_sha256",
+    "state",
+    "attribution",
+    "recorded_at"
+  ],
+  "title": "SubmissionResultObservation",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/submission-result-observation.schema.json"
+}

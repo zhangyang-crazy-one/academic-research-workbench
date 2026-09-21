@@ -489,7 +489,7 @@ copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
-for capability_skill in writing research literature experiment evidence files graph provenance artifact audit; do
+for capability_skill in writing research literature experiment evidence files graph provenance artifact audit submission; do
     copy_file "skills/${capability_skill}/SKILL.md"
 done
 copy_tree "skills/academic-research-suite"
@@ -500,6 +500,7 @@ copy_file "docs/runtime/files-first-data-plane.md"
 copy_file "docs/runtime/plugin-first-routing.md"
 copy_file "docs/runtime/research-graph.md"
 copy_file "docs/runtime/scientific-integrity.md"
+copy_file "docs/runtime/submission-workflow.md"
 copy_file "scripts/verify-phase-2" 0755
 copy_file "scripts/verify-phase-6" 0755
 copy_file "tests/integration/test_phase2_durable_runtime.py"
@@ -1284,6 +1285,7 @@ static_files = {
     "docs/runtime/plugin-first-routing.md",
     "docs/runtime/research-graph.md",
     "docs/runtime/scientific-integrity.md",
+    "docs/runtime/submission-workflow.md",
     "hooks/hooks.json",
     "hooks/arw_hook.py",
     "libexec/file-base-mcp",
@@ -1389,6 +1391,7 @@ static_files = {
     "skills/provenance/SKILL.md",
     "skills/artifact/SKILL.md",
     "skills/audit/SKILL.md",
+    "skills/submission/SKILL.md",
     "supply-chain/license-verdict.json",
     "supply-chain/use-distribution.json",
     "supply-chain/semantica-qualification.json",
@@ -1447,6 +1450,14 @@ extension_schema_names = {
     "research-heuristic-input.schema.json",
     "research-learning-policy.schema.json",
     "research-learning-sample.schema.json",
+    "journal-requirements.schema.json",
+    "submission-check-report.schema.json",
+    "submission-packet.schema.json",
+    "submission-readiness.schema.json",
+    "submission-response.schema.json",
+    "submission-result-observation.schema.json",
+    "submission-review-round.schema.json",
+    "submission-verifier-observation.schema.json",
 }
 static_files.update(f"share/arw/schemas/{name}" for name in extension_schema_names)
 ars_source = project_root / "skills/academic-research-suite"

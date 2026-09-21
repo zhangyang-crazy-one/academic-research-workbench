@@ -87,6 +87,9 @@ CAPABILITIES: tuple[str, ...] = (
     "research.memory.list",
     "research.memory.doctor",
     "research.memory.handoff",
+    "submission.prepare",
+    "submission.review_normalize",
+    "submission.check_observe",
 
     "research.experiment",
     "artifact.inspect",

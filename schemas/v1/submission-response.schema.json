@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "ReviewLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "locator_type": {
+          "enum": [
+            "heading",
+            "line",
+            "page",
+            "json_pointer",
+            "paragraph"
+          ],
+          "title": "Locator Type",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "manuscript_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manuscript Sha256"
+        },
+        "render_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Render Sha256"
+        }
+      },
+      "required": [
+        "locator_type",
+        "value"
+      ],
+      "title": "ReviewLocator",
+      "type": "object"
+    },
+    "RevisionPatchEvidence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "base_manuscript_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Manuscript Sha256",
+          "type": "string"
+        },
+        "candidate_manuscript_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Manuscript Sha256",
+          "type": "string"
+        },
+        "block_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Block Manifest Sha256",
+          "type": "string"
+        },
+        "approved_scope": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Approved Scope",
+          "type": "string"
+        },
+        "apply_report": {
+          "$ref": "#/$defs/SubmissionArtifactReference"
+        },
+        "comment_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Comment Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "base_manuscript_sha256",
+        "candidate_manuscript_sha256",
+        "block_manifest_sha256",
+        "approved_scope",
+        "apply_report",
+        "comment_ids"
+      ],
+      "title": "RevisionPatchEvidence",
+      "type": "object"
+    },
+    "SubmissionArtifactReference": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reference to an already accepted parent artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "manifest_sha256",
+        "content_sha256",
+        "accepting_event_id"
+      ],
+      "title": "SubmissionArtifactReference",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.submission-response.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "response_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Response Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "round_number": {
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Round Number",
+      "type": "integer"
+    },
+    "comment_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Comment Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "proposed",
+        "addressed",
+        "not_adopted",
+        "needs_author_confirmation",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "response_text": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Response Text",
+      "type": "string"
+    },
+    "rationale": {
+      "anyOf": [
+        {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rationale"
+    },
+    "predecessor_response_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Predecessor Response Id"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SubmissionArtifactReference"
+      },
+      "maxItems": 128,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "locations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReviewLocator"
+      },
+      "maxItems": 32,
+      "title": "Locations",
+      "type": "array"
+    },
+    "patch": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RevisionPatchEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "author_decision_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author Decision Id"
+    }
+  },
+  "required": [
+    "schema_version",
+    "response_id",
+    "submission_id",
+    "round_number",
+    "comment_id",
+    "status",
+    "response_text"
+  ],
+  "title": "ReviewResponse",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/submission-response.schema.json"
+}

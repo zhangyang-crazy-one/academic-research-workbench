@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.submission-readiness.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "packet_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Manifest Sha256",
+      "type": "string"
+    },
+    "input_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Fingerprint",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "readiness": {
+      "enum": [
+        "INCOMPLETE",
+        "BLOCKED",
+        "REVIEW_REQUIRED",
+        "STALE",
+        "READY_FOR_HUMAN_SUBMIT"
+      ],
+      "title": "Readiness",
+      "type": "string"
+    },
+    "reason_codes": {
+      "default": [],
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Reason Codes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "submission_id",
+    "packet_manifest_sha256",
+    "input_fingerprint",
+    "evaluated_at",
+    "readiness"
+  ],
+  "title": "SubmissionReadinessEvaluation",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/submission-readiness.schema.json"
+}

@@ -88,6 +88,16 @@ def default_router(
     for capability in ("research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"):
         router.register_optional(capability, _research_artifact)
 
+    def _submission_workflow():
+        return import_module("arw_submission_workflow").SubmissionWorkflowService()
+
+    for capability in (
+        "submission.prepare",
+        "submission.review_normalize",
+        "submission.check_observe",
+    ):
+        router.register_optional(capability, _submission_workflow)
+
     def _artifact_integrity():
         module = import_module("arw_artifact_integrity.service")
         return module.ArtifactIntegrityService()
@@ -195,6 +205,7 @@ def default_router(
             "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),
             "memory": tuple(f"research.memory.{op}" for op in ("save", "search", "read", "list", "doctor", "handoff")),
             "artifact": ("artifact.inspect", "artifact.sanitize", "research.artifact.compile", "research.artifact.inspect", "research.artifact.reproduce"),
+            "submission": ("submission.prepare", "submission.review_normalize", "submission.check_observe"),
             "audit": ("audit.replay",),
         }
         enabled: set[str] = set()

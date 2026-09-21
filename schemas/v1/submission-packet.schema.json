@@ -1,0 +1,382 @@
+{
+  "$defs": {
+    "DeclarationField": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "missing",
+            "needs_confirmation",
+            "confirmed",
+            "not_applicable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "human_decision_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Decision Id"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "maxLength": 1200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "DeclarationField",
+      "type": "object"
+    },
+    "SubmissionArtifactReference": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A reference to an already accepted parent artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "manifest_sha256",
+        "content_sha256",
+        "accepting_event_id"
+      ],
+      "title": "SubmissionArtifactReference",
+      "type": "object"
+    },
+    "SubmissionAuthorDeclaration": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "person_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Person Id",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "order": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Order",
+          "type": "integer"
+        },
+        "corresponding": {
+          "default": false,
+          "title": "Corresponding",
+          "type": "boolean"
+        },
+        "contributions": {
+          "default": [],
+          "items": {
+            "maxLength": 96,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Contributions",
+          "type": "array"
+        },
+        "funding": {
+          "$ref": "#/$defs/DeclarationField"
+        },
+        "conflicts": {
+          "$ref": "#/$defs/DeclarationField"
+        },
+        "ethics": {
+          "$ref": "#/$defs/DeclarationField"
+        },
+        "data": {
+          "$ref": "#/$defs/DeclarationField"
+        },
+        "ai_use": {
+          "$ref": "#/$defs/DeclarationField"
+        }
+      },
+      "required": [
+        "person_id",
+        "display_name",
+        "order",
+        "funding",
+        "conflicts",
+        "ethics",
+        "data",
+        "ai_use"
+      ],
+      "title": "SubmissionAuthorDeclaration",
+      "type": "object"
+    },
+    "SubmissionComponent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "component_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Component Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "main_manuscript",
+            "title_page",
+            "marked_manuscript",
+            "response_letter",
+            "figure",
+            "table",
+            "supplement",
+            "cover_letter",
+            "reporting_checklist"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/SubmissionArtifactReference"
+        },
+        "media_type": {
+          "maxLength": 127,
+          "minLength": 3,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "byte_length": {
+          "maximum": 67108864,
+          "minimum": 0,
+          "title": "Byte Length",
+          "type": "integer"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "component_id",
+        "role",
+        "artifact",
+        "media_type",
+        "byte_length"
+      ],
+      "title": "SubmissionComponent",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.submission-packet.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "packet_version": {
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Packet Version",
+      "type": "integer"
+    },
+    "predecessor_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Predecessor Manifest Sha256"
+    },
+    "journal_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Journal Id",
+      "type": "string"
+    },
+    "journal_name": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Journal Name",
+      "type": "string"
+    },
+    "article_type": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Article Type",
+      "type": "string"
+    },
+    "round_number": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Round Number",
+      "type": "integer"
+    },
+    "manuscript_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Manuscript Id",
+      "type": "string"
+    },
+    "manuscript_version": {
+      "maxLength": 96,
+      "minLength": 1,
+      "title": "Manuscript Version",
+      "type": "string"
+    },
+    "manuscript": {
+      "$ref": "#/$defs/SubmissionArtifactReference"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/SubmissionComponent"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "title": "Components",
+      "type": "array"
+    },
+    "policy_snapshot": {
+      "$ref": "#/$defs/SubmissionArtifactReference"
+    },
+    "authors": {
+      "items": {
+        "$ref": "#/$defs/SubmissionAuthorDeclaration"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Authors",
+      "type": "array"
+    },
+    "audit_evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SubmissionArtifactReference"
+      },
+      "maxItems": 256,
+      "title": "Audit Evidence",
+      "type": "array"
+    },
+    "response_evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SubmissionArtifactReference"
+      },
+      "maxItems": 256,
+      "title": "Response Evidence",
+      "type": "array"
+    },
+    "gaps": {
+      "default": [],
+      "items": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Gaps",
+      "type": "array"
+    },
+    "created_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+      "title": "Created By",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "project_id",
+    "run_id",
+    "submission_id",
+    "packet_version",
+    "journal_id",
+    "journal_name",
+    "article_type",
+    "round_number",
+    "manuscript_id",
+    "manuscript_version",
+    "manuscript",
+    "components",
+    "policy_snapshot",
+    "authors",
+    "created_at",
+    "created_by"
+  ],
+  "title": "SubmissionPacket",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/submission-packet.schema.json"
+}
