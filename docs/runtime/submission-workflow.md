@@ -30,6 +30,8 @@ listed below is not implemented by this change.
 | Review rounds and responses | `submission-review-round`, `submission-response` artifacts | parent admission | source-bound IDs, evidence-bound closure, explicit unsupported formats |
 | Optional preparation provider | `submission.prepare`, `submission.review_normalize`, `submission.check_observe` | composition root | absent provider returns `CapabilityUnavailable` |
 | Verifier observation contract | `submission-verifier-observation` | parent admission | retains verifier/source version, input/output digests, coverage, limitations and per-check evidence; it does not execute or authorize a verifier |
+| Writing/research-artifact inputs | existing accepted artifact references in packet components/evidence | parent artifact admission | preserves the referenced artifact manifest/content and any existing writing or visual-review limits; no filename/path is treated as authority |
+| Memory/handoff/learning context | existing accepted advisory references/observations | advisory context only | can inform preparation and explanation, but cannot satisfy a required check, confirm an author, release a gate, or perform a transition |
 | Parent packet admission | existing `artifact.accepted` event | parent journal | reserved kinds validate references and predecessor state under the writer |
 | Readiness check | `arw submission check/status` | derived from accepted records | read-only, fail-closed, stale/fingerprint aware |
 | Qualification | `arw submission qualify` | parent `gate.evaluated` event | records readiness evidence; final author Submit remains external and human |

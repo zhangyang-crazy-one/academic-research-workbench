@@ -278,6 +278,25 @@ def test_readiness_fails_closed_when_required_checks_are_missing() -> None:
     assert "check_not_checked:journal_requirements" in result.reason_codes
 
 
+def test_canonical_advisory_references_never_replace_required_checks() -> None:
+    advisory_packet = packet(
+        audit_evidence=(
+            ref("writing-proposal"),
+            ref("research-artifact-receipt"),
+            ref("memory-handoff"),
+            ref("learning-observation"),
+        )
+    )
+    result = evaluate_submission_readiness(
+        advisory_packet,
+        packet_manifest_sha256=HASH,
+        checks=(),
+        evaluated_at="2026-09-21T12:00:00Z",
+    )
+    assert result.readiness == "BLOCKED"
+    assert "check_not_checked:component_integrity" in result.reason_codes
+
+
 def test_initial_submission_reaches_human_submit_boundary_only_after_all_checks_pass() -> None:
     result = evaluate_submission_readiness(
         packet(),
