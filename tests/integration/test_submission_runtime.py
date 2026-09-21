@@ -4,6 +4,8 @@ import hashlib
 from pathlib import Path
 
 from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.execution.execution import DeterministicFakeAdapter
+from arw.kernel.execution.orchestration import OrchestrationService
 from arw.kernel.execution.runtime import RuntimeCommandService
 from arw.kernel.execution.submission import (
     SubmissionWorkflowError,
@@ -14,8 +16,10 @@ from arw.kernel.ledger.workflows import CORE_WORKFLOW
 from arw.kernel.state.models import (
     ArtifactAcceptanceRequest,
     InitRunRequest,
+    LifecycleTransitionRequest,
     RuntimeCommandRequest,
 )
+from arw.kernel.state.orchestration_models import HumanAuthority, HumanDecisionRecord
 from arw.kernel.state.submission import (
     DeclarationField,
     JournalRequirementsSnapshot,
@@ -23,6 +27,7 @@ from arw.kernel.state.submission import (
     ReviewLocator,
     ReviewResponse,
     ReviewRound,
+    RevisionPatchEvidence,
     SubmissionArtifactReference,
     SubmissionCheck,
     SubmissionCheckReport,
@@ -219,6 +224,8 @@ def test_submission_packet_is_admitted_only_with_parent_accepted_references(tmp_
     status = SubmissionWorkflowService(root).check("submission.demo")
     assert status["readiness"]["readiness"] == "BLOCKED"
     assert "check_not_checked:component_integrity" in status["readiness"]["reason_codes"]
+    assert status["packet"]["authors"][0]["display_name"] == "[redacted]"
+    assert status["packet"]["authors"][0]["funding"]["value"] is None
     page = SubmissionWorkflowService(root).check("submission.demo", limit=1)
     assert page["next_cursor"] is None
     try:
@@ -638,3 +645,453 @@ def test_confirmation_qualification_is_narrow_and_requires_later_human_decision(
     assert result["gate"]["accepted"] is True
     assert result["gate"]["event"]["payload"]["decision"]["verdict"] == "PASS"
     assert result["human_decision_required"] is True
+
+
+def test_ready_transition_rechecks_submission_report_under_parent_lock(tmp_path: Path) -> None:
+    root = seed_run(tmp_path)
+    runtime = RuntimeCommandService(root)
+    for index, (transition_id, from_stage) in enumerate(
+        (("start", "initialized"), ("begin_work", "intake"), ("request_review", "work")),
+        start=1120,
+    ):
+        replay = replay_run(root)
+        outcome = runtime.execute_transition(
+            LifecycleTransitionRequest.model_validate(
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN,
+                    "occurred_at": "2026-09-21T12:20:00Z",
+                    "event_id": f"evt-00000000-0000-4000-8000-{index:012d}",
+                    "command_id": f"cmd-00000000-0000-4000-8000-{index:012d}",
+                    "actor_id": "parent.runtime",
+                    "actor_role": "parent_control_plane",
+                    "expected_revision": replay.revision,
+                    "transition_id": transition_id,
+                    "from_stage": from_stage,
+                }
+            )
+        )
+        assert outcome.accepted, outcome.rejection
+    replay = replay_run(root)
+    request = LifecycleTransitionRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN,
+            "occurred_at": "2026-09-21T12:21:00Z",
+            "event_id": "evt-00000000-0000-4000-8000-000000001123",
+            "command_id": "cmd-00000000-0000-4000-8000-000000001123",
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "expected_revision": replay.revision,
+            "transition_id": "complete",
+            "from_stage": "review",
+        }
+    )
+    outcome = SubmissionWorkflowService(root).transition_ready(
+        "submission.missing", request
+    )
+    assert not outcome.accepted
+    assert outcome.rejection.code == "submission-packet-unknown"
+    assert replay_run(root).revision == replay.revision
+
+
+def test_ready_transition_requires_exact_human_approval_and_retries_exactly(
+    tmp_path: Path,
+) -> None:
+    root = seed_run(tmp_path)
+    runtime = RuntimeCommandService(root)
+    for index, (transition_id, from_stage) in enumerate(
+        (("start", "initialized"), ("begin_work", "intake"), ("request_review", "work")),
+        start=1130,
+    ):
+        replay = replay_run(root)
+        outcome = runtime.execute_transition(
+            LifecycleTransitionRequest.model_validate(
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN,
+                    "occurred_at": "2026-09-21T12:30:00Z",
+                    "event_id": f"evt-00000000-0000-4000-8000-{index:012d}",
+                    "command_id": f"cmd-00000000-0000-4000-8000-{index:012d}",
+                    "actor_id": "parent.runtime",
+                    "actor_role": "parent_control_plane",
+                    "expected_revision": replay.revision,
+                    "transition_id": transition_id,
+                    "from_stage": from_stage,
+                }
+            )
+        )
+        assert outcome.accepted, outcome.rejection
+    packet, packet_ref = _admit_complete_initial_packet(root)
+    status = SubmissionWorkflowService(root).check(packet.submission_id)
+    evidence = tuple(
+        accept_file(
+            root,
+            f"artifact.ready-evidence-{index}",
+            f"ready-evidence-{index}.txt",
+            b"strict fixture evidence",
+            1135 + index,
+            "audit",
+        )
+        for index in range(1, 6)
+    )
+    checks = tuple(
+        SubmissionCheck(
+            check_id=f"check.ready.{kind}",
+            check_kind=kind,
+            applicability="REQUIRED",
+            status="PASS",
+            source_identity="fixture.strict",
+            source_version="v1",
+            input_sha256=status["readiness"]["input_fingerprint"],
+            output_sha256="d" * 64,
+            coverage="fixture-labelled exact evidence",
+            evidence=(evidence[index],),
+            evaluated_at="2026-09-21T12:40:00Z",
+            valid_until="2026-09-21T13:00:00Z",
+        )
+        for index, kind in enumerate(
+            (
+                "component_integrity",
+                "journal_requirements",
+                "author_declarations",
+                "claim_citation_coverage",
+                "scientific_review",
+            )
+        )
+    )
+    report = SubmissionCheckReport(
+        schema_version="arw.submission-check-report.v1",
+        report_id="report.ready",
+        submission_id=packet.submission_id,
+        packet_manifest_sha256=packet_ref.manifest_sha256,
+        input_fingerprint=status["readiness"]["input_fingerprint"],
+        evaluated_at="2026-09-21T12:40:00Z",
+        valid_until="2026-09-21T13:00:00Z",
+        checks=checks,
+        readiness="READY_FOR_HUMAN_SUBMIT",
+    )
+    report_raw = canonical_json_bytes(report.model_dump(mode="json"))
+    (root / "ready-report.json").write_bytes(report_raw)
+    report_request = request_for(
+        root,
+        "artifact.ready-report",
+        "ready-report.json",
+        report_raw,
+        1141,
+        "submission-check-report",
+    )
+    workflow = SubmissionWorkflowService(root)
+    qualified = workflow.qualify(report, report_request)
+    assert qualified["gate"]["accepted"] is True
+    gate = workflow.runtime.read_state().gates[-1]
+    authority = HumanAuthority(
+        schema_version="arw.human-authority.v1",
+        authority_id="authority.submission",
+        authenticated_actor_id="author.user",
+        accountable_role="operator",
+        validated_by_actor_id="parent.runtime",
+        allowed_decision_kinds=("approval",),
+        allowed_gate_ids=(gate.gate_id,),
+        allowed_scopes=(f"submission:{packet.submission_id}:ready",),
+        authenticated_at="2026-09-21T12:40:00Z",
+        expires_at="2026-09-21T13:00:00Z",
+        evidence_sha256=(gate.decision_sha256,),
+    )
+    orchestration = OrchestrationService(
+        root,
+        adapter=DeterministicFakeAdapter({}),
+    )
+    authority_request = RuntimeCommandRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN,
+            "occurred_at": "2026-09-21T12:41:00Z",
+            "event_id": "evt-00000000-0000-4000-8000-000000001142",
+            "command_id": "cmd-00000000-0000-4000-8000-000000001142",
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "expected_revision": qualified["gate"]["state"]["accepted_revision"],
+        }
+    )
+    accepted_authority = orchestration.record_human_authority(
+        authority_request, authority
+    )
+    assert accepted_authority.accepted
+    decision = HumanDecisionRecord(
+        schema_version="arw.human-decision.v1",
+        decision_id="decision.submission.ready",
+        decision_kind="approval",
+        gate_id=gate.gate_id,
+        subject_sha256=report.input_fingerprint,
+        evidence_sha256=(gate.decision_sha256, authority.authority_sha256),
+        applicable_transition="complete",
+        accountable_actor_id="author.user",
+        accountable_role="operator",
+        scope=f"submission:{packet.submission_id}:ready",
+        rationale="Author approved this exact current submission packet.",
+        prior_verdict_sha256=gate.decision_sha256,
+        authority_sha256=authority.authority_sha256,
+        supersedes_decision_id=None,
+    )
+    decision_request = authority_request.model_copy(
+        update={
+            "event_id": "evt-00000000-0000-4000-8000-000000001143",
+            "command_id": "cmd-00000000-0000-4000-8000-000000001143",
+            "expected_revision": accepted_authority.state.accepted_revision,
+        }
+    )
+    accepted_decision = orchestration.record_human_decision(
+        decision_request, decision
+    )
+    assert accepted_decision.accepted
+    ready_request = LifecycleTransitionRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN,
+            "occurred_at": "2026-09-21T12:42:00Z",
+            "event_id": "evt-00000000-0000-4000-8000-000000001144",
+            "command_id": "cmd-00000000-0000-4000-8000-000000001144",
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+            "expected_revision": accepted_decision.state.accepted_revision,
+            "transition_id": "complete",
+            "from_stage": "review",
+        }
+    )
+    ready = workflow.transition_ready(packet.submission_id, ready_request)
+    assert ready.accepted, ready.rejection
+    retried = workflow.transition_ready(packet.submission_id, ready_request)
+    assert retried.accepted
+    assert retried.event is not None and retried.event.event_id == ready.event.event_id
+    assert retried.state.accepted_revision == ready.state.accepted_revision
+
+
+def test_revision_patch_report_is_bound_to_scope_and_exact_versions(tmp_path: Path) -> None:
+    root = seed_run(tmp_path)
+    packet, packet_ref = _admit_complete_initial_packet(root)
+    letter_ref = accept_file(
+        root,
+        "artifact.patch-letter",
+        "patch-letter.txt",
+        b"Please clarify the method.",
+        1100,
+        "review-letter",
+    )
+    locator = ReviewLocator(locator_type="paragraph", value="methods.p1")
+    comment_id = review_comment_identity(
+        packet.submission_id, 1, letter_ref.manifest_sha256, locator
+    )
+    round_value = ReviewRound(
+        schema_version="arw.submission-review-round.v1",
+        round_id="round.patch",
+        submission_id=packet.submission_id,
+        round_number=1,
+        source_letter=letter_ref,
+        comments=(
+            ReviewComment(
+                comment_id=comment_id,
+                submission_id=packet.submission_id,
+                round_number=1,
+                source_locator=locator,
+                quote="Please clarify the method.",
+                original_order=0,
+            ),
+        ),
+        imported_at="2026-09-21T12:00:00Z",
+        imported_by="parent.runtime",
+    )
+    accept_file(
+        root,
+        "artifact.patch-round",
+        "patch-round.json",
+        canonical_json_bytes(round_value.model_dump(mode="json")),
+        1101,
+        "submission-review-round",
+    )
+    candidate_bytes = b"revised draft"
+    candidate_ref = accept_file(
+        root,
+        "artifact.patch-candidate",
+        "patch-candidate.md",
+        candidate_bytes,
+        1102,
+        "manuscript",
+    )
+    block_manifest = {
+        "manifest_format_version": "1.0",
+        "base_draft_hash": packet.manuscript.content_sha256[:12],
+        "blocks": [
+            {"block_id": "B0001", "old_hash": "a" * 12, "first_line_excerpt": "Methods"}
+        ],
+    }
+    block_manifest_ref = accept_file(
+        root,
+        "artifact.patch-block-manifest",
+        "patch-block-manifest.json",
+        canonical_json_bytes(block_manifest),
+        1103,
+        "revision-block-manifest",
+    )
+    patch_document = {
+        "patch_format_version": "1.1",
+        "authorization_context": "review_roadmap",
+        "revision_round": 1,
+        "base_draft_hash": packet.manuscript.content_sha256[:12],
+        "ops": [
+            {
+                "op": "replace_block",
+                "block_id": "B0001",
+                "roadmap_item_ids": ["REV-001"],
+            }
+        ],
+    }
+    patch_document_raw = canonical_json_bytes(patch_document)
+    patch_ref = accept_file(
+        root,
+        "artifact.patch-document",
+        "patch-document.json",
+        patch_document_raw,
+        1104,
+        "revision-patch",
+    )
+    apply_report = {
+        "report_format_version": "1.3",
+        "mode": "patch",
+        "base_draft_hash": packet.manuscript.content_sha256[:12],
+        "output_draft_hash": candidate_ref.content_sha256[:12],
+        "patch_digest": patch_ref.content_sha256,
+        "revision_round": 1,
+        "authorization_context": "review_roadmap",
+        "authorization_witness": {"status": "pass"},
+        "ops_applied": [
+            {
+                "op_index": 0,
+                "op": "replace_block",
+                "block_id": "B0001",
+                "roadmap_item_ids": ["REV-001"],
+                "new_block_ids": [],
+            }
+        ],
+        "fresh_block_ids": [],
+        "pure_move_pairs": [],
+        "structural_flags": {"any": False},
+        "counters": {
+            "blocks_total": 1,
+            "blocks_touched": 1,
+            "blocks_preserved_byte_identical": 0,
+            "preserved_ratio": 0.0,
+        },
+    }
+    apply_report_ref = accept_file(
+        root,
+        "artifact.patch-report",
+        "patch-report.json",
+        canonical_json_bytes(apply_report),
+        1105,
+        "revision-apply-report",
+    )
+    scope = canonical_json_bytes(
+        {
+            "operation_mode": "ars_markdown_patch",
+            "block_ids": ["B0001"],
+            "operations": ["replace_block"],
+            "roadmap_item_ids": ["REV-001"],
+            "comment_ids": [comment_id],
+        }
+    ).decode("utf-8")
+    response = ReviewResponse(
+        schema_version="arw.submission-response.v1",
+        response_id="response.patch",
+        submission_id=packet.submission_id,
+        round_number=1,
+        comment_id=comment_id,
+        status="proposed",
+        response_text="We clarified the method.",
+        patch=RevisionPatchEvidence(
+            base_manuscript_sha256=packet.manuscript.content_sha256,
+            candidate_manuscript_sha256=candidate_ref.content_sha256,
+            block_manifest_sha256=block_manifest_ref.manifest_sha256,
+            approved_scope=scope,
+            apply_report=apply_report_ref,
+            patch_document=patch_ref,
+            comment_ids=(comment_id,),
+        ),
+    )
+    accepted = accept_file(
+        root,
+        "artifact.patch-response",
+        "patch-response.json",
+        canonical_json_bytes(response.model_dump(mode="json")),
+        1106,
+        "submission-response",
+    )
+    assert accepted.artifact_id == "artifact.patch-response"
+    bad_scope = canonical_json_bytes(
+        {
+            "operation_mode": "ars_markdown_patch",
+            "block_ids": ["B9999"],
+            "operations": ["replace_block"],
+            "roadmap_item_ids": ["REV-001"],
+            "comment_ids": [comment_id],
+        }
+    ).decode("utf-8")
+    bad_response = response.model_copy(
+        update={
+            "response_id": "response.patch.bad-scope",
+            "predecessor_response_id": response.response_id,
+            "patch": response.patch.model_copy(update={"approved_scope": bad_scope}),
+        }
+    )
+    rejected_scope = submit_file(
+        root,
+        "artifact.patch-response-bad-scope",
+        "patch-response-bad-scope.json",
+        canonical_json_bytes(bad_response.model_dump(mode="json")),
+        1107,
+        "submission-response",
+    )
+    assert not rejected_scope.accepted
+    assert rejected_scope.rejection.code == "submission-patch-scope-mismatch"
+    word_packet = packet.model_copy(
+        update={
+            "packet_version": 2,
+            "predecessor_manifest_sha256": packet_ref.manifest_sha256,
+            "components": tuple(
+                item.model_copy(
+                    update={
+                        "media_type": (
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            if item.role == "main_manuscript"
+                            else item.media_type
+                        )
+                    }
+                )
+                for item in packet.components
+            ),
+        }
+    )
+    accept_file(
+        root,
+        "artifact.word-packet",
+        "word-packet.json",
+        canonical_json_bytes(word_packet.model_dump(mode="json")),
+        1110,
+        "submission-packet",
+    )
+    word_response = response.model_copy(
+        update={
+            "response_id": "response.word.patch",
+            "predecessor_response_id": response.response_id,
+        }
+    )
+    unsupported = submit_file(
+        root,
+        "artifact.word-patch-response",
+        "word-patch-response.json",
+        canonical_json_bytes(word_response.model_dump(mode="json")),
+        1111,
+        "submission-response",
+    )
+    assert not unsupported.accepted
+    assert unsupported.rejection.code == "submission-revision-unsupported"

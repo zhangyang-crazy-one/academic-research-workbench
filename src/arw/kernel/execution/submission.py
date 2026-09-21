@@ -28,6 +28,8 @@ from arw.kernel.state.models import (
     ArtifactAcceptedPayload,
     EventId,
     GateEvaluatedPayload,
+    LifecycleTransitionedPayload,
+    LifecycleTransitionRequest,
     RuntimeCommandRequest,
     Sha256,
     StrictModel,
@@ -244,8 +246,12 @@ class SubmissionWorkflowService:
                 for comment in item.value.comments
             )
         )
+        state = self.runtime.read_state()
         dependency_sha256 = self._dependency_hashes(
-            packet_record, records, submission_id
+            packet_record, records, submission_id, state=state
+        )
+        dependency_categories = self._dependency_fingerprints(
+            packet_record, records, submission_id, state=state
         )
         current_input_fingerprint = submission_input_fingerprint(
             packet, dependency_sha256=dependency_sha256
@@ -258,10 +264,27 @@ class SubmissionWorkflowService:
             expected_comment_ids=expected_comment_ids,
             dependency_sha256=dependency_sha256,
             valid_input_sha256=(current_input_fingerprint, *dependency_sha256),
+            dependency_categories=dependency_categories,
             evaluated_at=evaluation_time,
         )
-        state = self.runtime.read_state()
         decisions = {item.decision_id: item for item in state.human_decision_history}
+        gates = {item.gate_id: item for item in state.gates}
+
+        def decision_is_current_approval(decision, gate_id: str, subject_sha256: str) -> bool:
+            gate = gates.get(gate_id)
+            return bool(
+                decision.decision_kind == "approval"
+                and decision.gate_id == gate_id
+                and decision.subject_sha256 == subject_sha256
+                and gate is not None
+                and gate.verdict == "PASS"
+                and gate.subject_sha256 == subject_sha256
+                and (
+                    gate.decision.fresh_until is None
+                    or evaluation_time <= gate.decision.fresh_until
+                )
+            )
+
         missing_author_decisions: set[str] = set()
         invalid_author_decisions: set[str] = set()
         for author in packet.authors:
@@ -284,6 +307,15 @@ class SubmissionWorkflowService:
                     != declaration_subject_sha256(
                         submission_id, author.person_id, field_name, field
                     )
+                    or not decision_is_current_approval(
+                        decision,
+                        confirmation_gate_id(
+                            f"submission:{submission_id}:author:{author.person_id}:{field_name}"
+                        ),
+                        declaration_subject_sha256(
+                            submission_id, author.person_id, field_name, field
+                        ),
+                    )
                 ):
                     invalid_author_decisions.add(field.human_decision_id)
         invalid_response_decisions = {
@@ -301,6 +333,13 @@ class SubmissionWorkflowService:
                 )
                 or decisions[item.author_decision_id].subject_sha256
                 != response_subject_sha256(item)
+                or not decision_is_current_approval(
+                    decisions[item.author_decision_id],
+                    confirmation_gate_id(
+                        f"submission:{submission_id}:response:{item.comment_id}"
+                    ),
+                    response_subject_sha256(item),
+                )
             )
         }
         invalid_response_decisions.discard(None)
@@ -440,6 +479,136 @@ class SubmissionWorkflowService:
             ),
             "final_submit": "human_only",
         }
+
+    def transition_ready(
+        self,
+        submission_id: str,
+        request: LifecycleTransitionRequest,
+    ) -> CommandOutcome:
+        """Run the registered completion transition only for a fresh submission.
+
+        The validation callback executes inside the runtime writer lock.  A
+        caller cannot turn a previously observed PASS into a transition after
+        changing the packet, response heads, scoped decisions, or aggregate
+        gate between two independent reads.
+        """
+
+        if request.transition_id != "complete":
+            raise SubmissionWorkflowError(
+                "submission ready transition must use the registered complete transition"
+            )
+        existing = self._existing_transition_outcome(request)
+        if existing is not None:
+            return existing
+
+        def validate(state, replayed):
+            records = self._accepted(replayed=replayed)
+            packets = [
+                item
+                for item in records
+                if item.kind == "submission-packet"
+                and isinstance(item.value, SubmissionPacket)
+                and item.value.submission_id == submission_id
+            ]
+            packet_record = max(
+                packets,
+                key=lambda item: (item.value.packet_version, item.sequence),
+                default=None,
+            )
+            if packet_record is None:
+                return "submission-packet-unknown", "submission packet is not accepted"
+            reports = [
+                item
+                for item in records
+                if item.kind == "submission-check-report"
+                and isinstance(item.value, SubmissionCheckReport)
+                and item.value.submission_id == submission_id
+                and item.value.packet_manifest_sha256 == packet_record.manifest_sha256
+            ]
+            report_record = max(reports, key=lambda item: item.sequence, default=None)
+            if report_record is None:
+                return "submission-report-unknown", "a current readiness report is required"
+            report = report_record.value
+            assert isinstance(report, SubmissionCheckReport)
+            responses_by_comment: dict[str, ReviewResponse] = {}
+            for item in sorted(records, key=lambda value: value.sequence):
+                if (
+                    item.kind == "submission-response"
+                    and isinstance(item.value, ReviewResponse)
+                    and item.value.submission_id == submission_id
+                ):
+                    responses_by_comment[item.value.comment_id] = item.value
+            expected_comment_ids = tuple(
+                dict.fromkeys(
+                    comment.comment_id
+                    for item in records
+                    if item.kind == "submission-review-round"
+                    and isinstance(item.value, ReviewRound)
+                    and item.value.submission_id == submission_id
+                    for comment in item.value.comments
+                )
+            )
+            dependency_sha256 = self._dependency_hashes(
+                packet_record,
+                records,
+                submission_id,
+                state=state,
+            )
+            dependency_categories = self._dependency_fingerprints(
+                packet_record,
+                records,
+                submission_id,
+                state=state,
+            )
+            current_fingerprint = submission_input_fingerprint(
+                packet_record.value,
+                dependency_sha256=dependency_sha256,
+            )
+            if report.input_fingerprint != current_fingerprint:
+                return "submission-report-stale", "readiness report fingerprint is stale"
+            evaluation = evaluate_submission_readiness(
+                packet_record.value,
+                packet_manifest_sha256=packet_record.manifest_sha256,
+                checks=tuple(report.checks),
+                responses=tuple(responses_by_comment.values()),
+                expected_comment_ids=expected_comment_ids,
+                dependency_sha256=dependency_sha256,
+                valid_input_sha256=(current_fingerprint, *dependency_sha256),
+                dependency_categories=dependency_categories,
+                evaluated_at=request.occurred_at,
+            )
+            if evaluation.readiness != "READY_FOR_HUMAN_SUBMIT":
+                return "submission-not-ready", "current readiness is not READY_FOR_HUMAN_SUBMIT"
+            if report.readiness != "READY_FOR_HUMAN_SUBMIT":
+                return "submission-report-not-ready", "accepted readiness report is not ready"
+            gate_id = f"gate.submission.{submission_id}.{report.report_id}"
+            gate = next((item for item in state.gates if item.gate_id == gate_id), None)
+            if (
+                gate is None
+                or gate.verdict != "PASS"
+                or gate.subject_sha256 != report.input_fingerprint
+                or (
+                    gate.decision.fresh_until is not None
+                    and request.occurred_at > gate.decision.fresh_until
+                )
+            ):
+                return "submission-gate-stale", "current aggregate readiness gate is not a fresh PASS"
+            final_scope = f"submission:{submission_id}:ready"
+            if not any(
+                item.decision_kind == "approval"
+                and item.applicable_transition == request.transition_id
+                and item.gate_id == gate_id
+                and item.subject_sha256 == report.input_fingerprint
+                and item.scope == final_scope
+                for item in state.human_decision_history
+            ):
+                return "submission-human-approval-required", "current packet requires an authenticated human approval"
+            return None
+
+        return self.runtime.execute_transition(
+            request,
+            additional_prevalidate=validate,
+        )
 
     def qualify_confirmation(
         self,
@@ -736,6 +905,34 @@ class SubmissionWorkflowService:
             "state": state.model_dump(mode="json"),
         }
 
+    def _existing_transition_outcome(
+        self, request: LifecycleTransitionRequest
+    ) -> CommandOutcome | None:
+        try:
+            replayed = replay_run(self.run_root, lock_timeout=self.lock_timeout)
+        except (OSError, RuntimeError) as error:
+            raise SubmissionWorkflowError(f"cannot replay submission run: {error}") from error
+        event = next(
+            (item for item in replayed.events if item.command_id == request.command_id),
+            None,
+        )
+        if event is None:
+            return None
+        state = self.runtime.read_state()
+        if (
+            event.event_type != "lifecycle.transitioned"
+            or not isinstance(event.payload, LifecycleTransitionedPayload)
+            or event.event_id != request.event_id
+            or event.payload.transition_id != request.transition_id
+            or event.payload.from_stage != request.from_stage
+        ):
+            return self.runtime._rejection(
+                state,
+                "duplicate-command-conflict",
+                "ready transition command identity is already bound to another operation",
+            )
+        return CommandOutcome(accepted=True, state=state, event=event)
+
     def _validate_gate_inputs(
         self, state, replayed, report, report_manifest: str, evaluation: dict[str, Any]
     ):
@@ -763,6 +960,8 @@ class SubmissionWorkflowService:
         packet_record: AcceptedSubmissionArtifact,
         records: tuple[AcceptedSubmissionArtifact, ...],
         submission_id: str,
+        *,
+        state=None,
     ) -> tuple[str, ...]:
         packet = packet_record.value
         assert isinstance(packet, SubmissionPacket)
@@ -783,7 +982,124 @@ class SubmissionWorkflowService:
             if getattr(item.value, "submission_id", None) == submission_id
             and item.kind in {"submission-review-round", "submission-response"}
         )
+        if state is not None:
+            values.extend(
+                item.decision_sha256
+                for item in state.human_decision_history
+                if item.scope.startswith(f"submission:{submission_id}:")
+                and item.scope != f"submission:{submission_id}:ready"
+            )
+        values.extend(
+            SubmissionWorkflowService._dependency_fingerprints(
+                packet_record,
+                records,
+                submission_id,
+                state=state,
+            ).values()
+        )
         return tuple(dict.fromkeys(values))
+
+    @staticmethod
+    def _dependency_fingerprints(
+        packet_record: AcceptedSubmissionArtifact,
+        records: tuple[AcceptedSubmissionArtifact, ...],
+        submission_id: str,
+        *,
+        state=None,
+    ) -> dict[str, str]:
+        """Build category-level fingerprints for conservative check reuse.
+
+        A check may bind its ``input_sha256`` to one category digest instead
+        of the aggregate fingerprint.  That lets an unchanged scientific
+        check remain historically useful when, for example, only an author
+        disclosure changes; the aggregate readiness result still becomes
+        stale until a new report is recorded.
+        """
+
+        packet = packet_record.value
+        assert isinstance(packet, SubmissionPacket)
+        kind_by_artifact = {item.artifact_id: item.kind for item in records}
+        components = tuple(
+            {
+                "component_id": item.component_id,
+                "role": item.role,
+                "artifact": item.artifact.model_dump(mode="json"),
+                "media_type": item.media_type,
+                "byte_length": item.byte_length,
+            }
+            for item in packet.components
+        )
+        review_values = tuple(
+            item.value.model_dump(mode="json")
+            for item in records
+            if item.kind in {"submission-review-round", "submission-response"}
+            and getattr(item.value, "submission_id", None) == submission_id
+        )
+        render_values = [
+            item.artifact.model_dump(mode="json")
+            for item in packet.components
+            if "pdf" in item.media_type.lower() or "render" in item.media_type.lower()
+        ]
+        render_values.extend(
+            locator.model_dump(mode="json")
+            for item in records
+            if item.kind == "submission-response"
+            and isinstance(item.value, ReviewResponse)
+            and item.value.submission_id == submission_id
+            for locator in item.value.locations
+            if locator.render_sha256 is not None
+        )
+        bibliography_values = [
+            item.artifact.model_dump(mode="json")
+            for item in packet.components
+            if "bib" in item.media_type.lower()
+            or "bibliograph" in kind_by_artifact.get(item.artifact.artifact_id, "").lower()
+        ]
+        author_decisions = tuple(
+            item.decision_sha256
+            for item in (state.human_decision_history if state is not None else ())
+            if item.scope.startswith(f"submission:{submission_id}:")
+            and item.scope != f"submission:{submission_id}:ready"
+        )
+        payloads = {
+            "manuscript": packet.manuscript.model_dump(mode="json"),
+            "bibliography": bibliography_values,
+            "render": render_values,
+            "policy": packet.policy_snapshot.model_dump(mode="json"),
+            "roster": tuple(
+                {
+                    "person_id": item.person_id,
+                    "display_name": item.display_name,
+                    "order": item.order,
+                    "corresponding": item.corresponding,
+                }
+                for item in packet.authors
+            ),
+            "contributions": tuple(
+                {"person_id": item.person_id, "contributions": item.contributions}
+                for item in packet.authors
+            ),
+            "disclosures": tuple(
+                {
+                    "person_id": item.person_id,
+                    "funding": item.funding.model_dump(mode="json"),
+                    "conflicts": item.conflicts.model_dump(mode="json"),
+                    "ethics": item.ethics.model_dump(mode="json"),
+                    "data": item.data.model_dump(mode="json"),
+                    "ai_use": item.ai_use.model_dump(mode="json"),
+                }
+                for item in packet.authors
+            ),
+            "attachments": components,
+            "responses": review_values,
+            "author_decisions": author_decisions,
+        }
+        return {
+            category: sha256_hex(
+                canonical_json_bytes({"category": category, "value": value})
+            )
+            for category, value in payloads.items()
+        }
 
     @staticmethod
     def _redacted_packet(packet: SubmissionPacket) -> dict[str, Any]:

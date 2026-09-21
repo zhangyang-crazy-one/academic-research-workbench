@@ -7,6 +7,7 @@ The runtime and composition layers remain responsible for those boundaries.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 from urllib.parse import urlparse
 
@@ -72,6 +73,20 @@ _MAX_COMPONENTS = 128
 _MAX_PEOPLE = 100
 _MAX_COMMENTS = 200
 _MAX_DEPENDENCIES = 2048
+
+CHECK_DEPENDENCY_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "component_integrity": ("packet", "attachments"),
+    "journal_requirements": ("policy",),
+    "author_declarations": (
+        "roster",
+        "contributions",
+        "disclosures",
+        "author_decisions",
+    ),
+    "claim_citation_coverage": ("manuscript", "bibliography"),
+    "scientific_review": ("manuscript", "render", "attachments"),
+    "review_response_coverage": ("responses",),
+}
 
 
 def _unique(values: tuple[str, ...], label: str) -> tuple[str, ...]:
@@ -363,6 +378,7 @@ class RevisionPatchEvidence(StrictModel):
     block_manifest_sha256: Sha256
     approved_scope: Annotated[str, Field(min_length=1, max_length=512)]
     apply_report: SubmissionArtifactReference
+    patch_document: SubmissionArtifactReference | None = None
     comment_ids: tuple[StableRuntimeId, ...] = Field(min_length=1, max_length=128)
 
     @field_validator("comment_ids")
@@ -645,6 +661,19 @@ def confirmation_gate_id(subject_scope: str) -> StableRuntimeId:
     return f"gate.submission.confirmation.{sha256_hex(subject_scope.encode())[:32]}"
 
 
+def submission_dependency_input_sha256(
+    check_kind: str,
+    dependency_categories: Mapping[str, Sha256],
+) -> Sha256:
+    """Return the exact input digest a category-bound check should record."""
+
+    categories = CHECK_DEPENDENCY_CATEGORIES.get(check_kind, ())
+    values = {category: dependency_categories[category] for category in categories if category in dependency_categories}
+    if len(values) == 1:
+        return next(iter(values.values()))
+    return sha256_hex(canonical_json_bytes({"categories": values}))
+
+
 def evaluate_submission_readiness(
     packet: SubmissionPacket,
     *,
@@ -654,6 +683,7 @@ def evaluate_submission_readiness(
     expected_comment_ids: tuple[StableRuntimeId, ...] = (),
     dependency_sha256: tuple[Sha256, ...] = (),
     valid_input_sha256: tuple[Sha256, ...] = (),
+    dependency_categories: Mapping[str, Sha256] | None = None,
     evaluated_at: UtcTimestamp,
 ) -> SubmissionReadinessEvaluation:
     """Pure fail-closed readiness aggregation used by the parent service."""
@@ -679,8 +709,15 @@ def evaluate_submission_readiness(
             continue
         if item.status != "PASS":
             reason_codes.append(f"check_{item.status.lower()}:{kind}")
-        elif valid_input_sha256 and item.input_sha256 not in set(valid_input_sha256):
-            reason_codes.append(f"check_input_stale:{kind}")
+        elif valid_input_sha256:
+            accepted_inputs = set(valid_input_sha256)
+            if dependency_categories is not None:
+                accepted_inputs = {
+                    valid_input_sha256[0],
+                    submission_dependency_input_sha256(kind, dependency_categories),
+                }
+            if item.input_sha256 not in accepted_inputs:
+                reason_codes.append(f"check_input_stale:{kind}")
         elif any(
             marker in " ".join((*item.reason_codes, *item.limitations)).lower()
             for marker in ("heuristic", "not_checked", "unverified")
@@ -704,7 +741,10 @@ def evaluate_submission_readiness(
 
     if packet.gaps:
         readiness: ReadinessStatus = "INCOMPLETE"
-    elif any(code.startswith("check_stale") for code in reason_codes):
+    elif any(
+        code.startswith(("check_stale", "check_input_stale"))
+        for code in reason_codes
+    ):
         readiness = "STALE"
     elif any(code.startswith("check_review") for code in reason_codes):
         readiness = "REVIEW_REQUIRED"
@@ -726,6 +766,7 @@ def evaluate_submission_readiness(
 
 
 __all__ = [
+    "CHECK_DEPENDENCY_CATEGORIES",
     "SUBMISSION_SCHEMA_NAMES",
     "CheckApplicability",
     "CheckStatus",
@@ -752,6 +793,7 @@ __all__ = [
     "evaluate_submission_readiness",
     "response_subject_sha256",
     "review_comment_identity",
+    "submission_dependency_input_sha256",
     "submission_input_fingerprint",
     "submission_schema_documents",
 ]

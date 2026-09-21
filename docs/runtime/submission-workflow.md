@@ -33,6 +33,7 @@ listed below is not implemented by this change.
 | Parent packet admission | existing `artifact.accepted` event | parent journal | reserved kinds validate references and predecessor state under the writer |
 | Readiness check | `arw submission check/status` | derived from accepted records | read-only, fail-closed, stale/fingerprint aware |
 | Qualification | `arw submission qualify` | parent `gate.evaluated` event | records readiness evidence; final author Submit remains external and human |
+| Registered ready transition | `arw submission ready` | parent lifecycle event | rechecks packet/report fingerprint, fresh PASS gate and exact human approval under the writer lock |
 | External result | `submission-result-observation` artifact | parent journal | user confirmation or retained platform receipt only; no network action |
 
 ## Supported and deferred behavior
@@ -40,7 +41,19 @@ listed below is not implemented by this change.
 Supported behavior includes local JSON preparation, digest-bound packet and
 attachment references, official-policy snapshots supplied as retained evidence,
 review comment/response artifacts, deterministic readiness evaluation, parent
-gate recording, replay and exact artifact admission retries.
+gate recording, replay and exact artifact admission retries.  Required checks
+may bind their input to category fingerprints for manuscript/bibliography,
+render, policy, roster/contributions/disclosures, attachments, responses and
+scoped author decisions.  A category change invalidates its dependent checks
+while preserving historical receipts and unrelated category-bound checks; the
+aggregate readiness fingerprint still becomes stale until requalified.
+
+ARS Markdown patch evidence is accepted only when the retained block manifest,
+patch document, apply report, base/candidate hashes and approved JSON scope
+agree.  A passing adapter report is evidence rather than scientific approval.
+Word/PDF automatic patching or locator remapping returns
+`submission-revision-unsupported`; externally edited Word/PDF evidence can be
+imported only with explicit version-bound locators.
 
 The following are deliberately unsupported in this change: portal login or
 upload, payment, email, automatic Submit, external-action retries, journal
@@ -64,6 +77,12 @@ The existing authenticated human-decision flow must still bind that gate and
 subject before the aggregate readiness gate can be treated as approval.
 `qualify --scope readiness` records the aggregate check report and its current
 parent gate.  Neither scope exposes a portal or a `submit` operation.
+`ready` is a parent-owned lifecycle transition, not an external submission
+action; it requires a fresh aggregate PASS and an authenticated approval bound
+to the exact packet/report subject.  That final approval is downstream of the
+aggregate report and is intentionally excluded from the report's input
+fingerprint; field/response confirmations remain fingerprinted inputs, so the
+approval path cannot become circular.
 
 ## Verification boundary
 

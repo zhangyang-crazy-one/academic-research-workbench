@@ -83,6 +83,17 @@
         "apply_report": {
           "$ref": "#/$defs/SubmissionArtifactReference"
         },
+        "patch_document": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubmissionArtifactReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "comment_ids": {
           "items": {
             "pattern": "^[a-z][a-z0-9._-]{2,95}$",

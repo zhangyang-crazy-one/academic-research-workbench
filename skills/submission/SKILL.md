@@ -20,6 +20,7 @@ arw submission review-import
 arw submission response-record
 arw submission check
 arw submission qualify
+arw submission ready
 arw submission record-result
 arw submission status
 ```
@@ -31,3 +32,10 @@ authenticated human-decision flow. There is no portal login, upload, payment,
 email, automatic retry, or `submit` operation. A saved portal page is not proof
 of submission; external facts must be explicitly recorded as user-confirmed or
 bound to a retained platform receipt.
+
+`ready` only performs the registered parent lifecycle transition after the
+current packet/report fingerprint, aggregate PASS gate and exact human
+approval are rechecked under parent serialization. It is not an external
+submission action. Automatic Word/PDF patching and locator remapping are
+unsupported; external document revisions require retained version-bound
+evidence.

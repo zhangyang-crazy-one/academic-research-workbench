@@ -257,7 +257,12 @@ class RuntimeCommandService:
                 after_append(accepted_state, event)
             return CommandOutcome(accepted=True, state=accepted_state, event=event)
 
-    def execute_transition(self, request: LifecycleTransitionRequest) -> CommandOutcome:
+    def execute_transition(
+        self,
+        request: LifecycleTransitionRequest,
+        *,
+        additional_prevalidate=None,
+    ) -> CommandOutcome:
         transition_holder = {}
 
         def validate(state, _replayed):
@@ -271,6 +276,10 @@ class RuntimeCommandService:
                 )
             except WorkflowDefinitionError as error:
                 return "invalid-transition", str(error)
+            if additional_prevalidate is not None:
+                rejection = additional_prevalidate(state, _replayed)
+                if rejection is not None:
+                    return rejection
             return None
 
         def payload(state, _replayed):
@@ -547,6 +556,7 @@ class RuntimeCommandService:
     def _validate_submission_artifact(self, request, replayed, state):
         """Validate reserved submission kinds before generic artifact admission."""
 
+        from arw.kernel.core.canonical import strict_json_loads
         from arw.kernel.execution.submission import (
             SUBMISSION_ARTIFACT_MODELS,
             SubmissionWorkflowError,
@@ -590,6 +600,8 @@ class RuntimeCommandService:
         response_heads: dict[tuple[str, str], tuple[str, str, ReviewResponse]] = {}
         accepted_content_sha256: set[str] = set()
         accepted_manifest_sha256: set[str] = set()
+        accepted_manifests: dict[str, ArtifactManifest] = {}
+        accepted_content_kinds: dict[str, set[str]] = {}
         for event in replayed.events:
             if event.event_type != "artifact.accepted" or not isinstance(
                 event.payload, ArtifactAcceptedPayload
@@ -609,6 +621,10 @@ class RuntimeCommandService:
             accepted_kinds[event.payload.artifact_id] = manifest.artifact_kind
             accepted_content_sha256.add(event.payload.artifact_sha256)
             accepted_manifest_sha256.add(event.payload.manifest_sha256)
+            accepted_manifests[event.payload.manifest_sha256] = manifest
+            accepted_content_kinds.setdefault(event.payload.artifact_sha256, set()).add(
+                manifest.artifact_kind
+            )
             if manifest.artifact_kind in {"submission-packet", "submission-review-round"}:
                 try:
                     previous = validate_submission_payload(
@@ -695,6 +711,129 @@ class RuntimeCommandService:
                 return "submission-packet-unknown", "referenced packet manifest is not accepted"
             return None
 
+        def read_accepted_json(manifest_sha256: str, *, label: str):
+            manifest = accepted_manifests.get(manifest_sha256)
+            if manifest is None:
+                return None, ("submission-reference-unknown", f"{label} is not accepted")
+            try:
+                raw_value = read_retained_bytes(
+                    self.run_root,
+                    manifest.content_path,
+                    max_bytes=_MAX_SUBMISSION_JSON_BYTES,
+                )
+                return strict_json_loads(raw_value), None
+            except (ManifestError, OSError, UnicodeError, ValueError) as error:
+                return None, ("submission-evidence-invalid", f"{label} is invalid: {error}")
+
+        def parse_patch_scope(scope_text: str):
+            try:
+                scope = strict_json_loads(scope_text.encode("utf-8"))
+            except (UnicodeError, ValueError) as error:
+                return None, ("submission-patch-scope-invalid", f"approved patch scope is invalid: {error}")
+            if not isinstance(scope, dict):
+                return None, ("submission-patch-scope-invalid", "approved patch scope must be a JSON object")
+            required = {"operation_mode", "block_ids", "operations", "roadmap_item_ids", "comment_ids"}
+            if set(scope) != required:
+                return None, ("submission-patch-scope-invalid", "approved patch scope has an unexpected shape")
+            if scope.get("operation_mode") not in {"ars_markdown_patch", "external_evidence", "automatic_word_patch", "automatic_pdf_remap"}:
+                return None, ("submission-patch-scope-invalid", "approved patch scope has an unknown operation mode")
+            arrays = {}
+            for name in ("block_ids", "operations", "roadmap_item_ids", "comment_ids"):
+                raw_values = scope.get(name)
+                if not isinstance(raw_values, list) or not raw_values or any(
+                    not isinstance(item, str) or not item or len(item) > 160 for item in raw_values
+                ) or len(raw_values) != len(set(raw_values)):
+                    return None, ("submission-patch-scope-invalid", f"approved patch scope field {name} is invalid")
+                arrays[name] = set(raw_values)
+            return (scope, arrays), None
+
+        def validate_patch_report(value, current_packet, report, block_manifest, patch_document):
+            if not isinstance(report, dict) or report.get("report_format_version") != "1.3" or report.get("mode") != "patch":
+                return "submission-patch-report-invalid", "apply report is not a current ARS patch report"
+            if not isinstance(block_manifest, dict) or block_manifest.get("manifest_format_version") != "1.0":
+                return "submission-patch-manifest-invalid", "block manifest is not a current ARS block manifest"
+            blocks = block_manifest.get("blocks")
+            if not isinstance(blocks, list) or not blocks:
+                return "submission-patch-manifest-invalid", "block manifest has no blocks"
+            block_ids = [item.get("block_id") for item in blocks if isinstance(item, dict)]
+            if len(block_ids) != len(blocks) or len(block_ids) != len(set(block_ids)):
+                return "submission-patch-manifest-invalid", "block manifest block IDs are invalid"
+            if any(
+                not isinstance(item.get("block_id"), str)
+                or not item["block_id"].startswith("B")
+                or not item["block_id"][1:].isdigit()
+                or len(item["block_id"]) < 5
+                or not isinstance(item.get("old_hash"), str)
+                or len(item["old_hash"]) != 12
+                or any(character not in "0123456789abcdef" for character in item["old_hash"])
+                for item in blocks
+                if isinstance(item, dict)
+            ):
+                return "submission-patch-manifest-invalid", "block manifest entries are malformed"
+            base_hash = report.get("base_draft_hash")
+            output_hash = report.get("output_draft_hash")
+            if not isinstance(base_hash, str) or len(base_hash) != 12 or not all(c in "0123456789abcdef" for c in base_hash):
+                return "submission-patch-report-invalid", "apply report base hash is invalid"
+            if not isinstance(output_hash, str) or len(output_hash) != 12 or not all(c in "0123456789abcdef" for c in output_hash):
+                return "submission-patch-report-invalid", "apply report output hash is invalid"
+            if not current_packet.manuscript.content_sha256.startswith(base_hash):
+                return "submission-patch-base-stale", "apply report base hash does not match the current manuscript"
+            if not value.patch.candidate_manuscript_sha256.startswith(output_hash):
+                return "submission-patch-candidate-mismatch", "apply report output hash does not match the candidate manuscript"
+            if report.get("revision_round") != value.round_number:
+                return "submission-patch-round-mismatch", "apply report round differs from the response round"
+            witness = report.get("authorization_witness")
+            if not isinstance(witness, dict) or witness.get("status") != "pass":
+                return "submission-patch-authorization-invalid", "apply report lacks a passing authorization witness"
+            ops = report.get("ops_applied")
+            if not isinstance(ops, list) or not ops:
+                return "submission-patch-report-invalid", "apply report has no applied operations"
+            parsed_scope, scope_error = parse_patch_scope(value.patch.approved_scope)
+            if scope_error:
+                return scope_error
+            _scope, allowed = parsed_scope
+            if value.patch.comment_ids[0] not in allowed["comment_ids"] or not set(value.patch.comment_ids) <= allowed["comment_ids"]:
+                return "submission-patch-scope-mismatch", "patch comments exceed the approved scope"
+            if value.patch.base_manuscript_sha256 != current_packet.manuscript.content_sha256:
+                return "submission-patch-base-stale", "patch base does not match the current manuscript"
+            for item in ops:
+                if not isinstance(item, dict):
+                    return "submission-patch-report-invalid", "apply report operation is not an object"
+                if item.get("block_id") not in allowed["block_ids"] and item.get("block_id") != "DOC-BODY-START":
+                    return "submission-patch-scope-mismatch", "apply report operation exceeds the approved block scope"
+                if item.get("op") not in allowed["operations"]:
+                    return "submission-patch-scope-mismatch", "apply report operation exceeds the approved operation scope"
+                roadmap_ids = item.get("roadmap_item_ids")
+                if not isinstance(roadmap_ids, list) or not set(roadmap_ids) <= allowed["roadmap_item_ids"]:
+                    return "submission-patch-scope-mismatch", "apply report roadmap mapping exceeds the approved scope"
+            if patch_document is not None:
+                if not isinstance(patch_document, dict) or patch_document.get("patch_format_version") != "1.1":
+                    return "submission-patch-document-invalid", "patch document is not a current ARS patch"
+                if patch_document.get("base_draft_hash") != base_hash:
+                    return "submission-patch-base-mismatch", "patch document and apply report bind different bases"
+                patch_ops = patch_document.get("ops")
+                if not isinstance(patch_ops, list) or len(patch_ops) != len(ops):
+                    return "submission-patch-report-mismatch", "patch document and apply report operation counts differ"
+                for patch_op, report_op in zip(patch_ops, ops, strict=True):
+                    if not isinstance(patch_op, dict) or patch_op.get("block_id") != report_op.get("block_id") or patch_op.get("op") != report_op.get("op"):
+                        return "submission-patch-report-mismatch", "patch document and apply report target different operations"
+                patch_digest = report.get("patch_digest")
+                if patch_digest != value.patch.patch_document.content_sha256:
+                    return "submission-patch-digest-mismatch", "apply report patch digest differs from the accepted patch document"
+            mode = parsed_scope[0].get("operation_mode")
+            media_type = next(
+                (component.media_type for component in current_packet.components if component.role == "main_manuscript"),
+                "",
+            ).lower()
+            if mode in {"automatic_word_patch", "automatic_pdf_remap"} or (
+                patch_document is not None
+                and ("word" in media_type or "pdf" in media_type)
+            ):
+                return "submission-revision-unsupported", "automatic Word/PDF patching or location remapping is unsupported; import external evidence instead"
+            if mode == "ars_markdown_patch" and not any(token in media_type for token in ("markdown", "text/plain", "latex", "tex")):
+                return "submission-revision-unsupported", "ARS patch adapter supports only Markdown/plain-text/LaTeX manuscripts"
+            return None
+
         if isinstance(value, SubmissionPacket):
             for reference in (
                 value.manuscript,
@@ -769,10 +908,18 @@ class RuntimeCommandService:
                 )
                 if decision is None:
                     return "author-decision-unknown", "response closure requires an accepted human decision"
+                gate = next(
+                    (item for item in state.gates if item.gate_id == decision.gate_id),
+                    None,
+                )
                 if (
-                    decision.scope != expected_scope
+                    decision.decision_kind != "approval"
+                    or decision.scope != expected_scope
                     or decision.gate_id != confirmation_gate_id(expected_scope)
                     or decision.subject_sha256 != response_subject_sha256(value)
+                    or gate is None
+                    or gate.verdict != "PASS"
+                    or gate.subject_sha256 != response_subject_sha256(value)
                 ):
                     return "author-decision-scope-invalid", "response closure decision is not bound to this response"
             current_packets = packet_values.get(value.submission_id, [])
@@ -783,7 +930,13 @@ class RuntimeCommandService:
                         return "submission-location-stale", "response location is not bound to the current manuscript"
                     if (
                         locator.render_sha256 is not None
-                        and locator.render_sha256 not in accepted_content_sha256
+                        and (
+                            locator.render_sha256 not in accepted_content_sha256
+                            or not any(
+                                "render" in kind or "pdf" in kind
+                                for kind in accepted_content_kinds.get(locator.render_sha256, set())
+                            )
+                        )
                     ):
                         return "submission-location-render-unknown", "response render locator is not accepted"
             for reference in value.evidence:
@@ -796,6 +949,10 @@ class RuntimeCommandService:
                 error = require_reference(value.patch.apply_report)
                 if error:
                     return error
+                if value.patch.patch_document is not None:
+                    error = require_reference(value.patch.patch_document)
+                    if error:
+                        return error
                 if current_packet is not None:
                     if value.patch.base_manuscript_sha256 != current_packet[2].manuscript.content_sha256:
                         return "submission-patch-base-stale", "patch base does not match the current manuscript"
@@ -806,6 +963,35 @@ class RuntimeCommandService:
                         != current_packet[2].manuscript.content_sha256
                     ):
                         return "submission-patch-candidate-unknown", "patch candidate is not an accepted artifact"
+                    block_manifest, error = read_accepted_json(
+                        value.patch.block_manifest_sha256,
+                        label="patch block manifest",
+                    )
+                    if error:
+                        return error
+                    report, error = read_accepted_json(
+                        value.patch.apply_report.manifest_sha256,
+                        label="patch apply report",
+                    )
+                    if error:
+                        return error
+                    patch_document = None
+                    if value.patch.patch_document is not None:
+                        patch_document, error = read_accepted_json(
+                            value.patch.patch_document.manifest_sha256,
+                            label="patch document",
+                        )
+                        if error:
+                            return error
+                    patch_error = validate_patch_report(
+                        value,
+                        current_packet[2],
+                        report,
+                        block_manifest,
+                        patch_document,
+                    )
+                    if patch_error is not None:
+                        return patch_error
             return None
         if isinstance(value, SubmissionCheckReport):
             error = require_packet(value.submission_id, value.packet_manifest_sha256)

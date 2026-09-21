@@ -8,7 +8,10 @@ from pathlib import Path
 from arw.cli_support import _load_request
 from arw.kernel.core.canonical import strict_json_loads
 from arw.kernel.ledger.source_locations import read_retained_bytes
-from arw.kernel.state.models import ArtifactAcceptanceRequest
+from arw.kernel.state.models import (
+    ArtifactAcceptanceRequest,
+    LifecycleTransitionRequest,
+)
 from arw.kernel.state.submission import (
     SubmissionCheckReport,
     SubmissionResultObservation,
@@ -66,6 +69,14 @@ def configure(subparsers) -> None:
     qualify.add_argument("--submission-id")
     qualify.add_argument("--subject-scope")
     qualify.add_argument("--subject-sha256")
+
+    ready = actions.add_parser(
+        "ready",
+        help="Perform the registered parent lifecycle transition after fresh readiness and human approval.",
+    )
+    ready.add_argument("--run-root", type=Path, required=True)
+    ready.add_argument("--submission-id", required=True)
+    ready.add_argument("--request", type=Path, required=True)
 
     record_result = actions.add_parser("record-result")
     record_result.add_argument("--run-root", type=Path, required=True)
@@ -171,6 +182,11 @@ def handle(args):
             report,
             request,
         )
+    if command == "ready":
+        return service.transition_ready(
+            args.submission_id,
+            _load_request(args.request, LifecycleTransitionRequest),
+        ).model_dump(mode="json")
     if command == "record-result":
         observation = _model_input(
             _input_bytes(args.run_root, args.input), SubmissionResultObservation

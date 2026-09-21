@@ -4,6 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.execution.submission import (
+    SubmissionWorkflowError,
+    validate_submission_payload,
+)
 from arw.kernel.state.submission import (
     DeclarationField,
     JournalRequirementsSnapshot,
@@ -17,6 +21,7 @@ from arw.kernel.state.submission import (
     SubmissionResultObservation,
     evaluate_submission_readiness,
     review_comment_identity,
+    submission_dependency_input_sha256,
 )
 
 HASH = "a" * 64
@@ -151,6 +156,49 @@ def test_review_ids_are_source_bound_and_locations_require_render_digest() -> No
     assert review_comment_identity("submission.demo", 1, HASH, locator).startswith("review.")
     with pytest.raises(ValidationError, match="rendered file digest"):
         ReviewLocator(locator_type="page", value="p.2")
+
+
+def test_review_round_rejects_dependency_cycles() -> None:
+    source = ref("letter-cycle")
+    first_locator = ReviewLocator(locator_type="paragraph", value="p1")
+    second_locator = ReviewLocator(locator_type="paragraph", value="p2")
+    first_id = review_comment_identity("submission.demo", 1, HASH, first_locator)
+    second_id = review_comment_identity("submission.demo", 1, HASH, second_locator)
+    with pytest.raises(ValidationError, match="dependency cycle"):
+        ReviewRound(
+            schema_version="arw.submission-review-round.v1",
+            round_id="round.cycle",
+            submission_id="submission.demo",
+            round_number=1,
+            source_letter=source,
+            comments=(
+                ReviewComment(
+                    comment_id=first_id,
+                    submission_id="submission.demo",
+                    round_number=1,
+                    source_locator=first_locator,
+                    quote="First",
+                    original_order=0,
+                    depends_on=(second_id,),
+                ),
+                ReviewComment(
+                    comment_id=second_id,
+                    submission_id="submission.demo",
+                    round_number=1,
+                    source_locator=second_locator,
+                    quote="Second",
+                    original_order=1,
+                    depends_on=(first_id,),
+                ),
+            ),
+            imported_at="2026-09-21T12:00:00Z",
+            imported_by="parent.runtime",
+        )
+
+
+def test_submission_payload_rejects_oversized_json_before_admission() -> None:
+    with pytest.raises(SubmissionWorkflowError, match="256 KiB"):
+        validate_submission_payload("journal-requirements", b"{" + b"a" * (256 * 1024) + b"}")
 
 
 def test_response_cannot_close_without_revision_evidence() -> None:
@@ -307,8 +355,62 @@ def test_required_check_with_unbound_input_digest_is_stale() -> None:
         valid_input_sha256=("d" * 64,),
         evaluated_at="2026-09-21T12:00:00Z",
     )
-    assert result.readiness == "BLOCKED"
+    assert result.readiness == "STALE"
     assert "check_input_stale:component_integrity" in result.reason_codes
+
+
+def test_dependency_category_change_invalidates_only_dependent_required_checks() -> None:
+    categories = {
+        "packet": "1" * 64,
+        "attachments": "2" * 64,
+        "policy": "3" * 64,
+        "roster": "4" * 64,
+        "contributions": "5" * 64,
+        "disclosures": "6" * 64,
+        "author_decisions": "7" * 64,
+        "manuscript": "8" * 64,
+        "bibliography": "9" * 64,
+        "render": "a" * 64,
+    }
+    checks = tuple(
+        check(kind).model_copy(
+            update={"input_sha256": input_sha256}
+        )
+        for kind, input_sha256 in (
+            (
+                "component_integrity",
+                submission_dependency_input_sha256("component_integrity", categories),
+            ),
+            ("journal_requirements", categories["policy"]),
+            (
+                "author_declarations",
+                submission_dependency_input_sha256("author_declarations", categories),
+            ),
+            (
+                "claim_citation_coverage",
+                submission_dependency_input_sha256("claim_citation_coverage", categories),
+            ),
+            (
+                "scientific_review",
+                submission_dependency_input_sha256("scientific_review", categories),
+            ),
+        )
+    )
+    changed = {**categories, "attachments": "b" * 64}
+    result = evaluate_submission_readiness(
+        packet(),
+        packet_manifest_sha256=HASH,
+        checks=checks,
+        dependency_sha256=tuple(changed.values()),
+        valid_input_sha256=("f" * 64, *changed.values()),
+        dependency_categories=changed,
+        evaluated_at="2026-09-21T12:00:00Z",
+    )
+    assert result.readiness == "STALE"
+    assert "check_input_stale:component_integrity" in result.reason_codes
+    assert "check_input_stale:scientific_review" in result.reason_codes
+    assert "check_input_stale:journal_requirements" not in result.reason_codes
+    assert "check_input_stale:claim_citation_coverage" not in result.reason_codes
 
 
 def test_external_result_requires_attributed_evidence_and_never_implies_submit_action() -> None:
