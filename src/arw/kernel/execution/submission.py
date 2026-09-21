@@ -236,6 +236,18 @@ class SubmissionWorkflowService:
             ):
                 response_by_comment[item.value.comment_id] = item.value
         responses = tuple(response_by_comment.values())
+        observations = [
+            item
+            for item in records
+            if item.kind == "submission-result-observation"
+            and isinstance(item.value, SubmissionResultObservation)
+            and item.value.submission_id == submission_id
+        ]
+        latest_observation = (
+            max(observations, key=lambda item: item.sequence).value
+            if observations
+            else None
+        )
         expected_comment_ids = tuple(
             dict.fromkeys(
                 comment.comment_id
@@ -287,9 +299,15 @@ class SubmissionWorkflowService:
 
         missing_author_decisions: set[str] = set()
         invalid_author_decisions: set[str] = set()
+        unconfirmed_author_fields: set[str] = set()
         for author in packet.authors:
             for field_name in ("funding", "conflicts", "ethics", "data", "ai_use"):
                 field = getattr(author, field_name)
+                if field.status in {"missing", "needs_confirmation"}:
+                    unconfirmed_author_fields.add(
+                        f"submission:{submission_id}:author:{author.person_id}:{field_name}"
+                    )
+                    continue
                 if field.status != "confirmed" or field.human_decision_id is None:
                     continue
                 decision = decisions.get(field.human_decision_id)
@@ -359,6 +377,14 @@ class SubmissionWorkflowService:
                     + ("author_decision_scope_invalid",),
                 }
             )
+        if unconfirmed_author_fields:
+            evaluation = evaluation.model_copy(
+                update={
+                    "readiness": "BLOCKED",
+                    "reason_codes": tuple(evaluation.reason_codes)
+                    + ("author_confirmation_required",),
+                }
+            )
         if invalid_response_decisions:
             evaluation = evaluation.model_copy(
                 update={
@@ -381,6 +407,28 @@ class SubmissionWorkflowService:
                     "reason_codes": tuple(evaluation.reason_codes) + ("report_expired",),
                 }
             )
+        aggregate_gates = [
+            item
+            for item in state.gates
+            if item.gate_id.startswith(f"gate.submission.{submission_id}.")
+            and not item.gate_id.startswith("gate.submission.confirmation.")
+        ]
+        latest_aggregate_gate = max(
+            aggregate_gates,
+            key=lambda item: state.gates.index(item),
+            default=None,
+        )
+        final_scope = f"submission:{submission_id}:ready"
+        final_approvals = [
+            item
+            for item in state.human_decision_history
+            if item.scope == final_scope and item.decision_kind == "approval"
+        ]
+        latest_final_approval = max(
+            final_approvals,
+            key=lambda item: state.human_decision_history.index(item),
+            default=None,
+        )
         page = [
             {
                 "artifact_id": item.artifact_id,
@@ -407,6 +455,24 @@ class SubmissionWorkflowService:
             "latest_check_report": (
                 self._redacted_report(report) if report is not None else None
             ),
+            "external_observation": (
+                self._redacted_observation(latest_observation)
+                if latest_observation is not None
+                else None
+            ),
+            "qualification": {
+                "aggregate_gate": (
+                    self._redacted_gate(latest_aggregate_gate)
+                    if latest_aggregate_gate is not None
+                    else None
+                ),
+                "final_human_approval": (
+                    self._redacted_decision(latest_final_approval)
+                    if latest_final_approval is not None
+                    else None
+                ),
+                "final_submit": "human_only",
+            },
             "readiness": evaluation.model_dump(mode="json"),
             "response_count": len(responses),
             "accepted_artifacts": page_items,
@@ -616,6 +682,8 @@ class SubmissionWorkflowService:
         subject_scope: str,
         subject_sha256: str,
         request: RuntimeCommandRequest,
+        *,
+        response_status: str | None = None,
     ) -> dict[str, Any]:
         """Record a narrow eligibility gate before an actual human decision.
 
@@ -632,6 +700,13 @@ class SubmissionWorkflowService:
             character not in "0123456789abcdef" for character in subject_sha256
         ):
             raise SubmissionWorkflowError("confirmation subject digest is invalid")
+        if response_status is not None and response_status not in {
+            "addressed",
+            "not_adopted",
+        }:
+            raise SubmissionWorkflowError(
+                "response confirmation must target addressed or not_adopted"
+            )
         records = self._accepted()
         packets = [
             item
@@ -646,6 +721,41 @@ class SubmissionWorkflowService:
         if packet_record is None:
             raise SubmissionWorkflowError("submission packet is not accepted")
         subjects = self._confirmation_subjects(packet_record, records, submission_id)
+        if response_status is not None:
+            response_scope_prefix = f"submission:{submission_id}:response:"
+            if not subject_scope.startswith(response_scope_prefix):
+                raise SubmissionWorkflowError(
+                    "response confirmation requires a response subject scope"
+                )
+            comment_id = subject_scope.removeprefix(response_scope_prefix)
+            current_response = next(
+                (
+                    item.value
+                    for item in reversed(records)
+                    if item.kind == "submission-response"
+                    and isinstance(item.value, ReviewResponse)
+                    and item.value.submission_id == submission_id
+                    and item.value.comment_id == comment_id
+                ),
+                None,
+            )
+            if current_response is None:
+                raise SubmissionWorkflowError("response confirmation subject is unknown")
+            candidate = current_response.model_copy(update={"status": response_status})
+            response_record = next(
+                (
+                    item
+                    for item in reversed(records)
+                    if item.kind == "submission-response"
+                    and isinstance(item.value, ReviewResponse)
+                    and item.value is current_response
+                ),
+                None,
+            )
+            subjects[subject_scope] = (
+                response_subject_sha256(candidate),
+                (response_record.manifest_sha256,) if response_record is not None else (),
+            )
         expected = subjects.get(subject_scope)
         valid = expected is not None and expected[0] == subject_sha256
         evidence = (packet_record.manifest_sha256, *(expected[1] if expected else ()))
@@ -1140,6 +1250,50 @@ class SubmissionWorkflowService:
                 }
                 for item in report.checks
             ],
+        }
+
+    @staticmethod
+    def _redacted_observation(
+        observation: SubmissionResultObservation,
+    ) -> dict[str, Any]:
+        return {
+            "schema_version": observation.schema_version,
+            "observation_id": observation.observation_id,
+            "submission_id": observation.submission_id,
+            "packet_manifest_sha256": observation.packet_manifest_sha256,
+            "state": observation.state,
+            "attribution": observation.attribution,
+            "recorded_at": observation.recorded_at,
+            "external_time": observation.external_time,
+            "receipt": (
+                observation.receipt.model_dump(mode="json")
+                if observation.receipt is not None
+                else None
+            ),
+            "deviation_codes": list(observation.deviation_codes),
+        }
+
+    @staticmethod
+    def _redacted_gate(gate) -> dict[str, Any]:
+        return {
+            "gate_id": gate.gate_id,
+            "subject_sha256": gate.decision.subject_sha256,
+            "evidence_sha256": list(gate.decision.evidence_sha256),
+            "verdict": gate.verdict,
+            "fresh_until": gate.decision.fresh_until,
+            "required": gate.decision.required,
+        }
+
+    @staticmethod
+    def _redacted_decision(decision) -> dict[str, Any]:
+        return {
+            "decision_id": decision.decision_id,
+            "decision_kind": decision.decision_kind,
+            "gate_id": decision.gate_id,
+            "subject_sha256": decision.subject_sha256,
+            "applicable_transition": decision.applicable_transition,
+            "scope": decision.scope,
+            "authority_sha256": decision.authority_sha256,
         }
 
     @staticmethod

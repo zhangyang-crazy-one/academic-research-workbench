@@ -69,6 +69,11 @@ def configure(subparsers) -> None:
     qualify.add_argument("--submission-id")
     qualify.add_argument("--subject-scope")
     qualify.add_argument("--subject-sha256")
+    qualify.add_argument(
+        "--response-status",
+        choices=("addressed", "not_adopted"),
+        help="For response confirmation, bind the decision to the intended closing disposition.",
+    )
 
     ready = actions.add_parser(
         "ready",
@@ -145,7 +150,6 @@ def handle(args):
         return service.prepare(args.kind, raw)
     if command == "record":
         raw = _input_bytes(args.run_root, args.input)
-        _validate_with_optional_provider(args.kind, raw)
         return service.record(
             args.kind,
             raw,
@@ -154,7 +158,6 @@ def handle(args):
     if command in {"review-import", "response-record"}:
         kind = "submission-review-round" if command == "review-import" else "submission-response"
         raw = _input_bytes(args.run_root, args.input)
-        _validate_with_optional_provider(kind, raw)
         return service.record(
             kind,
             raw,
@@ -174,6 +177,7 @@ def handle(args):
                 args.subject_scope,
                 args.subject_sha256,
                 request,
+                response_status=args.response_status,
             )
         if args.input is None:
             raise ValueError("readiness qualification requires --input")
