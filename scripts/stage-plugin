@@ -552,6 +552,9 @@ copy_as "schemas/v1/source-manifest.schema.json" "share/arw/schemas/source-manif
 copy_as "schemas/v1/version-report.schema.json" "share/arw/schemas/version-report.schema.json"
 copy_as "schemas/v1/audit-dossier.schema.json" "share/arw/schemas/audit-dossier.schema.json"
 copy_as "schemas/v1/lifecycle-evidence.schema.json" "share/arw/schemas/lifecycle-evidence.schema.json"
+# Agent/local-dev entrypoint (bin/arw-agent) stays on the source checkout.
+# Staging remains fail-closed on the first-party wheel; do not copy the
+# checkout interpreter fallback into the Codex plugin payload.
 copy_file "bin/arw" 0755
 copy_file "scripts/file-base-mcp" 0755
 copy_file "extensions/file-base-mcp/bin/provider" 0755

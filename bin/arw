@@ -6,7 +6,7 @@ usage() {
 Usage: arw <command> [options]
 
 Commands:
-  health --json  Verify the installed Python package and runtime.
+  health --json  Verify the installed offline Python package and runtime.
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
@@ -51,25 +51,50 @@ esac
 
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
-ARW_CODEX_HOME="${CODEX_HOME:-}"
-if [[ -z "$ARW_CODEX_HOME" ]]; then
-  [[ -n "${HOME:-}" ]] \
-    || fail "bootstrap-config" "CODEX_HOME is unset and HOME is unavailable to resolve the default Codex directory" 78
-  ARW_CODEX_HOME="$HOME/.codex"
+
+# Runtime mode is an explicit gate. Unset / plugin / codex stay fail-closed on
+# the staged first-party wheel. agent / local-dev may use an editable checkout
+# interpreter; they never qualify a Codex release and do not invent host canary
+# evidence. bin/arw-agent is a checkout-only wrapper that sets ARW_RUNTIME=agent.
+ARW_RUNTIME_MODE="plugin"
+REQUESTED_RUNTIME="${ARW_RUNTIME:-}"
+if [[ "$(basename -- "${BASH_SOURCE[0]}")" == "arw-agent" ]]; then
+  REQUESTED_RUNTIME="${REQUESTED_RUNTIME:-agent}"
 fi
-WHEEL_PATH="$PLUGIN_ROOT/share/arw/wheels"
-[[ -d "$WHEEL_PATH" && ! -L "$WHEEL_PATH" ]] \
-  || fail "runtime-artifact-missing" "staged ARW wheel directory is missing or unsafe" 66
-ARW_WHEEL="$(find "$WHEEL_PATH" -maxdepth 1 -type f -name 'academic_research_workbench-*.whl' -print -quit)"
-[[ -n "$ARW_WHEEL" && ! -L "$ARW_WHEEL" ]] \
-  || fail "runtime-artifact-missing" "staged ARW wheel is missing or unsafe" 66
+case "$REQUESTED_RUNTIME" in
+  ""|plugin|codex)
+    ARW_RUNTIME_MODE="plugin"
+    ;;
+  agent|local-dev)
+    ARW_RUNTIME_MODE="agent"
+    ;;
+  *)
+    fail "bootstrap-config" "ARW_RUNTIME must be unset, plugin, agent, or local-dev" 78
+    ;;
+esac
+export ARW_RUNTIME_MODE
+if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+  export ARW_RUNTIME="${ARW_RUNTIME:-agent}"
+fi
+
+python_is_supported() {
+  local candidate="$1"
+  [[ -n "$candidate" && -x "$candidate" ]] || return 1
+  "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null
+}
+
+python_has_arw() {
+  local candidate="$1"
+  python_is_supported "$candidate" || return 1
+  "$candidate" -c 'import importlib.metadata as m; raise SystemExit(0 if m.version("academic-research-workbench") else 1)' 2>/dev/null
+}
 
 select_python() {
   local candidate resolved
   if [[ -n "${ARW_PYTHON:-}" ]]; then
     candidate="$(command -v -- "$ARW_PYTHON" 2>/dev/null || true)"
     [[ -n "$candidate" ]] || fail "interpreter-not-found" "ARW_PYTHON is not executable" 78
-    if ! "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+    if ! python_is_supported "$candidate"; then
       fail "incompatible-interpreter" "ARW_PYTHON must be Python >=3.13" 78
     fi
     printf '%s\n' "$candidate"
@@ -78,7 +103,7 @@ select_python() {
 
   for candidate in python3 python; do
     resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
-    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+    if python_is_supported "$resolved"; then
       printf '%s\n' "$resolved"
       return
     fi
@@ -89,7 +114,7 @@ select_python() {
   # discovered names instead of maintaining a Python-version allowlist.
   while IFS= read -r candidate; do
     resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
-    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+    if python_is_supported "$resolved"; then
       printf '%s\n' "$resolved"
       return
     fi
@@ -98,19 +123,85 @@ select_python() {
   fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
 
-PYTHON="$(select_python)"
-PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
-  || fail "interpreter-failed" "selected Python could not report its version" 78
+select_agent_python() {
+  local candidate resolved
+  if [[ -n "${ARW_PYTHON:-}" ]]; then
+    candidate="$(command -v -- "$ARW_PYTHON" 2>/dev/null || true)"
+    [[ -n "$candidate" ]] || fail "interpreter-not-found" "ARW_PYTHON is not executable" 78
+    if ! python_is_supported "$candidate"; then
+      fail "incompatible-interpreter" "ARW_PYTHON must be Python >=3.13" 78
+    fi
+    if ! python_has_arw "$candidate"; then
+      fail "agent-runtime-missing" "ARW_PYTHON does not provide the academic-research-workbench package" 66
+    fi
+    printf '%s\n' "$candidate"
+    return 0
+  fi
 
-if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
-  fail "incompatible-interpreter" "requires Python >=3.13; got $PYTHON_VERSION" 78
-fi
+  candidate="$PLUGIN_ROOT/.venv/bin/python"
+  if python_has_arw "$candidate"; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
 
-unset PYTHONPATH PYTHONHOME
-export PYTHONNOUSERSITE=1
-export PIP_DISABLE_PIP_VERSION_CHECK=1
+  for candidate in python3 python; do
+    resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+    if python_has_arw "$resolved"; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  done
 
-RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$WHEEL_PATH" <<'PY'
+  while IFS= read -r candidate; do
+    resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+    if python_has_arw "$resolved"; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+
+  return 1
+}
+
+locate_staged_wheel() {
+  local wheel_dir="$PLUGIN_ROOT/share/arw/wheels"
+  local wheel
+  [[ -d "$wheel_dir" && ! -L "$wheel_dir" ]] || return 1
+  wheel="$(find "$wheel_dir" -maxdepth 1 -type f -name 'academic_research_workbench-*.whl' -print -quit)"
+  [[ -n "$wheel" && ! -L "$wheel" ]] || return 1
+  printf '%s\n' "$wheel"
+}
+
+resolve_codex_home() {
+  local home="${CODEX_HOME:-}"
+  if [[ -z "$home" ]]; then
+    [[ -n "${HOME:-}" ]] \
+      || fail "bootstrap-config" "CODEX_HOME is unset and HOME is unavailable to resolve the default Codex directory" 78
+    home="$HOME/.codex"
+  fi
+  printf '%s\n' "$home"
+}
+
+bootstrap_wheel_runtime() {
+  local wheel_path arw_codex_home
+  wheel_path="${1:-}"
+  [[ -n "$wheel_path" ]] || fail "runtime-artifact-missing" "staged ARW wheel is missing or unsafe" 66
+  arw_codex_home="$(resolve_codex_home)"
+  WHEEL_PATH="$(cd -P -- "$(dirname -- "$wheel_path")" && pwd)"
+  ARW_WHEEL="$wheel_path"
+
+  PYTHON="$(select_python)"
+  PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
+    || fail "interpreter-failed" "selected Python could not report its version" 78
+  if ! python_is_supported "$PYTHON"; then
+    fail "incompatible-interpreter" "requires Python >=3.13; got $PYTHON_VERSION" 78
+  fi
+
+  unset PYTHONPATH PYTHONHOME
+  export PYTHONNOUSERSITE=1
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+
+  RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$WHEEL_PATH" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -133,57 +224,162 @@ print(digest.hexdigest())
 PY
 )" || fail "runtime-artifact-invalid" "staged ARW wheel could not be verified" 65
 
-RUNTIME_PARENT="$ARW_CODEX_HOME/arw/runtime"
-RUNTIME_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY"
-RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python"
-COMPLETE_MARKER="$RUNTIME_ROOT/completed"
-LOCK_DIR="$RUNTIME_ROOT.lock"
+  local runtime_parent runtime_root complete_marker lock_dir acquired temp_root
+  runtime_parent="$arw_codex_home/arw/runtime"
+  runtime_root="$runtime_parent/$RUNTIME_IDENTITY"
+  RUNTIME_PYTHON="$runtime_root/venv/bin/python"
+  complete_marker="$runtime_root/completed"
+  lock_dir="$runtime_root.lock"
+  INTERPRETER_SOURCE="staged-wheel"
 
-mkdir -p "$RUNTIME_PARENT"
+  mkdir -p "$runtime_parent"
 
-runtime_ready() {
-  [[ -x "$RUNTIME_PYTHON" && -f "$COMPLETE_MARKER" ]] \
-    && [[ "$(tr -d '\n' < "$COMPLETE_MARKER")" == "$RUNTIME_IDENTITY" ]]
-}
-
-if ! runtime_ready; then
-  acquired=0
-  for _ in $(seq 1 120); do
-    if mkdir "$LOCK_DIR" 2>/dev/null; then
-      acquired=1
-      break
-    fi
-    sleep 0.25
-  done
-  [[ "$acquired" -eq 1 ]] || fail "bootstrap-lock-timeout" "timed out waiting for runtime lock" 75
-
-  TEMP_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY.tmp.$$"
-  cleanup() {
-    rm -rf -- "$TEMP_ROOT"
-    rmdir "$LOCK_DIR" 2>/dev/null || true
+  runtime_ready() {
+    [[ -x "$RUNTIME_PYTHON" && -f "$complete_marker" ]] \
+      && [[ "$(tr -d '\n' < "$complete_marker")" == "$RUNTIME_IDENTITY" ]]
   }
-  trap cleanup EXIT INT TERM
 
   if ! runtime_ready; then
-    rm -rf -- "$RUNTIME_ROOT" "$TEMP_ROOT"
-    "$PYTHON" -m venv "$TEMP_ROOT/venv" \
-      || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
-    "$TEMP_ROOT/venv/bin/python" -m pip install \
-      --quiet \
-      "$ARW_WHEEL" \
-      || fail "bootstrap-install-failed" "could not resolve ARW dependencies from the configured package index" 70
-    printf '%s\n' "$RUNTIME_IDENTITY" > "$TEMP_ROOT/completed.tmp"
-    mv "$TEMP_ROOT/completed.tmp" "$TEMP_ROOT/completed"
-    mv "$TEMP_ROOT" "$RUNTIME_ROOT"
-  fi
+    acquired=0
+    for _ in $(seq 1 120); do
+      if mkdir "$lock_dir" 2>/dev/null; then
+        acquired=1
+        break
+      fi
+      sleep 0.25
+    done
+    [[ "$acquired" -eq 1 ]] || fail "bootstrap-lock-timeout" "timed out waiting for runtime lock" 75
 
-  trap - EXIT INT TERM
-  rmdir "$LOCK_DIR"
+    temp_root="$runtime_parent/$RUNTIME_IDENTITY.tmp.$$"
+    cleanup() {
+      rm -rf -- "$temp_root"
+      rmdir "$lock_dir" 2>/dev/null || true
+    }
+    trap cleanup EXIT INT TERM
+
+    if ! runtime_ready; then
+      rm -rf -- "$runtime_root" "$temp_root"
+      "$PYTHON" -m venv "$temp_root/venv" \
+        || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
+      "$temp_root/venv/bin/python" -m pip install \
+        --quiet \
+        "$ARW_WHEEL" \
+        || fail "bootstrap-install-failed" "could not resolve ARW dependencies from the configured package index" 70
+      printf '%s\n' "$RUNTIME_IDENTITY" > "$temp_root/completed.tmp"
+      mv "$temp_root/completed.tmp" "$temp_root/completed"
+      mv "$temp_root" "$runtime_root"
+    fi
+
+    trap - EXIT INT TERM
+    rmdir "$lock_dir"
+  fi
+}
+
+bind_agent_python() {
+  local candidate
+  candidate="$(select_agent_python)" || return 1
+  unset PYTHONPATH PYTHONHOME
+  export PYTHONNOUSERSITE=1
+  export PIP_DISABLE_PIP_VERSION_CHECK=1
+  RUNTIME_PYTHON="$candidate"
+  INTERPRETER_SOURCE="checkout-venv"
+  if [[ -n "${ARW_PYTHON:-}" ]]; then
+    INTERPRETER_SOURCE="arw-python"
+  elif [[ "$candidate" != "$PLUGIN_ROOT/.venv/bin/python" ]]; then
+    INTERPRETER_SOURCE="path-python"
+  fi
+  RUNTIME_IDENTITY="$($RUNTIME_PYTHON - "$PLUGIN_ROOT" "$INTERPRETER_SOURCE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import importlib.metadata
+import sys
+from pathlib import Path
+
+plugin_root = Path(sys.argv[1]).resolve()
+source = sys.argv[2]
+version = importlib.metadata.version("academic-research-workbench")
+digest = hashlib.sha256()
+digest.update(b"arw-agent-runtime\n")
+digest.update(str(plugin_root).encode())
+digest.update(b"\n")
+digest.update(source.encode())
+digest.update(b"\n")
+digest.update(version.encode())
+digest.update(b"\n")
+digest.update(sys.executable.encode())
+print(digest.hexdigest())
+PY
+)" || fail "agent-runtime-missing" "agent interpreter could not report a runtime identity" 66
+}
+
+STAGED_WHEEL=""
+if STAGED_WHEEL="$(locate_staged_wheel)"; then
+  :
+else
+  STAGED_WHEEL=""
+fi
+
+INTERPRETER_SOURCE=""
+if [[ "$ARW_RUNTIME_MODE" == "plugin" ]]; then
+  # Production / staged plugin: fail closed unless the first-party wheel is
+  # present. An editable checkout .venv is never a substitute here.
+  ARW_CODEX_HOME="$(resolve_codex_home)"
+  WHEEL_PATH="$PLUGIN_ROOT/share/arw/wheels"
+  [[ -d "$WHEEL_PATH" && ! -L "$WHEEL_PATH" ]] \
+    || fail "runtime-artifact-missing" "staged ARW wheel directory is missing or unsafe" 66
+  [[ -n "$STAGED_WHEEL" ]] \
+    || fail "runtime-artifact-missing" "staged ARW wheel is missing or unsafe" 66
+  bootstrap_wheel_runtime "$STAGED_WHEEL"
+elif ! bind_agent_python; then
+  if [[ -n "$STAGED_WHEEL" ]]; then
+    bootstrap_wheel_runtime "$STAGED_WHEEL"
+  else
+    fail "agent-runtime-missing" "agent mode needs checkout .venv with academic-research-workbench installed, ARW_PYTHON pointing at that interpreter, or a staged first-party wheel" 66
+  fi
+fi
+
+SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+FILES_CONTRACT_HEADER="$PLUGIN_ROOT/share/arw/file-contracts.h"
+BUILD_IDENTITY="$PLUGIN_ROOT/share/arw/build-identity.json"
+if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+  if [[ ! -d "$SCHEMA_ROOT" || -L "$SCHEMA_ROOT" ]] && [[ -d "$PLUGIN_ROOT/schemas/v1" && ! -L "$PLUGIN_ROOT/schemas/v1" ]]; then
+    SCHEMA_ROOT="$PLUGIN_ROOT/schemas/v1"
+  fi
+  if [[ ! -f "$FILES_CONTRACT_HEADER" || -L "$FILES_CONTRACT_HEADER" ]] && [[ -f "$PLUGIN_ROOT/generated/file-contracts.h" && ! -L "$PLUGIN_ROOT/generated/file-contracts.h" ]]; then
+    FILES_CONTRACT_HEADER="$PLUGIN_ROOT/generated/file-contracts.h"
+  fi
 fi
 
 case "$COMMAND" in
   health)
     [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
+    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+      exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" "$INTERPRETER_SOURCE" <<'PY'
+import importlib.metadata
+import json
+import platform
+import sys
+
+if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+    raise SystemExit("installed package version mismatch")
+
+json.dump(
+    {
+        "command": "health",
+        "interpreter_source": sys.argv[2],
+        "python": platform.python_version(),
+        "runtime_identity": sys.argv[1],
+        "runtime_mode": "agent",
+        "status": "ok",
+    },
+    sys.stdout,
+    sort_keys=True,
+    separators=(",", ":"),
+)
+sys.stdout.write("\n")
+PY
+    fi
     exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" <<'PY'
 import importlib.metadata
 import json
@@ -218,6 +414,29 @@ PY
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_BUILD_IDENTITY="$PLUGIN_ROOT/share/arw/build-identity.json"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    if [[ "$ARW_RUNTIME_MODE" == "agent" && ( ! -f "$BUILD_IDENTITY" || -L "$BUILD_IDENTITY" ) ]]; then
+      [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "version requires --json" 64
+      exec "$RUNTIME_PYTHON" - <<'PY'
+import importlib.metadata
+import json
+import sys
+
+json.dump(
+    {
+        "command": "version",
+        "identity_source": "editable-checkout",
+        "package_version": importlib.metadata.version("academic-research-workbench"),
+        "runtime_mode": "agent",
+        "schema_version": "1.0.0",
+        "status": "ok",
+    },
+    sys.stdout,
+    sort_keys=True,
+    separators=(",", ":"),
+)
+sys.stdout.write("\n")
+PY
+    fi
     exec "$RUNTIME_PYTHON" -m arw.cli version "$@"
     ;;
   _memory-mcp)
@@ -263,11 +482,18 @@ PY
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
     export ARW_FILES_CONTRACT_HEADER="$PLUGIN_ROOT/share/arw/file-contracts.h"
+    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+      export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
+      export ARW_FILES_CONTRACT_HEADER="$FILES_CONTRACT_HEADER"
+    fi
     exec "$RUNTIME_PYTHON" -m arw.cli files "$@"
     ;;
   *)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+      export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
+    fi
     exec "$RUNTIME_PYTHON" -m arw.cli "$COMMAND" "$@"
     ;;
 esac
