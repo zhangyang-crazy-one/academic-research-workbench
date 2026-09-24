@@ -8,6 +8,11 @@ import pytest
 from arw.cli import build_parser
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
+from arw.kernel.state.submission import (
+    DeclarationField,
+    SubmissionArtifactReference,
+    SubmissionPacket,
+)
 
 
 def test_submission_provider_is_lazy_and_composition_bound(monkeypatch) -> None:
@@ -37,13 +42,80 @@ def test_submission_provider_is_lazy_and_composition_bound(monkeypatch) -> None:
     assert observation.schema_version == "arw.submission-verifier-observation.v1"
 
 
+def test_submission_provider_accepts_json_array_payloads(monkeypatch) -> None:
+    extension_root = Path(__file__).resolve().parents[2] / "extensions/submission-workflow/src"
+    monkeypatch.syspath_prepend(str(extension_root))
+    provider = default_router(
+        plugin_manifest=Path(__file__).resolve().parents[2] / ".codex-plugin/plugin.json"
+    ).resolve("submission.prepare")
+    manuscript = SubmissionArtifactReference(
+        artifact_id="artifact.plugin.manuscript",
+        manifest_sha256="a" * 64,
+        content_sha256="b" * 64,
+        accepting_event_id="evt-00000000-0000-4000-8000-000000000901",
+    )
+    policy = SubmissionArtifactReference(
+        artifact_id="artifact.plugin.policy",
+        manifest_sha256="c" * 64,
+        content_sha256="d" * 64,
+        accepting_event_id="evt-00000000-0000-4000-8000-000000000902",
+    )
+    not_applicable = DeclarationField(
+        status="not_applicable", rationale="Not applicable in this synthetic fixture."
+    )
+    packet = SubmissionPacket(
+        schema_version="arw.submission-packet.v1",
+        project_id="project.plugin",
+        run_id="run-00000000-0000-4000-8000-000000000901",
+        submission_id="submission.plugin.packet",
+        packet_version=1,
+        journal_id="journal.plugin",
+        journal_name="Synthetic Journal",
+        article_type="research-article",
+        round_number=0,
+        manuscript_id="manuscript.plugin",
+        manuscript_version="v1",
+        manuscript=manuscript,
+        components=(
+            {
+                "component_id": "component.plugin.manuscript",
+                "role": "main_manuscript",
+                "artifact": manuscript,
+                "media_type": "text/markdown",
+                "byte_length": 5,
+            },
+        ),
+        policy_snapshot=policy,
+        authors=(
+            {
+                "person_id": "person.plugin",
+                "display_name": "Synthetic Author",
+                "order": 0,
+                "corresponding": True,
+                "contributions": ("conceptualization",),
+                "funding": not_applicable,
+                "conflicts": not_applicable,
+                "ethics": not_applicable,
+                "data": not_applicable,
+                "ai_use": not_applicable,
+            },
+        ),
+        created_at="2026-09-23T00:00:00Z",
+        created_by="parent.runtime",
+    )
+
+    payload = packet.model_dump(mode="json")
+    assert isinstance(payload["components"], list)
+    assert isinstance(payload["authors"], list)
+    assert provider.prepare(payload) == packet
+
+
 def test_submission_provider_is_optional_when_extension_is_not_importable(tmp_path, monkeypatch) -> None:
     manifest = tmp_path / "plugin.json"
     manifest.write_text(
         '{"interface":{"capabilities":["submission"]}}\n', encoding="utf-8"
     )
-    monkeypatch.delitem(sys.modules, "arw_submission_workflow", raising=False)
-    monkeypatch.setattr(sys, "path", [item for item in sys.path if "submission-workflow/src" not in item])
+    monkeypatch.setitem(sys.modules, "arw_submission_workflow", None)
     router = default_router(plugin_manifest=manifest)
     try:
         router.resolve("submission.prepare")

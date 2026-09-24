@@ -7,6 +7,7 @@ bind to accepted artifacts before using them in a gate.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 
 from arw.kernel.state.submission import (
@@ -29,20 +30,30 @@ class SubmissionWorkflowService:
             raise TypeError("submission provider input must be a JSON object")
         return dict(value)
 
+    @classmethod
+    def _validate_json(cls, value: Mapping[str, object] | dict[str, object], model):
+        rendered = json.dumps(
+            cls._mapping(value),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        return model.model_validate_json(rendered, strict=True)
+
     def prepare(self, value: dict[str, object]) -> SubmissionPacket:
-        return SubmissionPacket.model_validate(self._mapping(value))
+        return self._validate_json(value, SubmissionPacket)
 
     def normalize_review(self, value: dict[str, object]) -> ReviewRound:
-        return ReviewRound.model_validate(self._mapping(value))
+        return self._validate_json(value, ReviewRound)
 
     def normalize_response(self, value: dict[str, object]) -> ReviewResponse:
-        return ReviewResponse.model_validate(self._mapping(value))
+        return self._validate_json(value, ReviewResponse)
 
     def observe_checks(self, value: dict[str, object]) -> tuple[SubmissionCheck, ...]:
         raw_checks = self._mapping(value).get("checks")
         if not isinstance(raw_checks, list) or len(raw_checks) > 256:
             raise TypeError("submission check observation requires a checks array")
-        return tuple(SubmissionCheck.model_validate(item) for item in raw_checks)
+        return tuple(self._validate_json(item, SubmissionCheck) for item in raw_checks)
 
     def observe_verifier(self, value: dict[str, object]) -> SubmissionVerifierObservation:
         """Normalize a bounded verifier receipt without executing the verifier."""
@@ -51,5 +62,4 @@ class SubmissionWorkflowService:
         checks = payload.get("checks")
         if not isinstance(checks, list) or len(checks) > 256:
             raise TypeError("submission verifier observation requires a checks array")
-        payload["checks"] = tuple(checks)
-        return SubmissionVerifierObservation.model_validate(payload)
+        return self._validate_json(payload, SubmissionVerifierObservation)
