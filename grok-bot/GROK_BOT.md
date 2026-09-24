@@ -11,6 +11,18 @@ Codex remains the native control-plane host. Grok does not install
 local `bin/arw` on the Grok box, and does not inherit a live file-base MCP
 session. `arw-adapt` is not a Codex installer.
 
+Canonical source: `https://github.com/zhangyang-crazy-one/academic-research-workbench`.
+All repo paths in this file and the copied portable skills are relative to that
+repository root, starting with `grok-bot/GROK_BOT.md`. When `arw-adapt` imports,
+resolve the chosen GitHub ref to its full commit SHA once, record the repository
+URL and resolved SHA as import provenance, and read every portable skill and
+referenced ARS file from that same commit. A CloudAgent checkout used for the
+same import must report the same `git rev-parse HEAD` before its CLI output is
+paired with those skills. A later import may resolve a newer commit; the
+recorded SHA identifies consumed source bytes, not an exact dependency or
+runtime compatibility requirement. Parent orchestration owns acceptance of
+that provenance and any state, retry, or gate decision; hooks only observe.
+
 Intended use of this repository is personal, non-commercial academic
 research. ARS-derived material stays under upstream CC BY-NC 4.0. This
 adaptation does **not** relicense ARS content, convert it to MIT, or
@@ -96,6 +108,15 @@ Optional diagnostics (still fail-closed; not a second family):
 .venv/bin/python -m arw.cli route --json --diagnostics
 ```
 
+These are separate output contracts. Plain `route --json` writes a
+`RouteResult` to stdout and returns `0` for a valid route, including a
+`BLOCKED` route. `route --json --diagnostics` writes an
+`arw.integration-diagnostic.v1` object to stdout; it returns `0` for
+`status: PASS` and `65` for `status: BLOCKED`. Parse the diagnostics stdout
+even on exit `65`, including when stderr is empty. Never validate that object
+as `RouteResult`, substitute it for a route, or discard it because stderr has
+no text. Report the diagnostic status and layers to the parent for decisions.
+
 `./bin/arw route --json` is valid **only** inside a staged plugin tree
 that already contains `share/arw/wheels/` (see repo `README.md`
 staging). A Grok CloudAgent on a source checkout should not run
@@ -155,8 +176,9 @@ required field, or the process is non-zero (including
 
 ## Advisory workflow-file tree
 
-This tree mirrors the **ARS router table** in
-`skills/academic-research-suite/SKILL.md`. It selects which bundled
+This tree summarizes the **ARS router** in
+`skills/academic-research-suite/SKILL.md`. Read its current override rules
+before using the table; those rules take precedence. It selects which bundled
 workflow file to read. It is **not** `bin/arw route --json` and does
 **not** invent control-plane families.
 
@@ -165,6 +187,7 @@ from memory as if it were the bundled file.
 
 | User intent | Read first (repo path) |
 | --- | --- |
+| Broad paper/thesis/proposal/manuscript writing topic or tentative title without a clear, answerable research question | `skills/academic-research-suite/ars/deep-research/WORKFLOW.md` in `socratic` mode first |
 | Deep research, literature review, systematic review, meta-analysis, fact-checking, research-question refinement | `skills/academic-research-suite/ars/deep-research/WORKFLOW.md` |
 | Academic paper writing, outline, abstract, revision, citation formatting, AI disclosure, figures/tables, venue-family layout | `skills/academic-research-suite/ars/academic-paper/WORKFLOW.md` |
 | Paper review, peer-review simulation, editorial decision, calibration, re-review | `skills/academic-research-suite/ars/academic-paper-reviewer/WORKFLOW.md` |
@@ -172,9 +195,13 @@ from memory as if it were the bundled file.
 | Experiment planning, human-study protocol, statistical interpretation, reproducibility planning | `skills/academic-research-suite/ars/experiment-agent/WORKFLOW.md` |
 | Auditable science workbench, run ledger, paper AST/XML, semantic claims | `skills/academic-research-suite/codex/references/science_workbench_mvp.md` first, then the closest workflow above |
 
-If the request spans multiple workflows, start with
+For that scoping override, ask 3–5 narrowing questions before outlining or
+drafting. It applies to natural language and `ars-*` aliases. Follow the source
+router's exceptions when the user has a clear research question, approved
+study frame, data/results, literature matrix, or draft, or explicitly asks to
+skip scoping. If the request spans multiple workflows, start with
 `ars/academic-pipeline/WORKFLOW.md` unless the user clearly asked for
-one phase.
+one phase or the scoping override applies.
 
 Venue, deadline, and template questions still require the academic-paper
 workflow plus a live check of official venue pages.

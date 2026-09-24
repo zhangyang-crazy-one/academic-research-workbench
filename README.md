@@ -99,12 +99,11 @@ existing local/offline behavior where each capability supports it.
 git clone <repository-url> academic-research-workbench
 cd academic-research-workbench
 uv venv
-uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
-  --all-extras --group dev --group ars-test --group storm
+.venv/bin/python scripts/install-unmanaged-deps.py --all-extras dev ars-test storm
 ./bin/arw help
 ```
 
-`--all-groups` also installs the dependencies required by the bundled ARS
+The selected groups also install the dependencies required by the bundled ARS
 self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash

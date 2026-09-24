@@ -11,6 +11,17 @@ description: >
 Portable Grok skill. Guidance only. It does not accept artifacts,
 append the ledger, or start MCP.
 
+Canonical source: `https://github.com/zhangyang-crazy-one/academic-research-workbench`.
+Read the entire `grok-bot/GROK_BOT.md` before using this imported skill, from
+the same resolved source commit. For one import, `arw-adapt` records the
+repository URL and resolved commit SHA as import provenance. Load every
+portable skill and referenced ARS file from that commit, and pair CLI output
+only from that same commit. If a CloudAgent checkout supplies CLI output,
+require `git rev-parse HEAD` to equal
+the recorded SHA and `git status --porcelain` to be empty; otherwise do not
+pair its CLI output with this skill import. The SHA identifies source bytes,
+not a dependency or runtime compatibility pin.
+
 ## Canonical vs disposable
 
 - The append-only ledger is the only canonical run state

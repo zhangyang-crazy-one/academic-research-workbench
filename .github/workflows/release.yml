@@ -25,7 +25,7 @@ jobs:
         with:
           enable-cache: true
       - name: Resolve release environment from declared ranges
-        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
       - name: Verify legal and accountable gates before publication
         run: |
           python - <<'PY'

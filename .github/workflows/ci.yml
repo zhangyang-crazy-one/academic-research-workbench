@@ -31,9 +31,8 @@ jobs:
           enable-cache: true
       - name: Resolve development environment from declared ranges
         run: >-
-          uv venv && uv pip install --python .venv/bin/python --editable .
-          -r pyproject.toml --all-extras
-          --group dev --group ars-test --group storm
+          uv venv && .venv/bin/python scripts/install-unmanaged-deps.py
+          --all-extras dev ars-test storm
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -131,7 +130,7 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          .venv/bin/python -m pytest -q
+          ../../../.venv/bin/python -m pytest -q
           --ignore scripts/test_check_calibration_tiers.py
           --ignore scripts/test_check_distribution_surface_claims.py
 
@@ -149,7 +148,7 @@ jobs:
         with:
           enable-cache: true
       - name: Resolve package boundary environment from declared ranges
-        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
       - name: Verify publish surface before building artifacts
         run: |
           test -f src/arw/kernel/execution/orchestration.py
