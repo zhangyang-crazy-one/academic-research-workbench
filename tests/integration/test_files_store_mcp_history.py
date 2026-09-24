@@ -123,9 +123,7 @@ def _seed_corpus(
         root_id="research-root", root_path=root, policy_id="research-files-v1"
     )
     store_path = tmp_path / "arw.db"
-    generation_id = _sync_and_ingest(
-        control, "research-root", store_path=store_path
-    )
+    generation_id = _sync_and_ingest(control, "research-root", store_path=store_path)
     return root, control, "research-root", generation_id
 
 
@@ -208,7 +206,9 @@ def test_degraded_outline_status_is_not_error(tmp_path: Path) -> None:
         cursor=None,
     )
 
-    response = _handle(adapter, _tools_call("get_outline", 1, request.model_dump(mode="json")))
+    response = _handle(
+        adapter, _tools_call("get_outline", 1, request.model_dump(mode="json"))
+    )
     assert response is not None
     assert response.get("error") is None
     envelope = response["result"]
@@ -261,7 +261,9 @@ def test_no_structure_outline_status_is_not_error(tmp_path: Path) -> None:
         cursor=None,
     )
 
-    response = _handle(adapter, _tools_call("get_outline", 1, request.model_dump(mode="json")))
+    response = _handle(
+        adapter, _tools_call("get_outline", 1, request.model_dump(mode="json"))
+    )
     assert response is not None
     assert response.get("error") is None
     envelope = response["result"]
@@ -318,14 +320,14 @@ def test_degraded_context_status_is_not_error(tmp_path: Path) -> None:
         file_id=entry.file_id,
         expected_digest=entry.indexed_digest,
         hit_id=None,
-        location=SourceLocation(
-            start_byte=0, end_byte=1, start_line=1, end_line=1
-        ),
+        location=SourceLocation(start_byte=0, end_byte=1, start_line=1, end_line=1),
         before_lines=2,
         after_lines=2,
     )
 
-    response = _handle(adapter, _tools_call("get_context", 1, request.model_dump(mode="json")))
+    response = _handle(
+        adapter, _tools_call("get_context", 1, request.model_dump(mode="json"))
+    )
     assert response is not None
     assert response.get("error") is None
     envelope = response["result"]
@@ -461,6 +463,7 @@ def test_constructor_rejects_tampered_canonical_path(tmp_path: Path) -> None:
 
     # Tamper: rewrite the cached canonical_path to point OUTSIDE the root.
     import sqlite3
+
     with sqlite3.connect(store_path) as connection:
         connection.execute(
             "UPDATE projection_meta SET value = ? WHERE key = 'files.canonical_path'",
@@ -612,9 +615,7 @@ def test_main_rejects_missing_anchor(tmp_path: Path) -> None:
             str(tmp_path / "store.db"),
         ]
     )
-    assert exit_code == 64, (
-        f"missing anchor must fail closed (64), got {exit_code}"
-    )
+    assert exit_code == 64, f"missing anchor must fail closed (64), got {exit_code}"
 
 
 def test_main_rejects_paired_only_one_flag(tmp_path: Path) -> None:
@@ -760,10 +761,9 @@ def _invoke_shim(
 
 
 _STUB_BIN_ARW_TEMPLATE = """#!/usr/bin/env bash
-# Test-only stub for bin/arw. Bypasses the real bootstrap (the in-repo
-# wheelhouse.lock.json at HEAD has a pre-existing inconsistency that is
-# out of scope for this patch) and forwards directly to the in-repo
-# venv python for the subcommands the shim routes to.
+# Test-only stub for bin/arw. Bypasses dependency resolution because this
+# test exercises MCP routing, not plugin installation, and forwards directly
+# to the in-repo venv Python for the subcommands the shim routes to.
 set -euo pipefail
 REAL_VENV="{real_venv}"
 
@@ -833,14 +833,17 @@ def test_subprocess_shim_dispatches_to_store_mcp(tmp_path: Path) -> None:
     """
     control, store_path = _seed_corpus_with_root_id(tmp_path, "research-root")
     plugin_root = _stage_stub_plugin(tmp_path)
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_shim(
         plugin_root=plugin_root,
@@ -861,9 +864,7 @@ def test_subprocess_shim_dispatches_to_store_mcp(tmp_path: Path) -> None:
         ),
         b"",
     )
-    assert line, (
-        f"shim produced no JSON-RPC response; stdout={completed.stdout!r}"
-    )
+    assert line, f"shim produced no JSON-RPC response; stdout={completed.stdout!r}"
     response = json.loads(line)
     server_info = response["result"]["serverInfo"]
     assert server_info["name"] == "academic-research-files-store", (
@@ -913,14 +914,17 @@ def test_subprocess_store_absent_returns_69_before_stdin(
     # the server reaches the STORE_ABSENT check after the anchor step.
     service.sync("research-root", extractor_version="1.0.0")
     absent_store = tmp_path / "absent.db"
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_store_mcp(
         arguments=[
@@ -966,21 +970,23 @@ def test_subprocess_denied_root_returns_78_no_fallback(tmp_path: Path) -> None:
 
     with sqlite3.connect(store_path) as connection:
         connection.execute(
-            "UPDATE projection_meta SET value = ? "
-            "WHERE key = 'files.canonical_path'",
+            "UPDATE projection_meta SET value = ? WHERE key = 'files.canonical_path'",
             (str(tmp_path / "somewhere_else"),),
         )
         connection.commit()
 
     plugin_root = _stage_stub_plugin(tmp_path)
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_shim(
         plugin_root=plugin_root,
@@ -1012,14 +1018,17 @@ def test_subprocess_explicit_legacy_reader_uses_v1(tmp_path: Path) -> None:
     """
     control, store_path = _seed_corpus_with_root_id(tmp_path, "research-root")
     plugin_root = _stage_stub_plugin(tmp_path)
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_shim(
         plugin_root=plugin_root,
@@ -1069,14 +1078,17 @@ def test_subprocess_shim_falls_back_on_store_absent(tmp_path: Path) -> None:
     # Point the store at a path that does NOT exist so the store MCP
     # returns STORE_ABSENT (69) before any transport work.
     absent_store = tmp_path / "absent.db"
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_shim(
         plugin_root=plugin_root,
@@ -1101,8 +1113,7 @@ def test_subprocess_shim_falls_back_on_store_absent(tmp_path: Path) -> None:
     response = json.loads(line)
     server_info = response["result"]["serverInfo"]
     assert server_info["name"] == "academic-research-files", (
-        f"STORE_ABSENT must route to v1 (legacy fallback), got "
-        f"{server_info['name']!r}"
+        f"STORE_ABSENT must route to v1 (legacy fallback), got {server_info['name']!r}"
     )
 
 
@@ -1137,14 +1148,17 @@ def test_store_absent_does_not_bypass_denied_manifest_gate(
         ),
         encoding="utf-8",
     )
-    request = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        }
-    ).encode("utf-8") + b"\n"
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     completed = _invoke_store_mcp(
         arguments=[
@@ -1803,7 +1817,9 @@ def _make_list_request(root_id: str, generation_id: str):
     )
 
 
-def _tools_call(name: str, identifier: int, arguments: dict[str, object]) -> dict[str, object]:
+def _tools_call(
+    name: str, identifier: int, arguments: dict[str, object]
+) -> dict[str, object]:
     return {
         "jsonrpc": "2.0",
         "id": identifier,

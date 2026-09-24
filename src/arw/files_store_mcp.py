@@ -257,9 +257,7 @@ def _enforce_capability_gate(store_path: Path) -> None:
     try:
         manifest_path = _resolve_plugin_manifest()
     except FilesAdminError as error:
-        raise CapabilityUnavailable(
-            f"files.local ({error.code}: {error})"
-        ) from error
+        raise CapabilityUnavailable(f"files.local ({error.code}: {error})") from error
 
     from arw.composition import default_router
 
@@ -292,9 +290,7 @@ def _check_manifest_declares_files() -> None:
     try:
         manifest_path = _resolve_plugin_manifest()
     except FilesAdminError as error:
-        raise CapabilityUnavailable(
-            f"files.local ({error.code}: {error})"
-        ) from error
+        raise CapabilityUnavailable(f"files.local ({error.code}: {error})") from error
 
     if manifest_path is None:
         # Source-tree mode: no manifest binding, no gate.
@@ -324,7 +320,10 @@ def _handle(adapter, request: object) -> dict[str, object] | None:
         if method == "initialize":
             result: object = {
                 "protocolVersion": "2025-03-26",
-                "serverInfo": {"name": "academic-research-files-store", "version": "1.0.0"},
+                "serverInfo": {
+                    "name": "academic-research-files-store",
+                    "version": "1.0.0",
+                },
                 "capabilities": {"tools": {"listChanged": False}},
             }
         elif method == "ping":
@@ -372,7 +371,10 @@ def _handle(adapter, request: object) -> dict[str, object] | None:
                         # as NOT-isError envelopes so downstream MCP
                         # clients can still inspect the body.
                         if method_name == "read_file":
-                            is_error = getattr(result_model, "status", "ok") not in _SUCCESS_STATUSES
+                            is_error = (
+                                getattr(result_model, "status", "ok")
+                                not in _SUCCESS_STATUSES
+                            )
                         else:
                             is_error = False
                         result = _tool_envelope(payload, error=is_error)
@@ -513,20 +515,14 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 64
-    if (
-        "--control-root" not in arguments
-        or "--root-id" not in arguments
-    ):
+    if "--control-root" not in arguments or "--root-id" not in arguments:
         print(
             "files-store-mcp: startup-error: --control-root and --root-id "
             "are required (production read path is fail-closed without them)",
             file=sys.stderr,
         )
         return 64
-    if (
-        ("--control-root" in arguments)
-        != ("--root-id" in arguments)
-    ):
+    if ("--control-root" in arguments) != ("--root-id" in arguments):
         print(
             "files-store-mcp: startup-error: --control-root and --root-id "
             "must be supplied together",
