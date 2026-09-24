@@ -5,8 +5,10 @@ It is an advisory ranking path; it cannot accept claims, change the canonical
 journal, or establish research efficacy. Existing FTS and graph queries remain
 available without it.
 
-Install explicitly with `uv sync --frozen --extra semantic`. The optional extra
-pins `sqlite-vec==0.1.9` (MIT OR Apache-2.0); no model is shipped or downloaded.
+Install the optional extra without a lockfile using
+`uv pip install --python .venv/bin/python -r pyproject.toml --extra semantic`.
+The optional extra requires `sqlite-vec>=0.1.9` (MIT OR Apache-2.0); no model is
+shipped or downloaded.
 Only explicit capability resolution loads the native extension, and extension
 loading is disabled again immediately afterward. Minimal store migration creates
 ordinary empty metadata/document tables without importing sqlite-vec. Explicit
@@ -62,7 +64,7 @@ Existing unrelated projection tables are preserved by semantic rebuild.
 Run the standalone acceptance example:
 
 ```bash
-uv run --frozen --extra semantic python \
+.venv/bin/python \
   extensions/local-store/examples/semantic_literature.py NEW_OUTPUT_DIRECTORY
 ```
 
@@ -75,4 +77,5 @@ benchmark-driven decision.
 
 API references: [sqlite-vec Python binding](https://alexgarcia.xyz/sqlite-vec/python.html)
 and [KNN queries](https://alexgarcia.xyz/sqlite-vec/features/knn.html), checked
-2026-09-08. The package pin is in the semantic extra and `uv.lock`.
+2026-09-08. The package lower bound is in the semantic extra; each build records
+the resolved version in its own inventory without constraining later installs.

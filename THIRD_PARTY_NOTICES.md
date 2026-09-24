@@ -12,31 +12,33 @@ The collective plugin has mixed licensing. Component identities remain separate.
 - `vendor/patches/file-base/0003-phase3-generation-builder.patch` — SHA-256 `12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc`.
 - `vendor/patches/file-base/0004-phase5-research-graph.patch` — SHA-256 `11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c`.
 
-## Frozen Python wheelhouse
-- `annotated-types==0.7.0` — MIT License.
-- `attrs==26.1.0` — MIT.
-- `hatchling==1.31.0` — MIT.
-- `iniconfig==2.3.0` — MIT.
-- `jsonschema==4.26.0` — MIT.
-- `jsonschema-specifications==2025.9.1` — MIT.
-- `packaging==26.2` — Apache-2.0 OR BSD-2-Clause.
-- `pathspec==1.1.1` — Mozilla Public License 2.0 (MPL 2.0).
-- `pluggy==1.6.0` — MIT License.
-- `platformdirs==4.11.6` — MIT.
-- `portalocker==3.2.0` — BSD-3-Clause.
-- `pydantic==2.13.4` — MIT.
-- `pydantic_core==2.46.4` — MIT.
-- `pydantic_core==2.46.4` — MIT.
-- `Pygments==2.20.0` — BSD-2-Clause.
-- `pytest==9.1.1` — MIT.
-- `PyYAML==6.0.3` — MIT License.
-- `PyYAML==6.0.3` — MIT License.
-- `referencing==0.37.0` — MIT.
-- `rpds-py==2026.6.3` — MIT.
-- `rpds-py==2026.6.3` — MIT.
-- `trove-classifiers==2026.6.1.19` — Apache Software License.
-- `typing_extensions==4.16.0` — PSF-2.0.
-- `typing-inspection==0.4.2` — MIT.
+## Python packages observed for this build
+Versions and installed-content digests below describe this build only; they are not resolution constraints for later builds. The run inventory and SBOM carry the same observed set.
+- `academic-research-workbench==0.1.0` — NOASSERTION; installed-content SHA-256 `250143406b0d3caaba05c6dab052cf11b39490f4bac4f21916ed9b9eb46e9cd6`.
+- `annotated-types==0.7.0` — MIT License; installed-content SHA-256 `8d59bc01c30b797c7ae4992a69eaa374f722ec444dbe42714edfed474066036c`.
+- `attrs==26.1.0` — MIT; installed-content SHA-256 `47771d5c7ba8982342b40630ab153e5ac09d3e5dff0df1766f59d57e299e5e64`.
+- `hatchling==1.31.0` — MIT; installed-content SHA-256 `6931a06d020880453f85a695d017585531bdef821910f4ae7ad0ba9a3ee763a8`.
+- `iniconfig==2.3.0` — MIT; installed-content SHA-256 `24484c6a96e352f1ba8ae6ed7986f9c40eb2165e1c9fe52f1f8a17d75f933e6c`.
+- `jsonschema==4.26.0` — MIT; installed-content SHA-256 `4ea989e20ee92826083ece16682b855dc512d302b0e95cd86a8c728632503c6c`.
+- `jsonschema-specifications==2025.9.1` — MIT; installed-content SHA-256 `abc48b603fc8372e8c2fe45bfc55b69fd96970a2827a18a1ad812ec418d3aed0`.
+- `packaging==26.2` — Apache-2.0 OR BSD-2-Clause; installed-content SHA-256 `aa52f7c33dcb4727b2878638efd5b71243c0841a3044eade11ff3bbd36d36ca5`.
+- `pathspec==1.1.1` — Mozilla Public License 2.0 (MPL 2.0); installed-content SHA-256 `f63f0f18270f925faf43fa0fb33bb169f5f48a3e87c5fec40f5da5d586754fc1`.
+- `pillow==12.3.0` — MIT-CMU; installed-content SHA-256 `34ff5b5a63d62ea2b1e086ebe2bfe7b5f823dc4024de0b2b31ba48565b26d97d`.
+- `platformdirs==4.11.6` — MIT; installed-content SHA-256 `04fc35df9015e2474b79e2ec4d1de812a4a28b36e02ace30d3cbd379d07a42b6`.
+- `pluggy==1.6.0` — MIT License; installed-content SHA-256 `f9b7f1389f55d93a5e7f0c2e189c80fc2fa0ed14962a8f74460ee247581519f1`.
+- `portalocker==3.2.0` — BSD-3-Clause; installed-content SHA-256 `0e276321f1ca5e645d1949598bb2a9fb8acf7302265b71c90ef77c85fd937ffa`.
+- `pydantic==2.13.4` — MIT; installed-content SHA-256 `6e1017fe6a0f7fcaff8a3781834216643799d2cacf1b42193aca7520926d561e`.
+- `pydantic_core==2.46.4` — MIT; installed-content SHA-256 `90bbd7dda2f4d8fada10847a501e6e25659d292fd86fd62f638c8e0ed9775488`.
+- `Pygments==2.20.0` — BSD-2-Clause; installed-content SHA-256 `aefc93577d205eca34e0db13259004ba698ecc91ab0c697e2542b5b70953416f`.
+- `pypdf==6.14.2` — BSD-3-Clause; installed-content SHA-256 `631d1d44e61810d4d48288837f0aa78efd737cf03c23cf283897ad280fa962bd`.
+- `pytest==9.1.1` — MIT; installed-content SHA-256 `97f317ae6b53bb4b8b3a1454b72894747e06fc9b0d34aa2e5e3743d843e219df`.
+- `PyYAML==6.0.3` — MIT License; installed-content SHA-256 `dece65ab0ec76ab14ccbe87c6d6bb5257e5b4b45c0e3334e9778877efe373f50`.
+- `referencing==0.37.0` — MIT; installed-content SHA-256 `67956237768c7a5a273d8e5659c724e26a5670db71d6b367584f8f71f02366a2`.
+- `rpds-py==2026.6.3` — MIT; installed-content SHA-256 `b56bac96086abb4e333b6ed8d743566931e4296cd4305ae372ff1d599617ff74`.
+- `sqlite-vec==0.1.9` — MIT License, Apache License, Version 2.0; installed-content SHA-256 `ccdf3b9622a06adf49c6fef8d22ef03edd2c19c0e8ead58053d982fdd07b3d6f`.
+- `trove-classifiers==2026.6.1.19` — Apache Software License; installed-content SHA-256 `1b30003f2b2112d2d43d35543433a2cdea5ffde1fe5aca07af10e45c4c913519`.
+- `typing-inspection==0.4.2` — MIT; installed-content SHA-256 `fa7e27a777036626fada8d99262aa9a126de1fb294ec1b78fd4a4912df939e4b`.
+- `typing_extensions==4.16.0` — PSF-2.0; installed-content SHA-256 `4b6a09e4571549f54ccf4339bb3bc32521b0390b36feb5a6e111be1150c9cad9`.
 
 ## Preserved file-base generated notices
 

@@ -28,7 +28,7 @@ events, ARS skill identity and native binary qualification remain readable.
 ## Format matrix
 
 Binary adapters run in a separate, bounded process. `artifact-formats` pins pypdf
-6.14.2 and Pillow 12.3.0; neither belongs to the base offline wheelhouse. Missing
+the declared lower-bound requirements; neither belongs to the base plugin. Missing
 libraries report `unsupported`. DOCX ZIP/XML processing uses the standard library.
 
 | Format | Inspection | Explicit metadata treatment | Retained-content verification |

@@ -27,19 +27,13 @@ def verification_root() -> Path:
         for relative in (
             "schemas/v1/source-manifest.schema.json",
             "scripts/verify-sources",
-            "uv.lock",
             "vendor/source-manifest.json",
-            "vendor/python/wheelhouse.lock.json",
         ):
             source = REPOSITORY_ROOT / relative
             assert source.is_file(), f"required digest input is absent: {relative}"
             _copy_file(source, root / relative)
 
-        for relative in (
-            "vendor/sources",
-            "vendor/patches",
-            "vendor/python/wheelhouse",
-        ):
+        for relative in ("vendor/sources", "vendor/patches"):
             source = REPOSITORY_ROOT / relative
             assert source.is_dir(), f"required digest input is absent: {relative}"
             shutil.copytree(source, root / relative, copy_function=os.link, symlinks=True)
@@ -85,8 +79,6 @@ def test_each_digest_class_fails_before_staging(verification_root: Path) -> None
         ("test-suite", "vendor/sources/file-base/tests/test_main.c"),
         ("legal-receipt", "build/evidence/phase-01/pre-vendor-license/receipt.json"),
         ("legal-input", "vendor/sources/file-base/LICENSE"),
-        ("lock", "uv.lock"),
-        ("wheelhouse", "vendor/python/wheelhouse/pytest-9.1.1-py3-none-any.whl"),
         ("binary", ".file-base/bin/file-base"),
         ("artifact", "schemas/v1/source-manifest.schema.json"),
         ("artifact", "schemas/v1/mcp-read-request.schema.json"),

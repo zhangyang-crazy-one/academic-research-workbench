@@ -15,27 +15,25 @@ concurrency:
 
 jobs:
   python:
-    name: Python ${{ matrix.python-version }}
+    name: Python
     runs-on: ubuntu-latest
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
-      matrix:
-        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.x"
       - uses: astral-sh/setup-uv@v5
         with:
-          version: "0.11.28"
           enable-cache: true
-      - name: Sync locked development environment
-        run: uv sync --frozen --all-groups --extra semantic --extra artifact-formats --python "${{ matrix.python-version }}"
+      - name: Resolve development environment from declared ranges
+        run: >-
+          uv venv && uv pip install --python .venv/bin/python --editable .
+          -r pyproject.toml --all-extras
+          --group dev --group ars-test --group storm
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -44,7 +42,7 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/integration/test_source_materialization.py::test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
           tests/integration/test_source_materialization.py::test_materializer_tree_digest_uses_the_manifest_wire_encoding
       - name: Run non-host contract and provenance tests
@@ -52,7 +50,7 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/unit
           tests/schema
           tests/unit/test_integration_lock.py
@@ -74,13 +72,13 @@ jobs:
         # wire digests" step above; the full license gate requires retained
         # local evidence and runs in the qualification flow.
         run: >-
-          uv run pytest -q -m v2_compat tests/compat
+          .venv/bin/python -m pytest -q -m v2_compat tests/compat
       - name: Run Phase 4 lifecycle and hook regression tests
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/unit/test_hook_contracts.py
           tests/unit/test_orchestration_models.py
           tests/unit/test_orchestration_cli.py
@@ -96,7 +94,7 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/integration/test_files_store_inventory_binding.py
           tests/integration/test_files_store_mcp_history.py
           tests/integration/test_files_store_mcp_lifecycle.py
@@ -108,7 +106,7 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/integration/test_artifact_integrity_cli.py
           tests/integration/test_artifact_sanitize.py
       - name: Run research artifact, memory and learning regressions
@@ -116,24 +114,24 @@ jobs:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run pytest -q
+          .venv/bin/python -m pytest -q
           tests/integration/test_research_artifacts.py
           tests/integration/test_research_memory.py
           tests/integration/test_research_learning.py tests/integration/test_writing.py
       - name: Run binary format and provider-extraction regressions
-        run: uv run --frozen --extra artifact-formats pytest -q tests/integration/test_binary_metadata.py tests/integration/test_extension_extraction.py tests/unit/test_storm.py
+        run: .venv/bin/python -m pytest -q tests/integration/test_binary_metadata.py tests/integration/test_extension_extraction.py tests/unit/test_storm.py
       - name: Run optional offline semantic retrieval regressions
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
-        run: uv run --frozen --extra semantic pytest -q tests/integration/test_semantic_retrieval.py
+        run: .venv/bin/python -m pytest -q tests/integration/test_semantic_retrieval.py
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
         run: >-
-          uv run --frozen --all-groups --project ../../.. python -m pytest -q
+          .venv/bin/python -m pytest -q
           --ignore scripts/test_check_calibration_tiers.py
           --ignore scripts/test_check_distribution_surface_claims.py
 
@@ -146,12 +144,12 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.x"
       - uses: astral-sh/setup-uv@v5
         with:
-          version: "0.11.28"
           enable-cache: true
-      - run: uv sync --frozen --all-groups
+      - name: Resolve package boundary environment from declared ranges
+        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
       - name: Verify publish surface before building artifacts
         run: |
           test -f src/arw/kernel/execution/orchestration.py

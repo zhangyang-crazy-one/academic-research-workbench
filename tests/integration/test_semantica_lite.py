@@ -127,9 +127,7 @@ def test_record_requires_artifact_and_canonical_ledger_binding(tmp_path: Path) -
 
 def test_lineage_is_bounded_and_decision_filtered(tmp_path: Path) -> None:
     source = _record(entity_id="source.alpha")
-    decision = _record(
-        entity_id="decision.alpha", derived_from=("source.alpha",)
-    )
+    decision = _record(entity_id="decision.alpha", derived_from=("source.alpha",))
     adapter = _adapter(tmp_path, (source, decision))
     adapter.record(source)
     adapter.record(decision)
@@ -159,8 +157,7 @@ def test_tampered_sidecar_record_surfaces_an_audit_fault(tmp_path: Path) -> None
     assert len(audit_paths) == 2
     assert audit_paths[0].parent.stat().st_mode & 0o777 == 0o700
     assert {
-        json.loads(path.read_text(encoding="utf-8"))["code"]
-        for path in audit_paths
+        json.loads(path.read_text(encoding="utf-8"))["code"] for path in audit_paths
     } == {"semantica_checksum_mismatch", "semantica_missing_record"}
     assert all(path.name.startswith("semantica-") for path in audit_paths)
     assert not (tmp_path / "escaped").exists()
@@ -235,9 +232,7 @@ def test_verify_sanitizes_invalid_utf8_sqlite_record_id(tmp_path: Path) -> None:
 
 def test_lineage_uses_checksums_payload_not_duplicate_columns(tmp_path: Path) -> None:
     source = _record(entity_id="source.alpha")
-    decision = _record(
-        entity_id="decision.alpha", derived_from=("source.alpha",)
-    )
+    decision = _record(entity_id="decision.alpha", derived_from=("source.alpha",))
     adapter = _adapter(tmp_path, (source, decision))
     adapter.record(source)
     adapter.record(decision)
@@ -307,9 +302,7 @@ def test_verify_reports_missing_canonical_record_and_lineage_fails_closed(
     adapter.record(record)
     with sqlite3.connect(tmp_path / "provenance.sqlite3") as connection:
         connection.execute("DELETE FROM provenance_records")
-    assert [fault.code for fault in adapter.verify()] == [
-        "semantica_missing_record"
-    ]
+    assert [fault.code for fault in adapter.verify()] == ["semantica_missing_record"]
     with pytest.raises(RuntimeError, match="missing canonical provenance"):
         adapter.lineage(record.entity_id)
 
@@ -325,9 +318,7 @@ def test_verify_turns_checksummed_invalid_json_into_audit_fault(
             "UPDATE provenance_records SET payload = ?, checksum = ? WHERE record_id = ?",
             (invalid, hashlib.sha256(invalid).hexdigest(), "prov-claim.alpha"),
         )
-    assert [fault.code for fault in adapter.verify()] == [
-        "semantica_checksum_mismatch"
-    ]
+    assert [fault.code for fault in adapter.verify()] == ["semantica_checksum_mismatch"]
 
 
 def test_noncanonical_checksummed_payload_is_rejected(tmp_path: Path) -> None:
@@ -344,9 +335,7 @@ def test_noncanonical_checksummed_payload_is_rejected(tmp_path: Path) -> None:
                 record.record_id,
             ),
         )
-    assert [fault.code for fault in adapter.verify()] == [
-        "semantica_checksum_mismatch"
-    ]
+    assert [fault.code for fault in adapter.verify()] == ["semantica_checksum_mismatch"]
     with pytest.raises(RuntimeError, match="noncanonical"):
         adapter.lineage(record.entity_id)
 
@@ -577,9 +566,7 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
         canonical_event_digests={EVENT_ID: EVENT_DIGEST},
         accepted_artifact_ids_by_event={EVENT_ID: ("artifact-alpha",)},
         accepted_artifact_sha256_by_event={EVENT_ID: _record().checksum},
-        expected_provenance_record_sha256={
-            _record().record_id: _record().checksum
-        },
+        expected_provenance_record_sha256={_record().record_id: _record().checksum},
         plugin_manifest=manifest,
     )
     assert "knowledge.provenance" in router.available()
@@ -593,12 +580,8 @@ def test_capability_is_optional_and_manifest_gated(tmp_path: Path) -> None:
 def test_provenance_capability_is_explicitly_gated_off_windows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "arw.composition._PROVENANCE_PLATFORM_SUPPORTED", False
-    )
-    router = default_router(
-        semantica_store_path=tmp_path / "provenance.sqlite3"
-    )
+    monkeypatch.setattr("arw.composition._PROVENANCE_PLATFORM_SUPPORTED", False)
+    router = default_router(semantica_store_path=tmp_path / "provenance.sqlite3")
     with pytest.raises(CapabilityUnavailable):
         router.resolve("knowledge.provenance")
 

@@ -195,7 +195,7 @@ claim.
 ## Optional dependency model
 
 `pdf-inspector` is not installed by `requirements-dev.txt`. Operators who deliberately
-select this diagnostic may install the isolated pin in
+select this diagnostic may install the isolated lower-bound requirement in
 `requirements-pdf-content-classifier.txt`. Only a top-level `ModuleNotFoundError` naming
 `pdf_inspector` emits the deterministic closed `DEPENDENCY_ABSENT` state. Internal or
 transitive import failures emit `CLASSIFIER_ERROR`, with bounded detail available only in

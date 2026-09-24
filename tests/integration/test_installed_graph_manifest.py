@@ -338,19 +338,23 @@ def test_cli_graph_mcp_source_development_allows_missing_manifest(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("case_label", ["_graph-mcp", "_files-store-mcp"])
+@pytest.mark.parametrize(
+    "case_label",
+    [
+        "_graph-mcp",
+        "_files-store-mcp",
+        "writing|semantic|learn|memory|artifact|submission",
+    ],
+)
 def test_launcher_binds_plugin_manifest_env(case_label: str) -> None:
     """The installed launcher must export ``ARW_PLUGIN_ROOT`` and
-    ``ARW_PLUGIN_MANIFEST`` before exec'ing any installed-mode MCP server
-    (graph + store-backed files); otherwise the wheel-mode discovery in
-    cli.py / files_store_mcp.py misses and the capability gate is silently
-    bypassed (PR15 follow-up + store-MCP symmetry P1)."""
+    ``ARW_PLUGIN_MANIFEST`` before exec'ing any installed-mode CLI or MCP
+    command; otherwise wheel-mode discovery misses and capability gating
+    fails closed or is bypassed."""
 
     script = LAUNCHER_PATH.read_text(encoding="utf-8")
 
-    # Locate the case block. The case line is followed by the
-    # env-binding and exec lines; we anchor on the case label and check the
-    # lines that follow until the next `;;`.
+    # Locate the case block and check the env-binding lines up to `;;`.
     needle = f"{case_label})\n"
     case_start = script.index(needle) + len(needle)
     case_end = script.index("\n    ;;\n", case_start)
@@ -367,6 +371,5 @@ def test_launcher_binds_plugin_manifest_env(case_label: str) -> None:
         "path stops relying on the source-tree fallback"
     )
     assert "$PLUGIN_ROOT/.codex-plugin/plugin.json" in case_body
-    # The launcher must also refuse to start the server if the bundled
-    # manifest is missing — the same fail-closed posture as the cli.py side.
+    # Installed commands refuse to run if the bundled manifest is missing.
     assert 'fail "plugin-manifest-missing"' in case_body

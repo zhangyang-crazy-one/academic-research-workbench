@@ -2,13 +2,6 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "annotated-types-2@0.7.0",
-      "name": "annotated-types",
-      "purl": "pkg:pypi/annotated-types@0.7.0",
-      "type": "library",
-      "version": "0.7.0"
-    },
-    {
       "bom-ref": "artifact:.file-base/bin/file-base",
       "hashes": [
         {
@@ -109,7 +102,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3fb0d67ea2e4efb58fbf9f798c2a8b6c0df8c22740744c10156106208873f8df"
+          "content": "4b88ab8ff4a5a80476281beacbb9fccaf5671bd14a75073324b5f6686012b723"
         }
       ],
       "name": "schemas/v1/source-manifest.schema.json",
@@ -121,7 +114,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cb1e0c5e24622f076f04802597d3d6d7a23a411ee23cca3ec47a6310c619003f"
+          "content": "4b73cb4a4c542c788b9d12ef5fd9550003c74afea9a4f58bafe67d09955fa84f"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -157,7 +150,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4a0b45310bc9c9121e450442bc62ddaebd1456bd8142b99e4b117c7737af1de0"
+          "content": "ba5940a021f428e7b6aef10a12ec7c4c6ca593e3c0a935f40ab725e502771104"
         }
       ],
       "name": "skills/academic-research-suite/ars",
@@ -169,7 +162,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b7687aa86fd4c7fc38c4210f9b1ea38b281b7495af959e56e1eb1f778675d8ac"
+          "content": "d06f1ad8f70288802e541a1066cdd98c8641b3f8e1db7b9986d5b8f933c25507"
         }
       ],
       "name": "skills/academic-research-suite/manifest.json",
@@ -187,26 +180,6 @@
       "name": "vendor/mcp-manifest.json",
       "type": "file",
       "version": "1"
-    },
-    {
-      "bom-ref": "attrs-3@26.1.0",
-      "name": "attrs",
-      "purl": "pkg:pypi/attrs@26.1.0",
-      "type": "library",
-      "version": "26.1.0"
-    },
-    {
-      "bom-ref": "colorama-4@0.4.6",
-      "name": "colorama",
-      "properties": [
-        {
-          "name": "uv:package:marker",
-          "value": "sys_platform == 'win32'"
-        }
-      ],
-      "purl": "pkg:pypi/colorama@0.4.6",
-      "type": "library",
-      "version": "0.4.6"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/LICENSE",
@@ -2385,7 +2358,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5c128ac7e37cc2f7a99eaf1e88864b2c96ef8998ef5e67da926038c72cb33df5"
+          "content": "e0e09e694110d422268d6460c7fd828245985ef7fdf9df81df28dcc3fcae3baf"
         }
       ],
       "licenses": [
@@ -2396,41 +2369,6 @@
       "name": "academic-research-workbench",
       "type": "library",
       "version": "0.1.0"
-    },
-    {
-      "bom-ref": "hatchling-5@1.31.0",
-      "name": "hatchling",
-      "purl": "pkg:pypi/hatchling@1.31.0",
-      "type": "library",
-      "version": "1.31.0"
-    },
-    {
-      "bom-ref": "iniconfig-6@2.3.0",
-      "name": "iniconfig",
-      "purl": "pkg:pypi/iniconfig@2.3.0",
-      "type": "library",
-      "version": "2.3.0"
-    },
-    {
-      "bom-ref": "jsonschema-7@4.26.0",
-      "name": "jsonschema",
-      "purl": "pkg:pypi/jsonschema@4.26.0",
-      "type": "library",
-      "version": "4.26.0"
-    },
-    {
-      "bom-ref": "jsonschema-specifications-8@2025.9.1",
-      "name": "jsonschema-specifications",
-      "purl": "pkg:pypi/jsonschema-specifications@2025.9.1",
-      "type": "library",
-      "version": "2025.9.1"
-    },
-    {
-      "bom-ref": "packaging-9@26.2",
-      "name": "packaging",
-      "purl": "pkg:pypi/packaging@26.2",
-      "type": "library",
-      "version": "26.2"
     },
     {
       "bom-ref": "patch:11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c",
@@ -2481,93 +2419,65 @@
       "version": "1"
     },
     {
-      "bom-ref": "pathspec-10@1.1.1",
-      "name": "pathspec",
-      "purl": "pkg:pypi/pathspec@1.1.1",
-      "type": "library",
-      "version": "1.1.1"
-    },
-    {
-      "bom-ref": "pillow-11@12.3.0",
-      "licenses": [
+      "bom-ref": "python:PyYAML@6.0.3",
+      "hashes": [
         {
-          "expression": "MIT-CMU"
+          "alg": "SHA-256",
+          "content": "dece65ab0ec76ab14ccbe87c6d6bb5257e5b4b45c0e3334e9778877efe373f50"
         }
       ],
-      "name": "pillow",
-      "purl": "pkg:pypi/pillow@12.3.0",
-      "scope": "optional",
+      "licenses": [
+        {
+          "expression": "MIT License"
+        }
+      ],
+      "name": "PyYAML",
+      "purl": "pkg:pypi/pyyaml@6.0.3",
       "type": "library",
-      "version": "12.3.0"
+      "version": "6.0.3"
     },
     {
-      "bom-ref": "platformdirs-12@4.11.6",
-      "name": "platformdirs",
-      "purl": "pkg:pypi/platformdirs@4.11.6",
-      "type": "library",
-      "version": "4.11.6"
-    },
-    {
-      "bom-ref": "pluggy-13@1.6.0",
-      "name": "pluggy",
-      "purl": "pkg:pypi/pluggy@1.6.0",
-      "type": "library",
-      "version": "1.6.0"
-    },
-    {
-      "bom-ref": "portalocker-14@3.2.0",
-      "name": "portalocker",
-      "purl": "pkg:pypi/portalocker@3.2.0",
-      "type": "library",
-      "version": "3.2.0"
-    },
-    {
-      "bom-ref": "pydantic-15@2.13.4",
-      "name": "pydantic",
-      "purl": "pkg:pypi/pydantic@2.13.4",
-      "type": "library",
-      "version": "2.13.4"
-    },
-    {
-      "bom-ref": "pydantic-core-16@2.46.4",
-      "name": "pydantic-core",
-      "purl": "pkg:pypi/pydantic-core@2.46.4",
-      "type": "library",
-      "version": "2.46.4"
-    },
-    {
-      "bom-ref": "pygments-17@2.20.0",
-      "name": "pygments",
+      "bom-ref": "python:Pygments@2.20.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "aefc93577d205eca34e0db13259004ba698ecc91ab0c697e2542b5b70953416f"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause"
+        }
+      ],
+      "name": "Pygments",
       "purl": "pkg:pypi/pygments@2.20.0",
       "type": "library",
       "version": "2.20.0"
     },
     {
-      "bom-ref": "pypdf-18@6.14.2",
-      "licenses": [
-        {
-          "expression": "BSD-3-Clause"
-        }
-      ],
-      "name": "pypdf",
-      "purl": "pkg:pypi/pypdf@6.14.2",
-      "scope": "optional",
-      "type": "library",
-      "version": "6.14.2"
-    },
-    {
-      "bom-ref": "pytest-19@9.1.1",
-      "name": "pytest",
-      "purl": "pkg:pypi/pytest@9.1.1",
-      "type": "library",
-      "version": "9.1.1"
-    },
-    {
-      "bom-ref": "python-wheel:annotated_types-0.7.0-py3-none-any.whl",
+      "bom-ref": "python:academic-research-workbench@0.1.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53"
+          "content": "250143406b0d3caaba05c6dab052cf11b39490f4bac4f21916ed9b9eb46e9cd6"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "NOASSERTION"
+        }
+      ],
+      "name": "academic-research-workbench",
+      "purl": "pkg:pypi/academic-research-workbench@0.1.0",
+      "type": "library",
+      "version": "0.1.0"
+    },
+    {
+      "bom-ref": "python:annotated-types@0.7.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8d59bc01c30b797c7ae4992a69eaa374f722ec444dbe42714edfed474066036c"
         }
       ],
       "licenses": [
@@ -2581,11 +2491,11 @@
       "version": "0.7.0"
     },
     {
-      "bom-ref": "python-wheel:attrs-26.1.0-py3-none-any.whl",
+      "bom-ref": "python:attrs@26.1.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"
+          "content": "47771d5c7ba8982342b40630ab153e5ac09d3e5dff0df1766f59d57e299e5e64"
         }
       ],
       "licenses": [
@@ -2599,11 +2509,11 @@
       "version": "26.1.0"
     },
     {
-      "bom-ref": "python-wheel:hatchling-1.31.0-py3-none-any.whl",
+      "bom-ref": "python:hatchling@1.31.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "aac80bec8b6fe35e8480f1c335be8910fa210a0e6f735a139be205dadcacb544"
+          "content": "6931a06d020880453f85a695d017585531bdef821910f4ae7ad0ba9a3ee763a8"
         }
       ],
       "licenses": [
@@ -2617,11 +2527,11 @@
       "version": "1.31.0"
     },
     {
-      "bom-ref": "python-wheel:iniconfig-2.3.0-py3-none-any.whl",
+      "bom-ref": "python:iniconfig@2.3.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12"
+          "content": "24484c6a96e352f1ba8ae6ed7986f9c40eb2165e1c9fe52f1f8a17d75f933e6c"
         }
       ],
       "licenses": [
@@ -2635,29 +2545,11 @@
       "version": "2.3.0"
     },
     {
-      "bom-ref": "python-wheel:jsonschema-4.26.0-py3-none-any.whl",
+      "bom-ref": "python:jsonschema-specifications@2025.9.1",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT"
-        }
-      ],
-      "name": "jsonschema",
-      "purl": "pkg:pypi/jsonschema@4.26.0",
-      "type": "library",
-      "version": "4.26.0"
-    },
-    {
-      "bom-ref": "python-wheel:jsonschema_specifications-2025.9.1-py3-none-any.whl",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe"
+          "content": "abc48b603fc8372e8c2fe45bfc55b69fd96970a2827a18a1ad812ec418d3aed0"
         }
       ],
       "licenses": [
@@ -2671,11 +2563,29 @@
       "version": "2025.9.1"
     },
     {
-      "bom-ref": "python-wheel:packaging-26.2-py3-none-any.whl",
+      "bom-ref": "python:jsonschema@4.26.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"
+          "content": "4ea989e20ee92826083ece16682b855dc512d302b0e95cd86a8c728632503c6c"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "jsonschema",
+      "purl": "pkg:pypi/jsonschema@4.26.0",
+      "type": "library",
+      "version": "4.26.0"
+    },
+    {
+      "bom-ref": "python:packaging@26.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "aa52f7c33dcb4727b2878638efd5b71243c0841a3044eade11ff3bbd36d36ca5"
         }
       ],
       "licenses": [
@@ -2689,11 +2599,11 @@
       "version": "26.2"
     },
     {
-      "bom-ref": "python-wheel:pathspec-1.1.1-py3-none-any.whl",
+      "bom-ref": "python:pathspec@1.1.1",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189"
+          "content": "f63f0f18270f925faf43fa0fb33bb169f5f48a3e87c5fec40f5da5d586754fc1"
         }
       ],
       "licenses": [
@@ -2707,11 +2617,29 @@
       "version": "1.1.1"
     },
     {
-      "bom-ref": "python-wheel:platformdirs-4.11.6-py3-none-any.whl",
+      "bom-ref": "python:pillow@12.3.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b22d992e863bc651c26b16242041c7979db6e3286e548f9a76cc91238fac599e"
+          "content": "34ff5b5a63d62ea2b1e086ebe2bfe7b5f823dc4024de0b2b31ba48565b26d97d"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT-CMU"
+        }
+      ],
+      "name": "pillow",
+      "purl": "pkg:pypi/pillow@12.3.0",
+      "type": "library",
+      "version": "12.3.0"
+    },
+    {
+      "bom-ref": "python:platformdirs@4.11.6",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "04fc35df9015e2474b79e2ec4d1de812a4a28b36e02ace30d3cbd379d07a42b6"
         }
       ],
       "licenses": [
@@ -2725,11 +2653,11 @@
       "version": "4.11.6"
     },
     {
-      "bom-ref": "python-wheel:pluggy-1.6.0-py3-none-any.whl",
+      "bom-ref": "python:pluggy@1.6.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746"
+          "content": "f9b7f1389f55d93a5e7f0c2e189c80fc2fa0ed14962a8f74460ee247581519f1"
         }
       ],
       "licenses": [
@@ -2743,11 +2671,11 @@
       "version": "1.6.0"
     },
     {
-      "bom-ref": "python-wheel:portalocker-3.2.0-py3-none-any.whl",
+      "bom-ref": "python:portalocker@3.2.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3cdc5f565312224bc570c49337bd21428bba0ef363bbcf58b9ef4a9f11779968"
+          "content": "0e276321f1ca5e645d1949598bb2a9fb8acf7302265b71c90ef77c85fd937ffa"
         }
       ],
       "licenses": [
@@ -2761,11 +2689,11 @@
       "version": "3.2.0"
     },
     {
-      "bom-ref": "python-wheel:pydantic-2.13.4-py3-none-any.whl",
+      "bom-ref": "python:pydantic@2.13.4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba"
+          "content": "6e1017fe6a0f7fcaff8a3781834216643799d2cacf1b42193aca7520926d561e"
         }
       ],
       "licenses": [
@@ -2779,11 +2707,11 @@
       "version": "2.13.4"
     },
     {
-      "bom-ref": "python-wheel:pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "bom-ref": "python:pydantic_core@2.46.4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9551187363ffc0de2a00b2e47c25aeaeb1020b69b668762966df15fc5659dd5a"
+          "content": "90bbd7dda2f4d8fada10847a501e6e25659d292fd86fd62f638c8e0ed9775488"
         }
       ],
       "licenses": [
@@ -2792,52 +2720,34 @@
         }
       ],
       "name": "pydantic_core",
-      "purl": "pkg:pypi/pydantic_core@2.46.4",
+      "purl": "pkg:pypi/pydantic-core@2.46.4",
       "type": "library",
       "version": "2.46.4"
     },
     {
-      "bom-ref": "python-wheel:pydantic_core-2.46.4-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "bom-ref": "python:pypdf@6.14.2",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7a5f930472650a82629163023e630d160863fce524c616f4e5186e5de9d9a49b"
+          "content": "631d1d44e61810d4d48288837f0aa78efd737cf03c23cf283897ad280fa962bd"
         }
       ],
       "licenses": [
         {
-          "expression": "MIT"
+          "expression": "BSD-3-Clause"
         }
       ],
-      "name": "pydantic_core",
-      "purl": "pkg:pypi/pydantic_core@2.46.4",
+      "name": "pypdf",
+      "purl": "pkg:pypi/pypdf@6.14.2",
       "type": "library",
-      "version": "2.46.4"
+      "version": "6.14.2"
     },
     {
-      "bom-ref": "python-wheel:pygments-2.20.0-py3-none-any.whl",
+      "bom-ref": "python:pytest@9.1.1",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "BSD-2-Clause"
-        }
-      ],
-      "name": "Pygments",
-      "purl": "pkg:pypi/Pygments@2.20.0",
-      "type": "library",
-      "version": "2.20.0"
-    },
-    {
-      "bom-ref": "python-wheel:pytest-9.1.1-py3-none-any.whl",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c"
+          "content": "97f317ae6b53bb4b8b3a1454b72894747e06fc9b0d34aa2e5e3743d843e219df"
         }
       ],
       "licenses": [
@@ -2851,47 +2761,11 @@
       "version": "9.1.1"
     },
     {
-      "bom-ref": "python-wheel:pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "bom-ref": "python:referencing@0.37.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT License"
-        }
-      ],
-      "name": "PyYAML",
-      "purl": "pkg:pypi/PyYAML@6.0.3",
-      "type": "library",
-      "version": "6.0.3"
-    },
-    {
-      "bom-ref": "python-wheel:pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT License"
-        }
-      ],
-      "name": "PyYAML",
-      "purl": "pkg:pypi/PyYAML@6.0.3",
-      "type": "library",
-      "version": "6.0.3"
-    },
-    {
-      "bom-ref": "python-wheel:referencing-0.37.0-py3-none-any.whl",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231"
+          "content": "67956237768c7a5a273d8e5659c724e26a5670db71d6b367584f8f71f02366a2"
         }
       ],
       "licenses": [
@@ -2905,11 +2779,11 @@
       "version": "0.37.0"
     },
     {
-      "bom-ref": "python-wheel:rpds_py-2026.6.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "bom-ref": "python:rpds-py@2026.6.3",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "acac386b453c2516111b50985d60ce46e7fadb5ea71ae7b25f4c946935bf27cf"
+          "content": "b56bac96086abb4e333b6ed8d743566931e4296cd4305ae372ff1d599617ff74"
         }
       ],
       "licenses": [
@@ -2923,29 +2797,29 @@
       "version": "2026.6.3"
     },
     {
-      "bom-ref": "python-wheel:rpds_py-2026.6.3-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "bom-ref": "python:sqlite-vec@0.1.9",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dc319e5a1de4b6913aac94bf6a2f9e847371e0a140a43dd4991db1a09bc2d504"
+          "content": "ccdf3b9622a06adf49c6fef8d22ef03edd2c19c0e8ead58053d982fdd07b3d6f"
         }
       ],
       "licenses": [
         {
-          "expression": "MIT"
+          "expression": "MIT License, Apache License, Version 2.0"
         }
       ],
-      "name": "rpds-py",
-      "purl": "pkg:pypi/rpds-py@2026.6.3",
+      "name": "sqlite-vec",
+      "purl": "pkg:pypi/sqlite-vec@0.1.9",
       "type": "library",
-      "version": "2026.6.3"
+      "version": "0.1.9"
     },
     {
-      "bom-ref": "python-wheel:trove_classifiers-2026.6.1.19-py3-none-any.whl",
+      "bom-ref": "python:trove-classifiers@2026.6.1.19",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3"
+          "content": "1b30003f2b2112d2d43d35543433a2cdea5ffde1fe5aca07af10e45c4c913519"
         }
       ],
       "licenses": [
@@ -2959,29 +2833,11 @@
       "version": "2026.6.1.19"
     },
     {
-      "bom-ref": "python-wheel:typing_extensions-4.16.0-py3-none-any.whl",
+      "bom-ref": "python:typing-inspection@0.4.2",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "PSF-2.0"
-        }
-      ],
-      "name": "typing_extensions",
-      "purl": "pkg:pypi/typing_extensions@4.16.0",
-      "type": "library",
-      "version": "4.16.0"
-    },
-    {
-      "bom-ref": "python-wheel:typing_inspection-0.4.2-py3-none-any.whl",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7"
+          "content": "fa7e27a777036626fada8d99262aa9a126de1fb294ec1b78fd4a4912df939e4b"
         }
       ],
       "licenses": [
@@ -2995,38 +2851,22 @@
       "version": "0.4.2"
     },
     {
-      "bom-ref": "pywin32-20@312",
-      "name": "pywin32",
-      "properties": [
+      "bom-ref": "python:typing_extensions@4.16.0",
+      "hashes": [
         {
-          "name": "uv:package:marker",
-          "value": "sys_platform == 'win32'"
+          "alg": "SHA-256",
+          "content": "4b6a09e4571549f54ccf4339bb3bc32521b0390b36feb5a6e111be1150c9cad9"
         }
       ],
-      "purl": "pkg:pypi/pywin32@312",
+      "licenses": [
+        {
+          "expression": "PSF-2.0"
+        }
+      ],
+      "name": "typing_extensions",
+      "purl": "pkg:pypi/typing-extensions@4.16.0",
       "type": "library",
-      "version": "312"
-    },
-    {
-      "bom-ref": "pyyaml-21@6.0.3",
-      "name": "pyyaml",
-      "purl": "pkg:pypi/pyyaml@6.0.3",
-      "type": "library",
-      "version": "6.0.3"
-    },
-    {
-      "bom-ref": "referencing-22@0.37.0",
-      "name": "referencing",
-      "purl": "pkg:pypi/referencing@0.37.0",
-      "type": "library",
-      "version": "0.37.0"
-    },
-    {
-      "bom-ref": "rpds-py-23@2026.6.3",
-      "name": "rpds-py",
-      "purl": "pkg:pypi/rpds-py@2026.6.3",
-      "type": "library",
-      "version": "2026.6.3"
+      "version": "4.16.0"
     },
     {
       "bom-ref": "source:academic-research-skills",
@@ -3102,197 +2942,14 @@
       "name": "file-base",
       "type": "library",
       "version": "v0.9.0-2-gee68144"
-    },
-    {
-      "bom-ref": "sqlite-vec-24@0.1.9",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "sqlite-vec",
-      "purl": "pkg:pypi/sqlite-vec@0.1.9",
-      "scope": "optional",
-      "type": "library",
-      "version": "0.1.9"
-    },
-    {
-      "bom-ref": "trove-classifiers-25@2026.6.1.19",
-      "name": "trove-classifiers",
-      "purl": "pkg:pypi/trove-classifiers@2026.6.1.19",
-      "type": "library",
-      "version": "2026.6.1.19"
-    },
-    {
-      "bom-ref": "typing-extensions-26@4.16.0",
-      "name": "typing-extensions",
-      "purl": "pkg:pypi/typing-extensions@4.16.0",
-      "type": "library",
-      "version": "4.16.0"
-    },
-    {
-      "bom-ref": "typing-inspection-27@0.4.2",
-      "name": "typing-inspection",
-      "purl": "pkg:pypi/typing-inspection@0.4.2",
-      "type": "library",
-      "version": "0.4.2"
-    }
-  ],
-  "dependencies": [
-    {
-      "dependsOn": [
-        "hatchling-5@1.31.0",
-        "jsonschema-7@4.26.0",
-        "pillow-11@12.3.0",
-        "platformdirs-12@4.11.6",
-        "portalocker-14@3.2.0",
-        "pydantic-15@2.13.4",
-        "pypdf-18@6.14.2",
-        "pytest-19@9.1.1",
-        "pyyaml-21@6.0.3",
-        "sqlite-vec-24@0.1.9"
-      ],
-      "ref": "academic-research-workbench-1@0.1.0"
-    },
-    {
-      "ref": "annotated-types-2@0.7.0"
-    },
-    {
-      "ref": "attrs-3@26.1.0"
-    },
-    {
-      "ref": "colorama-4@0.4.6"
-    },
-    {
-      "dependsOn": [
-        "packaging-9@26.2",
-        "pathspec-10@1.1.1",
-        "pluggy-13@1.6.0",
-        "trove-classifiers-25@2026.6.1.19"
-      ],
-      "ref": "hatchling-5@1.31.0"
-    },
-    {
-      "ref": "iniconfig-6@2.3.0"
-    },
-    {
-      "dependsOn": [
-        "attrs-3@26.1.0",
-        "jsonschema-specifications-8@2025.9.1",
-        "referencing-22@0.37.0",
-        "rpds-py-23@2026.6.3"
-      ],
-      "ref": "jsonschema-7@4.26.0"
-    },
-    {
-      "dependsOn": [
-        "referencing-22@0.37.0"
-      ],
-      "ref": "jsonschema-specifications-8@2025.9.1"
-    },
-    {
-      "ref": "packaging-9@26.2"
-    },
-    {
-      "ref": "pathspec-10@1.1.1"
-    },
-    {
-      "ref": "pillow-11@12.3.0"
-    },
-    {
-      "ref": "platformdirs-12@4.11.6"
-    },
-    {
-      "ref": "pluggy-13@1.6.0"
-    },
-    {
-      "dependsOn": [
-        "pywin32-20@312"
-      ],
-      "ref": "portalocker-14@3.2.0"
-    },
-    {
-      "dependsOn": [
-        "annotated-types-2@0.7.0",
-        "pydantic-core-16@2.46.4",
-        "typing-extensions-26@4.16.0",
-        "typing-inspection-27@0.4.2"
-      ],
-      "ref": "pydantic-15@2.13.4"
-    },
-    {
-      "dependsOn": [
-        "typing-extensions-26@4.16.0"
-      ],
-      "ref": "pydantic-core-16@2.46.4"
-    },
-    {
-      "ref": "pygments-17@2.20.0"
-    },
-    {
-      "ref": "pypdf-18@6.14.2"
-    },
-    {
-      "dependsOn": [
-        "colorama-4@0.4.6",
-        "iniconfig-6@2.3.0",
-        "packaging-9@26.2",
-        "pluggy-13@1.6.0",
-        "pygments-17@2.20.0"
-      ],
-      "ref": "pytest-19@9.1.1"
-    },
-    {
-      "ref": "pywin32-20@312"
-    },
-    {
-      "ref": "pyyaml-21@6.0.3"
-    },
-    {
-      "dependsOn": [
-        "attrs-3@26.1.0",
-        "rpds-py-23@2026.6.3"
-      ],
-      "ref": "referencing-22@0.37.0"
-    },
-    {
-      "ref": "rpds-py-23@2026.6.3"
-    },
-    {
-      "ref": "sqlite-vec-24@0.1.9"
-    },
-    {
-      "ref": "trove-classifiers-25@2026.6.1.19"
-    },
-    {
-      "ref": "typing-extensions-26@4.16.0"
-    },
-    {
-      "dependsOn": [
-        "typing-extensions-26@4.16.0"
-      ],
-      "ref": "typing-inspection-27@0.4.2"
     }
   ],
   "metadata": {
-    "component": {
-      "bom-ref": "academic-research-workbench-1@0.1.0",
-      "name": "academic-research-workbench",
-      "properties": [
-        {
-          "name": "uv:package:is_project_root",
-          "value": "true"
-        }
-      ],
-      "type": "library",
-      "version": "0.1.0"
-    },
     "timestamp": "2026-08-30T11:55:15Z",
     "tools": [
       {
-        "name": "uv",
-        "vendor": "Astral Software Inc.",
-        "version": "0.11.28"
+        "name": "ARW license-gate",
+        "version": "0.1.0"
       }
     ]
   },

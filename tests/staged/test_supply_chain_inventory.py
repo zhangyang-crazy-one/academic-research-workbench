@@ -73,9 +73,9 @@ def _stage(
     cachebuster: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment.update(
-        {"PYTHONNOUSERSITE": "1", "UV_OFFLINE": "1", "PIP_NO_INDEX": "1"}
-    )
+    environment.pop("UV_OFFLINE", None)
+    environment.pop("PIP_NO_INDEX", None)
+    environment.update({"PYTHONNOUSERSITE": "1"})
     command = [
         str(REPOSITORY_ROOT / "scripts/stage-plugin"),
         "--clean",
@@ -113,8 +113,6 @@ def _validate_stage(
         env={
             **os.environ,
             "PYTHONNOUSERSITE": "1",
-            "UV_OFFLINE": "1",
-            "PIP_NO_INDEX": "1",
         },
         text=True,
         capture_output=True,
@@ -205,12 +203,11 @@ def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
     return _canonical_test_lock(base_stage)
 
 
-def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components() -> (
+def test_sbom_covers_observed_python_packages_patches_native_and_source_components() -> (
     None
 ):
     sbom = _load(REPOSITORY_ROOT / "SBOM.cdx.json")
     source_manifest = _load(REPOSITORY_ROOT / "vendor/source-manifest.json")
-    wheelhouse = _load(REPOSITORY_ROOT / "vendor/python/wheelhouse.lock.json")
 
     assert sbom["bomFormat"] == "CycloneDX"
     assert sbom["specVersion"] == "1.5"
@@ -218,7 +215,6 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
     components = {item["bom-ref"]: item for item in sbom["components"]}
     expected_refs = {f"source:{item['id']}" for item in source_manifest["components"]}
     expected_refs |= {f"patch:{item['sha256']}" for item in source_manifest["patches"]}
-    expected_refs |= {f"python-wheel:{item['file']}" for item in wheelhouse["wheels"]}
     expected_refs |= {
         f"artifact:{item['path']}" for item in source_manifest["declared_artifacts"]
     }
@@ -238,11 +234,18 @@ def test_sbom_covers_frozen_python_wheels_patches_native_and_source_components()
         assert components[f"patch:{item['sha256']}"]["hashes"] == [
             {"alg": "SHA-256", "content": item["sha256"]}
         ]
-    for wheel in wheelhouse["wheels"]:
-        component = components[f"python-wheel:{wheel['file']}"]
-        assert component["name"] == wheel["package"]
-        assert component["version"] == wheel["version"]
-        assert component["hashes"] == [{"alg": "SHA-256", "content": wheel["sha256"]}]
+    python_packages = [
+        item
+        for item in sbom["components"]
+        if isinstance(item.get("purl"), str)
+        and item["purl"].startswith("pkg:pypi/")
+    ]
+    assert python_packages
+    assert all(not item["bom-ref"].startswith("python-wheel:") for item in python_packages)
+    assert all(
+        item["purl"].rsplit("@", 1)[-1] == item["version"]
+        for item in python_packages
+    )
     for relative in (
         "hooks/hooks.json",
         "hooks/arw_hook.py",
@@ -389,7 +392,6 @@ def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) ->
             "legal",
             "runtime",
             "source-manifest",
-            "wheelhouse",
         }
 
 
@@ -866,13 +868,9 @@ def test_validate_only_rejects_paired_header_and_identity_rebind(
     identity = _load(stage_root / "share/arw/build-identity.json")
     identity["file_contract"]["header"]["sha256"] = _sha256(contracts_path)
     identity["file_contract"]["contract_sha256"] = fake_value
-    payloads = {
-        entry["path"]: entry for entry in identity["staged_payloads"]
-    }
+    payloads = {entry["path"]: entry for entry in identity["staged_payloads"]}
     payloads["share/arw/file-contracts.h"]["sha256"] = _sha256(contracts_path)
-    identity["staged_payloads"] = [
-        payloads[p] for p in sorted(payloads)
-    ]
+    identity["staged_payloads"] = [payloads[p] for p in sorted(payloads)]
     _write_pretty(stage_root / "share/arw/build-identity.json", identity)
     _rebind_inventory(
         stage_root,
@@ -885,41 +883,23 @@ def test_validate_only_rejects_paired_header_and_identity_rebind(
     assert "regenerated from the staged checked schemas" in validated.stderr
 
 
-def test_validate_only_rejects_3_15_staged_pin(
+def test_validate_only_accepts_unbounded_python_build_version(
     tmp_path: Path,
 ) -> None:
-    """RED: validate-only rejects ``.python-version`` set to 3.15.x."""
+    """A build interpreter above 3.14 remains valid and needs no pin file."""
 
     stage_root = tmp_path / "python-315-stage" / PLUGIN_NAME
     result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
-    (stage_root / ".python-version").write_text("3.15.0\n", encoding="ascii")
     identity = _load(stage_root / "share/arw/build-identity.json")
-    identity["runtime"]["build_interpreter"] = "3.15.0"
-    payloads = {
-        entry["path"]: entry for entry in identity["staged_payloads"]
-    }
-    payloads[".python-version"]["sha256"] = _sha256(
-        stage_root / ".python-version"
-    )
-    identity["staged_payloads"] = [
-        payloads[p] for p in sorted(payloads)
-    ]
+    identity["runtime"]["build_interpreter"] = "3.25.0"
     _write_pretty(stage_root / "share/arw/build-identity.json", identity)
-    _rebind_inventory(
-        stage_root,
-        ".python-version",
-        "share/arw/build-identity.json",
-    )
+    _rebind_inventory(stage_root, "share/arw/build-identity.json")
+    assert not (stage_root / ".python-version").exists()
 
     validated = _validate_stage(stage_root)
-    assert validated.returncode != 0
-    # Schema validation or verifier rejects.
-    assert (
-        "exactly 3\\.13\\.x or 3\\.14\\.x" in validated.stderr
-        or "does not match" in validated.stderr
-    )
+    assert validated.returncode == 0, validated.stderr
 
 
 def test_validate_only_rejects_passthrough_evidence_stub(
@@ -1013,10 +993,7 @@ def test_validate_only_rejects_pre_vendor_component_field_drift(
     # Either the manifest cross-check fires or the inventory gate catches
     # the tampered file; both reject the validate-only path.
     stderr = validated.stderr
-    assert (
-        "field version drifts" in stderr
-        or "manifest cross-check failed" in stderr
-    )
+    assert "field version drifts" in stderr or "manifest cross-check failed" in stderr
 
 
 def test_validate_only_rejects_legal_staged_path_byte_flip(
@@ -1028,9 +1005,7 @@ def test_validate_only_rejects_legal_staged_path_byte_flip(
     result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
-    license_path = (
-        stage_root / "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
-    )
+    license_path = stage_root / "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
     # Rebind inventory so the audit manifest gate does not pre-empt the
     # verifier's live-bytes cross-check on legal.json rows.
     _rebind_inventory(

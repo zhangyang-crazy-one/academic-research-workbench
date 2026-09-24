@@ -28,7 +28,7 @@ def test_stage_contains_graph_runtime_and_identity(tmp_path: Path) -> None:
     assert identity["projection"]["algorithm"] == "research-graph-projection-v1"
     assert identity["projection"]["oracle"] == "research-graph-normalization-v1"
     assert identity["projection"]["query_profile"] == "arw-graph-mcp-v1"
-    wheel = next((stage_root / "vendor/python/wheelhouse").glob("academic_research_workbench-*.whl"))
+    wheel = next((stage_root / "share/arw/wheels").glob("academic_research_workbench-*.whl"))
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
     assert "arw/graph_store.py" in names

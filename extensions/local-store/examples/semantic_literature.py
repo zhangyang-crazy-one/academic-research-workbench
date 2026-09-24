@@ -1,4 +1,4 @@
-"""Offline fixture: uv run --extra semantic python THIS_FILE NEW_OUTPUT_DIR."""
+"""Offline fixture: .venv/bin/python THIS_FILE NEW_OUTPUT_DIR."""
 
 import json
 import sys

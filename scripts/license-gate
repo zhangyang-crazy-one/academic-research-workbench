@@ -4,17 +4,17 @@
 from __future__ import annotations
 
 import argparse
-import email
 import hashlib
+import importlib.metadata
 import json
 import os
+import re
 import shlex
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -256,10 +256,8 @@ def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
-def wheel_license(wheel_path: Path) -> str:
-    with zipfile.ZipFile(wheel_path) as archive:
-        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
-        metadata = email.message_from_bytes(archive.read(metadata_name))
+def distribution_license(distribution: importlib.metadata.Distribution) -> str:
+    metadata = distribution.metadata
     expression = metadata.get("License-Expression")
     if expression:
         return expression.strip()
@@ -268,12 +266,48 @@ def wheel_license(wheel_path: Path) -> str:
     return ", ".join(license_classifiers) or metadata.get("License", "NOASSERTION").strip() or "NOASSERTION"
 
 
+def installed_distributions() -> list[dict[str, str]]:
+    """Capture this invocation's installed Python inventory as evidence only."""
+    records: dict[tuple[str, str], dict[str, str]] = {}
+    for distribution in importlib.metadata.distributions():
+        name = distribution.metadata.get("Name")
+        version = distribution.version
+        if not name:
+            continue
+        content = hashlib.sha256()
+        for entry in sorted(distribution.files or (), key=str):
+            path = distribution.locate_file(entry)
+            if path.is_file():
+                content.update(str(entry).encode("utf-8"))
+                content.update(b"\0")
+                content.update(digest(path).encode("ascii"))
+                content.update(b"\n")
+        record = {
+            "name": name,
+            "version": version,
+            "license": distribution_license(distribution),
+            "installed_content_sha256": content.hexdigest(),
+        }
+        normalized_name = re.sub(r"[-_.]+", "-", name).casefold()
+        key = (normalized_name, version)
+        previous = records.get(key)
+        if previous is not None and previous != record:
+            fail(
+                "conflicting installed distributions for "
+                f"{name}=={version}"
+            )
+        records[key] = record
+    return sorted(
+        records.values(), key=lambda item: (item["name"].casefold(), item["version"])
+    )
+
+
 def build_first_party_wheel(work_root: Path) -> dict[str, str]:
     destination = work_root / "dist"
     destination.mkdir()
     build_python = PROJECT_ROOT / ".venv/bin/python"
     if not build_python.is_file() or not os.access(build_python, os.X_OK):
-        fail("project environment missing; run uv sync --frozen first", 66)
+        fail("project environment missing; create .venv and install declared dependencies with uv pip", 66)
     result = subprocess.run(
         [str(build_python), "-m", "hatchling", "build", "--target", "wheel", "--directory", str(destination)],
         cwd=PROJECT_ROOT,
@@ -294,26 +328,27 @@ def generate_sbom(
     evidence_root: Path,
     manifest: dict[str, Any],
     receipt: dict[str, Any],
-    wheelhouse: dict[str, Any],
+    python_packages: list[dict[str, str]],
     first_party: dict[str, str],
 ) -> dict[str, Any]:
-    raw_path = evidence_root / "raw/uv-export.cdx.json"
-    raw_path.parent.mkdir(parents=True, exist_ok=True)
-    run_capture(
-        evidence_root,
-        4,
-        "uv-cyclonedx-export",
-        ["uv", "export", "--frozen", "--all-extras", "--format", "cyclonedx1.5", "--output-file", str(raw_path)],
-        cwd=PROJECT_ROOT,
-    )
-    sbom = read_json(raw_path)
-    sbom["metadata"]["timestamp"] = receipt["created_at"]
-    components = {item["bom-ref"]: item for item in sbom.get("components", [])}
-    for item in components.values():
-        if item.get("name") in {"pypdf", "pillow"}:
-            item.update(scope="optional", licenses=[{"expression": "BSD-3-Clause" if item["name"] == "pypdf" else "MIT-CMU"}])
-        if item.get("name") == "sqlite-vec":
-            item.update(scope="optional", licenses=[{"expression": "MIT OR Apache-2.0"}])
+    sbom: dict[str, Any] = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {"timestamp": receipt["created_at"], "tools": [{"name": "ARW license-gate", "version": "0.1.0"}]},
+        "components": [],
+    }
+    components: dict[str, dict[str, Any]] = {}
+    for package in python_packages:
+        name = package["name"]
+        version = package["version"]
+        reference = f"python:{name}@{version}"
+        components[reference] = {
+            "type": "library", "bom-ref": reference, "name": name, "version": version,
+            "hashes": [{"alg": "SHA-256", "content": package["installed_content_sha256"]}],
+            "licenses": [{"expression": package["license"]}],
+            "purl": f"pkg:pypi/{name.lower().replace('_', '-')}@{version}",
+        }
 
     for component in manifest["components"]:
         components[f"source:{component['id']}"] = {
@@ -332,17 +367,6 @@ def generate_sbom(
             "name": patch["path"],
             "version": str(patch["order"]),
             "hashes": [{"alg": "SHA-256", "content": patch["sha256"]}],
-        }
-    for wheel in wheelhouse["wheels"]:
-        wheel_path = PROJECT_ROOT / "vendor/python/wheelhouse" / wheel["file"]
-        components[f"python-wheel:{wheel['file']}"] = {
-            "type": "library",
-            "bom-ref": f"python-wheel:{wheel['file']}",
-            "name": wheel["package"],
-            "version": wheel["version"],
-            "hashes": [{"alg": "SHA-256", "content": wheel["sha256"]}],
-            "licenses": [{"expression": wheel_license(wheel_path)}],
-            "purl": f"pkg:pypi/{wheel['package']}@{wheel['version']}",
         }
     components[f"first-party-wheel:{first_party['file']}"] = {
         "type": "library",
@@ -410,7 +434,7 @@ def generate_sbom(
 def create_notices(
     upstream_notices: Path,
     manifest: dict[str, Any],
-    wheelhouse: dict[str, Any],
+    python_packages: list[dict[str, str]],
 ) -> None:
     preserved_notices = upstream_notices.read_text(encoding="utf-8").rstrip("\n") + "\n"
     sections = [
@@ -436,10 +460,10 @@ def create_notices(
     sections.append("\n## Ordered local patches\n")
     for patch in manifest["patches"]:
         sections.append(f"- `{patch['path']}` — SHA-256 `{patch['sha256']}`.\n")
-    sections.append("\n## Frozen Python wheelhouse\n")
-    for wheel in wheelhouse["wheels"]:
-        expression = wheel_license(PROJECT_ROOT / "vendor/python/wheelhouse" / wheel["file"])
-        sections.append(f"- `{wheel['package']}=={wheel['version']}` — {expression}.\n")
+    sections.append("\n## Python packages observed for this build\n")
+    sections.append("Versions and installed-content digests below describe this build only; they are not resolution constraints for later builds. The run inventory and SBOM carry the same observed set.\n")
+    for package in python_packages:
+        sections.append(f"- `{package['name']}=={package['version']}` — {package['license']}; installed-content SHA-256 `{package['installed_content_sha256']}`.\n")
     sections.extend(
         [
             "\n## Preserved file-base generated notices\n\n",
@@ -589,9 +613,9 @@ def main() -> None:
             )
         )
         shutil.rmtree(file_base_root / "graph-ui/node_modules", ignore_errors=True)
-        wheelhouse = read_json(PROJECT_ROOT / "vendor/python/wheelhouse.lock.json")
+        python_packages = installed_distributions()
         first_party = build_first_party_wheel(work_root)
-        sbom = generate_sbom(evidence_root, manifest, receipt, wheelhouse, first_party)
+        sbom = generate_sbom(evidence_root, manifest, receipt, python_packages, first_party)
 
     verifier = subprocess.run(
         [str(PROJECT_ROOT / "scripts/verify-sources")],
@@ -604,7 +628,7 @@ def main() -> None:
         sys.stderr.write(verifier.stderr)
         fail("native legal tooling changed a manifest-bound source")
 
-    create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, wheelhouse)
+    create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, python_packages)
     refresh_technical_evidence_hashes()
     verdict = classify_release(component_licenses)
     inventory = {
@@ -617,7 +641,7 @@ def main() -> None:
         "pre_vendor_receipt": manifest["pre_vendor_receipt"],
         "component_licenses": component_licenses,
         "patches": manifest["patches"],
-        "python_wheels": wheelhouse["wheels"],
+        "python_packages_observed": python_packages,
         "declared_artifacts": manifest["declared_artifacts"],
         "file_base_legal_inputs": next(
             item["legal_inputs"] for item in manifest["components"] if item["id"] == "file-base"
@@ -641,7 +665,7 @@ def main() -> None:
             "unexpected": [],
             "pre_vendor_legal_input_count": len(receipt["legal_inputs"]),
             "post_materialization_legal_input_count": len(inventory["file_base_legal_inputs"]),
-            "python_wheel_count": len(wheelhouse["wheels"]),
+            "python_package_count": len(python_packages),
             "patch_count": len(manifest["patches"]),
             "sbom_component_count": len(sbom["components"]),
         },

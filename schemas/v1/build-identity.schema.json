@@ -14,7 +14,7 @@
     "native",
     "projection",
     "file_contract",
-    "wheelhouse",
+    "runtime_artifact",
     "schemas",
     "evidence",
     "staged_payloads"
@@ -38,7 +38,7 @@
     "native": {"$ref": "#/$defs/native"},
     "projection": {"$ref": "#/$defs/projection"},
     "file_contract": {"$ref": "#/$defs/fileContract"},
-    "wheelhouse": {"$ref": "#/$defs/wheelhouse"},
+    "runtime_artifact": {"$ref": "#/$defs/runtimeArtifact"},
     "schemas": {"$ref": "#/$defs/schemaSet"},
     "evidence": {"$ref": "#/$defs/evidence"},
     "staged_payloads": {
@@ -78,7 +78,7 @@
       "required": ["python_requires", "build_interpreter"],
       "properties": {
         "python_requires": {"const": ">=3.13"},
-        "build_interpreter": {"type": "string", "pattern": "^3\\.(13|14)\\.[0-9]+$"}
+        "build_interpreter": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+[A-Za-z0-9.+-]*$"}
       }
     },
     "component": {
@@ -173,14 +173,12 @@
         }
       }
     },
-    "wheelhouse": {
+    "runtimeArtifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lock", "requirements", "first_party"],
+      "required": ["first_party_wheel"],
       "properties": {
-        "lock": {"$ref": "#/$defs/digestPath"},
-        "requirements": {"$ref": "#/$defs/digestPath"},
-        "first_party": {"$ref": "#/$defs/digestPath"}
+        "first_party_wheel": {"$ref": "#/$defs/digestPath"}
       }
     },
     "schemaSet": {

@@ -65,9 +65,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PYTHON="$PROJECT_ROOT/.venv/bin/python"
-[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
-
+PYTHON="${ARW_BUILD_PYTHON:-$PROJECT_ROOT/.venv/bin/python}"
+[[ -x "$PYTHON" ]] || PYTHON="$(command -v python3 || command -v python || true)"
+[[ -n "$PYTHON" && -x "$PYTHON" ]] || fail "Python >=3.13 is required" 66
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)'; then
+  [[ -z "${ARW_BUILD_PYTHON:-}" ]] || fail "ARW_BUILD_PYTHON must satisfy Python >=3.13" 66
+  PYTHON=""
+  for candidate in python3 python; do
+    resolved="$(command -v "$candidate" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)'; then
+      PYTHON="$resolved"
+      break
+    fi
+  done
+  [[ -n "$PYTHON" ]] || fail "build interpreter must satisfy Python >=3.13" 66
+fi
 STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
 EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
 [[ "$STAGE_ROOT" != "/" && "$STAGE_ROOT" != "$PROJECT_ROOT" ]] \
@@ -422,6 +434,9 @@ PY
   exit 0
 fi
 
+UV="$(command -v uv || true)"
+[[ -n "$UV" ]] || fail "uv is required to resolve Python dependencies from the configured package index" 69
+
 if [[ -e "$STAGE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "stage root exists; pass --clean" 73
   [[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] \
@@ -483,9 +498,7 @@ copy_tree() {
   )
 }
 
-copy_file ".python-version"
 copy_file "pyproject.toml"
-copy_file "uv.lock"
 copy_file ".codex-plugin/plugin.json"
 copy_file ".mcp.json"
 copy_file "skills/academic-research-workbench/SKILL.md"
@@ -579,8 +592,6 @@ copy_file "vendor/patches/file-base/0001-file-base-server-name.patch"
 copy_file "vendor/patches/file-base/0002-phase1-confined-read.patch"
 copy_file "vendor/patches/file-base/0003-phase3-generation-builder.patch"
 copy_file "vendor/patches/file-base/0004-phase5-research-graph.patch"
-copy_file "vendor/python/wheelhouse.lock.json"
-copy_file "vendor/python/wheelhouse/requirements-runtime.txt"
 
 if [[ -n "$INTEGRATION_LOCK" ]]; then
   "$PYTHON" - "$PROJECT_ROOT" "$INTEGRATION_LOCK" "$TEMP_STAGE" <<'PY'
@@ -703,13 +714,10 @@ manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
 PY
 fi
 
-while IFS= read -r -d '' wheel; do
-  relative="${wheel#"$PROJECT_ROOT/"}"
-  copy_file "$relative"
-done < <(find "$PROJECT_ROOT/vendor/python/wheelhouse" -maxdepth 1 -type f -name '*.whl' -print0 | sort -z)
-
 DIST_ROOT="$WORK_ROOT/dist"
 mkdir -p "$DIST_ROOT"
+"$UV" pip install --python "$PYTHON" 'hatchling>=1.31.0' "$PROJECT_ROOT" \
+  || fail "build-dependency-resolution-failed: could not resolve project and build dependencies from the configured package index" 69
 (
   cd "$PROJECT_ROOT"
   "$PYTHON" -m hatchling build --target wheel --directory "$DIST_ROOT"
@@ -720,47 +728,9 @@ mapfile -t first_party_wheels < <(find "$DIST_ROOT" -maxdepth 1 -type f -name "$
 FIRST_PARTY_WHEEL="${first_party_wheels[0]}"
 FIRST_PARTY_NAME="$(basename -- "$FIRST_PARTY_WHEEL")"
 FIRST_PARTY_SHA256="$(sha256sum "$FIRST_PARTY_WHEEL" | awk '{print $1}')"
-install -D -m 0644 -- "$FIRST_PARTY_WHEEL" "$TEMP_STAGE/vendor/python/wheelhouse/$FIRST_PARTY_NAME"
+install -D -m 0644 -- "$FIRST_PARTY_WHEEL" "$TEMP_STAGE/share/arw/wheels/$FIRST_PARTY_NAME"
 
-INSTALL_REQUIREMENTS_REL="vendor/python/wheelhouse/requirements-installed.txt"
-cp -- "$TEMP_STAGE/vendor/python/wheelhouse/requirements-runtime.txt" "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL"
-printf '\n%s==0.1.0 \\\n    --hash=sha256:%s\n' "$PLUGIN_NAME" "$FIRST_PARTY_SHA256" >> "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL"
-INSTALL_REQUIREMENTS_SHA256="$(sha256sum "$TEMP_STAGE/$INSTALL_REQUIREMENTS_REL" | awk '{print $1}')"
-
-"$PYTHON" - \
-  "$TEMP_STAGE/vendor/python/wheelhouse.lock.json" \
-  "$FIRST_PARTY_NAME" \
-  "$FIRST_PARTY_SHA256" \
-  "$INSTALL_REQUIREMENTS_REL" \
-  "$INSTALL_REQUIREMENTS_SHA256" <<'PY'
-from __future__ import annotations
-
-import json
-import os
-import sys
-from pathlib import Path
-
-
-lock_path = Path(sys.argv[1])
-payload = json.loads(lock_path.read_text(encoding="utf-8"))
-payload["first_party_wheel"] = {
-    "file": sys.argv[2],
-    "package": "academic-research-workbench",
-    "registry": "first-party",
-    "sha256": sys.argv[3],
-    "source": "built-from-clean-stage-inputs",
-    "version": "0.1.0",
-}
-payload["install_requirements"] = {
-    "path": sys.argv[4],
-    "sha256": sys.argv[5],
-}
-temporary = lock_path.with_suffix(".json.tmp")
-temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-os.replace(temporary, lock_path)
-PY
-
-"$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" <<'PY'
+"$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$FIRST_PARTY_NAME" "$FIRST_PARTY_SHA256" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -774,6 +744,8 @@ from pathlib import Path
 
 project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
+first_party_name = sys.argv[3]
+first_party_sha256 = sys.argv[4]
 sys.path.insert(0, str(project_root / "src"))
 
 from arw.kernel.core.canonical import strict_json_loads  # noqa: E402
@@ -790,7 +762,6 @@ from arw.kernel.policy.integration_lock import (  # noqa: E402
     NATIVE_SURFACES,
     NATIVE_VERDICT_KIND,
     native_evidence_path,
-    observe_staged_python_version,
     parse_file_contract_contract_sha256_from_bytes,
     verify_evidence_contract,
 )
@@ -868,8 +839,6 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
 
 manifest = json.loads((project_root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
 plugin = json.loads((stage_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-lock_path = stage_root / "vendor/python/wheelhouse.lock.json"
-lock = json.loads(lock_path.read_text(encoding="utf-8"))
 contract_header_path = stage_root / "share/arw/file-contracts.h"
 schema_dir = stage_root / "share/arw/schemas"
 schema_entries = regenerate_schemas(schema_dir)
@@ -902,26 +871,8 @@ payloads = [
     if path.is_file() and path.relative_to(stage_root).as_posix() != "share/arw/build-identity.json"
 ]
 
-# Build the pinned build_interpreter from the staged ``.python-version``
-# file.  The producer MUST refuse to emit an identity unless the running
-# interpreter equals the staged pin - the verifier compares the recorded
-# build_interpreter against this live file, so a mismatch would fail
-# install-time verification.  Use an explicit failure (never ``assert`` so
-# the check survives ``python -O``).
-staged_python_version = observe_staged_python_version(stage_root)
-running_python_version = platform.python_version()
-if running_python_version != staged_python_version:
-    raise SystemExit(
-        f"stage-plugin requires the running interpreter to match the staged "
-        f".python-version pin: running={running_python_version} "
-        f"staged={staged_python_version}"
-    )
-major, minor, _patch = staged_python_version.split(".")
-if int(minor) not in {13, 14}:
-    raise SystemExit(
-        f"stage-plugin requires Python 3.13.x or 3.14.x exactly "
-        f"(got {staged_python_version})"
-    )
+# Record the actual interpreter used to build this artifact as evidence.
+build_interpreter = platform.python_version()
 
 # The producer regenerates the file-contract header FROM the staged
 # checked schemas (NOT from the source ``generated/`` directory) so the
@@ -935,7 +886,7 @@ identity = {
     "plugin": {"name": plugin["name"], "version": plugin["version"]},
     "runtime": {
         "python_requires": ">=3.13",
-        "build_interpreter": staged_python_version,
+        "build_interpreter": build_interpreter,
     },
     "components": [
         {key: component[key] for key in ("id", "version", "revision", "tree_sha256")}
@@ -992,15 +943,10 @@ identity = {
             "source-outline-v1",
         ],
     },
-    "wheelhouse": {
-        "lock": {"path": "vendor/python/wheelhouse.lock.json", "sha256": digest(lock_path)},
-        "requirements": {
-            "path": "vendor/python/wheelhouse/requirements-runtime.txt",
-            "sha256": digest(stage_root / "vendor/python/wheelhouse/requirements-runtime.txt"),
-        },
-        "first_party": {
-            "path": f"vendor/python/wheelhouse/{lock['first_party_wheel']['file']}",
-            "sha256": lock["first_party_wheel"]["sha256"],
+    "runtime_artifact": {
+        "first_party_wheel": {
+            "path": f"share/arw/wheels/{first_party_name}",
+            "sha256": first_party_sha256,
         },
     },
     "schemas": {
@@ -1143,13 +1089,6 @@ from pathlib import Path
 project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 first_party_name = sys.argv[3]
-source_lock = json.loads(
-    (project_root / "vendor/python/wheelhouse.lock.json").read_text(encoding="utf-8")
-)
-stage_lock = json.loads(
-    (stage_root / "vendor/python/wheelhouse.lock.json").read_text(encoding="utf-8")
-# pi-lens-ignore: jscpd:duplicate
-)
 
 
 def digest(path: Path) -> str:
@@ -1260,16 +1199,7 @@ def verify_technical_provenance(
         raise SystemExit("technical provenance contains an SBOM self-reference cycle")
 
 
-if digest(project_root / source_lock["uv_lock"]["path"]) != source_lock["uv_lock"]["sha256"]:
-    raise SystemExit("uv.lock does not match the wheelhouse lock")
-
-for wheel in source_lock["wheels"]:
-    source = project_root / "vendor/python/wheelhouse" / wheel["file"]
-    if source.is_symlink() or digest(source) != wheel["sha256"]:
-        raise SystemExit(f"source wheel mismatch: {wheel['file']}")
-
 static_files = {
-    ".python-version",
     ".codex-plugin/plugin.json",
     ".mcp.json",
     ".file-base/build-evidence.json",
@@ -1396,10 +1326,6 @@ static_files = {
     "supply-chain/use-distribution.json",
     "supply-chain/semantica-qualification.json",
     "tests/integration/test_phase2_durable_runtime.py",
-    "uv.lock",
-    "vendor/python/wheelhouse.lock.json",
-    "vendor/python/wheelhouse/requirements-installed.txt",
-    "vendor/python/wheelhouse/requirements-runtime.txt",
     "vendor/source-manifest.json",
     "vendor/mcp-manifest.json",
     "vendor/patches/file-base/0001-file-base-server-name.patch",
@@ -1475,9 +1401,7 @@ for path in ars_source.rglob("*"):
 lock_relative = "supply-chain/integration-lock.json"
 if (stage_root / lock_relative).is_file():
     static_files.add(lock_relative)
-expected = static_files | {
-    f"vendor/python/wheelhouse/{wheel['file']}" for wheel in source_lock["wheels"]
-} | {f"vendor/python/wheelhouse/{first_party_name}"}
+expected = static_files | {f"share/arw/wheels/{first_party_name}"}
 
 actual: set[str] = set()
 for path in stage_root.rglob("*"):
@@ -1501,9 +1425,9 @@ for relative in actual:
     if private_path.search(relative):
         raise SystemExit(f"private path class rejected from stage: {relative}")
 
-first_party = stage_root / "vendor/python/wheelhouse" / stage_lock["first_party_wheel"]["file"]
-if digest(first_party) != stage_lock["first_party_wheel"]["sha256"]:
-    raise SystemExit("first-party wheel hash mismatch")
+first_party = stage_root / "share/arw/wheels" / first_party_name
+if not first_party.is_file():
+    raise SystemExit("first-party wheel is missing")
 
 try:
     sbom = json.loads((stage_root / "SBOM.cdx.json").read_text(encoding="utf-8"))
@@ -1560,8 +1484,8 @@ for relative, record in payloads.items():
 def inventory_source(relative: str) -> str:
     if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
         return "source-manifest"
-    if relative.startswith("vendor/python/wheelhouse/") or relative in {"uv.lock", ".python-version"}:
-        return "wheelhouse"
+    if relative.startswith("share/arw/wheels/"):
+        return "build"
     if relative.startswith("LICENSES/") or relative.startswith("supply-chain/") or relative in {
         "MODIFICATIONS.md",
         "SBOM.cdx.json",

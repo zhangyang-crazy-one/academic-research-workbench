@@ -25,9 +25,7 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         "HOME": str(tmp_path / "caller-home"),
         "CODEX_HOME": str(tmp_path / "caller-codex-home"),
         "PATH": os.environ["PATH"],
-        "PIP_NO_INDEX": "1",
         "PYTHONNOUSERSITE": "1",
-        "UV_OFFLINE": "1",
     }
     result = subprocess.run(
         [
@@ -112,7 +110,7 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         "markdown-outline-v1",
         "source-outline-v1",
     }
-    first_party = identity["wheelhouse"]["first_party"]
+    first_party = identity["runtime_artifact"]["first_party_wheel"]
     assert hashlib.sha256(
         (stage_root / first_party["path"]).read_bytes()
     ).hexdigest() == first_party["sha256"]
@@ -147,7 +145,6 @@ def test_identity_loader_rejects_tampered_packaged_schema(
             "HOME": str(tmp_path / "caller-home"),
             "CODEX_HOME": str(tmp_path / "caller-codex-home"),
             "PATH": os.environ["PATH"],
-            "PIP_NO_INDEX": "1",
             "PYTHONNOUSERSITE": "1",
         },
         text=True,

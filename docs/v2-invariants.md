@@ -6,7 +6,7 @@ compatibility baseline in `tests/compat/`, gated by the `v2_compat` pytest
 marker:
 
 ```bash
-uv run pytest -m v2_compat
+.venv/bin/python -m pytest -m v2_compat
 ```
 
 A v2 PR may not merge while `pytest -m v2_compat` is red, and may not weaken a
@@ -24,7 +24,7 @@ rejection behavior.
 ## I2 — Replay determinism
 
 Replaying the same canonical event bytes produces the same state digest on
-every run, on every supported Python (3.13 and 3.14), regardless of wall
+every run, on every supported Python version (>=3.13), regardless of wall
 clock, process identity, or filesystem location. Enforced by:
 `test_replay_digest_is_repeat_stable` and the pinned `replay_digest.json`.
 
@@ -133,5 +133,5 @@ local-only and are not required for regeneration):
      Phase-5 fixture records; recompute the pinned SHA-256 values.
 3. Review the golden diff line-by-line in the PR. A golden change without a
    corresponding, explained production change is a red flag.
-4. Re-run `uv run pytest -m v2_compat` plus the confinement and
+4. Re-run `.venv/bin/python -m pytest -m v2_compat` plus the confinement and
    file-security suites before merge.

@@ -8,8 +8,8 @@ watermarking, absence of watermarks, or authorship.
 ## Commands
 
 For an installed plugin, use `bin/arw`. From a source development environment, use
-`uv run --frozen python -m arw.cli` with the same arguments. The repository launcher
-uses its existing offline, locked wheelhouse; it does not fall back to source imports.
+`.venv/bin/python -m arw.cli` with the same arguments. The repository launcher uses
+the installed runtime environment and does not fall back to source imports.
 
 ```sh
 bin/arw artifact inspect --root /research/paper --path manuscript.md

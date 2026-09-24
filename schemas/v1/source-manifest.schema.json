@@ -10,7 +10,6 @@
     "components",
     "patches",
     "native_test_suites",
-    "locks",
     "declared_artifacts"
   ],
   "properties": {
@@ -31,11 +30,6 @@
       "minItems": 1,
       "maxItems": 1,
       "items": {"$ref": "#/$defs/nativeTestSuite"}
-    },
-    "locks": {
-      "type": "array",
-      "minItems": 2,
-      "items": {"$ref": "#/$defs/digestPath"}
     },
     "declared_artifacts": {
       "type": "array",

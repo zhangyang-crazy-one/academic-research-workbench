@@ -1,4 +1,4 @@
-"""Run: uv run python extensions/research-artifact/examples/compile_workflow.py OUTPUT
+"""Run: .venv/bin/python extensions/research-artifact/examples/compile_workflow.py OUTPUT
 
 Creates a fresh, explicitly exploratory figure from accepted bilingual evidence.
 No simulated visual review is used; this example is not publication qualification.

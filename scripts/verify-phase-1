@@ -42,7 +42,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 PYTHON="$PROJECT_ROOT/.venv/bin/python"
-[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+[[ -x "$PYTHON" ]] || fail "project environment missing; create .venv and install declared dependencies with uv pip" 66
 EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
 [[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe evidence root" 64

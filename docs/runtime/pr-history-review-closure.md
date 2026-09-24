@@ -62,7 +62,7 @@ disabled. No production date validation, schemas, or negative cases were removed
 - Research-integrity correction: 103 tests pass; complete unit suite: 540 pass.
 - PR #16 suffix and audit-entry follow-up: 14 focused tests pass.
 - Store transport/root/shim follow-up: 21 tests pass, using isolated temporary
-  plugin fixtures rather than mutating the repository's wheelhouse or lockfile.
+  plugin fixtures rather than mutating the repository's declared dependency ranges.
 - Final serial integration: 674 tests pass across the complete unit suite and
   selected CLI/MCP/provider/local-store/provenance regression suites.
 - Final serial schema/staged checks: 33 tests pass (schema drift, supply-chain

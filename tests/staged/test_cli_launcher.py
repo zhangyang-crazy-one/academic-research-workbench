@@ -9,7 +9,12 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
-FORBIDDEN_FRAGMENTS = ("Paper4Master", "Examination", str(Path.home()), str(REPOSITORY_ROOT))
+FORBIDDEN_FRAGMENTS = (
+    "Paper4Master",
+    "Examination",
+    str(Path.home()),
+    str(REPOSITORY_ROOT),
+)
 
 
 def _required_executable(relative_path: str) -> Path:
@@ -19,7 +24,9 @@ def _required_executable(relative_path: str) -> Path:
     return executable
 
 
-def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> None:
+def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
+    tmp_path: Path,
+) -> None:
     stage_script = _required_executable("scripts/stage-plugin")
     smoke_script = _required_executable("scripts/smoke-staged-plugin")
     unrelated_cwd = tmp_path / "unrelated-working-directory"
@@ -31,8 +38,6 @@ def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> N
         "CODEX_HOME": str(tmp_path / "isolated-codex-home"),
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
-        "PIP_NO_INDEX": "1",
-        "UV_OFFLINE": "1",
     }
 
     staged = subprocess.run(
@@ -114,7 +119,12 @@ def test_installed_cli_runs_offline_outside_source_checkout(tmp_path: Path) -> N
     summary = json.loads((evidence_root / "summary.json").read_text())
     assert summary["source_imported"] is False
     assert summary["network_isolation"] == "linux-user-network-namespace"
+    assert summary["runtime_dependency_bootstrap"] == (
+        "configured-package-index-before-isolated-canary"
+    )
     assert summary["inherited_pythonpath"] is False
+
+
 def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
     stage_script = _required_executable("scripts/stage-plugin")
     stage_root = tmp_path / "stage" / PLUGIN_NAME
@@ -125,8 +135,6 @@ def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
         "HOME": str(isolated_home),
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
-        "PIP_NO_INDEX": "1",
-        "UV_OFFLINE": "1",
     }
 
     staged = subprocess.run(
@@ -165,3 +173,18 @@ def test_installed_cli_reports_actionable_error_without_home(tmp_path: Path) -> 
     assert result.returncode == 78
     assert "bootstrap-config" in result.stderr
     assert "HOME" in result.stderr
+
+
+def test_installed_cli_reports_missing_runtime_artifact(tmp_path: Path) -> None:
+    launcher = REPOSITORY_ROOT / "bin/arw"
+    result = subprocess.run(
+        [str(launcher), "status", "--help"],
+        cwd=tmp_path,
+        env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 66
+    assert "runtime-artifact-missing" in result.stderr
+    assert "find:" not in result.stderr

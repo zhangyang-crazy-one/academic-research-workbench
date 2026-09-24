@@ -47,7 +47,6 @@ CODEX_CLI_VERSION_REQUIREMENT = ">=0.144.4"
 _CODEX_CLI_STABLE_VERSION_RE = re.compile(
     r"^codex-cli (?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)(?:\+[0-9A-Za-z.-]+)?$"
 )
-EXPECTED_CODEX_CLI_VERSION = "codex-cli 0.144.4"
 EXPECTED_ARS_UPSTREAM_COMMIT = "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
 EXPECTED_EXPERIMENT_AGENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 
@@ -181,7 +180,7 @@ BUILD_IDENTITY_PROJECTION_KEYS = (
     "native",
     "projection",
     "file_contract",
-    "wheelhouse",
+    "runtime_artifact",
     "schemas",
     "evidence",
 )
@@ -1497,7 +1496,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         raise IntegrationLockError("staged plugin version is not qualified")
     wheels = tuple(
         sorted(
-            (stage_root / "vendor/python/wheelhouse").glob(
+            (stage_root / "share/arw/wheels").glob(
                 "academic_research_workbench-*.whl"
             )
         )
@@ -2160,11 +2159,8 @@ def _audit_inventory_source(relative: str) -> str:
 
     if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
         return "source-manifest"
-    if relative.startswith("vendor/python/wheelhouse/") or relative in {
-        "uv.lock",
-        ".python-version",
-    }:
-        return "wheelhouse"
+    if relative.startswith("share/arw/wheels/"):
+        return "build"
     if relative.startswith(("LICENSES/", "supply-chain/")) or relative in {
         "MODIFICATIONS.md",
         "SBOM.cdx.json",
@@ -3533,7 +3529,9 @@ def _projection_profile_patch_sha256(patches: list[Mapping[str, object]]) -> str
 _CONTRACT_DEFINE_PATTERN = re.compile(
     r'#\s*define\s+ARW_FILES_CONTRACT_SHA256\s+"([0-9a-f]{64})"'
 )
-_PYTHON_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_PYTHON_VERSION_PATTERN = re.compile(
+    r"^([0-9]+)\.([0-9]+)\.([0-9]+)(?:[A-Za-z0-9.+-]*)$"
+)
 
 
 def _strip_c_comments(source: str) -> str:
@@ -3707,42 +3705,6 @@ def observe_regenerated_file_contract(
     return parse_file_contract_contract_sha256_from_bytes(expected_bytes)
 
 
-def observe_staged_python_version(stage_root: Path) -> str:
-    """Read the staged ``.python-version`` and require strict x.y.z form.
-
-    The producer pins the interpreter that built the wheel into this file;
-    the verifier reads it back so the ``build_interpreter`` claim in the
-    build identity is a live, content-addressable reference rather than a
-    self-reported producer value.  A bare version without a patch component
-    is rejected so callers cannot smuggle a partial ``3.13`` declaration.
-    The pinned interpreter MUST be exactly Python 3.13.x or 3.14.x; future
-    versions require an explicit binding update.
-    """
-
-    path = _regular_file_under(stage_root, ".python-version")
-    try:
-        raw = path.read_text(encoding="ascii")
-    except (OSError, UnicodeError) as error:
-        raise IntegrationLockError(f".python-version is unreadable: {error}") from error
-    value = raw.strip()
-    if "\n" in value or not _PYTHON_VERSION_PATTERN.fullmatch(value):
-        raise IntegrationLockError(
-            ".python-version must contain a single strict x.y.z version line"
-        )
-    _major, minor, _patch = value.split(".")
-    try:
-        minor_value = int(minor)
-    except ValueError as error:
-        raise IntegrationLockError(
-            f".python-version has a non-numeric minor version: {value}"
-        ) from error
-    if minor_value not in {13, 14}:
-        raise IntegrationLockError(
-            f".python-version must be exactly 3.13.x or 3.14.x (got {value})"
-        )
-    return value
-
-
 def _load_build_identity_binding(
     stage_root: Path,
     source_manifest: Mapping[str, object],
@@ -3842,12 +3804,7 @@ def _load_build_identity_binding(
             f"build identity plugin.version is not qualified: {declared_version}"
         )
 
-    # ----- runtime.build_interpreter == staged .python-version --------------
-    # The producer pins the interpreter that built the wheel into the staged
-    # ``.python-version`` file; the verifier reads it back live so the
-    # ``build_interpreter`` claim is content-addressable rather than
-    # self-reported.  The verifier never compares against its own runtime
-    # because installed verification can run on a different interpreter.
+    # ----- build interpreter observation -------------------------------------
     runtime = identity.get("runtime")
     if not isinstance(runtime, dict):
         raise IntegrationLockError("build identity runtime is malformed")
@@ -3856,13 +3813,14 @@ def _load_build_identity_binding(
         raise IntegrationLockError(
             "build identity runtime.build_interpreter must be a string"
         )
-    staged_python_version = observe_staged_python_version(stage_root)
-    if declared_build_interpreter != staged_python_version:
+    version_match = _PYTHON_VERSION_PATTERN.fullmatch(declared_build_interpreter)
+    if version_match is None:
         raise IntegrationLockError(
-            "build identity runtime.build_interpreter must equal staged "
-            f".python-version: declared={declared_build_interpreter} "
-            f"staged={staged_python_version}"
+            "build identity runtime.build_interpreter must be a full version"
         )
+    build_major, build_minor = map(int, version_match.groups()[:2])
+    if (build_major, build_minor) < (3, 13):
+        raise IntegrationLockError("build interpreter must satisfy Python >=3.13")
 
     # ----- native.binary / native.build_evidence live bytes -------------------
     if native.get("compile_profile") != "release-o2":
@@ -3953,48 +3911,16 @@ def _load_build_identity_binding(
             "ARW_FILES_CONTRACT_SHA256 embedded in the regenerated header"
         )
 
-    # ----- wheelhouse lock / requirements / first_party live bytes ------------
-    wheelhouse = identity.get("wheelhouse")
-    if not isinstance(wheelhouse, dict):
-        raise IntegrationLockError("build identity wheelhouse is malformed")
-    for field in ("lock", "requirements", "first_party"):
-        _verify_digest_path(
-            stage_root,
-            wheelhouse.get(field),
-            label=f"build identity wheelhouse.{field}",
-            staged_payloads=staged_payloads,
-        )
-    first_party = wheelhouse.get("first_party")
-    if isinstance(first_party, dict) and first_party.get("path", "").startswith(
-        "vendor/python/wheelhouse/"
-    ):
-        # Verify the wheelhouse.lock.json claims this exact first-party wheel
-        # so the digestPath and the lockfile cannot be rebound independently.
-        lock_path = _regular_file_under(stage_root, wheelhouse["lock"]["path"])
-        try:
-            lock_payload = json.loads(lock_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise IntegrationLockError(
-                f"wheelhouse lock payload is unreadable: {error}"
-            ) from error
-        first_party_record = (
-            lock_payload.get("first_party_wheel")
-            if isinstance(lock_payload, dict)
-            else None
-        )
-        if not isinstance(first_party_record, dict):
-            raise IntegrationLockError(
-                "wheelhouse.lock.json does not declare first_party_wheel"
-            )
-        expected_wheel_filename = first_party["path"].rsplit("/", 1)[-1]
-        if first_party_record.get("file") != expected_wheel_filename:
-            raise IntegrationLockError(
-                "wheelhouse.first_party.path drifts from wheelhouse.lock.json"
-            )
-        if first_party_record.get("sha256") != first_party["sha256"]:
-            raise IntegrationLockError(
-                "wheelhouse.first_party.sha256 drifts from wheelhouse.lock.json"
-            )
+    # ----- first-party wheel artifact identity -------------------------------
+    runtime_artifact = identity.get("runtime_artifact")
+    if not isinstance(runtime_artifact, dict):
+        raise IntegrationLockError("build identity runtime_artifact is malformed")
+    _verify_digest_path(
+        stage_root,
+        runtime_artifact.get("first_party_wheel"),
+        label="build identity runtime_artifact.first_party_wheel",
+        staged_payloads=staged_payloads,
+    )
 
     # ----- schemas files + derived aggregate ---------------------------------
     schemas = identity.get("schemas")
@@ -4888,7 +4814,6 @@ __all__ = (
     "observe_codex_host",
     "observe_hook_definition",
     "observe_stage_identity",
-    "observe_staged_python_version",
     "parse_file_contract_contract_sha256",
     "validate_live_audit_manifests",
     "verify_integration_lock",

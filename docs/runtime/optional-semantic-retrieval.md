@@ -16,7 +16,8 @@ read-only query behavior, backend failures, SQL rollback after vector replacemen
 CLI commands, fusion boundaries and unsafe paths. Existing compatibility and
 local-store suites verify the additive store schema migration.
 
-`sqlite-vec==0.1.9` is an optional MIT OR Apache-2.0 dependency recorded in the
-lockfile and SBOM. It is not bundled into the base installed wheelhouse. The base
-plugin remains usable without semantic retrieval; operators provision the extra
-in their runtime explicitly. No model is bundled, and full GraphRAG is deferred.
+`sqlite-vec` is an optional MIT OR Apache-2.0 dependency. Its resolved version is
+recorded in the SBOM generated for the build or runtime inventory that includes
+it; that observation does not constrain future resolution. It is not bundled
+into the base plugin. Operators provision the extra in their runtime explicitly.
+No model is bundled, and full GraphRAG is deferred.

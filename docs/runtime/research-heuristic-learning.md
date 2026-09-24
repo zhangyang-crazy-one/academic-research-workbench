@@ -4,7 +4,7 @@ The research-learning extension provides project-scoped, evidence-bound lessons
 for subsequent research decisions. Its standalone acceptance example is:
 
 ```bash
-uv run --frozen python extensions/research-learning/examples/qualified_lesson.py OUTPUT
+.venv/bin/python extensions/research-learning/examples/qualified_lesson.py OUTPUT
 ```
 
 The example exercises canonical observation capture, manual candidate publication,

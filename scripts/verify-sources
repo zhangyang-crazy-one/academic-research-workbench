@@ -11,7 +11,7 @@ usage() {
 Usage: verify-sources [--project-root PATH] [--inputs-only]
        verify-sources --materialize --patch-source PATH [--project-root PATH]
 
-Verify the receipt-bound source, legal, lock, wheelhouse, patch, binary, and
+Verify the receipt-bound source, legal, patch, binary, and
 declared artifact digests. Materialization is allowed only from a passing
 pre-vendor receipt and its exact source archives.
 EOF
@@ -336,13 +336,6 @@ if materialize:
                     "sha256": digest(notice_path),
                 },
             ],
-            "locks": [
-                {"path": "uv.lock", "sha256": digest(project_root / "uv.lock")},
-                {
-                    "path": "vendor/python/wheelhouse.lock.json",
-                    "sha256": digest(project_root / "vendor/python/wheelhouse.lock.json"),
-                },
-            ],
             "native_test_suites": [
                 {
                     "component": "file-base",
@@ -386,22 +379,6 @@ if not isinstance(receipt_record, dict):
 receipt = verify_receipt(
     project_root / str(receipt_record["path"]), str(receipt_record["sha256"])
 )
-
-for lock in manifest.get("locks", []):
-    require_digest(project_root / str(lock["path"]), str(lock["sha256"]), "lock")
-
-wheelhouse_lock_path = project_root / "vendor/python/wheelhouse.lock.json"
-wheelhouse_lock = load_json(wheelhouse_lock_path, "lock")
-uv_record = wheelhouse_lock.get("uv_lock")
-if not isinstance(uv_record, dict):
-    fail("lock", "wheelhouse lock omits uv.lock relationship")
-require_digest(project_root / str(uv_record["path"]), str(uv_record["sha256"]), "lock")
-for wheel in wheelhouse_lock.get("wheels", []):
-    require_digest(
-        project_root / "vendor/python/wheelhouse" / str(wheel["file"]),
-        str(wheel["sha256"]),
-        "wheelhouse",
-    )
 
 for artifact in manifest.get("declared_artifacts", []):
     artifact_path = project_root / str(artifact["path"])

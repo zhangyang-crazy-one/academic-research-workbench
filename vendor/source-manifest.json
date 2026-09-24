@@ -1010,17 +1010,7 @@
       "class": "schema",
       "path": "schemas/v1/source-manifest.schema.json",
       "required_before_staging": true,
-      "sha256": "3fb0d67ea2e4efb58fbf9f798c2a8b6c0df8c22740744c10156106208873f8df"
-    }
-  ],
-  "locks": [
-    {
-      "path": "uv.lock",
-      "sha256": "0f7ab3eaf71af4db2022d365820023474e579123a521e010870607ca1a73b4df"
-    },
-    {
-      "path": "vendor/python/wheelhouse.lock.json",
-      "sha256": "0f13390b424785c0afeea55cfcbbee83fdaab5e36beccdbb02e3b8668ebec0e7"
+      "sha256": "4b88ab8ff4a5a80476281beacbb9fccaf5671bd14a75073324b5f6686012b723"
     }
   ],
   "native_test_suites": [

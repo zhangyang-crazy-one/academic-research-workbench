@@ -205,28 +205,8 @@ def _install_audit_manifests(stage: Path) -> None:
         return _digest(stage / relative)
 
     wheel_path = (
-        "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
+        "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
     )
-    wheel_path_filename = wheel_path.rsplit("/", 1)[-1]
-    requirements_path = "vendor/python/wheelhouse/requirements-runtime.txt"
-    (stage / requirements_path).parent.mkdir(parents=True, exist_ok=True)
-    (stage / requirements_path).write_text(
-        "academic-research-workbench==0.1.0\n", encoding="utf-8"
-    )
-    wheelhouse_lock_path = "vendor/python/wheelhouse.lock.json"
-    wheelhouse_lock_payload = {
-        "schema_version": "arw.wheelhouse-lock.v1",
-        "wheels": [],
-        "first_party_wheel": {
-            "file": wheel_path_filename,
-            "package": "academic-research-workbench",
-            "registry": "first-party",
-            "sha256": _digest(stage / wheel_path),
-            "source": "built-from-clean-stage-inputs",
-            "version": "0.1.0",
-        },
-    }
-    _json(stage / wheelhouse_lock_path, wheelhouse_lock_payload)
 
     # Stage the real phase-01 evidence files under ``share/arw/evidence``
     # so the live recompute of the build-identity evidence block verifies
@@ -375,14 +355,8 @@ def _install_audit_manifests(stage: Path) -> None:
         [(entry["path"], entry["sha256"]) for entry in schemas_files]
     )
 
-    # Pin the staged ``.python-version`` so the build_interpreter claim
-    # matches the live stage bytes exactly.  The fixture generator pins it
-    # before constructing the identity so the verifier's
-    # ``observe_staged_python_version`` agrees with the recorded value.
+    # Record the interpreter used for this synthetic build as evidence.
     staged_python_version = "3.13.1"
-    (stage / ".python-version").write_text(
-        f"{staged_python_version}\n", encoding="ascii"
-    )
 
     identity = {
         "schema_version": "1.0.0",
@@ -442,16 +416,8 @@ def _install_audit_manifests(stage: Path) -> None:
                 "source-outline-v1",
             ],
         },
-        "wheelhouse": {
-            "lock": {
-                "path": wheelhouse_lock_path,
-                "sha256": collect(wheelhouse_lock_path),
-            },
-            "requirements": {
-                "path": requirements_path,
-                "sha256": collect(requirements_path),
-            },
-            "first_party": {"path": wheel_path, "sha256": collect(wheel_path)},
+        "runtime_artifact": {
+            "first_party_wheel": {"path": wheel_path, "sha256": collect(wheel_path)}
         },
         "schemas": {
             "aggregate_sha256": schemas_aggregate,
@@ -528,11 +494,8 @@ def _fixture_inventory_source(relative: str) -> str:
 
     if relative in {"vendor/source-manifest.json", "vendor/mcp-manifest.json"}:
         return "source-manifest"
-    if relative.startswith("vendor/python/wheelhouse/") or relative in {
-        "uv.lock",
-        ".python-version",
-    }:
-        return "wheelhouse"
+    if relative.startswith("share/arw/wheels/"):
+        return "build"
     if relative.startswith(("LICENSES/", "supply-chain/")) or relative in {
         "MODIFICATIONS.md",
         "SBOM.cdx.json",
@@ -562,7 +525,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     _write(stage / "bin/arw", "#!/bin/sh\nexit 0\n", executable=True)
     _make_wheel(
         stage
-        / "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
+        / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
     )
     _write(stage / "hooks/hooks.json", '{"hooks": {}}\n')
     _write(stage / "hooks/arw_hook.py", "#!/usr/bin/env python3\n", executable=True)
@@ -769,7 +732,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     canary.parent.mkdir(parents=True)
     arw_runtime_sha256 = _digest(
         stage
-        / "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
+        / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
     )
     stage_sha256 = observe_stage_identity(stage)
     credential_policy_sha256 = EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256
@@ -1173,7 +1136,7 @@ def test_bundled_ars_root_must_be_present_and_not_a_symlink(
     [
         ("external:ars/academic-pipeline/WORKFLOW.md", "append"),
         (
-            "stage:vendor/python/wheelhouse/"
+            "stage:share/arw/wheels/"
             "academic_research_workbench-0.1.0-py3-none-any.whl",
             "append",
         ),
@@ -1933,7 +1896,7 @@ def test_diagnostic_stops_at_the_first_exact_drift_layer(
     if mutation == "staged-arw":
         target = (
             integration_fixture["stage"]
-            / "vendor/python/wheelhouse/academic_research_workbench-0.1.0-py3-none-any.whl"
+            / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
         )
         target.write_bytes(target.read_bytes() + b"drift")
     elif mutation == "ars":
@@ -2440,27 +2403,13 @@ def _rebind_build_identity(
             ),
             "file_contract.contract_sha256",
         ),
-        # ---- wheelhouse digestPaths ----------------------------------------
+        # ---- first-party runtime artifact digest --------------------------
         (
-            "wheelhouse.lock.sha256",
-            lambda identity: identity["wheelhouse"]["lock"].__setitem__(
-                "sha256", "0" * 64
-            ),
-            "wheelhouse.lock",
-        ),
-        (
-            "wheelhouse.requirements.sha256",
-            lambda identity: identity["wheelhouse"]["requirements"].__setitem__(
-                "sha256", "1" * 64
-            ),
-            "wheelhouse.requirements",
-        ),
-        (
-            "wheelhouse.first_party.sha256",
-            lambda identity: identity["wheelhouse"]["first_party"].__setitem__(
+            "runtime_artifact.first_party_wheel.sha256",
+            lambda identity: identity["runtime_artifact"]["first_party_wheel"].__setitem__(
                 "sha256", "2" * 64
             ),
-            "wheelhouse.first_party",
+            "runtime_artifact.first_party_wheel",
         ),
         # ---- native digestPaths ---------------------------------------------
         (
@@ -2759,12 +2708,12 @@ def test_schema_aggregate_matches_canonical_helper(
 
 
 # ---------------------------------------------------------------------------
-# Codex P1 3884328234 / 3884328236: parser hardening and python_requires pin.
+# Codex P1 3884328234 / 3884328236: parser hardening and Python floor.
 #
 # The producer must use the SAME comment-aware parser as the verifier; the
-# ``runtime.build_interpreter`` claim must equal the live staged
-# ``.python-version`` exactly; the verifier must NEVER compare against its
-# own runtime.  The compact RED/GREEN tests below pin each invariant.
+# ``runtime.build_interpreter`` claim records the builder version and must
+# satisfy the Python floor; the verifier must NEVER compare against its own
+# runtime.
 # ---------------------------------------------------------------------------
 
 
@@ -2830,43 +2779,38 @@ def test_file_contract_parser_rejects_missing_active_define(tmp_path: Path) -> N
         integration_lock_module.parse_file_contract_contract_sha256(header)
 
 
-def test_runtime_build_interpreter_must_equal_staged_python_version(
+def test_runtime_build_interpreter_must_satisfy_minimum(
     integration_fixture: dict[str, Path],
 ) -> None:
-    """RED: consistent rebind of build_interpreter to a non-staged value is rejected."""
+    """Build identity cannot claim an interpreter older than Python 3.13."""
 
     lock = _build(integration_fixture)
     write_integration_lock(integration_fixture["lock"], lock)
 
     def _tamper(identity: dict[str, object]) -> None:
         runtime = cast(dict[str, object], identity["runtime"])
-        runtime["build_interpreter"] = "3.13.99"
+        runtime["build_interpreter"] = "3.12.9"
 
     _rebind_build_identity(integration_fixture["stage"], mutate=_tamper)
-    with pytest.raises(IntegrationLockError, match="must equal staged .python-version"):
+    with pytest.raises(IntegrationLockError, match="must satisfy Python >=3.13"):
         _verify(integration_fixture, lock)
 
 
-def test_runtime_build_interpreter_green_exact_staged_pin(
+def test_runtime_build_interpreter_observation_is_retained(
     integration_fixture: dict[str, Path],
 ) -> None:
-    """GREEN: identity whose build_interpreter equals the staged pin passes."""
+    """The build identity records the actual builder version as evidence."""
 
     lock = _build(integration_fixture)
     write_integration_lock(integration_fixture["lock"], lock)
     receipt = _verify(integration_fixture, lock)
     assert receipt.technical_qualification == "PASS"
-    staged = (
-        (integration_fixture["stage"] / ".python-version")
-        .read_text(encoding="ascii")
-        .strip()
-    )
     identity = json.loads(
         (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
             encoding="utf-8"
         )
     )
-    assert identity["runtime"]["build_interpreter"] == staged
+    assert identity["runtime"]["build_interpreter"] == "3.13.1"
 
 
 def test_runtime_build_interpreter_verifier_runtime_is_not_compared(
@@ -2875,7 +2819,7 @@ def test_runtime_build_interpreter_verifier_runtime_is_not_compared(
     """GREEN: verifier running on a different interpreter still passes.
 
     The verifier must NOT compare ``build_interpreter`` against
-    ``sys.version_info``; it only reads the staged ``.python-version``.
+    ``sys.version_info``.
     Mock the current platform so the assertion below would fail if the
     verifier ever sneaks in a runtime self-comparison.
     """
@@ -2896,92 +2840,20 @@ def test_runtime_build_interpreter_verifier_runtime_is_not_compared(
     assert receipt.technical_qualification == "PASS"
 
 
-def test_build_identity_schema_rejects_legacy_python_310_interpreter(
-    tmp_path: Path,
+def test_build_identity_schema_accepts_newer_build_interpreter(
+    integration_fixture: dict[str, Path],
 ) -> None:
-    """RED: 3.10.x build_interpreter is rejected by the tightened schema."""
+    """The build identity schema has no upper Python version bound."""
 
     from arw.kernel.policy.schema_registry import validate_instance
 
-    identity = {
-        "schema_version": "1.0.0",
-        "platform_claim": "linux",
-        "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
-        "runtime": {"python_requires": ">=3.13", "build_interpreter": "3.10.0"},
-        "components": [
-            {
-                "id": "academic-research-skills",
-                "version": "pinned",
-                "revision": "0" * 40,
-                "tree_sha256": "a" * 64,
-            }
-        ],
-        "patches": [],
-        "native": {
-            "binary": {"path": "libexec/file-base-mcp", "sha256": "b" * 64},
-            "build_evidence": {
-                "path": ".file-base/build-evidence.json",
-                "sha256": "c" * 64,
-            },
-            "compile_profile": "release-o2",
-            "patched_source_tree_sha256": "d" * 64,
-            "upstream_test_tree_sha256": "e" * 64,
-        },
-        "projection": {
-            "algorithm": "research-graph-projection-v1",
-            "oracle": "research-graph-normalization-v1",
-            "native_profile": "research-graph-builder-v1",
-            "patch_set_sha256": "f" * 64,
-            "profile_patch_sha256": "0" * 64,
-            "query_profile": "arw-graph-mcp-v1",
-            "query_launcher": {"path": "scripts/x", "sha256": "1" * 64},
-        },
-        "file_contract": {
-            "header": {"path": "share/arw/file-contracts.h", "sha256": "2" * 64},
-            "contract_sha256": "3" * 64,
-            "tokenizer_id": "unicode61-cjk-v1",
-            "ranking_version": "files-rank-v1",
-            "outline_versions": [
-                "bibtex-outline-v1",
-                "latex-outline-v1",
-                "markdown-outline-v1",
-                "source-outline-v1",
-            ],
-        },
-        "wheelhouse": {
-            "lock": {"path": "vendor/python/wheelhouse.lock.json", "sha256": "4" * 64},
-            "requirements": {"path": "x", "sha256": "5" * 64},
-            "first_party": {"path": "y", "sha256": "6" * 64},
-        },
-        "schemas": {
-            "aggregate_sha256": "7" * 64,
-            "files": [
-                {
-                    "path": "share/arw/schemas/build-identity.schema.json",
-                    "sha256": "8" * 64,
-                }
-            ],
-        },
-        "evidence": {
-            "pre_vendor": {
-                "path": "share/arw/evidence/pre_vendor.json",
-                "sha256": "9" * 64,
-            },
-            "legal": {"path": "share/arw/evidence/legal.json", "sha256": "a" * 64},
-            "upstream": {
-                "path": "share/arw/evidence/upstream.json",
-                "sha256": "b" * 64,
-            },
-            "asan_ubsan": {
-                "path": "share/arw/evidence/asan_ubsan.json",
-                "sha256": "c" * 64,
-            },
-            "tsan": {"path": "share/arw/evidence/tsan.json", "sha256": "d" * 64},
-        },
-        "staged_payloads": [{"path": "z", "sha256": "e" * 64}],
-    }
-    with pytest.raises(Exception, match="3\\.10|build_interpreter"):
-        validate_instance("build-identity.schema.json", identity)
+    identity = json.loads(
+        (integration_fixture["stage"] / "share/arw/build-identity.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    identity["runtime"]["build_interpreter"] = "3.25.0"
+    validate_instance("build-identity.schema.json", identity)
 
 
 # ---------------------------------------------------------------------------
@@ -2992,7 +2864,7 @@ def test_build_identity_schema_rejects_legacy_python_310_interpreter(
 # schemas, requires byte equality, and extracts the embedded semantic from
 # the regeneration.  The staged bytes are no longer authoritative, so a
 # paired rebind (rewrite header + identity + staged_payloads + inventory)
-# is rejected on the regeneration step.  Python support is exact 3.13/3.14.
+# is rejected on the regeneration step.
 # ---------------------------------------------------------------------------
 
 
@@ -3106,16 +2978,10 @@ def _rebind_inventory_coverage(stage: Path, *relative_paths: str) -> None:
     )
 
 
-def test_runtime_python_version_15_is_rejected_by_verifier(
+def test_runtime_python_version_15_is_accepted_by_verifier(
     integration_fixture: dict[str, Path],
 ) -> None:
-    """RED: 3.15 staged pin is rejected by ``observe_staged_python_version``."""
-
-    lock = _build(integration_fixture)
-    write_integration_lock(integration_fixture["lock"], lock)
-    (integration_fixture["stage"] / ".python-version").write_text(
-        "3.15.0\n", encoding="ascii"
-    )
+    """A newer observed Python build is accepted without an upper bound."""
 
     def _mutate(identity: dict[str, object]) -> None:
         runtime = cast(dict[str, object], identity["runtime"])
@@ -3124,33 +2990,29 @@ def test_runtime_python_version_15_is_rejected_by_verifier(
     _rebind_build_identity(
         integration_fixture["stage"],
         mutate=_mutate,
-        extra_rebind_paths=(".python-version",),
     )
     _refresh_canary_stage_identity(integration_fixture)
-    # Schema validation catches 3.15 before the runtime check; either
-    # gate is an acceptable rejection.
-    with pytest.raises(
-        IntegrationLockError,
-        match="exactly 3\\.13\\.x or 3\\.14\\.x|does not match '\\^3",
-    ):
-        _verify(integration_fixture, lock)
+    integration_fixture["lock"].unlink(missing_ok=True)
+    fresh_lock = _build(integration_fixture)
+    write_integration_lock(integration_fixture["lock"], fresh_lock)
+    receipt = _verify(integration_fixture, fresh_lock)
+    assert receipt.technical_qualification == "PASS"
 
 
-def test_runtime_python_version_13_and_14_are_green(
+def test_runtime_python_minimum_and_newer_versions_are_green(
     integration_fixture: dict[str, Path],
 ) -> None:
-    """GREEN: 3.13.x and 3.14.x staged pins both pass the verifier."""
+    """Python 3.13 and a much newer builder both pass the verifier."""
 
-    for pin in ("3.13.7", "3.14.2"):
+    for pin in ("3.13.7", "3.25.2"):
         stage = integration_fixture["stage"]
-        (stage / ".python-version").write_text(f"{pin}\n", encoding="ascii")
 
         def _mutate(identity: dict[str, object], pinned: str = pin) -> None:
             runtime = cast(dict[str, object], identity["runtime"])
             runtime["build_interpreter"] = pinned
 
         _rebind_build_identity(
-            stage, mutate=_mutate, extra_rebind_paths=(".python-version",)
+            stage, mutate=_mutate
         )
         _refresh_canary_stage_identity(integration_fixture)
         # Rebuild the lock from the live stage so the rebuild path is

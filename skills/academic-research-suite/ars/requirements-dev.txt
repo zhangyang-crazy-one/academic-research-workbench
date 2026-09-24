@@ -1,5 +1,5 @@
-pyyaml
+pyyaml>=6.0.3
 ruamel.yaml>=0.17
 jsonschema[format]>=4.17
-pypdf
-defusedxml
+pypdf>=6.14.2
+defusedxml>=0.7.1

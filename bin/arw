@@ -6,7 +6,7 @@ usage() {
 Usage: arw <command> [options]
 
 Commands:
-  health --json  Verify the installed offline Python package and runtime.
+  health --json  Verify the installed Python package and runtime.
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
@@ -51,8 +51,18 @@ esac
 
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
-LOCK_PATH="$PLUGIN_ROOT/vendor/python/wheelhouse.lock.json"
-WHEELHOUSE_DIR="$PLUGIN_ROOT/vendor/python/wheelhouse"
+ARW_CODEX_HOME="${CODEX_HOME:-}"
+if [[ -z "$ARW_CODEX_HOME" ]]; then
+  [[ -n "${HOME:-}" ]] \
+    || fail "bootstrap-config" "CODEX_HOME is unset and HOME is unavailable to resolve the default Codex directory" 78
+  ARW_CODEX_HOME="$HOME/.codex"
+fi
+WHEEL_PATH="$PLUGIN_ROOT/share/arw/wheels"
+[[ -d "$WHEEL_PATH" && ! -L "$WHEEL_PATH" ]] \
+  || fail "runtime-artifact-missing" "staged ARW wheel directory is missing or unsafe" 66
+ARW_WHEEL="$(find "$WHEEL_PATH" -maxdepth 1 -type f -name 'academic_research_workbench-*.whl' -print -quit)"
+[[ -n "$ARW_WHEEL" && ! -L "$ARW_WHEEL" ]] \
+  || fail "runtime-artifact-missing" "staged ARW wheel is missing or unsafe" 66
 
 select_python() {
   local candidate resolved
@@ -66,13 +76,25 @@ select_python() {
     return
   fi
 
-  for candidate in python3.15 python3.14 python3.13 python3 python; do
+  for candidate in python3 python; do
     resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
     if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
       printf '%s\n' "$resolved"
       return
     fi
   done
+
+  # Some hosts expose only versioned commands (for example python3.14) while
+  # generic python/python3 shims still point below the supported floor. Scan
+  # discovered names instead of maintaining a Python-version allowlist.
+  while IFS= read -r candidate; do
+    resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)'; then
+      printf '%s\n' "$resolved"
+      return
+    fi
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+
   fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
 
@@ -86,72 +108,31 @@ fi
 
 unset PYTHONPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
-export PIP_NO_INDEX=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-ARW_CODEX_HOME="${CODEX_HOME:-}"
-if [[ -z "$ARW_CODEX_HOME" ]]; then
-  [[ -n "${HOME:-}" ]] \
-    || fail "bootstrap-config" "CODEX_HOME is unset and HOME is unavailable to resolve the default Codex directory" 78
-  ARW_CODEX_HOME="$HOME/.codex"
-fi
-[[ -f "$LOCK_PATH" ]] || fail "wheelhouse-lock-missing" "installed wheelhouse lock is missing" 66
-[[ -d "$WHEELHOUSE_DIR" ]] || fail "wheelhouse-missing" "installed wheelhouse is missing" 66
-
-RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$LOCK_PATH" "$WHEELHOUSE_DIR" <<'PY'
+RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$WHEEL_PATH" <<'PY'
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 from pathlib import Path
 
 
 plugin_root = Path(sys.argv[1]).resolve()
-lock_path = Path(sys.argv[2])
-wheelhouse = Path(sys.argv[3]).resolve()
-lock_bytes = lock_path.read_bytes()
-lock = json.loads(lock_bytes)
-
-
-def checked_file(relative: str, expected: str, base: Path = plugin_root) -> Path:
-    raw_candidate = base / relative
-    candidate = raw_candidate.resolve()
-    if (
-        raw_candidate.is_symlink()
-        or not candidate.is_relative_to(base)
-        or not candidate.is_file()
-    ):
-        raise SystemExit(f"unsafe or missing locked file: {relative}")
-    actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
-    if actual != expected:
-        raise SystemExit(f"hash mismatch for locked file: {relative}")
-    return candidate
-
-
-checked_file(lock["uv_lock"]["path"], lock["uv_lock"]["sha256"])
-checked_file(
-    lock["runtime_requirements"]["path"],
-    lock["runtime_requirements"]["sha256"],
-)
-install_requirements = checked_file(
-    lock["install_requirements"]["path"],
-    lock["install_requirements"]["sha256"],
-)
-
-for wheel in lock["wheels"]:
-    checked_file(wheel["file"], wheel["sha256"], wheelhouse)
-
-first_party = lock["first_party_wheel"]
-checked_file(first_party["file"], first_party["sha256"], wheelhouse)
-
-print(hashlib.sha256(lock_bytes).hexdigest())
+wheel_dir = Path(sys.argv[2]).resolve()
+wheels = tuple(sorted(wheel_dir.glob("academic_research_workbench-*.whl")))
+if len(wheels) != 1 or wheels[0].is_symlink() or not wheels[0].is_file():
+    raise SystemExit("staged first-party ARW wheel is missing or ambiguous")
+if not wheels[0].resolve().is_relative_to(plugin_root):
+    raise SystemExit("staged ARW wheel escapes the plugin root")
+digest = hashlib.sha256()
+with wheels[0].open("rb") as stream:
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+print(digest.hexdigest())
 PY
-)" || fail "wheelhouse-verification-failed" "installed wheelhouse did not match its lock" 65
+)" || fail "runtime-artifact-invalid" "staged ARW wheel could not be verified" 65
 
-INSTALL_REQUIREMENTS="$PLUGIN_ROOT/$(
-  "$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["install_requirements"]["path"])' "$LOCK_PATH"
-)"
 RUNTIME_PARENT="$ARW_CODEX_HOME/arw/runtime"
 RUNTIME_ROOT="$RUNTIME_PARENT/$RUNTIME_IDENTITY"
 RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python"
@@ -189,12 +170,8 @@ if ! runtime_ready; then
       || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
     "$TEMP_ROOT/venv/bin/python" -m pip install \
       --quiet \
-      --no-index \
-      --only-binary=:all: \
-      --require-hashes \
-      --find-links "$WHEELHOUSE_DIR" \
-      --requirement "$INSTALL_REQUIREMENTS" \
-      || fail "bootstrap-install-failed" "offline hash-locked installation failed" 70
+      "$ARW_WHEEL" \
+      || fail "bootstrap-install-failed" "could not resolve ARW dependencies from the configured package index" 70
     printf '%s\n' "$RUNTIME_IDENTITY" > "$TEMP_ROOT/completed.tmp"
     mv "$TEMP_ROOT/completed.tmp" "$TEMP_ROOT/completed"
     mv "$TEMP_ROOT" "$RUNTIME_ROOT"
@@ -275,7 +252,7 @@ PY
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
     ;;
-  writing|semantic|learn|memory|artifact)
+  writing|semantic|learn|memory|artifact|submission)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"

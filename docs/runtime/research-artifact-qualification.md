@@ -11,7 +11,7 @@ The complete contract and executable example are in
 `examples/compile_workflow.py`. Run the example with a fresh output directory:
 
 ```sh
-uv run --frozen python extensions/research-artifact/examples/compile_workflow.py build/artifact-example
+.venv/bin/python extensions/research-artifact/examples/compile_workflow.py build/artifact-example
 ```
 
 The example is explicitly exploratory: source, semantic and render checks pass;

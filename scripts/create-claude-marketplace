@@ -85,7 +85,7 @@ MARKETPLACE_ROOT="$(realpath -m -- "$MARKETPLACE_ROOT")"
   || fail "marketplace root must differ from Codex stage root" 64
 
 PYTHON="$PROJECT_ROOT/.venv/bin/python"
-[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+[[ -x "$PYTHON" ]] || fail "project environment missing; create .venv and install declared dependencies with uv pip" 66
 
 if [[ "$RUN_STAGE" -eq 1 ]]; then
   "$PROJECT_ROOT/scripts/stage-plugin" --clean --stage-root "$STAGE_ROOT"

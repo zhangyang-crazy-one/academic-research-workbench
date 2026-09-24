@@ -391,6 +391,7 @@ def install_exact_stage(
     evidence: Path,
     *,
     copy_auth: bool,
+    prewarm_runtime: bool = False,
 ) -> dict[str, Any]:
     shutil.rmtree(fresh_root, ignore_errors=True)
     home = fresh_root / "home"
@@ -403,6 +404,7 @@ def install_exact_stage(
     shutil.copytree(stage_root, marketplace_plugin)
     marketplace_payload(marketplace_root / ".agents/plugins/marketplace.json")
 
+    auth_file: Path | None = None
     if copy_auth:
         caller_codex_home = Path(
             os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
@@ -414,8 +416,6 @@ def install_exact_stage(
             raise PermissionError(
                 "Codex authentication is unavailable; set ARW_CODEX_AUTH_FILE to an existing auth.json"
             )
-        shutil.copyfile(auth_file, codex_home / "auth.json")
-        (codex_home / "auth.json").chmod(0o600)
 
     stage_files, stage_digests, stage_sha = file_inventory(stage_root)
     market_files, market_digests, market_sha = file_inventory(marketplace_plugin)
@@ -492,7 +492,7 @@ def install_exact_stage(
     write_json(evidence / "plugin/installed-identity.json", identity)
     hook_definition = inspect_installed_hook_definition(installed_root)
     write_json(evidence / "plugin/hook-definition.json", hook_definition)
-    return {
+    installed = {
         "home": home,
         "codex_home": codex_home,
         "environment": environment,
@@ -502,6 +502,73 @@ def install_exact_stage(
         "installed_root": installed_root,
         "unrelated_cwd": unrelated_cwd,
     }
+    if prewarm_runtime:
+        bootstrap_unlocked_runtime(
+            installed,
+            evidence / "plugin/runtime-bootstrap",
+        )
+    if auth_file is not None:
+        shutil.copyfile(auth_file, codex_home / "auth.json")
+        (codex_home / "auth.json").chmod(0o600)
+    return installed
+
+
+def bootstrap_unlocked_runtime(
+    installed: dict[str, Any],
+    evidence: Path,
+) -> None:
+    """Resolve broad runtime requirements before network-isolated host checks.
+
+    The package is intentionally installed from its ``>=`` requirements rather
+    than a committed lock or wheelhouse. Bootstrap therefore needs the
+    configured package index once; subsequent installed commands can be checked
+    with network access disabled.
+    """
+    installed_root: Path = installed["installed_root"]
+    environment = dict(installed["environment"])
+    environment.pop("PIP_NO_INDEX", None)
+    command = [str(installed_root / "bin/arw"), "health", "--json"]
+    write_json(
+        evidence / "command.json",
+        {
+            "argv": ["<installed-plugin>/bin/arw", "health", "--json"],
+            "cwd": "<isolated-working-directory>",
+            "environment": {
+                "CODEX_HOME": "<isolated-codex-home>",
+                "HOME": "<isolated-home>",
+                "PIP_NO_INDEX": "unset",
+                "PYTHONNOUSERSITE": "1",
+                "TMPDIR": "<isolated-temporary-directory>",
+            },
+            "network_access": "configured-package-index-for-unlocked-dependencies",
+        },
+    )
+    result = run_recorded(
+        command,
+        cwd=installed["unrelated_cwd"],
+        environment=environment,
+        evidence=evidence,
+        timeout=300,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise CanaryDefect("unlocked runtime bootstrap returned invalid health JSON") from error
+    if (
+        result.returncode != 0
+        or not isinstance(payload, dict)
+        or payload.get("status") != "ok"
+        or not isinstance(payload.get("runtime_identity"), str)
+        or not SHA256_PATTERN.fullmatch(payload["runtime_identity"])
+    ):
+        raise CanaryDefect("unlocked runtime bootstrap failed")
+    write_json(
+        evidence / "verdict.json",
+        {
+            "dependency_resolution": "configured-package-index-unlocked",
+            "status": "PASS",
+        },
+    )
 
 
 def materialize_stage_if_missing(
@@ -627,6 +694,7 @@ def run_install_cli(args: argparse.Namespace) -> int:
         fresh_root,
         evidence_root,
         copy_auth=False,
+        prewarm_runtime=True,
     )
     launcher_dir = evidence_root / "plugin/launcher"
     health = offline_installed_command(installed, ["health", "--json"], launcher_dir)
@@ -642,6 +710,7 @@ def run_install_cli(args: argparse.Namespace) -> int:
             "inherited_pythonpath": False,
             "installed_from_exact_stage": True,
             "network_isolation": "linux-user-network-namespace",
+            "runtime_dependency_bootstrap": "configured-package-index-before-isolated-canary",
             "source_imported": False,
             "stage_name": PLUGIN_NAME,
             "technical_qualification": "PASS",
@@ -873,7 +942,13 @@ def run_version(args: argparse.Namespace) -> int:
     shutil.rmtree(fresh_root, ignore_errors=True)
     evidence_root.mkdir(parents=True)
     materialize_stage_if_missing(stage_root, evidence_root / "stage-build")
-    installed = install_exact_stage(stage_root, fresh_root, evidence_root, copy_auth=False)
+    installed = install_exact_stage(
+        stage_root,
+        fresh_root,
+        evidence_root,
+        copy_auth=False,
+        prewarm_runtime=True,
+    )
     version_dir = evidence_root / "plugin/version"
     reported = offline_installed_command(installed, ["version", "--json"], version_dir)
     try:
@@ -1380,6 +1455,7 @@ def run_route(args: argparse.Namespace) -> int:
                 attempt_fresh,
                 attempt_dir / "installed",
                 copy_auth=True,
+                prewarm_runtime=True,
             )
         except PermissionError as error:
             classification = {

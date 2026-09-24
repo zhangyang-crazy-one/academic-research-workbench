@@ -33,6 +33,8 @@ if (
         str(PROJECT_PYTHON),
         [str(PROJECT_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]],
     )
+if sys.version_info < (3, 13):
+    raise SystemExit("Codex host qualification requires Python >=3.13")
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads  # noqa: E402
@@ -216,9 +218,6 @@ def _bwrap_prefix(fresh_root: Path) -> list[str]:
         "/tmp",
         "--setenv",
         "PYTHONNOUSERSITE",
-        "1",
-        "--setenv",
-        "PIP_NO_INDEX",
         "1",
     ]
     for name in SAFE_ENVIRONMENT_KEYS:
@@ -543,19 +542,14 @@ def _run_one_home(
 
 
 def _runtime_sha256(stage_root: Path) -> str:
-    path = stage_root / "vendor/python/wheelhouse.lock.json"
-    try:
-        value = strict_json_loads(path.read_bytes())
-        first_party = value["first_party_wheel"]
-        digest = first_party["sha256"]
-    except (OSError, UnicodeError, ValueError, KeyError, TypeError) as error:
-        raise CanaryError("staged first-party wheel identity is invalid") from error
-    if not isinstance(digest, str) or len(digest) != 64:
-        raise CanaryError("staged first-party wheel digest is invalid")
-    wheel = stage_root / "vendor/python/wheelhouse" / first_party["file"]
-    if _sha256(_regular_file(wheel, label="staged ARW wheel", max_bytes=64 * 1024 * 1024)) != digest:
-        raise CanaryError("staged ARW wheel bytes drifted from the wheelhouse lock")
-    return digest
+    wheel_dir = stage_root / "share/arw/wheels"
+    wheels = tuple(sorted(wheel_dir.glob("academic_research_workbench-*.whl")))
+    if len(wheels) != 1:
+        raise CanaryError("staged first-party ARW wheel is missing or ambiguous")
+    wheel = _regular_file(
+        wheels[0], label="staged ARW wheel", max_bytes=64 * 1024 * 1024
+    )
+    return _sha256(wheel)
 
 
 def _parity_evidence(

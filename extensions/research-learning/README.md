@@ -16,7 +16,7 @@ there is no memory-to-policy execution path.
 ## Running the example
 
 ```bash
-uv run --frozen python extensions/research-learning/examples/qualified_lesson.py OUTPUT
+.venv/bin/python extensions/research-learning/examples/qualified_lesson.py OUTPUT
 ```
 
 Use a new output directory. The standalone example creates a run, accepts a

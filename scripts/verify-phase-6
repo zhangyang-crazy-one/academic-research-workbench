@@ -179,7 +179,6 @@ def observed_identities(root: Path) -> dict[str, Any]:
         "source_manifest": optional(PROJECT_ROOT / "vendor/source-manifest.json"),
         "sbom": optional(PROJECT_ROOT / "SBOM.cdx.json"),
         "license_verdict": optional(PROJECT_ROOT / "supply-chain/license-verdict.json"),
-        "wheelhouse_lock": optional(PROJECT_ROOT / "vendor/python/wheelhouse.lock.json"),
         "integration_lock": {"path": str(lock), "sha256": digest_bytes(lock_raw)},
         "codex_cli": "unavailable",
         "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),

@@ -28,8 +28,8 @@ matrix distinguishes native, adapter-backed, instruction-backed and unsupported 
 ## Validation commands
 
 ```sh
-uv run --frozen pytest tests/integration/test_research_memory.py tests/compat tests/schema tests/unit -q
-uv run --frozen python extensions/research-memory/examples/handoff_roundtrip.py NEW_OUTPUT
+.venv/bin/python -m pytest tests/integration/test_research_memory.py tests/compat tests/schema tests/unit -q
+.venv/bin/python extensions/research-memory/examples/handoff_roundtrip.py NEW_OUTPUT
 ```
 
 The example retained under `build/examples/research-memory-20260908` used

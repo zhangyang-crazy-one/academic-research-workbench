@@ -25,9 +25,9 @@ The bundled adapter is version `0.1.27`. It tracks
 `academic-research-skills@127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
 (ARS v3.21.1, released 2026-08-24) and
 `experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
-The ARW core remains compatible with Codex CLI 0.144.4; the optional contained
+The ARW core requires Codex CLI `>=0.144.4`; the optional contained
 subscription citation transport is capability-gated and requires Codex CLI
-0.147.0 or newer.
+`>=0.147.0`.
 The Codex overlay also provides a source-audited annual venue registry for the
 October 2026 ARR cycle, COLING 2027, NAACL 2027, and ECIR 2027 under
 `skills/academic-research-suite/codex/references/annual_venue_profiles.*`.
@@ -76,16 +76,24 @@ serial qualification receipt when present.
 
 ### Development checkout
 
-Requirements are Python `>=3.13,<3.15`, `uv>=0.11.28`, and (for the exact
-host qualification path) Codex CLI `0.144.4`. The `uv` declaration is a
-minimum compatible tool version; resolved Python dependencies remain pinned
-by `uv.lock`, while source commits, artifact digests, schemas, and qualified
-host identities remain exact reproducibility locks.
+Requirements are Python `>=3.13`, `uv>=0.11.28`, and (for the host
+qualification path) Codex CLI `>=0.144.4`. Python dependency versions are
+intentionally flexible and resolved when installing; this project does not
+include or require a `uv.lock` dependency lockfile. The uv project integration
+is unmanaged to prevent automatic lock creation; setup uses `uv pip` to resolve
+the declared ranges. Source commits, artifact digests, schemas, and actual host
+observations remain evidence about the inputs used, not compatibility pins.
+Initial setup or a later dependency install needs access to the configured
+package index unless compatible packages are already cached; offline dependency
+resolution is not guaranteed. Once installed, research operations retain their
+existing local/offline behavior where each capability supports it.
 
 ```bash
 git clone <repository-url> academic-research-workbench
 cd academic-research-workbench
-uv sync --frozen --all-groups
+uv venv
+uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
+  --all-extras --group dev --group ars-test --group storm
 ./bin/arw help
 ```
 
@@ -94,7 +102,7 @@ self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash
 (cd skills/academic-research-suite/ars && \
-  uv run --frozen --all-groups --project ../../.. python -m pytest -q \
+  ../../../.venv/bin/python -m pytest -q \
     --ignore scripts/test_check_calibration_tiers.py \
     --ignore scripts/test_check_distribution_surface_claims.py)
 ```

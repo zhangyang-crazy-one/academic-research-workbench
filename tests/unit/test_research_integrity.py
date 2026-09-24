@@ -239,9 +239,10 @@ def test_bridge_preserves_ars_valid_large_tag_lists() -> None:
     assert entry_model.tags is not None and len(entry_model.tags) == 257
     source = _bridge(entry)
 
-    assert source.bibliographic_sha256 == hashlib.sha256(
-        canonical_json_bytes(entry)
-    ).hexdigest()
+    assert (
+        source.bibliographic_sha256
+        == hashlib.sha256(canonical_json_bytes(entry)).hexdigest()
+    )
 
 
 def test_bridge_preserves_ars_valid_large_signal_lists() -> None:
@@ -270,9 +271,10 @@ def test_bridge_preserves_ars_valid_large_signal_lists() -> None:
     )
     source = _bridge(entry)
 
-    assert source.bibliographic_sha256 == hashlib.sha256(
-        canonical_json_bytes(entry)
-    ).hexdigest()
+    assert (
+        source.bibliographic_sha256
+        == hashlib.sha256(canonical_json_bytes(entry)).hexdigest()
+    )
     from arw.kernel.policy.schema_registry import validate_instance
 
     validate_instance(
@@ -1236,9 +1238,7 @@ def test_evidence_span_builder_revalidates_source_from_canonical_bytes() -> None
         kind="page", start=1, end=2, label="page 1"
     )
 
-    bogus_schema_version = source.model_copy(
-        update={"schema_version": "arw.bogus.v1"}
-    )
+    bogus_schema_version = source.model_copy(update={"schema_version": "arw.bogus.v1"})
     assert bogus_schema_version.schema_version == "arw.bogus.v1"
     with pytest.raises(ValidationError, match="schema_version"):
         research_integrity.build_evidence_span(
@@ -1249,9 +1249,7 @@ def test_evidence_span_builder_revalidates_source_from_canonical_bytes() -> None
             extracted_text_sha256=TEXT_SHA256,
         )
 
-    bogus_source_id = source.model_copy(
-        update={"source_id": "Bogus-Capitalised"}
-    )
+    bogus_source_id = source.model_copy(update={"source_id": "Bogus-Capitalised"})
     assert bogus_source_id.source_id == "Bogus-Capitalised"
     with pytest.raises(ValidationError, match="source_id"):
         research_integrity.build_evidence_span(
@@ -1303,6 +1301,7 @@ def test_evidence_span_builder_still_accepts_a_freshly_constructed_source() -> N
         extracted_text_sha256=TEXT_SHA256,
     )
     assert span.source_id == source.source_id
-    assert span.research_source_manifest_sha256 == research_integrity.research_integrity_sha256(
-        source
+    assert (
+        span.research_source_manifest_sha256
+        == research_integrity.research_integrity_sha256(source)
     )

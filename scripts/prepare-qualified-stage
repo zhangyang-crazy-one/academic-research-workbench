@@ -6,7 +6,8 @@ set -euo pipefail
 # lock creation, and final staging are deliberately separate boundaries.
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON="$PROJECT_ROOT/.venv/bin/python"
+PYTHON="${ARW_BUILD_PYTHON:-$PROJECT_ROOT/.venv/bin/python}"
+[[ -x "$PYTHON" ]] || PYTHON="$(command -v python3 || command -v python || true)"
 STAGE_ROOT="$PROJECT_ROOT/build/stage/phase-07-qualified"
 EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-07-qualified"
 LOCK_PATH=""
@@ -82,7 +83,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -x "$PYTHON" ]] || fail "project environment missing; run uv sync --frozen first" 66
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)'; then
+  [[ -z "${ARW_BUILD_PYTHON:-}" ]] || fail "ARW_BUILD_PYTHON must satisfy Python >=3.13" 66
+  PYTHON=""
+  for candidate in python3 python; do
+    resolved="$(command -v "$candidate" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)'; then
+      PYTHON="$resolved"
+      break
+    fi
+  done
+  [[ -n "$PYTHON" ]] || fail "build interpreter must satisfy Python >=3.13" 66
+fi
 STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
 EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
 [[ "$STAGE_ROOT" != "$PROJECT_ROOT" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \

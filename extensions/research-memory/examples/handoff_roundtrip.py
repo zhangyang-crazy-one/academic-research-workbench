@@ -1,4 +1,4 @@
-"""uv run python extensions/research-memory/examples/handoff_roundtrip.py OUTPUT
+""".venv/bin/python extensions/research-memory/examples/handoff_roundtrip.py OUTPUT
 
 Reproducible local Codex -> Claude MCP transport -> Codex continuation example.
 It does not claim a live Claude host session.

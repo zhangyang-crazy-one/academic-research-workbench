@@ -49,7 +49,6 @@ from arw_semantica import (  # pyright: ignore[reportMissingImports]
     SemanticaSQLiteAdapter,
 )
 
-
 EVENT_ID = "evt-00000000-0000-4000-8000-000000000001"
 EVENT_DIGEST = "a" * 64
 COPY_EVENT_ID = "evt-00000000-0000-4000-8000-000000000004"
@@ -129,7 +128,7 @@ def _canonical_create_sql(extra_columns: tuple[str, ...] = ()) -> str:
             derived_from_json TEXT NOT NULL,
             payload BLOB NOT NULL,
             checksum TEXT NOT NULL
-            {',' + extra if extra else ''}
+            {"," + extra if extra else ""}
         )
     """
 
@@ -192,8 +191,7 @@ def test_init_rejects_create_unique_index_on_entity_id(tmp_path: Path) -> None:
     database = _seed_schema(tmp_path, _canonical_create_sql())
     with sqlite3.connect(database) as connection:
         connection.execute(
-            "CREATE UNIQUE INDEX hostile_entity_idx "
-            "ON provenance_records(entity_id)"
+            "CREATE UNIQUE INDEX hostile_entity_idx ON provenance_records(entity_id)"
         )
         connection.commit()
     with pytest.raises(RuntimeError, match="unsupported UNIQUE INDEX"):
@@ -204,8 +202,7 @@ def test_init_rejects_create_unique_index_on_record_id(tmp_path: Path) -> None:
     database = _seed_schema(tmp_path, _canonical_create_sql())
     with sqlite3.connect(database) as connection:
         connection.execute(
-            "CREATE UNIQUE INDEX hostile_record_id_idx "
-            "ON provenance_records(record_id)"
+            "CREATE UNIQUE INDEX hostile_record_id_idx ON provenance_records(record_id)"
         )
         connection.commit()
     with pytest.raises(RuntimeError, match="unsupported UNIQUE INDEX"):
@@ -377,9 +374,7 @@ def test_count_check_rolls_back_silent_replace(
             )
             """
         )
-        connection.execute(
-            "INSERT INTO provenance_records SELECT * FROM _preserved"
-        )
+        connection.execute("INSERT INTO provenance_records SELECT * FROM _preserved")
         connection.execute("DROP TABLE _preserved")
         connection.commit()
 
@@ -504,14 +499,8 @@ def test_quote_identifier_rejects_non_alnum() -> None:
 def test_normalize_sql_collapses_whitespace() -> None:
     from arw_semantica.adapter import _normalize_sql
 
-    assert (
-        _normalize_sql("CREATE TABLE t(\n  a  TEXT\n)")
-        == "CREATE TABLE t( a TEXT )"
-    )
-    assert (
-        _normalize_sql("ON\tCONFLICT\nREPLACE")
-        == "ON CONFLICT REPLACE"
-    )
+    assert _normalize_sql("CREATE TABLE t(\n  a  TEXT\n)") == "CREATE TABLE t( a TEXT )"
+    assert _normalize_sql("ON\tCONFLICT\nREPLACE") == "ON CONFLICT REPLACE"
 
 
 def test_canonical_payload_byte_stability_for_count_anchor() -> None:

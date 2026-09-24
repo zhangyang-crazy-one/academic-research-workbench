@@ -1,4 +1,4 @@
-"""Run with: uv run python extensions/research-learning/examples/qualified_lesson.py OUTPUT.
+"""Run with: .venv/bin/python extensions/research-learning/examples/qualified_lesson.py OUTPUT.
 
 A reproducible synthetic fixture demonstrates governance, not scientific efficacy.
 """
