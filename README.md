@@ -72,6 +72,13 @@ CC-BY-NC permission evidence is supplied. See
 `build/evidence/phase-07-final-13/phase-7-verification.json` for the latest
 serial qualification receipt when present.
 
+## Grok Bot consumption
+
+This repository is Codex-native. A thin, fail-closed adaptation for the
+Grok Bot named `arw` lives in `grok-bot/` and is **not** a second plugin
+install, a Codex marketplace path, or a qualified-stage unlock. See
+`grok-bot/GROK_BOT.md`.
+
 ## Installation
 
 ### Development checkout
