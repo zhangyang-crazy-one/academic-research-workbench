@@ -68,6 +68,28 @@ def test_agent_wrapper_is_checkout_only_and_forces_agent_mode() -> None:
     assert '"bin/arw-agent"' not in staged.split("static_files = {", 1)[1].split("}", 1)[0]
 
 
+def test_install_python_prints_unmanaged_dependency_groups() -> None:
+    installer = REPOSITORY_ROOT / "scripts" / "install-python"
+    assert installer.stat().st_mode & stat.S_IXUSR
+    result = subprocess.run(
+        [str(installer), "--print-group-specs", "dev"],
+        cwd=REPOSITORY_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    specs = [line for line in result.stdout.splitlines() if line]
+    assert any(item.startswith("pytest") for item in specs)
+    source = installer.read_text(encoding="utf-8")
+    assert "DEP_GROUPS" in source
+    assert not any(line.startswith("GROUPS=") or line.startswith("GROUPS+=") for line in source.splitlines())
+    workflows = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "scripts/install-python" in workflows
+    assert "--group dev --group ars-test --group storm" in workflows
+    assert "uv pip install --python .venv/bin/python --editable . --group" not in workflows
+
+
 def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) -> None:
     result = _run(
         [str(LAUNCHER), "health", "--json"],

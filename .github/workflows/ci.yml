@@ -30,10 +30,7 @@ jobs:
         with:
           enable-cache: true
       - name: Resolve development environment from declared ranges
-        run: >-
-          uv venv && uv pip install --python .venv/bin/python --editable .
-          -r pyproject.toml --all-extras
-          --group dev --group ars-test --group storm
+        run: uv venv && ./scripts/install-python --all-extras --group dev --group ars-test --group storm
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -149,7 +146,7 @@ jobs:
         with:
           enable-cache: true
       - name: Resolve package boundary environment from declared ranges
-        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
+        run: uv venv && ./scripts/install-python --group dev
       - name: Verify publish surface before building artifacts
         run: |
           test -f src/arw/kernel/execution/orchestration.py

@@ -81,7 +81,9 @@ qualification path) Codex CLI `>=0.144.4`. Python dependency versions are
 intentionally flexible and resolved when installing; this project does not
 include or require a `uv.lock` dependency lockfile. The uv project integration
 is unmanaged to prevent automatic lock creation; setup uses `uv pip` to resolve
-the declared ranges. Source commits, artifact digests, schemas, and actual host
+the declared ranges. `uv pip install --group` refuses unmanaged projects, so
+`scripts/install-python` reads `[dependency-groups]` and installs those
+requirement strings directly. Source commits, artifact digests, schemas, and actual host
 observations remain evidence about the inputs used, not compatibility pins.
 Initial setup or a later dependency install needs access to the configured
 package index unless compatible packages are already cached; offline dependency
@@ -92,8 +94,7 @@ existing local/offline behavior where each capability supports it.
 git clone <repository-url> academic-research-workbench
 cd academic-research-workbench
 uv venv
-uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
-  --all-extras --group dev --group ars-test --group storm
+./scripts/install-python --all-extras --group dev --group ars-test --group storm
 ./bin/arw help
 ```
 
@@ -115,8 +116,7 @@ Install once, then call ARW without a `codex` binary:
 
 ```bash
 uv venv
-uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
-  --all-extras --group dev --group ars-test --group storm
+./scripts/install-python --all-extras --group dev --group ars-test --group storm
 export ARW_PYTHON="$PWD/.venv/bin/python"   # optional; .venv is discovered
 ./bin/arw-agent health --json
 ./bin/arw-agent version --json
@@ -145,7 +145,7 @@ instead of the production `runtime-artifact-missing` error. Leave
 `ARW_RUNTIME` unset for Codex plugin installs so a checkout `.venv` cannot
 substitute for a staged wheel.
 
-`--all-groups` also installs the dependencies required by the bundled ARS
+The `ars-test` group installs the dependencies required by the bundled ARS
 self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash
