@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Checkout / headless-agent entrypoint. Forces ARW_RUNTIME=agent and then
+# delegates to bin/arw. This file is intentionally not staged into the Codex
+# plugin payload; production install remains fail-closed on the first-party
+# wheel. See README "Agent self-use".
+set -euo pipefail
+export ARW_RUNTIME=agent
+SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/arw" "$@"

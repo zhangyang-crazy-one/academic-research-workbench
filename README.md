@@ -97,6 +97,54 @@ uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
 ./bin/arw help
 ```
 
+`./bin/arw help` works from a checkout. Other commands on `bin/arw` stay
+fail-closed unless a staged first-party wheel exists under
+`share/arw/wheels/`; that is the Codex plugin path. A headless agent that
+already has this checkout and `.venv` should use agent mode instead of
+staging a plugin or installing Codex CLI.
+
+### Agent self-use
+
+Agent / local-dev runtime is an explicit gate (`ARW_RUNTIME=agent` or the
+checkout-only `bin/arw-agent` wrapper). It is not a Codex qualification
+bypass: route still reports `integration_status: BLOCKED` until a verified
+integration lock and host canary are present, and the staged plugin launcher
+still requires the first-party wheel when `ARW_RUNTIME` is unset.
+
+Install once, then call ARW without a `codex` binary:
+
+```bash
+uv venv
+uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
+  --all-extras --group dev --group ars-test --group storm
+export ARW_PYTHON="$PWD/.venv/bin/python"   # optional; .venv is discovered
+./bin/arw-agent health --json
+./bin/arw-agent version --json
+./bin/arw-agent route --json
+./bin/arw-agent status --help
+```
+
+Equivalent invocation through the production launcher:
+
+```bash
+ARW_RUNTIME=agent ./bin/arw health --json
+# or
+ARW_RUNTIME=local-dev ./bin/arw health --json
+```
+
+Interpreter selection in agent mode:
+
+1. `ARW_PYTHON` when it is Python `>=3.13` and provides
+   `academic-research-workbench`
+2. the checkout `.venv/bin/python` when that interpreter has the package
+3. a `PATH` Python `>=3.13` that already has the package
+4. the staged first-party wheel, using the existing cache-local bootstrap
+
+If none of those are available, agent mode fails with `agent-runtime-missing`
+instead of the production `runtime-artifact-missing` error. Leave
+`ARW_RUNTIME` unset for Codex plugin installs so a checkout `.venv` cannot
+substitute for a staged wheel.
+
 `--all-groups` also installs the dependencies required by the bundled ARS
 self-tests. Verify the complete vendored skill suite from the checkout root:
 
