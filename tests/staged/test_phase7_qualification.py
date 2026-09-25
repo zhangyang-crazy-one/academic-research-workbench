@@ -22,8 +22,6 @@ from arw.kernel.policy.integration_lock import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-_QUALIFICATION_INPUTS = discover_bundled_qualification()
-STAGE_ROOT, LOCK_PATH, CANARY_PATH = _QUALIFICATION_INPUTS or (None, None, None)
 
 
 def _digest(path: Path) -> str:
@@ -31,15 +29,26 @@ def _digest(path: Path) -> str:
 
 
 @pytest.fixture(scope="module")
-def qualified_stage() -> Path:
-    if _QUALIFICATION_INPUTS is None:
-        pytest.skip("no retained Phase 7 qualification verifies against the current runtime and host")
-    return STAGE_ROOT
+def qualified_evidence() -> tuple[Path, Path, Path]:
+    discovered = discover_bundled_qualification()
+    if discovered is None:
+        if os.environ.get("ARW_STRICT_PREREQS") == "1":
+            pytest.fail("missing retained Phase 7 qualification; run scripts/verify-phase-7", pytrace=False)
+        pytest.skip("missing retained Phase 7 qualification; run scripts/verify-phase-7")
+    return discovered
 
 
+@pytest.fixture(scope="module")
+def qualified_stage(qualified_evidence: tuple[Path, Path, Path]) -> Path:
+    return qualified_evidence[0]
+
+
+@pytest.mark.requires_retained_evidence("qualification:phase7")
 def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
     qualified_stage: Path,
+    qualified_evidence: tuple[Path, Path, Path],
 ) -> None:
+    _, LOCK_PATH, CANARY_PATH = qualified_evidence
     inventory = json.loads(
         (qualified_stage / "supply-chain/stage-inventory.json").read_text()
     )
@@ -147,7 +156,9 @@ def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
         assert command in help_result.stdout
 
 
-def test_unsupported_codex_host_version_fails_closed(qualified_stage: Path, tmp_path: Path) -> None:
+@pytest.mark.requires_retained_evidence("qualification:phase7")
+def test_unsupported_codex_host_version_fails_closed(qualified_stage: Path, qualified_evidence: tuple[Path, Path, Path], tmp_path: Path) -> None:
+    _, _, CANARY_PATH = qualified_evidence
     launcher = tmp_path / "codex"
     launcher.write_text(
         "#!/bin/sh\n"
@@ -165,9 +176,12 @@ def test_unsupported_codex_host_version_fails_closed(qualified_stage: Path, tmp_
         )
 
 
+@pytest.mark.requires_retained_evidence("qualification:phase7")
 def test_official_hook_definition_is_observational_and_parity_inputs_are_present(
     qualified_stage: Path,
+    qualified_evidence: tuple[Path, Path, Path],
 ) -> None:
+    _, _, CANARY_PATH = qualified_evidence
     hooks = json.loads((qualified_stage / "hooks/hooks.json").read_text())
     assert set(hooks["hooks"]) == {"SessionStart", "SubagentStop", "Stop"}
     for rows in hooks["hooks"].values():

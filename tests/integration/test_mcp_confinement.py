@@ -237,8 +237,8 @@ def test_confinement_schemas_are_strict_and_phase1_budgeted() -> None:
 @pytest.mark.parametrize(
     ("suite", "required_libraries"),
     [
-        ("asan-ubsan", {"libasan.so", "libubsan.so"}),
-        ("tsan", {"libtsan.so"}),
+        pytest.param("asan-ubsan", {"libasan.so", "libubsan.so"}, marks=pytest.mark.requires_retained_evidence("build/evidence/phase-01/native/asan-ubsan/verdict.json")),
+        pytest.param("tsan", {"libtsan.so"}, marks=pytest.mark.requires_retained_evidence("build/evidence/phase-01/native/tsan/verdict.json")),
     ],
 )
 def test_sanitizer_evidence_uses_verified_user_runtime(
@@ -283,6 +283,7 @@ def test_sanitizer_evidence_uses_verified_user_runtime(
         assert len(library["sha256"]) == 64
 
 
+@pytest.mark.requires_native_file_base
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case.case_id)
 def test_direct_native_confinement_matrix(case: ReadCase, tmp_path: Path) -> None:
     assert platform.system() == "Linux", "Phase 1 claims only the Linux confinement baseline"

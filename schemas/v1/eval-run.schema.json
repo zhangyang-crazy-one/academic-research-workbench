@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/eval-run.schema.json",
+  "title": "Offline evaluation receipt and input contracts",
+  "$defs": {
+    "sha": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "cost": {"type":"object","additionalProperties":false,"minProperties":1,"properties":{"tokens":{"type":"integer","minimum":0},"usd":{"type":"number","minimum":0},"elapsed_ms":{"type":"integer","minimum":0}}},
+    "cost_report": {"type":"object","additionalProperties":false,"required":["tokens","usd","elapsed_ms"],"properties":{"tokens":{"oneOf":[{"type":"integer","minimum":0},{"const":"unavailable"}]},"usd":{"oneOf":[{"type":"number","minimum":0},{"const":"unavailable"}]},"elapsed_ms":{"oneOf":[{"type":"integer","minimum":0},{"const":"unavailable"}]}}},
+    "citation": {"type":"object","additionalProperties":false,"required":["id","status"],"properties":{"id":{"type":"string","minLength":1,"maxLength":96},"status":{"enum":["valid","retracted","unknown"]}}},
+    "answer": {"oneOf":[
+      {"type":"object","additionalProperties":false,"required":["citations"],"properties":{"citations":{"type":"array","maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/citation"}}}},
+      {"type":"object","additionalProperties":false,"required":["locator","quote","quote_sha256"],"properties":{"locator":{"type":"string","minLength":1,"maxLength":128},"quote":{"type":"string","maxLength":4096},"quote_sha256":{"$ref":"#/$defs/sha"}}},
+      {"type":"object","additionalProperties":false,"required":["gate"],"properties":{"gate":{"enum":["pass","block","human_review"]}}},
+      {"type":"object","additionalProperties":false,"required":["route"],"properties":{"route":{"enum":["literature","experiment","writing","review"]}}},
+      {"type":"object","additionalProperties":false,"required":["text"],"properties":{"text":{"type":"string","maxLength":4096}}}
+    ]},
+    "case": {"type":"object","additionalProperties":false,"required":["id","language","adversarial","checker","prompt","expected"],"properties":{"id":{"type":"string","pattern":"^[a-z]+-[0-9]{2}$"},"language":{"enum":["en","zh"]},"adversarial":{"type":"boolean"},"checker":{"enum":["citation","quote_locator","gate","route","leakage"]},"prompt":{"type":"string","minLength":1,"maxLength":1200},"sentinel":{"type":"string","minLength":1,"maxLength":128},"expected":{"$ref":"#/$defs/answer"}}},
+    "corpus": {"type":"object","additionalProperties":false,"required":["schema_version","version","origin","cases"],"properties":{"schema_version":{"const":"arw.eval-corpus.v1"},"version":{"type":"string","minLength":1,"maxLength":80},"origin":{"type":"string","minLength":1,"maxLength":200},"cases":{"type":"array","minItems":30,"maxItems":256,"items":{"$ref":"#/$defs/case"}}}},
+    "result": {"type":"object","additionalProperties":false,"required":["task_id","answer"],"properties":{"task_id":{"type":"string","pattern":"^[a-z]+-[0-9]{2}$"},"answer":{"$ref":"#/$defs/answer"}}},
+    "bundle": {"type":"object","additionalProperties":false,"required":["schema_version","route","corpus_version","results"],"properties":{"schema_version":{"const":"arw.eval-bundle.v1"},"route":{"enum":["baseline","arw-route"]},"corpus_version":{"type":"string","minLength":1,"maxLength":80},"run_id":{"type":"string","pattern":"^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},"build_identity_sha256":{"$ref":"#/$defs/sha"},"model_id":{"type":"string","minLength":1,"maxLength":200,"not":{"const":"unavailable"}},"cost":{"$ref":"#/$defs/cost"},"results":{"type":"array","minItems":30,"maxItems":256,"items":{"$ref":"#/$defs/result"}}}},
+    "scores": {"type":"object","additionalProperties":false,"required":["citation_precision","citation_recall","citation_status_accuracy","quote_locator_digest_accuracy","gate_tp","gate_fp","gate_tn","gate_fn","gate_pass_as_pass","gate_pass_as_block","gate_pass_as_human_review","gate_block_as_pass","gate_block_as_block","gate_block_as_human_review","gate_human_review_as_pass","gate_human_review_as_block","gate_human_review_as_human_review","route_accuracy","leakage_hits","leakage_cases"],"properties":{"citation_precision":{"type":"number","minimum":0,"maximum":1},"citation_recall":{"type":"number","minimum":0,"maximum":1},"citation_status_accuracy":{"type":"number","minimum":0,"maximum":1},"quote_locator_digest_accuracy":{"type":"number","minimum":0,"maximum":1},"gate_tp":{"type":"integer","minimum":0},"gate_fp":{"type":"integer","minimum":0},"gate_tn":{"type":"integer","minimum":0},"gate_fn":{"type":"integer","minimum":0},"route_accuracy":{"type":"number","minimum":0,"maximum":1},"leakage_hits":{"type":"integer","minimum":0},"leakage_cases":{"type":"integer","minimum":0}},"patternProperties":{"^gate_(pass|block|human_review)_as_(pass|block|human_review)$":{"type":"integer","minimum":0}}},
+    "case_score": {"type":"object","additionalProperties":false,"required":["task_id","checker","baseline","arw-route","sha256"],"properties":{"task_id":{"type":"string"},"checker":{"type":"string"},"baseline":{"type":"object"},"arw-route":{"type":"object"},"sha256":{"$ref":"#/$defs/sha"}}},
+    "candidate_context": {"type":"object","additionalProperties":false,"required":["heuristic_id","proposed_action","actual_action","policy"],"properties":{"heuristic_id":{"type":"string"},"proposed_action":{"type":"string"},"actual_action":{"type":"string"},"policy":{"type":"object"}}}
+  },
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","evaluator_version","pairing","corpus_version","corpus_sha256","input_sha256","cases","cases_sha256","summary","summary_sha256","cost","model_id","build_identity_sha256","receipt_sha256"],
+  "properties":{
+    "schema_version":{"const":"arw.eval-run.v1"},"evaluator_version":{"const":"2"},"pairing":{"enum":["matched","unavailable"]},"corpus_version":{"type":"string"},"corpus_sha256":{"$ref":"#/$defs/sha"},
+    "input_sha256":{"type":"object","additionalProperties":false,"required":["baseline","arw-route"],"properties":{"baseline":{"$ref":"#/$defs/sha"},"arw-route":{"$ref":"#/$defs/sha"}}},
+    "cases":{"type":"array","minItems":30,"maxItems":256,"items":{"$ref":"#/$defs/case_score"}},"cases_sha256":{"$ref":"#/$defs/sha"},
+    "summary":{"type":"object","additionalProperties":false,"required":["baseline","arw-route","delta"],"properties":{"baseline":{"$ref":"#/$defs/scores"},"arw-route":{"$ref":"#/$defs/scores"},"delta":{"type":"object","minProperties":20,"maxProperties":20,"additionalProperties":{"type":"number"}}}},"summary_sha256":{"$ref":"#/$defs/sha"},
+    "cost":{"type":"object","additionalProperties":false,"required":["baseline","arw-route"],"properties":{"baseline":{"$ref":"#/$defs/cost_report"},"arw-route":{"$ref":"#/$defs/cost_report"}}},
+    "model_id":{"type":"object","additionalProperties":false,"required":["baseline","arw-route"],"properties":{"baseline":{"type":"string"},"arw-route":{"type":"string"}}},
+    "build_identity_sha256":{"type":"object","additionalProperties":false,"required":["baseline","arw-route"],"properties":{"baseline":{"oneOf":[{"const":"unavailable"},{"$ref":"#/$defs/sha"}]},"arw-route":{"oneOf":[{"const":"unavailable"},{"$ref":"#/$defs/sha"}]}}},
+    "receipt_sha256":{"$ref":"#/$defs/sha"}
+  }
+}

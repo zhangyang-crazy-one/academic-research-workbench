@@ -30,7 +30,7 @@ not a dependency or runtime compatibility pin.
 | --- | --- |
 | ARS router | `skills/academic-research-suite/SKILL.md` |
 | Deep research / lit-review / SLR workflow | `skills/academic-research-suite/ars/deep-research/WORKFLOW.md` |
-| Codex literature stub | `skills/literature/SKILL.md` |
+| Codex ARS route | `skills/academic-research-suite/SKILL.md` |
 | Integrity / evidence-tier language | `docs/runtime/scientific-integrity.md` |
 | Venue overlay (recheck official pages) | `skills/academic-research-suite/codex/references/annual_venue_profiles.md` |
 
@@ -60,6 +60,6 @@ remembered ARS policy as if it were the bundled file.
    that can actually run the optional pipeline. Output is pre-writing
    material, never canonical experiment evidence.
 
-Codex `skills/literature/SKILL.md` delegates literature to the bundled
-ARS skill via installed `bin/arw`. Grok cannot take that path. Read
+Codex `skills/academic-research-suite/SKILL.md` routes literature through the
+bundled ARS workflow. Grok cannot take the installed `bin/arw` path. Read
 the same bundled files; do not pretend the control plane ran.

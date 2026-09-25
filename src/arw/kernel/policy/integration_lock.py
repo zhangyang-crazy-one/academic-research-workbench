@@ -39,7 +39,13 @@ from pydantic import (
 )
 
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-from arw.kernel.policy.hook_contracts import CodexHookReceipt, HookParityMatrix
+from arw.kernel.policy.hook_contracts import (
+    CodexHookReceipt,
+    HookContractError,
+    HookParityMatrix,
+    LegacyCodexHookReceipt,
+    parse_codex_hook_receipt_bytes,
+)
 
 EXPECTED_ARS_ADAPTER_VERSION = "0.1.27"
 MINIMUM_CODEX_CLI_VERSION = (0, 144, 4)
@@ -1038,12 +1044,15 @@ def _load_canonical_bound_model(
     model: type[EvidenceModel],
     *,
     label: str,
-) -> EvidenceModel:
+) -> EvidenceModel | LegacyCodexHookReceipt:
     path = _bound_file(root, binding)
     try:
         raw = path.read_bytes()
-        value = model.model_validate_json(raw, strict=True)
-    except (OSError, UnicodeError, ValueError, ValidationError) as error:
+        if model is CodexHookReceipt:
+            value = parse_codex_hook_receipt_bytes(raw)
+        else:
+            value = model.model_validate_json(raw, strict=True)
+    except (OSError, UnicodeError, ValueError, ValidationError, HookContractError) as error:
         raise IntegrationLockError(f"{label} is invalid: {error}") from error
     canonical = canonical_json_bytes(value.model_dump(mode="json"))
     if raw != canonical:

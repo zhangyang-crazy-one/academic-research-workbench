@@ -13,12 +13,19 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import BeforeValidator, Field, ValidationError, model_validator
+from pydantic import (
+    BeforeValidator,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.kernel.state.models import Sha256, StableRuntimeId, StrictModel
-from arw.kernel.state.orchestration_models import HookObservation as CanonicalHookObservation
-
+from arw.kernel.state.orchestration_models import (
+    HookObservation as CanonicalHookObservation,
+)
 
 HookName = Literal[
     "SessionStart",
@@ -98,8 +105,8 @@ class CodexReceiptControl(StrictModel):
     hook_bypass_safe: Literal[True]
 
 
-class CodexHookReceipt(StrictModel):
-    """Redacted receipt emitted by the installed official-wire hook adapter."""
+class _CodexHookReceiptV1Fields(StrictModel):
+    """Fields and digest rules shared by the exact old and current v1 wires."""
 
     schema_version: Literal["arw.codex-hook-observation.v1"]
     authority: Literal["observational"]
@@ -155,12 +162,75 @@ class CodexHookReceipt(StrictModel):
         )
 
 
+class LegacyCodexHookReceipt(_CodexHookReceiptV1Fields):
+    """Immutable pre-change v1 receipt with its original exact field set."""
+
+
+class CodexHookReceipt(_CodexHookReceiptV1Fields):
+    """Redacted receipt emitted by the current official-wire hook adapter."""
+
+    permission_mode: Literal[
+        "default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"
+    ] | None
+    permission_mode_unrecognized: bool
+    unrecognized_fields: Annotated[
+        tuple[str, ...], BeforeValidator(_freeze_array), Field(max_length=32)
+    ]
+
+    @field_validator("unrecognized_fields")
+    @classmethod
+    def unknown_names_are_bounded_and_sorted(cls, names: tuple[str, ...]) -> tuple[str, ...]:
+        if tuple(sorted(set(names))) != names:
+            raise ValueError("unrecognized receipt fields must be sorted and unique")
+        for name in names:
+            try:
+                encoded = name.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise ValueError("unrecognized receipt field is not UTF-8") from error
+            if not 0 < len(encoded) <= 128 or "\x00" in name:
+                raise ValueError("unrecognized receipt field name is invalid")
+        return names
+
+    @model_validator(mode="after")
+    def permission_marker_is_consistent(self) -> Self:
+        if self.permission_mode_unrecognized != (self.permission_mode is None):
+            raise HookContractError("Codex hook receipt permission marker is inconsistent")
+        return self
+
+
+CodexHookReceiptWire = CodexHookReceipt | LegacyCodexHookReceipt
+
+
+def parse_codex_hook_receipt_bytes(raw: bytes) -> CodexHookReceiptWire:
+    """Decode either exact v1 shape without supplying fields or changing bytes."""
+
+    if not raw or len(raw) > MAX_HOOK_OUTPUT_BYTES:
+        raise HookContractError("Codex hook receipt exceeds the bounded size")
+    try:
+        payload = strict_json_loads(raw)
+        if not isinstance(payload, dict):
+            raise TypeError("receipt must be a JSON object")
+        fields = set(payload)
+        if fields == set(LegacyCodexHookReceipt.model_fields):
+            model = LegacyCodexHookReceipt
+        elif fields == set(CodexHookReceipt.model_fields):
+            model = CodexHookReceipt
+        else:
+            raise ValueError("receipt fields do not match either exact v1 shape")
+        receipt = model.model_validate(payload, strict=True)
+    except (TypeError, UnicodeError, ValueError, ValidationError) as error:
+        raise HookContractError(f"invalid Codex hook receipt: {error}") from error
+    if raw != canonical_json_bytes(receipt.model_dump(mode="json")):
+        raise HookContractError("Codex hook receipt bytes are not canonical")
+    return receipt
+
+
 def load_codex_hook_receipt(
     path: Path,
     *,
     receipt_root: Path,
     expected_hook_definition_sha256: str,
-) -> CodexHookReceipt:
+) -> CodexHookReceiptWire:
     """Load one retained official-host receipt through a bounded exact boundary."""
 
     try:
@@ -175,14 +245,7 @@ def load_codex_hook_receipt(
         raw = resolved.read_bytes()
     except OSError as error:
         raise HookContractError("Codex hook receipt is unreadable") from error
-    if not raw or len(raw) > MAX_HOOK_OUTPUT_BYTES:
-        raise HookContractError("Codex hook receipt exceeds the bounded size")
-    try:
-        receipt = CodexHookReceipt.model_validate_json(raw, strict=True)
-    except (ValueError, ValidationError) as error:
-        raise HookContractError(f"invalid Codex hook receipt: {error}") from error
-    if raw != canonical_json_bytes(receipt.model_dump(mode="json")):
-        raise HookContractError("Codex hook receipt bytes are not canonical")
+    receipt = parse_codex_hook_receipt_bytes(raw)
     if resolved.name != f"{receipt.receipt_sha256}.json":
         raise HookContractError("Codex hook receipt filename is not content addressed")
     if receipt.hook_definition_sha256 != expected_hook_definition_sha256:

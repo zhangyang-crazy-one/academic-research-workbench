@@ -296,12 +296,13 @@ def run_command(root: Path, name: str, argv: list[str], *, required: bool = True
                 "PIP_NO_INDEX": "1",
                 "PYTHONNOUSERSITE": "1",
                 "UV_OFFLINE": "1",
+                "ARW_STRICT_PREREQS": "1",
                 "credentials_forwarded": False,
             },
         },
     )
     environment = os.environ.copy()
-    environment.update({"UV_OFFLINE": "1", "PIP_NO_INDEX": "1", "PYTHONNOUSERSITE": "1"})
+    environment.update({"UV_OFFLINE": "1", "PIP_NO_INDEX": "1", "PYTHONNOUSERSITE": "1", "ARW_STRICT_PREREQS": "1"})
     environment.pop("OPENAI_API_KEY", None)
     environment.pop("ANTHROPIC_API_KEY", None)
     environment.pop("PYTHONPATH", None)

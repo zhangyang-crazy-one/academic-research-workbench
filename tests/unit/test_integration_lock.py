@@ -52,6 +52,10 @@ ARS_COMMIT = "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
 EXPERIMENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_RECEIPT = (
+    REPOSITORY_ROOT / "tests" / "fixtures" / "hooks" / "legacy-v1"
+    / "cb42a36430800257e5dbb337ac92713d2ab74882882f65d63d21b81473046bed.json"
+)
 
 
 def _write(path: Path, value: bytes | str, *, executable: bool = False) -> None:
@@ -70,6 +74,33 @@ def _json(path: Path, value: object) -> None:
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_bound_hook_receipt_loader_accepts_exact_legacy_bytes(tmp_path: Path) -> None:
+    raw = LEGACY_RECEIPT.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == (
+        "d42ae38c1b766f4d0bd45220ff187ebedfd8cb55630bb1d8e39b31e8b62c45e2"
+    )
+    path = tmp_path / LEGACY_RECEIPT.name
+    path.write_bytes(raw)
+    binding = FileBinding.from_path(tmp_path, path.name)
+    receipt = integration_lock_module._load_canonical_bound_model(
+        tmp_path, binding, CodexHookReceipt, label="legacy official hook receipt"
+    )
+    assert receipt.receipt_sha256 == LEGACY_RECEIPT.stem
+    assert receipt.permission_mode == "bypassPermissions"
+    assert path.read_bytes() == raw
+
+    path.write_bytes(raw[:-1] + b"  \n")
+    with pytest.raises(IntegrationLockError, match="digest drift"):
+        integration_lock_module._load_canonical_bound_model(
+            tmp_path, binding, CodexHookReceipt, label="legacy official hook receipt"
+        )
+    changed_binding = FileBinding.from_path(tmp_path, path.name)
+    with pytest.raises(IntegrationLockError, match="canonical"):
+        integration_lock_module._load_canonical_bound_model(
+            tmp_path, changed_binding, CodexHookReceipt, label="legacy official hook receipt"
+        )
 
 
 @pytest.mark.parametrize(
@@ -795,6 +826,8 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         "model_sha256": "4" * 64,
         "cwd_sha256": "5" * 64,
         "permission_mode": "bypassPermissions",
+        "permission_mode_unrecognized": False,
+        "unrecognized_fields": [],
         "source": "startup",
         "stop_hook_active": None,
         "status": "observed",

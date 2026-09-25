@@ -6,6 +6,32 @@ The collective plugin has mixed licensing. Component identities remain separate.
 - `codebase-memory-mcp` (ARW `file-base` adapter) `v0.9.0-2-gee68144` — `MIT`;
   source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.
 
+- `K-Dense-AI/scientific-agent-skills` database-lookup advisory — `MIT`; original archived outside the staged skill tree at `third_party/admissions/k-dense-database-lookup/`; modified advisory at `skills/academic-research-workbench/references/database-lookup-advisory.md`. Direct skill staging remains pending human admission.
+
+## K-Dense database-lookup license (preserved)
+
+MIT License
+
+Copyright (c) 2025 K-Dense Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## Ordered local patches
 - `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`.
 - `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029`.

@@ -3,17 +3,16 @@
 import argparse
 import json
 import os
-import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.kernel.ledger.journal import replay_run
 from arw.kernel.state.models import RuntimeCommandRequest
 from arw.kernel.state.research_memory import MemoryInput, MemoryQuery
+from arw.mcp_stdio import StdioProtocol, run_stdio
 
 TOOLS = ("memory_save", "memory_search", "memory_read", "memory_doctor")
 
@@ -72,61 +71,40 @@ class MemoryMcpServer:
         return provider.save(value, request=request)
 
     def handle(self, message):
-        identifier = message.get("id")
-        method = message.get("method")
-        if identifier is None:
-            return None
-        response = {"jsonrpc": "2.0", "id": identifier}
-        if method == "initialize":
-            return {
-                **response,
-                "result": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "arw-memory", "version": "0.1.0"},
+        return StdioProtocol(
+            name="arw-memory",
+            version="0.1.0",
+            tools=self.tools,
+            call_tool=self._call_tool,
+        ).handle(message)
+
+    @staticmethod
+    def tools():
+        schemas = {
+            "memory_save": MemoryInput.model_json_schema(),
+            "memory_search": MemoryQuery.model_json_schema(),
+            "memory_read": {
+                "type": "object",
+                "properties": {
+                    "memory_id": {"type": "string"},
+                    "query": MemoryQuery.model_json_schema(),
                 },
-            }
-        if method == "ping":
-            return {**response, "result": {}}
-        if method == "tools/list":
-            schemas = {
-                "memory_save": MemoryInput.model_json_schema(),
-                "memory_search": MemoryQuery.model_json_schema(),
-                "memory_read": {
-                    "type": "object",
-                    "properties": {
-                        "memory_id": {"type": "string"},
-                        "query": MemoryQuery.model_json_schema(),
-                    },
-                    "required": ["memory_id"],
-                    "additionalProperties": False,
-                },
-                "memory_doctor": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": False,
-                },
-            }
-            return {
-                **response,
-                "result": {
-                    "tools": [
-                        {
-                            "name": name,
-                            "description": name,
-                            "inputSchema": schemas[name],
-                        }
-                        for name in TOOLS
-                    ]
-                },
-            }
-        if method != "tools/call":
-            return {
-                **response,
-                "error": {"code": -32601, "message": "CapabilityUnavailable"},
-            }
+                "required": ["memory_id"],
+                "additionalProperties": False,
+            },
+            "memory_doctor": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        }
+        return [
+            {"name": name, "description": name, "inputSchema": schemas[name]}
+            for name in TOOLS
+        ]
+
+    def _call_tool(self, params):
         try:
-            params = message.get("params", {})
             value = self.call(params["name"], params.get("arguments", {}))
             failed = False
         except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
@@ -137,14 +115,11 @@ class MemoryMcpServer:
             }
             failed = True
         return {
-            **response,
-            "result": {
-                "content": [
-                    {"type": "text", "text": json.dumps(value, ensure_ascii=False)}
-                ],
-                "structuredContent": value,
-                "isError": failed,
-            },
+            "content": [
+                {"type": "text", "text": json.dumps(value, ensure_ascii=False)}
+            ],
+            "structuredContent": value,
+            "isError": failed,
         }
 
 
@@ -165,35 +140,7 @@ def main():
         harness=args.harness,
         manifest=Path(manifest) if manifest else None,
     )
-    while True:
-        raw = sys.stdin.buffer.readline(65_538)
-        if not raw:
-            return 0
-        if len(raw) > 65_536:
-            return 65
-        try:
-            message = strict_json_loads(raw.decode("utf-8"))
-            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
-                raise ValueError()
-            response = server.handle(message)
-        except (ValueError, TypeError):
-            response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32700, "message": "Invalid request"},
-            }
-        if response is not None:
-            encoded = canonical_json_bytes(response)
-            if len(encoded) > 262_144:
-                encoded = canonical_json_bytes(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": message.get("id"),
-                        "error": {"code": -32603, "message": "OutputBudgetExceeded"},
-                    }
-                )
-            sys.stdout.buffer.write(encoded)
-            sys.stdout.buffer.flush()
+    return run_stdio(server.handle)
 
 
 if __name__ == "__main__":

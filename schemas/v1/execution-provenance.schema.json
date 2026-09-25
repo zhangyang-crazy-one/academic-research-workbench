@@ -1,0 +1,669 @@
+{
+  "$defs": {
+    "ComputerLanguageIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Owner-asserted language identity for a workflow source.",
+      "properties": {
+        "uri": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Uri",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri",
+        "name",
+        "url",
+        "version"
+      ],
+      "title": "ComputerLanguageIdentity",
+      "type": "object"
+    },
+    "DatasetMetadataAcceptedPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "date_published": {
+          "title": "Date Published",
+          "type": "string"
+        },
+        "license": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "supersedes_event_id": {
+          "anyOf": [
+            {
+              "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes Event Id"
+        },
+        "supersedes_event_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes Event Sha256"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rationale"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "date_published",
+        "license",
+        "supersedes_event_id",
+        "supersedes_event_sha256",
+        "rationale"
+      ],
+      "title": "DatasetMetadataAcceptedPayload",
+      "type": "object"
+    },
+    "ExecutionActionFinishedPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Action Id",
+          "type": "string"
+        },
+        "ended_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "title": "Ended At",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "host_agent_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host Agent Id"
+        },
+        "host_result_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host Result Sha256"
+        },
+        "observed_runtime_version": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Runtime Version"
+        },
+        "observed_runtime_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Runtime Sha256"
+        },
+        "observed_transport": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Transport"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "action_id",
+        "ended_at",
+        "outcome"
+      ],
+      "title": "ExecutionActionFinishedPayload",
+      "type": "object"
+    },
+    "ExecutionActionStartedPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Action Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "workflow",
+            "tool"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "workflow_action_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Workflow Action Id"
+        },
+        "assignment_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assignment Id"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attempt Id"
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Step Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tool Id"
+        },
+        "started_at": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "title": "Started At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_id",
+        "kind",
+        "workflow_action_id",
+        "assignment_id",
+        "attempt_id",
+        "step_id",
+        "tool_id",
+        "started_at"
+      ],
+      "title": "ExecutionActionStartedPayload",
+      "type": "object"
+    },
+    "ExecutionArtifactBoundPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "input",
+            "output"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "action_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Action Id",
+          "type": "string"
+        },
+        "assignment_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Assignment Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "run_input",
+            "proposal",
+            "artifact"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Event Sha256",
+          "type": "string"
+        },
+        "source_manifest_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Manifest Sha256"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "byte_count": {
+          "maximum": 104857600,
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity_id",
+        "direction",
+        "action_id",
+        "assignment_id",
+        "attempt_id",
+        "source_kind",
+        "source_event_id",
+        "source_event_sha256",
+        "source_manifest_sha256",
+        "relative_path",
+        "content_sha256",
+        "byte_count"
+      ],
+      "title": "ExecutionArtifactBoundPayload",
+      "type": "object"
+    },
+    "ExecutionContextAcceptedPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "workflow_definition_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Workflow Definition Id",
+          "type": "string"
+        },
+        "workflow_definition_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Workflow Definition Sha256",
+          "type": "string"
+        },
+        "workflow_source": {
+          "$ref": "#/$defs/WorkflowSource"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ExecutionStep"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/ExecutionTool"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Tools",
+          "type": "array"
+        },
+        "runtime": {
+          "$ref": "#/$defs/ExecutionRuntime"
+        }
+      },
+      "required": [
+        "workflow_definition_id",
+        "workflow_definition_sha256",
+        "workflow_source",
+        "steps",
+        "tools",
+        "runtime"
+      ],
+      "title": "ExecutionContextAcceptedPayload",
+      "type": "object"
+    },
+    "ExecutionRuntime": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version"
+        },
+        "build_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Build Sha256"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "build_sha256"
+      ],
+      "title": "ExecutionRuntime",
+      "type": "object"
+    },
+    "ExecutionStep": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "tool_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 128,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step_id",
+        "tool_id",
+        "position"
+      ],
+      "title": "ExecutionStep",
+      "type": "object"
+    },
+    "ExecutionTool": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "tool_id",
+        "name"
+      ],
+      "title": "ExecutionTool",
+      "type": "object"
+    },
+    "WorkflowSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "content_base64": {
+          "anyOf": [
+            {
+              "maxLength": 349528,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content Base64"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sha256"
+        },
+        "programming_language": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComputerLanguageIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "entity_id",
+        "relative_path",
+        "content_base64",
+        "sha256",
+        "programming_language"
+      ],
+      "title": "WorkflowSource",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ExecutionContextAcceptedPayload"
+    },
+    {
+      "$ref": "#/$defs/DatasetMetadataAcceptedPayload"
+    },
+    {
+      "$ref": "#/$defs/ExecutionActionStartedPayload"
+    },
+    {
+      "$ref": "#/$defs/ExecutionActionFinishedPayload"
+    },
+    {
+      "$ref": "#/$defs/ExecutionArtifactBoundPayload"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/execution-provenance.schema.json"
+}

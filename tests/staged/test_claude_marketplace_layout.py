@@ -27,17 +27,7 @@ def _minimal_codex_stage(root: Path) -> None:
     )
     _write(
         root / ".mcp.json",
-        json.dumps(
-            {
-                "mcpServers": {
-                    "file-base": {
-                        "command": "./scripts/file-base-mcp",
-                        "env": {"CBM_DISABLE_UPDATE_CHECK": "1"},
-                    }
-                }
-            },
-            indent=2,
-        )
+        json.dumps({"mcpServers": {}}, indent=2)
         + "\n",
     )
     _write(
@@ -176,10 +166,7 @@ def test_claude_marketplace_layout_and_host_rewrites(tmp_path: Path) -> None:
     assert os.access(plugin / "hooks/arw_hook_claude.py", os.X_OK)
 
     mcp = json.loads((plugin / ".mcp.json").read_text(encoding="utf-8"))
-    assert (
-        mcp["mcpServers"]["file-base"]["command"]
-        == "${CLAUDE_PLUGIN_ROOT}/scripts/file-base-mcp"
-    )
+    assert mcp == {"mcpServers": {}}
 
     commands = sorted(path.name for path in (plugin / "commands").glob("ars-*.md"))
     assert commands == ["ars-full.md", "ars-plan.md"]

@@ -25,6 +25,8 @@ from arw.kernel.policy.research_integrity import (
     research_integrity_contracts_schema_document,
     validate_research_integrity_contract_instance,
 )
+from arw.kernel.state.execution_schema import execution_provenance_schema_document
+from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES
 from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
     generate_phase4_schema_documents,
@@ -62,6 +64,7 @@ AUDIT_SCHEMA_NAMES: tuple[str, ...] = (AUDIT_DOSSIER_SCHEMA_NAME,)
 SCHEMA_NAMES: tuple[str, ...] = (
     PHASE1_SCHEMA_NAMES
     + (
+        "execution-provenance.schema.json",
         "artifact-manifest.schema.json",
         "artifact-request.schema.json",
         "attempt-request.schema.json",
@@ -164,6 +167,45 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
     if set(candidate.get("properties", {})) != set(expected.get("properties", {})):
         raise SchemaRegistryError(f"{name} has incompatible additional properties")
 
+    if name == "event.schema.json":
+        event_types = set(candidate["properties"]["event_type"]["enum"])
+        if not set(EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES) <= event_types:
+            raise SchemaRegistryError("execution provenance event types drifted")
+        if "1.4.0" not in candidate["properties"]["schema_version"]["enum"]:
+            raise SchemaRegistryError("execution provenance event version drifted")
+        for (
+            event_type,
+            payload_model,
+        ) in EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES.items():
+            expected_ref = (
+                "execution-provenance.schema.json#/$defs/" + payload_model.__name__
+            )
+            variants = [
+                entry["then"]
+                for entry in candidate.get("allOf", [])
+                if entry.get("if", {})
+                .get("properties", {})
+                .get("event_type", {})
+                .get("const")
+                == event_type
+            ]
+            if (
+                len(variants) != 1
+                or variants[0].get("properties", {})
+                != {
+                    "schema_version": {"const": "1.4.0"},
+                    "actor_role": {"const": "parent_control_plane"},
+                    "payload": {"$ref": expected_ref},
+                }
+                or "actor_role" not in variants[0].get("required", [])
+            ):
+                raise SchemaRegistryError(f"{event_type} schema branch drifted")
+
+    if (
+        name == "execution-provenance.schema.json"
+        and candidate != execution_provenance_schema_document()
+    ):
+        raise SchemaRegistryError("execution provenance schema drift")
     if name == "version-report.schema.json":
         command = candidate.get("properties", {}).get("command")
         if command != {"const": "version"}:
@@ -255,6 +297,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = research_artifact_schema_documents()[name]
         elif name in PROVENANCE_SCHEMA_NAMES:
             document = provenance_schema_documents()[name]
+        elif name == "execution-provenance.schema.json":
+            document = execution_provenance_schema_document()
         elif name in SUBMISSION_SCHEMA_NAMES:
             document = submission_documents[name]
         else:

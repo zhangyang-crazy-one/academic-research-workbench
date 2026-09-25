@@ -30,6 +30,19 @@ fail() {
   local error_type="$1"
   local message="$2"
   local status="${3:-70}"
+  if [[ "${ARW_JSON_DIAGNOSTIC:-0}" == "1" ]]; then
+    local action
+    case "$error_type" in
+      bootstrap-config) action="set HOME or CODEX_HOME before running ARW" ;;
+      runtime-artifact-missing) action="install a qualified plugin stage containing the ARW wheel" ;;
+      interpreter-*) action="select an executable Python >=3.13 interpreter" ;;
+      bootstrap-install-failed) action="check the configured package index and retry runtime installation" ;;
+      *) action="repair the installed ARW runtime and retry" ;;
+    esac
+    printf '{"schema_version":"arw.files-opt-in.v1","status":"rejected","reason_code":"%s","action":"%s"}\n' \
+      "${error_type//-/_}" "$action"
+    exit "$status"
+  fi
   printf 'arw: %s: %s\n' "$error_type" "$message" >&2
   exit "$status"
 }
@@ -41,9 +54,13 @@ fi
 
 COMMAND="$1"
 shift
+ARW_JSON_DIAGNOSTIC=0
+if [[ ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ]]; then
+  ARW_JSON_DIAGNOSTIC=1
+fi
 
 case "$COMMAND" in
-  health|route|version|files|writing|semantic|learn|memory|submission|_memory-mcp|artifact|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover) ;;
+  health|route|version|files|writing|semantic|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -51,6 +68,39 @@ esac
 
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
+# A source checkout has no staged wheel. Keep the opt-in preflight and health
+# available there so a missing native binary is reported as JSON before any
+# runtime bootstrap attempt. The installed package continues below.
+if [[ -f "$PLUGIN_ROOT/src/arw/files_opt_in.py" && ! -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+  if [[ "$COMMAND" == "health" || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ]]; then
+    SOURCE_PYTHON=""
+    if [[ -n "${ARW_PYTHON:-}" ]]; then
+      source_candidates=("$ARW_PYTHON")
+    else
+      source_candidates=("$PLUGIN_ROOT/.venv/bin/python" python3.15 python3.14 python3.13 python3 python)
+    fi
+    for candidate in "${source_candidates[@]}"; do
+      resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
+      if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null; then
+        SOURCE_PYTHON="$resolved"
+        break
+      fi
+    done
+    if [[ -z "$SOURCE_PYTHON" ]]; then
+      printf '{"schema_version":"arw.files-opt-in.v1","status":"rejected","reason_code":"runtime_unsupported","message":"Python 3.13 or newer is required"}\n'
+      exit 65
+    fi
+    unset PYTHONHOME
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export PYTHONPATH="$PLUGIN_ROOT/src"
+    export PYTHONNOUSERSITE=1
+    if [[ "$COMMAND" == "health" ]]; then
+      exec "$SOURCE_PYTHON" -m arw.files_opt_in health "$@"
+    fi
+    shift
+    exec "$SOURCE_PYTHON" -m arw.files_opt_in enable "$@"
+  fi
+fi
 ARW_CODEX_HOME="${CODEX_HOME:-}"
 if [[ -z "$ARW_CODEX_HOME" ]]; then
   [[ -n "${HOME:-}" ]] \
@@ -98,7 +148,15 @@ select_python() {
   fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
 
-PYTHON="$(select_python)"
+if PYTHON="$(select_python)"; then
+  :
+else
+  status=$?
+  if [[ "${ARW_JSON_DIAGNOSTIC:-0}" == "1" && "$PYTHON" == \{* ]]; then
+    printf '%s\n' "$PYTHON"
+  fi
+  exit "$status"
+fi
 PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
   || fail "interpreter-failed" "selected Python could not report its version" 78
 
@@ -184,11 +242,14 @@ fi
 case "$COMMAND" in
   health)
     [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" <<'PY'
 import importlib.metadata
 import json
 import platform
 import sys
+from arw.files_opt_in import health
+from arw.platform_support import platform_support
 
 if importlib.metadata.version("academic-research-workbench") != "0.1.0":
     raise SystemExit("installed package version mismatch")
@@ -199,6 +260,8 @@ json.dump(
         "python": platform.python_version(),
         "runtime_identity": sys.argv[1],
         "status": "ok",
+        "file_base": health(),
+        "platform": platform_support(),
     },
     sys.stdout,
     sort_keys=True,

@@ -9,6 +9,8 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 - Upstream suite version: `v3.21.1` (2026-08-24)
 - Adapter version: `0.1.27`
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
+- Progressive-loading modification (2026-09-25): moved the manuscript artifact/figure guidance and agent/shared-resource index from the 603-line Codex adapter `SKILL.md` into `codex/references/manuscript_artifact_and_figures.md` and `codex/references/agent_file_index.md`, with explicit links in the router. The moved contract text and upstream CC BY-NC 4.0 attribution are preserved; the adapter remains a modified downstream work, not a new upstream release.
+- Agent Skills metadata correction (2026-09-25): represented `codex_adapter` as the string `"true"` required for metadata string values. The adapter behavior is unchanged.
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
 - Snapshot lint hygiene: Markdown-only fixes add explicit fence languages, normalize ordered-list/table syntax, escape a literal table pipe, and render two maintainer-local feedback identifiers as non-links because those private notes are intentionally absent from the release snapshot. These changes do not alter ARS workflow policy.
 - Codex path overlay: vendored workflow entrypoints use `WORKFLOW.md`; upstream checks that address Claude `SKILL.md` entrypoints are translated and their byte-level locks are repinned to the adapted files.
@@ -55,3 +57,9 @@ capability profile. It is not an unpinned external MCP dependency.
 - Upstream test policy: `vendor/sources/file-base/tests` remains unchanged and is manifest-bound at SHA-256 `4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a`; the same `Makefile.cbm:test` inventory is used for normal, ASan+UBSan, and separate TSan runs.
 
 The machine-readable source manifest is authoritative for exact tree, patch, artifact, and legal-input digests. Later patches must be appended in order and must update this document, the manifest, generated notices, and the SBOM.
+
+## K-Dense scientific-agent-skills database-lookup advisory
+
+- Upstream: K-Dense Inc., `K-Dense-AI/scientific-agent-skills`, commit `49c6e97775eaa18ba791bebe23162a70ae601c18`, path `skills/database-lookup/SKILL.md` (MIT). The commit identifies reviewed source bytes, not a runtime dependency pin.
+- Exact upstream skill bytes, license text, selected tree identity, scan findings, and the user-directed archive-only disposition are recorded in `third_party/admissions/k-dense-database-lookup/`. The archive is outside auto-discovered and staged skill paths.
+- Local modification (2026-09-25): `skills/academic-research-workbench/references/database-lookup-advisory.md` is a new, reduced proposal reference. It removes upstream shell commands, direct request procedures, local key handling, and the mandatory self-citation instruction. It cannot grant a worker canonical write or evidence admission. Direct staging of the upstream skill is rejected; trusted admission still needs separate human review.

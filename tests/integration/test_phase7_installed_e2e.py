@@ -76,14 +76,10 @@ def _retained_bundled_qualification() -> tuple[Path, Path, Path | None]:
     )
 
 
-LOCK_PATH, CANARY_PATH, RETAINED_STAGE = _retained_bundled_qualification()
-CODEX_LAUNCHER = Path(
-    os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex"
-)
-CODEX_NATIVE = Path(
-    os.environ.get("ARW_CODEX_NATIVE_BINARY")
-    or discover_codex_native_binary(CODEX_LAUNCHER)
-)
+def _codex_host_paths() -> tuple[Path, Path]:
+    launcher = Path(os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex")
+    native = Path(os.environ.get("ARW_CODEX_NATIVE_BINARY") or discover_codex_native_binary(launcher))
+    return launcher, native
 
 
 def _digest(path: Path) -> str:
@@ -155,13 +151,13 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     # matching host canary; that must remain a qualification failure rather
     # than silently weakening the lock. Clean environments still exercise the
     # normal stage-plugin path below.
-    retained_stage = RETAINED_STAGE
+    lock_path, canary_path, retained_stage = _retained_bundled_qualification()
     if (
         retained_stage is not None
         and retained_stage.is_dir()
         and (retained_stage / "skills/academic-research-suite/SKILL.md").is_file()
-        and LOCK_PATH.is_file()
-        and CANARY_PATH.is_file()
+        and lock_path.is_file()
+        and canary_path.is_file()
     ):
         shutil.copytree(retained_stage, stage)
     else:
@@ -191,10 +187,12 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     return marketplace_root, outside, environment
 
 
+@pytest.mark.requires_retained_evidence("candidate_or_phase7")
 def test_source_hidden_installed_ars_route_and_bounded_receipt(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
 ) -> None:
+    lock_path, canary_path, _ = _retained_bundled_qualification()
     installed, outside, environment = installed_stage
     run_root = tmp_path / "run"
     run_root.mkdir()
@@ -206,12 +204,13 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         "ARW_PLUGIN_ROOT": str(installed),
     }
     if (installed / "supply-chain/integration-lock.json").is_file():
+        codex_launcher, codex_native = _codex_host_paths()
         command_environment.update(
             {
-                "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
-                "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
-                "ARW_CODEX_NATIVE_BINARY": str(CODEX_NATIVE),
-                "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
+                "ARW_INTEGRATION_LOCK": str(lock_path),
+                "ARW_CODEX_LAUNCHER": str(codex_launcher),
+                "ARW_CODEX_NATIVE_BINARY": str(codex_native),
+                "ARW_HOST_CANARY_EVIDENCE": str(canary_path),
             }
         )
 
@@ -229,7 +228,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     assert route["paper_ast_export"] == "deferred-v2"
     if (installed / "supply-chain/integration-lock.json").is_file():
         assert route["integration_status"] == "PASS"
-        assert route["integration_lock_sha256"] == _digest(LOCK_PATH)
+        assert route["integration_lock_sha256"] == _digest(lock_path)
         assert route["reason_codes"] == []
     else:
         assert route["integration_status"] == "BLOCKED"
@@ -267,7 +266,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     assert b"auth.json" not in retained
     assert b"OPENAI_API_KEY" not in retained
 
-    lock_sha = _digest(LOCK_PATH) if LOCK_PATH.is_file() else None
+    lock_sha = _digest(lock_path) if lock_path.is_file() else None
     receipt = {
         "schema_version": "arw.installed-qualification.v1",
         "technical_qualification": "PASS" if route["integration_status"] == "PASS" else "BLOCKED",
@@ -276,7 +275,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         "integration_lock_sha256": lock_sha,
         "ars_route_evidence_sha256": _digest(ars_path),
         "hook_definition_sha256": observe_hook_definition(installed)[2],
-        "host_canary_sha256": _digest(CANARY_PATH) if CANARY_PATH.is_file() else None,
+        "host_canary_sha256": _digest(canary_path) if canary_path.is_file() else None,
         "mcp_status": "not-invoked-in-route-smoke",
         "route_result_sha256": hashlib.sha256(route_output).hexdigest(),
         "reason_codes": list(route["reason_codes"]),
@@ -289,6 +288,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     )
 
 
+@pytest.mark.requires_retained_evidence("candidate_or_phase7")
 def test_installed_route_requires_qualification_lock(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
@@ -607,26 +607,29 @@ def test_phase7_representative_fixture_has_every_bounded_scientific_stage() -> N
     assert "review_gate_stale" in stale_review.reason_codes
 
 
+@pytest.mark.requires_retained_evidence("qualification:phase7")
 def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossier(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    lock_path, canary_path, _ = _retained_bundled_qualification()
     installed, outside, environment = installed_stage
     if not (installed / "supply-chain/integration-lock.json").is_file() or not (
-        LOCK_PATH.is_file() and CANARY_PATH.is_file()
+        lock_path.is_file() and canary_path.is_file()
     ):
-        pytest.skip("retained exact bundled host qualification evidence is absent")
+        pytest.fail("retained exact bundled host qualification evidence is absent")
+    codex_launcher, codex_native = _codex_host_paths()
     run_root, _ = _init_run(tmp_path)
     command_environment = {
         **environment,
         "HOME": str(tmp_path / "journey-home"),
         "CODEX_HOME": str(tmp_path / "journey-codex-home"),
         "ARW_PLUGIN_ROOT": str(installed),
-        "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
-        "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
-        "ARW_CODEX_NATIVE_BINARY": str(CODEX_NATIVE),
-        "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
+        "ARW_INTEGRATION_LOCK": str(lock_path),
+        "ARW_CODEX_LAUNCHER": str(codex_launcher),
+        "ARW_CODEX_NATIVE_BINARY": str(codex_native),
+        "ARW_HOST_CANARY_EVIDENCE": str(canary_path),
     }
     route_run = _run([str(installed / "bin/arw"), "route", "--json"], cwd=outside, environment=command_environment)
     assert route_run.returncode == 0, f"arw route exited {route_run.returncode}"
@@ -715,7 +718,7 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
         },
         graph={"status": "available", "receipts": (_graph_receipt(),)},
         source_identity_sha256=(decision.subject_sha256,),
-        integration_lock_sha256=_digest(LOCK_PATH),
+        integration_lock_sha256=_digest(lock_path),
     )
     assert dossier.technical_qualification.verdict == "PASS"
     assert dossier.release_qualification.verdict == "BLOCKED"

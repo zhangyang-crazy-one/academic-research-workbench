@@ -173,19 +173,14 @@ def _materialize_commands(plugin_root: Path) -> int:
     return count
 
 
-def _rewrite_mcp(plugin_root: Path) -> None:
+def _validate_mcp_disabled(plugin_root: Path) -> None:
     mcp_path = plugin_root / ".mcp.json"
     if not mcp_path.is_file():
         raise BuildError(".mcp.json missing from stage")
     payload = json.loads(mcp_path.read_text(encoding="utf-8"))
     servers = payload.get("mcpServers")
-    if not isinstance(servers, dict) or "file-base" not in servers:
-        raise BuildError(".mcp.json missing file-base server")
-    entry = servers["file-base"]
-    if not isinstance(entry, dict):
-        raise BuildError("file-base MCP entry must be an object")
-    entry["command"] = "${CLAUDE_PLUGIN_ROOT}/scripts/file-base-mcp"
-    _write_json(mcp_path, payload)
+    if not isinstance(servers, dict) or servers:
+        raise BuildError("Claude plugin MCP servers must be disabled by default")
 
 
 def transform(
@@ -244,7 +239,7 @@ def transform(
     shutil.copy2(claude_hook, target_hook)
     target_hook.chmod(target_hook.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-    _rewrite_mcp(claude_stage_root)
+    _validate_mcp_disabled(claude_stage_root)
     command_count = _materialize_commands(claude_stage_root)
 
     workbench_skill = claude_stage_root / "skills/academic-research-workbench/SKILL.md"

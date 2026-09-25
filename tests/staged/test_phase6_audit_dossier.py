@@ -45,6 +45,9 @@ def staged(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return _stage(tmp_path_factory.mktemp("phase6-stage"))
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_phase6_artifacts_are_executable_and_private_free(staged: Path) -> None:
     stage = staged
     required = {
@@ -64,6 +67,9 @@ def test_staged_phase6_artifacts_are_executable_and_private_free(staged: Path) -
     assert identity["staged_payloads"]
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_audit_schema_digest_is_bound_in_build_identity(staged: Path) -> None:
     stage = staged
     identity = json.loads((stage / "share/arw/build-identity.json").read_text(encoding="utf-8"))

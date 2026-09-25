@@ -1,23 +1,10 @@
 ---
 name: academic-research-suite
-description: >
-  Codex-native ARS/AWR suite for literature reviews, academic writing and
-  revision, citation and semantic-claim verification, manuscript or peer
-  review, full research-to-paper pipelines, experiment design or validation,
-  and audited paper/PDF generation. Use for systematic reviews, source-access
-  and full-text integrity, evidence-tier checks, reviewer simulation,
-  statistical interpretation, human-study protocols, run ledgers, paper
-  AST/XML validation, CS or data-engineering source integration, academic
-  figure/table planning, and current venue/template checks. Korean triggers:
-  논문 심사, 논문 수정, 초록 작성, 체계적 문헌고찰, 연구부터 논문까지. Also use
-  for ars-plan, ars-outline, ars-abstract, ars-lit-review, ars-citation-check,
-  ars-disclosure, ars-format-convert, ars-3w, ars-revision-coach, ars-revision,
-  ars-reviewer, ars-mark-read, ars-unmark-read, ars-cache-invalidate,
-  ars-rebuttal-audit, ars-full, and related /ars-* forms.
+description: "ARS research methodology and paper production: literature/systematic review, citation checking, experiment design, abstract/draft/revision, peer review and research-to-paper workflows. Use for 文献综述、系统综述、论文审稿、论文修改、摘要撰写、实验设计、引用核查、从研究到论文; also 논문 심사, 논문 수정, 체계적 문헌고찰 and ars-* aliases. For operational commands use academic-research-workbench; for post-manuscript submission handoff use submission."
 metadata:
   version: "0.1.27"
   upstream_suite: "academic-research-skills"
-  codex_adapter: true
+  codex_adapter: "true"
 allowed-tools: Read, Glob, Grep, WebSearch, Bash(uv *), Bash(python *), Bash(python3 *)
 ---
 
@@ -315,103 +302,10 @@ open full text, user-supplied local full text, or inaccessible full text.
   controls. If full text remains unavailable, narrow or remove the claim, or
   mark it unresolved/retrieval-failed instead of fabricating support.
 
-## Manuscript Artifact Boundary
+## Manuscript Artifact and Figure Boundaries
 
-Separate user-facing collaboration from manuscript-facing artifacts. Notes written
-to explain choices to the user, audit diagnoses, planning commentary, status updates,
-or phrases addressed to "you"/"the user"/"我/你" are not manuscript content.
-
-When drafting papers, generating figures/tables, writing captions, exporting PDF/XML,
-or preparing camera-ready assets:
-
-- Do not copy conversation explanations, coaching text, implementation notes, or
-  "why I designed it this way" commentary into the manuscript, figure labels, table
-  notes, captions, abstracts, titles, or supplementary artifacts.
-- Do not include phrases such as "as you requested", "I recommend", "we discussed",
-  "给你的解释", "我认为", "你需要", "用户要求", or equivalent assistant-user
-  dialogue markers in final paper artifacts.
-- Do not include meta-delivery explanations in titles, subtitles, abstracts, body
-  text, captions, or PDF cover pages. Prohibited examples include "本报告用于...",
-  "本案例报告用于配合...", "PPT 负责...", "本报告负责...", "报告不嵌入...",
-  "正文重点...", "配合 15 页 PPT...", "behind each slide", and equivalent
-  wording that explains the artifact's role in a conversation or delivery package
-  instead of stating project facts, methods, evidence, decisions, or execution
-  status.
-- For Chinese manuscript/report artifacts, enforce terminology normalization.
-  Avoid casual Chinese-English mixing in body text, headings, captions, tables, and
-  cover pages. Keep only necessary official product names, standards, protocol
-  acronyms, code identifiers, and technology names; when a non-Chinese term is
-  necessary, introduce it with a Chinese explanation once and keep subsequent usage
-  consistent. Do not use English delivery labels such as "PPT", "slide", "deck",
-  or similar packaging terms in the manuscript unless the artifact itself is a
-  slide inventory rather than the final report.
-- Keep internal audit labels only when they are legitimate scholarly labels, for
-  example `diagnostic`, `oracle upper bound`, `sample-200 screening`, or
-  `full-validation`; strip conversational rationale around them.
-- Before final emission, run a manuscript-artifact leak check: every visible string
-  must serve the paper's research claim, method, evidence, limitation, or venue
-  requirement. If a string only explains the work to the user, remove it or place it
-  in a separate non-manuscript audit note.
-
-## Evidence-Tiered Experiment Narratives
-
-For empirical paper writing, figure planning, main-table planning, and result
-summaries, separate evidence tiers before making claims:
-
-- **Main results** require full-validation evidence on the declared primary setting.
-  If a cross-model or cross-dataset generalization claim is made, the same level of
-  validation is required for that claim.
-- **Screening or evolution results** may use smoke, small, or sample-200 runs, but
-  figures/tables must label them as screening, method selection, or pilot evidence.
-- **Diagnostic results** such as oracle labels, gold/reference-assisted settings,
-  span guards, repair branches, semantic verifiers, cost probes, and concurrency
-  probes must be visually and textually separated from the main claim route.
-- **Figure groups** are preferred when the argument depends on research-question
-  framing, literature anchors, method evolution, final full-validation evidence, and
-  diagnostics. Do not force these into one overloaded figure.
-- Never state that an entire evolution chain is fully validated across models unless
-  every component in that chain has the corresponding full-validation evidence.
-
-## Non-Boxed Academic Main Figures
-
-When generating a main figure, overview figure, graphical abstract, or teaser
-figure for a paper, do not default to a rigid box-and-arrow architecture diagram.
-First test whether a richer paper visual grammar better communicates the research
-question, motivating example, protocol boundary, and evidence. Use
-`ars/academic-paper/references/main_figure_table_standards.md` for the
-figure-narrative brief, style probes, critic gate, and finalization rules.
-
-For manuscript-facing image-generation prompts, lead with a vivid positive
-description of the paper content: the concrete research scene, what the reader
-should notice, how the method changes the task, and where evidence enters. Do
-not make the prompt primarily a long list of prohibitions. Keep negative
-requirements compact and reserved for hard manuscript constraints. Generated
-paper figures should not contain an in-image title; figure names and explanatory
-titles belong in the caption or manuscript text, while visible text inside the
-image should be limited to panel tags, object labels, task labels, and short
-evidence labels.
-
-When the user provides a formal reference PDF for visual, figure, or table
-style, first extract and inspect every figure and table one by one. Classify
-each artifact by scholarly role (motivating case, dataset construction,
-method architecture, main result table, appendix prompt/rubric figure, data
-analysis chart, taxonomy table, dataset-statistics table) before designing new
-figures or tables. Do not infer the style from captions alone.
-
-Reference papers are exemplars for scholarly role, evidence density, table
-logic, caption discipline, and venue-appropriate artifact types only. Do not
-copy, trace, crop into the manuscript, visually recreate, or closely imitate a
-reference paper's protected figure/table expression, wording, layout geometry,
-icons, color arrangement, or distinctive composition. Abstract the reusable
-principle, then design a new artifact from the user's own research question,
-data, evidence, labels, and manuscript argument.
-
-Framework boxes and pipeline arrows are acceptable only when the paper's central
-contribution is literally a system architecture or execution pipeline. For LLM
-event extraction, ontology abstraction, prompt optimization, or feasibility
-studies, prefer manuscript-safe visual narratives such as annotated examples,
-evidence dossiers, abstraction lenses, failure-to-protocol contrasts, or
-validation maps.
+Read [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md)
+when drafting manuscript-facing text, figures, tables, captions or exports.
 
 ## Science Workbench MVP Extension
 
@@ -460,116 +354,10 @@ For multi-review phases, preserve independence by writing each reviewer section
 before synthesizing. Do not let the final synthesis erase critical findings from
 devil's advocate or methodology roles.
 
-## Canonical Agent Files
+## Agent File and Shared Resource Index
 
-Use these exact filenames. Do not invent hyphenated alternatives or rename files
-from memory.
-
-`ars/deep-research/agents/`:
-`bibliography_agent.md`, `devils_advocate_agent.md`,
-`editor_in_chief_agent.md`, `ethics_review_agent.md`,
-`meta_analysis_agent.md`, `monitoring_agent.md`,
-`report_compiler_agent.md`, `research_architect_agent.md`,
-`research_question_agent.md`, `risk_of_bias_agent.md`,
-`socratic_mentor_agent.md`, `source_verification_agent.md`,
-`synthesis_agent.md`, `timeline_extraction_agent.md`.
-
-`ars/academic-paper/agents/`:
-`abstract_bilingual_agent.md`, `argument_builder_agent.md`,
-`citation_compliance_agent.md`, `draft_writer_agent.md`,
-`formatter_agent.md`, `intake_agent.md`,
-`literature_strategist_agent.md`, `peer_reviewer_agent.md`,
-`revision_coach_agent.md`, `socratic_mentor_agent.md`,
-`structure_architect_agent.md`, `visualization_agent.md`.
-
-`ars/academic-paper-reviewer/agents/`:
-`devils_advocate_reviewer_agent.md`, `domain_reviewer_agent.md`,
-`editorial_synthesizer_agent.md`, `eic_agent.md`,
-`field_analyst_agent.md`, `methodology_reviewer_agent.md`,
-`perspective_reviewer_agent.md`.
-
-`ars/academic-pipeline/agents/`:
-`claim_ref_alignment_audit_agent.md`, `collaboration_depth_agent.md`,
-`integrity_verification_agent.md`,
-`pipeline_orchestrator_agent.md`, `state_tracker_agent.md`.
-
-`ars/experiment-agent/agents/`:
-`code_runner_agent.md`, `study_manager_agent.md`.
-
-## Shared Resources
-
-Use `ars/shared/` for cross-workflow contracts and quality gates:
-
-- `ars/shared/handoff_schemas.md` defines inter-stage artifact schemas.
-- `ars/shared/style_calibration_protocol.md` defines writing voice calibration.
-- `ars/shared/manuscript_artifact_boundary.md` defines the separation between
-  user-facing collaboration notes and manuscript-facing text, figures, tables,
-  captions, and exports.
-- `ars/academic-paper/references/ai_scientific_image_generation.md` defines
-  image-model use boundaries for scientific schematics, policy/disclosure
-  checks, prompt brief templates, negative constraints, and final figure audits.
-- `ars/academic-paper/references/academic_svg_box_diagram_standards.md` defines
-  semantic contracts, restrained visual grammar, constant-scale arrows,
-  relationship-label spacing, rail and bracket junction geometry, explicit
-  feedback targets, and rendered-image audits for explicitly requested strict
-  academic SVG box diagrams only.
-- `ars/shared/mode_spectrum.md` defines fidelity, balanced, and originality modes.
-- `ars/shared/model_tiering.md` defines the optional judgment/execution
-  classification; Codex applies it only when per-dispatch model selection exists.
-- `ars/shared/cross_model_verification.md` defines risk-stratified verification,
-  blind disagreement checkpoints, the canonical dispatcher handoff envelope,
-  the fixed-seat cross-model reviewer track, re-review judge independence,
-  provider grounding guards, model-id status, and the contained citation-only
-  Codex subscription transport.
-- `ars/shared/references/evidence_row_protocol.md` defines source-bound Phase E
-  evidence rows; `ars/shared/contracts/revision/` separates non-ranking roadmaps
-  from author adjudication and current revision evidence.
-- `ars/shared/references/human_subjects_authority_protocol.md`,
-  `ars/shared/references/review_pathway_rule_trace_protocol.md`, and
-  `ars/shared/references/submission_packet_manifest_protocol.md` define the
-  institution-owned human-subjects authority, navigation, and packet boundaries.
-- `ars/shared/review_criteria_registry.json` and
-  `ars/shared/references/review_criteria_consumer_protocol.md` bind one
-  author-confirmed review target across formative, internal, and external review.
-- `ars/shared/research_workflow_profiles/field_general.json` plus the closed
-  `ars/shared/contracts/research_workflow/` schemas define the default-off
-  profile selection/correction substrate; `ars/shared/contracts/passport/inquiry_ledger_ref.schema.json`
-  and `ars/scripts/inquiry_branch_ledger.py` define the separately opt-in local
-  branch ledger.
-- `ars/shared/contracts/cross_model/promotion_bakeoff_sealed_*.schema.json`
-  defines future promotion-bakeoff commitment/reveal records. The associated
-  history-aware tree verifier is upstream-only in this re-rooted package, while
-  its hermetic contract tests remain available.
-- `ars/shared/bibliographic_integrity_signals.md` and
-  `ars/shared/references/cross_document_consistency_advisory_protocol.md` keep
-  bibliographic, retraction, preregistration, and cross-document signals
-  provenance-bearing and advisory rather than clean-document certificates.
-- `ars/academic-pipeline/references/claim_verification_protocol.md` defines the
-  v3.18 high-impact-first sampling gate plus advisory-only scope-conformance
-  and search-bounded novelty classifications, and the v3.19 revision-round
-  claim-strength drift audit.
-- `ars/shared/references/claim_strength_ladder.md` and
-  `ars/scripts/check_revision_token_conservation.py` define the v3.19 semantic
-  and deterministic revision-drift guards.
-- `ars/shared/contracts/passport/human_read_log.schema.json` defines optional
-  user-owned read-scope attestations. Missing scope remains `unknown`; partial
-  coverage remains visible and is never promoted to full coverage.
-- `ars/shared/contracts/degradation_registry.json` indexes every graceful-
-  degradation mechanism, its emitted state, authority, downstream consumer,
-  and terminal-policy effect without replacing the underlying authority.
-- `ars/shared/agents/compliance_agent.md` defines compliance checks.
-- `ars/shared/compliance_checkpoint_protocol.md`, `ars/shared/prisma_trAIce_protocol.md`, and `ars/shared/raise_framework.md` define integrity and reporting gates.
-- `ars/scripts/` contains upstream validators and reference adapters.
-- `ars/examples/` contains upstream non-PDF fixtures and templates.
-- `ars/docs/design/` contains upstream design specs referenced by ARS protocols.
-- `ars/commands/` contains upstream Claude slash-command prompt recipes.
-- `ars/hooks/` contains upstream Claude hook metadata preserved for traceability.
-- `ars/tests/` contains upstream fixture corpora used by validator tests.
-
-When an ARS file points to `shared/...`, resolve it as `ars/shared/...`.
-When it points to another workflow, resolve it under `ars/<workflow>/...`.
-When it points to root-level `scripts/...`, `examples/...`, or `docs/...`, resolve
-it under `ars/scripts/...`, `ars/examples/...`, or `ars/docs/...`.
+Read [agent files and shared resources](codex/references/agent_file_index.md)
+when a selected workflow requires a role prompt, handoff, shared contract or template.
 
 ## Inactive Upstream Scripts
 
