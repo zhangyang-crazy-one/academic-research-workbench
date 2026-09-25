@@ -40,12 +40,12 @@ jobs:
           path: build/candidate-from-ci-transfer
       - name: Extract candidate with hidden files and executable modes
         run: |
-          python scripts/candidate-bundle extract
-            --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz
+          python scripts/candidate-bundle extract \
+            --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz \
             --output-root build/candidate-from-ci
       - name: Select the exact gated candidate for stage regressions
         run: |
-          python scripts/candidate-bundle verify
+          python scripts/candidate-bundle verify \
             --bundle-root build/candidate-from-ci
           python - <<'PY'
           import json
@@ -302,9 +302,10 @@ jobs:
       - name: Extract and verify same-run candidate bundle
         run: |
           python scripts/candidate-bundle extract \
-            --archive candidate-transfer/candidate-bundle.tar.gz
+            --archive candidate-transfer/candidate-bundle.tar.gz \
             --output-root candidate-bundle
-          python scripts/candidate-bundle verify --bundle-root candidate-bundle
+          python scripts/candidate-bundle verify \
+            --bundle-root candidate-bundle
           python - <<'PY'
           import json
           import os
