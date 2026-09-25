@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Validate locally discoverable Agent Skills and the plugin stage contract."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+LINK = re.compile(r"(?<!!)\[[^\]]+\]\((<[^>]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
+STAGE_FILE = re.compile(r'^copy_file "skills/([^/]+)/SKILL\.md"$', re.MULTILINE)
+STAGE_TREE = re.compile(r'^copy_tree "skills/([^/]+)"$', re.MULTILINE)
+
+
+class UniqueLoader(yaml.SafeLoader):
+    """Reject duplicate YAML keys at every mapping level."""
+
+
+def _unique_mapping(loader: UniqueLoader, node: yaml.MappingNode) -> dict:
+    result = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node)
+        if key in result:
+            raise ValueError(f"duplicate frontmatter key: {key}")
+        result[key] = loader.construct_object(value_node)
+    return result
+
+
+UniqueLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping
+)
+
+
+def stage_allowlist(stage_script: Path) -> set[str]:
+    source = stage_script.read_text(encoding="utf-8")
+    direct = set(STAGE_FILE.findall(source))
+    trees = set(STAGE_TREE.findall(source))
+    copied = direct | trees
+    if not copied:
+        raise ValueError("stage skill allowlist is empty or not statically inspectable")
+    for name in direct:
+        if f'"skills/{name}/SKILL.md"' not in source:
+            raise ValueError(
+                f"stage expected-file inventory omits skills/{name}/SKILL.md"
+            )
+    return copied
+
+
+def validate_skill(path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
+        return ["SKILL.md is missing or is a symlink"], warnings
+    body = path.read_text(encoding="utf-8")
+    lines = body.splitlines()
+    if len(lines) < 3 or lines[0] != "---" or "---" not in lines[1:]:
+        return ["required YAML frontmatter is missing"], warnings
+    closing = lines.index("---", 1)
+    try:
+        meta = yaml.load("\n".join(lines[1:closing]), Loader=UniqueLoader)
+    except (yaml.YAMLError, ValueError) as exc:
+        return [f"invalid YAML frontmatter: {exc}"], warnings
+    if not isinstance(meta, dict):
+        return ["frontmatter must be a mapping"], warnings
+    name = meta.get("name")
+    description = meta.get("description")
+    if not isinstance(name, str) or len(name) > 64 or not NAME.fullmatch(name):
+        errors.append("name must be 1-64 lowercase alphanumeric/hyphen characters")
+    elif name != path.parent.name:
+        errors.append("name does not match skill directory")
+    if not isinstance(description, str) or not 1 <= len(description) <= 1024:
+        errors.append("description must be 1-1024 characters")
+    for field, max_len in (
+        ("compatibility", 500),
+        ("license", None),
+        ("allowed-tools", None),
+    ):
+        value = meta.get(field)
+        if value is not None and (
+            not isinstance(value, str)
+            or not value.strip()
+            or (max_len and len(value) > max_len)
+        ):
+            errors.append(
+                f"{field} must be a nonempty string"
+                + (f" of at most {max_len} characters" if max_len else "")
+            )
+    if "metadata" in meta and (
+        not isinstance(meta["metadata"], dict)
+        or any(
+            not isinstance(k, str) or not isinstance(v, str)
+            for k, v in meta["metadata"].items()
+        )
+    ):
+        errors.append("metadata must map strings to strings")
+    if len(lines) > 500:
+        warnings.append(f"SKILL.md is {len(lines)} lines (recommended at most 500)")
+    if not any(line.strip() for line in lines[closing + 1 :]):
+        errors.append("Markdown body is empty")
+    root = path.parent.resolve()
+    for match in LINK.finditer("\n".join(lines[closing + 1 :])):
+        target = match.group(1).strip("<>")
+        parts = urlsplit(target)
+        if parts.scheme in {"http", "https", "mailto"} or target.startswith("#"):
+            continue
+        if parts.scheme or parts.netloc:
+            errors.append(f"unsafe file link: {target}")
+            continue
+        candidate = Path(unquote(parts.path))
+        if candidate.is_absolute() or not candidate.parts:
+            errors.append(f"unsafe file link: {target}")
+            continue
+        resolved = (root / candidate).resolve()
+        if not resolved.is_relative_to(root) or not resolved.is_file():
+            errors.append(f"unresolved or escaping file link: {target}")
+    return errors, warnings
+
+
+def validate_tree(
+    skills_root: Path, allowlist: set[str]
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    found = {path.parent.name: path for path in skills_root.glob("*/SKILL.md")}
+    for path in skills_root.rglob("SKILL.md"):
+        if path.parent.parent != skills_root:
+            errors.append(
+                f"nested discoverable skill is not allowlisted: {path.relative_to(skills_root)}"
+            )
+    for name in sorted(found.keys() - allowlist):
+        errors.append(f"skills/{name}/SKILL.md is absent from stage allowlist")
+    for name in sorted(allowlist - found.keys()):
+        errors.append(f"allowlisted skills/{name}/SKILL.md is missing")
+    if len(found) > 4:
+        errors.append(f"{len(found)} discoverable skills exceed the four-skill limit")
+    for name, path in sorted(found.items()):
+        skill_errors, skill_warnings = validate_skill(path)
+        errors.extend(f"skills/{name}: {item}" for item in skill_errors)
+        warnings.extend(f"skills/{name}: {item}" for item in skill_warnings)
+    return errors, warnings
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--stage-root",
+        type=Path,
+        help="validate an assembled plugin stage instead of source skills",
+    )
+    args = parser.parse_args()
+    try:
+        allowlist = stage_allowlist(ROOT / "scripts/stage-plugin")
+        skills_root = (args.stage_root or ROOT) / "skills"
+        errors, warnings = validate_tree(skills_root, allowlist)
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    for item in warnings:
+        print(f"WARNING: {item}", file=sys.stderr)
+    for item in errors:
+        print(f"ERROR: {item}", file=sys.stderr)
+    if errors:
+        return 1
+    print(f"validated {len(allowlist)} allowlisted skills in {skills_root}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

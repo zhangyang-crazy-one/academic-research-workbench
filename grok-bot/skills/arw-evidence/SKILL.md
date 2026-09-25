@@ -25,7 +25,7 @@ not a dependency or runtime compatibility pin.
 ## Canonical vs disposable
 
 - The append-only ledger is the only canonical run state
-  (`skills/audit/SKILL.md`, `docs/runtime/scientific-integrity.md`).
+  (`skills/academic-research-workbench/references/control-plane-capabilities.md`, `docs/runtime/scientific-integrity.md`).
 - File-base indexes, graphs, and SQLite projections are disposable.
 - GitHub-readable skill text is **not** a run. Do not quote it as
   `arw status` output.
@@ -47,7 +47,7 @@ not a dependency or runtime compatibility pin.
 Installed MCP, when a parent has configured it, exposes only
 `list_files`, `read_file`, `search_files`, `get_outline`, and
 `get_context` under one registered root
-(`skills/files/SKILL.md`, `docs/runtime/files-first-data-plane.md`).
+(`skills/academic-research-workbench/references/control-plane-capabilities.md`, `docs/runtime/files-first-data-plane.md`).
 
 On Grok:
 
@@ -61,10 +61,10 @@ On Grok:
 
 | Topic | Path |
 | --- | --- |
-| Evidence access | `skills/evidence/SKILL.md` |
-| Audit / ledger | `skills/audit/SKILL.md` |
-| Provenance | `skills/provenance/SKILL.md` |
-| Artifacts | `skills/artifact/SKILL.md` |
+| Evidence access | `skills/academic-research-workbench/references/control-plane-capabilities.md` |
+| Audit / ledger | `skills/academic-research-workbench/references/control-plane-capabilities.md` |
+| Provenance | `skills/academic-research-workbench/references/control-plane-capabilities.md` |
+| Artifacts | `skills/academic-research-workbench/references/control-plane-capabilities.md` |
 | Integrity overview | `docs/runtime/scientific-integrity.md` |
 | Audit dossier bounds | `docs/runtime/audit-dossier.md` |
 

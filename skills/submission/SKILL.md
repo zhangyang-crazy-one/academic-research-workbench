@@ -1,6 +1,6 @@
 ---
 name: submission
-description: Route auditable manuscript submission and revision work through ARW's parent-owned submission contracts.
+description: "ARW manuscript submission packet and decision workflow after a manuscript exists: prepare, review-import, response-record, readiness, human confirmation and result recording. Use for 投稿材料、审稿意见导入、回复审稿人、投稿就绪核查. For research methods use academic-research-suite; for operational commands use academic-research-workbench."
 ---
 
 # Submission workflow

@@ -1,9 +1,4 @@
----
-name: writing
-description: Prepare academic revisions with explicit author goals, measured surface controls and source-bound preservation review.
----
-
-# Writing revisions
+# Source-bound writing revisions
 
 Use the installed `bin/arw writing` contract. Preserve the accepted source.
 Select one capability: `writing.academic_rewrite` (academic tone/organization),
@@ -35,6 +30,6 @@ regularities), `writing.claim_preserving_rewrite` (claim-centered wording), or
    rationale. Prior review of different bytes is invalid.
 
 Generators and reviewers propose; the parent alone uses canonical admission.
-Read `docs/runtime/writing.md` in the source distribution for metric definitions,
+The source distribution's `docs/runtime/writing.md` describes metric definitions,
 review schema and limitations. Original and candidate text remain in the immutable
 bundle so review can be repeated without regenerating model output.

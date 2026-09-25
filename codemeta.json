@@ -1,0 +1,26 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-3.0",
+  "@type": "SoftwareSourceCode",
+  "name": "Academic Research Workbench",
+  "version": "0.1.0",
+  "description": "Headless, auditable research-workflow control plane for Codex.",
+  "codeRepository": "https://github.com/zhangyang-crazy-one/academic-research-workbench",
+  "hasPart": [
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "academic-research-skills and experiment-agent workflow content",
+      "license": "https://creativecommons.org/licenses/by-nc/4.0/"
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "vendored file-base data plane",
+      "license": "https://opensource.org/license/mit"
+    }
+  ],
+  "relatedLink": [
+    "https://github.com/zhangyang-crazy-one/academic-research-workbench",
+    "https://github.com/zhangyang-crazy-one/academic-research-workbench/issues",
+    "https://creativecommons.org/licenses/by-nc/4.0/",
+    "https://opensource.org/license/mit"
+  ]
+}
