@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Build one ARW wheel and record the actual isolated builder environment."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LOWER_BOUND_REQUIREMENT = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[A-Za-z0-9_,.-]+\])?\s*>=\s*[A-Za-z0-9][A-Za-z0-9.!+_-]*(?:\s*;\s*.+)?"
+)
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def package_tree_sha256(packages: list[str]) -> str:
+    checksum = hashlib.sha256()
+    for relative_root in packages:
+        source = ROOT / relative_root
+        for path in sorted(source.rglob("*")):
+            if not path.is_file() or path.suffix in {".pyc", ".pyo"} or "__pycache__" in path.parts:
+                continue
+            relative = path.relative_to(ROOT).as_posix()
+            checksum.update(relative.encode() + b"\0" + sha256(path).encode() + b"\n")
+    return checksum.hexdigest()
+
+
+def run(argv: list[str], *, cwd: Path = ROOT) -> str:
+    result = subprocess.run(argv, cwd=cwd, text=True, capture_output=True, check=False)
+    if result.returncode:
+        raise RuntimeError(f"command failed ({result.returncode}): {argv!r}\n{result.stderr}{result.stdout}")
+    return result.stdout.strip()
+
+
+def validate_build_requirements(build_system: dict[str, object]) -> list[str]:
+    requirements = build_system.get("requires")
+    if build_system.get("build-backend") != "hatchling.build":
+        raise ValueError("candidate builder requires the declared hatchling.build backend")
+    if not isinstance(requirements, list) or not requirements:
+        raise ValueError("build requirements must be a nonempty list")
+    names = set()
+    for requirement in requirements:
+        match = LOWER_BOUND_REQUIREMENT.fullmatch(requirement) if isinstance(requirement, str) else None
+        if match is None:
+            raise ValueError(f"build requirement must use one lower bound: {requirement!r}")
+        name = re.sub(r"[-_.]+", "-", match.group("name")).lower()
+        if name in names:
+            raise ValueError(f"duplicate normalized build requirement: {name}")
+        names.add(name)
+    if "hatchling" not in names:
+        raise ValueError("hatchling build backend is absent from build requirements")
+    return requirements
+
+
+def collapse_distribution_sightings(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep one observation per normalized name only when repeats are identical."""
+    by_name: dict[str, dict[str, str]] = {}
+    for row in rows:
+        name = row.get("name") if isinstance(row, dict) else None
+        if not isinstance(name, str) or not name:
+            raise ValueError("distribution sighting has no package name")
+        normalized = re.sub(r"[-_.]+", "-", name).lower()
+        previous = by_name.get(normalized)
+        if previous is not None and previous != row:
+            raise ValueError(f"conflicting distribution sightings: {normalized}")
+        by_name[normalized] = row
+    return list(by_name.values())
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-root", required=True, type=Path)
+    args = parser.parse_args()
+    output = args.output_root.absolute()
+    if output.exists() or output in (ROOT, Path("/")):
+        parser.error("--output-root must be a fresh directory outside the repository root itself")
+    if sys.version_info < (3, 13):  # noqa: UP036 - standalone script may be run before installation
+        parser.error("builder Python must satisfy >=3.13")
+    uv = shutil.which("uv")
+    if uv is None:
+        parser.error("uv is required to resolve declared build requirements")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    try:
+        requirements = validate_build_requirements(project["build-system"])
+    except ValueError as error:
+        parser.error(str(error))
+    package_roots = project["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
+    source_tree_before = package_tree_sha256(package_roots)
+    output.mkdir(parents=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="arw-candidate-builder.") as temporary:
+            builder = Path(temporary) / "venv"
+            run([uv, "venv", "--python", sys.executable, str(builder)])
+            python = builder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+            run([uv, "pip", "install", "--python", str(python), *requirements])
+            inventory_code = """
+import hashlib, importlib.metadata, json, platform, sys
+rows = []
+for d in importlib.metadata.distributions():
+    name = d.metadata.get('Name')
+    if not name:
+        continue
+    content = hashlib.sha256()
+    for entry in sorted(d.files or (), key=str):
+        path = d.locate_file(entry)
+        if path.is_file():
+            content.update(str(entry).encode()); content.update(b'\\0')
+            content.update(hashlib.sha256(path.read_bytes()).hexdigest().encode()); content.update(b'\\n')
+    rows.append({'name': name, 'version': d.version,
+                 'license': d.metadata.get('License-Expression') or d.metadata.get('License') or 'NOASSERTION',
+                 'installed_content_sha256': content.hexdigest()})
+print(json.dumps({'python': {'version': platform.python_version(), 'executable': sys.executable},
+                  'inventory': sorted(rows, key=lambda x:(x['name'].lower(),x['version']))}))
+"""
+            observations = json.loads(run([str(python), "-c", inventory_code]))
+            observations["inventory"] = collapse_distribution_sightings(observations["inventory"])
+            observations["backend"] = {
+                "name": "hatchling",
+                "version": run([str(python), "-c", "import importlib.metadata; print(importlib.metadata.version('hatchling'))"]),
+            }
+            dist = output / "dist"
+            dist.mkdir()
+            argv = [str(python), "-m", "hatchling", "build", "--target", "wheel", "--directory", str(dist)]
+            run(argv)
+            wheels = list(dist.glob("*.whl"))
+            if len(wheels) != 1:
+                raise RuntimeError(f"expected exactly one wheel, found {len(wheels)}")
+            wheel = wheels[0]
+            run([str(python), "-m", "hatchling", "build", "--target", "sdist", "--directory", str(dist)])
+            sdists = list(dist.glob("*.tar.gz"))
+            if len(sdists) != 1:
+                raise RuntimeError(f"expected exactly one sdist, found {len(sdists)}")
+            sdist = sdists[0]
+            if source_tree_before != package_tree_sha256(package_roots):
+                raise RuntimeError("package source tree changed during candidate build")
+            validation = Path(temporary) / "validation-venv"
+            run([uv, "venv", "--python", sys.executable, str(validation)])
+            validation_python = validation / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+            install_argv = [uv, "pip", "install", "--python", str(validation_python), str(wheel)]
+            run(install_argv)
+            runtime_observations = json.loads(run([str(validation_python), "-c", inventory_code]))
+            runtime_observations["inventory"] = collapse_distribution_sightings(runtime_observations["inventory"])
+            resolved_runtime = [
+                row for row in runtime_observations["inventory"]
+                if row["name"].lower().replace("_", "-") != "academic-research-workbench"
+            ]
+            evidence = {
+                "schema_version": "1.0.0",
+                "source_identity": {
+                    "source_manifest_sha256": sha256(ROOT / "vendor/source-manifest.json"),
+                    "pyproject_sha256": sha256(ROOT / "pyproject.toml"),
+                    "build_hook_sha256": sha256(ROOT / "build_hooks.py"),
+                    "git_commit": run(["git", "rev-parse", "HEAD"]),
+                    "git_status": run(["git", "status", "--porcelain", "--untracked-files=all"]),
+                    "package_tree_sha256": source_tree_before,
+                    "sdist_sha256": sha256(sdist),
+                },
+                "build": {
+                    **observations,
+                    "uv": {"version": run([uv, "--version"]), "executable": uv},
+                    "requirements": requirements,
+                    "argv": ["python", "-m", "hatchling", "build", "--target", "wheel", "--directory", "dist"],
+                    "sdist_argv": ["python", "-m", "hatchling", "build", "--target", "sdist", "--directory", "dist"],
+                    "wheel_source": "working-tree",
+                },
+                "resolved_runtime_inventory": resolved_runtime,
+                "runtime_resolution_environment": {
+                    "python": runtime_observations["python"],
+                    "uv": {"version": run([uv, "--version"]), "executable": uv},
+                    "install_argv": ["uv", "pip", "install", "--python", "<validation-python>", wheel.name],
+                    "inventory": resolved_runtime,
+                },
+                "artifacts": [
+                    {"kind": "wheel", "path": f"dist/{wheel.name}", "size": wheel.stat().st_size, "sha256": sha256(wheel)},
+                    {"kind": "sdist", "path": f"dist/{sdist.name}", "size": sdist.stat().st_size, "sha256": sha256(sdist), "supplied_wheel_source": False},
+                ],
+            }
+            (output / "build-evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(wheel)
+    except Exception as error:
+        shutil.rmtree(output, ignore_errors=True)
+        raise SystemExit(f"build-candidate: {error}") from error
+
+
+if __name__ == "__main__":
+    main()

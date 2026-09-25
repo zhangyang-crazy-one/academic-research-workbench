@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CANARY_ROOT = REPOSITORY_ROOT / "tests/fixtures/private-canaries"
@@ -32,6 +33,7 @@ def _run_stage(stage_root: Path, *, validate_only: bool = False) -> subprocess.C
         command.append("--validate-only")
     else:
         command.insert(1, "--clean")
+        command.extend(candidate_stage_args())
     return subprocess.run(
         command,
         cwd=REPOSITORY_ROOT,

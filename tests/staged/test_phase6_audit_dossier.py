@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,16 +16,20 @@ ROOT = Path(__file__).resolve().parents[2]
 def _stage(tmp_path: Path) -> Path:
     stage = tmp_path / "stage" / "academic-research-workbench"
     evidence = tmp_path / "evidence"
+    process_tmp = tmp_path / "process-tmp"
+    stage_tmp = tmp_path / "stage-tmp"
+    process_tmp.mkdir()
+    stage_tmp.mkdir()
     environment = {
         **os.environ,
         "UV_OFFLINE": "1",
         "PYTHONNOUSERSITE": "1",
         "PIP_NO_INDEX": "1",
-        "TMPDIR": str(ROOT / "build/tmp/phase-06"),
-        "ARW_STAGE_TMP_ROOT": str(ROOT / "build/tmp/phase-06/staged-test"),
+        "TMPDIR": str(process_tmp),
+        "ARW_STAGE_TMP_ROOT": str(stage_tmp),
     }
     result = subprocess.run(
-        [str(ROOT / "scripts/stage-plugin"), "--clean", "--stage-root", str(stage), "--evidence-root", str(evidence)],
+        [str(ROOT / "scripts/stage-plugin"), "--clean", "--stage-root", str(stage), "--evidence-root", str(evidence), *candidate_stage_args()],
         cwd=ROOT,
         env=environment,
         text=True,

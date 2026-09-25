@@ -9,6 +9,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -115,6 +116,7 @@ def installed_route_evidence(
             "--clean",
             "--stage-root",
             str(stage_root),
+            *candidate_stage_args(),
         ],
         unrelated_cwd,
         environment,

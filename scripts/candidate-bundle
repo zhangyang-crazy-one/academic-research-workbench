@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+"""Copy and verify one explicitly selected release candidate and its evidence."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import sys
+import tarfile
+import tempfile
+import unicodedata
+from pathlib import Path
+
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"candidate-bundle: {message}")
+
+
+def digest(path: Path) -> str:
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            value.update(chunk)
+    return value.hexdigest()
+
+
+def regular(path: Path) -> Path:
+    if any(part.is_symlink() for part in (path, *path.parents)) or not path.is_file():
+        fail(f"required regular file is missing or unsafe: {path}")
+    return path
+
+
+def read_json(path: Path) -> dict:
+    try:
+        value = json.loads(regular(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as error:
+        fail(f"invalid JSON {path}: {error}")
+    if not isinstance(value, dict):
+        fail(f"expected JSON object: {path}")
+    return value
+
+
+def relative(value: object) -> Path:
+    if not isinstance(value, str) or not value:
+        fail("artifact path is absent")
+    if any(unicodedata.category(char).startswith("C") for char in value) or "\\" in value or ":" in value:
+        fail("artifact path contains unsafe characters")
+    path = Path(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in value.split("/")) or path.as_posix() != value:
+        fail(f"unsafe artifact path: {value}")
+    return path
+
+
+def declared_artifacts(build: dict) -> tuple[list[dict], dict]:
+    artifacts = build.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        fail("build evidence has no artifacts")
+    seen: set[str] = set()
+    wheels: list[dict] = []
+    for item in artifacts:
+        if not isinstance(item, dict):
+            fail("malformed artifact record")
+        path = relative(item.get("path"))
+        sha = item.get("sha256")
+        size = item.get("size")
+        if path.as_posix() in seen or not SHA256.fullmatch(str(sha)) or type(size) is not int or size < 1:
+            fail(f"invalid or duplicated artifact record: {path}")
+        seen.add(path.as_posix())
+        if item.get("kind") == "wheel":
+            wheels.append(item)
+    if len(wheels) != 1 or not str(wheels[0]["path"]).endswith(".whl"):
+        fail("build evidence must select exactly one wheel")
+    return artifacts, wheels[0]
+
+
+def verify_binding(root: Path, build: dict, evidence: Path, selected_wheel: Path | None) -> list[dict]:
+    artifacts, wheel = declared_artifacts(build)
+    for item in artifacts:
+        path = regular(root / relative(item["path"]))
+        if path.stat().st_size != item["size"] or digest(path) != item["sha256"]:
+            fail(f"candidate artifact differs from build evidence: {item['path']}")
+    wheel_path = root / relative(wheel["path"])
+    if selected_wheel is not None and (selected_wheel.resolve() != wheel_path.resolve() or selected_wheel.is_symlink()):
+        fail("explicit wheel differs from build evidence selection")
+    sbom = read_json(evidence / "SBOM.cdx.json")
+    components = sbom.get("components")
+    if not isinstance(components, list):
+        fail("candidate SBOM components are missing")
+    matching = [item for item in components if isinstance(item, dict) and item.get("bom-ref") == f"first-party-wheel:{wheel_path.name}"]
+    if len(matching) != 1 or matching[0].get("hashes") != [{"alg": "SHA-256", "content": wheel["sha256"]}]:
+        fail("candidate SBOM does not bind the selected wheel")
+    use = read_json(evidence / "supply-chain/use-distribution.json")
+    refs = use.get("evidence_hashes")
+    sbom_refs = [item for item in refs if isinstance(item, dict) and item.get("path") == "SBOM.cdx.json"] if isinstance(refs, list) else []
+    if len(sbom_refs) != 1 or sbom_refs[0].get("sha256") != digest(evidence / "SBOM.cdx.json"):
+        fail("use/distribution does not bind the base candidate SBOM")
+    inventory = read_json(evidence / "license-evidence/inventory.json")
+    build_record = inventory.get("build_evidence")
+    if not isinstance(build_record, dict) or build_record.get("sha256") != digest(root / "build-evidence.json"):
+        fail("license inventory does not bind the supplied build evidence")
+    if (inventory.get("build_observation") != build.get("build")
+            or inventory.get("runtime_resolution_environment") != build.get("runtime_resolution_environment")):
+        fail("license inventory builder or runtime observation differs from build evidence")
+    observed = [*build.get("build", {}).get("inventory", []), *build.get("resolved_runtime_inventory", [])]
+    if not observed or any(not isinstance(row, dict) for row in observed):
+        fail("build evidence has no valid package inventory")
+    packages = sorted({(row["name"].lower(), row["version"]): row for row in observed}.values(),
+                      key=lambda row: (row["name"].lower(), row["version"]))
+    if inventory.get("python_packages_observed") != packages:
+        fail("license inventory package set differs from build evidence")
+    first_party = inventory.get("first_party_wheel")
+    if not isinstance(first_party, dict) or first_party.get("sha256") != wheel["sha256"] or first_party.get("file") != wheel_path.name:
+        fail("license inventory does not bind the selected wheel")
+    python_components = {item["bom-ref"]: item for item in components
+                         if isinstance(item, dict) and isinstance(item.get("bom-ref"), str)
+                         and item["bom-ref"].startswith("python:")}
+    expected_components = {
+        f"python:{row['name']}@{row['version']}": {
+            "name": row["name"], "version": row["version"],
+            "hashes": [{"alg": "SHA-256", "content": row["installed_content_sha256"]}],
+            "licenses": [{"expression": row["license"]}],
+        } for row in packages
+    }
+    if set(python_components) != set(expected_components) or any(
+        any(python_components[ref].get(key) != value for key, value in expected.items())
+        for ref, expected in expected_components.items()
+    ):
+        fail("candidate SBOM Python inventory differs from build evidence")
+    verdict = read_json(evidence / "supply-chain/license-verdict.json")
+    if verdict.get("technical_qualification") != "PASS":
+        fail("candidate license gate technical verdict is not PASS")
+    return artifacts
+
+
+def files_under(root: Path) -> list[Path]:
+    if root.is_symlink() or not root.is_dir():
+        fail(f"required evidence directory is missing or unsafe: {root}")
+    paths = []
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            fail(f"symlink in candidate evidence: {path}")
+        if path.is_file():
+            paths.append(path)
+        elif not path.is_dir():
+            fail(f"non-file in candidate evidence: {path}")
+    if not paths:
+        fail(f"empty candidate evidence: {root}")
+    return sorted(paths)
+
+
+def canary_bound_files(root: Path, canary_path: Path) -> list[Path]:
+    """Resolve only the strict canary's hash-bound, transitive evidence files."""
+    if root.is_symlink() or not root.is_dir() or canary_path.parent.resolve() != root.resolve():
+        fail("host canary must be a direct file in --canary-evidence-root")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from arw.kernel.core.canonical import canonical_json_bytes
+    from arw.kernel.policy.integration_lock import (
+        CodexHostCanaryEvidence,
+        CodexHostEvidenceBundle,
+        FreshHomeReceipt,
+        HookParityEvidenceRecord,
+        IntegrationLockError,
+        _load_canonical_bound_model,
+    )
+
+    try:
+        raw = regular(canary_path).read_bytes()
+        canary = CodexHostCanaryEvidence.model_validate_json(raw, strict=True)
+        if raw != canonical_json_bytes(canary.model_dump(mode="json")):
+            fail("host canary bytes are not canonical JSON")
+        paths = {canary_path.resolve()}
+
+        def bound(binding, model):
+            path = relative(binding.path)
+            if path.parts[0] in {"stage", "phase-7-verification.json", "integration-lock.json",
+                                 "host-canary.json", "canary-evidence-files.json"}:
+                fail(f"canary evidence path collides with qualification input: {path}")
+            value = _load_canonical_bound_model(root, binding, model, label="host canary evidence")
+            paths.add((root / path).resolve())
+            return value
+
+        bundle = bound(canary.evidence_bundle, CodexHostEvidenceBundle)
+        if bundle.fresh_home_receipts != canary.fresh_home_receipts:
+            fail("host canary and evidence bundle receipt bindings differ")
+        for binding in canary.fresh_home_receipts:
+            bound(binding, FreshHomeReceipt)
+        for classification in bundle.hook_status_classifications:
+            parity = bound(classification.evidence, HookParityEvidenceRecord)
+            if parity.official_hook_receipt is not None:
+                from arw.kernel.policy.hook_contracts import CodexHookReceipt
+                bound(parity.official_hook_receipt, CodexHookReceipt)
+        return sorted(paths)
+    except (OSError, ValueError, IntegrationLockError) as error:
+        fail(f"invalid path-bound host canary evidence: {error}")
+
+
+def verify_qualification(root: Path, build: dict, wheel_sha256: str) -> None:
+    """Bind supplied Phase 7 observations to this candidate without granting release PASS."""
+    qualification = root / "qualification"
+    if not qualification.exists():
+        return
+    phase7 = read_json(qualification / "phase-7-verification.json")
+    stage = qualification / "stage"
+    stage_files = files_under(stage)
+    staged_wheels = [path for path in stage_files if path.parent == stage / "share/arw/wheels" and path.suffix == ".whl"]
+    if len(staged_wheels) != 1 or digest(staged_wheels[0]) != wheel_sha256:
+        fail("qualified stage wheel differs from candidate")
+    staged_build = regular(stage / "share/arw/evidence/candidate-build.json")
+    if digest(staged_build) != digest(root / "build-evidence.json"):
+        fail("qualified stage does not contain the original candidate build evidence")
+    staged_inventory = read_json(stage / "share/arw/evidence/license-inventory.json")
+    if staged_inventory.get("build_evidence", {}).get("sha256") != digest(staged_build):
+        fail("qualified stage license inventory does not bind original build evidence")
+    stage_rows = sorted((path.relative_to(stage).as_posix(), digest(path)) for path in stage_files)
+    stage_sha256 = hashlib.sha256((json.dumps(stage_rows, ensure_ascii=False, sort_keys=True,
+                                         separators=(",", ":"), allow_nan=False) + "\n").encode()).hexdigest()
+    summary = phase7.get("stage")
+    if phase7.get("git_head") != build.get("source_identity", {}).get("git_commit") or not isinstance(summary, dict):
+        fail("Phase 7 observation does not identify this candidate source commit")
+    if summary.get("stage_sha256") != stage_sha256:
+        fail("Phase 7 observation does not bind the qualified stage")
+    for field, path in (("integration_lock_sha256", qualification / "integration-lock.json"),
+                        ("host_canary_sha256", qualification / "host-canary.json")):
+        if summary.get(field) != digest(regular(path)):
+            fail(f"Phase 7 observation does not bind {path.name}")
+
+
+def create(args: argparse.Namespace) -> None:
+    build_path = regular(args.build_evidence)
+    source_root = build_path.parent
+    evidence = args.candidate_evidence_root
+    build = read_json(build_path)
+    artifacts = verify_binding(source_root, build, evidence, args.wheel)
+    selected_wheel = next(item for item in artifacts if item["kind"] == "wheel")
+    explicit_qualification = (args.phase7_verification, args.qualified_stage,
+                              args.integration_lock, args.host_canary, args.canary_evidence_root)
+    if args.qualification_root is not None and any(explicit_qualification):
+        fail("use either --qualification-root or the four explicit qualification inputs")
+    if any(explicit_qualification) and not all(explicit_qualification):
+        fail("Phase 7 verification, qualified stage, integration lock, host canary and canary evidence root are all required")
+    canary_files = (canary_bound_files(args.canary_evidence_root, args.host_canary)
+                    if all(explicit_qualification) else [])
+    if args.output_root.exists() or args.output_root.is_symlink():
+        fail("bundle output root exists; choose a fresh root")
+    args.output_root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".candidate-bundle-", dir=args.output_root.parent) as temporary:
+        temporary_root = Path(temporary)
+        shutil.copy2(build_path, temporary_root / "build-evidence.json")
+        for item in artifacts:
+            target = temporary_root / relative(item["path"])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_root / relative(item["path"]), target)
+        for source in files_under(evidence):
+            target = temporary_root / "evidence" / source.relative_to(evidence)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        if args.qualification_root is not None:
+            for source in files_under(args.qualification_root):
+                target = temporary_root / "qualification" / source.relative_to(args.qualification_root)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+        elif all(explicit_qualification):
+            qualification = temporary_root / "qualification"
+            for source, name in ((args.phase7_verification, "phase-7-verification.json"),
+                                 (args.integration_lock, "integration-lock.json"),
+                                 (args.host_canary, "host-canary.json")):
+                qualification.mkdir(exist_ok=True)
+                shutil.copy2(regular(source), qualification / name)
+            for source in files_under(args.qualified_stage):
+                target = qualification / "stage" / source.relative_to(args.qualified_stage)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+            for source in canary_files:
+                if source == args.host_canary.resolve():
+                    continue
+                target = qualification / relative(source.relative_to(args.canary_evidence_root.resolve()).as_posix())
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+            (qualification / "canary-evidence-files.json").write_text(
+                json.dumps({"paths": sorted(source.relative_to(args.canary_evidence_root.resolve()).as_posix()
+                                           for source in canary_files if source != args.host_canary.resolve())},
+                           sort_keys=True) + "\n", encoding="utf-8")
+        verify_qualification(temporary_root, build, selected_wheel["sha256"])
+        rows = [
+            {"path": path.relative_to(temporary_root).as_posix(), "size": path.stat().st_size,
+             "sha256": digest(path), "executable_bits": stat.S_IMODE(path.stat().st_mode) & 0o111}
+            for path in files_under(temporary_root)
+        ]
+        (temporary_root / "bundle-manifest.json").write_text(
+            json.dumps({"schema_version": "arw.candidate-bundle.v1", "files": rows,
+                        "publish_artifacts": [item["path"] for item in artifacts]}, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        verify(temporary_root, None)
+        os.rename(temporary_root, args.output_root)
+    print(args.output_root)
+
+
+def verify(root: Path, files_output: Path | None) -> None:
+    manifest = read_json(root / "bundle-manifest.json")
+    if manifest.get("schema_version") != "arw.candidate-bundle.v1":
+        fail("unsupported candidate bundle manifest")
+    rows = manifest.get("files")
+    if not isinstance(rows, list) or not rows:
+        fail("candidate bundle has no file inventory")
+    seen: set[str] = set()
+    for item in rows:
+        if not isinstance(item, dict):
+            fail("malformed candidate bundle file record")
+        path = relative(item.get("path"))
+        if path.as_posix() in seen or path.as_posix() == "bundle-manifest.json":
+            fail("duplicate or recursive candidate bundle file record")
+        seen.add(path.as_posix())
+        target = regular(root / path)
+        if target.stat().st_size != item.get("size") or digest(target) != item.get("sha256"):
+            fail(f"candidate bundle file digest mismatch: {path}")
+        executable_bits = item.get("executable_bits")
+        if type(executable_bits) is not int or executable_bits & ~0o111:
+            fail(f"invalid candidate bundle executable permission record: {path}")
+        if stat.S_IMODE(target.stat().st_mode) & 0o111 != executable_bits:
+            fail(f"candidate bundle executable permission mismatch: {path}")
+    required = {
+        "build-evidence.json",
+        "evidence/SBOM.cdx.json",
+        "evidence/supply-chain/use-distribution.json",
+        "evidence/supply-chain/license-verdict.json",
+    }
+    if not required <= seen:
+        fail(f"candidate bundle omits required evidence files: {sorted(required - seen)}")
+    build = read_json(root / "build-evidence.json")
+    artifacts = verify_binding(root, build, root / "evidence", None)
+    wheel = next(item for item in artifacts if item["kind"] == "wheel")
+    verify_qualification(root, build, wheel["sha256"])
+    canary_inventory = root / "qualification/canary-evidence-files.json"
+    if "qualification/canary-evidence-files.json" in seen:
+        declared = read_json(canary_inventory).get("paths")
+        if not isinstance(declared, list) or any(not isinstance(path, str) for path in declared):
+            fail("invalid canary evidence file inventory")
+        bound = canary_bound_files(root / "qualification", root / "qualification/host-canary.json")
+        actual = sorted(path.relative_to((root / "qualification").resolve()).as_posix()
+                        for path in bound if path != (root / "qualification/host-canary.json").resolve())
+        if declared != actual or any(f"qualification/{path}" not in seen for path in actual):
+            fail("canary evidence inventory differs from path-bound files")
+    publish = manifest.get("publish_artifacts")
+    expected = [item["path"] for item in artifacts]
+    if publish != expected or any(item not in seen for item in publish):
+        fail("published artifact list differs from verified build evidence")
+    if files_output is not None:
+        if any(unicodedata.category(char).startswith("C") for char in str(root.resolve())):
+            fail("bundle root cannot be represented in a line-delimited publish list")
+        files_output.parent.mkdir(parents=True, exist_ok=True)
+        files_output.write_text("".join(str((root / relative(item)).resolve()) + "\n" for item in publish), encoding="utf-8")
+    print(f"candidate bundle verified: {len(publish)} explicit publish artifacts")
+
+
+def archive_bundle(root: Path, output: Path) -> None:
+    verify(root, None)
+    if output.exists() or output.is_symlink():
+        fail("archive output already exists")
+    manifest = read_json(root / "bundle-manifest.json")
+    members = ["bundle-manifest.json", *(item["path"] for item in manifest["files"])]
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(output, "w:gz", format=tarfile.PAX_FORMAT) as archive:
+        for name in members:
+            path = regular(root / relative(name))
+            info = tarfile.TarInfo(name)
+            info.size = path.stat().st_size
+            info.mode = stat.S_IMODE(path.stat().st_mode) & 0o755
+            info.mtime = 0
+            with path.open("rb") as stream:
+                archive.addfile(info, stream)
+
+
+def extract_bundle(archive_path: Path, output: Path) -> None:
+    regular(archive_path)
+    if output.exists() or output.is_symlink():
+        fail("extracted bundle output already exists")
+    output.mkdir(parents=True)
+    try:
+        with tarfile.open(archive_path, "r:gz") as archive:
+            seen: set[str] = set()
+            for member in archive:
+                name = relative(member.name).as_posix()
+                if name in seen or not member.isfile() or member.mode & ~0o755:
+                    fail(f"unsafe archive member: {name}")
+                seen.add(name)
+                target = output / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                stream = archive.extractfile(member)
+                if stream is None:
+                    fail(f"unreadable archive member: {name}")
+                with stream, target.open("xb") as destination:
+                    shutil.copyfileobj(stream, destination)
+                target.chmod(member.mode)
+        verify(output, None)
+        listed = {"bundle-manifest.json", *(item["path"] for item in read_json(output / "bundle-manifest.json")["files"])}
+        if seen != listed:
+            fail("archive member set differs from candidate bundle manifest")
+    except BaseException:
+        shutil.rmtree(output)
+        raise
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subcommands = parser.add_subparsers(dest="command", required=True)
+    create_parser = subcommands.add_parser("create")
+    create_parser.add_argument("--wheel", type=Path, required=True)
+    create_parser.add_argument("--build-evidence", type=Path, required=True)
+    create_parser.add_argument("--candidate-evidence-root", type=Path, required=True)
+    create_parser.add_argument("--output-root", type=Path, required=True)
+    create_parser.add_argument("--qualification-root", type=Path)
+    create_parser.add_argument("--phase7-verification", type=Path)
+    create_parser.add_argument("--qualified-stage", type=Path)
+    create_parser.add_argument("--integration-lock", type=Path)
+    create_parser.add_argument("--host-canary", type=Path)
+    create_parser.add_argument("--canary-evidence-root", type=Path)
+    verify_parser = subcommands.add_parser("verify")
+    verify_parser.add_argument("--bundle-root", type=Path, required=True)
+    verify_parser.add_argument("--files-output", type=Path)
+    inputs_parser = subcommands.add_parser("verify-inputs")
+    inputs_parser.add_argument("--wheel", type=Path, required=True)
+    inputs_parser.add_argument("--build-evidence", type=Path, required=True)
+    inputs_parser.add_argument("--candidate-evidence-root", type=Path, required=True)
+    archive_parser = subcommands.add_parser("archive")
+    archive_parser.add_argument("--bundle-root", type=Path, required=True)
+    archive_parser.add_argument("--output", type=Path, required=True)
+    extract_parser = subcommands.add_parser("extract")
+    extract_parser.add_argument("--archive", type=Path, required=True)
+    extract_parser.add_argument("--output-root", type=Path, required=True)
+    args = parser.parse_args()
+    if args.command == "create":
+        create(args)
+    elif args.command == "verify-inputs":
+        build_path = regular(args.build_evidence)
+        verify_binding(build_path.parent, read_json(build_path), args.candidate_evidence_root, args.wheel)
+    elif args.command == "archive":
+        archive_bundle(args.bundle_root, args.output)
+    elif args.command == "extract":
+        extract_bundle(args.archive, args.output_root)
+    else:
+        verify(args.bundle_root, args.files_output)
+
+
+if __name__ == "__main__":
+    main()
