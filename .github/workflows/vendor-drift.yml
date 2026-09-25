@@ -1,0 +1,76 @@
+name: Vendor drift watcher
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report without writing a GitHub issue
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: vendor-drift-tracker
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      report_json: ${{ steps.report.outputs.report_json }}
+      has_drift: ${{ steps.report.outputs.has_drift }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Observe stable upstream releases
+        id: report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/vendor-drift-report --online > "$RUNNER_TEMP/vendor-drift.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'vendor-drift.json').read_text())
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as out:
+              out.write('report_json=' + json.dumps(report, ensure_ascii=True, separators=(',', ':')) + '\n')
+              out.write('has_drift=' + str(report['has_drift']).lower() + '\n')
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write(report['issue_body'] + '\n')
+          PY
+
+  report:
+    needs: check
+    if: >-
+      needs.check.outputs.has_drift == 'true' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Update one drift tracker
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ARW_DRIFT_REPORT_JSON: ${{ needs.check.outputs.report_json }}
+        run: python scripts/vendor-drift-issue --write

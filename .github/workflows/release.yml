@@ -30,58 +30,175 @@ jobs:
   qualify:
     name: Verify candidate and release authority
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
     outputs:
       release_tag: ${{ steps.select.outputs.release_tag }}
-      bundle_manifest_sha256: ${{ steps.identity.outputs.bundle_manifest_sha256 }}
+      bundle_manifest_sha256: >-
+        ${{ steps.identity.outputs.bundle_manifest_sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: false
       - name: Install declared runtime validator dependencies
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
       - name: Select explicit candidate transfer
         id: select
         env:
-          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || vars.ARW_CANDIDATE_RUN_ID }}
-          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name || vars.ARW_CANDIDATE_ARTIFACT_NAME }}
+          CANDIDATE_RUN_ID: >-
+            ${{ inputs.candidate_run_id || vars.ARW_CANDIDATE_RUN_ID }}
+          CANDIDATE_ARTIFACT_NAME: >-
+            ${{ inputs.candidate_artifact_name ||
+                vars.ARW_CANDIDATE_ARTIFACT_NAME }}
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          test -n "$CANDIDATE_RUN_ID" || { echo 'release blocked: candidate run ID is required' >&2; exit 1; }
-          test -n "$CANDIDATE_ARTIFACT_NAME" || { echo 'release blocked: exact candidate artifact name is required' >&2; exit 1; }
-          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'release blocked: invalid candidate run ID' >&2; exit 1; }
-          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'release blocked: invalid candidate artifact name' >&2; exit 1; }
-          [[ "$RELEASE_TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]] || { echo 'release blocked: invalid release tag' >&2; exit 1; }
+          test -n "$CANDIDATE_RUN_ID" || {
+            echo 'release blocked: candidate run ID is required' >&2
+            exit 1
+          }
+          test -n "$CANDIDATE_ARTIFACT_NAME" || {
+            echo 'release blocked: candidate artifact name is required' >&2
+            exit 1
+          }
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || {
+            echo 'release blocked: invalid candidate run ID' >&2
+            exit 1
+          }
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || {
+            echo 'release blocked: invalid candidate artifact name' >&2
+            exit 1
+          }
+          [[ "$RELEASE_TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]] || {
+            echo 'release blocked: invalid release tag' >&2
+            exit 1
+          }
           git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" >/dev/null \
-            || { echo 'release blocked: release tag does not exist' >&2; exit 1; }
+            || {
+              echo 'release blocked: release tag does not exist' >&2
+              exit 1
+            }
           echo "candidate_run_id=$CANDIDATE_RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "candidate_artifact_name=$CANDIDATE_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo "candidate_artifact_name=$CANDIDATE_ARTIFACT_NAME" \
+            >> "$GITHUB_OUTPUT"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ steps.select.outputs.candidate_artifact_name }}
           run-id: ${{ steps.select.outputs.candidate_run_id }}
           github-token: ${{ github.token }}
           path: candidate-transfer
       - name: Extract candidate with hidden files and executable modes
-        run: .venv/bin/python scripts/candidate-bundle extract --archive candidate-transfer/candidate-bundle.tar.gz --output-root candidate-bundle
-      - name: Verify downloaded candidate bytes and qualification
+        run: |
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive candidate-transfer/candidate-bundle.tar.gz \
+            --output-root candidate-bundle
+      - name: Verify downloaded candidate bytes
+        run: |
+          .venv/bin/python scripts/candidate-bundle verify \
+            --bundle-root candidate-bundle
+      - name: Verify artifact attestations for exact candidate subjects
+        env:
+          RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path('candidate-bundle')
+          tag = os.environ['RELEASE_TAG']
+          ref = f"refs/tags/{tag}^{{commit}}"
+          source_commit = subprocess.check_output(
+              ['git', 'rev-parse', ref],
+              text=True,
+          ).strip()
+          repository = os.environ['GITHUB_REPOSITORY']
+          build = json.loads((root / 'build-evidence.json').read_text())
+          artifacts = build['artifacts']
+          kinds = sorted(item['kind'] for item in artifacts)
+          if (len(artifacts) != 2 or
+                  kinds != ['sdist', 'wheel'] or
+                  build['source_identity']['git_commit'] != source_commit):
+              msg = 'release blocked: candidate subjects or commit differ'
+              raise SystemExit(msg)
+          sbom_path = root / 'evidence/SBOM.cdx.json'
+          sbom = json.loads(sbom_path.read_text())
+          slsa = 'https://slsa.dev/provenance/v1'
+          cyclonedx = 'https://cyclonedx.org/bom'
+
+          def matches(row, digest, predicate_type):
+              try:
+                  statement = row['verificationResult']['statement']
+                  if statement['predicateType'] != predicate_type:
+                      return False
+                  if (predicate_type == cyclonedx and
+                          statement['predicate'] != sbom):
+                      return False
+                  return any(
+                      entry['digest']['sha256'] == digest
+                      for entry in statement['subject']
+                  )
+              except (KeyError, TypeError, AttributeError):
+                  return False
+
+          subjects = [root / item['path'] for item in artifacts]
+          for subject in [*subjects, sbom_path]:
+              digest = hashlib.sha256(subject.read_bytes()).hexdigest()
+              predicate_types = (
+                  (slsa,) if subject == sbom_path else (slsa, cyclonedx)
+              )
+              for predicate_type in predicate_types:
+                  result = subprocess.run(
+                      ['gh', 'attestation', 'verify', str(subject),
+                       '--repo', repository,
+                       '--signer-workflow',
+                       f'{repository}/.github/workflows/ci.yml',
+                       '--source-ref', 'refs/heads/main',
+                       '--source-digest', source_commit,
+                       '--predicate-type', predicate_type,
+                       '--format', 'json'],
+                      check=True, capture_output=True, text=True,
+                  )
+                  verified = json.loads(result.stdout)
+                  if not isinstance(verified, list) or not any(
+                      matches(row, digest, predicate_type) for row in verified
+                  ):
+                      msg = (
+                          f'release blocked: missing {predicate_type} for '
+                          f'{subject}'
+                      )
+                      raise SystemExit(msg)
+          PY
+      - name: Verify candidate release authority
         env:
           RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
         run: |
           source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
-          .venv/bin/python scripts/candidate-bundle verify --bundle-root candidate-bundle
           .venv/bin/python scripts/check-release-candidate \
             --bundle-root candidate-bundle --source-commit "$source_commit"
       - name: Bind verified bundle transfer
         id: identity
-        run: echo "bundle_manifest_sha256=$(sha256sum candidate-bundle/bundle-manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        run: |
+          raw_manifest="candidate-bundle/bundle-manifest.json"
+          digest="$(sha256sum "$raw_manifest" | cut -d' ' -f1)"
+          echo "bundle_manifest_sha256=$digest" >> "$GITHUB_OUTPUT"
       - name: Archive exact verified candidate files with executable modes
-        run: .venv/bin/python scripts/candidate-bundle archive --bundle-root candidate-bundle --output candidate-bundle.tar.gz
-      - uses: actions/upload-artifact@v4
+        run: |
+          .venv/bin/python scripts/candidate-bundle archive \
+            --bundle-root candidate-bundle --output candidate-bundle.tar.gz
+      - uses: actions/upload-artifact@v7
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
           path: candidate-bundle.tar.gz
@@ -94,28 +211,39 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: false
       - name: Install declared runtime validator dependencies
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
           path: verified-candidate-transfer
       - name: Extract exact verified candidate files
-        run: .venv/bin/python scripts/candidate-bundle extract --archive verified-candidate-transfer/candidate-bundle.tar.gz --output-root candidate-bundle
+        run: |
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive verified-candidate-transfer/candidate-bundle.tar.gz \
+            --output-root candidate-bundle
       - name: Recheck downloaded bytes and produce explicit publication list
         env:
           RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
-          EXPECTED_BUNDLE_SHA256: ${{ needs.qualify.outputs.bundle_manifest_sha256 }}
+          EXPECTED_BUNDLE_SHA256: >-
+            ${{ needs.qualify.outputs.bundle_manifest_sha256 }}
         run: |
-          test "$(sha256sum candidate-bundle/bundle-manifest.json | cut -d' ' -f1)" = "$EXPECTED_BUNDLE_SHA256" \
-            || { echo 'release blocked: candidate bundle manifest changed after qualification' >&2; exit 1; }
+          raw_manifest="candidate-bundle/bundle-manifest.json"
+          actual="$(sha256sum "$raw_manifest" | cut -d' ' -f1)"
+          test "$actual" = "$EXPECTED_BUNDLE_SHA256" || {
+            echo 'release blocked: bundle manifest changed' >&2
+            exit 1
+          }
           source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
           .venv/bin/python scripts/candidate-bundle verify \
             --bundle-root candidate-bundle --files-output publish-files.txt
@@ -127,5 +255,9 @@ jobs:
           RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
         run: |
           mapfile -t files < publish-files.txt
-          test "${#files[@]}" -gt 0 || { echo 'release blocked: no verified artifacts selected' >&2; exit 1; }
-          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${files[@]}"
+          test "${#files[@]}" -gt 0 || {
+            echo 'release blocked: no verified artifacts selected' >&2
+            exit 1
+          }
+          gh release create "$RELEASE_TAG" --verify-tag \
+            --generate-notes "${files[@]}"
