@@ -196,7 +196,7 @@ jobs:
           PY
       - name: Build one candidate and generate its isolated legal evidence
         run: |
-          .venv/bin/python scripts/build-candidate
+          .venv/bin/python scripts/build-candidate \
             --output-root build/candidate-ci
           python - <<'PY'
           import json
@@ -361,6 +361,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bubblewrap strace build-essential
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev
       - name: Restore legal receipt and materialize pinned native source
