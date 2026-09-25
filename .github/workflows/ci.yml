@@ -40,10 +40,13 @@ jobs:
           path: build/candidate-from-ci-transfer
       - name: Extract candidate with hidden files and executable modes
         run: |
-          python scripts/candidate-bundle extract \n            --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz \n            --output-root build/candidate-from-ci
+          python scripts/candidate-bundle extract
+            --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz
+            --output-root build/candidate-from-ci
       - name: Select the exact gated candidate for stage regressions
         run: |
-          python scripts/candidate-bundle verify \n            --bundle-root build/candidate-from-ci
+          python scripts/candidate-bundle verify
+            --bundle-root build/candidate-from-ci
           python - <<'PY'
           import json
           import os
@@ -56,7 +59,8 @@ jobs:
           assert len(wheels) == 1, wheels
           with Path(os.environ['GITHUB_ENV']).open('a') as output:
               output.write(f"ARW_CANDIDATE_WHEEL={root / wheels[0]['path']}\n")
-              output.write(f"ARW_BUILD_EVIDENCE={root / 'build-evidence.json'}\n")
+              be = root / 'build-evidence.json'
+              output.write(f'ARW_BUILD_EVIDENCE={be}\n')
               output.write(f"ARW_CANDIDATE_EVIDENCE_ROOT={root / 'evidence'}\n")
           PY
       - name: Resolve development environment from declared ranges
@@ -67,9 +71,13 @@ jobs:
         run: .venv/bin/python scripts/validate-skills
       - name: Lint and type-check the adopted core surface
         run: |
-          .venv/bin/ruff check --isolated --select E4,E7,E9,F \n            src/arw/kernel/core src/arw/files_opt_in.py \n            src/arw/platform_support.py
-          .venv/bin/ruff format --check \n            src/arw/files_opt_in.py src/arw/platform_support.py
-          .venv/bin/pyright src/arw/kernel/core \n            src/arw/files_opt_in.py src/arw/platform_support.py
+          .venv/bin/ruff check --isolated --select E4,E7,E9,F \
+            src/arw/kernel/core src/arw/files_opt_in.py \
+            src/arw/platform_support.py
+          .venv/bin/ruff format --check \
+            src/arw/files_opt_in.py src/arw/platform_support.py
+          .venv/bin/pyright src/arw/kernel/core \
+            src/arw/files_opt_in.py src/arw/platform_support.py
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -79,8 +87,12 @@ jobs:
           UV_OFFLINE: "1"
         run: >-
           .venv/bin/python -m pytest -q
-          tests/integration/test_source_materialization.py::\n          test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
-          tests/integration/test_source_materialization.py::\n          test_materializer_tree_digest_uses_the_manifest_wire_encoding
+          tests/integration/test_source_materialization.py::
+          tests/integration/test_source_materialization.py::\
+          test_exact_snapshots_patch_and_canonical_license_paths_are_\
+          materialized
+          tests/integration/test_source_materialization.py::
+          test_materializer_tree_digest_uses_the_manifest_wire_encoding
       - name: Run v2 compatibility baseline
         env:
           PYTHONNOUSERSITE: "1"
@@ -138,14 +150,21 @@ jobs:
           assert sha == manifest['pre_vendor_receipt']['sha256'], err
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_bytes(receipt.read_bytes())
-          target.with_name('receipt.sha256').write_text(sha + '\n')
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
           PY
           ./scripts/materialize-sources
-          (cd vendor/sources/file-base/graph-ui && \n           npm ci --ignore-scripts --silent)
-          notice_dir=build/evidence/phase-01/pre-vendor-license/generated
-          notice="/THIRD_PARTY_NOTICES.md"
-          ./vendor/sources/file-base/scripts/gen-third-party-notices.sh "$notice"
-          python -c \n            "import shutil; shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')"
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          notice="$g/THIRD_PARTY_NOTICES.md"
+          script=./vendor/sources/file-base/scripts/gen-third-party-notices.sh
+          "$script" "$notice"
+          python - <<'PY'
+          import shutil
+          shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')
+          PY
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
       - name: Resolve native legal checker from configured index
@@ -177,7 +196,8 @@ jobs:
           PY
       - name: Build one candidate and generate its isolated legal evidence
         run: |
-          .venv/bin/python scripts/build-candidate \n            --output-root build/candidate-ci
+          .venv/bin/python scripts/build-candidate
+            --output-root build/candidate-ci
           python - <<'PY'
           import json
           from pathlib import Path
@@ -187,7 +207,8 @@ jobs:
           wheels = [item for item in artifacts if item['kind'] == 'wheel']
           assert len(wheels) == 1, wheels
           with Path('build/candidate-ci/wheel-path.txt').open('w') as stream:
-              stream.write(str(Path('build/candidate-ci') / wheels[0]['path']) + '\n')
+              w = str(Path('build/candidate-ci') / wheels[0]['path'])
+              stream.write(f'{w}\n')
           PY
           wheel="$(cat build/candidate-ci/wheel-path.txt)"
           .venv/bin/python scripts/license-gate \
@@ -202,7 +223,8 @@ jobs:
           .venv/bin/python scripts/candidate-bundle verify \
             --bundle-root build/candidate-bundle-ci
           .venv/bin/python scripts/candidate-bundle archive \
-            --bundle-root build/candidate-bundle-ci --output build/candidate-bundle.tar.gz
+            --bundle-root build/candidate-bundle-ci \
+            --output build/candidate-bundle.tar.gz
           test -s build/candidate-bundle.tar.gz
       - name: Inspect candidate wheel and source archive boundaries
         run: |
@@ -216,10 +238,12 @@ jobs:
           build_ev = json.loads((root / 'build-evidence.json').read_text())
           artifacts = build_ev['artifacts']
           wheel = next(
-              root / item['path'] for item in artifacts if item['kind'] == 'wheel'
+              root / item['path']
+              for item in artifacts if item['kind'] == 'wheel'
           )
           source = next(
-              root / item['path'] for item in artifacts if item['kind'] == 'sdist'
+              root / item['path']
+              for item in artifacts if item['kind'] == 'sdist'
           )
           with ZipFile(wheel) as archive:
               names = archive.namelist()
@@ -278,7 +302,8 @@ jobs:
       - name: Extract and verify same-run candidate bundle
         run: |
           python scripts/candidate-bundle extract \
-            --archive candidate-transfer/candidate-bundle.tar.gz \n            --output-root candidate-bundle
+            --archive candidate-transfer/candidate-bundle.tar.gz
+            --output-root candidate-bundle
           python scripts/candidate-bundle verify --bundle-root candidate-bundle
           python - <<'PY'
           import json
@@ -287,11 +312,13 @@ jobs:
 
           root = Path('candidate-bundle')
           build = json.loads((root / 'build-evidence.json').read_text())
-          assert build['source_identity']['git_commit'] == os.environ['GITHUB_SHA']
+          commit = os.environ['GITHUB_SHA']
+          assert build['source_identity']['git_commit'] == commit
           assert build['source_identity']['git_status'] == ''
           artifacts = build['artifacts']
           expected = {'wheel': '.whl', 'sdist': '.tar.gz'}
-          assert len(artifacts) == len(expected), 'unexpected candidate artifact count'
+          err = 'unexpected candidate artifact count'
+          assert len(artifacts) == len(expected), err
           for kind, suffix in expected.items():
               matches = [item for item in artifacts if item['kind'] == kind]
               assert len(matches) == 1, f'missing or duplicated {kind}'
@@ -339,7 +366,8 @@ jobs:
       - name: Restore legal receipt and materialize pinned native source
         run: |
           mkdir -p build
-          sha256sum vendor/source-manifest.json > build/ci-native-manifest.sha256
+          manifest=vendor/source-manifest.json
+          sha256sum "$manifest" > build/ci-native-manifest.sha256
           python - <<'PY'
           import hashlib
           import json
@@ -352,15 +380,22 @@ jobs:
           assert sha == manifest['pre_vendor_receipt']['sha256']
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_bytes(receipt.read_bytes())
-          target.with_name('receipt.sha256').write_text(sha + '\n')
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
           PY
           ./scripts/materialize-sources --clean
           sha256sum -c build/ci-native-manifest.sha256
-          (cd vendor/sources/file-base/graph-ui && \n           npm ci --ignore-scripts --silent)
-          notice_dir=build/evidence/phase-01/pre-vendor-license/generated
-          notice="/THIRD_PARTY_NOTICES.md"
-          ./vendor/sources/file-base/scripts/gen-third-party-notices.sh "$notice"
-          python -c \n            "import shutil; shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')"
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          notice="$g/THIRD_PARTY_NOTICES.md"
+          script=./vendor/sources/file-base/scripts/gen-third-party-notices.sh
+          "$script" "$notice"
+          python - <<'PY'
+          import shutil
+          shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')
+          PY
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
       - name: Run nightly ASan and UBSan suite
@@ -370,12 +405,15 @@ jobs:
           for library in libasan.so libubsan.so; do
             resolved="$(readlink -f "$(cc -print-file-name="$library")")"
             test -f "$resolved"
-            install -m 0644 "$resolved" "build/sanitizer-runtime/$(basename "$resolved")"
+            dest="build/sanitizer-runtime/$(basename "$resolved")"
+            install -m 0644 "$resolved" "$dest"
             ln -s "$(basename "$resolved")" "build/sanitizer-runtime/$library"
           done
           ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
-            ./scripts/offline-exec --evidence-root build/evidence/ci-native-sanitized \
-            ./scripts/build-file-base --clean --ci-ephemeral \n              --run-upstream-tests --sanitizers asan,ubsan
+            ./scripts/offline-exec \
+            --evidence-root build/evidence/ci-native-sanitized \
+            ./scripts/build-file-base --clean --ci-ephemeral
+              --run-upstream-tests --sanitizers asan,ubsan
       - name: Build native test binary under network denial
         if: github.event_name != 'schedule'
         run: >-
@@ -388,9 +426,14 @@ jobs:
           ARW_STRICT_PREREQS: '1'
         run: |
           .venv/bin/python -m pytest -q \
-            tests/integration/test_mcp_confinement.py::test_direct_native_confinement_matrix \
-            tests/integration/test_files_admin.py::\n            test_parent_only_admin_commands_build_complete_sibling_generation \
-            tests/integration/test_files_admin.py::\n            test_native_builder_attests_closed_candidate_and_rejects_unsafe_inputs
+            tests/integration/test_mcp_confinement.py::\
+            test_direct_native_confinement_matrix \
+            tests/integration/test_files_admin.py::
+            test_parent_only_admin_commands_build_complete_sibling_generation \
+            tests/integration/test_files_admin.py::
+            tests/integration/test_files_admin.py::\
+            test_native_builder_attests_closed_candidate_and_rejects_\
+            unsafe_inputs
 
   macos-core:
     name: macOS Tier 2 core
