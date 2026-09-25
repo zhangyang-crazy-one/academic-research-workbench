@@ -393,6 +393,33 @@ def install_exact_stage(
     copy_auth: bool,
     prewarm_runtime: bool = False,
 ) -> dict[str, Any]:
+    candidate = strict_json_object(
+        (stage_root / "share/arw/evidence/candidate-build.json").read_bytes(),
+        label="staged candidate build evidence",
+    )
+    artifact_rows = candidate.get("artifacts")
+    if not isinstance(artifact_rows, list):
+        raise CanaryDefect("staged candidate build evidence has no artifacts")
+    wheel_rows = [row for row in artifact_rows if isinstance(row, dict) and row.get("kind") == "wheel"]
+    if len(wheel_rows) != 1:
+        raise CanaryDefect("staged candidate requires exactly one wheel")
+    wheel_row = wheel_rows[0]
+    if not isinstance(wheel_row.get("path"), str):
+        raise CanaryDefect("staged candidate wheel path is missing")
+    wheel = stage_root / "share/arw/wheels" / Path(wheel_row["path"]).name
+    if not wheel.is_file() or wheel.is_symlink():
+        raise CanaryDefect("staged candidate wheel is missing or unsafe")
+    wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    if wheel_row.get("sha256") != wheel_sha256 or wheel_row.get("size") != wheel.stat().st_size:
+        raise CanaryDefect("staged wheel differs from candidate build evidence")
+    sbom = strict_json_object((stage_root / "SBOM.cdx.json").read_bytes(), label="staged SBOM")
+    components = sbom.get("components")
+    if not isinstance(components, list) or len([
+        item for item in components if isinstance(item, dict)
+        and item.get("bom-ref") == f"first-party-wheel:{wheel.name}"
+        and item.get("hashes") == [{"alg": "SHA-256", "content": wheel_sha256}]
+    ]) != 1:
+        raise CanaryDefect("staged SBOM does not bind candidate wheel")
     shutil.rmtree(fresh_root, ignore_errors=True)
     home = fresh_root / "home"
     codex_home = fresh_root / "codex-home"
@@ -488,6 +515,7 @@ def install_exact_stage(
         "installed_manifest_version": manifest["version"],
         "installed_sha256": installed_sha,
         "stage_sha256": stage_sha,
+        "source_wheel_sha256": wheel_sha256,
     }
     write_json(evidence / "plugin/installed-identity.json", identity)
     hook_definition = inspect_installed_hook_definition(installed_root)
@@ -569,6 +597,38 @@ def bootstrap_unlocked_runtime(
             "status": "PASS",
         },
     )
+    wheel_sha256 = installed["identity"]["source_wheel_sha256"]
+    runtime_python = installed["codex_home"] / "arw/runtime" / wheel_sha256 / "venv/bin/python"
+    if not runtime_python.is_file():
+        raise CanaryDefect("installed candidate runtime interpreter is missing")
+    inventory_script = (
+        "import importlib.metadata as m,json,platform,sys; "
+        "rows=sorted(({'name': d.metadata['Name'], 'version': d.version} "
+        "for d in m.distributions()), key=lambda x:x['name'].lower()); "
+        "print(json.dumps({'python':platform.python_version(),"
+        "'executable':sys.executable,'distributions':rows},sort_keys=True))"
+    )
+    observed = subprocess.run(
+        [str(runtime_python), "-c", inventory_script],
+        text=True, capture_output=True, check=False, timeout=30,
+        env=environment,
+    )
+    if observed.returncode != 0:
+        raise CanaryDefect("installed candidate inventory could not be observed")
+    try:
+        inventory = json.loads(observed.stdout)
+    except json.JSONDecodeError as error:
+        raise CanaryDefect("installed candidate inventory is invalid JSON") from error
+    first_party = [row for row in inventory["distributions"] if row["name"].lower().replace("_", "-") == PLUGIN_NAME]
+    if len(first_party) != 1:
+        raise CanaryDefect("installed candidate package identity is missing or ambiguous")
+    write_json(evidence / "installation-inventory.json", {
+        "schema_version": "1.0.0",
+        "source_wheel_sha256": wheel_sha256,
+        "installed_package": first_party[0],
+        "python": inventory["python"],
+        "distributions": inventory["distributions"],
+    })
 
 
 def materialize_stage_if_missing(
@@ -577,44 +637,12 @@ def materialize_stage_if_missing(
     *,
     cachebuster: str | None = None,
 ) -> bool:
-    """Create a diagnostic stage only when the caller did not provide one.
-
-    An existing stage is an immutable canary input.  In particular, a
-    qualified stage may carry an integration lock that must survive every
-    smoke mode byte-for-byte.
-    """
+    """Require an explicit stage that already contains the gated candidate."""
     if stage_root.exists():
         if not stage_root.is_dir():
             raise CanaryDefect("stage root is not a directory")
         return False
-
-    command = [
-        str(PROJECT_ROOT / "scripts/stage-plugin"),
-        "--clean",
-        "--stage-root",
-        str(stage_root),
-    ]
-    recorded_command = [
-        "<repository-root>/scripts/stage-plugin",
-        "--clean",
-        "--stage-root",
-        "<stage-root>",
-    ]
-    if cachebuster is not None:
-        command.extend(["--cachebuster", cachebuster])
-        recorded_command.extend(["--cachebuster", cachebuster])
-    stage_evidence = evidence / "stage-evidence"
-    command.extend(["--evidence-root", str(stage_evidence)])
-    write_command(evidence / "command.json", recorded_command)
-    staged = run_recorded(
-        command,
-        cwd=PROJECT_ROOT,
-        environment=os.environ.copy(),
-        evidence=evidence,
-    )
-    if staged.returncode != 0:
-        raise CanaryDefect("diagnostic stage materialization failed")
-    return True
+    raise CanaryDefect("stage root is missing; provide an explicitly gated candidate stage")
 
 
 def offline_installed_command(

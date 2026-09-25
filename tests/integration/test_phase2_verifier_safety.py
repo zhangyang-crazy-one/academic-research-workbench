@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,6 +45,7 @@ def test_stage_plugin_refuses_to_clean_an_unowned_existing_directory(
             str(unowned),
             "--evidence-root",
             str(tmp_path / "evidence"),
+            *candidate_stage_args(),
         ],
         cwd=REPOSITORY_ROOT,
         text=True,

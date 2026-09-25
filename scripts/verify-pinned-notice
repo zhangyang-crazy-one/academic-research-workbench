@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Verify the generated pre-vendor notice against its source-manifest digest."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+NOTICE = "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-root", type=Path, default=Path(__file__).resolve().parents[1])
+    args = parser.parse_args()
+    root = args.project_root
+    try:
+        manifest = json.loads((root / "vendor/source-manifest.json").read_text(encoding="utf-8"))
+        rows = [row for row in manifest["declared_artifacts"] if row.get("path") == NOTICE]
+        if len(rows) != 1 or rows[0].get("class") != "build-evidence":
+            raise ValueError("pinned notice declaration missing or ambiguous")
+        notice = root / NOTICE
+        if notice.is_symlink() or not notice.is_file():
+            raise ValueError("pinned notice is missing or unsafe")
+        if hashlib.sha256(notice.read_bytes()).hexdigest() != rows[0].get("sha256"):
+            raise ValueError("pinned notice digest mismatch")
+    except (OSError, UnicodeError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        parser.exit(1, f"verify-pinned-notice: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

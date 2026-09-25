@@ -35,6 +35,15 @@ class VerificationError(RuntimeError):
     pass
 
 
+def candidate_stage_args() -> list[str]:
+    names = ("ARW_CANDIDATE_WHEEL", "ARW_BUILD_EVIDENCE", "ARW_CANDIDATE_EVIDENCE_ROOT")
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        raise VerificationError(f"gated candidate inputs are required: {', '.join(missing)}")
+    return ["--candidate-wheel", os.environ[names[0]], "--build-evidence", os.environ[names[1]],
+            "--candidate-evidence-root", os.environ[names[2]]]
+
+
 def digest_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -193,7 +202,7 @@ def main() -> int:
         run_command(root, "native-profile-run", [str(native / "test_phase5_graph_profile")])
         stage = PROJECT_ROOT / "build/stage/phase-05"
         stage_evidence = root / "stage-plugin"
-        run_command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence)])
+        run_command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence), *candidate_stage_args()])
         run_command(root, "stage-validate", ["./scripts/stage-plugin", "--stage-root", str(stage), "--validate-only"])
         staged_rows = tree_inventory(stage)
         if any(row["path"].endswith((".db", ".sqlite", ".sqlite3")) for row in staged_rows):

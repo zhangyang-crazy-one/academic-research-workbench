@@ -9,14 +9,18 @@ CACHEBUSTER=""
 VALIDATE_ONLY=0
 EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-01/stage"
 INTEGRATION_LOCK=""
+CANDIDATE_WHEEL=""
+BUILD_EVIDENCE=""
+CANDIDATE_EVIDENCE_ROOT=""
 
 usage() {
   cat <<'EOF'
-Usage: stage-plugin [--clean] [--stage-root PATH] [--cachebuster TOKEN]
-                    [--evidence-root PATH] [--integration-lock PATH]
+Usage: stage-plugin --candidate-wheel PATH --build-evidence PATH
+                    --candidate-evidence-root PATH [--clean] [--stage-root PATH]
+                    [--cachebuster TOKEN] [--evidence-root PATH] [--integration-lock PATH]
                     [--validate-only]
 
-Build the first-party wheel and assemble the exact positive-allowlist plugin stage.
+Assemble the exact positive-allowlist plugin stage from a gated candidate wheel.
 EOF
 }
 
@@ -50,6 +54,18 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || fail "--integration-lock requires a path" 64
       INTEGRATION_LOCK="$2"
       shift 2
+      ;;
+    --candidate-wheel)
+      [[ $# -ge 2 ]] || fail "--candidate-wheel requires a path" 64
+      CANDIDATE_WHEEL="$2"; shift 2
+      ;;
+    --build-evidence)
+      [[ $# -ge 2 ]] || fail "--build-evidence requires a path" 64
+      BUILD_EVIDENCE="$2"; shift 2
+      ;;
+    --candidate-evidence-root)
+      [[ $# -ge 2 ]] || fail "--candidate-evidence-root requires a path" 64
+      CANDIDATE_EVIDENCE_ROOT="$2"; shift 2
       ;;
     --validate-only)
       VALIDATE_ONLY=1
@@ -86,6 +102,24 @@ EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
   || fail "refusing unsafe stage root" 64
 [[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe evidence root" 64
+case "$STAGE_ROOT" in
+  "$EVIDENCE_ROOT"|"$EVIDENCE_ROOT"/*) fail "stage and evidence roots must be disjoint" 64 ;;
+esac
+case "$EVIDENCE_ROOT" in
+  "$STAGE_ROOT"|"$STAGE_ROOT"/*) fail "stage and evidence roots must be disjoint" 64 ;;
+esac
+STAGE_TMP_ROOT="${ARW_STAGE_TMP_ROOT:-$PROJECT_ROOT/build/tmp}"
+STAGE_TMP_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_TMP_ROOT")"
+[[ "$STAGE_TMP_ROOT" != "/" && "$STAGE_TMP_ROOT" != "$PROJECT_ROOT" ]] \
+  || fail "refusing unsafe stage temporary root" 64
+for accepted_root in "$STAGE_ROOT" "$EVIDENCE_ROOT"; do
+  case "$STAGE_TMP_ROOT" in
+    "$accepted_root"|"$accepted_root"/*) fail "stage temporary root must be disjoint from accepted roots" 64 ;;
+  esac
+  case "$accepted_root" in
+    "$STAGE_TMP_ROOT"|"$STAGE_TMP_ROOT"/*) fail "stage temporary root must be disjoint from accepted roots" 64 ;;
+  esac
+done
 
 if [[ -n "$INTEGRATION_LOCK" ]]; then
   [[ -f "$INTEGRATION_LOCK" && ! -L "$INTEGRATION_LOCK" ]] \
@@ -387,6 +421,44 @@ try:
     identity = json.loads((stage_root / identity_relative).read_text(encoding="utf-8"))
 except (OSError, UnicodeError, json.JSONDecodeError) as error:
     raise SystemExit(f"stage binding metadata is invalid: {error}") from error
+candidate_build = json.loads(
+    (stage_root / "share/arw/evidence/candidate-build.json").read_text(encoding="utf-8")
+)
+license_inventory = json.loads(
+    (stage_root / "share/arw/evidence/license-inventory.json").read_text(encoding="utf-8")
+)
+if license_inventory.get("build_evidence", {}).get("sha256") != digest(
+    stage_root / "share/arw/evidence/candidate-build.json"
+):
+    raise SystemExit("staged license inventory does not bind original candidate build evidence")
+if (
+    license_inventory.get("build_observation") != candidate_build.get("build")
+    or license_inventory.get("runtime_resolution_environment") != candidate_build.get("runtime_resolution_environment")
+):
+    raise SystemExit("staged license inventory builder or runtime observation differs from candidate")
+build_observation = candidate_build.get("build")
+runtime_packages = candidate_build.get("resolved_runtime_inventory")
+if not isinstance(build_observation, dict) or not isinstance(build_observation.get("inventory"), list) or not isinstance(runtime_packages, list):
+    raise SystemExit("staged candidate package inventory is missing")
+observed_packages = [*build_observation["inventory"], *runtime_packages]
+if not observed_packages or any(not isinstance(row, dict) for row in observed_packages):
+    raise SystemExit("staged candidate package inventory is malformed")
+packages = sorted({(row["name"].lower(), row["version"]): row for row in observed_packages}.values(),
+                  key=lambda row: (row["name"].lower(), row["version"]))
+if license_inventory.get("python_packages_observed") != packages:
+    raise SystemExit("staged license inventory package set differs from candidate")
+candidate_rows = [row for row in candidate_build.get("artifacts", []) if row.get("kind") == "wheel"]
+wheel_binding = identity["runtime_artifact"]["first_party_wheel"]
+if (
+    len(candidate_rows) != 1
+    or candidate_rows[0].get("sha256") != wheel_binding["sha256"]
+    or Path(candidate_rows[0].get("path", "")).name != Path(wheel_binding["path"]).name
+    or identity["runtime"]["build_interpreter"] != candidate_build["build"]["python"]["version"]
+):
+    raise SystemExit("staged candidate build evidence does not bind builder and wheel")
+first_party = license_inventory.get("first_party_wheel")
+if not isinstance(first_party, dict) or first_party.get("sha256") != wheel_binding["sha256"] or first_party.get("file") != Path(wheel_binding["path"]).name:
+    raise SystemExit("staged license inventory does not bind the installed wheel")
 component_rows = sbom.get("components", [])
 if not isinstance(component_rows, list) or not all(
     isinstance(item, dict) and isinstance(item.get("bom-ref"), str)
@@ -397,6 +469,19 @@ component_refs = [item["bom-ref"] for item in component_rows]
 if len(component_refs) != len(set(component_refs)):
     raise SystemExit("staged SBOM contains duplicate component references")
 components = {item["bom-ref"]: item for item in component_rows}
+observed_python = {ref: item for ref, item in components.items() if ref.startswith("python:")}
+expected_python = {
+    f"python:{row['name']}@{row['version']}": {
+        "name": row["name"], "version": row["version"],
+        "hashes": [{"alg": "SHA-256", "content": row["installed_content_sha256"]}],
+        "licenses": [{"expression": row["license"]}],
+    } for row in packages
+}
+if set(observed_python) != set(expected_python) or any(
+    any(observed_python[ref].get(key) != value for key, value in expected.items())
+    for ref, expected in expected_python.items()
+):
+    raise SystemExit("staged SBOM package inventory differs from candidate")
 lock_ref = f"artifact:{lock_relative}"
 # pi-lens-ignore: jscpd:duplicate
 if has_lock:
@@ -434,8 +519,72 @@ PY
   exit 0
 fi
 
-UV="$(command -v uv || true)"
-[[ -n "$UV" ]] || fail "uv is required to resolve Python dependencies from the configured package index" 69
+[[ -n "$CANDIDATE_WHEEL" && -n "$BUILD_EVIDENCE" && -n "$CANDIDATE_EVIDENCE_ROOT" ]] \
+  || fail "--candidate-wheel, --build-evidence and --candidate-evidence-root are required" 64
+[[ -f "$CANDIDATE_WHEEL" && ! -L "$CANDIDATE_WHEEL" ]] \
+  || fail "candidate wheel is missing or unsafe" 66
+[[ -f "$BUILD_EVIDENCE" && ! -L "$BUILD_EVIDENCE" ]] \
+  || fail "build evidence is missing or unsafe" 66
+[[ -d "$CANDIDATE_EVIDENCE_ROOT" && ! -L "$CANDIDATE_EVIDENCE_ROOT" ]] \
+  || fail "candidate evidence root is missing or unsafe" 66
+CANDIDATE_WHEEL="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$CANDIDATE_WHEEL")"
+BUILD_EVIDENCE="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$BUILD_EVIDENCE")"
+CANDIDATE_EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$CANDIDATE_EVIDENCE_ROOT")"
+"$PYTHON" "$PROJECT_ROOT/scripts/candidate-bundle" verify-inputs \
+  --wheel "$CANDIDATE_WHEEL" --build-evidence "$BUILD_EVIDENCE" \
+  --candidate-evidence-root "$CANDIDATE_EVIDENCE_ROOT" \
+  || fail "candidate gate inventory does not bind supplied build evidence" 66
+for input in "$CANDIDATE_WHEEL" "$BUILD_EVIDENCE" "$CANDIDATE_EVIDENCE_ROOT"; do
+  case "$input" in
+    "$STAGE_ROOT"|"$STAGE_ROOT"/*|"$EVIDENCE_ROOT"|"$EVIDENCE_ROOT"/*)
+      fail "candidate inputs must be outside stage and stage-evidence roots" 64 ;;
+  esac
+done
+
+FIRST_PARTY_SHA256="$($PYTHON - "$CANDIDATE_WHEEL" "$BUILD_EVIDENCE" "$CANDIDATE_EVIDENCE_ROOT" <<'PY'
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+wheel, evidence_path, gate = map(Path, sys.argv[1:])
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+try:
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    artifacts = evidence["artifacts"]
+    builder_version = evidence["build"]["python"]["version"]
+    rows = [row for row in artifacts if row.get("kind") == "wheel"]
+    if len(rows) != 1 or not isinstance(builder_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+.*", builder_version):
+        raise ValueError("candidate needs one wheel and an observed builder Python")
+    row = rows[0]
+    relative = Path(row["path"])
+    if relative.is_absolute() or ".." in relative.parts or (evidence_path.parent / relative).resolve() != wheel:
+        raise ValueError("candidate wheel path does not match build evidence")
+    actual = digest(wheel)
+    if row["sha256"] != actual or row["size"] != wheel.stat().st_size:
+        raise ValueError("candidate wheel size or digest differs from build evidence")
+    sbom_path = gate / "SBOM.cdx.json"
+    sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+    components = [component for component in sbom["components"] if component.get("bom-ref") == f"first-party-wheel:{wheel.name}"]
+    if len(components) != 1 or components[0].get("hashes") != [{"alg": "SHA-256", "content": actual}]:
+        raise ValueError("candidate SBOM does not bind the supplied wheel")
+    declaration = json.loads((gate / "supply-chain/use-distribution.json").read_text(encoding="utf-8"))
+    bindings = declaration["evidence_hashes"]
+    sbom_bindings = [item for item in bindings if item.get("path") == "SBOM.cdx.json"]
+    if len(sbom_bindings) != 1 or sbom_bindings[0].get("sha256") != digest(sbom_path):
+        raise ValueError("candidate use/distribution record does not bind the SBOM")
+    verdict = json.loads((gate / "supply-chain/license-verdict.json").read_text(encoding="utf-8"))
+    if verdict.get("technical_qualification") != "PASS":
+        raise ValueError("candidate legal gate did not pass")
+    print(actual)
+except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+    raise SystemExit(f"candidate input validation failed: {error}") from error
+PY
+)" || fail "candidate evidence does not bind supplied wheel" 66
+FIRST_PARTY_NAME="$(basename -- "$CANDIDATE_WHEEL")"
 
 if [[ -e "$STAGE_ROOT" ]]; then
   [[ "$CLEAN" -eq 1 ]] || fail "stage root exists; pass --clean" 73
@@ -444,18 +593,24 @@ if [[ -e "$STAGE_ROOT" ]]; then
   [[ -f "$STAGE_ROOT/supply-chain/stage-inventory.json" \
       && ! -L "$STAGE_ROOT/supply-chain/stage-inventory.json" ]] \
     || fail "refusing to clean stage root without its ownership inventory" 64
-  rm -rf -- "$STAGE_ROOT"
+fi
+if [[ -e "$EVIDENCE_ROOT" ]]; then
+  [[ "$CLEAN" -eq 1 ]] || fail "stage evidence exists; pass --clean" 73
+  [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
+    || fail "unsafe evidence root" 64
+  [[ -f "$EVIDENCE_ROOT/.arw-stage-evidence" \
+      || ( -f "$EVIDENCE_ROOT/inventory.json" && -f "$EVIDENCE_ROOT/verdict.json" ) ]] \
+    || fail "refusing to clean evidence root without an ownership marker" 64
 fi
 
-STAGE_TMP_ROOT="${ARW_STAGE_TMP_ROOT:-$PROJECT_ROOT/build/tmp}"
-STAGE_TMP_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_TMP_ROOT")"
-[[ "$STAGE_TMP_ROOT" != "/" && "$STAGE_TMP_ROOT" != "$PROJECT_ROOT" ]] \
-  || fail "refusing unsafe stage temporary root" 64
 mkdir -p "$STAGE_TMP_ROOT"
 WORK_ROOT="$(mktemp -d "$STAGE_TMP_ROOT/arw-stage.XXXXXX")"
 TEMP_STAGE="$STAGE_ROOT.tmp.$$"
+TEMP_EVIDENCE="$EVIDENCE_ROOT.tmp.$$"
+[[ ! -e "$TEMP_STAGE" && ! -e "$TEMP_EVIDENCE" ]] \
+  || fail "stage temporary output already exists" 73
 cleanup() {
-  rm -rf -- "$WORK_ROOT" "$TEMP_STAGE"
+  rm -rf -- "$WORK_ROOT" "$TEMP_STAGE" "$TEMP_EVIDENCE"
 }
 trap cleanup EXIT INT TERM
 mkdir -p "$(dirname -- "$STAGE_ROOT")" "$TEMP_STAGE"
@@ -466,6 +621,27 @@ copy_file() {
   local source="$PROJECT_ROOT/$relative"
   [[ -f "$source" && ! -L "$source" ]] || fail "allowlisted source is unsafe or missing: $relative" 66
   install -D -m "$mode" -- "$source" "$TEMP_STAGE/$relative"
+}
+
+copy_candidate_file() {
+  local relative="$1"
+  local source="$CANDIDATE_EVIDENCE_ROOT/$relative"
+  [[ -f "$source" && ! -L "$source" ]] \
+    || fail "candidate evidence is missing or unsafe: $relative" 66
+  install -D -m 0644 -- "$source" "$TEMP_STAGE/$relative"
+  [[ "$(sha256sum "$source" | cut -d ' ' -f 1)" == "$(sha256sum "$TEMP_STAGE/$relative" | cut -d ' ' -f 1)" ]] \
+    || fail "candidate evidence changed during copy: $relative" 66
+}
+
+copy_candidate_as() {
+  local source_relative="$1"
+  local destination_relative="$2"
+  local source="$CANDIDATE_EVIDENCE_ROOT/$source_relative"
+  [[ -f "$source" && ! -L "$source" ]] \
+    || fail "candidate evidence is missing or unsafe: $source_relative" 66
+  install -D -m 0644 -- "$source" "$TEMP_STAGE/$destination_relative"
+  [[ "$(sha256sum "$source" | cut -d ' ' -f 1)" == "$(sha256sum "$TEMP_STAGE/$destination_relative" | cut -d ' ' -f 1)" ]] \
+    || fail "candidate evidence changed during copy: $source_relative" 66
 }
 
 copy_as() {
@@ -565,7 +741,8 @@ copy_file ".file-base/build-evidence.json"
 # by the wheel-bound verifier, so mutable build/evidence output cannot redefine
 # qualification after review. Other phase-01 surfaces remain retained evidence.
 copy_as "supply-chain/pre-vendor-receipt.json" "share/arw/evidence/pre_vendor.json"
-copy_as "build/evidence/phase-01/license-0002/verdict.json" "share/arw/evidence/legal.json"
+copy_candidate_as "license-evidence/verdict.json" "share/arw/evidence/legal.json"
+copy_candidate_as "license-evidence/inventory.json" "share/arw/evidence/license-inventory.json"
 # Native five-file bundles are also canonical committed supply-chain evidence.
 # Producer and installed verifier both enforce surface-specific content hashes.
 for native_surface in "upstream" "asan-ubsan" "tsan"; do
@@ -577,14 +754,17 @@ for native_surface in "upstream" "asan-ubsan" "tsan"; do
     copy_as "${canonical}/test-suite.sha256" "share/arw/evidence/${staged_surface}_test_suite_sha256.txt"
     copy_as "${canonical}/status.txt" "share/arw/evidence/${staged_surface}_status.txt"
 done
-copy_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
-copy_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
-copy_file "LICENSES/file-base-MIT.txt"
-copy_file "THIRD_PARTY_NOTICES.md"
+copy_candidate_file "LICENSES/academic-research-skills-CC-BY-NC-4.0.txt"
+copy_candidate_file "LICENSES/experiment-agent-CC-BY-NC-4.0.txt"
+copy_candidate_file "LICENSES/file-base-MIT.txt"
+copy_candidate_file "THIRD_PARTY_NOTICES.md"
 copy_file "MODIFICATIONS.md"
-copy_file "SBOM.cdx.json"
-copy_file "supply-chain/use-distribution.json"
-copy_file "supply-chain/license-verdict.json"
+copy_candidate_file "SBOM.cdx.json"
+copy_candidate_file "supply-chain/use-distribution.json"
+copy_candidate_file "supply-chain/license-verdict.json"
+install -D -m 0644 -- "$BUILD_EVIDENCE" "$TEMP_STAGE/share/arw/evidence/candidate-build.json"
+[[ "$(sha256sum "$BUILD_EVIDENCE" | cut -d ' ' -f 1)" == "$(sha256sum "$TEMP_STAGE/share/arw/evidence/candidate-build.json" | cut -d ' ' -f 1)" ]] \
+  || fail "build evidence changed during copy" 66
 copy_file "supply-chain/semantica-qualification.json"
 copy_file "vendor/source-manifest.json"
 copy_file "vendor/mcp-manifest.json"
@@ -714,28 +894,18 @@ manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
 PY
 fi
 
-DIST_ROOT="$WORK_ROOT/dist"
-mkdir -p "$DIST_ROOT"
-"$UV" pip install --python "$PYTHON" 'hatchling>=1.31.0' "$PROJECT_ROOT" \
-  || fail "build-dependency-resolution-failed: could not resolve project and build dependencies from the configured package index" 69
-(
-  cd "$PROJECT_ROOT"
-  "$PYTHON" -m hatchling build --target wheel --directory "$DIST_ROOT"
-)
-
-mapfile -t first_party_wheels < <(find "$DIST_ROOT" -maxdepth 1 -type f -name "${PLUGIN_NAME//-/_}-*.whl" -print | sort)
-[[ "${#first_party_wheels[@]}" -eq 1 ]] || fail "expected exactly one first-party wheel" 70
-FIRST_PARTY_WHEEL="${first_party_wheels[0]}"
-FIRST_PARTY_NAME="$(basename -- "$FIRST_PARTY_WHEEL")"
-FIRST_PARTY_SHA256="$(sha256sum "$FIRST_PARTY_WHEEL" | awk '{print $1}')"
-install -D -m 0644 -- "$FIRST_PARTY_WHEEL" "$TEMP_STAGE/share/arw/wheels/$FIRST_PARTY_NAME"
+[[ "$(sha256sum "$CANDIDATE_WHEEL" | cut -d ' ' -f 1)" == "$FIRST_PARTY_SHA256" ]] \
+  || fail "candidate wheel changed before copy" 66
+install -D -m 0644 -- "$CANDIDATE_WHEEL" "$TEMP_STAGE/share/arw/wheels/$FIRST_PARTY_NAME"
+[[ "$(sha256sum "$CANDIDATE_WHEEL" | cut -d ' ' -f 1)" == "$FIRST_PARTY_SHA256" \
+    && "$(sha256sum "$TEMP_STAGE/share/arw/wheels/$FIRST_PARTY_NAME" | cut -d ' ' -f 1)" == "$FIRST_PARTY_SHA256" ]] \
+  || fail "candidate wheel changed during copy" 66
 
 "$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$FIRST_PARTY_NAME" "$FIRST_PARTY_SHA256" <<'PY'
 from __future__ import annotations
 
 import hashlib
 import json
-import platform
 import re
 # pi-lens-ignore: jscpd:duplicate
 import sys
@@ -871,8 +1041,11 @@ payloads = [
     if path.is_file() and path.relative_to(stage_root).as_posix() != "share/arw/build-identity.json"
 ]
 
-# Record the actual interpreter used to build this artifact as evidence.
-build_interpreter = platform.python_version()
+# The candidate build evidence, not the staging interpreter, identifies the builder.
+build_evidence = strict_json_loads(
+    (stage_root / "share/arw/evidence/candidate-build.json").read_bytes()
+)
+build_interpreter = build_evidence["build"]["python"]["version"]
 
 # The producer regenerates the file-contract header FROM the staged
 # checked schemas (NOT from the source ``generated/`` directory) so the
@@ -1253,6 +1426,8 @@ static_files = {
     "share/arw/build-identity.json",
     "share/arw/evidence/pre_vendor.json",
     "share/arw/evidence/legal.json",
+    "share/arw/evidence/license-inventory.json",
+    "share/arw/evidence/candidate-build.json",
     "share/arw/evidence/upstream.json",
     "share/arw/evidence/upstream_command.json",
     "share/arw/evidence/upstream_sanitizer_verdict.json",
@@ -1522,23 +1697,10 @@ inventory_path.parent.mkdir(parents=True, exist_ok=True)
 inventory_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
-mv "$TEMP_STAGE" "$STAGE_ROOT"
-trap - EXIT INT TERM
-rm -rf -- "$WORK_ROOT"
-
-if [[ -e "$EVIDENCE_ROOT" ]]; then
-  [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
-    || fail "unsafe evidence root" 64
-  [[ -f "$EVIDENCE_ROOT/.arw-stage-evidence" \
-      || ( -f "$EVIDENCE_ROOT/inventory.json" \
-           && -f "$EVIDENCE_ROOT/verdict.json" ) ]] \
-    || fail "refusing to clean evidence root without an ownership marker" 64
-  rm -rf -- "$EVIDENCE_ROOT"
-fi
-mkdir -p "$EVIDENCE_ROOT"
+mkdir -p "$TEMP_EVIDENCE"
 printf 'academic-research-workbench stage evidence v1\n' \
-  > "$EVIDENCE_ROOT/.arw-stage-evidence"
-"$PYTHON" - "$PROJECT_ROOT" "$STAGE_ROOT" "$EVIDENCE_ROOT" <<'PY'
+  > "$TEMP_EVIDENCE/.arw-stage-evidence"
+"$PYTHON" - "$PROJECT_ROOT" "$TEMP_STAGE" "$TEMP_EVIDENCE" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -1617,5 +1779,63 @@ if verdict["technical_qualification"] != "PASS":
     + "\n",
     encoding="utf-8",
 )
+PY
+VALIDATION_ARGS=()
+if [[ -n "$INTEGRATION_LOCK" ]]; then
+  VALIDATION_ARGS=(--integration-lock "$INTEGRATION_LOCK")
+fi
+"$PROJECT_ROOT/scripts/stage-plugin" --validate-only --stage-root "$TEMP_STAGE" \
+  "${VALIDATION_ARGS[@]}" \
+  || fail "candidate stage validation failed; accepted stage preserved" 70
+"$PYTHON" - "$TEMP_STAGE" "$STAGE_ROOT" "$TEMP_EVIDENCE" "$EVIDENCE_ROOT" <<'PY'
+import os
+import shutil
+import signal
+import sys
+from pathlib import Path
+
+new_stage, stage, new_evidence, evidence = map(Path, sys.argv[1:])
+if stage.resolve() == evidence.resolve() or stage.resolve() in evidence.resolve().parents or evidence.resolve() in stage.resolve().parents:
+    raise SystemExit("stage and evidence roots must be disjoint")
+old_stage = stage.with_name(stage.name + ".previous." + str(os.getpid()))
+old_evidence = evidence.with_name(evidence.name + ".previous." + str(os.getpid()))
+for backup in (old_stage, old_evidence):
+    if backup.exists() or backup.is_symlink():
+        raise SystemExit(f"unsafe existing stage backup: {backup}")
+stage_existed, evidence_existed = stage.exists(), evidence.exists()
+
+def interrupted(_signum, _frame):
+    raise KeyboardInterrupt("candidate promotion interrupted")
+
+original_term = signal.signal(signal.SIGTERM, interrupted)
+try:
+    if stage_existed:
+        stage.rename(old_stage)
+    if evidence_existed:
+        evidence.rename(old_evidence)
+    new_stage.rename(stage)
+    new_evidence.rename(evidence)
+except BaseException:
+    original_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    try:
+        for accepted, old, existed, new in (
+            (stage, old_stage, stage_existed, new_stage),
+            (evidence, old_evidence, evidence_existed, new_evidence),
+        ):
+            if accepted.exists() and (old.exists() or not existed and not new.exists()):
+                shutil.rmtree(accepted)
+            if old.exists():
+                old.rename(accepted)
+    finally:
+        signal.signal(signal.SIGINT, original_int)
+        signal.signal(signal.SIGTERM, original_term)
+    raise
+else:
+    signal.signal(signal.SIGTERM, original_term)
+    if stage_existed:
+        shutil.rmtree(old_stage)
+    if evidence_existed:
+        shutil.rmtree(old_evidence)
 PY
 printf 'stage ready: %s\n' "$STAGE_ROOT"

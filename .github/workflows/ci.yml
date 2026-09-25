@@ -17,6 +17,7 @@ jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
+    needs: package-boundary
     strategy:
       fail-fast: false
     steps:
@@ -29,11 +30,33 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: academic-research-workbench-ci-${{ github.sha }}
+          path: build/candidate-from-ci-transfer
+      - name: Extract candidate with hidden files and executable modes
+        run: python scripts/candidate-bundle extract --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz --output-root build/candidate-from-ci
+      - name: Select the exact gated candidate for stage regressions
+        run: |
+          python scripts/candidate-bundle verify --bundle-root build/candidate-from-ci
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('build/candidate-from-ci').resolve()
+          artifacts = json.loads((root / 'build-evidence.json').read_text())['artifacts']
+          wheels = [item for item in artifacts if item['kind'] == 'wheel']
+          assert len(wheels) == 1, wheels
+          with Path(os.environ['GITHUB_ENV']).open('a') as output:
+              output.write(f"ARW_CANDIDATE_WHEEL={root / wheels[0]['path']}\n")
+              output.write(f"ARW_BUILD_EVIDENCE={root / 'build-evidence.json'}\n")
+              output.write(f"ARW_CANDIDATE_EVIDENCE_ROOT={root / 'evidence'}\n")
+          PY
       - name: Resolve development environment from declared ranges
         run: >-
-          uv venv && uv pip install --python .venv/bin/python --editable .
-          -r pyproject.toml --all-extras
-          --group dev --group ars-test --group storm
+          uv venv && .venv/bin/python scripts/install-unmanaged-deps.py
+          --all-extras dev ars-test storm
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -68,9 +91,9 @@ jobs:
         # toolchain-drifted hashes. Native-binary-dependent suites (native
         # surface, confinement, file security) run in the local
         # qualification flow (scripts/verify-phase-*), matching release.yml.
-        # I7's CI-runnable portion is the existing "Verify source manifest
-        # wire digests" step above; the full license gate requires retained
-        # local evidence and runs in the qualification flow.
+        # The package-boundary job uses the committed digest-bound pre-vendor
+        # receipt and runs the candidate license gate for this CI wheel.
+        # Native host qualification remains a separate retained workflow.
         run: >-
           .venv/bin/python -m pytest -q -m v2_compat tests/compat
       - name: Run Phase 4 lifecycle and hook regression tests
@@ -130,9 +153,10 @@ jobs:
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
-        run: >-
-          .venv/bin/python -m pytest -q
-          --ignore scripts/test_check_calibration_tiers.py
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
+          ../../../.venv/bin/python -m pytest -q \
+          --ignore scripts/test_check_calibration_tiers.py \
           --ignore scripts/test_check_distribution_surface_claims.py
 
   package-boundary:
@@ -149,7 +173,34 @@ jobs:
         with:
           enable-cache: true
       - name: Resolve package boundary environment from declared ranges
-        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Restore pinned legal receipt and materialize source snapshots
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          assert sha == manifest['pre_vendor_receipt']['sha256'], 'pinned legal receipt digest mismatch'
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(sha + '\n')
+          PY
+          ./scripts/materialize-sources
+          (cd vendor/sources/file-base/graph-ui && npm ci --ignore-scripts --silent)
+          notice=build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md
+          ./vendor/sources/file-base/scripts/gen-third-party-notices.sh "$notice"
+          python -c "import shutil; shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')"
+          python scripts/verify-pinned-notice
+          ./scripts/verify-sources --inputs-only
+      - name: Resolve native legal checker from configured index
+        run: |
+          uv pip install --python .venv/bin/python 'scancode-toolkit>=32.5.0'
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Verify publish surface before building artifacts
         run: |
           test -f src/arw/kernel/execution/orchestration.py
@@ -173,26 +224,50 @@ jobs:
           ), commands
           assert any('arw_hook.py' in command for command in commands), commands
           PY
-      - name: Build wheel and inspect payload
+      - name: Build one candidate and generate its isolated legal evidence
         run: |
-          uv build --out-dir dist
+          .venv/bin/python scripts/build-candidate --output-root build/candidate-ci
           python - <<'PY'
-          import hashlib
           import json
+          from pathlib import Path
+
+          artifacts = json.loads(Path('build/candidate-ci/build-evidence.json').read_text())['artifacts']
+          wheels = [item for item in artifacts if item['kind'] == 'wheel']
+          assert len(wheels) == 1, wheels
+          with Path('build/candidate-ci/wheel-path.txt').open('w') as stream:
+              stream.write(str(Path('build/candidate-ci') / wheels[0]['path']) + '\n')
+          PY
+          wheel="$(cat build/candidate-ci/wheel-path.txt)"
+          .venv/bin/python scripts/license-gate \
+            --wheel "$wheel" \
+            --build-evidence build/candidate-ci/build-evidence.json \
+            --output-root build/evidence/candidate-ci
+          .venv/bin/python scripts/candidate-bundle create \
+            --wheel "$wheel" \
+            --build-evidence build/candidate-ci/build-evidence.json \
+            --candidate-evidence-root build/evidence/candidate-ci \
+            --output-root build/candidate-bundle-ci
+          .venv/bin/python scripts/candidate-bundle verify \
+            --bundle-root build/candidate-bundle-ci
+          .venv/bin/python scripts/candidate-bundle archive \
+            --bundle-root build/candidate-bundle-ci --output build/candidate-bundle.tar.gz
+          test -s build/candidate-bundle.tar.gz
+      - name: Inspect candidate wheel and source archive boundaries
+        run: |
+          python - <<'PY'
+          import json
+          import tarfile
           from pathlib import Path
           from zipfile import ZipFile
 
-          wheels = list(Path('dist').glob('*.whl'))
-          assert len(wheels) == 1, wheels
-          wheel = wheels[0]
-          components = json.loads(Path('SBOM.cdx.json').read_text())['components']
-          component = next(item for item in components
-                           if item['bom-ref'] == 'first-party-wheel:' + wheel.name)
-          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
-          assert component['hashes'] == [{'alg': 'SHA-256', 'content': digest}], \
-              f"First-party wheel digest {digest} differs from {component['hashes']}"
-          with ZipFile(wheels[0]) as archive:
+          root = Path('build/candidate-bundle-ci')
+          artifacts = json.loads((root / 'build-evidence.json').read_text())['artifacts']
+          wheel = next(root / item['path'] for item in artifacts if item['kind'] == 'wheel')
+          source = next(root / item['path'] for item in artifacts if item['kind'] == 'sdist')
+          with ZipFile(wheel) as archive:
               names = archive.namelist()
+          with tarfile.open(source) as archive:
+              source_names = archive.getnames()
           forbidden = (
               '.planning/',
               'build/',
@@ -202,21 +277,21 @@ jobs:
           )
           leaked = [name for name in names if name.startswith(forbidden)]
           assert not leaked, leaked
+          assert not any(any(part in {'.planning', 'build', '.evidence', '.file-base',
+                                      '.env', 'credentials', 'secrets'}
+                             for part in Path(name).parts) or 'vendor/sources/' in name
+                         for name in source_names), source_names
           PY
-      - name: Build source archive with export rules
+      - name: Run focused candidate artifact regressions
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          mkdir -p dist/source
-          git archive --worktree-attributes --format=tar \
-            --output=dist/source/arw.tar HEAD
-          tar -tf dist/source/arw.tar > dist/source/files.txt
-          excluded='(^|/)(\.planning|build|\.evidence|\.file-base|'
-          excluded="${excluded}vendor/sources)(/|$)"
-          ! grep -E "$excluded" dist/source/files.txt
-          ! grep -E \
-            '(^|/)(\.env|credentials|secrets)(/|$)' \
-            dist/source/files.txt
+          .venv/bin/python -m pytest -q --confcutdir=tests/unit \
+            -p no:cacheprovider tests/unit/test_candidate_gate.py
+          .venv/bin/python -m pytest -q --confcutdir=tests/integration \
+            -p no:cacheprovider tests/integration/test_candidate_bundle.py
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: academic-research-workbench-ci-${{ github.sha }}
-          path: dist/
+          path: build/candidate-bundle.tar.gz
+          if-no-files-found: error

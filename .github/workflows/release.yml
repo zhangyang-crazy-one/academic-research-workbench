@@ -4,9 +4,23 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: 'Actions run containing the qualified candidate bundle'
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: 'Exact candidate bundle artifact name from that run'
+        required: true
+        type: string
+      release_tag:
+        description: 'Existing tag at the candidate source commit'
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -14,77 +28,104 @@ concurrency:
 
 jobs:
   qualify:
-    name: Qualify release boundary
+    name: Verify candidate and release authority
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.select.outputs.release_tag }}
+      bundle_manifest_sha256: ${{ steps.identity.outputs.bundle_manifest_sha256 }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
       - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - name: Resolve release environment from declared ranges
-        run: uv venv && uv pip install --python .venv/bin/python --editable . --group dev
-      - name: Verify legal and accountable gates before publication
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          use = json.loads(Path('supply-chain/use-distribution.json').read_text())
-          verdict = json.loads(Path('supply-chain/license-verdict.json').read_text())
-          qualification = Path('build/evidence/phase-07-final-13/phase-7-verification.json')
-          if not qualification.is_file():
-              raise SystemExit(
-                  'release blocked: retained Phase 7 qualification evidence is not present; '
-                  'run the qualification workflow and supply its evidence bundle'
-              )
-          phase7 = json.loads(qualification.read_text())
-          required = {
-              'intended_use': 'declared',
-              'distribution_class': 'declared',
-              'accountable_approval': 'approved',
-          }
-          for field, status in required.items():
-              if use.get(field, {}).get('status') != status:
-                  raise SystemExit(f'release blocked: {field} is not {status}')
-          if not use.get('permission_references'):
-              raise SystemExit('release blocked: permission_references is empty')
-          if verdict.get('release_qualification') != 'PASS':
-              raise SystemExit('release blocked: license-verdict is not PASS')
-          if phase7.get('technical_qualification') != 'PASS':
-              raise SystemExit('release blocked: Phase 7 technical qualification is not PASS')
-          if phase7.get('release_qualification') != 'PASS':
-              raise SystemExit('release blocked: Phase 7 release qualification is not PASS')
-          if 'P04-09' in phase7.get('release_blockers', []):
-              raise SystemExit('release blocked: P04-09 human gate is unresolved')
-          PY
-      - name: Run release-safe tests
+      - name: Install declared runtime validator dependencies
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Select explicit candidate transfer
+        id: select
         env:
-          PYTHONNOUSERSITE: '1'
-          UV_OFFLINE: '1'
-        run: .venv/bin/python -m pytest -q tests/unit tests/schema tests/integration/test_license_gate.py
-      - name: Build release artifacts
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || vars.ARW_CANDIDATE_RUN_ID }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name || vars.ARW_CANDIDATE_ARTIFACT_NAME }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          rm -rf dist
-          uv build --out-dir dist
-          git archive --worktree-attributes --format=tar --output=dist/academic-research-workbench-source.tar HEAD
-      - uses: actions/upload-artifact@v4
-        with:
-          name: academic-research-workbench-${{ github.ref_name }}
-          path: dist/
-
-  publish:
-    name: Publish GitHub release
-    needs: qualify
-    runs-on: ubuntu-latest
-    steps:
+          test -n "$CANDIDATE_RUN_ID" || { echo 'release blocked: candidate run ID is required' >&2; exit 1; }
+          test -n "$CANDIDATE_ARTIFACT_NAME" || { echo 'release blocked: exact candidate artifact name is required' >&2; exit 1; }
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'release blocked: invalid candidate run ID' >&2; exit 1; }
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'release blocked: invalid candidate artifact name' >&2; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]] || { echo 'release blocked: invalid release tag' >&2; exit 1; }
+          git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" >/dev/null \
+            || { echo 'release blocked: release tag does not exist' >&2; exit 1; }
+          echo "candidate_run_id=$CANDIDATE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "candidate_artifact_name=$CANDIDATE_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
-          name: academic-research-workbench-${{ github.ref_name }}
-          path: dist
-      - uses: softprops/action-gh-release@v2
+          name: ${{ steps.select.outputs.candidate_artifact_name }}
+          run-id: ${{ steps.select.outputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate-transfer
+      - name: Extract candidate with hidden files and executable modes
+        run: .venv/bin/python scripts/candidate-bundle extract --archive candidate-transfer/candidate-bundle.tar.gz --output-root candidate-bundle
+      - name: Verify downloaded candidate bytes and qualification
+        env:
+          RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
+        run: |
+          source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          .venv/bin/python scripts/candidate-bundle verify --bundle-root candidate-bundle
+          .venv/bin/python scripts/check-release-candidate \
+            --bundle-root candidate-bundle --source-commit "$source_commit"
+      - name: Bind verified bundle transfer
+        id: identity
+        run: echo "bundle_manifest_sha256=$(sha256sum candidate-bundle/bundle-manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Archive exact verified candidate files with executable modes
+        run: .venv/bin/python scripts/candidate-bundle archive --bundle-root candidate-bundle --output candidate-bundle.tar.gz
+      - uses: actions/upload-artifact@v4
         with:
-          files: dist/*
-          generate_release_notes: true
+          name: academic-research-workbench-verified-${{ github.run_id }}
+          path: candidate-bundle.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish exact verified candidate files
+    needs: qualify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v5
+      - name: Install declared runtime validator dependencies
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: academic-research-workbench-verified-${{ github.run_id }}
+          path: verified-candidate-transfer
+      - name: Extract exact verified candidate files
+        run: .venv/bin/python scripts/candidate-bundle extract --archive verified-candidate-transfer/candidate-bundle.tar.gz --output-root candidate-bundle
+      - name: Recheck downloaded bytes and produce explicit publication list
+        env:
+          RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
+          EXPECTED_BUNDLE_SHA256: ${{ needs.qualify.outputs.bundle_manifest_sha256 }}
+        run: |
+          test "$(sha256sum candidate-bundle/bundle-manifest.json | cut -d' ' -f1)" = "$EXPECTED_BUNDLE_SHA256" \
+            || { echo 'release blocked: candidate bundle manifest changed after qualification' >&2; exit 1; }
+          source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          .venv/bin/python scripts/candidate-bundle verify \
+            --bundle-root candidate-bundle --files-output publish-files.txt
+          .venv/bin/python scripts/check-release-candidate \
+            --bundle-root candidate-bundle --source-commit "$source_commit"
+      - name: Publish only the verified candidate artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
+        run: |
+          mapfile -t files < publish-files.txt
+          test "${#files[@]}" -gt 0 || { echo 'release blocked: no verified artifacts selected' >&2; exit 1; }
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${files[@]}"

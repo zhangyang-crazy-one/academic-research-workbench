@@ -72,6 +72,13 @@ CC-BY-NC permission evidence is supplied. See
 `build/evidence/phase-07-final-13/phase-7-verification.json` for the latest
 serial qualification receipt when present.
 
+## Grok Bot consumption
+
+This repository is Codex-native. A thin, fail-closed adaptation for the
+Grok Bot named `arw` lives in `grok-bot/` and is **not** a second plugin
+install, a Codex marketplace path, or a qualified-stage unlock. See
+`grok-bot/GROK_BOT.md`.
+
 ## Installation
 
 ### Development checkout
@@ -92,12 +99,11 @@ existing local/offline behavior where each capability supports it.
 git clone <repository-url> academic-research-workbench
 cd academic-research-workbench
 uv venv
-uv pip install --python .venv/bin/python --editable . -r pyproject.toml \
-  --all-extras --group dev --group ars-test --group storm
+.venv/bin/python scripts/install-unmanaged-deps.py --all-extras dev ars-test storm
 ./bin/arw help
 ```
 
-`--all-groups` also installs the dependencies required by the bundled ARS
+The selected groups also install the dependencies required by the bundled ARS
 self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash
@@ -145,8 +151,28 @@ carry `supply-chain/integration-lock.json`; an unlocked stage is diagnostic
 only and cannot qualify the route:
 
 ```bash
-./scripts/stage-plugin --clean --stage-root build/stage/bootstrap
+CANDIDATE_WHEEL="$(./scripts/build-candidate --output-root build/candidates/local-001)"
+./scripts/license-gate \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --output-root build/evidence/candidates/local-001
+./scripts/stage-plugin --clean \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --stage-root build/stage/bootstrap
 ```
+
+Use fresh candidate and gate roots for each attempt. The build records the
+actual Python, uv, backend, resolved build packages, wheel and sdist digests.
+The license gate records its own validation environment; installation smoke
+records a separate resolved installation inventory. These observations do not
+constrain later dependency resolution. Package installation needs the configured
+package index when compatible dependencies are absent from the local cache.
+The gate requires the pinned pre-vendor legal receipt and verified source
+snapshots; it never rebuilds or replaces the supplied wheel.
+Its source preflight checks manifest-bound inputs; the native binary and its
+build evidence are checked when the plugin is staged.
 
 This bootstrap stage is only the deterministic input for host qualification;
 do not install it. For host qualification, use
@@ -170,12 +196,75 @@ with the fail-closed helper (the launcher/native paths are part of the lock):
   --credential-source "$CODEX_HOME" \
   --codex-launcher "$(command -v codex)"
 ./scripts/prepare-qualified-stage \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
   --host-canary-evidence build/evidence/host-canary/canary.json \
   --codex-launcher /usr/local/sbin/codex \
   --codex-native-binary /path/to/exact/native/codex \
   --stage-root build/stage/qualified \
   --evidence-root build/evidence/qualified
 ```
+
+`prepare-qualified-stage` passes that same wheel through bootstrap and final
+staging. Rebuilding after the gate creates a new candidate and requires new
+evidence. For transfer, `scripts/candidate-bundle create` records the explicit
+wheel and source artifacts with their digests. `scripts/candidate-bundle archive`
+packs the verified manifest files into a tar archive, preserving hidden stage
+files and executable modes; `scripts/candidate-bundle extract` rejects unsafe
+members and rechecks every digest after download. The release workflow selects
+only the verified wheel and sdist for publication. The current approval and
+permission fields have no independently verifiable authority contract, so
+`check-release-candidate` keeps release qualification blocked even if
+transferred records self-report `PASS`.
+
+To prepare a transfer:
+
+```bash
+./scripts/candidate-bundle create \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --output-root build/candidate-bundles/local-001
+```
+
+A candidate with independently produced Phase 7 evidence uses the five explicit
+inputs below. `candidate-bundle` verifies that the Phase 7 source commit,
+stage digest, integration lock and host canary refer to the supplied wheel,
+then copies only the canary's path-bound evidence files from its evidence root.
+The equivalent `--qualification-root` form must contain
+`phase-7-verification.json`, `stage/`, `integration-lock.json`,
+`host-canary.json`, and the canary's referenced evidence files with the same
+relative paths and hashes.
+
+```bash
+./scripts/candidate-bundle create \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --phase7-verification build/evidence/phase-07/phase-7-verification.json \
+  --qualified-stage build/stage/phase-07-qualified \
+  --integration-lock build/evidence/phase-07/integration-lock.json \
+  --host-canary build/evidence/phase-07/host-canary/canary.json \
+  --canary-evidence-root build/evidence/phase-07/host-canary \
+  --output-root build/candidate-bundles/qualified-local-001
+./scripts/candidate-bundle verify --bundle-root build/candidate-bundles/qualified-local-001
+./scripts/candidate-bundle archive \
+  --bundle-root build/candidate-bundles/qualified-local-001 \
+  --output build/candidate-bundles/qualified-local-001.tar.gz
+```
+
+`verify-phase-7` currently records `release_qualification: BLOCKED` while
+legal and accountable approval evidence is unresolved; packaging its technical
+result does not change that status. The release
+workflow takes the exact Actions run ID and artifact name, downloads and
+rehashes the bundle, checks its source commit and release gates, transfers it
+between jobs, then rehashes it again before publishing only the listed wheel
+and sdist. Missing qualification evidence blocks publication; it cannot be
+replaced by CI's technical bundle. Manual release dispatch supplies
+`candidate_run_id`, `candidate_artifact_name`, and `release_tag`; tag-triggered
+runs require `ARW_CANDIDATE_RUN_ID` and `ARW_CANDIDATE_ARTIFACT_NAME` repository
+variables for the exact qualified transfer.
 
 Only after that command succeeds, create and install the qualified marketplace
 copy:

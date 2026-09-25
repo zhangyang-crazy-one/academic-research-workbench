@@ -23,6 +23,7 @@ from arw.kernel.policy.integration_lock import (
     observe_hook_definition,
     observe_stage_identity,
 )
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -81,6 +82,7 @@ def _stage(
         "--clean",
         "--stage-root",
         str(stage_root),
+        *candidate_stage_args(),
     ]
     if integration_lock is not None:
         command.extend(("--integration-lock", str(integration_lock)))
@@ -402,19 +404,72 @@ def test_base_stage_remains_lock_free_and_validate_only_compatible(
     result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
-    source_sbom = (REPOSITORY_ROOT / "SBOM.cdx.json").read_bytes()
     staged_sbom = stage_root / "SBOM.cdx.json"
-    assert staged_sbom.read_bytes() == source_sbom
-    assert not (stage_root / "supply-chain/integration-lock.json").exists()
     sbom = _load(staged_sbom)
-    assert "artifact:supply-chain/integration-lock.json" not in {
-        item["bom-ref"] for item in sbom["components"]
+    assert sbom["bomFormat"] == "CycloneDX"
+    assert sbom["specVersion"] == "1.5"
+    assert sbom["version"] == 1
+    components = {item["bom-ref"]: item for item in sbom["components"]}
+    source_manifest = _load(stage_root / "vendor/source-manifest.json")
+    source_components = {
+        item["bom-ref"]: item
+        for item in _load(REPOSITORY_ROOT / "SBOM.cdx.json")["components"]
+        if item["bom-ref"].startswith(("source:", "patch:", "file-base-legal:"))
     }
+    file_base = next(
+        source for source in source_manifest["components"] if source["id"] == "file-base"
+    )
+    assert set(source_components) == (
+        {f"source:{source['id']}" for source in source_manifest["components"]}
+        | {f"patch:{patch['sha256']}" for patch in source_manifest["patches"]}
+        | {f"file-base-legal:{item['path']}" for item in file_base["legal_inputs"]}
+    )
+    assert {
+        ref: component
+        for ref, component in components.items()
+        if ref.startswith(("source:", "patch:", "file-base-legal:"))
+    } == source_components
+    for source in source_manifest["components"]:
+        assert components[f"source:{source['id']}"]["licenses"] == [
+            {"license": {"id": source["licenses"][0]["spdx"]}}
+        ]
+
+    build_evidence = _load(stage_root / "share/arw/evidence/candidate-build.json")
+    package_rows = [
+        *build_evidence["build"]["inventory"],
+        *build_evidence["resolved_runtime_inventory"],
+    ]
+    packages = {(row["name"].lower(), row["version"]): row for row in package_rows}
+    assert {ref for ref in components if ref.startswith("python:")} == {
+        f"python:{row['name']}@{row['version']}" for row in packages.values()
+    }
+    for row in packages.values():
+        component = components[f"python:{row['name']}@{row['version']}"]
+        assert component["hashes"] == [
+            {"alg": "SHA-256", "content": row["installed_content_sha256"]}
+        ]
+        assert component["licenses"] == [{"expression": row["license"]}]
+
+    candidate_wheel = Path(os.environ["ARW_CANDIDATE_WHEEL"])
+    assert components[f"first-party-wheel:{candidate_wheel.name}"]["hashes"] == [
+        {"alg": "SHA-256", "content": _sha256(candidate_wheel)}
+    ]
+    assert _sha256(stage_root / "share/arw/wheels" / candidate_wheel.name) == _sha256(
+        candidate_wheel
+    )
+    assert not (stage_root / "supply-chain/integration-lock.json").exists()
+    assert "artifact:supply-chain/integration-lock.json" not in components
 
     identity = _load(stage_root / "share/arw/build-identity.json")
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
     assert "supply-chain/integration-lock.json" not in payloads
     assert payloads["SBOM.cdx.json"]["sha256"] == _sha256(staged_sbom)
+    declaration = _load(stage_root / "supply-chain/use-distribution.json")
+    assert [
+        item["sha256"]
+        for item in declaration["evidence_hashes"]
+        if item["path"] == "SBOM.cdx.json"
+    ] == [_sha256(staged_sbom)]
     validated = _validate_stage(stage_root)
     assert validated.returncode == 0, validated.stderr
 

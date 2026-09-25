@@ -94,6 +94,9 @@ STAGE_COMMAND=(
   --clean
   --stage-root "$STAGE_ROOT"
   --evidence-root "$EVIDENCE_ROOT/stage"
+  --candidate-wheel "${ARW_CANDIDATE_WHEEL:?set ARW_CANDIDATE_WHEEL to the gated wheel}"
+  --build-evidence "${ARW_BUILD_EVIDENCE:?set ARW_BUILD_EVIDENCE to the candidate build evidence}"
+  --candidate-evidence-root "${ARW_CANDIDATE_EVIDENCE_ROOT:?set ARW_CANDIDATE_EVIDENCE_ROOT to the gate output}"
 )
 write_command "$EVIDENCE_ROOT/commands/stage/command.json" "${STAGE_COMMAND[@]}"
 set +e

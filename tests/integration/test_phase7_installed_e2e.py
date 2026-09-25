@@ -16,17 +16,21 @@ from pathlib import Path
 
 import pytest
 
-from arw.kernel.artifacts.audit_dossier import assemble_audit_dossier, replay_audit_dossier
-from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.graph_models import GraphProjectionReceipt
+from arw.kernel.artifacts.audit_dossier import (
+    assemble_audit_dossier,
+    replay_audit_dossier,
+)
 from arw.kernel.artifacts.evidence_access import (
     EvidenceAccessDecision,
     LifecycleEvidenceRecord,
     evaluate_claim_capability,
 )
-from arw.kernel.core.faults import InjectedFault
-from arw.kernel.artifacts.integrity import IntegrityReceipt
 from arw.kernel.artifacts.experiment_provenance import QualificationReceipt
-from arw.graph_models import GraphProjectionReceipt
+from arw.kernel.artifacts.integrity import IntegrityReceipt
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.core.faults import InjectedFault
+from arw.kernel.ledger.journal import replay_run
 from arw.kernel.policy.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
@@ -34,7 +38,6 @@ from arw.kernel.policy.integration_lock import (
     observe_hook_definition,
     observe_stage_identity,
 )
-from arw.kernel.ledger.journal import replay_run
 from arw.kernel.state.models import LifecycleTransitionRequest
 from arw.kernel.state.orchestration_models import (
     FORMAL_REVIEW_ROLE_IDS,
@@ -47,10 +50,10 @@ from arw.kernel.state.orchestration_models import (
     ReviewReport,
     ReviewSynthesis,
 )
-
-from .test_orchestration_lifecycle import _run as _init_run
+from tests.candidate_inputs import candidate_stage_args
 from tests.qualification_support import discover_bundled_qualification
 
+from .test_orchestration_lifecycle import _run as _init_run
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -127,16 +130,26 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     stage = tmp_path / "stage" / PLUGIN_NAME
     stage_tmp = tmp_path / "stage-tmp"
     evidence = tmp_path / "stage-evidence"
+    process_tmp = tmp_path / "process-tmp"
+    process_tmp.mkdir()
     environment = {
         "HOME": str(tmp_path / "caller-home"),
         "CODEX_HOME": str(tmp_path / "caller-codex-home"),
         "PATH": os.environ.get("PATH", os.defpath),
-        "PIP_NO_INDEX": "1",
         "PYTHONNOUSERSITE": "1",
-        "UV_OFFLINE": "1",
-        "TMPDIR": str(REPOSITORY_ROOT / "build/tmp/phase-07/ars-smoke"),
+        "TMPDIR": str(process_tmp),
         "ARW_STAGE_TMP_ROOT": str(stage_tmp),
     }
+    environment.update(
+        {
+            key: value
+            for key, value in os.environ.items()
+            if key.startswith(("PIP_INDEX_", "UV_INDEX_"))
+            or key in {"PIP_EXTRA_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX"}
+        }
+    )
+    assert "PIP_NO_INDEX" not in environment
+    assert "UV_OFFLINE" not in environment
     # Reuse the retained exact stage when it is available. Rebuilding a wheel
     # from a dirty checkout would produce a new runtime digest without a
     # matching host canary; that must remain a qualification failure rather
@@ -159,9 +172,14 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
             str(stage),
             "--evidence-root",
             str(evidence),
+            *candidate_stage_args(),
         ]
-        staged = _run(stage_command, cwd=outside, environment=environment)
-        assert staged.returncode == 0, staged.stderr
+        staged = _run(
+            stage_command,
+            cwd=outside,
+            environment=environment,
+        )
+        assert staged.returncode == 0, f"stage-plugin exited {staged.returncode}"
 
     marketplace_root = tmp_path / "marketplace/plugins" / PLUGIN_NAME
     shutil.copytree(stage, marketplace_root)
@@ -202,7 +220,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         cwd=outside,
         environment=command_environment,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, f"arw route exited {result.returncode}"
     route = json.loads(result.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
@@ -292,7 +310,7 @@ def test_installed_route_requires_qualification_lock(
         cwd=outside,
         environment=command_environment,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, f"arw route exited {result.returncode}"
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
     assert route["reason_codes"] == ["integration_lock_not_verified"]
@@ -359,7 +377,9 @@ def _integrity(decision: EvidenceAccessDecision) -> IntegrityReceipt:
 def _qualification_receipts(provenance: object) -> dict[str, QualificationReceipt]:
     checked = provenance
     if not hasattr(checked, "provenance_sha256"):
-        from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
+        from arw.kernel.artifacts.experiment_provenance import (
+            seal_experiment_provenance,
+        )
 
         checked = seal_experiment_provenance(checked)
     result: dict[str, QualificationReceipt] = {}
@@ -609,7 +629,7 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
         "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
     }
     route_run = _run([str(installed / "bin/arw"), "route", "--json"], cwd=outside, environment=command_environment)
-    assert route_run.returncode == 0, route_run.stderr
+    assert route_run.returncode == 0, f"arw route exited {route_run.returncode}"
     route = json.loads(route_run.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION

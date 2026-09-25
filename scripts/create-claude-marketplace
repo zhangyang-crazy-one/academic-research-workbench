@@ -7,6 +7,9 @@ STAGE_ROOT="$PROJECT_ROOT/build/stage/$PLUGIN_NAME"
 CLAUDE_STAGE_ROOT="$PROJECT_ROOT/build/claude-stage/$PLUGIN_NAME"
 MARKETPLACE_ROOT="$PROJECT_ROOT/build/claude-marketplace"
 RUN_STAGE=0
+CANDIDATE_WHEEL=""
+BUILD_EVIDENCE=""
+CANDIDATE_EVIDENCE_ROOT=""
 
 usage() {
   cat <<'EOF'
@@ -19,7 +22,10 @@ Options:
   --stage-root PATH          Codex stage input (default: build/stage/academic-research-workbench)
   --claude-stage-root PATH   Claude plugin output (default: build/claude-stage/...)
   --marketplace-root PATH    Claude marketplace output (default: build/claude-marketplace)
-  --stage                    Run scripts/stage-plugin --clean before transforming
+  --stage                    Stage the explicitly supplied gated candidate before transforming
+  --candidate-wheel PATH     Candidate wheel for --stage
+  --build-evidence PATH      Candidate build evidence for --stage
+  --candidate-evidence-root PATH  Candidate license/SBOM gate output for --stage
   --help                     Show this help
 
 Install (Claude Code):
@@ -59,6 +65,18 @@ while [[ $# -gt 0 ]]; do
       RUN_STAGE=1
       shift
       ;;
+    --candidate-wheel)
+      [[ $# -ge 2 ]] || fail "--candidate-wheel requires a path" 64
+      CANDIDATE_WHEEL="$2"; shift 2
+      ;;
+    --build-evidence)
+      [[ $# -ge 2 ]] || fail "--build-evidence requires a path" 64
+      BUILD_EVIDENCE="$2"; shift 2
+      ;;
+    --candidate-evidence-root)
+      [[ $# -ge 2 ]] || fail "--candidate-evidence-root requires a path" 64
+      CANDIDATE_EVIDENCE_ROOT="$2"; shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -88,7 +106,11 @@ PYTHON="$PROJECT_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || fail "project environment missing; create .venv and install declared dependencies with uv pip" 66
 
 if [[ "$RUN_STAGE" -eq 1 ]]; then
-  "$PROJECT_ROOT/scripts/stage-plugin" --clean --stage-root "$STAGE_ROOT"
+  [[ -n "$CANDIDATE_WHEEL" && -n "$BUILD_EVIDENCE" && -n "$CANDIDATE_EVIDENCE_ROOT" ]] \
+    || fail "--stage requires --candidate-wheel, --build-evidence and --candidate-evidence-root" 64
+  "$PROJECT_ROOT/scripts/stage-plugin" --clean --stage-root "$STAGE_ROOT" \
+    --candidate-wheel "$CANDIDATE_WHEEL" --build-evidence "$BUILD_EVIDENCE" \
+    --candidate-evidence-root "$CANDIDATE_EVIDENCE_ROOT"
 fi
 
 [[ -d "$STAGE_ROOT" && ! -L "$STAGE_ROOT" ]] \

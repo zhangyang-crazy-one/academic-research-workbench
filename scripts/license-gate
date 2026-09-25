@@ -4,22 +4,36 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import configparser
+import csv
 import hashlib
 import importlib.metadata
+import io
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
+import tomllib
+import zipfile
+from email.parser import BytesParser
+from email.policy import default
 from pathlib import Path
 from typing import Any
 
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name, parse_wheel_filename
+from packaging.version import InvalidVersion, Version
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REQUIRED_WHEEL_LICENSE_FILES = frozenset({"LICENSE"})
 LICENSE_MAPPINGS = {
     "academic-research-skills": {
         "license": "CC-BY-NC-4.0",
@@ -53,6 +67,44 @@ def fail(message: str, status: int = 1) -> None:
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def package_tree_sha256(packages: list[str]) -> str:
+    checksum = hashlib.sha256()
+    for relative_root in packages:
+        source = PROJECT_ROOT / relative_root
+        for path in sorted(source.rglob("*")):
+            if not path.is_file() or path.suffix in {".pyc", ".pyo"} or "__pycache__" in path.parts:
+                continue
+            relative = path.relative_to(PROJECT_ROOT).as_posix()
+            checksum.update(relative.encode() + b"\0" + digest(path).encode() + b"\n")
+    return checksum.hexdigest()
+
+
+def wheel_source_map(packages: list[str]) -> dict[str, str]:
+    """Map each Hatchling package-root file to its wheel member name."""
+    mapping: dict[str, str] = {}
+    for relative_root in packages:
+        root = PROJECT_ROOT / relative_root
+        if not root.is_dir() or root.is_symlink():
+            fail(f"configured wheel package root is missing or unsafe: {relative_root}")
+        for path in root.rglob("*"):
+            if path.is_symlink():
+                fail(f"configured wheel package contains a symlink: {path}")
+            if not path.is_file() or path.suffix in {".pyc", ".pyo"}:
+                continue
+            relative = path.relative_to(root.parent)
+            # Hatchling's default selection ignores hidden paths and Python caches.
+            if any(part.startswith(".") or part == "__pycache__" for part in relative.parts):
+                continue
+            member = relative.as_posix()
+            source = path.relative_to(PROJECT_ROOT).as_posix()
+            if member in mapping:
+                fail(f"configured wheel package roots overlap: {member}")
+            mapping[member] = source
+    if not mapping:
+        fail("configured wheel package roots have no source files")
+    return mapping
 
 
 def tree_digest(root: Path) -> str:
@@ -117,9 +169,7 @@ def safe_reset_directory(path: Path) -> None:
     if path in {Path("/").resolve(), PROJECT_ROOT}:
         fail(f"refusing unsafe evidence root: {path}", 64)
     if path.exists():
-        if path.is_symlink() or not path.is_dir():
-            fail(f"unsafe evidence root: {path}", 64)
-        shutil.rmtree(path)
+        fail(f"candidate output root already exists: {path}", 64)
     path.mkdir(parents=True)
 
 
@@ -190,21 +240,25 @@ def native_environment(evidence_root: Path, work_root: Path) -> dict[str, str]:
     }
     for tool in ("python3", "npm", "scancode"):
         target = sys.executable if tool == "python3" else shutil.which(tool)
-        if target is None and (fallback := verified_fallbacks.get(tool)) is not None:
-            if fallback.is_file() and os.access(fallback, os.X_OK):
-                target = str(fallback)
+        if target is None and (fallback := verified_fallbacks.get(tool)) is not None and fallback.is_file() and os.access(fallback, os.X_OK):
+            target = str(fallback)
         if target is None:
             fail(f"required native-gate tool is unavailable: {tool}", 69)
         write_wrapper(wrapper_root / tool, target, invocation_log)
     environment = os.environ.copy()
     environment["PATH"] = f"{wrapper_root}{os.pathsep}{environment['PATH']}"
+    for key in tuple(environment):
+        if key.lower() in {"npm_config_omit", "npm_config_include", "npm_config_production"}:
+            del environment[key]
+    environment["npm_config_omit"] = "dev"
+    environment["npm_config_include"] = "prod"
     return environment
 
 
 def verify_inputs(source_manifest: Path, pre_vendor_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     verifier = PROJECT_ROOT / "scripts/verify-sources"
     result = subprocess.run(
-        [str(verifier)], cwd=PROJECT_ROOT, text=True, capture_output=True, check=False
+        [str(verifier), "--inputs-only"], cwd=PROJECT_ROOT, text=True, capture_output=True, check=False
     )
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
@@ -223,7 +277,7 @@ def verify_inputs(source_manifest: Path, pre_vendor_root: Path) -> tuple[dict[st
     return manifest, receipt
 
 
-def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def copy_component_licenses(manifest: dict[str, Any], output_root: Path) -> list[dict[str, Any]]:
     components = {item["id"]: item for item in manifest["components"]}
     records: list[dict[str, Any]] = []
     for component_id, mapping in LICENSE_MAPPINGS.items():
@@ -231,7 +285,7 @@ def copy_component_licenses(manifest: dict[str, Any]) -> list[dict[str, Any]]:
         if component is None:
             fail(f"source manifest omits required component: {component_id}")
         source = PROJECT_ROOT / mapping["source_path"]
-        destination = PROJECT_ROOT / mapping["staged_path"]
+        destination = output_root / mapping["staged_path"]
         declared = component["licenses"][0]
         if declared["path"] != mapping["source_path"] or declared["spdx"] != mapping["license"]:
             fail(f"license identity mismatch for {component_id}")
@@ -268,7 +322,7 @@ def distribution_license(distribution: importlib.metadata.Distribution) -> str:
 
 def installed_distributions() -> list[dict[str, str]]:
     """Capture this invocation's installed Python inventory as evidence only."""
-    records: dict[tuple[str, str], dict[str, str]] = {}
+    records: dict[tuple[str, str, str], dict[str, str]] = {}
     for distribution in importlib.metadata.distributions():
         name = distribution.metadata.get("Name")
         version = distribution.version
@@ -289,43 +343,386 @@ def installed_distributions() -> list[dict[str, str]]:
             "installed_content_sha256": content.hexdigest(),
         }
         normalized_name = re.sub(r"[-_.]+", "-", name).casefold()
-        key = (normalized_name, version)
-        previous = records.get(key)
-        if previous is not None and previous != record:
-            fail(
-                "conflicting installed distributions for "
-                f"{name}=={version}"
-            )
+        key = (normalized_name, version, record["installed_content_sha256"])
         records[key] = record
     return sorted(
         records.values(), key=lambda item: (item["name"].casefold(), item["version"])
     )
 
 
-def build_first_party_wheel(work_root: Path) -> dict[str, str]:
-    destination = work_root / "dist"
-    destination.mkdir()
-    build_python = PROJECT_ROOT / ".venv/bin/python"
-    if not build_python.is_file() or not os.access(build_python, os.X_OK):
-        fail("project environment missing; create .venv and install declared dependencies with uv pip", 66)
-    result = subprocess.run(
-        [str(build_python), "-m", "hatchling", "build", "--target", "wheel", "--directory", str(destination)],
-        cwd=PROJECT_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        sys.stderr.write(result.stderr)
-        fail("first-party wheel build failed", result.returncode)
-    wheels = sorted(destination.glob("academic_research_workbench-*.whl"))
-    if len(wheels) != 1:
-        fail("expected exactly one first-party wheel")
-    return {"file": wheels[0].name, "sha256": digest(wheels[0]), "version": "0.1.0"}
+def safe_member_name(name: str) -> bool:
+    parts = name.split("/")
+    return bool(name and not name.startswith("/") and "\\" not in name
+                and all(part not in {"", ".", ".."} for part in parts)
+                and not any(ord(char) < 32 or ord(char) == 127 for char in name)
+                and not re.match(r"^[A-Za-z]:", name))
+
+
+def check_python_version(observation: dict[str, Any], label: str) -> None:
+    try:
+        version = Version(observation["version"])
+    except (KeyError, TypeError, InvalidVersion):
+        fail(f"{label} Python version is invalid")
+    if version < Version("3.13") or version.is_prerelease or version.is_devrelease:
+        fail(f"{label} Python does not satisfy >=3.13")
+    if not isinstance(observation.get("executable"), str) or not observation["executable"].strip():
+        fail(f"{label} Python executable is missing")
+
+
+def check_uv_version(observation: dict[str, Any], label: str) -> None:
+    value = observation.get("version")
+    if not isinstance(value, str):
+        fail(f"{label} uv version is invalid")
+    parts = value.split()
+    try:
+        if len(parts) < 2 or parts[0] != "uv":
+            raise InvalidVersion(value)
+        Version(parts[1])
+    except InvalidVersion:
+        fail(f"{label} uv version is invalid")
+
+
+def check_inventory(rows: list[Any], label: str) -> dict[str, dict[str, str]]:
+    if not rows:
+        fail(f"{label} inventory is empty")
+    packages: dict[str, dict[str, str]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or any(not isinstance(row.get(key), str) or not row[key].strip()
+                                            for key in ("name", "version", "license", "installed_content_sha256")):
+            fail(f"{label} inventory contains incomplete rows")
+        try:
+            requirement = Requirement(row["name"])
+            version = Version(row["version"])
+        except (ValueError, InvalidVersion):
+            fail(f"{label} inventory has an invalid package name or version")
+        if requirement.name != row["name"] or requirement.extras or requirement.specifier or requirement.marker or version.is_devrelease:
+            fail(f"{label} inventory has an invalid package name or version")
+        if not re.fullmatch(r"[0-9a-f]{64}", row["installed_content_sha256"]):
+            fail(f"{label} inventory has an invalid SHA-256")
+        name = canonicalize_name(row["name"])
+        if name in packages:
+            fail(f"{label} inventory has duplicate normalized package names: {name}")
+        packages[name] = row
+    return packages
+
+
+def expected_metadata_requirements(project: dict[str, Any]) -> set[str]:
+    requirements = set(project.get("dependencies", []))
+    for extra, declarations in project.get("optional-dependencies", {}).items():
+        requirements.update(f"{declaration}; extra == '{extra}'" for declaration in declarations)
+    return requirements
+
+
+def expected_entry_points(project: dict[str, Any]) -> dict[str, dict[str, str]]:
+    if set(project.get("entry-points", {})) & {"console_scripts", "gui_scripts"}:
+        fail("pyproject entry point groups overlap dedicated script tables")
+    groups = {
+        "console_scripts": project.get("scripts", {}),
+        "gui_scripts": project.get("gui-scripts", {}),
+        **project.get("entry-points", {}),
+    }
+    return {group: entries for group, entries in groups.items() if entries}
+
+
+def validate_entry_points(content: bytes | None, project: dict[str, Any]) -> None:
+    expected = expected_entry_points(project)
+    if content is None:
+        if expected:
+            fail("wheel entry_points.txt is missing declared entry points")
+        return
+    try:
+        parser = configparser.ConfigParser(interpolation=None, strict=True)
+        parser.optionxform = str
+        parser.read_string(content.decode("utf-8"))
+    except (UnicodeError, configparser.Error) as error:
+        fail(f"wheel entry_points.txt is malformed: {error}")
+    actual = {group: dict(parser.items(group, raw=True)) for group in parser.sections()}
+    if parser.defaults() or actual != expected:
+        fail("wheel entry_points.txt differs from pyproject entry point declarations")
+
+
+def validate_dist_info(
+    archive: zipfile.ZipFile,
+    names: list[str],
+    prefix: str,
+    project: dict[str, Any],
+    sdist_names: set[str],
+    backend: dict[str, Any],
+    filename_tags: set[Any],
+) -> None:
+    members = {name.removeprefix(prefix) for name in names if name.startswith(prefix)}
+    standard = {"METADATA", "WHEEL", "RECORD"}
+    entry_points_name = prefix + "entry_points.txt"
+    expected_entries = expected_entry_points(project)
+    if bool(expected_entries) != ("entry_points.txt" in members):
+        fail("wheel entry_points.txt presence differs from pyproject declarations")
+    license_members = {name for name in members if name.startswith("licenses/")}
+    allowed = standard | license_members | ({"entry_points.txt"} if expected_entries else set())
+    if members != allowed:
+        fail(f"wheel has missing or unexpected dist-info members: {sorted(members ^ allowed)}")
+
+    metadata = BytesParser(policy=default).parsebytes(archive.read(prefix + "METADATA"))
+    wheel_info = BytesParser(policy=default).parsebytes(archive.read(prefix + "WHEEL"))
+    if metadata.defects or wheel_info.defects:
+        fail("wheel dist-info has malformed metadata fields")
+    allowed_metadata = {
+        "Metadata-Version", "Name", "Version", "Summary", "License-File",
+        "Requires-Python", "Requires-Dist", "Provides-Extra",
+    }
+    metadata_keys = list(metadata.keys())
+    if set(metadata_keys) - allowed_metadata:
+        fail(f"wheel METADATA has unexpected fields: {sorted(set(metadata_keys) - allowed_metadata)}")
+    for field in allowed_metadata - {"Requires-Dist", "Provides-Extra", "License-File"}:
+        if metadata_keys.count(field) > 1:
+            fail(f"wheel METADATA repeats singleton field: {field}")
+    expected_singletons = {
+        "Name": project["name"],
+        "Version": project["version"],
+        "Requires-Python": project["requires-python"],
+        "Summary": project.get("description"),
+    }
+    if any(metadata.get(key) != value for key, value in expected_singletons.items()):
+        fail("wheel package metadata differs from pyproject")
+    if metadata.get("Metadata-Version") not in {"2.4", "2.5"} or metadata.get_payload():
+        fail("wheel METADATA version or body is unexpected")
+    requirements = metadata.get_all("Requires-Dist", [])
+    extras = metadata.get_all("Provides-Extra", [])
+    if len(requirements) != len(set(requirements)) or set(requirements) != expected_metadata_requirements(project):
+        fail("wheel dependency declarations differ from pyproject")
+    if len(extras) != len(set(extras)) or set(extras) != set(project.get("optional-dependencies", {})):
+        fail("wheel optional dependency groups differ from pyproject")
+
+    license_files = metadata.get_all("License-File", [])
+    missing_licenses = REQUIRED_WHEEL_LICENSE_FILES - set(license_files)
+    if missing_licenses:
+        fail(f"required wheel license files are absent: {sorted(missing_licenses)}")
+    if len(license_files) != len(set(license_files)) or license_members != {f"licenses/{name}" for name in license_files}:
+        fail("wheel license files differ from METADATA declarations")
+    for name in license_files:
+        source = PROJECT_ROOT / name
+        if (not safe_member_name(name) or name not in sdist_names or source.is_symlink()
+                or not source.is_file() or archive.read(prefix + "licenses/" + name) != source.read_bytes()):
+            fail(f"wheel license file differs from current source: {name}")
+
+    wheel_keys = list(wheel_info.keys())
+    if set(wheel_keys) != {"Wheel-Version", "Generator", "Root-Is-Purelib", "Tag"}:
+        fail("wheel WHEEL has missing or unexpected fields")
+    if any(wheel_keys.count(field) != 1 for field in ("Wheel-Version", "Generator", "Root-Is-Purelib")):
+        fail("wheel WHEEL repeats a singleton field")
+    tags = wheel_info.get_all("Tag", [])
+    if (wheel_info.get("Wheel-Version") != "1.0"
+            or wheel_info.get("Generator") != f"{backend['name']} {backend['version']}"
+            or wheel_info.get("Root-Is-Purelib") != "true"
+            or len(tags) != len(set(tags))
+            or set(tags) != {str(tag) for tag in filename_tags}
+            or wheel_info.get_payload()):
+        fail("wheel backend metadata is inconsistent with builder observations")
+    validate_entry_points(archive.read(entry_points_name) if expected_entries else None, project)
+
+
+def validate_sdist(path: Path, project: dict[str, Any], package_roots: list[str]) -> set[str]:
+    prefix = f"{project['name'].replace('-', '_')}-{project['version']}/"
+    if path.name != prefix[:-1] + ".tar.gz":
+        fail("sdist filename differs from project identity")
+    source_names: set[str] = set()
+    links: dict[str, str] = {}
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            members = archive.getmembers()
+            if not members:
+                fail("sdist is empty")
+            for member in members:
+                name = member.name
+                if not safe_member_name(name) or not name.startswith(prefix):
+                    fail(f"sdist has an unsafe or foreign member: {name}")
+                relative = name[len(prefix):]
+                if not relative or relative in source_names or not safe_member_name(relative):
+                    fail(f"sdist has a duplicate or unsafe member: {name}")
+                source_names.add(relative)
+                if member.issym():
+                    if relative in {"PKG-INFO", "pyproject.toml", "build_hooks.py"}:
+                        fail(f"sdist metadata must be a regular file: {name}")
+                    source = PROJECT_ROOT / relative
+                    target = member.linkname
+                    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), target))
+                    if (not target or target.startswith("/") or "\\" in target
+                            or any(ord(char) < 32 or ord(char) == 127 for char in target)
+                            or not safe_member_name(resolved) or not source.is_symlink()
+                            or os.readlink(source) != target):
+                        fail(f"sdist has an unsafe or changed symlink: {name}")
+                    links[relative] = resolved
+                    continue
+                if not member.isfile():
+                    fail(f"sdist has a non-file member: {name}")
+                content = archive.extractfile(member)
+                if content is None:
+                    fail(f"sdist member cannot be read: {name}")
+                data = content.read()
+                if relative == "PKG-INFO":
+                    metadata = BytesParser(policy=default).parsebytes(data)
+                    if (metadata.get("Name") != project["name"] or metadata.get("Version") != project["version"]
+                            or metadata.get("Requires-Python") != project["requires-python"]
+                            or not metadata.get("Metadata-Version")
+                            or set(metadata.get_all("Requires-Dist", [])) != expected_metadata_requirements(project)
+                            or set(metadata.get_all("Provides-Extra", [])) != set(project.get("optional-dependencies", {}))):
+                        fail("sdist PKG-INFO identity differs from pyproject")
+                    continue
+                source = PROJECT_ROOT / relative
+                if source.is_symlink() or not source.is_file() or source.read_bytes() != data:
+                    fail(f"sdist source bytes differ from working tree: {relative}")
+    except (OSError, tarfile.TarError) as error:
+        fail(f"sdist is not a readable tar.gz archive: {error}")
+    for name, target in links.items():
+        if target not in source_names or target in links:
+            fail(f"sdist symlink target is absent or indirect: {name}")
+    if not {"PKG-INFO", "pyproject.toml", "build_hooks.py"}.issubset(source_names):
+        fail("sdist lacks required project metadata or build hook")
+    missing = set(wheel_source_map(package_roots).values()) - source_names
+    if missing:
+        fail(f"sdist lacks configured package source: {min(missing)}")
+    return source_names
+
+
+def validate_candidate(wheel: Path, evidence_path: Path, source_manifest: Path) -> tuple[dict[str, str], dict[str, Any]]:
+    if not wheel.is_file() or wheel.is_symlink():
+        fail("--wheel must name a direct regular file", 66)
+    evidence = read_json(evidence_path)
+    build = evidence.get("build")
+    artifacts = evidence.get("artifacts")
+    source = evidence.get("source_identity")
+    if not isinstance(build, dict) or not isinstance(artifacts, list) or not isinstance(source, dict):
+        fail("build evidence is missing required observations")
+    python = build.get("python")
+    backend = build.get("backend")
+    uv = build.get("uv")
+    inventory = build.get("inventory")
+    runtime_inventory = evidence.get("resolved_runtime_inventory")
+    runtime_environment = evidence.get("runtime_resolution_environment")
+    if not all((isinstance(python, dict), isinstance(backend, dict), isinstance(uv, dict), isinstance(inventory, list), isinstance(runtime_inventory, list))):
+        fail("build evidence is missing builder Python, uv, backend, or inventory")
+    if (
+        not isinstance(runtime_environment, dict)
+        or not isinstance(runtime_environment.get("python"), dict)
+        or not runtime_environment["python"].get("version")
+        or not runtime_environment["python"].get("executable")
+        or runtime_environment["python"]["executable"] == python.get("executable")
+        or not isinstance(runtime_environment.get("uv"), dict)
+        or not isinstance(runtime_environment.get("install_argv"), list)
+        or not runtime_environment["install_argv"]
+        or runtime_environment.get("inventory") != runtime_inventory
+    ):
+        fail("runtime resolution environment is missing or mixed with the builder")
+    check_python_version(python, "builder")
+    check_python_version(runtime_environment["python"], "runtime")
+    check_uv_version(uv, "builder")
+    check_uv_version(runtime_environment["uv"], "runtime")
+    if not python.get("version") or not python.get("executable") or backend.get("name") != "hatchling" or not backend.get("version") or not uv.get("version") or not build.get("argv"):
+        fail("build evidence has incomplete builder observations")
+    build_packages = check_inventory(inventory, "build")
+    runtime_packages = check_inventory(runtime_inventory, "runtime")
+    if build_packages.get("hatchling", {}).get("version") != backend["version"]:
+        fail("build inventory does not identify the actual backend")
+    for name in build_packages.keys() & runtime_packages.keys():
+        first, second = build_packages[name], runtime_packages[name]
+        if first["version"] == second["version"] and first != second:
+            fail(f"build and runtime inventories disagree on package identity: {name}")
+    project_config = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    observed_runtime = {name: row["version"] for name, row in runtime_packages.items()}
+    for declaration in project_config["project"]["dependencies"]:
+        requirement = Requirement(declaration)
+        if requirement.marker is not None and not requirement.marker.evaluate():
+            continue
+        version = observed_runtime.get(canonicalize_name(requirement.name))
+        if version is None or Version(version) not in requirement.specifier:
+            fail(f"resolved runtime inventory lacks a satisfying direct dependency: {requirement.name}")
+    package_roots = project_config["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
+    if source.get("source_manifest_sha256") != digest(source_manifest) or source.get("pyproject_sha256") != digest(PROJECT_ROOT / "pyproject.toml") or source.get("build_hook_sha256") != digest(PROJECT_ROOT / "build_hooks.py") or source.get("package_tree_sha256") != package_tree_sha256(package_roots):
+        fail("build source identity differs from current source inputs")
+    if build.get("requirements") != project_config["build-system"]["requires"]:
+        fail("build requirements differ from current declared requirements")
+    wheels = [row for row in artifacts if isinstance(row, dict) and row.get("kind") == "wheel"]
+    if len(wheels) != 1 or len({row.get("path") for row in artifacts if isinstance(row, dict)}) != len(artifacts):
+        fail("build evidence must identify exactly one unambiguous wheel")
+    row = wheels[0]
+    relative = row.get("path")
+    if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts or (evidence_path.parent / relative).resolve() != wheel.resolve():
+        fail("wheel path does not match build evidence")
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or artifact.get("kind") not in {"wheel", "sdist", "source_archive"}:
+            fail("unsupported candidate artifact")
+        path = artifact.get("path")
+        if not isinstance(path, str) or Path(path).is_absolute() or ".." in Path(path).parts:
+            fail("unsafe candidate artifact path")
+        candidate = evidence_path.parent / path
+        if not candidate.is_file() or candidate.is_symlink() or candidate.stat().st_size != artifact.get("size") or digest(candidate) != artifact.get("sha256"):
+            fail(f"candidate artifact size or digest mismatch: {path}")
+    sdists = [item for item in artifacts if item["kind"] == "sdist"]
+    if len(sdists) != 1 or source.get("sdist_sha256") != sdists[0]["sha256"]:
+        fail("source archive digest is missing or inconsistent")
+    project = project_config["project"]
+    sdist_names = validate_sdist(evidence_path.parent / sdists[0]["path"], project, package_roots)
+    try:
+        filename_name, filename_version, _, filename_tags = parse_wheel_filename(wheel.name)
+    except ValueError as error:
+        fail(f"invalid wheel filename: {error}")
+    if filename_name != canonicalize_name(project["name"]) or filename_version != Version(project["version"]):
+        fail("wheel filename package identity differs from pyproject")
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)) or any(not safe_member_name(name) for name in names):
+            fail("wheel has duplicate or unsafe members")
+        metadata_names = [name for name in names if name.endswith(".dist-info/METADATA")]
+        wheel_names = [name for name in names if name.endswith(".dist-info/WHEEL")]
+        record_names = [name for name in names if name.endswith(".dist-info/RECORD")]
+        if len(metadata_names) != len(wheel_names) or len(metadata_names) != len(record_names) or len(metadata_names) != 1:
+            fail("wheel must have exactly one METADATA, WHEEL, and RECORD")
+        prefix = metadata_names[0].removesuffix("METADATA")
+        if wheel_names[0] != prefix + "WHEEL" or record_names[0] != prefix + "RECORD":
+            fail("wheel dist-info members disagree")
+        if prefix != f"{project['name'].replace('-', '_')}-{project['version']}.dist-info/":
+            fail("wheel dist-info identity differs from filename")
+        source_map = wheel_source_map(package_roots)
+        package_members: set[str] = set()
+        for info in archive.infolist():
+            name = info.filename
+            if info.is_dir() or stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK:
+                fail(f"wheel has a non-file member: {name}")
+            if name.startswith(prefix):
+                continue  # Hatchling generates dist-info metadata and license files.
+            source_name = source_map.get(name)
+            if source_name is None:
+                fail(f"wheel member is outside configured package roots: {name}")
+            package_members.add(name)
+            source_path = PROJECT_ROOT / source_name
+            if source_name not in sdist_names or source_path.is_symlink() or not source_path.is_file() or archive.read(name) != source_path.read_bytes():
+                fail(f"wheel member is not bound to sdist and current source: {name}")
+        missing = set(source_map) - package_members
+        if missing:
+            fail(f"wheel lacks configured package source: {min(missing)}")
+        validate_dist_info(archive, names, prefix, project, sdist_names, backend, filename_tags)
+        records = list(csv.reader(io.StringIO(archive.read(record_names[0]).decode("utf-8"))))
+        record_map = {}
+        for item in records:
+            if len(item) != 3 or item[0] in record_map:
+                fail("wheel RECORD is malformed or duplicated")
+            record_map[item[0]] = item[1:]
+        if set(record_map) != set(names):
+            fail("wheel RECORD member set differs from archive")
+        for name in names:
+            checksum, size = record_map[name]
+            if name == record_names[0]:
+                if checksum or size:
+                    fail("wheel RECORD self-entry must be unhashed")
+                continue
+            content = archive.read(name)
+            actual = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode("ascii")
+            if checksum != f"sha256={actual}" or size != str(len(content)):
+                fail(f"wheel RECORD digest or size mismatch: {name}")
+    return {"file": wheel.name, "sha256": digest(wheel), "version": project["version"]}, evidence
 
 
 def generate_sbom(
-    evidence_root: Path,
+    output_root: Path,
     manifest: dict[str, Any],
     receipt: dict[str, Any],
     python_packages: list[dict[str, str]],
@@ -427,7 +824,7 @@ def generate_sbom(
         }
     sbom["components"] = sorted(components.values(), key=lambda item: item["bom-ref"])
     sbom["serialNumber"] = f"urn:uuid:{manifest['pre_vendor_receipt']['sha256'][:8]}-0000-4000-8000-{manifest['pre_vendor_receipt']['sha256'][8:20]}"
-    write_json(PROJECT_ROOT / "SBOM.cdx.json", sbom)
+    write_json(output_root / "SBOM.cdx.json", sbom)
     return sbom
 
 
@@ -435,6 +832,7 @@ def create_notices(
     upstream_notices: Path,
     manifest: dict[str, Any],
     python_packages: list[dict[str, str]],
+    output_root: Path,
 ) -> None:
     preserved_notices = upstream_notices.read_text(encoding="utf-8").rstrip("\n") + "\n"
     sections = [
@@ -448,13 +846,13 @@ def create_notices(
     file_base = components["file-base"]
     sections.extend(
         [
-            f"- `academic-research-skills` `{ars['version']}` — `{ars['licenses'][0]['spdx']}`; "
-            "bundled adapter source `skills/academic-research-suite/ars/`.\n",
-            f"- `experiment-agent` `{experiment['version']}` — `{experiment['licenses'][0]['spdx']}`; "
-            "bundled and reshaped inside `skills/academic-research-suite/ars/`.\n",
-            f"- `codebase-memory-mcp` (ARW `file-base` adapter) `{file_base['version']}` — "
-            f"`{file_base['licenses'][0]['spdx']}`;\n"
-            "  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.\n",
+            (f"- `academic-research-skills` `{ars['version']}` — `{ars['licenses'][0]['spdx']}`; "
+             "bundled adapter source `skills/academic-research-suite/ars/`.\n"),
+            (f"- `experiment-agent` `{experiment['version']}` — `{experiment['licenses'][0]['spdx']}`; "
+             "bundled and reshaped inside `skills/academic-research-suite/ars/`.\n"),
+            (f"- `codebase-memory-mcp` (ARW `file-base` adapter) `{file_base['version']}` — "
+             f"`{file_base['licenses'][0]['spdx']}`;\n"
+             "  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.\n"),
         ]
     )
     sections.append("\n## Ordered local patches\n")
@@ -470,12 +868,12 @@ def create_notices(
             preserved_notices,
         ]
     )
-    (PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").write_text("".join(sections), encoding="utf-8")
+    (output_root / "THIRD_PARTY_NOTICES.md").write_text("".join(sections), encoding="utf-8")
 
 
-def refresh_technical_evidence_hashes() -> None:
-    path = PROJECT_ROOT / "supply-chain/use-distribution.json"
-    use_distribution = read_json(path)
+def refresh_technical_evidence_hashes(output_root: Path) -> None:
+    path = output_root / "supply-chain/use-distribution.json"
+    use_distribution = read_json(PROJECT_ROOT / "supply-chain/use-distribution.json")
     entries = use_distribution.get("evidence_hashes")
     if not isinstance(entries, list) or not entries:
         fail("use-distribution technical evidence hashes are absent")
@@ -495,7 +893,7 @@ def refresh_technical_evidence_hashes() -> None:
         if relative not in expected_paths:
             fail(f"use-distribution technical evidence path is unexpected: {relative}")
         paths.append(relative)
-        source = PROJECT_ROOT / relative
+        source = PROJECT_ROOT / relative if relative == "vendor/source-manifest.json" else output_root / relative
         if source.is_symlink() or not source.is_file():
             fail(f"use-distribution technical evidence is absent or unsafe: {relative}")
         refreshed.append({**entry, "sha256": digest(source)})
@@ -513,8 +911,8 @@ def refresh_technical_evidence_hashes() -> None:
     write_json(path, use_distribution)
 
 
-def classify_release(component_licenses: list[dict[str, Any]]) -> dict[str, Any]:
-    use_distribution = read_json(PROJECT_ROOT / "supply-chain/use-distribution.json")
+def classify_release(component_licenses: list[dict[str, Any]], output_root: Path) -> dict[str, Any]:
+    use_distribution = read_json(output_root / "supply-chain/use-distribution.json")
     unresolved = (
         use_distribution.get("intended_use", {}).get("status") != "declared"
         or use_distribution.get("distribution_class", {}).get("status") != "declared"
@@ -556,31 +954,44 @@ def classify_release(component_licenses: list[dict[str, Any]]) -> dict[str, Any]
         "use_distribution_path": "supply-chain/use-distribution.json",
         "private_repository_is_noncommercial_evidence": False,
     }
-    write_json(PROJECT_ROOT / "supply-chain/license-verdict.json", verdict)
+    write_json(output_root / "supply-chain/license-verdict.json", verdict)
     return verdict
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-manifest", required=True)
-    parser.add_argument("--pre-vendor-evidence", required=True)
-    parser.add_argument("--evidence-root", required=True)
+    parser.add_argument("--source-manifest", default="vendor/source-manifest.json")
+    parser.add_argument("--pre-vendor-evidence", default="build/evidence/phase-01/pre-vendor-license")
+    parser.add_argument("--wheel", required=True)
+    parser.add_argument("--build-evidence", required=True)
+    parser.add_argument("--output-root", required=True)
     args = parser.parse_args()
 
     source_manifest_path = resolve_input(args.source_manifest)
     pre_vendor_root = resolve_input(args.pre_vendor_evidence)
-    evidence_root = resolve_input(args.evidence_root)
-    safe_reset_directory(evidence_root)
+    wheel = resolve_input(args.wheel)
+    build_evidence_path = resolve_input(args.build_evidence)
+    output_root = resolve_input(args.output_root)
+    if output_root.exists() or output_root in {Path("/"), PROJECT_ROOT}:
+        fail("candidate output root must be fresh and safe", 64)
     manifest, receipt = verify_inputs(source_manifest_path, pre_vendor_root)
-    component_licenses = copy_component_licenses(manifest)
+    first_party, build_evidence = validate_candidate(wheel, build_evidence_path, source_manifest_path)
 
     file_base_root = PROJECT_ROOT / "vendor/sources/file-base"
     for relative in NATIVE_TOOL_PATHS:
         if not (file_base_root / relative).is_file():
             fail(f"preserved native legal tool is absent: {relative}")
 
-    with tempfile.TemporaryDirectory(prefix="arw-license-gate.") as temporary:
-        work_root = Path(temporary)
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".arw-candidate-gate.", dir=output_root.parent) as temporary:
+        candidate_root = Path(temporary) / "output"
+        candidate_root.mkdir()
+        evidence_root = candidate_root / "license-evidence"
+        evidence_root.mkdir()
+        work_root = Path(temporary) / "work"
+        work_root.mkdir()
+        native_copy = work_root / "file-base"
+        shutil.copytree(file_base_root, native_copy, symlinks=True, ignore=shutil.ignore_patterns("node_modules", "__pycache__", ".pytest_cache"))
         environment = native_environment(evidence_root, work_root)
         commands = [
             run_capture(
@@ -588,7 +999,7 @@ def main() -> None:
                 1,
                 "native-gate-selftest",
                 ["./scripts/license-gate.sh", "--selftest"],
-                cwd=file_base_root,
+                cwd=native_copy,
                 environment=environment,
             ),
             run_capture(
@@ -596,7 +1007,7 @@ def main() -> None:
                 2,
                 "native-gate",
                 ["./scripts/license-gate.sh"],
-                cwd=file_base_root,
+                cwd=native_copy,
                 environment=environment,
             ),
         ]
@@ -608,30 +1019,18 @@ def main() -> None:
                 3,
                 "notice-generator",
                 ["./scripts/gen-third-party-notices.sh", str(upstream_notices)],
-                cwd=file_base_root,
+                cwd=native_copy,
                 environment=environment,
             )
         )
-        shutil.rmtree(file_base_root / "graph-ui/node_modules", ignore_errors=True)
-        python_packages = installed_distributions()
-        first_party = build_first_party_wheel(work_root)
-        sbom = generate_sbom(evidence_root, manifest, receipt, python_packages, first_party)
-
-    verifier = subprocess.run(
-        [str(PROJECT_ROOT / "scripts/verify-sources")],
-        cwd=PROJECT_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if verifier.returncode != 0:
-        sys.stderr.write(verifier.stderr)
-        fail("native legal tooling changed a manifest-bound source")
-
-    create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, python_packages)
-    refresh_technical_evidence_hashes()
-    verdict = classify_release(component_licenses)
-    inventory = {
+        package_rows = [*build_evidence["build"]["inventory"], *build_evidence["resolved_runtime_inventory"]]
+        python_packages = sorted({(row["name"].lower(), row["version"]): row for row in package_rows}.values(), key=lambda row: (row["name"].lower(), row["version"]))
+        component_licenses = copy_component_licenses(manifest, candidate_root)
+        sbom = generate_sbom(candidate_root, manifest, receipt, python_packages, first_party)
+        create_notices(evidence_root / "generated/THIRD_PARTY_NOTICES.md", manifest, python_packages, candidate_root)
+        refresh_technical_evidence_hashes(candidate_root)
+        verdict = classify_release(component_licenses, candidate_root)
+        inventory = {
         "schema_version": "1.0.0",
         "technical_qualification": "PASS",
         "source_manifest": {
@@ -639,15 +1038,20 @@ def main() -> None:
             "sha256": digest(source_manifest_path),
         },
         "pre_vendor_receipt": manifest["pre_vendor_receipt"],
+        "source_verification": "manifest-and-source-inputs; native binary is verified at staging",
         "component_licenses": component_licenses,
         "patches": manifest["patches"],
         "python_packages_observed": python_packages,
+        "build_evidence": {"path": str(build_evidence_path), "sha256": digest(build_evidence_path)},
+        "build_observation": build_evidence["build"],
+        "runtime_resolution_environment": build_evidence["runtime_resolution_environment"],
+        "validation_environment": {"python": sys.version.split()[0], "python_packages_observed": installed_distributions()},
         "declared_artifacts": manifest["declared_artifacts"],
         "file_base_legal_inputs": next(
             item["legal_inputs"] for item in manifest["components"] if item["id"] == "file-base"
         ),
         "first_party_wheel": first_party,
-        "sbom": {"path": "SBOM.cdx.json", "sha256": digest(PROJECT_ROOT / "SBOM.cdx.json")},
+        "sbom": {"path": "SBOM.cdx.json", "sha256": digest(candidate_root / "SBOM.cdx.json")},
         "native_file_base_gate": {
             "entrypoint": "vendor/sources/file-base/scripts/license-gate.sh",
             "technical_qualification": "PASS",
@@ -655,12 +1059,12 @@ def main() -> None:
             "commands": commands,
         },
         "release_qualification": verdict["release_qualification"],
-    }
-    write_json(evidence_root / "inventory.json", inventory)
-    write_json(evidence_root / "verdict.json", verdict)
-    write_json(
-        evidence_root / "inventory-diff.json",
-        {
+        }
+        write_json(evidence_root / "inventory.json", inventory)
+        write_json(evidence_root / "verdict.json", verdict)
+        write_json(
+            evidence_root / "inventory-diff.json",
+            {
             "missing": [],
             "unexpected": [],
             "pre_vendor_legal_input_count": len(receipt["legal_inputs"]),
@@ -668,8 +1072,11 @@ def main() -> None:
             "python_package_count": len(python_packages),
             "patch_count": len(manifest["patches"]),
             "sbom_component_count": len(sbom["components"]),
-        },
-    )
+            },
+        )
+        if digest(wheel) != first_party["sha256"]:
+            fail("candidate wheel changed during license gate")
+        os.replace(candidate_root, output_root)
     print("license gate: technical PASS; release " + verdict["release_qualification"])
 
 

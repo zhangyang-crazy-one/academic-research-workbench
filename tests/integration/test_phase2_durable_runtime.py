@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -52,6 +53,28 @@ class StagedHarness:
         self.cwd.mkdir(parents=True)
         self.primary_codex = tmp_path / "codex-primary"
         self.fresh_codex = tmp_path / "codex-fresh-replay"
+        self.network_environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key.startswith(("PIP_INDEX_", "UV_INDEX_"))
+            or key
+            in {
+                "PIP_EXTRA_INDEX_URL",
+                "UV_DEFAULT_INDEX",
+                "UV_INDEX",
+                "HTTPS_PROXY",
+                "HTTP_PROXY",
+                "NO_PROXY",
+                "ALL_PROXY",
+                "SSL_CERT_FILE",
+                "SSL_CERT_DIR",
+            }
+        }
+        self.network_values = sorted(
+            {value for value in self.network_environment.values() if value},
+            key=len,
+            reverse=True,
+        )
         if not configured_stage:
             staged = subprocess.run(
                 [
@@ -59,6 +82,7 @@ class StagedHarness:
                     "--clean",
                     "--stage-root",
                     str(self.stage_root),
+                    *candidate_stage_args(),
                 ],
                 cwd=self.cwd,
                 env=self.environment(),
@@ -66,7 +90,7 @@ class StagedHarness:
                 capture_output=True,
                 check=False,
             )
-            assert staged.returncode == 0, staged.stderr
+            assert staged.returncode == 0, f"stage-plugin exited {staged.returncode}"
         assert (self.stage_root / "bin/arw").is_file()
         self.command_number = 0
 
@@ -81,12 +105,18 @@ class StagedHarness:
             "CODEX_HOME": str(self.fresh_codex if fresh else self.primary_codex),
             "PATH": os.environ["PATH"],
             "PYTHONNOUSERSITE": "1",
-            "PIP_NO_INDEX": "1",
-            "UV_OFFLINE": "1",
+            **self.network_environment,
         }
         if failpoint is not None:
             value["ARW_TEST_FAILPOINT"] = failpoint
+        assert "PIP_NO_INDEX" not in value
+        assert "UV_OFFLINE" not in value
         return value
+
+    def redact_network_values(self, output: str) -> str:
+        for value in self.network_values:
+            output = output.replace(value, "[REDACTED_NETWORK]")
+        return output
 
     def run(
         self,
@@ -107,29 +137,37 @@ class StagedHarness:
             capture_output=True,
             check=False,
         )
+        result.stdout = self.redact_network_values(result.stdout)
+        result.stderr = self.redact_network_values(result.stderr)
         record = self.evidence_root / "commands" / f"{self.command_number:02d}-{label}"
         _write_json(
             record / "command.json",
             {
-                "argv": argv,
-                "cwd": str(self.cwd),
+                "argv": [self.redact_network_values(argument) for argument in argv],
+                "cwd": self.redact_network_values(str(self.cwd)),
                 "environment": {
-                    key: environment[key]
+                    key: self.redact_network_values(environment[key])
                     for key in (
                         "ARW_TEST_FAILPOINT",
                         "CODEX_HOME",
-                        "PIP_NO_INDEX",
                         "PYTHONNOUSERSITE",
-                        "UV_OFFLINE",
                     )
                     if key in environment
                 },
             },
         )
-        (record / "stdout.log").write_text(result.stdout, encoding="utf-8")
-        (record / "stderr.log").write_text(result.stderr, encoding="utf-8")
+        (record / "stdout.log").write_text(
+            self.redact_network_values(result.stdout), encoding="utf-8"
+        )
+        (record / "stderr.log").write_text(
+            self.redact_network_values(result.stderr), encoding="utf-8"
+        )
         _write_json(record / "exit.json", {"returncode": result.returncode})
-        assert result.returncode == expected, (label, result.stdout, result.stderr)
+        assert result.returncode == expected, (
+            label,
+            self.redact_network_values(result.stdout),
+            self.redact_network_values(result.stderr),
+        )
         payload: object | None = None
         if result.stdout.strip():
             payload = json.loads(result.stdout)
@@ -194,8 +232,8 @@ def _assert_rejection_unchanged(
 
 def test_staged_projection_free_durable_runtime_design_intent(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
-    from arw.kernel.policy.schema_registry import validate_instance
     from arw.kernel.ledger.workflows import CORE_WORKFLOW
+    from arw.kernel.policy.schema_registry import validate_instance
 
     harness = StagedHarness(tmp_path)
     run_root = tmp_path / "run"

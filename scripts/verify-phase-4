@@ -31,7 +31,7 @@ STAGE_ROOT = PROJECT_ROOT / "build/stage/phase 04 academic-research-workbench"
 _PROJECT_PYTHON = PROJECT_ROOT / ".venv/bin/python"
 PYTHON = _PROJECT_PYTHON if _PROJECT_PYTHON.is_file() else Path(sys.executable).resolve()
 
-# The repository uses a frozen virtual environment.  Keep direct execution
+# The repository uses a range-resolved virtual environment. Keep direct execution
 # portable while ensuring the verifier's in-process schema validation uses the
 # same dependency set as its subprocess checks.
 if __name__ == "__main__" and _PROJECT_PYTHON.is_file() and Path(sys.executable) != _PROJECT_PYTHON:
@@ -166,6 +166,15 @@ class VerificationError(RuntimeError):
     def __init__(self, message: str, code: int = 70) -> None:
         super().__init__(message)
         self.code = code
+
+
+def candidate_stage_args() -> list[str]:
+    names = ("ARW_CANDIDATE_WHEEL", "ARW_BUILD_EVIDENCE", "ARW_CANDIDATE_EVIDENCE_ROOT")
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        raise VerificationError(f"gated candidate inputs are required: {', '.join(missing)}", 64)
+    return ["--candidate-wheel", os.environ[names[0]], "--build-evidence", os.environ[names[1]],
+            "--candidate-evidence-root", os.environ[names[2]]]
 
 
 def canonical(value: object) -> bytes:
@@ -1051,7 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
                         str(STAGE_ROOT),
                         "--evidence-root",
                         str(root / "stage"),
-                    ]
+                    ] + candidate_stage_args()
                 )
                 + (["--integration-lock", str(args.integration_lock.resolve())] if args.integration_lock else []),
                 True,

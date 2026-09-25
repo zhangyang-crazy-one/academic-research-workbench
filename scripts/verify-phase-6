@@ -21,7 +21,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_BASE = (PROJECT_ROOT / "build/evidence").resolve()
 DEFAULT_EVIDENCE_ROOT = EVIDENCE_BASE / "phase-06"
@@ -57,6 +56,15 @@ PRIOR_TESTS = (
 
 class VerificationError(RuntimeError):
     pass
+
+
+def candidate_stage_args() -> list[str]:
+    names = ("ARW_CANDIDATE_WHEEL", "ARW_BUILD_EVIDENCE", "ARW_CANDIDATE_EVIDENCE_ROOT")
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        raise VerificationError(f"gated candidate inputs are required: {', '.join(missing)}")
+    return ["--candidate-wheel", os.environ[names[0]], "--build-evidence", os.environ[names[1]],
+            "--candidate-evidence-root", os.environ[names[2]]]
 
 
 def digest_bytes(data: bytes) -> str:
@@ -177,8 +185,8 @@ def observed_identities(root: Path) -> dict[str, Any]:
         "schema_registry": optional(PROJECT_ROOT / "src/arw/kernel/policy/schema_registry.py"),
         "schema_tree_sha256": digest_bytes(b"".join(digest_file(p).encode() for p in sorted((PROJECT_ROOT / "schemas/v1").glob("*.json")))),
         "source_manifest": optional(PROJECT_ROOT / "vendor/source-manifest.json"),
-        "sbom": optional(PROJECT_ROOT / "SBOM.cdx.json"),
-        "license_verdict": optional(PROJECT_ROOT / "supply-chain/license-verdict.json"),
+        "sbom": optional(Path(os.environ["ARW_CANDIDATE_EVIDENCE_ROOT"]) / "SBOM.cdx.json"),
+        "license_verdict": optional(Path(os.environ["ARW_CANDIDATE_EVIDENCE_ROOT"]) / "supply-chain/license-verdict.json"),
         "integration_lock": {"path": str(lock), "sha256": digest_bytes(lock_raw)},
         "codex_cli": "unavailable",
         "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -200,7 +208,7 @@ def stage_inventory(root: Path, stage: Path) -> dict[str, Any]:
             raise VerificationError(f"symlink in stage: {path.relative_to(stage)}")
         if path.is_file():
             relative = path.relative_to(stage).as_posix()
-            if re.search(r"(^|/)(?:runs?|papers?|private|credentials?|receipts?|indexes?|generations?|extractions?)(?:/|$)|\.(?:db|sqlite3?|pem|key)$", relative, re.I):
+            if re.search(r"(^|/)(?:runs?|papers?|private|credentials?|receipts?|indexes?|generations?|extractions?)(?:/|$)|\.(?:db|sqlite3?|pem|key)$", relative, re.IGNORECASE):
                 raise VerificationError(f"private/generated payload in stage: {relative}")
             paths.append({"path": relative, "sha256": digest_file(path)})
     required = {
@@ -263,13 +271,15 @@ def main() -> int:
     args = parser.parse_args()
     root: Path | None = None
     try:
+        candidate_stage_args()
         root = owned_root(args.evidence_root, clean=args.clean)
         write_json(root / "preflight.json", {"schema_version": "1.0.0", "phase": "06", "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "evidence_root": str(root)})
         identities = observed_identities(root)
         lock_path = Path(identities["integration_lock"]["path"])
         shutil.copyfile(lock_path, root / "integration-lock.json")
         command(root, "source-verification", ["./scripts/verify-sources", "--inputs-only"])
-        license_path = PROJECT_ROOT / "supply-chain/license-verdict.json"
+        candidate_stage_args()
+        license_path = Path(os.environ["ARW_CANDIDATE_EVIDENCE_ROOT"]) / "supply-chain/license-verdict.json"
         try:
             license_verdict = json.loads(license_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -284,14 +294,16 @@ def main() -> int:
         stage = PROJECT_ROOT / "build/stage/academic-research-workbench"
         stage_evidence = root / "stage"
         try:
-            command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence), "--integration-lock", str(lock_path)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
+            command(root, "stage-build", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence), "--integration-lock", str(lock_path), *candidate_stage_args()], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
         except VerificationError as lock_error:
             # Preserve a complete diagnostic stage when the retained lock is
             # stale.  The unlocked build is never qualified; it only permits
             # exact wheel/source/hook/license drift evidence to be retained.
             try:
-                command(root, "stage-build-unlocked-diagnostic", ["./scripts/stage-plugin", "--clean", "--stage-root", str(stage), "--evidence-root", str(stage_evidence)], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
-                write_json(root / "integration-lock-drift.json", compare_lock_to_stage(lock_path, stage))
+                diagnostic_stage = root / "unlocked-diagnostic-stage"
+                diagnostic_evidence = root / "unlocked-diagnostic-evidence"
+                command(root, "stage-build-unlocked-diagnostic", ["./scripts/stage-plugin", "--stage-root", str(diagnostic_stage), "--evidence-root", str(diagnostic_evidence), *candidate_stage_args()], env={"ARW_STAGE_TMP_ROOT": str(PHASE_TMP / "stage")})
+                write_json(root / "integration-lock-drift.json", compare_lock_to_stage(lock_path, diagnostic_stage))
             except (VerificationError, OSError, ValueError) as diagnostic_error:
                 write_json(root / "integration-lock-drift.json", {"technical_qualification": "BLOCKED", "error": str(diagnostic_error)})
             drift = {}

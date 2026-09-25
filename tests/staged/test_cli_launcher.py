@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
 FORBIDDEN_FRAGMENTS = (
@@ -41,7 +43,7 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
     }
 
     staged = subprocess.run(
-        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        [str(stage_script), "--clean", "--stage-root", str(stage_root), *candidate_stage_args()],
         cwd=unrelated_cwd,
         env=environment,
         text=True,
@@ -138,7 +140,7 @@ def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
     }
 
     staged = subprocess.run(
-        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        [str(stage_script), "--clean", "--stage-root", str(stage_root), *candidate_stage_args()],
         cwd=tmp_path,
         env=environment,
         text=True,

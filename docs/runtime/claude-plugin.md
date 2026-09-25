@@ -9,15 +9,26 @@ does **not** claim `isolated_codex_exec` host parity for Phase 4 orchestration.
 ## Build
 
 ```bash
-# Optional: rebuild the Codex-positive allowlist stage first
-./scripts/stage-plugin --clean
+# Build and gate one candidate as described in README.md, then stage its exact wheel
+./scripts/stage-plugin --clean \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001
 
 # Transform stage → Claude plugin + local marketplace
 ./scripts/create-claude-marketplace
 
-# Or stage then transform in one step:
-./scripts/create-claude-marketplace --stage
+# Or pass the same three paths through the staging wrapper:
+./scripts/create-claude-marketplace --stage \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001
 ```
+
+The candidate wheel is built once. Staging, the Claude transform, and install
+checks consume its recorded digest without a replacement build. Build, gate,
+and install inventories describe their own environments and do not pin future
+dependency resolution.
 
 Outputs:
 

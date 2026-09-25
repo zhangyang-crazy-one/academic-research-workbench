@@ -47,11 +47,16 @@ EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
 [[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe evidence root" 64
 mkdir -p "$EVIDENCE_ROOT"
+[[ -n "${ARW_CANDIDATE_WHEEL:-}" && -n "${ARW_BUILD_EVIDENCE:-}" && -n "${ARW_CANDIDATE_EVIDENCE_ROOT:-}" ]] \
+  || fail "set ARW_CANDIDATE_WHEEL, ARW_BUILD_EVIDENCE, and ARW_CANDIDATE_EVIDENCE_ROOT to the gated candidate" 64
 
 "$PROJECT_ROOT/scripts/stage-plugin" \
   --clean \
   --stage-root "$PROJECT_ROOT/build/stage/academic-research-workbench" \
-  --evidence-root "$EVIDENCE_ROOT/stage-final"
+  --evidence-root "$EVIDENCE_ROOT/stage-final" \
+  --candidate-wheel "$ARW_CANDIDATE_WHEEL" \
+  --build-evidence "$ARW_BUILD_EVIDENCE" \
+  --candidate-evidence-root "$ARW_CANDIDATE_EVIDENCE_ROOT"
 
 IDENTITY="$PROJECT_ROOT/build/stage/academic-research-workbench/share/arw/build-identity.json"
 [[ -f "$IDENTITY" && ! -L "$IDENTITY" ]] || fail "stage did not produce build identity" 70
@@ -87,7 +92,7 @@ identity_path = Path(sys.argv[5]).resolve()
 identity_sha256 = sys.argv[6]
 identity = json.loads(identity_path.read_text(encoding="utf-8"))
 license_verdict = json.loads(
-    (project_root / "supply-chain/license-verdict.json").read_text(encoding="utf-8")
+    (project_root / "build/stage/academic-research-workbench/supply-chain/license-verdict.json").read_text(encoding="utf-8")
 )
 
 required = {

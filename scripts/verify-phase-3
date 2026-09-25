@@ -124,7 +124,10 @@ run_step stage \
   "$PROJECT_ROOT/scripts/stage-plugin" \
   --clean \
   --stage-root "$STAGE_ROOT" \
-  --evidence-root "$EVIDENCE_ROOT/stage"
+  --evidence-root "$EVIDENCE_ROOT/stage" \
+  --candidate-wheel "${ARW_CANDIDATE_WHEEL:?set ARW_CANDIDATE_WHEEL to the gated wheel}" \
+  --build-evidence "${ARW_BUILD_EVIDENCE:?set ARW_BUILD_EVIDENCE to the candidate build evidence}" \
+  --candidate-evidence-root "${ARW_CANDIDATE_EVIDENCE_ROOT:?set ARW_CANDIDATE_EVIDENCE_ROOT to the gate output}"
 run_step phase-tests \
   "$PYTHON" -m pytest -q \
   tests/unit/test_file_models.py \
