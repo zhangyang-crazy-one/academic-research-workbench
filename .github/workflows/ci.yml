@@ -87,12 +87,7 @@ jobs:
           UV_OFFLINE: "1"
         run: >-
           .venv/bin/python -m pytest -q
-          tests/integration/test_source_materialization.py::
-          tests/integration/test_source_materialization.py::\
-          test_exact_snapshots_patch_and_canonical_license_paths_are_\
-          materialized
-          tests/integration/test_source_materialization.py::
-          test_materializer_tree_digest_uses_the_manifest_wire_encoding
+          tests/integration/test_source_materialization.py
       - name: Run v2 compatibility baseline
         env:
           PYTHONNOUSERSITE: "1"
