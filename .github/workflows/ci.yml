@@ -409,7 +409,7 @@ jobs:
           ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
             ./scripts/offline-exec \
             --evidence-root build/evidence/ci-native-sanitized \
-            ./scripts/build-file-base --clean --ci-ephemeral
+            ./scripts/build-file-base --clean --ci-ephemeral \
               --run-upstream-tests --sanitizers asan,ubsan
       - name: Build native test binary under network denial
         if: github.event_name != 'schedule'
@@ -421,16 +421,14 @@ jobs:
       - name: Enforce direct native confinement and admin regressions
         env:
           ARW_STRICT_PREREQS: '1'
-        run: |
-          .venv/bin/python -m pytest -q \
-            tests/integration/test_mcp_confinement.py::\
-            test_direct_native_confinement_matrix \
-            tests/integration/test_files_admin.py::
-            test_parent_only_admin_commands_build_complete_sibling_generation \
-            tests/integration/test_files_admin.py::
-            tests/integration/test_files_admin.py::\
-            test_native_builder_attests_closed_candidate_and_rejects_\
-            unsafe_inputs
+        run: >-
+          .venv/bin/python -m pytest -q
+          tests/integration/test_mcp_confinement.py
+          tests/integration/test_files_admin.py -k
+          "test_direct_native_confinement_matrix or
+          test_parent_only_admin_commands_build_complete_sibling_generation or
+          test_native_builder_attests_closed_candidate_and_rejects_
+          unsafe_inputs"
 
   macos-core:
     name: macOS Tier 2 core
