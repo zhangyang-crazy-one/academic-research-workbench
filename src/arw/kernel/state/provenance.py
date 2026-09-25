@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter, model_validator
@@ -52,17 +53,53 @@ class ByteChunk(StrictModel):
         return self
 
 
+class PdfLocation(StrictModel):
+    schema_version: Literal["arw.pdf-location.v1"]
+    kind: Literal["pdf_page", "pdf_paragraph", "pdf_section", "pdf_region", "reference_entry"]
+    page: int = Field(ge=1)
+    start: int = Field(ge=0)
+    end: int = Field(ge=1)
+    label: str | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    pdf_source_path: str = Field(min_length=1)
+    pdf_sha256: Sha256
+    extraction_manifest_path: str = Field(min_length=1)
+    extraction_manifest_sha256: Sha256
+    extractor_name: Literal["pypdf", "grobid", "docling"]
+    extractor_version: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def coherent(self):
+        if self.end <= self.start:
+            raise ValueError("PDF byte range is empty or reversed")
+        if self.kind == "pdf_region" and (self.bbox is None or self.extractor_name == "pypdf"):
+            raise ValueError("PDF region requires structural coordinates from an extractor")
+        if self.kind == "reference_entry" and not self.label:
+            raise ValueError("reference entry requires its reference ID")
+        if self.bbox is not None and (self.extractor_name == "pypdf" or
+                                      not all(math.isfinite(value) for value in self.bbox) or
+                                      self.bbox[2] <= self.bbox[0] or self.bbox[3] <= self.bbox[1]):
+            raise ValueError("invalid or unsupported PDF coordinates")
+        return self
+
+
 class SourceLocator(StrictModel):
-    schema_version: Literal["arw.source-locator.v1"]
+    schema_version: Literal["arw.source-locator.v1", "arw.source-locator.v2"]
     source_artifact_id: StableRuntimeId
     source_sha256: Sha256
     source_event_id: EventId
     source_event_sha256: Sha256
     producing_activity_id: StableRuntimeId
     location: Annotated[
-        LineRange | TextPage | MarkdownSection | ByteChunk, Field(discriminator="kind")
+        LineRange | TextPage | MarkdownSection | ByteChunk | PdfLocation, Field(discriminator="kind")
     ]
     quote_sha256: Sha256
+
+    @model_validator(mode="after")
+    def location_version(self):
+        if isinstance(self.location, PdfLocation) != (self.schema_version == "arw.source-locator.v2"):
+            raise ValueError("PDF locations require source locator v2")
+        return self
 
 
 class ProvenanceRecord(StrictModel):

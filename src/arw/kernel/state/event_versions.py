@@ -1,6 +1,13 @@
 """Additive event-reader migrations; immutable historical bytes are never rewritten."""
 
 MIGRATIONS = (
+    (4, "1.4.0", (
+        "execution_provenance.context_accepted",
+        "execution_provenance.dataset_metadata_accepted",
+        "execution_provenance.action_started",
+        "execution_provenance.action_finished",
+        "execution_provenance.artifact_bound",
+    )),
     (3, "1.3.0", ('learning_observation_recorded', 'research_heuristic_proposed', 'research_heuristic_evaluated', 'research_heuristic_qualified', 'research_heuristic_rejected', 'research_heuristic_promoted', 'research_heuristic_superseded')),
     (2, '1.2.0', (
         'research_memory_created', 'research_handoff_created', 'research_memory_superseded',

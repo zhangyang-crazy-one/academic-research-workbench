@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export ARW_STRICT_PREREQS=1
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 EVIDENCE_ROOT="$PROJECT_ROOT/build/evidence/phase-03"

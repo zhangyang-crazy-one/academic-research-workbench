@@ -45,6 +45,40 @@ def build_parser() -> argparse.ArgumentParser:
         description="Academic Research Workbench control plane.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    citation = subparsers.add_parser("citation", help="Check retained citation responses or propose a citation gate.")
+    citation_actions = citation.add_subparsers(dest="citation_action", required=True)
+    check = citation_actions.add_parser("check")
+    check.add_argument("--reference", required=True, type=Path)
+    check.add_argument("--provider", required=True, choices=("crossref", "openalex", "dblp", "arxiv"))
+    check.add_argument("--store", required=True, type=Path)
+    check.add_argument("--observed-at")
+    check.add_argument("--batch-id", help="Shared ID for one complete multi-provider check batch.")
+    source = check.add_mutually_exclusive_group(required=True)
+    source.add_argument("--response", type=Path)
+    source.add_argument("--allow-network", action="store_true")
+    gate = citation_actions.add_parser("gate")
+    gate.add_argument("--reference", required=True, type=Path)
+    gate.add_argument("--use", required=True, type=Path)
+    gate.add_argument("--store", required=True, type=Path)
+    gate.add_argument("--receipt", action="append")
+    gate.add_argument("--provider", action="append", required=True, choices=("crossref", "openalex", "dblp", "arxiv"))
+    gate.add_argument("--run-root", type=Path, help="Canonical parent-owned run to evaluate.")
+    gate.add_argument("--request", type=Path, help="Parent runtime command request for a canonical gate.")
+    pdf = subparsers.add_parser("pdf", help="Extract a local PDF into retained text and locator proposals.")
+    pdf.add_argument("--root", required=True, type=Path)
+    pdf.add_argument("--path", required=True)
+    pdf.add_argument("--output-root", required=True, type=Path)
+    pdf.add_argument("--provider", choices=("pypdf", "grobid", "docling"), default="pypdf")
+    pdf.add_argument("--grobid-endpoint")
+    pdf.add_argument("--allow-local-service", action="store_true")
+    pdf.add_argument("--docling-artifacts-path", type=Path)
+    pdf.add_argument("--control-root", type=Path)
+    pdf.add_argument("--root-id")
+    pdf.add_argument("--file-id")
+    pdf.add_argument("--registration-id")
+    pdf.add_argument("--extracted-at")
+    health_command = subparsers.add_parser("health", help="Report runtime and optional file-base readiness.")
+    health_command.add_argument("--json", action="store_true", dest="json_output", required=True)
     artifact = subparsers.add_parser(
         "artifact",
         help="Inspect explicit signals or accept selected derived UTF-8 cleanup.",
@@ -110,6 +144,8 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--remove-metadata", action="append", default=[], choices=("exif", "xmp", "pdf_properties", "docx_properties"), help="Explicit binary metadata family; repeat for multiple families.")
     from arw.cli_research_artifact import configure
     configure(artifact_commands)
+    from arw.cli_ro_crate import configure as configure_ro_crate
+    configure_ro_crate(artifact_commands)
     from arw.cli_memory import configure as configure_memory
     configure_memory(subparsers)
     from arw.cli_writing import configure as configure_writing
@@ -158,23 +194,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     storm.add_argument(
         "--backend",
-        choices=["session", "litellm"],
-        default="session",
-        help="Model backend: session (current agent session model) or litellm "
-        "(explicit OpenAI-compatible endpoint).",
+        choices=["litellm"],
+        default="litellm",
+        help="Model adapter (default: litellm).",
+    )
+    storm.add_argument(
+        "--provider",
+        choices=["openai", "gemini", "openai-compatible"],
+        help="Explicit model provider; required to run STORM.",
     )
     storm.add_argument(
         "--model",
         default=None,
-        help="LiteLLM model id, e.g. openai/gemini-2.5-flash.",
+        help="LiteLLM model id matching the selected provider.",
     )
     storm.add_argument(
-        "--api-key", default=None, help="Model API key (default: GEMINI_API_KEY)."
+        "--api-key-env",
+        default=None,
+        help="Name of an environment variable containing the model key.",
     )
     storm.add_argument(
         "--api-base",
         default=None,
-        help="OpenAI-compatible API base (default: GOOGLE_GEMINI_BASE_URL).",
+        help="HTTPS API base for --provider openai-compatible only.",
     )
     storm.add_argument(
         "--retriever",
@@ -286,6 +328,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--host-evidence-sha256",
         help="Parent-expected SHA-256 of the exact host-evidence manifest bytes.",
     )
+    for name, help_text in (
+        ("execution-context", "Accept exact parent-owned workflow execution context."),
+        ("execution-metadata", "Append owner-supplied dataset publication metadata."),
+        ("execution-bind", "Bind an accepted artifact to one observed parent action."),
+    ):
+        command = subparsers.add_parser(name, help=help_text)
+        _add_run_request_arguments(command)
+        command.add_argument("--payload", required=True, type=Path)
+    projection = subparsers.add_parser(
+        "execution-provenance",
+        help="Read the deterministic canonical execution projection.",
+    )
+    projection.add_argument("--run-root", required=True, type=Path)
     orchestration_panel = subparsers.add_parser(
         "orchestration-panel",
         help="Freeze a canonical formal-panel manifest from retained host identities.",
@@ -320,6 +375,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Parent-only file root, extraction, and generation administration.",
     )
     files_subcommands = files.add_subparsers(dest="files_command", required=True)
+    files_enable = files_subcommands.add_parser("enable", help="Explicitly add native file-base to one project host config.")
+    files_enable.add_argument("--provider", required=True)
+    files_enable.add_argument("--host", required=True)
+    files_enable.add_argument("--target", required=True, type=Path)
+    files_enable.add_argument("--root", required=True, type=Path)
+    files_enable.add_argument("--root-id", required=True)
+    files_enable.add_argument("--cache-dir", required=True, type=Path)
     for resource in ("root", "extraction"):
         command = files_subcommands.add_parser(resource)
         actions = command.add_subparsers(dest="files_action", required=True)
@@ -492,7 +554,48 @@ def _read_bounded_regular_file(
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    raw_args = tuple(sys.argv[1:] if argv is None else argv)
+    if raw_args and raw_args[0] == "storm" and any(
+        arg == "--api-key" or arg.startswith("--api-key=") for arg in raw_args
+    ):
+        print(
+            "arw: storm-error: raw --api-key values are not accepted; use --api-key-env NAME",
+            file=sys.stderr,
+        )
+        return 65
+    args = parser.parse_args(raw_args)
+    if args.command == "artifact" and args.artifact_command in {"ro-crate-export", "ro-crate-verify"}:
+        from arw.cli_ro_crate import handle as handle_ro_crate
+        from arw.kernel.artifacts.ro_crate import CrateError
+
+        try:
+            result = handle_ro_crate(args)
+            _write_json(result)
+            if args.artifact_command == "ro-crate-verify":
+                return 0 if (result["structure"]["status"] == "pass"
+                             and result["byte_integrity"]["status"] == "pass"
+                             and result["source_run_binding"]["status"] in {"pass", "unverified"}) else 65
+            return 0
+        except (CrateError, OSError) as error:
+            _write_json({"status": "error", "code": "ro_crate_request_invalid", "message": str(error)})
+            return 65
+    if args.command in {"citation", "pdf"}:
+        from arw.cli_scholarly import handle
+        try:
+            if args.command == "pdf" and args.control_root is not None and not all((args.root_id, args.file_id, args.registration_id)):
+                raise ValueError("PDF registration requires root, file and registration IDs")
+            result = handle(args)
+            _write_json(result)
+            return 0 if result.get("accepted", True) else 65
+        except (ValueError, RuntimeError, OSError) as error:
+            _write_json({"status": "error", "code": getattr(error, "code", "scholarly_request_invalid"), "message": str(error)})
+            return 65
+    if args.command == "health":
+        from arw.files_opt_in import health
+        from arw.platform_support import platform_support
+
+        _write_json({"command": "health", "status": "ok", "file_base": health(), "platform": platform_support()})
+        return 0
     if args.command == "submission":
         from arw.cli_submission import handle
         from arw.kernel.capabilities import CapabilityUnavailable
@@ -696,12 +799,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "topic": args.topic,
             "output_dir": Path(args.output_dir),
             "backend": args.backend,
+            "provider": args.provider,
             "retriever": args.retriever,
         }
         if args.model is not None:
             config_kwargs["model"] = args.model
-        if args.api_key is not None:
-            config_kwargs["api_key"] = args.api_key
+        if args.api_key_env is not None:
+            config_kwargs["api_key_env"] = args.api_key_env
         if args.api_base is not None:
             config_kwargs["api_base"] = args.api_base
         config = StormConfig(
@@ -725,6 +829,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json(receipt.model_dump(mode="json"))
         return 0
     if args.command == "files":
+        if args.files_command == "enable":
+            from arw.files_opt_in import OptInError, diagnostic, enable
+
+            try:
+                _write_json(enable(provider=args.provider, host=args.host, target=args.target, root=args.root, root_id=args.root_id, cache_dir=args.cache_dir))
+                return 0
+            except OptInError as error:
+                _write_json(diagnostic(error))
+                return 65
         from arw.file_models import ExtractionRegistration
         from arw.files import FilesAdminError
 
@@ -1206,6 +1319,66 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "role_catalog_sha256": prepared.role_catalog_sha256,
                     "run_id": prepared.state.run_id,
                     "stage": prepared.state.stage,
+                }
+            )
+            return 0
+        if args.command in {
+            "execution-context",
+            "execution-metadata",
+            "execution-bind",
+        }:
+            request = _load_request(args.request, RuntimeCommandRequest)
+            if args.payload.stat().st_size > 524288:
+                raise CLIInputError("execution provenance payload exceeds 512 KiB")
+            payload = _load_object(args.payload, label="execution provenance payload")
+            service = RuntimeCommandService(
+                args.run_root, lock_timeout=args.lock_timeout
+            )
+            method = {
+                "execution-context": service.accept_execution_context,
+                "execution-metadata": service.accept_dataset_metadata,
+                "execution-bind": service.bind_execution_artifact,
+            }[args.command]
+            outcome = method(request, payload)
+            _write_json(outcome.model_dump(mode="json"))
+            return 0 if outcome.accepted else 65
+        if args.command == "execution-provenance":
+            facts = RuntimeCommandService(args.run_root).read_execution_provenance()
+            _write_json(
+                {
+                    "schema_version": "arw.execution-provenance-projection.v1",
+                    "context": facts.context.model_dump(mode="json")
+                    if facts.context
+                    else None,
+                    "dataset_metadata": facts.dataset_metadata.model_dump(mode="json")
+                    if facts.dataset_metadata
+                    else None,
+                    "metadata_history": [
+                        e.model_dump(mode="json") for e in facts.metadata_history
+                    ],
+                    "actions": [
+                        {
+                            "started": a.started.model_dump(mode="json"),
+                            "finished": a.finished.model_dump(mode="json")
+                            if a.finished
+                            else None,
+                            "status": a.status,
+                        }
+                        for a in facts.actions
+                    ],
+                    "control_actions": [
+                        {
+                            "control_id": item.control_id,
+                            "step_id": item.step_id,
+                            "tool_id": item.tool_id,
+                            "tool_action_id": item.tool_action_id,
+                            "source_event_id": item.source_event_id,
+                        }
+                        for item in facts.control_actions
+                    ],
+                    "bindings": [e.model_dump(mode="json") for e in facts.bindings],
+                    "intent_only_attempt_ids": list(facts.intent_only_attempt_ids),
+                    "coverage_gaps": list(facts.coverage_gaps),
                 }
             )
             return 0

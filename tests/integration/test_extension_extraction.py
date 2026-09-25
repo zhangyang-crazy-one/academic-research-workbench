@@ -65,6 +65,7 @@ def test_no_kernel_concrete_extension_imports():
                 )
 
 
+@pytest.mark.requires_native_file_base
 def test_native_surface_through_relocated_provider(tmp_path, monkeypatch):
     binary = ROOT / ".file-base/bin/file-base"
     if not binary.is_file():
@@ -75,7 +76,10 @@ def test_native_surface_through_relocated_provider(tmp_path, monkeypatch):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, destination)
     (plugin / "libexec").mkdir()
-    os.link(binary, plugin / "libexec/file-base-mcp")
+    try:
+        os.link(binary, plugin / "libexec/file-base-mcp")
+    except OSError:
+        shutil.copy2(binary, plugin / "libexec/file-base-mcp")
     allowed = tmp_path / "allowed"
     allowed.mkdir()
     environment = {

@@ -20,29 +20,32 @@ from arw.kernel.core.canonical import (
     sha256_hex,
     strict_json_loads,
 )
-from arw.kernel.state.models import (
-    AppendProbeRequest,
-    BaselineProbePayload,
-    CanonicalEvent,
-    InitRunRequest,
-    RecoveryHealth,
-    RunInitializedPayload,
-    RunManifest,
-    ZERO_HASH,
-)
+from arw.kernel.core.faults import active_fault, inject
 from arw.kernel.ledger.manifests import (
     ManifestError,
     validate_accepted_event_manifests,
     validate_event_manifest_semantics,
+    validate_execution_binding_source,
 )
 from arw.kernel.ledger.recovery import (
     RecoveryError,
     publish_recovery_segment,
     validate_recovery_boundary,
 )
-from arw.kernel.core.faults import active_fault, inject
-from arw.kernel.ledger.workflows import LEGACY_WORKFLOW_ID, WorkflowDefinitionError, require_workflow
-
+from arw.kernel.ledger.workflows import (
+    LEGACY_WORKFLOW_ID,
+    WorkflowDefinitionError,
+    require_workflow,
+)
+from arw.kernel.state.models import (
+    ZERO_HASH,
+    AppendProbeRequest,
+    CanonicalEvent,
+    InitRunRequest,
+    RecoveryHealth,
+    RunInitializedPayload,
+    RunManifest,
+)
 
 MANIFEST_NAME = "run-manifest.json"
 JOURNAL_NAME = "events.jsonl"
@@ -413,6 +416,11 @@ def _replay_unlocked(root: Path) -> ReplayState:
         if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
             try:
                 validate_accepted_event_manifests(root, (event,))
+            except ManifestError as error:
+                raise JournalError(str(error)) from error
+        if event.event_type == "execution_provenance.artifact_bound":
+            try:
+                validate_execution_binding_source(root, event, manifest)
             except ManifestError as error:
                 raise JournalError(str(error)) from error
         try:

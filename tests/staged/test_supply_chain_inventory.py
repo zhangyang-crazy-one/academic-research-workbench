@@ -205,6 +205,9 @@ def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
     return _canonical_test_lock(base_stage)
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_sbom_covers_observed_python_packages_patches_native_and_source_components() -> (
     None
 ):
@@ -298,6 +301,9 @@ def test_use_distribution_technical_provenance_hashes_are_fresh() -> None:
     assert "artifact:supply-chain/use-distribution.json" not in component_refs
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_rebound_stale_technical_provenance(
     tmp_path: Path,
 ) -> None:
@@ -331,6 +337,9 @@ def test_validate_only_rejects_rebound_stale_technical_provenance(
     assert "technical provenance digest mismatch: SBOM.cdx.json" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_missing_required_technical_provenance_row(
     tmp_path: Path,
 ) -> None:
@@ -364,6 +373,9 @@ def test_validate_only_rejects_missing_required_technical_provenance_row(
     assert "SBOM.cdx.json" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _stage(stage_root)
@@ -397,6 +409,9 @@ def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) ->
         }
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_base_stage_remains_lock_free_and_validate_only_compatible(
     tmp_path: Path,
 ) -> None:
@@ -474,6 +489,9 @@ def test_base_stage_remains_lock_free_and_validate_only_compatible(
     assert validated.returncode == 0, validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_optional_integration_lock_is_bound_without_changing_release_verdict(
     tmp_path: Path,
 ) -> None:
@@ -528,6 +546,9 @@ def test_optional_integration_lock_is_bound_without_changing_release_verdict(
     assert validated_against_input.returncode == 0, validated_against_input.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_build_identity_metadata_falsification(
     tmp_path: Path,
 ) -> None:
@@ -552,6 +573,9 @@ def test_validate_only_rejects_build_identity_metadata_falsification(
     "relative",
     ("supply-chain/integration-lock.json", "SBOM.cdx.json"),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     tmp_path: Path, relative: str
 ) -> None:
@@ -570,6 +594,9 @@ def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     assert "digest mismatch" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     tmp_path: Path,
 ) -> None:
@@ -604,6 +631,9 @@ def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     assert "staged SBOM bytes are not canonical" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> None:
     lock_path = tmp_path / "noncanonical-lock.json"
     lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "noncanonical") + b"\n")
@@ -621,6 +651,9 @@ def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> No
         ("ars-binding", "does not bind the staged ARS bundle"),
     ),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_rejects_live_payload_drift_against_lock(
     tmp_path: Path, drift: str, expected_error: str
 ) -> None:
@@ -652,6 +685,9 @@ def test_stage_rejects_live_payload_drift_against_lock(
         ("ars-binding", "does not bind the staged ARS bundle"),
     ),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_recomputes_local_lock_bindings(
     tmp_path: Path, drift: str, expected_error: str
 ) -> None:
@@ -697,6 +733,9 @@ def test_validate_only_recomputes_local_lock_bindings(
     assert expected_error in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None:
     stage_root = tmp_path / "duplicate-stage" / PLUGIN_NAME
     result = _stage(stage_root)
@@ -764,6 +803,9 @@ EVIDENCE_STAGED_PATHS = (
 )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_evidence_files_exist_with_pass_qualification(
     tmp_path: Path,
 ) -> None:
@@ -780,6 +822,9 @@ def test_staged_evidence_files_exist_with_pass_qualification(
         )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_build_identity_evidence_block_points_at_staged_copies(
     tmp_path: Path,
 ) -> None:
@@ -817,6 +862,9 @@ def test_build_identity_evidence_block_points_at_staged_copies(
             assert entry["sha256"] == _sha256(stage_root / relative)
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_staged_evidence_qualification_drift(
     tmp_path: Path,
 ) -> None:
@@ -851,6 +899,9 @@ def test_validate_only_rejects_staged_evidence_qualification_drift(
     assert "evidence.upstream" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_staged_evidence_path_redirect(
     tmp_path: Path,
 ) -> None:
@@ -874,6 +925,9 @@ def test_validate_only_rejects_staged_evidence_path_redirect(
     assert "pre_vendor" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_whole_header_alias_on_contract_sha256(
     tmp_path: Path,
 ) -> None:
@@ -900,6 +954,9 @@ def test_validate_only_rejects_whole_header_alias_on_contract_sha256(
     assert "embedded in the regenerated header" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_paired_header_and_identity_rebind(
     tmp_path: Path,
 ) -> None:
@@ -938,6 +995,9 @@ def test_validate_only_rejects_paired_header_and_identity_rebind(
     assert "regenerated from the staged checked schemas" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_accepts_unbounded_python_build_version(
     tmp_path: Path,
 ) -> None:
@@ -957,6 +1017,9 @@ def test_validate_only_accepts_unbounded_python_build_version(
     assert validated.returncode == 0, validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_passthrough_evidence_stub(
     tmp_path: Path,
 ) -> None:
@@ -1011,6 +1074,9 @@ def test_validate_only_rejects_passthrough_evidence_stub(
         assert "producer contract" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_pre_vendor_component_field_drift(
     tmp_path: Path,
 ) -> None:
@@ -1051,6 +1117,9 @@ def test_validate_only_rejects_pre_vendor_component_field_drift(
     assert "field version drifts" in stderr or "manifest cross-check failed" in stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_legal_staged_path_byte_flip(
     tmp_path: Path,
 ) -> None:

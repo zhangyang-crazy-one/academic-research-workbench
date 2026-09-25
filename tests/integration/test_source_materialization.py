@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 import jsonschema
-
+import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PATCH_SHA256 = "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
@@ -62,6 +62,7 @@ def test_source_work_area_is_ignored_and_materializer_is_available() -> None:
     assert tracked.returncode != 0, tracked.stdout
 
 
+@pytest.mark.requires_materialized_sources
 def test_exact_snapshots_patch_and_canonical_license_paths_are_materialized() -> None:
     manifest = _manifest()
     components = {item["id"]: item for item in manifest["components"]}
@@ -93,6 +94,7 @@ def test_exact_snapshots_patch_and_canonical_license_paths_are_materialized() ->
     assert _sha256(REPOSITORY_ROOT / patches[2]["path"]) == PHASE3_PATCH_SHA256
 
 
+@pytest.mark.requires_materialized_sources
 def test_materializer_tree_digest_uses_the_manifest_wire_encoding() -> None:
     """The online materializer must agree with the offline verifier byte-for-byte."""
 
@@ -110,6 +112,8 @@ def test_materializer_tree_digest_uses_the_manifest_wire_encoding() -> None:
         assert module.tree_digest(source) == component["tree_sha256"]
 
 
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_offline_network_isolation
 def test_network_denied_verification_retains_namespace_and_syscall_evidence(tmp_path: Path) -> None:
     offline = REPOSITORY_ROOT / "scripts/offline-exec"
     verifier = REPOSITORY_ROOT / "scripts/verify-sources"
@@ -129,6 +133,7 @@ def test_network_denied_verification_retains_namespace_and_syscall_evidence(tmp_
     assert (evidence / "stderr.log").is_file()
 
 
+@pytest.mark.requires_offline_network_isolation
 def test_offline_runner_rejects_network_capable_commands(tmp_path: Path) -> None:
     offline = REPOSITORY_ROOT / "scripts/offline-exec"
     assert offline.is_file() and os.access(offline, os.X_OK)

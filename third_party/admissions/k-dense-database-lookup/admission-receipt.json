@@ -1,0 +1,143 @@
+{
+  "schema_version": "arw.skill-admission.v1",
+  "source": {
+    "repository_url": "https://github.com/K-Dense-AI/scientific-agent-skills",
+    "file_url": "https://github.com/K-Dense-AI/scientific-agent-skills/blob/49c6e97775eaa18ba791bebe23162a70ae601c18/skills/database-lookup/SKILL.md",
+    "commit": "49c6e97775eaa18ba791bebe23162a70ae601c18",
+    "path": "skills/database-lookup/SKILL.md",
+    "selected_tree_git_sha1": "fdb92cf1bf19aa09a7662379cf91e8150338994c",
+    "file_git_blob_sha1": "84f0f798b726378c5f79e641b76a98cd2b8848ec",
+    "file_sha256": "dda99c6b4fbde7f127bf8f06a82a4a1e7d683486d215ae6282aac46136f06b85",
+    "archive_path": "third_party/admissions/k-dense-database-lookup/source-skill.md",
+    "archived_scope": "Exact SKILL.md bytes only; upstream references/ tree is identified by selected_tree_git_sha1 but is neither archived nor staged."
+  },
+  "legal": {
+    "skill_declared_license": "MIT",
+    "repository_license": "MIT",
+    "copyright": "Copyright (c) 2025 K-Dense Inc.",
+    "upstream_license_path": "LICENSE.md",
+    "upstream_license_git_blob_sha1": "eb246475fd5a66b9bb56176f3a718984632dd98d",
+    "archived_license_path": "third_party/admissions/k-dense-database-lookup/LICENSE.md",
+    "archived_license_sha256": "0207337e5ae2b28c15c647054fafaddafb159be533f9723825d7a5aa2610f21d",
+    "archive_note": "MIT license text preserved; local archive adds one terminal newline to the upstream license blob.",
+    "notices_observed": "No root NOTICE or THIRD_PARTY_NOTICES file in the selected commit; preserve LICENSE.md and attribution.",
+    "license_gate": "MIT declaration and repository license agree; restricted instructions still block direct staging."
+  },
+  "scan": {
+    "findings": [
+      {
+        "category": "shell_execution",
+        "count": 22,
+        "sample_lines": [
+          4,
+          29,
+          91,
+          95,
+          96,
+          97,
+          98,
+          99,
+          152,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          173,
+          174,
+          175,
+          181,
+          186
+        ]
+      },
+      {
+        "category": "network_access",
+        "count": 38,
+        "sample_lines": [
+          13,
+          23,
+          27,
+          91,
+          95,
+          96,
+          97,
+          98,
+          99,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          122,
+          123,
+          124,
+          125,
+          126
+        ]
+      },
+      {
+        "category": "credential_access",
+        "count": 26,
+        "sample_lines": [
+          106,
+          107,
+          108,
+          109,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130
+        ]
+      },
+      {
+        "category": "self_citation",
+        "count": 3,
+        "sample_lines": [
+          390,
+          393,
+          400
+        ]
+      },
+      {
+        "category": "write_instruction",
+        "count": 2,
+        "sample_lines": [
+          259,
+          265
+        ]
+      }
+    ],
+    "interpretation": "Indicators for human review only; no safety certification or execution permission.",
+    "policy_id": "arw-skill-import-static-v1",
+    "source_bytes": 27358,
+    "source_sha256": "dda99c6b4fbde7f127bf8f06a82a4a1e7d683486d215ae6282aac46136f06b85"
+  },
+  "disposition": {
+    "human": "user_directed_archive_only_and_reject_direct_staging",
+    "reviewer": null,
+    "reviewed_at": null,
+    "trusted_admission": "pending_human_review",
+    "directive_source": "requesting user's issue #40 implementation instruction; no source-safety approval attested",
+    "technical_recommendation": "reject_direct_staging",
+    "reason": "Bash/curl, network requests, local key lookup and mandatory self-citation require removal and separate workflow review.",
+    "staging": "source_archive_only",
+    "derivative": "locally_modified_advisory_reference",
+    "derivative_path": "skills/academic-research-workbench/references/database-lookup-advisory.md",
+    "derivative_sha256": "a145c31a013e3a2dfb97347fcd8aa05af33721eab9c3e779e3cdf1338702dfd3",
+    "scanner_sha256": "e62841e94ae2a8fa0c4b6019b4aad0a4dc4c94d07fb6855202aacb2dcbb58efa"
+  }
+}

@@ -18,6 +18,7 @@ from arw.kernel.state.provenance import (
     ByteChunk,
     LineRange,
     MarkdownSection,
+    PdfLocation,
     PreciseProvenanceRecord,
     SourceLocator,
     TextPage,
@@ -97,6 +98,10 @@ def read_retained_bytes(
 
 def located_bytes(raw: bytes, locator: SourceLocator) -> bytes:
     location = locator.location
+    if isinstance(location, PdfLocation):
+        if location.end > len(raw):
+            raise SourceLocatorError("PDF span is outside retained extraction")
+        return raw[location.start:location.end]
     if isinstance(location, ByteChunk):
         if location.end > len(raw):
             raise SourceLocatorError("chunk is outside retained source")
@@ -160,6 +165,37 @@ def resolve_source_locator(root: Path, locator: SourceLocator, events) -> None:
     raw = read_retained_bytes(root, manifest.content_path)
     if sha256_hex(raw) != locator.source_sha256:
         raise SourceLocatorError("retained source digest mismatch")
+    if isinstance(locator.location, PdfLocation):
+        from arw.pdf_extraction import PdfExtraction
+
+        location = locator.location
+        pdf = read_retained_bytes(root, location.pdf_source_path)
+        if sha256_hex(pdf) != location.pdf_sha256:
+            raise SourceLocatorError("retained PDF digest mismatch")
+        manifest_bytes = read_retained_bytes(root, location.extraction_manifest_path)
+        if sha256_hex(manifest_bytes) != location.extraction_manifest_sha256:
+            raise SourceLocatorError("PDF extraction manifest digest mismatch")
+        try:
+            extraction = PdfExtraction.model_validate_json(manifest_bytes)
+        except ValueError as error:
+            raise SourceLocatorError("PDF extraction manifest is invalid") from error
+        if (extraction.quality_state != "complete" or
+                extraction.source_sha256 != location.pdf_sha256 or
+                extraction.extracted_text_sha256 != locator.source_sha256 or
+                extraction.extractor_name != location.extractor_name or
+                extraction.extractor_version != location.extractor_version):
+            raise SourceLocatorError("PDF extraction is not complete or digest bound")
+        kind = {"pdf_page": "page", "pdf_paragraph": "paragraph", "pdf_section": "section",
+                "pdf_region": "region", "reference_entry": "reference"}[location.kind]
+        if not any(item.kind == kind and item.page == location.page and
+                   item.start == location.start and item.end == location.end and
+                   item.label == location.label and item.bbox == location.bbox
+                   for item in extraction.locators):
+            raise SourceLocatorError("PDF location is absent from retained extraction")
+        if location.kind == "reference_entry" and not any(
+            ref.reference_id == location.label for ref in extraction.references
+        ):
+            raise SourceLocatorError("PDF reference identity is absent")
     if sha256_hex(located_bytes(raw, locator)) != locator.quote_sha256:
         raise SourceLocatorError("located quote digest mismatch")
 

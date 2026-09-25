@@ -120,9 +120,10 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
 
     v1's kernel has known cycles (state <-> ledger via status->reducer and
     journal->models; artifacts -> execution via experiment_provenance ->
-    runtime). A DAG would require semantic refactors that are out of scope
-    for the move-only extraction; the ratchet fails on ANY edge-set change
-    (new coupling or unrecorded decoupling), forcing deliberate review.
+    runtime). The accepted policy -> ledger edge lets citation checks publish
+    immutable receipts and read parent-accepted manifests. Ledger has no path
+    back to policy. The ratchet fails on ANY edge-set change, forcing review
+    of new coupling and decoupling alike.
     """
     import json as _json
 
@@ -130,8 +131,8 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
 
     golden = read_golden_json(Path(__file__).parent / "golden" / "kernel_edges.json")
     assert _kernel_edges() == golden["edges"], (
-        "kernel subpackage edge set drifted; new coupling is forbidden, "
-        "decoupling must update the pinned baseline deliberately"
+        "kernel subpackage edge set drifted; review new or removed coupling "
+        "and update the pinned baseline deliberately"
     )
     # Keep the json import honest even if the golden read is refactored.
     assert _json.dumps(_kernel_edges(), sort_keys=True)

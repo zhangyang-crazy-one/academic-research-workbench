@@ -142,6 +142,9 @@ def installed_route_evidence(
 
 
 @pytest.mark.codex_host
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_fresh_installed_skill_returns_schema_valid_route(
     installed_route_evidence: tuple[Path, subprocess.CompletedProcess[str]],
 ) -> None:

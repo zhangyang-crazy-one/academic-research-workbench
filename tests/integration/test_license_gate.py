@@ -12,6 +12,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PRE_VENDOR_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/pre-vendor-license"
 POST_VENDOR_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/license"
@@ -128,6 +130,8 @@ def _refresh_wheel_evidence(wheel: Path, evidence_path: Path) -> None:
     evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
 def test_gate_rejects_resealed_wheel_without_required_license(tmp_path: Path) -> None:
     wheel, evidence_path = _build_candidate(tmp_path / "valid-candidate")
     with zipfile.ZipFile(wheel) as source:
@@ -161,6 +165,8 @@ def test_gate_rejects_resealed_wheel_without_required_license(tmp_path: Path) ->
     assert not output_root.exists()
 
 
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
 def test_post_materialization_gate_preserves_native_toolchain_and_receipt(tmp_path: Path) -> None:
     evidence_parent = Path(os.environ.get("ARW_LICENSE_GATE_TEST_ROOT", str(tmp_path)))
     evidence_root = evidence_parent / "gate-output"
@@ -209,6 +215,8 @@ def test_post_materialization_gate_preserves_native_toolchain_and_receipt(tmp_pa
     )
 
 
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
 def test_gate_rejects_resealed_undeclared_dist_info(tmp_path: Path) -> None:
     original_root = tmp_path / "valid-candidate"
     original_wheel, _ = _build_candidate(original_root)
@@ -237,6 +245,7 @@ def test_gate_rejects_resealed_undeclared_dist_info(tmp_path: Path) -> None:
         assert not output_root.exists(), label
 
 
+@pytest.mark.requires_materialized_sources
 def test_component_identity_and_release_classifier_do_not_collapse_licenses() -> None:
     verdict = _load("supply-chain/license-verdict.json")
     use_distribution = _load("supply-chain/use-distribution.json")

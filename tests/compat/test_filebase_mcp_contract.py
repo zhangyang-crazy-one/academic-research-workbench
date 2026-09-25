@@ -18,19 +18,47 @@ from tests.file_plane_helpers import canonical_request, invoke_jsonrpc_process
 
 from .normalize import read_golden_json
 
-pytestmark = pytest.mark.v2_compat
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_BINARY = REPOSITORY_ROOT / ".file-base" / "bin" / "file-base"
 GOLDEN_DIR = Path(__file__).parent / "golden" / "filebase"
 
 pytestmark = [
     pytest.mark.v2_compat,
-    pytest.mark.skipif(
-        not NATIVE_BINARY.is_file() or not os.access(NATIVE_BINARY, os.X_OK),
-        reason="file-base native binary not materialized (.file-base/bin/file-base)",
-    ),
+    pytest.mark.requires_native_file_base,
 ]
+
+
+def test_native_binary_has_no_modern_discovery(tmp_path: Path) -> None:
+    """A probe must not mistake the pinned legacy C server for a modern one."""
+    result = invoke_jsonrpc_process(
+        [str(NATIVE_BINARY)],
+        [
+            canonical_request(
+                1,
+                "server/discover",
+                {
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                        "io.modelcontextprotocol/clientCapabilities": {},
+                    }
+                },
+            )
+        ],
+        cwd=tmp_path,
+        environment={
+            "CBM_ALLOWED_ROOT": str(tmp_path),
+            "CBM_ALLOWED_ROOT_ID": "research-root",
+            "CBM_CACHE_DIR": str(tmp_path / "cache"),
+            "CBM_DISABLE_UPDATE_CHECK": "1",
+            "CBM_LOG_LEVEL": "error",
+            "HOME": str(tmp_path / "home"),
+            "PATH": os.environ["PATH"],
+        },
+    )
+    assert result.completed.returncode == 0, result.completed.stderr[-500:]
+    assert len(result.responses) == 1
+    assert "result" not in result.responses[0]
+    assert result.responses[0]["error"]["code"] == -32601
 
 
 def test_native_binary_surface_matches_golden(tmp_path: Path) -> None:

@@ -61,7 +61,8 @@ The files-first MCP is ARW's modified `DeusData/codebase-memory-mcp` adapter.
 The installed launcher retains the upstream-compatible `file-base` command
 name; `vendor/mcp-manifest.json` records its exact source commit, ordered ARW
 patches, patched-tree digest, binary digest, protocol, and bounded capability
-profile.
+profile. The plugin does not register this MCP by default. File access remains
+disabled until a project explicitly opts in.
 
 ## Qualification status
 
@@ -81,6 +82,40 @@ install, a Codex marketplace path, or a qualified-stage unlock. See
 
 ## Installation
 
+### Enable the files-first MCP for one project
+
+After installing a qualified plugin with its native `libexec/file-base-mcp`
+binary, create an existing research root and an existing cache directory outside
+that root. Point `--target` at the **project** configuration file. The command
+checks Python, the native provider, allowed root, cache, target and binary before
+writing; it never edits user or global host configuration.
+
+```bash
+mkdir -p /path/to/project/.codex /path/to/file-base-cache
+/installed/plugin/bin/arw files enable --provider native --host codex \
+  --target /path/to/project/.codex/config.toml \
+  --root /path/to/research --root-id research --cache-dir /path/to/file-base-cache
+
+# For Claude Code, use the project's .mcp.json instead:
+/installed/plugin/bin/arw files enable --provider native --host claude \
+  --target /path/to/project/.mcp.json \
+  --root /path/to/research --root-id research --cache-dir /path/to/file-base-cache
+
+/installed/plugin/bin/arw health --json
+```
+
+Run one host command for each project that needs files-first access. The
+generated entry binds that root and cache explicitly; inspect the generated
+project config before starting a new host session. Codex loads project config
+only for trusted projects. A plain source checkout lacks the qualified native
+binary, so `files enable` returns a structured `native_binary_missing` result
+without creating a config. Run `health --json` from the target project to see
+its Codex and Claude project-config states plus native binary readiness.
+Bounded source retrieval supports citation checks and manuscript drafting;
+source files and the parent-owned journal remain authoritative.
+Existing `ARW_FILES_*` launcher deployments retain
+their startup-only `STORE_ABSENT=69` fallback.
+
 ### Development checkout
 
 Requirements are Python `>=3.13`, `uv>=0.11.28`, and (for the host
@@ -90,6 +125,22 @@ include or require a `uv.lock` dependency lockfile. The uv project integration
 is unmanaged to prevent automatic lock creation; setup uses `uv pip` to resolve
 the declared ranges. Source commits, artifact digests, schemas, and actual host
 observations remain evidence about the inputs used, not compatibility pins.
+The launcher accepts newer Python versions that satisfy the minimum; each host
+still needs to pass its runtime and dependency qualification checks.
+
+### Platform support
+
+| Platform | Support | CI coverage and limits |
+| --- | --- | --- |
+| Linux | Tier 1 | Full non-host Python tree and a separate native confinement/admin job on each PR; ASan/UBSan native suite nightly. |
+| macOS | Tier 2 | Canonical state, manifest, recovery, and platform-report unit tests on each PR. The Linux network-denied native builder is unavailable. |
+| Windows | Unsupported | No Windows CI job or native file-base qualification; POSIX descriptor-relative file access and the Bash launcher are unavailable. |
+
+`arw health --json` reports the running platform's tier and capabilities that
+are unavailable for platform reasons. A successful health response observes the
+environment; it does not grant release qualification. Linux native jobs build
+from pinned source snapshots in ignored work areas and do not rewrite
+`vendor/source-manifest.json`.
 Initial setup or a later dependency install needs access to the configured
 package index unless compatible packages are already cached; offline dependency
 resolution is not guaranteed. Once installed, research operations retain their
@@ -292,5 +343,38 @@ permission evidence is resolved. If host canary evidence is not supplied,
 CI builds and tests every change, but CD is fail-closed: a release job stops
 unless the retained license verdict is `PASS`, accountable intended-use and
 distribution evidence is present, and the P04-09 human gate is complete.
+On a successful push to `main`, CI creates SLSA provenance for the candidate
+wheel, sdist, and retained CycloneDX SBOM file after Python validation. It also
+attests that CycloneDX SBOM as the predicate for the wheel and sdist. Release
+qualification checks both predicates for each package artifact, the SBOM file's
+provenance, and the predicate's content against the retained SBOM. Each claim
+must match the `ci.yml` signer, `refs/heads/main`, and the source commit bound
+to the release tag before transfer to publish.
+Consumers can verify downloaded candidate files with GitHub CLI:
+
+```bash
+REPO=OWNER/REPO
+TAG=vX.Y.Z
+SOURCE_COMMIT="$(git rev-parse "refs/tags/$TAG^{commit}")"
+for file in path/to/*.whl path/to/*.tar.gz; do
+  for predicate in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
+    gh attestation verify "$file" --repo "$REPO" \
+      --signer-workflow "$REPO/.github/workflows/ci.yml" \
+      --source-ref refs/heads/main --source-digest "$SOURCE_COMMIT" \
+      --predicate-type "$predicate"
+  done
+done
+gh attestation verify path/to/SBOM.cdx.json --repo "$REPO" \
+  --signer-workflow "$REPO/.github/workflows/ci.yml" \
+  --source-ref refs/heads/main --source-digest "$SOURCE_COMMIT" \
+  --predicate-type https://slsa.dev/provenance/v1
+```
+
+The attestation establishes build identity for those bytes; it does not
+establish scientific validity or human authorship. Hosted OIDC creation and
+retrieval/verification still require evidence from an authorized Actions run.
+The owner policy keeps reviewed Action major tags and open `>=` Python ranges
+without a lockfile. Issue #32's exact-SHA and zero-high `zizmor` criteria remain
+unmet under that policy; no finding is suppressed or reported as cleared.
 Planning files, local evidence, build directories, credentials, and materialized
 third-party sources are excluded from source archives and staged payloads.

@@ -4,6 +4,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/pre-vendor-license"

@@ -9,16 +9,18 @@ service can append canonical events.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
 
-from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_hex,
+    strict_json_loads,
+)
+from arw.kernel.core.faults import inject
 from arw.kernel.execution.execution import (
     DEFAULT_EXECUTION_POLICY,
     DispatchSpec,
@@ -28,24 +30,38 @@ from arw.kernel.execution.execution import (
     RepairableEnvelopeFailure,
     StaleAttempt,
 )
-from arw.kernel.core.faults import inject
+from arw.kernel.execution.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
+from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
+from arw.kernel.execution.scheduler import (
+    AttemptOutcome,
+    DeterministicScheduler,
+    ScheduledOutcome,
+    carried_host_result,
+)
 from arw.kernel.ledger.journal import replay_run
 from arw.kernel.ledger.manifests import (
     ManifestError,
     admit_raw_proposal,
     install_assignment_manifest,
+    load_artifact_manifest,
     materialize_attempt_tree,
+    validate_content_file,
 )
+from arw.kernel.ledger.reducer import RuntimeState
+from arw.kernel.ledger.workflows import PHASE4_WORKFLOW_ID
 from arw.kernel.state.models import (
     AssignmentPreparedPayload,
     AssignmentSupersededPayload,
     AttemptLifecyclePayload,
     AttemptPreparedPayload,
+    ExecutionActionFinishedPayload,
+    ExecutionActionStartedPayload,
+    ExecutionArtifactBoundPayload,
     ExecutionModeSelectedPayload,
     ExecutionRoleMode,
     GateEvaluatedPayload,
-    HostIdentityAcceptedPayload,
     HookObservedPayload,
+    HostIdentityAcceptedPayload,
     HumanAuthorityAcceptedPayload,
     HumanDecisionRecordedPayload,
     LifecycleTransitionRequest,
@@ -54,20 +70,19 @@ from arw.kernel.state.models import (
     ProposalRejectedPayload,
     ReviewReportAcceptedPayload,
     ReviewSynthesisAcceptedPayload,
-    RuntimeCommandRequest,
     RunManifest,
+    RuntimeCommandRequest,
     StrictModel,
 )
 from arw.kernel.state.orchestration_models import (
+    FORMAL_REVIEW_ROLE_IDS,
+    AssignmentKey,
     AttemptDescriptor,
     AttemptStatus,
-    AssignmentKey,
     BlindReviewConstraints,
     CompletionContract,
     ExecutionMode,
     GateDecision,
-    FORMAL_REVIEW_ROLE_IDS,
-    HookObservation as CanonicalHookObservation,
     HostIdentityReceipt,
     HumanAuthority,
     HumanDecisionRecord,
@@ -75,18 +90,17 @@ from arw.kernel.state.orchestration_models import (
     OutputPolicy,
     PanelManifest,
     PanelSeat,
-    ReviewFindingMatrix,
-    ReviewReport as WireReviewReport,
     RetryReason,
-    WorkerProposal,
+    ReviewFindingMatrix,
     canonical_orchestration_model_bytes,
     locked_role_catalog,
 )
-from arw.kernel.ledger.reducer import RuntimeState
-from arw.kernel.execution.review import FormalPanelPolicy, PanelPlan, ReviewerIdentity
-from arw.kernel.execution.runtime import CommandOutcome, RuntimeCommandService
-from arw.kernel.execution.scheduler import AttemptOutcome, DeterministicScheduler, ScheduledOutcome
-from arw.kernel.ledger.workflows import PHASE4_WORKFLOW_ID
+from arw.kernel.state.orchestration_models import (
+    HookObservation as CanonicalHookObservation,
+)
+from arw.kernel.state.orchestration_models import (
+    ReviewReport as WireReviewReport,
+)
 
 
 class OrchestrationError(RuntimeError):
@@ -250,7 +264,7 @@ class OrchestrationService:
         path.write_bytes(raw)
 
     def _append_gate_decision(
-        self, request: RuntimeCommandRequest, decision: GateDecision
+        self, request: RuntimeCommandRequest, decision: GateDecision, *, prevalidate=None
     ) -> CommandOutcome:
         return self.runtime.append_phase4_event(
             request,
@@ -259,6 +273,7 @@ class OrchestrationService:
                 decision=decision,
                 decision_sha256=sha256_hex(canonical_orchestration_model_bytes(decision)),
             ),
+            prevalidate=prevalidate,
         )
 
     def record_host_identity(
@@ -661,6 +676,8 @@ class OrchestrationService:
         self,
         request: RuntimeCommandRequest,
         decision: GateDecision,
+        *,
+        prevalidate=None,
     ) -> CommandOutcome:
         """Evaluate a gate from current evidence and fail closed on stale inputs."""
 
@@ -668,6 +685,7 @@ class OrchestrationService:
         if decision.human_decision is not None:
             raise OrchestrationError("human decisions must use the append-only decision route")
         state = self.runtime.read_state()
+        evaluated_revision = state.accepted_revision
         unknown = tuple(item for item in decision.evidence_sha256 if item not in self._known_evidence(state))
         stale = (
             decision.fresh_until is not None
@@ -688,7 +706,14 @@ class OrchestrationService:
                     "rationale": decision.rationale + " blocked: " + "; ".join(reasons),
                 }
             )
-        return self._append_gate_decision(request, decision)
+        def validate(current_state, replayed):
+            if current_state.accepted_revision != evaluated_revision:
+                return "stale-gate-context", "gate context changed before journal append"
+            if prevalidate is not None:
+                return prevalidate(current_state, replayed)
+            return None
+
+        return self._append_gate_decision(request, decision, prevalidate=validate)
 
     def record_human_decision(
         self,
@@ -1305,6 +1330,230 @@ class OrchestrationService:
         request: RuntimeCommandRequest,
         prepared: PreparedRun,
     ) -> DispatchReport:
+        """Record one parent dispatch saga when an exact context was accepted."""
+
+        self._require_parent(request)
+        state = self.runtime.read_state()
+        if state.accepted_revision != request.expected_revision:
+            raise OrchestrationError("dispatch request revision is stale")
+        if (
+            prepared.policy_sha256 != self.policy.policy_sha256
+            or state.policy_sha256 != prepared.policy_sha256
+        ):
+            raise OrchestrationError("dispatch policy differs from the prepared run")
+        if {item.assignment_id for item in prepared.assignments} != {
+            item.assignment_id for item in state.assignments
+        }:
+            raise OrchestrationError(
+                "prepared assignment set differs from canonical state"
+            )
+        facts = self.runtime.read_execution_provenance()
+        if facts.context is None:
+            # Older runs remain executable, with explicitly incomplete coverage.
+            return await self._dispatch_operation(request, prepared)
+        action_id = (
+            f"workflow.{_deterministic_uuid(f'{request.run_id}:{request.command_id}')}"
+        )
+        start = self.runtime.start_execution_action(
+            self._child_request(
+                request, revision=state.accepted_revision, label="workflow-start"
+            ),
+            ExecutionActionStartedPayload(
+                action_id=action_id,
+                kind="workflow",
+                workflow_action_id=None,
+                assignment_id=None,
+                attempt_id=None,
+                step_id=None,
+                tool_id=None,
+                started_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ),
+        )
+        self._require_accepted(start, "workflow action start")
+        child = request.model_copy(
+            update={"expected_revision": start.state.accepted_revision}
+        )
+        try:
+            report = await self._dispatch_operation(
+                child, prepared, workflow_action_id=action_id
+            )
+            self._bind_accepted_outputs(request, action_id)
+        except asyncio.CancelledError:
+            # Cancellation can leave an external adapter running. Replay
+            # retains an unresolved workflow action without a guessed end.
+            raise
+        except Exception as error:
+            self._finish_workflow_action(request, action_id, "failed", str(error))
+            raise
+        workflow_outcome = (
+            "succeeded"
+            if all(
+                item.status == "completed"
+                and any(
+                    proposal.attempt_id == item.attempts[-1].attempt_id
+                    and proposal.effective_status == "accepted"
+                    for proposal in report.state.proposals
+                )
+                for item in report.outcomes
+            )
+            else "cancelled"
+            if any(
+                item.status in {"cancelled", "force_terminated"}
+                for item in report.outcomes
+            )
+            else "failed"
+        )
+        self._finish_workflow_action(request, action_id, workflow_outcome, None)
+        return replace(report, state=self.runtime.read_state())
+
+    def _finish_workflow_action(
+        self,
+        request: RuntimeCommandRequest,
+        action_id: str,
+        outcome: str,
+        error: str | None,
+    ) -> None:
+        state = self.runtime.read_state()
+        ended = self.runtime.finish_execution_action(
+            self._child_request(
+                request,
+                revision=state.accepted_revision,
+                label=f"workflow-finish:{action_id}",
+            ),
+            ExecutionActionFinishedPayload(
+                action_id=action_id,
+                ended_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                outcome=outcome,
+                error=error[:2048] if error else None,
+            ),
+        )
+        self._require_accepted(ended, "workflow action finish")
+
+    def _bind_assignment_inputs(
+        self, request: RuntimeCommandRequest, spec: DispatchSpec, action_id: str
+    ) -> None:
+        """Bind each frozen input to one exact pre-existing canonical source."""
+
+        replayed = replay_run(self.run_root, lock_timeout=self.runtime.lock_timeout)
+        assignment = next(
+            (
+                item.assignment
+                for item in self.runtime.read_state().assignments
+                if item.assignment_id == spec.assignment_id
+            ),
+            None,
+        )
+        if assignment is None:
+            raise OrchestrationError("dispatch assignment is no longer accepted")
+        manifest = self._manifest()
+        for digest in assignment.input_sha256:
+            candidates: list[tuple[str, object, str, str]] = []
+            if digest == manifest.immutable_input.sha256:
+                candidates.append(
+                    (
+                        "run_input",
+                        replayed.events[0],
+                        manifest.immutable_input.path,
+                        f"input.{digest[:32]}",
+                    )
+                )
+            for event in replayed.events:
+                if (
+                    event.event_type == "artifact.accepted"
+                    and event.payload.artifact_sha256 == digest
+                ):
+                    accepted = load_artifact_manifest(
+                        self.run_root, event.payload.manifest_sha256
+                    )
+                    candidates.append(
+                        ("artifact", event, accepted.content_path, accepted.artifact_id)
+                    )
+            if len(candidates) != 1:
+                raise OrchestrationError(
+                    "assignment input has zero or ambiguous accepted source entities"
+                )
+            kind, source, path, entity_id = candidates[0]
+            retained = validate_content_file(self.run_root, path, digest)
+            state = self.runtime.read_state()
+            bound = self.runtime.bind_execution_artifact(
+                self._child_request(
+                    request,
+                    revision=state.accepted_revision,
+                    label=f"input:{spec.attempt_id}:{entity_id}",
+                ),
+                ExecutionArtifactBoundPayload(
+                    entity_id=entity_id,
+                    direction="input",
+                    action_id=action_id,
+                    assignment_id=spec.assignment_id,
+                    attempt_id=spec.attempt_id,
+                    source_kind=kind,
+                    source_event_id=source.event_id,
+                    source_event_sha256=source.event_sha256,
+                    source_manifest_sha256=(source.payload.manifest_sha256),
+                    relative_path=path,
+                    content_sha256=digest,
+                    byte_count=retained.stat().st_size,
+                ),
+            )
+            self._require_accepted(bound, f"input binding {entity_id}")
+
+    def _bind_accepted_outputs(
+        self, request: RuntimeCommandRequest, workflow_action_id: str
+    ) -> None:
+        replayed = replay_run(self.run_root, lock_timeout=self.runtime.lock_timeout)
+        facts = self.runtime.read_execution_provenance()
+        producing = {
+            item.started.payload.attempt_id: item.started.payload.action_id
+            for item in facts.tool_actions
+            if item.started.payload.workflow_action_id == workflow_action_id
+        }
+        for event in replayed.events:
+            if (
+                event.event_type != "proposal.accepted"
+                or event.payload.attempt_id not in producing
+            ):
+                continue
+            p = event.payload
+            for proposed in p.proposal.artifacts:
+                relative = f"attempts/{p.attempt_id}/result/{proposed.relative_path}"
+                retained = validate_content_file(
+                    self.run_root,
+                    relative,
+                    proposed.sha256,
+                    expected_byte_count=proposed.byte_count,
+                )
+                entity_id = f"artifact.{_deterministic_uuid(f'{event.event_id}:{proposed.relative_path}')}"
+                state = self.runtime.read_state()
+                bound = self.runtime.bind_execution_artifact(
+                    self._child_request(
+                        request,
+                        revision=state.accepted_revision,
+                        label=f"output:{p.attempt_id}:{entity_id}",
+                    ),
+                    ExecutionArtifactBoundPayload(
+                        entity_id=entity_id,
+                        direction="output",
+                        action_id=producing[p.attempt_id],
+                        assignment_id=p.assignment_id,
+                        attempt_id=p.attempt_id,
+                        source_kind="proposal",
+                        source_event_id=event.event_id,
+                        source_event_sha256=event.event_sha256,
+                        source_manifest_sha256=p.proposal_sha256,
+                        relative_path=proposed.relative_path,
+                        content_sha256=proposed.sha256,
+                        byte_count=retained.stat().st_size,
+                    ),
+                )
+                self._require_accepted(bound, f"output binding {entity_id}")
+
+    async def _dispatch_operation(
+        self,
+        request: RuntimeCommandRequest,
+        prepared: PreparedRun,
+        workflow_action_id: str | None = None,
+    ) -> DispatchReport:
         """Dispatch prepared assignments and admit outcomes in frozen order."""
 
         self._require_parent(request)
@@ -1363,6 +1612,105 @@ class OrchestrationService:
             )
 
         canonical_event_lock = asyncio.Lock()
+
+        async def observe_adapter(spec: DispatchSpec, invoke) -> HostResult:
+            assert workflow_action_id is not None
+            context_event = self.runtime.read_execution_provenance().context
+            assert context_event is not None
+            step = context_event.payload.steps[0]
+            action_id = (
+                f"tool.{_deterministic_uuid(f'{request.run_id}:{spec.attempt_id}')}"
+            )
+            async with canonical_event_lock:
+                try:
+                    self._bind_assignment_inputs(request, spec, workflow_action_id)
+                except (OrchestrationError, ManifestError) as error:
+                    raise StaleAttempt(str(error)) from error
+                state = self.runtime.read_state()
+                started = self.runtime.start_execution_action(
+                    self._child_request(
+                        request,
+                        revision=state.accepted_revision,
+                        label=f"tool-start:{spec.attempt_id}",
+                    ),
+                    ExecutionActionStartedPayload(
+                        action_id=action_id,
+                        kind="tool",
+                        workflow_action_id=workflow_action_id,
+                        assignment_id=spec.assignment_id,
+                        attempt_id=spec.attempt_id,
+                        step_id=step.step_id,
+                        tool_id=step.tool_id,
+                        started_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    ),
+                )
+                if not started.accepted:
+                    raise StaleAttempt(started.rejection.message)
+            try:
+                result = await invoke()
+            except asyncio.CancelledError as error:
+                carried = carried_host_result(error)
+                if carried is not None:
+                    await finish_tool(
+                        spec, action_id, "cancelled", carried, str(error) or "cancelled"
+                    )
+                raise
+            except Exception as error:
+                carried = carried_host_result(error)
+                await finish_tool(spec, action_id, "failed", carried, str(error))
+                raise
+            await finish_tool(spec, action_id, "succeeded", result, None)
+            return result
+
+        async def finish_tool(
+            spec: DispatchSpec,
+            action_id: str,
+            outcome: str,
+            result: HostResult | None,
+            error: str | None,
+        ) -> None:
+            summary = None
+            if result is not None:
+                summary = sha256_hex(
+                    canonical_json_bytes(
+                        {
+                            "attempt_id": result.attempt_id,
+                            "host_agent_id": result.host_agent_id,
+                            "observation_sha256": result.observation_sha256,
+                            "returncode": result.returncode,
+                            "process_id": result.process_id,
+                            "codex_version": result.codex_version,
+                            "codex_binary_sha256": result.codex_binary_sha256,
+                        }
+                    )
+                )
+            async with canonical_event_lock:
+                state = self.runtime.read_state()
+                finished = self.runtime.finish_execution_action(
+                    self._child_request(
+                        request,
+                        revision=state.accepted_revision,
+                        label=f"tool-finish:{spec.attempt_id}",
+                    ),
+                    ExecutionActionFinishedPayload(
+                        action_id=action_id,
+                        ended_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        outcome=outcome,
+                        host_agent_id=result.host_agent_id if result else None,
+                        host_result_sha256=summary,
+                        observed_runtime_version=result.codex_version
+                        if result
+                        else None,
+                        observed_runtime_sha256=result.codex_binary_sha256
+                        if result
+                        else None,
+                        observed_transport=str(result.transport)
+                        if result and result.transport
+                        else None,
+                        error=error[:2048] if error else None,
+                    ),
+                )
+                self._require_accepted(finished, "tool action finish")
 
         async def record_cancel_request(spec: DispatchSpec, _deadline_monotonic: float) -> None:
             # Scheduler callbacks can race across assignments.  The parent
@@ -1466,6 +1814,7 @@ class OrchestrationService:
             policy=self.policy,
             cancel_observer=record_cancel_request,
             result_validator=validate_host_result,
+            dispatch_wrapper=observe_adapter if workflow_action_id is not None else None,
         )
 
         def mark_generation_dispatched(specs: Sequence[DispatchSpec]) -> None:
@@ -1737,6 +2086,11 @@ class OrchestrationService:
         if current.policy_sha256 != self.policy.policy_sha256:
             raise OrchestrationError("recovery policy differs from the frozen run policy")
         assignments = {item.assignment_id: item for item in current.assignments}
+        unresolved_entered = {
+            item.started.payload.attempt_id
+            for item in self.runtime.read_execution_provenance().tool_actions
+            if item.finished is None
+        }
 
         def prepare_retry(history) -> None:
             nonlocal current
@@ -1861,6 +2215,7 @@ class OrchestrationService:
                 raise OrchestrationError("active attempt policy differs from the frozen run")
             retry_eligible = (
                 history.attempt_number < self.policy.max_attempts_per_assignment
+                and history.attempt_id not in unresolved_entered
             )
             interrupted = self.record_attempt_lifecycle(
                 self._child_request(

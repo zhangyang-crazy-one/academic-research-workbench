@@ -4,9 +4,14 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from test_supply_chain_inventory import _stage
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_contains_graph_runtime_and_identity(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / "academic-research-workbench"
     result = _stage(stage_root)
@@ -36,6 +41,9 @@ def test_stage_contains_graph_runtime_and_identity(tmp_path: Path) -> None:
     assert "arw/graph_projection.py" in names
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_graph_launcher_fails_closed_without_parent_selection(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / "academic-research-workbench"
     result = _stage(stage_root)
