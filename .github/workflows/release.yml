@@ -39,14 +39,14 @@ jobs:
       bundle_manifest_sha256: >-
         ${{ steps.identity.outputs.bundle_manifest_sha256 }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
       - name: Install declared runtime validator dependencies
@@ -90,7 +90,7 @@ jobs:
           echo "candidate_artifact_name=$CANDIDATE_ARTIFACT_NAME" \
             >> "$GITHUB_OUTPUT"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: ${{ steps.select.outputs.candidate_artifact_name }}
           run-id: ${{ steps.select.outputs.candidate_run_id }}
@@ -198,7 +198,7 @@ jobs:
         run: |
           .venv/bin/python scripts/candidate-bundle archive \
             --bundle-root candidate-bundle --output candidate-bundle.tar.gz
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
           path: candidate-bundle.tar.gz
@@ -211,19 +211,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
       - name: Install declared runtime validator dependencies
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
           path: verified-candidate-transfer

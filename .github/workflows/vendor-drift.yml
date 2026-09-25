@@ -26,10 +26,10 @@ jobs:
       report_json: ${{ steps.report.outputs.report_json }}
       has_drift: ${{ steps.report.outputs.has_drift }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - name: Observe stable upstream releases
@@ -37,16 +37,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python scripts/vendor-drift-report --online > "$RUNNER_TEMP/vendor-drift.json"
+          out_file="$RUNNER_TEMP/vendor-drift.json"
+          python scripts/vendor-drift-report --online > "$out_file"
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'vendor-drift.json').read_text())
+          temp = Path(os.environ['RUNNER_TEMP'])
+          report = json.loads((temp / 'vendor-drift.json').read_text())
+          raw_json = json.dumps(
+              report, ensure_ascii=True, separators=(',', ':')
+          )
           with Path(os.environ['GITHUB_OUTPUT']).open('a') as out:
-              out.write('report_json=' + json.dumps(report, ensure_ascii=True, separators=(',', ':')) + '\n')
-              out.write('has_drift=' + str(report['has_drift']).lower() + '\n')
+              out.write(f'report_json={raw_json}\n')
+              has_drift = str(report['has_drift']).lower()
+              out.write(f'has_drift={has_drift}\n')
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
               summary.write(report['issue_body'] + '\n')
           PY
@@ -54,7 +60,8 @@ jobs:
   report:
     needs: check
     if: >-
-      needs.check.outputs.has_drift == 'true' && github.ref == 'refs/heads/main' &&
+      needs.check.outputs.has_drift == 'true' &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name == 'schedule' || inputs.dry_run == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -62,10 +69,10 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - name: Update one drift tracker
