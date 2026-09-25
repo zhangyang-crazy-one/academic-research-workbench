@@ -49,6 +49,16 @@ def test_ci_candidate_archive_name_matches_both_downloaders() -> None:
                in step.get("run", "") for step in publish_steps)
 
 
+def test_bundled_ars_self_tests_put_absolute_repo_venv_first_on_path() -> None:
+    ci = _workflow("ci.yml")
+    steps = ci["jobs"]["python"]["steps"]
+    step = next(step for step in steps if step.get("name") == "Run bundled ARS self-tests")
+    assert step["working-directory"] == "skills/academic-research-suite/ars"
+    commands = step["run"].splitlines()
+    assert commands[0] == 'export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"'
+    assert commands[1].startswith("../../../.venv/bin/python -m pytest -q")
+
+
 def test_release_candidate_bundle_commands_use_installed_validator_environment() -> None:
     release = _workflow("release.yml")
     for job_name in ("qualify", "publish"):

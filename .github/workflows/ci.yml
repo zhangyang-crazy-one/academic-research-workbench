@@ -153,9 +153,10 @@ jobs:
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
-        run: >-
-          ../../../.venv/bin/python -m pytest -q
-          --ignore scripts/test_check_calibration_tiers.py
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
+          ../../../.venv/bin/python -m pytest -q \
+          --ignore scripts/test_check_calibration_tiers.py \
           --ignore scripts/test_check_distribution_surface_claims.py
 
   package-boundary:
