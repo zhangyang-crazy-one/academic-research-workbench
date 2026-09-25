@@ -23,6 +23,7 @@ import argparse
 import os
 import stat
 import sys
+from collections.abc import Mapping
 from contextlib import suppress
 from pathlib import Path
 
@@ -40,7 +41,7 @@ from arw.file_models import (
 from arw.files import FilesAdminError, load_query_generation
 from arw.files_mcp import TOOL_MODELS, _tool_envelope
 from arw.kernel.capabilities import CapabilityUnavailable
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+from arw.mcp_stdio import StdioProtocol, run_stdio
 
 # Reuse the v1 MCP request/response contract; the provider is the only
 # difference.  TOOL_MODELS maps tool names to their request models.
@@ -306,94 +307,71 @@ def _check_manifest_declares_files() -> None:
 
 def _handle(adapter, request: object) -> dict[str, object] | None:
     if not isinstance(request, dict):
-        return {
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": -32600, "message": "Invalid Request"},
-        }
-    identifier = request.get("id")
-    if identifier is None:
         return None
-    method = request.get("method")
-    params = request.get("params", {})
+    return StdioProtocol(
+        name="academic-research-files-store",
+        version="1.0.0",
+        tools=_tools,
+        call_tool=lambda params: _call_tool(adapter, params),
+        capabilities={"tools": {"listChanged": False}},
+    ).handle(request)
+
+
+def _tools() -> list[dict[str, object]]:
+    return [
+        {
+            "name": name,
+            "description": f"Local-store {name}.",
+            "inputSchema": model.model_json_schema(mode="validation"),
+        }
+        for name, model in TOOL_MODELS.items()
+    ]
+
+
+def _call_tool(adapter, params: Mapping[str, object]) -> dict[str, object]:
     try:
-        if method == "initialize":
-            result: object = {
-                "protocolVersion": "2025-03-26",
-                "serverInfo": {
-                    "name": "academic-research-files-store",
-                    "version": "1.0.0",
-                },
-                "capabilities": {"tools": {"listChanged": False}},
-            }
-        elif method == "ping":
-            result = {}
-        elif method == "tools/list":
-            result = {
-                "tools": [
-                    {
-                        "name": name,
-                        "description": f"Local-store {name}.",
-                        "inputSchema": model.model_json_schema(mode="validation"),
-                    }
-                    for name, model in TOOL_MODELS.items()
-                ]
-            }
-        elif method == "tools/call" and isinstance(params, dict):
-            name = params.get("name")
-            arguments = params.get("arguments", {})
-            entry = _DISPATCH.get(name if isinstance(name, str) else "")
-            if entry is None:
-                payload, is_error = (
-                    {"error_code": "unknown_tool", "message": "tool is not registered"},
-                    True,
-                )
-                result = _tool_envelope(payload, error=is_error)
-            else:
-                method_name, model = entry
-                try:
-                    parsed = model.model_validate(arguments)
-                except ValidationError as error:
-                    # Wire parity with v1 ``FilesMcpServer.handle_tool``:
-                    # argument validation failures are reported as
-                    # ``invalid_request``, not the generic ``tool_error``.
-                    result = _tool_envelope(
-                        {"error_code": "invalid_request", "message": str(error)},
-                        error=True,
-                    )
-                else:
-                    try:
-                        result_model = getattr(adapter, method_name)(parsed)
-                        payload = result_model.model_dump(mode="json")
-                        # Per-tool isError mapping (v1 parity): only
-                        # ``read_file`` consults ``result.status``; the
-                        # other four tools deliver degraded/no_structure/etc.
-                        # as NOT-isError envelopes so downstream MCP
-                        # clients can still inspect the body.
-                        if method_name == "read_file":
-                            is_error = (
-                                getattr(result_model, "status", "ok")
-                                not in _SUCCESS_STATUSES
-                            )
-                        else:
-                            is_error = False
-                        result = _tool_envelope(payload, error=is_error)
-                    except Exception as error:  # noqa: BLE001 - envelope boundary
-                        code = getattr(error, "code", "tool_error")
-                        result = _tool_envelope(
-                            {"error_code": code, "message": str(error)}, error=True
-                        )
+        name = params.get("name")
+        arguments = params.get("arguments", {})
+        entry = _DISPATCH.get(name if isinstance(name, str) else "")
+        if entry is None:
+            payload, is_error = (
+                {"error_code": "unknown_tool", "message": "tool is not registered"},
+                True,
+            )
+            result = _tool_envelope(payload, error=is_error)
         else:
-            return {
-                "jsonrpc": "2.0",
-                "id": identifier,
-                "error": {"code": -32601, "message": "Method not found"},
-            }
+            method_name, model = entry
+            try:
+                parsed = model.model_validate(arguments)
+            except ValidationError as error:
+                # Preserve the v1 invalid_request tool envelope.
+                result = _tool_envelope(
+                    {"error_code": "invalid_request", "message": str(error)},
+                    error=True,
+                )
+            else:
+                try:
+                    result_model = getattr(adapter, method_name)(parsed)
+                    payload = result_model.model_dump(mode="json")
+                    # Only read_file maps a non-success status to isError.
+                    if method_name == "read_file":
+                        is_error = (
+                            getattr(result_model, "status", "ok")
+                            not in _SUCCESS_STATUSES
+                        )
+                    else:
+                        is_error = False
+                    result = _tool_envelope(payload, error=is_error)
+                except Exception as error:  # noqa: BLE001 - envelope boundary
+                    code = getattr(error, "code", "tool_error")
+                    result = _tool_envelope(
+                        {"error_code": code, "message": str(error)}, error=True
+                    )
     except CursorError as error:
         result = _tool_envelope(
             {"error_code": error.code, "message": str(error)}, error=True
         )
-    return {"jsonrpc": "2.0", "id": identifier, "result": result}
+    return result
 
 
 # Pre-protocol exit code: STORE_ABSENT — the resolved store file does not
@@ -676,20 +654,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_loop(adapter) -> None:
-    for raw_line in sys.stdin.buffer:
-        try:
-            request = strict_json_loads(raw_line)
-        except (UnicodeError, ValueError) as error:
-            response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32700, "message": f"Parse error: {error}"},
-            }
-        else:
-            response = _handle(adapter, request)
-        if response is not None:
-            sys.stdout.buffer.write(canonical_json_bytes(response))
-            sys.stdout.buffer.flush()
+    run_stdio(lambda request: _handle(adapter, request))
 
 
 if __name__ == "__main__":

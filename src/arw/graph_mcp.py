@@ -1,18 +1,17 @@
-"""Official MCP 2025-11-25 stdio adapter for bounded research graph traces."""
+"""Dual-era stdio adapter for bounded research graph traces."""
 
 from __future__ import annotations
 
-import json
-import sys
 from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
 
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.graph_models import GraphQueryRequest, GraphQueryResult
 from arw.graph_store import GraphStore
-
+from arw.kernel.core.canonical import canonical_json_bytes
+from arw.mcp_stdio import ProtocolError, StdioProtocol
+from arw.mcp_stdio import run_stdio as serve_stdio
 
 TOOL_NAMES = (
     "trace_claim",
@@ -31,6 +30,13 @@ def _text(value: object) -> str:
 class GraphMcpServer:
     def __init__(self, store: GraphStore) -> None:
         self.store = store
+        self.protocol = StdioProtocol(
+            name="academic-research-workbench-graph",
+            version="0.1.0",
+            tools=self._tools,
+            call_tool=self._call_tool,
+            capabilities={"tools": {"listChanged": False}},
+        )
 
     @staticmethod
     def _tools() -> list[dict[str, Any]]:
@@ -69,37 +75,15 @@ class GraphMcpServer:
         return tools
 
     def handle(self, message: Mapping[str, Any]) -> dict[str, Any] | None:
-        request_id = message.get("id")
-        method = message.get("method")
-        if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
-            return self._error(request_id, -32600, "invalid JSON-RPC request")
-        if method == "notifications/initialized":
-            return None
-        if method == "ping":
-            return {"jsonrpc": "2.0", "id": request_id, "result": {}}
-        if method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": {"name": "academic-research-workbench-graph", "version": "0.1.0"},
-                },
-            }
-        if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": self._tools()}}
-        if method == "tools/call":
-            return self._call_tool(request_id, message.get("params"))
-        return self._error(request_id, -32601, "method not found")
+        return self.protocol.handle(message)
 
-    def _call_tool(self, request_id: Any, params: Any) -> dict[str, Any]:
-        if not isinstance(params, Mapping) or set(params) - {"name", "arguments"}:
-            return self._error(request_id, -32602, "tools/call parameters are invalid")
+    def _call_tool(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        if set(params) - {"name", "arguments", "_meta"}:
+            raise ProtocolError(-32602, "tools/call parameters are invalid")
         name = params.get("name")
         arguments = params.get("arguments", {})
         if name not in TOOL_NAMES or not isinstance(arguments, Mapping):
-            return self._error(request_id, -32602, "unknown graph tool or arguments")
+            raise ProtocolError(-32602, "unknown graph tool or arguments")
         payload = dict(arguments)
         payload["schema_version"] = "1.0.0"
         payload["operation"] = name
@@ -124,34 +108,11 @@ class GraphMcpServer:
         if result_message:
             payload_result["message"] = result_message
         return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "content": [{"type": "text", "text": _text(payload_result)}],
-                "structuredContent": payload_result,
-                "isError": result.status != "ok",
-            },
+            "content": [{"type": "text", "text": _text(payload_result)}],
+            "structuredContent": payload_result,
+            "isError": result.status != "ok",
         }
-
-    @staticmethod
-    def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
-        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
 def run_stdio(server: GraphMcpServer) -> int:
-    for line in sys.stdin.buffer:
-        if not line.strip():
-            continue
-        try:
-            message = strict_json_loads(line)
-            if not isinstance(message, Mapping):
-                response = server._error(None, -32600, "request must be an object")
-            else:
-                response = server.handle(message)
-        except (UnicodeError, ValueError, json.JSONDecodeError) as error:
-            response = server._error(None, -32700, f"invalid JSON: {error}")
-        if response is not None:
-            sys.stdout.buffer.write(canonical_json_bytes(response))
-            sys.stdout.buffer.flush()
-    return 0
-
+    return serve_stdio(server.handle)

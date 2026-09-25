@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import json
 import os
 import re
 import sqlite3
@@ -16,35 +15,34 @@ import unicodedata
 from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
 
 from pydantic import ValidationError
 
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.file_contracts import CursorCodec, CursorError
 from arw.file_models import (
     CONTRACT_LIMITS,
     RANKING_VERSION,
     TOKENIZER_ID,
-    FileSearchHit,
     FileListEntry,
-    FilesContextResult,
     FilesContextRequest,
+    FilesContextResult,
+    FileSearchHit,
     FilesListRequest,
     FilesListResult,
-    FilesOutlineResult,
     FilesOutlineRequest,
+    FilesOutlineResult,
     FilesReadDenied,
     FilesReadRequest,
     FilesReadStale,
     FilesReadSuccess,
-    FilesSearchResult,
     FilesSearchRequest,
+    FilesSearchResult,
     OutlineNode,
     SourceLocation,
 )
 from arw.files import FilesAdminError, FilesQueryGeneration, load_query_generation
-
+from arw.kernel.core.canonical import canonical_json_bytes
+from arw.mcp_stdio import StdioProtocol, run_stdio
 
 MAX_LIVE_FILE_BYTES = 64 * 1024 * 1024
 MAX_SEARCH_CANDIDATES = 10_000
@@ -1258,39 +1256,29 @@ class FilesMcpServer:
 
     def handle(self, request: object) -> dict[str, object] | None:
         if not isinstance(request, dict):
-            return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}}
-        identifier = request.get("id")
-        if identifier is None:
             return None
-        method = request.get("method")
-        params = request.get("params", {})
+        return self._protocol().handle(request)
+
+    def _protocol(self) -> StdioProtocol:
+        return StdioProtocol(
+            name="academic-research-files",
+            version="1.0.0",
+            tools=self.tools,
+            call_tool=self._call_tool,
+            capabilities={"tools": {"listChanged": False}},
+        )
+
+    def _call_tool(self, params: dict[str, object]) -> dict[str, object]:
         try:
-            if method == "initialize":
-                result: object = {
-                    "protocolVersion": "2025-03-26",
-                    "serverInfo": {"name": "academic-research-files", "version": "1.0.0"},
-                    "capabilities": {"tools": {"listChanged": False}},
-                }
-            elif method == "ping":
-                result = {}
-            elif method == "tools/list":
-                result = {"tools": self.tools()}
-            elif method == "tools/call" and isinstance(params, dict):
-                name = params.get("name")
-                arguments = params.get("arguments", {})
-                payload, error = self.handle_tool(name if isinstance(name, str) else "", arguments)
-                if hasattr(payload, "model_dump"):
-                    payload = payload.model_dump(mode="json")
-                result = _tool_envelope(payload, error=error)
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": identifier,
-                    "error": {"code": -32601, "message": "Method not found"},
-                }
+            name = params.get("name")
+            arguments = params.get("arguments", {})
+            payload, error = self.handle_tool(name if isinstance(name, str) else "", arguments)
+            if hasattr(payload, "model_dump"):
+                payload = payload.model_dump(mode="json")
+            result = _tool_envelope(payload, error=error)
         except (CursorError, LiveReadError, ToolError) as error:
             result = _tool_envelope({"error_code": error.code, "message": str(error)}, error=True)
-        return {"jsonrpc": "2.0", "id": identifier, "result": result}
+        return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1315,21 +1303,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"files-mcp: startup-error: {error.code}: {error}", file=sys.stderr)
         return 78
     server = FilesMcpServer(generation)
-    for raw_line in sys.stdin.buffer:
-        try:
-            request = strict_json_loads(raw_line)
-        except (UnicodeError, ValueError) as error:
-            response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32700, "message": f"Parse error: {error}"},
-            }
-        else:
-            response = server.handle(request)
-        if response is not None:
-            sys.stdout.buffer.write(canonical_json_bytes(response))
-            sys.stdout.buffer.flush()
-    return 0
+    return run_stdio(server.handle)
 
 
 if __name__ == "__main__":
