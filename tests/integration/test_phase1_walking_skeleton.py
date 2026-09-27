@@ -5,10 +5,15 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.requires_retained_evidence("candidate", "build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_phase1_clean_evidence_gate_retains_every_required_domain(tmp_path: Path) -> None:
     script = REPOSITORY_ROOT / "scripts/verify-phase-1"
     evidence_root = tmp_path / "phase-01-evidence"

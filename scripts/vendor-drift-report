@@ -1,0 +1,39 @@
+"""Render a deterministic fixture report or fetch release metadata only."""
+
+import argparse
+import json
+import os
+from pathlib import Path
+
+from vendor_drift import load_manifests, online_observations, report
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--fixture", type=Path, help="offline observation JSON")
+    inputs.add_argument(
+        "--online", action="store_true", help="GitHub release and compare metadata only"
+    )
+    parser.add_argument(
+        "--root", type=Path, default=Path(__file__).resolve().parents[1]
+    )
+    args = parser.parse_args()
+    source, mcp = load_manifests(args.root)
+    observations = (
+        online_observations(source, mcp, os.environ.get("GITHUB_TOKEN", ""))
+        if args.online
+        else json.loads(args.fixture.read_text(encoding="utf-8"))
+    )
+    print(
+        json.dumps(
+            report(source, mcp, observations),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

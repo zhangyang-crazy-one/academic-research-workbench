@@ -59,6 +59,7 @@ HOOK_RECEIPT_KEYS = {
     "model_sha256",
     "parent_controls",
     "permission_mode",
+    "permission_mode_unrecognized",
     "plugin_root_sha256",
     "receipt_sha256",
     "redacted_error_code",
@@ -69,6 +70,7 @@ HOOK_RECEIPT_KEYS = {
     "stop_hook_active",
     "subject_id_sha256",
     "turn_id_sha256",
+    "unrecognized_fields",
 }
 
 
@@ -603,10 +605,12 @@ def bootstrap_unlocked_runtime(
         raise CanaryDefect("installed candidate runtime interpreter is missing")
     inventory_script = (
         "import importlib.metadata as m,json,platform,sys; "
-        "rows=sorted(({'name': d.metadata['Name'], 'version': d.version} "
-        "for d in m.distributions()), key=lambda x:x['name'].lower()); "
-        "print(json.dumps({'python':platform.python_version(),"
-        "'executable':sys.executable,'distributions':rows},sort_keys=True))"
+        "dists = {d.metadata['Name'].lower(): {'name': d.metadata['Name'], 'version': d.version} "
+        "for d in sorted(m.distributions(), key=lambda x: (x.metadata['Name'] if x.metadata else '').lower()) "
+        "if d.metadata and 'Name' in d.metadata}; "
+        "rows = sorted(dists.values(), key=lambda x: x['name'].lower()); "
+        "print(json.dumps({'python': platform.python_version(), "
+        "'executable': sys.executable, 'distributions': rows}, sort_keys=True))"
     )
     observed = subprocess.run(
         [str(runtime_python), "-c", inventory_script],
@@ -619,7 +623,12 @@ def bootstrap_unlocked_runtime(
         inventory = json.loads(observed.stdout)
     except json.JSONDecodeError as error:
         raise CanaryDefect("installed candidate inventory is invalid JSON") from error
-    first_party = [row for row in inventory["distributions"] if row["name"].lower().replace("_", "-") == PLUGIN_NAME]
+    unique_first_party = {
+        (row["name"], row["version"]): row
+        for row in inventory["distributions"]
+        if row["name"].lower().replace("_", "-") == PLUGIN_NAME
+    }
+    first_party = list(unique_first_party.values())
     if len(first_party) != 1:
         raise CanaryDefect("installed candidate package identity is missing or ambiguous")
     write_json(evidence / "installation-inventory.json", {
@@ -806,13 +815,12 @@ def run_mcp(args: argparse.Namespace) -> int:
     config_path = installed_root / ".mcp.json"
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        server = config["mcpServers"]["file-base"]
-        configured_command = server["command"]
     except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
         raise CanaryDefect(f"installed MCP config is invalid: {error}") from error
-    if configured_command != "./scripts/file-base-mcp":
-        raise CanaryDefect("installed MCP command is not plugin-root-relative")
-    launcher = (installed_root / configured_command).resolve()
+    if config != {"mcpServers": {}}:
+        raise CanaryDefect("installed MCP must be disabled by default")
+    launcher_command = "./scripts/file-base-mcp"
+    launcher = (installed_root / launcher_command).resolve()
     if not launcher.is_relative_to(installed_root) or not os.access(launcher, os.X_OK):
         raise CanaryDefect("installed MCP launcher does not resolve inside the plugin")
 
@@ -833,13 +841,9 @@ def run_mcp(args: argparse.Namespace) -> int:
         listed_payload: object = json.loads(listed.stdout)
     except json.JSONDecodeError:
         listed_payload = None
-    host_listed = (
-        listed.returncode == 0
-        and nested_text_contains(listed_payload, "file-base")
-        and nested_text_contains(listed_payload, configured_command)
-    )
-    if not host_listed:
-        raise CanaryDefect("installed Codex host did not list the plugin MCP server")
+    host_listed = listed.returncode == 0 and nested_text_contains(listed_payload, "file-base")
+    if listed.returncode != 0 or host_listed:
+        raise CanaryDefect("installed Codex host listed a default file-base MCP server")
 
     fixture_root = fresh_root / "mcp-fixture"
     cache_dir = fresh_root / "mcp-cache"
@@ -925,8 +929,8 @@ def run_mcp(args: argparse.Namespace) -> int:
     write_json(
         mcp_dir / "config-probe.json",
         {
-            "configured_command": configured_command,
-            "host_listed": True,
+            "launcher_command": launcher_command,
+            "host_listed": False,
             "resolved_inside_installed_plugin": True,
             "server_name": "file-base",
             "technical_qualification": "PASS",
@@ -1069,7 +1073,11 @@ def validate_hook_receipt(
     receipt = strict_json_object(raw, label="installed Codex hook receipt")
     if set(receipt) != HOOK_RECEIPT_KEYS:
         raise CanaryDefect("installed Codex hook receipt fields drifted")
-    if raw != canonical_json_bytes(receipt):
+    try:
+        canonical_receipt = canonical_json_bytes(receipt)
+    except UnicodeEncodeError as error:
+        raise CanaryDefect("installed Codex hook receipt is not UTF-8") from error
+    if raw != canonical_receipt:
         raise CanaryDefect("installed Codex hook receipt bytes are not canonical")
 
     receipt_sha256 = receipt.get("receipt_sha256")
@@ -1139,14 +1147,38 @@ def validate_hook_receipt(
         or type(receipt.get("stop_hook_active")) is not bool
     ):
         raise CanaryDefect("installed Stop receipt fields are inconsistent")
-    if receipt.get("permission_mode") not in {
+    known_permission_modes = {
         "default",
         "acceptEdits",
         "plan",
         "dontAsk",
         "bypassPermissions",
-    }:
+    }
+    permission_mode = receipt.get("permission_mode")
+    permission_mode_unrecognized = receipt.get("permission_mode_unrecognized")
+    if type(permission_mode_unrecognized) is not bool:
         raise CanaryDefect("installed Codex hook receipt permission mode drifted")
+    if permission_mode_unrecognized and permission_mode is not None:
+        raise CanaryDefect("installed Codex hook receipt permission mode drifted")
+    if not permission_mode_unrecognized and (
+        not isinstance(permission_mode, str) or permission_mode not in known_permission_modes
+    ):
+        raise CanaryDefect("installed Codex hook receipt permission mode drifted")
+    unrecognized_fields = receipt.get("unrecognized_fields")
+    if not isinstance(unrecognized_fields, list) or len(unrecognized_fields) > 32:
+        raise CanaryDefect("installed Codex hook receipt unrecognized fields are invalid")
+    try:
+        names_valid = all(
+            isinstance(name, str)
+            and name
+            and "\x00" not in name
+            and len(name.encode("utf-8")) <= 128
+            for name in unrecognized_fields
+        )
+    except UnicodeEncodeError:
+        names_valid = False
+    if not names_valid or unrecognized_fields != sorted(set(unrecognized_fields)):
+        raise CanaryDefect("installed Codex hook receipt unrecognized fields are invalid")
     controls = receipt.get("parent_controls")
     expected_controls = [
         {"surface": surface, "parent_enforced": True, "hook_bypass_safe": True}

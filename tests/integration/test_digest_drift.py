@@ -71,6 +71,9 @@ def _run_verifier(root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
+@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
 def test_each_digest_class_fails_before_staging(verification_root: Path) -> None:
     mutations = [
         ("source", "vendor/sources/academic-research-skills/README.md"),

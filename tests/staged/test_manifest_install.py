@@ -43,6 +43,9 @@ def _run(command: list[str], cwd: Path, environment: dict[str, str]) -> subproce
     )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_clean_allowlisted_stage_validates_and_installs(tmp_path: Path) -> None:
     stage_script = _required_executable("scripts/stage-plugin")
     smoke_script = _required_executable("scripts/smoke-staged-plugin")

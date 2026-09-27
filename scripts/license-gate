@@ -855,6 +855,18 @@ def create_notices(
              "  source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.\n"),
         ]
     )
+    advisory_license = (PROJECT_ROOT / "third_party/admissions/k-dense-database-lookup/LICENSE.md").read_text(encoding="utf-8").rstrip("\n")
+    sections.extend(
+        [
+            ("- `K-Dense-AI/scientific-agent-skills` database-lookup advisory — `MIT`; "
+             "original archived outside the staged skill tree at "
+             "`third_party/admissions/k-dense-database-lookup/`; "
+             "modified advisory at `skills/academic-research-workbench/references/database-lookup-advisory.md`. "
+             "Direct skill staging remains pending human admission.\n"),
+            "\n## K-Dense database-lookup license (preserved)\n\n",
+            advisory_license + "\n",
+        ]
+    )
     sections.append("\n## Ordered local patches\n")
     for patch in manifest["patches"]:
         sections.append(f"- `{patch['path']}` — SHA-256 `{patch['sha256']}`.\n")

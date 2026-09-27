@@ -1,0 +1,153 @@
+"""Plan or perform a single idempotent GitHub drift-tracker update."""
+
+import argparse
+import json
+import os
+import re
+import sys
+import urllib.request
+from pathlib import Path
+
+from vendor_drift import MARKER, MAX_BODY, SHA, SOURCES, TAG, TITLE, issue_body
+
+REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def request(method: str, url: str, token: str, payload: dict | None = None):
+    data = json.dumps(payload).encode() if payload is not None else None
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "arw-vendor-drift/1",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    with urllib.request.urlopen(
+        urllib.request.Request(url, data=data, headers=headers, method=method),
+        timeout=8,
+    ) as response:
+        body = response.read(1_000_001)
+    if len(body) > 1_000_000:
+        raise ValueError("issue API response exceeds cap")
+    return json.loads(body)
+
+
+def open_issues(repo: str, token: str) -> list[dict]:
+    base = f"https://api.github.com/repos/{repo}/issues"
+    issues = []
+    for page in range(1, 11):
+        batch = request("GET", f"{base}?state=open&per_page=100&page={page}", token)
+        if not isinstance(batch, list):
+            raise TypeError("unexpected issue list")
+        issues.extend(
+            item
+            for item in batch
+            if isinstance(item, dict) and "pull_request" not in item
+        )
+        if len(batch) < 100:
+            return issues
+    raise ValueError("issue listing exceeded 10-page cap; refusing to create")
+
+
+def plan(report: dict, issues: list[dict]) -> dict:
+    rows = report.get("sources")
+    if (
+        report.get("schema") != "arw.vendor-drift.v1"
+        or not isinstance(rows, list)
+        or len(rows) != len(SOURCES)
+        or {row.get("id") for row in rows if isinstance(row, dict)} != set(SOURCES)
+    ):
+        raise ValueError("unrecognized drift report")
+    for row in rows:
+        repo = SOURCES[row["id"]]
+        revision = row.get("revision")
+        if (
+            row.get("repository") != repo
+            or not isinstance(revision, str)
+            or not SHA.fullmatch(revision)
+            or row.get("source_url") != f"https://github.com/{repo}/commit/{revision}"
+        ):
+            raise ValueError("unexpected source link")
+        if "release_url" in row:
+            tag = row.get("release_tag")
+            if (
+                not isinstance(tag, str)
+                or not TAG.fullmatch(tag)
+                or row["release_url"] != f"https://github.com/{repo}/releases/tag/{tag}"
+            ):
+                raise ValueError("unexpected release link")
+    body = issue_body(report)
+    if body != report.get("issue_body") or len(body) > MAX_BODY:
+        raise ValueError("invalid issue body")
+    if not any(row["status"] == "drift" for row in rows):
+        return {"action": "none"}
+    candidates = [
+        item
+        for item in issues
+        if item.get("title") == TITLE or MARKER in (item.get("body") or "")
+    ]
+    if len(candidates) > 1:
+        raise ValueError("multiple drift trackers; refusing to write")
+    if candidates:
+        item = candidates[0]
+        if item.get("title") != TITLE or MARKER not in (item.get("body") or ""):
+            raise ValueError("conflicting drift tracker; refusing to write")
+        if item.get("body") == body:
+            return {"action": "none"}
+        return {
+            "action": "update",
+            "number": item["number"],
+            "title": TITLE,
+            "body": body,
+        }
+    return {"action": "create", "title": TITLE, "body": body}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--write", action="store_true", help="explicitly permit issue creation/update"
+    )
+    parser.add_argument(
+        "--fixture-issues", help="offline JSON list of existing open issues"
+    )
+    args = parser.parse_args()
+    report = json.loads(os.environ["ARW_DRIFT_REPORT_JSON"])
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not REPO.fullmatch(repo):
+        parser.error("GITHUB_REPOSITORY must be owner/repo")
+    if args.write and args.fixture_issues:
+        parser.error("--write cannot be combined with fixture issues")
+    token = os.environ.get("GITHUB_TOKEN", "") if args.write else ""
+    if args.write and not token:
+        parser.error("--write requires GITHUB_TOKEN")
+    issues = (
+        json.loads(Path(args.fixture_issues).read_text(encoding="utf-8"))
+        if args.fixture_issues
+        else open_issues(repo, token)
+        if args.write
+        else []
+    )
+    decision = plan(report, issues)
+    if args.write and decision["action"] != "none":
+        base = f"https://api.github.com/repos/{repo}/issues"
+        url = base if decision["action"] == "create" else f"{base}/{decision['number']}"
+        request(
+            "POST" if decision["action"] == "create" else "PATCH",
+            url,
+            token,
+            {"title": TITLE, "body": decision["body"]},
+        )
+    print(
+        json.dumps(
+            {key: value for key, value in decision.items() if key != "body"},
+            sort_keys=True,
+        )
+    )
+    if not args.write and decision["action"] != "none":
+        print(decision["body"], file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

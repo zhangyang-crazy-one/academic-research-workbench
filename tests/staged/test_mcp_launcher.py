@@ -128,6 +128,9 @@ def test_launcher_rejects_partial_files_profile_capability(tmp_path: Path) -> No
     assert "control root and root ID" in result.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -203,6 +206,9 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
     assert _snapshot(control) == control_before
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> None:
     smoke_script = _required_executable("scripts/smoke-staged-plugin")
     unrelated_cwd = tmp_path / "unrelated-working-directory"
@@ -254,17 +260,7 @@ def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> N
     )
     assert manifest["mcpServers"] == "./.mcp.json"
     mcp_config = json.loads((stage_root / ".mcp.json").read_text(encoding="utf-8"))
-    assert mcp_config == {
-        "mcpServers": {
-            "file-base": {
-                "command": "./scripts/file-base-mcp",
-                "env": {
-                    "CBM_DISABLE_UPDATE_CHECK": "1",
-                    "CBM_LOG_LEVEL": "warn",
-                },
-            }
-        }
-    }
+    assert mcp_config == {"mcpServers": {}}
     assert os.access(stage_root / "scripts/file-base-mcp", os.X_OK)
     assert os.access(stage_root / "libexec/file-base-mcp", os.X_OK)
 
@@ -288,8 +284,8 @@ def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> N
         (evidence_root / "plugin/mcp/config-probe.json").read_text(encoding="utf-8")
     )
     assert config_probe == {
-        "configured_command": "./scripts/file-base-mcp",
-        "host_listed": True,
+        "launcher_command": "./scripts/file-base-mcp",
+        "host_listed": False,
         "resolved_inside_installed_plugin": True,
         "server_name": "file-base",
         "technical_qualification": "PASS",

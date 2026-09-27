@@ -33,10 +33,7 @@ BUNDLED_POINTERS = (
     "skills/academic-research-suite/ars/academic-pipeline/WORKFLOW.md",
     "skills/academic-research-suite/ars/experiment-agent/WORKFLOW.md",
     "skills/academic-research-suite/codex/references/science_workbench_mvp.md",
-    "skills/literature/SKILL.md",
-    "skills/evidence/SKILL.md",
-    "skills/audit/SKILL.md",
-    "skills/files/SKILL.md",
+    "skills/academic-research-workbench/references/control-plane-capabilities.md",
     "docs/runtime/scientific-integrity.md",
     "schemas/v1/route-result.schema.json",
 )

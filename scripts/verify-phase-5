@@ -101,6 +101,7 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     environment.setdefault("TMPDIR", str(temporary_root))
     if env:
         environment.update(env)
+    environment["ARW_STRICT_PREREQS"] = "1"
     result = subprocess.run(
         argv,
         cwd=PROJECT_ROOT,

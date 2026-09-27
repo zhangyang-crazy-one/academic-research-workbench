@@ -17,6 +17,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
 
 
+@pytest.mark.requires_retained_evidence("candidate", "build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) -> None:
     smoke_script = REPOSITORY_ROOT / "scripts/smoke-staged-plugin"
     stage_root = tmp_path / "stage" / PLUGIN_NAME
@@ -125,6 +128,9 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
     )
 
 
+@pytest.mark.requires_retained_evidence("candidate", "build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_identity_loader_rejects_tampered_packaged_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

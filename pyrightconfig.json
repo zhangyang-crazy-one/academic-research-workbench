@@ -1,5 +1,17 @@
 {
-  "extraPaths": ["src", "extensions/local-store/src", "extensions/semantica/src"],
+  "extraPaths": [
+    "src",
+    "extensions/ars/src",
+    "extensions/storm/src",
+    "extensions/local-store/src",
+    "extensions/semantica/src",
+    "extensions/artifact-integrity/src",
+    "extensions/research-artifact/src",
+    "extensions/research-memory/src",
+    "extensions/research-learning/src",
+    "extensions/academic-humanization/src",
+    "extensions/submission-workflow/src"
+  ],
   "venvPath": ".",
   "venv": ".venv"
 }

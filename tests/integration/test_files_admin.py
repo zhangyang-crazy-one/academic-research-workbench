@@ -177,6 +177,7 @@ def test_failed_generation_preserves_selected_pointer_and_emits_receipt(tmp_path
     assert not list((service.root_control_path("research-root") / "generations").glob(".building-*"))
 
 
+@pytest.mark.requires_native_file_base
 def test_native_builder_attests_closed_candidate_and_rejects_unsafe_inputs(
     tmp_path: Path,
 ) -> None:

@@ -60,6 +60,9 @@ def _canaries() -> list[dict[str, str]]:
     return payload["canaries"]
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_positive_allowlist_excludes_every_private_class_and_canary(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _run_stage(stage_root)
@@ -110,6 +113,9 @@ def test_positive_allowlist_excludes_every_private_class_and_canary(tmp_path: Pa
 
 
 @pytest.mark.parametrize("kind", ["undeclared-file", "absolute-symlink"])
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_validation_rejects_post_build_extras_and_symlinks(
     tmp_path: Path, kind: str
 ) -> None:
@@ -130,6 +136,9 @@ def test_stage_validation_rejects_post_build_extras_and_symlinks(
     assert kind.split("-", 1)[-1] in validated.stderr.lower() or "allowlist" in validated.stderr.lower()
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_graph_database_and_fixture_payloads_are_not_staged(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _run_stage(stage_root)

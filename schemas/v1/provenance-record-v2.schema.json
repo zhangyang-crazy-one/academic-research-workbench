@@ -86,12 +86,141 @@
       "title": "MarkdownSection",
       "type": "object"
     },
+    "PdfLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.pdf-location.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pdf_page",
+            "pdf_paragraph",
+            "pdf_section",
+            "pdf_region",
+            "reference_entry"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "pdf_source_path": {
+          "minLength": 1,
+          "title": "Pdf Source Path",
+          "type": "string"
+        },
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "extraction_manifest_path": {
+          "minLength": 1,
+          "title": "Extraction Manifest Path",
+          "type": "string"
+        },
+        "extraction_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Manifest Sha256",
+          "type": "string"
+        },
+        "extractor_name": {
+          "enum": [
+            "pypdf",
+            "grobid",
+            "docling"
+          ],
+          "title": "Extractor Name",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "page",
+        "start",
+        "end",
+        "pdf_source_path",
+        "pdf_sha256",
+        "extraction_manifest_path",
+        "extraction_manifest_sha256",
+        "extractor_name",
+        "extractor_version"
+      ],
+      "title": "PdfLocation",
+      "type": "object"
+    },
     "SourceLocator": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "schema_version": {
-          "const": "arw.source-locator.v1",
+          "enum": [
+            "arw.source-locator.v1",
+            "arw.source-locator.v2"
+          ],
           "title": "Schema Version",
           "type": "string"
         },
@@ -126,6 +255,11 @@
               "byte_chunk": "#/$defs/ByteChunk",
               "lines": "#/$defs/LineRange",
               "markdown_section": "#/$defs/MarkdownSection",
+              "pdf_page": "#/$defs/PdfLocation",
+              "pdf_paragraph": "#/$defs/PdfLocation",
+              "pdf_region": "#/$defs/PdfLocation",
+              "pdf_section": "#/$defs/PdfLocation",
+              "reference_entry": "#/$defs/PdfLocation",
               "text_page": "#/$defs/TextPage"
             },
             "propertyName": "kind"
@@ -142,6 +276,9 @@
             },
             {
               "$ref": "#/$defs/ByteChunk"
+            },
+            {
+              "$ref": "#/$defs/PdfLocation"
             }
           ],
           "title": "Location"

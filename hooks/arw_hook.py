@@ -25,7 +25,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-
 MAX_INPUT_BYTES = 64 * 1024
 MAX_DEFINITION_BYTES = 256 * 1024
 RECEIPT_SCHEMA = "arw.codex-hook-observation.v1"
@@ -139,7 +138,7 @@ def _validate_official_input(value: Mapping[str, Any]) -> str:
     event = value.get("hook_event_name")
     if not isinstance(event, str) or event not in _EVENT_FIELDS:
         raise HookWireError("unsupported-hook-event")
-    if set(value) != _EVENT_FIELDS[event]:
+    if not _EVENT_FIELDS[event] <= value.keys():
         raise HookWireError("official-schema-field-mismatch")
 
     if not _bounded_string(value["session_id"], limit=512):
@@ -150,10 +149,7 @@ def _validate_official_input(value: Mapping[str, Any]) -> str:
         raise HookWireError("invalid-model")
     if not _bounded_string(value["transcript_path"], nullable=True, limit=4096):
         raise HookWireError("invalid-transcript-path")
-    if (
-        not isinstance(value["permission_mode"], str)
-        or value["permission_mode"] not in PERMISSION_MODES
-    ):
+    if not _bounded_string(value["permission_mode"], limit=128):
         raise HookWireError("invalid-permission-mode")
 
     if event == "SessionStart":
@@ -216,6 +212,12 @@ def _redacted_receipt(
     definition_sha256: str,
     plugin_root_sha256: str,
 ) -> dict[str, Any]:
+    unknown_names = sorted(
+        name
+        for name in value.keys() - _EVENT_FIELDS[event]
+        if _bounded_string(name, limit=128)
+    )[:32]
+    known_permission_mode = value["permission_mode"] in PERMISSION_MODES
     receipt: dict[str, Any] = {
         "schema_version": RECEIPT_SCHEMA,
         "authority": "observational",
@@ -229,7 +231,9 @@ def _redacted_receipt(
         "agent_type_sha256": _digest(value["agent_type"]) if "agent_type" in value else None,
         "model_sha256": _digest(value["model"]),
         "cwd_sha256": _digest(value["cwd"]),
-        "permission_mode": value["permission_mode"],
+        "permission_mode": value["permission_mode"] if known_permission_mode else None,
+        "permission_mode_unrecognized": not known_permission_mode,
+        "unrecognized_fields": unknown_names,
         "source": value.get("source"),
         "stop_hook_active": value.get("stop_hook_active"),
         "status": "observed",

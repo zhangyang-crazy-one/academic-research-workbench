@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -22,6 +24,9 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@pytest.mark.requires_native_file_base
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
 def test_real_candidate_stage_install_and_transfer(tmp_path: Path) -> None:
     canonical = [ROOT / "SBOM.cdx.json", ROOT / "vendor/source-manifest.json"]
     before = [_sha256(path) for path in canonical]

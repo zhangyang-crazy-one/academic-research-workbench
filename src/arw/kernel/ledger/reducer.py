@@ -7,40 +7,10 @@ from typing import Literal
 
 from pydantic import Field
 
-from arw.kernel.state.models import (
-    AssignmentPreparedPayload,
-    AssignmentSupersededPayload,
-    AttemptClosedPayload,
-    AttemptLifecyclePayload,
-    AttemptPreparedPayload,
-    AttemptStartedPayload,
-    ArtifactAcceptedPayload,
-    CanonicalEvent,
-    ExecutionModeSelectedPayload,
-    ExperimentProvenanceAcceptedPayload,
-    GateEvaluatedPayload,
-    HostIdentityAcceptedPayload,
-    HookObservedPayload,
-    HumanAuthorityAcceptedPayload,
-    HumanDecisionRequestedPayload,
-    HumanDecisionRecordedPayload,
-    HumanDecisionResolvedPayload,
-    LifecycleTransitionedPayload,
-    PassportAcceptedPayload,
-    PanelPreparedPayload,
-    ProposalAcceptedPayload,
-    ProposalRejectedPayload,
-    RecoveryHealth,
-    RecoveryCompletedPayload,
-    ReviewReportAcceptedPayload,
-    ReviewSynthesisAcceptedPayload,
-    ResumeAcceptedPayload,
-    Sha256,
-    StableRuntimeId,
-    StrictModel,
-    ZERO_HASH,
+from arw.kernel.ledger.execution_provenance import (
+    ExecutionProvenanceError,
+    project_execution_provenance,
 )
-from arw.kernel.state.orchestration_models import RETRYABLE_FAILURES
 from arw.kernel.ledger.workflows import (
     LEGACY_WORKFLOW_ID,
     WorkflowDefinitionError,
@@ -50,7 +20,41 @@ from arw.kernel.ledger.workflows import (
     require_transition,
     require_workflow,
 )
-
+from arw.kernel.state.models import (
+    EXECUTION_PROVENANCE_EVENT_TYPES,
+    ZERO_HASH,
+    ArtifactAcceptedPayload,
+    AssignmentPreparedPayload,
+    AssignmentSupersededPayload,
+    AttemptClosedPayload,
+    AttemptLifecyclePayload,
+    AttemptPreparedPayload,
+    AttemptStartedPayload,
+    CanonicalEvent,
+    ExecutionModeSelectedPayload,
+    ExperimentProvenanceAcceptedPayload,
+    GateEvaluatedPayload,
+    HookObservedPayload,
+    HostIdentityAcceptedPayload,
+    HumanAuthorityAcceptedPayload,
+    HumanDecisionRecordedPayload,
+    HumanDecisionRequestedPayload,
+    HumanDecisionResolvedPayload,
+    LifecycleTransitionedPayload,
+    PanelPreparedPayload,
+    PassportAcceptedPayload,
+    ProposalAcceptedPayload,
+    ProposalRejectedPayload,
+    RecoveryCompletedPayload,
+    RecoveryHealth,
+    ResumeAcceptedPayload,
+    ReviewReportAcceptedPayload,
+    ReviewSynthesisAcceptedPayload,
+    Sha256,
+    StableRuntimeId,
+    StrictModel,
+)
+from arw.kernel.state.orchestration_models import RETRYABLE_FAILURES
 
 REDUCER_VERSION = "1.0.0"
 
@@ -328,6 +332,20 @@ def reduce_events(
     require_workflow(workflow_definition_id)
     if not events:
         raise ReducerError("a run requires at least run.initialized")
+    try:
+        execution_facts = project_execution_provenance(events)
+        if execution_facts.context is not None:
+            context = execution_facts.context.payload
+            definition = require_workflow(workflow_definition_id)
+            if (
+                context.workflow_definition_id != workflow_definition_id
+                or context.workflow_definition_sha256 != definition.sha256
+            ):
+                raise ReducerError(
+                    "execution context differs from active workflow definition"
+                )
+    except ExecutionProvenanceError as error:
+        raise ReducerError(str(error)) from error
     run_id = events[0].run_id
     stage = "initialized"
     revision = 0
@@ -395,6 +413,20 @@ def reduce_events(
             raise ReducerError(str(error)) from error
         if not actor_can_commit(role, category):
             raise ReducerError(f"actor role {role!r} is not authorized for {category}")
+        if event.event_type in EXECUTION_PROVENANCE_EVENT_TYPES and event_index:
+            previous = events[event_index - 1]
+            if previous.event_type in {"human_decision.resolved", "recovery.completed"}:
+                raise ReducerError(
+                    "execution provenance cannot split Passport adjacency"
+                )
+            if previous.event_type == "lifecycle.transitioned":
+                transition = require_transition(
+                    workflow_definition_id,
+                    previous.payload.from_stage,
+                    previous.payload.transition_id,
+                )
+                if transition.coherent_checkpoint:
+                    raise ReducerError("execution provenance cannot split Passport adjacency")
         from arw.kernel.state.research_artifact import validate_artifact_event_progress
         try:
             validate_artifact_event_progress(events[:event_index], event)

@@ -7,6 +7,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -230,6 +232,7 @@ def _assert_rejection_unchanged(
     assert harness.snapshot(f"{label}-after", run_root) == before
 
 
+@pytest.mark.requires_retained_evidence("candidate_or_phase2_stage")
 def test_staged_projection_free_durable_runtime_design_intent(tmp_path: Path) -> None:
     from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
     from arw.kernel.ledger.workflows import CORE_WORKFLOW

@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '12 3 * * *'
 
 permissions:
   contents: read
@@ -16,6 +18,7 @@ concurrency:
 jobs:
   python:
     name: Python
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: package-boundary
     strategy:
@@ -24,39 +27,57 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
       - uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
+          enable-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: academic-research-workbench-ci-${{ github.sha }}
           path: build/candidate-from-ci-transfer
       - name: Extract candidate with hidden files and executable modes
-        run: python scripts/candidate-bundle extract --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz --output-root build/candidate-from-ci
+        run: |
+          python scripts/candidate-bundle extract \
+            --archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz \
+            --output-root build/candidate-from-ci
       - name: Select the exact gated candidate for stage regressions
         run: |
-          python scripts/candidate-bundle verify --bundle-root build/candidate-from-ci
+          python scripts/candidate-bundle verify \
+            --bundle-root build/candidate-from-ci
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
           root = Path('build/candidate-from-ci').resolve()
-          artifacts = json.loads((root / 'build-evidence.json').read_text())['artifacts']
+          build_ev = json.loads((root / 'build-evidence.json').read_text())
+          artifacts = build_ev['artifacts']
           wheels = [item for item in artifacts if item['kind'] == 'wheel']
           assert len(wheels) == 1, wheels
           with Path(os.environ['GITHUB_ENV']).open('a') as output:
               output.write(f"ARW_CANDIDATE_WHEEL={root / wheels[0]['path']}\n")
-              output.write(f"ARW_BUILD_EVIDENCE={root / 'build-evidence.json'}\n")
+              be = root / 'build-evidence.json'
+              output.write(f'ARW_BUILD_EVIDENCE={be}\n')
               output.write(f"ARW_CANDIDATE_EVIDENCE_ROOT={root / 'evidence'}\n")
           PY
       - name: Resolve development environment from declared ranges
         run: >-
           uv venv && .venv/bin/python scripts/install-unmanaged-deps.py
           --all-extras dev ars-test storm
+      - name: Validate source skills and stage allowlist
+        run: .venv/bin/python scripts/validate-skills
+      - name: Lint and type-check the adopted core surface
+        run: |
+          .venv/bin/ruff check --isolated --select E4,E7,E9,F \
+            src/arw/kernel/core src/arw/files_opt_in.py \
+            src/arw/platform_support.py
+          .venv/bin/ruff format --check \
+            src/arw/files_opt_in.py src/arw/platform_support.py
+          .venv/bin/pyright src/arw/kernel/core \
+            src/arw/files_opt_in.py src/arw/platform_support.py
       - name: Materialize pinned source snapshots
         run: |
           ./scripts/materialize-sources --clean
@@ -66,88 +87,21 @@ jobs:
           UV_OFFLINE: "1"
         run: >-
           .venv/bin/python -m pytest -q
-          tests/integration/test_source_materialization.py::test_exact_snapshots_patch_and_canonical_license_paths_are_materialized
-          tests/integration/test_source_materialization.py::test_materializer_tree_digest_uses_the_manifest_wire_encoding
-      - name: Run non-host contract and provenance tests
-        env:
-          PYTHONNOUSERSITE: "1"
-          UV_OFFLINE: "1"
-        run: >-
-          .venv/bin/python -m pytest -q
-          tests/unit
-          tests/schema
-          tests/unit/test_integration_lock.py
+          tests/integration/test_source_materialization.py
       - name: Run v2 compatibility baseline
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
-        # tests/compat is listed explicitly: a bare marker run still
-        # COLLECTS the whole tests/ tree, and host-dependent integration
-        # modules (e.g. phase-07 installed E2E) fail collection on runners
-        # without an installed Codex binary. Path-scoping avoids that.
-        # The native-binary golden (test_filebase_mcp_contract.py) skips on
-        # clean runners BY DESIGN: PR CI has no pinned C toolchain, and
-        # building here would rebaseline vendor/source-manifest.json with
-        # toolchain-drifted hashes. Native-binary-dependent suites (native
-        # surface, confinement, file security) run in the local
-        # qualification flow (scripts/verify-phase-*), matching release.yml.
-        # The package-boundary job uses the committed digest-bound pre-vendor
-        # receipt and runs the candidate license gate for this CI wheel.
-        # Native host qualification remains a separate retained workflow.
-        run: >-
-          .venv/bin/python -m pytest -q -m v2_compat tests/compat
-      - name: Run Phase 4 lifecycle and hook regression tests
+        run: .venv/bin/python -m pytest -q -m v2_compat tests/compat
+      - name: Run complete non-host test tree
         env:
           PYTHONNOUSERSITE: "1"
           UV_OFFLINE: "1"
+        # v2_compat is qualified by the preceding dedicated step. Keep tests/
+        # as the discovery root so new modules cannot be lost from a path list.
         run: >-
           .venv/bin/python -m pytest -q
-          tests/unit/test_hook_contracts.py
-          tests/unit/test_orchestration_models.py
-          tests/unit/test_orchestration_cli.py
-          tests/unit/test_scheduler.py
-          tests/integration/test_human_gates.py
-          tests/integration/test_orchestration_hook_parity.py
-          tests/integration/test_orchestration_lifecycle.py
-          tests/integration/test_orchestration_panels.py
-          tests/integration/test_orchestration_replay.py
-          tests/integration/test_phase4_verifier.py
-      - name: Run store inventory and audit regressions
-        env:
-          PYTHONNOUSERSITE: "1"
-          UV_OFFLINE: "1"
-        run: >-
-          .venv/bin/python -m pytest -q
-          tests/integration/test_files_store_inventory_binding.py
-          tests/integration/test_files_store_mcp_history.py
-          tests/integration/test_files_store_mcp_lifecycle.py
-          tests/integration/test_semantica_conflict_policies.py
-          tests/integration/test_semantica_lite.py
-          tests/integration/test_semantica_audit_reconciliation.py
-      - name: Run artifact inspection and acceptance regressions
-        env:
-          PYTHONNOUSERSITE: "1"
-          UV_OFFLINE: "1"
-        run: >-
-          .venv/bin/python -m pytest -q
-          tests/integration/test_artifact_integrity_cli.py
-          tests/integration/test_artifact_sanitize.py
-      - name: Run research artifact, memory and learning regressions
-        env:
-          PYTHONNOUSERSITE: "1"
-          UV_OFFLINE: "1"
-        run: >-
-          .venv/bin/python -m pytest -q
-          tests/integration/test_research_artifacts.py
-          tests/integration/test_research_memory.py
-          tests/integration/test_research_learning.py tests/integration/test_writing.py
-      - name: Run binary format and provider-extraction regressions
-        run: .venv/bin/python -m pytest -q tests/integration/test_binary_metadata.py tests/integration/test_extension_extraction.py tests/unit/test_storm.py
-      - name: Run optional offline semantic retrieval regressions
-        env:
-          PYTHONNOUSERSITE: "1"
-          UV_OFFLINE: "1"
-        run: .venv/bin/python -m pytest -q tests/integration/test_semantic_retrieval.py
+          -m "not codex_host and not v2_compat" tests/
       - name: Run bundled ARS self-tests
         working-directory: skills/academic-research-suite/ars
         env:
@@ -161,17 +115,19 @@ jobs:
 
   package-boundary:
     name: Wheel and source archive boundary
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
       - uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
+          enable-cache: false
       - name: Resolve package boundary environment from declared ranges
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
       - name: Restore pinned legal receipt and materialize source snapshots
@@ -185,16 +141,25 @@ jobs:
           receipt = Path('supply-chain/pre-vendor-receipt.json')
           target = Path(manifest['pre_vendor_receipt']['path'])
           sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
-          assert sha == manifest['pre_vendor_receipt']['sha256'], 'pinned legal receipt digest mismatch'
+          err = 'pinned legal receipt digest mismatch'
+          assert sha == manifest['pre_vendor_receipt']['sha256'], err
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_bytes(receipt.read_bytes())
-          target.with_name('receipt.sha256').write_text(sha + '\n')
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
           PY
           ./scripts/materialize-sources
-          (cd vendor/sources/file-base/graph-ui && npm ci --ignore-scripts --silent)
-          notice=build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md
-          ./vendor/sources/file-base/scripts/gen-third-party-notices.sh "$notice"
-          python -c "import shutil; shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')"
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          notice="$g/THIRD_PARTY_NOTICES.md"
+          script=./vendor/sources/file-base/scripts/gen-third-party-notices.sh
+          "$script" "$notice"
+          python - <<'PY'
+          import shutil
+          shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')
+          PY
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
       - name: Resolve native legal checker from configured index
@@ -226,16 +191,19 @@ jobs:
           PY
       - name: Build one candidate and generate its isolated legal evidence
         run: |
-          .venv/bin/python scripts/build-candidate --output-root build/candidate-ci
+          .venv/bin/python scripts/build-candidate \
+            --output-root build/candidate-ci
           python - <<'PY'
           import json
           from pathlib import Path
 
-          artifacts = json.loads(Path('build/candidate-ci/build-evidence.json').read_text())['artifacts']
+          be_text = Path('build/candidate-ci/build-evidence.json').read_text()
+          artifacts = json.loads(be_text)['artifacts']
           wheels = [item for item in artifacts if item['kind'] == 'wheel']
           assert len(wheels) == 1, wheels
           with Path('build/candidate-ci/wheel-path.txt').open('w') as stream:
-              stream.write(str(Path('build/candidate-ci') / wheels[0]['path']) + '\n')
+              w = str(Path('build/candidate-ci') / wheels[0]['path'])
+              stream.write(f'{w}\n')
           PY
           wheel="$(cat build/candidate-ci/wheel-path.txt)"
           .venv/bin/python scripts/license-gate \
@@ -250,7 +218,8 @@ jobs:
           .venv/bin/python scripts/candidate-bundle verify \
             --bundle-root build/candidate-bundle-ci
           .venv/bin/python scripts/candidate-bundle archive \
-            --bundle-root build/candidate-bundle-ci --output build/candidate-bundle.tar.gz
+            --bundle-root build/candidate-bundle-ci \
+            --output build/candidate-bundle.tar.gz
           test -s build/candidate-bundle.tar.gz
       - name: Inspect candidate wheel and source archive boundaries
         run: |
@@ -261,9 +230,16 @@ jobs:
           from zipfile import ZipFile
 
           root = Path('build/candidate-bundle-ci')
-          artifacts = json.loads((root / 'build-evidence.json').read_text())['artifacts']
-          wheel = next(root / item['path'] for item in artifacts if item['kind'] == 'wheel')
-          source = next(root / item['path'] for item in artifacts if item['kind'] == 'sdist')
+          build_ev = json.loads((root / 'build-evidence.json').read_text())
+          artifacts = build_ev['artifacts']
+          wheel = next(
+              root / item['path']
+              for item in artifacts if item['kind'] == 'wheel'
+          )
+          source = next(
+              root / item['path']
+              for item in artifacts if item['kind'] == 'sdist'
+          )
           with ZipFile(wheel) as archive:
               names = archive.namelist()
           with tarfile.open(source) as archive:
@@ -277,9 +253,10 @@ jobs:
           )
           leaked = [name for name in names if name.startswith(forbidden)]
           assert not leaked, leaked
-          assert not any(any(part in {'.planning', 'build', '.evidence', '.file-base',
-                                      '.env', 'credentials', 'secrets'}
-                             for part in Path(name).parts) or 'vendor/sources/' in name
+          bad_parts = {'.planning', 'build', '.evidence', '.file-base',
+                       '.env', 'credentials', 'secrets'}
+          assert not any(any(part in bad_parts for part in Path(name).parts)
+                         or 'vendor/sources/' in name
                          for name in source_names), source_names
           PY
       - name: Run focused candidate artifact regressions
@@ -295,3 +272,186 @@ jobs:
           name: academic-research-workbench-ci-${{ github.sha }}
           path: build/candidate-bundle.tar.gz
           if-no-files-found: error
+
+  attest-candidate:
+    name: Attest validated main candidate
+    if: >-
+      success() && github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: [package-boundary, python]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: academic-research-workbench-ci-${{ github.sha }}
+          path: candidate-transfer
+      - name: Extract and verify same-run candidate bundle
+        run: |
+          python scripts/candidate-bundle extract \
+            --archive candidate-transfer/candidate-bundle.tar.gz \
+            --output-root candidate-bundle
+          python scripts/candidate-bundle verify \
+            --bundle-root candidate-bundle
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('candidate-bundle')
+          build = json.loads((root / 'build-evidence.json').read_text())
+          commit = os.environ['GITHUB_SHA']
+          assert build['source_identity']['git_commit'] == commit
+          assert build['source_identity']['git_status'] == ''
+          artifacts = build['artifacts']
+          expected = {'wheel': '.whl', 'sdist': '.tar.gz'}
+          err = 'unexpected candidate artifact count'
+          assert len(artifacts) == len(expected), err
+          for kind, suffix in expected.items():
+              matches = [item for item in artifacts if item['kind'] == kind]
+              assert len(matches) == 1, f'missing or duplicated {kind}'
+              p = matches[0]['path']
+              assert p.startswith('dist/') and p.endswith(suffix)
+          assert len(list((root / 'dist').glob('*.whl'))) == 1
+          assert len(list((root / 'dist').glob('*.tar.gz'))) == 1
+          PY
+      - name: Attest candidate wheel, sdist and SBOM file provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            candidate-bundle/dist/*.whl
+            candidate-bundle/dist/*.tar.gz
+            candidate-bundle/evidence/SBOM.cdx.json
+      - name: Attest CycloneDX SBOM for wheel and sdist
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            candidate-bundle/dist/*.whl
+            candidate-bundle/dist/*.tar.gz
+          sbom-path: candidate-bundle/evidence/SBOM.cdx.json
+
+  native-security:
+    name: Linux native confinement
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+      - name: Install native test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace build-essential
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          uv venv
+          .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Restore legal receipt and materialize pinned native source
+        run: |
+          mkdir -p build
+          manifest=vendor/source-manifest.json
+          sha256sum "$manifest" > build/ci-native-manifest.sha256
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          assert sha == manifest['pre_vendor_receipt']['sha256']
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
+          PY
+          ./scripts/materialize-sources --clean
+          sha256sum -c build/ci-native-manifest.sha256
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          notice="$g/THIRD_PARTY_NOTICES.md"
+          script=./vendor/sources/file-base/scripts/gen-third-party-notices.sh
+          "$script" "$notice"
+          python - <<'PY'
+          import shutil
+          shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')
+          PY
+          python scripts/verify-pinned-notice
+          ./scripts/verify-sources --inputs-only
+      - name: Run nightly ASan and UBSan suite
+        if: github.event_name == 'schedule'
+        run: |
+          mkdir -p build/sanitizer-runtime
+          for library in libasan.so libubsan.so; do
+            resolved="$(readlink -f "$(cc -print-file-name="$library")")"
+            test -f "$resolved"
+            dest="build/sanitizer-runtime/$(basename "$resolved")"
+            install -m 0644 "$resolved" "$dest"
+            ln -s "$(basename "$resolved")" "build/sanitizer-runtime/$library"
+          done
+          ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
+            ./scripts/offline-exec \
+            --evidence-root build/evidence/ci-native-sanitized \
+            ./scripts/build-file-base --clean --ci-ephemeral \
+              --run-upstream-tests --sanitizers asan,ubsan
+      - name: Build native test binary under network denial
+        if: github.event_name != 'schedule'
+        run: >-
+          ./scripts/offline-exec --evidence-root build/evidence/ci-native
+          ./scripts/build-file-base --clean --ci-ephemeral
+      - name: Verify native build left the source manifest unchanged
+        run: sha256sum -c build/ci-native-manifest.sha256
+      - name: Enforce direct native confinement and admin regressions
+        env:
+          ARW_STRICT_PREREQS: '1'
+        run: >-
+          .venv/bin/python -m pytest -q
+          tests/integration/test_mcp_confinement.py
+          tests/integration/test_files_admin.py -k
+          "test_direct_native_confinement_matrix or
+          test_parent_only_admin_commands_build_complete_sibling_generation or
+          test_native_builder_attests_closed_candidate_and_rejects_
+          unsafe_inputs"
+
+  macos-core:
+    name: macOS Tier 2 core
+    if: github.event_name != 'schedule'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+      - name: Resolve declared test dependencies
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Exercise canonical state and recovery on macOS
+        run: >-
+          .venv/bin/python -m pytest -q
+          tests/unit/test_canonical.py
+          tests/unit/test_manifests.py
+          tests/unit/test_recovery_scan.py
+          tests/unit/test_platform_support.py

@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -27,6 +26,7 @@ def _verifier_module():
     return module
 
 
+@pytest.mark.requires_retained_evidence("build/evidence/phase-05/verdict.json", "build/evidence/phase-04.1-verifier-final-20260715f/commands/P04-05-T01/exit.json")
 def test_prior_phase_graph_and_independence_receipts_are_exact() -> None:
     verifier = _verifier_module()
     receipts = verifier.validate_receipts()
@@ -40,6 +40,7 @@ def test_prior_phase_graph_and_independence_receipts_are_exact() -> None:
     assert set(independence["independence_command_exit_sha256"]) == {"P04-05-T01", "P04-05-T02"}
 
 
+@pytest.mark.requires_retained_evidence("build/evidence/phase-05/stage-tree.json")
 def test_missing_file_base_receipt_fails_closed(tmp_path: Path) -> None:
     verifier = _verifier_module()
     phase5 = tmp_path / "phase-05"
@@ -54,6 +55,7 @@ def test_missing_file_base_receipt_fails_closed(tmp_path: Path) -> None:
         verifier.validate_receipts(phase5_root=phase5)
 
 
+@pytest.mark.requires_retained_evidence("build/evidence/phase-05/verdict.json")
 def test_tampered_graph_verdict_fails_closed(tmp_path: Path) -> None:
     verifier = _verifier_module()
     phase5 = tmp_path / "phase-05"
@@ -66,6 +68,7 @@ def test_tampered_graph_verdict_fails_closed(tmp_path: Path) -> None:
         verifier.validate_receipts(phase5_root=phase5)
 
 
+@pytest.mark.requires_retained_evidence("build/evidence/phase-05/graph-control/roots/research-root/selected-generation.json")
 def test_tampered_graph_control_receipt_fails_closed(tmp_path: Path) -> None:
     verifier = _verifier_module()
     phase5 = tmp_path / "phase-05"
@@ -78,6 +81,7 @@ def test_tampered_graph_control_receipt_fails_closed(tmp_path: Path) -> None:
         verifier.validate_receipts(phase5_root=phase5)
 
 
+@pytest.mark.requires_retained_evidence("build/evidence/phase-04.1-verifier-final-20260715f/commands/P04-05-T01/exit.json")
 def test_tampered_independence_receipt_fails_closed(tmp_path: Path) -> None:
     verifier = _verifier_module()
     phase41 = tmp_path / "phase-04.1"
@@ -116,10 +120,19 @@ def test_owned_root_rejects_traversal_and_unowned_clean(tmp_path: Path) -> None:
 
 def test_phase7_inputs_reject_symlink_and_external_root(tmp_path: Path) -> None:
     verifier = _verifier_module()
-    stage_link = tmp_path / "stage-link"
-    stage_link.symlink_to(verifier.STAGE_ROOT, target_is_directory=True)
-    with pytest.raises(verifier.VerificationError, match="path must remain below|symlink"):
-        verifier._safe_phase7_input(stage_link, base=verifier.STAGE_BASE, label="stage")
+    stage_base = tmp_path / "stage"
+    stage_base.mkdir()
+    stage_root = stage_base / "qualified"
+    stage_root.mkdir()
+    stage_link = stage_base / "stage-link"
+    stage_link.symlink_to(stage_root, target_is_directory=True)
+    with pytest.raises(verifier.VerificationError, match="symlink"):
+        verifier._safe_phase7_input(stage_link, base=stage_base, label="stage")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    with pytest.raises(verifier.VerificationError, match="path must remain below"):
+        verifier._safe_phase7_input(outside, base=stage_base, label="stage")
 
 
 def test_secret_stream_and_incomplete_commands_fail_closed() -> None:

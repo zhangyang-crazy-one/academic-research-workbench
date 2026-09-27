@@ -16,6 +16,7 @@ from arw.cli import main
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
 from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.execution import submission as submission_module
 from arw.kernel.execution.execution import DeterministicFakeAdapter
 from arw.kernel.execution.orchestration import OrchestrationService
 from arw.kernel.execution.runtime import RuntimeCommandService
@@ -573,6 +574,7 @@ def test_a1_first_submission_cli_reaches_bound_human_boundary_without_network(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
     monkeypatch.syspath_prepend(str(SUBMISSION_EXTENSION))
+    monkeypatch.setattr(submission_module, "_now", lambda: "2026-09-21T12:45:00Z")
 
     def fail_network(*_args, **_kwargs):
         raise AssertionError("submission acceptance must not perform network IO")

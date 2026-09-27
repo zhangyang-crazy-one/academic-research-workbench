@@ -1,0 +1,6 @@
+{
+  "protocol_version": "2026-07-28",
+  "supported_versions": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"],
+  "server_name": "academic-research-files",
+  "tool_names": ["list_files", "read_file", "search_files", "get_outline", "get_context"]
+}

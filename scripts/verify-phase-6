@@ -130,6 +130,7 @@ def command(root: Path, name: str, argv: list[str], *, env: dict[str, str] | Non
     environment.update({"UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
     if env:
         environment.update(env)
+    environment["ARW_STRICT_PREREQS"] = "1"
     result = subprocess.run(argv, cwd=PROJECT_ROOT, env=environment, capture_output=True, check=False)
     stdout, stderr = result.stdout[:MAX_CAPTURE], result.stderr[:MAX_CAPTURE]
     (target / "stdout.log").write_bytes(stdout)

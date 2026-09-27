@@ -16,10 +16,11 @@ dependencies = [
 
 [project.optional-dependencies]
 artifact-formats = ["pypdf>=6.14.2", "pillow>=12.3.0"]
+scholarly-pdf = ["pypdf>=6.14.2", "docling>=2.60.0"]
 semantic = ["sqlite-vec>=0.1.9"]
 
 [dependency-groups]
-dev = ["hatchling>=1.31.0", "packaging>=25.0", "PyYAML>=6.0.3", "pytest>=9.1.1"]
+dev = ["hatchling>=1.31.0", "packaging>=25.0", "PyYAML>=6.0.3", "pytest>=9.1.1", "ruff>=0.15.21", "pyright>=1.1.411"]
 ars-test = [
   "defusedxml>=0.7.1",
   "jsonschema[format]>=4.17",
@@ -55,6 +56,10 @@ addopts = ["--strict-markers", "-ra"]
 testpaths = ["tests"]
 markers = [
   "codex_host: exercises an authenticated fresh Codex host against installed plugin bytes",
+  "requires_native_file_base: needs the executable .file-base/bin/file-base",
+  "requires_materialized_sources: needs pinned snapshots under vendor/sources",
+  "requires_offline_network_isolation: needs Linux, usable strace, and a working bwrap or unshare network namespace",
+  "requires_retained_evidence(*paths): needs retained evidence paths or env:VARIABLE inputs",
   "v2_compat: v2 compatibility baseline — pins v1 CLI/MCP/replay/projection contracts (tests/compat)",
 ]
 
