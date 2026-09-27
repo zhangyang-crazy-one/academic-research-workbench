@@ -6,7 +6,7 @@ usage() {
 Usage: arw <command> [options]
 
 Commands:
-  health --json  Verify the installed offline Python package and runtime.
+  health --json  Verify the installed Python package and runtime.
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
@@ -54,10 +54,6 @@ fi
 
 COMMAND="$1"
 shift
-ARW_JSON_DIAGNOSTIC=0
-if [[ ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ]]; then
-  ARW_JSON_DIAGNOSTIC=1
-fi
 
 case "$COMMAND" in
   health|route|version|files|writing|semantic|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
@@ -68,6 +64,7 @@ esac
 
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
+
 # Runtime mode is an explicit gate. Unset / plugin / codex stay fail-closed on
 # the staged first-party wheel. agent / local-dev may use an editable checkout
 # interpreter; they never qualify a Codex release and do not invent host canary
@@ -85,12 +82,18 @@ case "$REQUESTED_RUNTIME" in
     ARW_RUNTIME_MODE="agent"
     ;;
   *)
-    fail "bootstrap-config" "ARW_RUNTIME must be unset, plugin, agent, or local-dev" 78
+    printf 'arw: bootstrap-config: ARW_RUNTIME must be unset, plugin, agent, or local-dev\n' >&2
+    exit 78
     ;;
 esac
 export ARW_RUNTIME_MODE
 if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
   export ARW_RUNTIME="${ARW_RUNTIME:-agent}"
+fi
+
+ARW_JSON_DIAGNOSTIC=0
+if [[ "$ARW_RUNTIME_MODE" != "agent" && ( ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ) ]]; then
+  ARW_JSON_DIAGNOSTIC=1
 fi
 
 # A source checkout in plugin mode has no staged wheel. Keep the opt-in preflight and health
@@ -125,21 +128,6 @@ if [[ "$ARW_RUNTIME_MODE" != "agent" && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py
     shift
     exec "$SOURCE_PYTHON" -m arw.files_opt_in enable "$@"
   fi
-fi
-case "$REQUESTED_RUNTIME" in
-  ""|plugin|codex)
-    ARW_RUNTIME_MODE="plugin"
-    ;;
-  agent|local-dev)
-    ARW_RUNTIME_MODE="agent"
-    ;;
-  *)
-    fail "bootstrap-config" "ARW_RUNTIME must be unset, plugin, agent, or local-dev" 78
-    ;;
-esac
-export ARW_RUNTIME_MODE
-if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
-  export ARW_RUNTIME="${ARW_RUNTIME:-agent}"
 fi
 
 python_is_supported() {
@@ -255,7 +243,15 @@ bootstrap_wheel_runtime() {
   WHEEL_PATH="$(cd -P -- "$(dirname -- "$wheel_path")" && pwd)"
   ARW_WHEEL="$wheel_path"
 
-  PYTHON="$(select_python)"
+  if PYTHON="$(select_python)"; then
+    :
+  else
+    status=$?
+    if [[ "${ARW_JSON_DIAGNOSTIC:-0}" == "1" && "$PYTHON" == \{* ]]; then
+      printf '%s\n' "$PYTHON"
+    fi
+    exit "$status"
+  fi
   PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
     || fail "interpreter-failed" "selected Python could not report its version" 78
   if ! python_is_supported "$PYTHON"; then
@@ -419,7 +415,6 @@ fi
 case "$COMMAND" in
   health)
     [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
-    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
       exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" "$INTERPRETER_SOURCE" <<'PY'
 import importlib.metadata
@@ -453,6 +448,7 @@ import platform
 import sys
 from arw.files_opt_in import health
 from arw.platform_support import platform_support
+
 
 if importlib.metadata.version("academic-research-workbench") != "0.1.0":
     raise SystemExit("installed package version mismatch")

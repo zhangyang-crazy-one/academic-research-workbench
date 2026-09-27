@@ -83,7 +83,7 @@ def test_install_python_prints_unmanaged_dependency_groups() -> None:
     assert any(item.startswith("pytest") for item in specs)
     source = installer.read_text(encoding="utf-8")
     assert "DEP_GROUPS" in source
-    assert not any(line.startswith("GROUPS=") or line.startswith("GROUPS+=") for line in source.splitlines())
+    assert not any(line.startswith(("GROUPS=", "GROUPS+=")) for line in source.splitlines())
     workflows = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "scripts/install-python" in workflows
     assert "--group dev --group ars-test --group storm" in workflows
@@ -92,7 +92,7 @@ def test_install_python_prints_unmanaged_dependency_groups() -> None:
 
 def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) -> None:
     result = _run(
-        [str(LAUNCHER), "health", "--json"],
+        [str(LAUNCHER), "route", "--json"],
         env={
             "PATH": os.environ.get("PATH", ""),
             "HOME": str(tmp_path / "home"),
