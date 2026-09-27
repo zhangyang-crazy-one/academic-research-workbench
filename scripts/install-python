@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Install the unmanaged ARW project with uv pip.
+#
+# uv refuses ``--group`` when ``[tool.uv] managed = false``, so this helper
+# reads PEP 735 ``[dependency-groups]`` from pyproject.toml and installs those
+# requirement strings directly. It does not create a lockfile or mark the
+# project as uv-managed.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: install-python [options]
+
+Options:
+  --python PATH     Interpreter that receives the install (default: .venv/bin/python)
+  --editable        Install the checkout editable (default)
+  --no-editable     Skip the project install; only install selected groups
+  --all-extras      Include project optional-dependencies
+  --group NAME      Install a pyproject [dependency-groups] entry (repeatable)
+  --print-group-specs NAME
+                    Print the resolved requirement strings for NAME and exit
+  -h, --help        Show this help text
+EOF
+}
+
+SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
+PYTHON_TARGET="${ARW_PYTHON:-$REPO_ROOT/.venv/bin/python}"
+EDITABLE=1
+ALL_EXTRAS=0
+# Do not name this GROUPS: bash exposes a read-only GROUPS array of GIDs.
+DEP_GROUPS=()
+PRINT_GROUP=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --python)
+      PYTHON_TARGET="$2"
+      shift 2
+      ;;
+    --editable)
+      EDITABLE=1
+      shift
+      ;;
+    --no-editable)
+      EDITABLE=0
+      shift
+      ;;
+    --all-extras)
+      ALL_EXTRAS=1
+      shift
+      ;;
+    --group)
+      DEP_GROUPS+=("$2")
+      shift 2
+      ;;
+    --print-group-specs)
+      PRINT_GROUP="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'install-python: unknown option: %s\n' "$1" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+parse_group() {
+  local group_name="$1"
+  python3 - "$REPO_ROOT/pyproject.toml" "$group_name" <<'PY'
+from __future__ import annotations
+
+import sys
+import tomllib
+from pathlib import Path
+
+path = Path(sys.argv[1])
+name = sys.argv[2]
+payload = tomllib.loads(path.read_text(encoding="utf-8"))
+groups = payload.get("dependency-groups")
+if not isinstance(groups, dict) or name not in groups:
+    raise SystemExit(f"unknown dependency group: {name}")
+for item in groups[name]:
+    if not isinstance(item, str) or not item.strip():
+        raise SystemExit(f"unsupported dependency-group entry in {name}: {item!r}")
+    print(item)
+PY
+}
+
+if [[ -n "$PRINT_GROUP" ]]; then
+  parse_group "$PRINT_GROUP"
+  exit 0
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  printf 'install-python: uv is required on PATH\n' >&2
+  exit 78
+fi
+
+if [[ ! -x "$PYTHON_TARGET" ]]; then
+  if [[ "$PYTHON_TARGET" == "$REPO_ROOT/.venv/bin/python" ]]; then
+    uv venv --directory "$REPO_ROOT"
+    PYTHON_TARGET="$REPO_ROOT/.venv/bin/python"
+  else
+    printf 'install-python: interpreter is not executable: %s\n' "$PYTHON_TARGET" >&2
+    exit 78
+  fi
+fi
+
+if [[ "$EDITABLE" -eq 1 ]]; then
+  extras=()
+  if [[ "$ALL_EXTRAS" -eq 1 ]]; then
+    extras+=(-r "$REPO_ROOT/pyproject.toml" --all-extras)
+  fi
+  uv pip install --python "$PYTHON_TARGET" --editable "$REPO_ROOT" "${extras[@]}"
+fi
+
+if [[ ${#DEP_GROUPS[@]} -gt 0 ]]; then
+  specs=()
+  for group in "${DEP_GROUPS[@]}"; do
+    while IFS= read -r spec; do
+      [[ -n "$spec" ]] && specs+=("$spec")
+    done < <(parse_group "$group")
+  done
+  if [[ ${#specs[@]} -eq 0 ]]; then
+    printf 'install-python: no requirements resolved for groups: %s\n' "${DEP_GROUPS[*]}" >&2
+    exit 65
+  fi
+  uv pip install --python "$PYTHON_TARGET" "${specs[@]}"
+fi

@@ -65,8 +65,8 @@ jobs:
           PY
       - name: Resolve development environment from declared ranges
         run: >-
-          uv venv && .venv/bin/python scripts/install-unmanaged-deps.py
-          --all-extras dev ars-test storm
+          uv venv && ./scripts/install-python
+          --all-extras --group dev --group ars-test --group storm
       - name: Validate source skills and stage allowlist
         run: .venv/bin/python scripts/validate-skills
       - name: Lint and type-check the adopted core surface
@@ -129,7 +129,7 @@ jobs:
         with:
           enable-cache: false
       - name: Resolve package boundary environment from declared ranges
-        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+        run: uv venv && ./scripts/install-python --group dev
       - name: Restore pinned legal receipt and materialize source snapshots
         run: |
           python - <<'PY'
