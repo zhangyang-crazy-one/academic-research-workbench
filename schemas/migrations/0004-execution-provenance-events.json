@@ -1,0 +1,12 @@
+{
+  "migration": 4,
+  "event_schema_version": "1.4.0",
+  "historical_action": "retain bytes; add reader variants",
+  "event_types": [
+    "execution_provenance.context_accepted",
+    "execution_provenance.dataset_metadata_accepted",
+    "execution_provenance.action_started",
+    "execution_provenance.action_finished",
+    "execution_provenance.artifact_bound"
+  ]
+}

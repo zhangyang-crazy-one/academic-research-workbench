@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
 FORBIDDEN_FRAGMENTS = (
@@ -24,6 +26,9 @@ def _required_executable(relative_path: str) -> Path:
     return executable
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
     tmp_path: Path,
 ) -> None:
@@ -41,7 +46,7 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
     }
 
     staged = subprocess.run(
-        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        [str(stage_script), "--clean", "--stage-root", str(stage_root), *candidate_stage_args()],
         cwd=unrelated_cwd,
         env=environment,
         text=True,
@@ -75,7 +80,12 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
         "python": health["python"],
         "runtime_identity": health["runtime_identity"],
         "status": "ok",
+        "file_base": health["file_base"],
+        "platform": health["platform"],
     }
+    assert health["file_base"]["state"] == "disabled"
+    assert health["file_base"]["reason_code"] == "opt_in_required"
+    assert health["platform"]["tier"] == "tier-1"
     major, minor = (int(value) for value in health["python"].split(".")[:2])
     assert (major, minor) >= (3, 13)
     assert len(health["runtime_identity"]) == 64
@@ -125,6 +135,9 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
     assert summary["inherited_pythonpath"] is False
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
     stage_script = _required_executable("scripts/stage-plugin")
     stage_root = tmp_path / "stage" / PLUGIN_NAME
@@ -138,7 +151,7 @@ def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
     }
 
     staged = subprocess.run(
-        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        [str(stage_script), "--clean", "--stage-root", str(stage_root), *candidate_stage_args()],
         cwd=tmp_path,
         env=environment,
         text=True,

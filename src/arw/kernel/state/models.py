@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+from datetime import date
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -14,7 +19,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-
 
 SCHEMA_VERSION = "1.0.0"
 ZERO_HASH = "0" * 64
@@ -65,6 +69,244 @@ class StrictModel(BaseModel):
         allow_inf_nan=False,
         json_schema_extra={"$schema": "https://json-schema.org/draft/2020-12/schema"},
     )
+
+
+def _execution_relative_path(value: str) -> str:
+    if (
+        not value
+        or "\x00" in value
+        or "\\" in value
+        or PurePosixPath(value).is_absolute()
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+        or PurePosixPath(value).as_posix() != value
+    ):
+        raise ValueError("execution source path must be normalized and relative")
+    return value
+
+
+class ComputerLanguageIdentity(StrictModel):
+    """Owner-asserted language identity for a workflow source."""
+
+    uri: Annotated[str, Field(min_length=1, max_length=2048)]
+    name: Annotated[str, Field(min_length=1, max_length=256)]
+    url: Annotated[str, Field(min_length=1, max_length=2048)]
+    version: Annotated[str, Field(min_length=1, max_length=128)]
+
+    @field_validator("name", "version")
+    @classmethod
+    def nonblank_label(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("language name and version must not be blank")
+        return value
+
+    @field_validator("uri")
+    @classmethod
+    def absolute_uri(cls, value: str) -> str:
+        if any(character.isspace() for character in value):
+            raise ValueError("language URI must be absolute without whitespace")
+        parts = urlsplit(value)
+        if (
+            not parts.scheme
+            or not (parts.netloc or parts.path)
+            or (parts.scheme in {"http", "https"} and not parts.netloc)
+        ):
+            raise ValueError("language URI must be absolute")
+        return value
+
+    @field_validator("url")
+    @classmethod
+    def absolute_url(cls, value: str) -> str:
+        if any(character.isspace() for character in value):
+            raise ValueError("language URL must be absolute HTTP(S)")
+        parts = urlsplit(value)
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.netloc
+            or parts.username
+            or parts.password
+        ):
+            raise ValueError("language URL must be absolute HTTP(S)")
+        return value
+
+
+class WorkflowSource(StrictModel):
+    entity_id: StableRuntimeId
+    relative_path: str
+    content_base64: Annotated[str, Field(max_length=349528)] | None
+    sha256: Sha256 | None
+    programming_language: ComputerLanguageIdentity | None
+
+    @field_validator("relative_path")
+    @classmethod
+    def valid_path(cls, value: str) -> str:
+        return _execution_relative_path(value)
+
+    @model_validator(mode="after")
+    def exact_bytes(self) -> Self:
+        if (self.content_base64 is None) != (self.sha256 is None):
+            raise ValueError("workflow source bytes and digest must appear together")
+        if self.content_base64 is not None:
+            try:
+                raw = base64.b64decode(self.content_base64, validate=True)
+            except binascii.Error as error:
+                raise ValueError("workflow source is not base64") from error
+            if len(raw) > 262144 or hashlib.sha256(raw).hexdigest() != self.sha256:
+                raise ValueError("workflow source bytes do not match bounded digest")
+            if base64.b64encode(raw).decode("ascii") != self.content_base64:
+                raise ValueError("workflow source base64 is not canonical")
+        return self
+
+
+class ExecutionStep(StrictModel):
+    step_id: StableRuntimeId
+    tool_id: StableRuntimeId
+    position: Annotated[int, Field(ge=1, le=128)]
+
+
+class ExecutionTool(StrictModel):
+    tool_id: StableRuntimeId
+    name: Annotated[str, Field(min_length=1, max_length=256)]
+    version: Annotated[str, Field(min_length=1, max_length=128)] | None = None
+
+
+class ExecutionRuntime(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=128)] | None
+    version: Annotated[str, Field(min_length=1, max_length=128)] | None
+    build_sha256: Sha256 | None
+
+
+class ExecutionContextAcceptedPayload(StrictModel):
+    workflow_definition_id: StableRuntimeId
+    workflow_definition_sha256: Sha256
+    workflow_source: WorkflowSource
+    steps: list[ExecutionStep] = Field(min_length=1, max_length=128)
+    tools: list[ExecutionTool] = Field(min_length=1, max_length=128)
+    runtime: ExecutionRuntime
+
+    @model_validator(mode="after")
+    def relations(self) -> Self:
+        if len({item.step_id for item in self.steps}) != len(self.steps):
+            raise ValueError("workflow step IDs must be unique")
+        tools = {item.tool_id for item in self.tools}
+        if len(tools) != len(self.tools):
+            raise ValueError("workflow tool IDs must be unique")
+        if any(step.tool_id not in tools for step in self.steps):
+            raise ValueError("workflow step references unknown tool")
+        if [step.position for step in self.steps] != list(
+            range(1, len(self.steps) + 1)
+        ):
+            raise ValueError("workflow steps must be ordered from one")
+        return self
+
+
+class DatasetMetadataAcceptedPayload(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=512)]
+    description: Annotated[str, Field(min_length=1, max_length=4096)]
+    date_published: str
+    license: Annotated[str, Field(min_length=1, max_length=2048)]
+    supersedes_event_id: EventId | None
+    supersedes_event_sha256: Sha256 | None
+    rationale: Annotated[str, Field(min_length=1, max_length=2048)] | None
+
+    @field_validator("date_published")
+    @classmethod
+    def valid_date(cls, value: str) -> str:
+        if len(value) != 10 or date.fromisoformat(value).isoformat() != value:
+            raise ValueError("publication date must be ISO YYYY-MM-DD")
+        return value
+
+    @model_validator(mode="after")
+    def revision_link(self) -> Self:
+        linked = self.supersedes_event_id is not None
+        if linked != (self.supersedes_event_sha256 is not None) or linked != (
+            self.rationale is not None
+        ):
+            raise ValueError(
+                "metadata correction needs predecessor ID, digest and rationale"
+            )
+        return self
+
+
+class ExecutionActionStartedPayload(StrictModel):
+    action_id: StableRuntimeId
+    kind: Literal["workflow", "tool"]
+    workflow_action_id: StableRuntimeId | None
+    assignment_id: StableRuntimeId | None
+    attempt_id: StableRuntimeId | None
+    step_id: StableRuntimeId | None
+    tool_id: StableRuntimeId | None
+    started_at: UtcTimestamp
+
+    @model_validator(mode="after")
+    def action_shape(self) -> Self:
+        detail = (
+            self.workflow_action_id,
+            self.assignment_id,
+            self.attempt_id,
+            self.step_id,
+            self.tool_id,
+        )
+        if self.kind == "workflow" and any(value is not None for value in detail):
+            raise ValueError("workflow action cannot claim a tool invocation")
+        if self.kind == "tool" and any(value is None for value in detail):
+            raise ValueError(
+                "tool action needs workflow, assignment, attempt, step and tool"
+            )
+        return self
+
+
+class ExecutionActionFinishedPayload(StrictModel):
+    action_id: StableRuntimeId
+    ended_at: UtcTimestamp
+    outcome: Literal["succeeded", "failed", "cancelled"]
+    host_agent_id: Annotated[str, Field(min_length=1, max_length=256)] | None = None
+    host_result_sha256: Sha256 | None = None
+    observed_runtime_version: (
+        Annotated[str, Field(min_length=1, max_length=128)] | None
+    ) = None
+    observed_runtime_sha256: Sha256 | None = None
+    observed_transport: Annotated[str, Field(min_length=1, max_length=128)] | None = (
+        None
+    )
+    error: Annotated[str, Field(min_length=1, max_length=2048)] | None = None
+
+
+class ExecutionArtifactBoundPayload(StrictModel):
+    entity_id: StableRuntimeId
+    direction: Literal["input", "output"]
+    action_id: StableRuntimeId
+    assignment_id: StableRuntimeId
+    attempt_id: StableRuntimeId
+    source_kind: Literal["run_input", "proposal", "artifact"]
+    source_event_id: EventId
+    source_event_sha256: Sha256
+    source_manifest_sha256: Sha256 | None
+    relative_path: str
+    content_sha256: Sha256
+    byte_count: Annotated[int, Field(ge=0, le=104857600)]
+
+    @field_validator("relative_path")
+    @classmethod
+    def valid_path(cls, value: str) -> str:
+        return _execution_relative_path(value)
+
+    @model_validator(mode="after")
+    def direction_source(self) -> Self:
+        if (self.source_kind == "run_input" and self.direction != "input") or (
+            self.source_kind == "proposal" and self.direction != "output"
+        ):
+            raise ValueError("binding direction and source kind disagree")
+        return self
+
+
+EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
+    "execution_provenance.context_accepted": ExecutionContextAcceptedPayload,
+    "execution_provenance.dataset_metadata_accepted": DatasetMetadataAcceptedPayload,
+    "execution_provenance.action_started": ExecutionActionStartedPayload,
+    "execution_provenance.action_finished": ExecutionActionFinishedPayload,
+    "execution_provenance.artifact_bound": ExecutionArtifactBoundPayload,
+}
+EXECUTION_PROVENANCE_EVENT_TYPES = frozenset(EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES)
 
 
 class ImmutableInput(StrictModel):
@@ -385,8 +627,10 @@ def _phase4_record(value: object, model_name: str) -> object:
 
 
 def _phase4_record_digest(value: object) -> str:
-    from arw.kernel.state.orchestration_models import canonical_orchestration_model_bytes
     from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.state.orchestration_models import (
+        canonical_orchestration_model_bytes,
+    )
 
     return sha256_hex(canonical_orchestration_model_bytes(value))  # type: ignore[arg-type]
 
@@ -731,6 +975,7 @@ PHASE4_EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
 
 
 EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
+    **EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES,
     "run.initialized": RunInitializedPayload,
     "baseline.probe_recorded": BaselineProbePayload,
     "lifecycle.transitioned": LifecycleTransitionedPayload,
@@ -756,8 +1001,13 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
 class CanonicalEvent(StrictModel):
     """One hash-chained event accepted by the canonical writer."""
 
-    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0"]
+    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]
     event_type: Literal[
+        "execution_provenance.context_accepted",
+        "execution_provenance.dataset_metadata_accepted",
+        "execution_provenance.action_started",
+        "execution_provenance.action_finished",
+        "execution_provenance.artifact_bound",
         'learning_observation_recorded', 'research_heuristic_proposed', 'research_heuristic_evaluated', 'research_heuristic_qualified', 'research_heuristic_rejected', 'research_heuristic_promoted', 'research_heuristic_superseded',
         "research_memory_created", "research_handoff_created", "research_memory_superseded",
         "research_memory_rejected", "research_memory_distilled", "research_memory_activated",
@@ -804,7 +1054,12 @@ class CanonicalEvent(StrictModel):
     actor_role: ActorRole | None = None
     prev_event_sha256: Sha256
     payload: (
-        ResearchLearningPayload
+        ExecutionContextAcceptedPayload
+        | DatasetMetadataAcceptedPayload
+        | ExecutionActionStartedPayload
+        | ExecutionActionFinishedPayload
+        | ExecutionArtifactBoundPayload
+        | ResearchLearningPayload
         | ResearchMemoryPayload
         | ResearchArtifactStagePayload
         | ResearchArtifactAcceptedPayload
@@ -853,6 +1108,8 @@ class CanonicalEvent(StrictModel):
             validate_memory_event(self.event_type, self.payload)
         if self.event_type in RESEARCH_LEARNING_EVENT_TYPES and self.actor_role != "parent_control_plane":
             raise ValueError("learning events require the parent writer")
+        if self.event_type in EXECUTION_PROVENANCE_EVENT_TYPES and self.actor_role != "parent_control_plane":
+            raise ValueError("execution provenance events require the parent writer")
         expected_payload = EVENT_PAYLOAD_TYPES[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("event_type and payload variant do not match")

@@ -36,6 +36,7 @@
     }
   ],
   "protocol": "MCP-2025-11-25-stdio",
+  "protocol_boundary": "legacy-only; server/discover and 2026-07-28 are unsupported",
   "capabilities": [
     "bounded-list-files",
     "confined-read-file",

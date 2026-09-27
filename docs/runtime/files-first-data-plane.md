@@ -8,6 +8,12 @@ runtime download or a generic MCP placeholder. Its source commit, patch
 series, binary digest, protocol, and capabilities are bound by
 `vendor/mcp-manifest.json` and the integration lock.
 
+The pinned native file-base process is a legacy MCP `2025-11-25` stdio server.
+It does not implement `2026-07-28` `server/discover` or per-request `_meta`.
+ARW's four Python stdio servers separately serve both MCP eras. Neither path
+uses client Roots to grant file access: server-side registration and root
+bindings control it.
+
 ## Ownership Boundary
 
 - The parent owns root registration, extraction registration, synchronization,

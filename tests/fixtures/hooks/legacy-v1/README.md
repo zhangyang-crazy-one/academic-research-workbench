@@ -1,0 +1,3 @@
+# Pre-change v1 receipt
+
+This receipt was emitted by the unmodified `hooks/arw_hook.py` and `hooks/hooks.json` from repository `HEAD` `056988033d9dde72fdf1c91c7432c206ad21dad3`, extracted into `/tmp/arw-hook-v1.k83Puu`. Its stdin was the verified Codex 0.144.4 `SessionStart.json` fixture. The old adapter exited 0 and produced the receipt under its isolated `PLUGIN_DATA` directory. The fixture is copied from that receipt without changing its canonical JSON bytes; its file SHA-256 is `d42ae38c1b766f4d0bd45220ff187ebedfd8cb55630bb1d8e39b31e8b62c45e2`, and the SHA-256 over its unsigned canonical content is the filename `cb42a36430800257e5dbb337ac92713d2ab74882882f65d63d21b81473046bed`.

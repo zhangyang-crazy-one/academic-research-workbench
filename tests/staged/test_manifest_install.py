@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -42,6 +43,9 @@ def _run(command: list[str], cwd: Path, environment: dict[str, str]) -> subproce
     )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_clean_allowlisted_stage_validates_and_installs(tmp_path: Path) -> None:
     stage_script = _required_executable("scripts/stage-plugin")
     smoke_script = _required_executable("scripts/smoke-staged-plugin")
@@ -52,7 +56,7 @@ def test_clean_allowlisted_stage_validates_and_installs(tmp_path: Path) -> None:
     environment = _isolated_environment(tmp_path / "isolation")
 
     staged = _run(
-        [str(stage_script), "--clean", "--stage-root", str(stage_root)],
+        [str(stage_script), "--clean", "--stage-root", str(stage_root), *candidate_stage_args()],
         unrelated_cwd,
         environment,
     )
@@ -85,4 +89,3 @@ def test_clean_allowlisted_stage_validates_and_installs(tmp_path: Path) -> None:
     assert summary["technical_qualification"] == "PASS"
     assert summary["stage_name"] == PLUGIN_NAME
     assert summary["installed_from_exact_stage"] is True
-

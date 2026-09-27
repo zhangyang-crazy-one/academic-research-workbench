@@ -23,6 +23,7 @@ from arw.kernel.policy.integration_lock import (
     observe_hook_definition,
     observe_stage_identity,
 )
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -81,6 +82,7 @@ def _stage(
         "--clean",
         "--stage-root",
         str(stage_root),
+        *candidate_stage_args(),
     ]
     if integration_lock is not None:
         command.extend(("--integration-lock", str(integration_lock)))
@@ -203,6 +205,9 @@ def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
     return _canonical_test_lock(base_stage)
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_sbom_covers_observed_python_packages_patches_native_and_source_components() -> (
     None
 ):
@@ -296,6 +301,9 @@ def test_use_distribution_technical_provenance_hashes_are_fresh() -> None:
     assert "artifact:supply-chain/use-distribution.json" not in component_refs
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_rebound_stale_technical_provenance(
     tmp_path: Path,
 ) -> None:
@@ -329,6 +337,9 @@ def test_validate_only_rejects_rebound_stale_technical_provenance(
     assert "technical provenance digest mismatch: SBOM.cdx.json" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_missing_required_technical_provenance_row(
     tmp_path: Path,
 ) -> None:
@@ -362,6 +373,9 @@ def test_validate_only_rejects_missing_required_technical_provenance_row(
     assert "SBOM.cdx.json" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) -> None:
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     result = _stage(stage_root)
@@ -395,6 +409,9 @@ def test_exact_stage_contains_inventory_covered_legal_outputs(tmp_path: Path) ->
         }
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_base_stage_remains_lock_free_and_validate_only_compatible(
     tmp_path: Path,
 ) -> None:
@@ -402,23 +419,79 @@ def test_base_stage_remains_lock_free_and_validate_only_compatible(
     result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
-    source_sbom = (REPOSITORY_ROOT / "SBOM.cdx.json").read_bytes()
     staged_sbom = stage_root / "SBOM.cdx.json"
-    assert staged_sbom.read_bytes() == source_sbom
-    assert not (stage_root / "supply-chain/integration-lock.json").exists()
     sbom = _load(staged_sbom)
-    assert "artifact:supply-chain/integration-lock.json" not in {
-        item["bom-ref"] for item in sbom["components"]
+    assert sbom["bomFormat"] == "CycloneDX"
+    assert sbom["specVersion"] == "1.5"
+    assert sbom["version"] == 1
+    components = {item["bom-ref"]: item for item in sbom["components"]}
+    source_manifest = _load(stage_root / "vendor/source-manifest.json")
+    source_components = {
+        item["bom-ref"]: item
+        for item in _load(REPOSITORY_ROOT / "SBOM.cdx.json")["components"]
+        if item["bom-ref"].startswith(("source:", "patch:", "file-base-legal:"))
     }
+    file_base = next(
+        source for source in source_manifest["components"] if source["id"] == "file-base"
+    )
+    assert set(source_components) == (
+        {f"source:{source['id']}" for source in source_manifest["components"]}
+        | {f"patch:{patch['sha256']}" for patch in source_manifest["patches"]}
+        | {f"file-base-legal:{item['path']}" for item in file_base["legal_inputs"]}
+    )
+    assert {
+        ref: component
+        for ref, component in components.items()
+        if ref.startswith(("source:", "patch:", "file-base-legal:"))
+    } == source_components
+    for source in source_manifest["components"]:
+        assert components[f"source:{source['id']}"]["licenses"] == [
+            {"license": {"id": source["licenses"][0]["spdx"]}}
+        ]
+
+    build_evidence = _load(stage_root / "share/arw/evidence/candidate-build.json")
+    package_rows = [
+        *build_evidence["build"]["inventory"],
+        *build_evidence["resolved_runtime_inventory"],
+    ]
+    packages = {(row["name"].lower(), row["version"]): row for row in package_rows}
+    assert {ref for ref in components if ref.startswith("python:")} == {
+        f"python:{row['name']}@{row['version']}" for row in packages.values()
+    }
+    for row in packages.values():
+        component = components[f"python:{row['name']}@{row['version']}"]
+        assert component["hashes"] == [
+            {"alg": "SHA-256", "content": row["installed_content_sha256"]}
+        ]
+        assert component["licenses"] == [{"expression": row["license"]}]
+
+    candidate_wheel = Path(os.environ["ARW_CANDIDATE_WHEEL"])
+    assert components[f"first-party-wheel:{candidate_wheel.name}"]["hashes"] == [
+        {"alg": "SHA-256", "content": _sha256(candidate_wheel)}
+    ]
+    assert _sha256(stage_root / "share/arw/wheels" / candidate_wheel.name) == _sha256(
+        candidate_wheel
+    )
+    assert not (stage_root / "supply-chain/integration-lock.json").exists()
+    assert "artifact:supply-chain/integration-lock.json" not in components
 
     identity = _load(stage_root / "share/arw/build-identity.json")
     payloads = {item["path"]: item for item in identity["staged_payloads"]}
     assert "supply-chain/integration-lock.json" not in payloads
     assert payloads["SBOM.cdx.json"]["sha256"] == _sha256(staged_sbom)
+    declaration = _load(stage_root / "supply-chain/use-distribution.json")
+    assert [
+        item["sha256"]
+        for item in declaration["evidence_hashes"]
+        if item["path"] == "SBOM.cdx.json"
+    ] == [_sha256(staged_sbom)]
     validated = _validate_stage(stage_root)
     assert validated.returncode == 0, validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_optional_integration_lock_is_bound_without_changing_release_verdict(
     tmp_path: Path,
 ) -> None:
@@ -473,6 +546,9 @@ def test_optional_integration_lock_is_bound_without_changing_release_verdict(
     assert validated_against_input.returncode == 0, validated_against_input.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_build_identity_metadata_falsification(
     tmp_path: Path,
 ) -> None:
@@ -497,6 +573,9 @@ def test_validate_only_rejects_build_identity_metadata_falsification(
     "relative",
     ("supply-chain/integration-lock.json", "SBOM.cdx.json"),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     tmp_path: Path, relative: str
 ) -> None:
@@ -515,6 +594,9 @@ def test_validate_only_rejects_lock_or_augmented_sbom_tamper(
     assert "digest mismatch" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     tmp_path: Path,
 ) -> None:
@@ -549,6 +631,9 @@ def test_validate_only_rejects_reformatted_sbom_after_identity_rebind(
     assert "staged SBOM bytes are not canonical" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> None:
     lock_path = tmp_path / "noncanonical-lock.json"
     lock_path.write_bytes(_locally_bound_test_lock(tmp_path, "noncanonical") + b"\n")
@@ -566,6 +651,9 @@ def test_stage_rejects_noncanonical_integration_lock_bytes(tmp_path: Path) -> No
         ("ars-binding", "does not bind the staged ARS bundle"),
     ),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_stage_rejects_live_payload_drift_against_lock(
     tmp_path: Path, drift: str, expected_error: str
 ) -> None:
@@ -597,6 +685,9 @@ def test_stage_rejects_live_payload_drift_against_lock(
         ("ars-binding", "does not bind the staged ARS bundle"),
     ),
 )
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_recomputes_local_lock_bindings(
     tmp_path: Path, drift: str, expected_error: str
 ) -> None:
@@ -642,6 +733,9 @@ def test_validate_only_recomputes_local_lock_bindings(
     assert expected_error in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_duplicate_binding_records(tmp_path: Path) -> None:
     stage_root = tmp_path / "duplicate-stage" / PLUGIN_NAME
     result = _stage(stage_root)
@@ -709,6 +803,9 @@ EVIDENCE_STAGED_PATHS = (
 )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_evidence_files_exist_with_pass_qualification(
     tmp_path: Path,
 ) -> None:
@@ -725,6 +822,9 @@ def test_staged_evidence_files_exist_with_pass_qualification(
         )
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_build_identity_evidence_block_points_at_staged_copies(
     tmp_path: Path,
 ) -> None:
@@ -762,6 +862,9 @@ def test_build_identity_evidence_block_points_at_staged_copies(
             assert entry["sha256"] == _sha256(stage_root / relative)
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_staged_evidence_qualification_drift(
     tmp_path: Path,
 ) -> None:
@@ -796,6 +899,9 @@ def test_validate_only_rejects_staged_evidence_qualification_drift(
     assert "evidence.upstream" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_staged_evidence_path_redirect(
     tmp_path: Path,
 ) -> None:
@@ -819,6 +925,9 @@ def test_validate_only_rejects_staged_evidence_path_redirect(
     assert "pre_vendor" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_whole_header_alias_on_contract_sha256(
     tmp_path: Path,
 ) -> None:
@@ -845,6 +954,9 @@ def test_validate_only_rejects_whole_header_alias_on_contract_sha256(
     assert "embedded in the regenerated header" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_paired_header_and_identity_rebind(
     tmp_path: Path,
 ) -> None:
@@ -883,6 +995,9 @@ def test_validate_only_rejects_paired_header_and_identity_rebind(
     assert "regenerated from the staged checked schemas" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_accepts_unbounded_python_build_version(
     tmp_path: Path,
 ) -> None:
@@ -902,6 +1017,9 @@ def test_validate_only_accepts_unbounded_python_build_version(
     assert validated.returncode == 0, validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_passthrough_evidence_stub(
     tmp_path: Path,
 ) -> None:
@@ -956,6 +1074,9 @@ def test_validate_only_rejects_passthrough_evidence_stub(
         assert "producer contract" in validated.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_pre_vendor_component_field_drift(
     tmp_path: Path,
 ) -> None:
@@ -996,6 +1117,9 @@ def test_validate_only_rejects_pre_vendor_component_field_drift(
     assert "field version drifts" in stderr or "manifest cross-check failed" in stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_validate_only_rejects_legal_staged_path_byte_flip(
     tmp_path: Path,
 ) -> None:

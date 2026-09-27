@@ -1,0 +1,425 @@
+{
+  "schema_version": "arw.skill-routing-corpus.v1",
+  "cases": [
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "文献综述",
+      "prompt": "请为这个研究问题做文献综述",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "系统综述",
+      "prompt": "帮我做一个系统综述",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "论文审稿",
+      "prompt": "请对我的论文做论文审稿",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "论文修改",
+      "prompt": "收到意见后帮我规划论文修改",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "摘要撰写",
+      "prompt": "我需要摘要撰写的框架",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "实验设计",
+      "prompt": "请评估这个实验设计",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "引用核查",
+      "prompt": "逐条做引用核查",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "从研究到论文",
+      "prompt": "规划从研究到论文的步骤",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "系统综述",
+      "prompt": "为定量研究做系统综述方案",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-suite",
+      "cue": "论文审稿",
+      "prompt": "模拟严格的论文审稿",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "运行状态",
+      "prompt": "查询当前运行状态",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "文件检索",
+      "prompt": "在授权目录做文件检索",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "研究图谱",
+      "prompt": "查看研究图谱里的主张",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "审计台账",
+      "prompt": "核对审计台账事件",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "证据接纳",
+      "prompt": "检查证据接纳门禁",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "受控改写记录",
+      "prompt": "查看受控改写记录",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "运行状态",
+      "prompt": "给我运行状态的机器可读结果",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "文件检索",
+      "prompt": "针对这批本地文献做文件检索",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "证据接纳",
+      "prompt": "这份文件的证据接纳结果是什么",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "academic-research-workbench",
+      "cue": "审计台账",
+      "prompt": "重放后检查审计台账",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿材料",
+      "prompt": "准备投稿材料清单",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "审稿意见导入",
+      "prompt": "进行审稿意见导入",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "回复审稿人",
+      "prompt": "记录回复审稿人的材料",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿就绪核查",
+      "prompt": "执行投稿就绪核查",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿材料",
+      "prompt": "检查投稿材料的版本",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "审稿意见导入",
+      "prompt": "把第二轮意见做审稿意见导入",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "回复审稿人",
+      "prompt": "核查回复审稿人是否完整",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿就绪核查",
+      "prompt": "给出投稿就绪核查结果",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿材料",
+      "prompt": "生成投稿材料准备状态",
+      "ambiguity": "none"
+    },
+    {
+      "language": "zh",
+      "route": "submission",
+      "cue": "投稿就绪核查",
+      "prompt": "重新做投稿就绪核查",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "literature",
+      "prompt": "Plan a literature synthesis for this topic",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "systematic review",
+      "prompt": "Help design a systematic review",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "citation checking",
+      "prompt": "Do citation checking for this draft",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "experiment design",
+      "prompt": "Critique the experiment design",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "abstract",
+      "prompt": "Draft an abstract from these findings",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "revision",
+      "prompt": "Plan a revision after reviewer feedback",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "peer review",
+      "prompt": "Simulate peer review of this manuscript",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "research-to-paper",
+      "prompt": "Outline a research-to-paper workflow",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "draft",
+      "prompt": "Help draft the methods section",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-suite",
+      "cue": "systematic review",
+      "prompt": "Set inclusion criteria for a systematic review",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "run status",
+      "prompt": "Show run status as JSON",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "bounded local files",
+      "prompt": "Search bounded local files in the registered root",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "artifact admission",
+      "prompt": "Inspect artifact admission for this run",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "provenance/graph",
+      "prompt": "Query provenance/graph for a claim",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "audit replay",
+      "prompt": "Perform audit replay for this run",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "writing record",
+      "prompt": "Inspect the writing record and gate",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "run status",
+      "prompt": "What is the latest run status?",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "bounded local files",
+      "prompt": "List bounded local files for this project",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "artifact admission",
+      "prompt": "Why did artifact admission fail?",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "academic-research-workbench",
+      "cue": "audit replay",
+      "prompt": "Check the audit replay result",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "submission packet",
+      "prompt": "Prepare the submission packet",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "review-import",
+      "prompt": "Run review-import for received comments",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "response-record",
+      "prompt": "Add the response-record for reviewers",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "readiness",
+      "prompt": "Check readiness before handoff",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "human confirmation",
+      "prompt": "Record human confirmation for the packet",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "result recording",
+      "prompt": "Do result recording from the portal receipt",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "submission packet",
+      "prompt": "Inspect the submission packet fingerprint",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "review-import",
+      "prompt": "Validate this review-import payload",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "readiness",
+      "prompt": "Recheck readiness after the packet changed",
+      "ambiguity": "none"
+    },
+    {
+      "language": "en",
+      "route": "submission",
+      "cue": "human confirmation",
+      "prompt": "Verify human confirmation is still current",
+      "ambiguity": "none"
+    }
+  ]
+}

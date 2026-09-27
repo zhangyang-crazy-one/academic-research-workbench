@@ -10,6 +10,10 @@ from pathlib import Path
 
 from pydantic import model_validator
 
+from arw.kernel.ledger.execution_provenance import (
+    ExecutionProvenanceState,
+    project_execution_provenance,
+)
 from arw.kernel.ledger.journal import (
     JournalError,
     append_runtime_event_unlocked,
@@ -53,6 +57,11 @@ from arw.kernel.state.models import (
     AttemptStartRequest,
     CanonicalEvent,
     CheckpointRequest,
+    DatasetMetadataAcceptedPayload,
+    ExecutionActionFinishedPayload,
+    ExecutionActionStartedPayload,
+    ExecutionArtifactBoundPayload,
+    ExecutionContextAcceptedPayload,
     ExperimentProvenanceAcceptedPayload,
     HumanDecisionRequest,
     HumanDecisionRequestedPayload,
@@ -70,6 +79,7 @@ from arw.kernel.state.models import (
     Rejection,
     ResumeAcceptedPayload,
     ResumeRequest,
+    RunManifest,
     RuntimeCommandRequest,
     StrictModel,
 )
@@ -128,6 +138,158 @@ class RuntimeCommandService:
             replayed.events,
             now=now,
             recovery_health=replayed.recovery_health,
+        )
+
+    def read_execution_provenance(self) -> ExecutionProvenanceState:
+        replayed = replay_run(self.run_root, lock_timeout=self.lock_timeout)
+        if replayed.recovery_health != "healthy":
+            raise JournalError(
+                replayed.recovery_message or "execution provenance replay is blocked"
+            )
+        # The normal reducer performs the same semantic checks on cold replay.
+        reduce_events(replayed.workflow_definition_id, replayed.events)
+        return project_execution_provenance(replayed.events)
+
+    def _append_execution_provenance(
+        self,
+        request: RuntimeCommandRequest,
+        event_type: str,
+        payload: StrictModel,
+        *,
+        prevalidate=None,
+    ) -> CommandOutcome:
+        return self._execute(
+            request,
+            event_type=event_type,
+            payload_factory=lambda _state, _replayed: payload,
+            prevalidate=prevalidate,
+        )
+
+    def accept_execution_context(
+        self,
+        request: RuntimeCommandRequest,
+        context: ExecutionContextAcceptedPayload | dict,
+    ) -> CommandOutcome:
+        payload = ExecutionContextAcceptedPayload.model_validate(context)
+        return self._append_execution_provenance(
+            request, "execution_provenance.context_accepted", payload
+        )
+
+    def accept_dataset_metadata(
+        self,
+        request: RuntimeCommandRequest,
+        metadata: DatasetMetadataAcceptedPayload | dict,
+    ) -> CommandOutcome:
+        payload = DatasetMetadataAcceptedPayload.model_validate(metadata)
+        return self._append_execution_provenance(
+            request, "execution_provenance.dataset_metadata_accepted", payload
+        )
+
+    def start_execution_action(
+        self,
+        request: RuntimeCommandRequest,
+        action: ExecutionActionStartedPayload | dict,
+    ) -> CommandOutcome:
+        payload = ExecutionActionStartedPayload.model_validate(action)
+        return self._append_execution_provenance(
+            request, "execution_provenance.action_started", payload
+        )
+
+    def finish_execution_action(
+        self,
+        request: RuntimeCommandRequest,
+        observation: ExecutionActionFinishedPayload | dict,
+    ) -> CommandOutcome:
+        payload = ExecutionActionFinishedPayload.model_validate(observation)
+        return self._append_execution_provenance(
+            request, "execution_provenance.action_finished", payload
+        )
+
+    def bind_execution_artifact(
+        self,
+        request: RuntimeCommandRequest,
+        binding: ExecutionArtifactBoundPayload | dict,
+    ) -> CommandOutcome:
+        payload = ExecutionArtifactBoundPayload.model_validate(binding)
+
+        def validate(_state: RuntimeState, replayed):
+            try:
+                source = next(
+                    (
+                        e
+                        for e in replayed.events
+                        if e.event_id == payload.source_event_id
+                    ),
+                    None,
+                )
+                if source is None or source.event_sha256 != payload.source_event_sha256:
+                    return "invalid-binding", "source event is missing or stale"
+                if payload.source_kind == "run_input":
+                    manifest = RunManifest.model_validate_json(
+                        (self.run_root / "run-manifest.json").read_bytes()
+                    )
+                    if (
+                        manifest.run_id != request.run_id
+                        or source.event_type != "run.initialized"
+                        or manifest.immutable_input.path != payload.relative_path
+                        or manifest.immutable_input.sha256 != payload.content_sha256
+                        or source.payload.manifest_sha256
+                        != payload.source_manifest_sha256
+                    ):
+                        return (
+                            "invalid-binding",
+                            "run input differs from immutable manifest",
+                        )
+                    path = validate_content_file(
+                        self.run_root,
+                        payload.relative_path,
+                        payload.content_sha256,
+                        expected_byte_count=payload.byte_count,
+                    )
+                elif payload.source_kind == "proposal":
+                    if source.event_type != "proposal.accepted":
+                        return "invalid-binding", "proposal was not accepted"
+                    path = validate_content_file(
+                        self.run_root,
+                        f"attempts/{payload.attempt_id}/result/{payload.relative_path}",
+                        payload.content_sha256,
+                        expected_byte_count=payload.byte_count,
+                    )
+                else:
+                    if source.event_type != "artifact.accepted":
+                        return "invalid-binding", "artifact was not accepted"
+                    manifest = load_artifact_manifest(
+                        self.run_root, payload.source_manifest_sha256
+                    )
+                    if (
+                        manifest.run_id != request.run_id
+                        or manifest.content_path != payload.relative_path
+                        or manifest.content_sha256 != payload.content_sha256
+                    ):
+                        return (
+                            "invalid-binding",
+                            "artifact differs from accepted manifest",
+                        )
+                    path = validate_content_file(
+                        self.run_root,
+                        payload.relative_path,
+                        payload.content_sha256,
+                        expected_byte_count=payload.byte_count,
+                    )
+                if path.stat().st_size != payload.byte_count:
+                    return (
+                        "invalid-binding",
+                        "artifact byte count differs from accepted source",
+                    )
+            except (OSError, ValueError, ManifestError) as error:
+                return "invalid-binding", str(error)
+            return None
+
+        return self._append_execution_provenance(
+            request,
+            "execution_provenance.artifact_bound",
+            payload,
+            prevalidate=validate,
         )
 
     @staticmethod
@@ -496,6 +658,12 @@ class RuntimeCommandService:
             submission_error = self._validate_submission_artifact(request, replayed, state)
             if submission_error is not None:
                 return submission_error
+            if request.artifact_kind in {"reference-record", "reference-use", "citation-check-receipt"}:
+                from arw.kernel.policy.citations import validate_citation_artifact
+                try:
+                    validate_citation_artifact(self.run_root, request, replayed.events)
+                except (ValueError, RuntimeError, OSError) as error:
+                    return "citation-artifact-invalid", str(error)
             if request.artifact_kind == "provenance-record":
                 from arw.kernel.core.canonical import strict_json_loads
                 from arw.kernel.ledger.source_locations import (

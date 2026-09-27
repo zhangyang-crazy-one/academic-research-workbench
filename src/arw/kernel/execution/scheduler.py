@@ -12,16 +12,14 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Literal
 
+from arw.kernel.core.faults import inject
 from arw.kernel.execution.execution import (
     DEFAULT_EXECUTION_POLICY,
-    AdapterFailure,
     DispatchSpec,
     ExecutionAdapter,
     ExecutionPolicySnapshot,
     HostResult,
 )
-from arw.kernel.core.faults import inject
-
 
 RETRYABLE_FAILURES = frozenset({"timeout", "process_failure", "repairable_envelope"})
 NON_RETRYABLE_FAILURES = frozenset(
@@ -49,6 +47,9 @@ AttemptStatus = Literal[
 ]
 ObservationClassification = Literal["observed", "rejected_stale"]
 ResultValidator = Callable[[DispatchSpec, HostResult], Awaitable[None]]
+DispatchWrapper = Callable[
+    [DispatchSpec, Callable[[], Awaitable[HostResult]]], Awaitable[HostResult]
+]
 
 
 def retry_is_eligible(
@@ -117,6 +118,16 @@ def _error_text(error: BaseException) -> str:
     return f"{type(error).__name__}: {message}" if message else type(error).__name__
 
 
+def carried_host_result(error: BaseException) -> HostResult | None:
+    """Preserve the structured result used by qualified native adapters."""
+
+    for name in ("result", "host_result"):
+        value = getattr(error, name, None)
+        if isinstance(value, HostResult):
+            return value
+    return None
+
+
 def _consume_task_result(task: asyncio.Task[HostResult]) -> None:
     """Consume a detached host observation without cancelling the host."""
 
@@ -136,11 +147,13 @@ class DeterministicScheduler:
         policy: SchedulerPolicy = DEFAULT_SCHEDULER_POLICY,
         cancel_observer: Callable[[DispatchSpec, float], Awaitable[None]] | None = None,
         result_validator: ResultValidator | None = None,
+        dispatch_wrapper: DispatchWrapper | None = None,
     ) -> None:
         self.adapter = adapter
         self.policy = policy
         self.cancel_observer = cancel_observer
         self.result_validator = result_validator
+        self.dispatch_wrapper = dispatch_wrapper
 
     async def run(self, specs: Iterable[DispatchSpec]) -> tuple[ScheduledOutcome, ...]:
         frozen_specs = tuple(specs)
@@ -213,7 +226,15 @@ class DeterministicScheduler:
         # allows Phase 7 to terminate this boundary deterministically without
         # giving a child authority to create a retry.
         inject("phase7.host-dispatch")
-        host_task = asyncio.create_task(self.adapter.dispatch(spec))
+
+        async def enter_adapter() -> HostResult:
+            if self.dispatch_wrapper is not None:
+                return await self.dispatch_wrapper(
+                    spec, lambda: self.adapter.dispatch(spec)
+                )
+            return await self.adapter.dispatch(spec)
+
+        host_task = asyncio.create_task(enter_adapter())
         try:
             result = await asyncio.wait_for(
                 asyncio.shield(host_task), timeout=spec.effective_timeout_seconds
@@ -222,12 +243,13 @@ class DeterministicScheduler:
             return await self._cancel_after_timeout(spec, host_task, first_timeout)
         except Exception as error:
             reason = _failure_reason(error)
+            carried = carried_host_result(error)
             return AttemptOutcome(
                 assignment_id=spec.assignment_id,
                 attempt_id=spec.attempt_id,
                 attempt_number=spec.attempt_number,
                 status="failed",
-                result=None,
+                result=carried,
                 failure_reason=reason,
                 error=_error_text(error),
                 retry_eligible=retry_is_eligible(

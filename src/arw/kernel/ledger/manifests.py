@@ -20,6 +20,7 @@ from arw.kernel.state.models import (
     ArtifactAcceptedPayload,
     ArtifactManifest,
     CanonicalEvent,
+    ExecutionArtifactBoundPayload,
     MaterialPassport,
     PassportAcceptedPayload,
     PassportAttemptSnapshot,
@@ -315,7 +316,13 @@ def manifest_bytes_and_sha256(manifest: StrictModel) -> tuple[bytes, str]:
     return value, sha256_hex(value)
 
 
-def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Path:
+def validate_content_file(
+    root: Path,
+    relative: str,
+    expected_sha256: str,
+    *,
+    expected_byte_count: int | None = None,
+) -> Path:
     path = PurePosixPath(relative)
     if (
         not relative
@@ -340,9 +347,57 @@ def validate_content_file(root: Path, relative: str, expected_sha256: str) -> Pa
         raise ManifestError(
             "artifact content must be a regular file under the run root"
         )
+    if (
+        expected_byte_count is not None
+        and resolved.stat().st_size != expected_byte_count
+    ):
+        raise ManifestError("artifact content byte count mismatch")
     if sha256_hex(resolved.read_bytes()) != expected_sha256:
         raise ManifestError("artifact content digest mismatch")
     return resolved
+
+
+def validate_execution_binding_source(
+    root: Path, event: CanonicalEvent, run_manifest: object
+) -> None:
+    """Recheck accepted binding bytes on replay, including forged hash chains."""
+
+    if event.event_type != "execution_provenance.artifact_bound":
+        return
+    payload = event.payload
+    assert isinstance(payload, ExecutionArtifactBoundPayload)
+    if payload.source_kind == "run_input":
+        source = run_manifest.immutable_input
+        if (
+            payload.relative_path != source.path
+            or payload.content_sha256 != source.sha256
+            or payload.source_manifest_sha256
+            != sha256_hex(
+                canonical_json_bytes(
+                    run_manifest.model_dump(mode="json", exclude_none=True)
+                )
+            )
+        ):
+            raise ManifestError("execution input binding differs from run manifest")
+        relative = payload.relative_path
+    elif payload.source_kind == "proposal":
+        relative = f"attempts/{payload.attempt_id}/result/{payload.relative_path}"
+    else:
+        if payload.source_manifest_sha256 is None:
+            raise ManifestError("accepted artifact binding needs its manifest digest")
+        artifact = load_artifact_manifest(root, payload.source_manifest_sha256)
+        if (
+            artifact.run_id != event.run_id
+            or artifact.content_path != payload.relative_path
+            or artifact.content_sha256 != payload.content_sha256
+        ):
+            raise ManifestError("execution artifact binding differs from manifest")
+        relative = payload.relative_path
+    retained = validate_content_file(
+        root, relative, payload.content_sha256, expected_byte_count=payload.byte_count
+    )
+    if retained.stat().st_size != payload.byte_count:
+        raise ManifestError("execution binding byte count differs from retained file")
 
 
 def _install(root: Path, relative_store: Path, manifest: StrictModel) -> Path:

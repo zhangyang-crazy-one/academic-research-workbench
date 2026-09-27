@@ -61,7 +61,8 @@ The files-first MCP is ARW's modified `DeusData/codebase-memory-mcp` adapter.
 The installed launcher retains the upstream-compatible `file-base` command
 name; `vendor/mcp-manifest.json` records its exact source commit, ordered ARW
 patches, patched-tree digest, binary digest, protocol, and bounded capability
-profile.
+profile. The plugin does not register this MCP by default. File access remains
+disabled until a project explicitly opts in.
 
 ## Qualification status
 
@@ -72,7 +73,48 @@ CC-BY-NC permission evidence is supplied. See
 `build/evidence/phase-07-final-13/phase-7-verification.json` for the latest
 serial qualification receipt when present.
 
+## Grok Bot consumption
+
+This repository is Codex-native. A thin, fail-closed adaptation for the
+Grok Bot named `arw` lives in `grok-bot/` and is **not** a second plugin
+install, a Codex marketplace path, or a qualified-stage unlock. See
+`grok-bot/GROK_BOT.md`.
+
 ## Installation
+
+### Enable the files-first MCP for one project
+
+After installing a qualified plugin with its native `libexec/file-base-mcp`
+binary, create an existing research root and an existing cache directory outside
+that root. Point `--target` at the **project** configuration file. The command
+checks Python, the native provider, allowed root, cache, target and binary before
+writing; it never edits user or global host configuration.
+
+```bash
+mkdir -p /path/to/project/.codex /path/to/file-base-cache
+/installed/plugin/bin/arw files enable --provider native --host codex \
+  --target /path/to/project/.codex/config.toml \
+  --root /path/to/research --root-id research --cache-dir /path/to/file-base-cache
+
+# For Claude Code, use the project's .mcp.json instead:
+/installed/plugin/bin/arw files enable --provider native --host claude \
+  --target /path/to/project/.mcp.json \
+  --root /path/to/research --root-id research --cache-dir /path/to/file-base-cache
+
+/installed/plugin/bin/arw health --json
+```
+
+Run one host command for each project that needs files-first access. The
+generated entry binds that root and cache explicitly; inspect the generated
+project config before starting a new host session. Codex loads project config
+only for trusted projects. A plain source checkout lacks the qualified native
+binary, so `files enable` returns a structured `native_binary_missing` result
+without creating a config. Run `health --json` from the target project to see
+its Codex and Claude project-config states plus native binary readiness.
+Bounded source retrieval supports citation checks and manuscript drafting;
+source files and the parent-owned journal remain authoritative.
+Existing `ARW_FILES_*` launcher deployments retain
+their startup-only `STORE_ABSENT=69` fallback.
 
 ### Development checkout
 
@@ -85,6 +127,22 @@ the declared ranges. `uv pip install --group` refuses unmanaged projects, so
 `scripts/install-python` reads `[dependency-groups]` and installs those
 requirement strings directly. Source commits, artifact digests, schemas, and actual host
 observations remain evidence about the inputs used, not compatibility pins.
+The launcher accepts newer Python versions that satisfy the minimum; each host
+still needs to pass its runtime and dependency qualification checks.
+
+### Platform support
+
+| Platform | Support | CI coverage and limits |
+| --- | --- | --- |
+| Linux | Tier 1 | Full non-host Python tree and a separate native confinement/admin job on each PR; ASan/UBSan native suite nightly. |
+| macOS | Tier 2 | Canonical state, manifest, recovery, and platform-report unit tests on each PR. The Linux network-denied native builder is unavailable. |
+| Windows | Unsupported | No Windows CI job or native file-base qualification; POSIX descriptor-relative file access and the Bash launcher are unavailable. |
+
+`arw health --json` reports the running platform's tier and capabilities that
+are unavailable for platform reasons. A successful health response observes the
+environment; it does not grant release qualification. Linux native jobs build
+from pinned source snapshots in ignored work areas and do not rewrite
+`vendor/source-manifest.json`.
 Initial setup or a later dependency install needs access to the configured
 package index unless compatible packages are already cached; offline dependency
 resolution is not guaranteed. Once installed, research operations retain their
@@ -146,6 +204,9 @@ instead of the production `runtime-artifact-missing` error. Leave
 substitute for a staged wheel.
 
 The `ars-test` group installs the dependencies required by the bundled ARS
+The dependencies can also be installed with `.venv/bin/python scripts/install-unmanaged-deps.py --all-extras dev ars-test storm`.
+
+The selected groups also install the dependencies required by the bundled ARS
 self-tests. Verify the complete vendored skill suite from the checkout root:
 
 ```bash
@@ -193,8 +254,28 @@ carry `supply-chain/integration-lock.json`; an unlocked stage is diagnostic
 only and cannot qualify the route:
 
 ```bash
-./scripts/stage-plugin --clean --stage-root build/stage/bootstrap
+CANDIDATE_WHEEL="$(./scripts/build-candidate --output-root build/candidates/local-001)"
+./scripts/license-gate \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --output-root build/evidence/candidates/local-001
+./scripts/stage-plugin --clean \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --stage-root build/stage/bootstrap
 ```
+
+Use fresh candidate and gate roots for each attempt. The build records the
+actual Python, uv, backend, resolved build packages, wheel and sdist digests.
+The license gate records its own validation environment; installation smoke
+records a separate resolved installation inventory. These observations do not
+constrain later dependency resolution. Package installation needs the configured
+package index when compatible dependencies are absent from the local cache.
+The gate requires the pinned pre-vendor legal receipt and verified source
+snapshots; it never rebuilds or replaces the supplied wheel.
+Its source preflight checks manifest-bound inputs; the native binary and its
+build evidence are checked when the plugin is staged.
 
 This bootstrap stage is only the deterministic input for host qualification;
 do not install it. For host qualification, use
@@ -218,12 +299,75 @@ with the fail-closed helper (the launcher/native paths are part of the lock):
   --credential-source "$CODEX_HOME" \
   --codex-launcher "$(command -v codex)"
 ./scripts/prepare-qualified-stage \
+  --candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
   --host-canary-evidence build/evidence/host-canary/canary.json \
   --codex-launcher /usr/local/sbin/codex \
   --codex-native-binary /path/to/exact/native/codex \
   --stage-root build/stage/qualified \
   --evidence-root build/evidence/qualified
 ```
+
+`prepare-qualified-stage` passes that same wheel through bootstrap and final
+staging. Rebuilding after the gate creates a new candidate and requires new
+evidence. For transfer, `scripts/candidate-bundle create` records the explicit
+wheel and source artifacts with their digests. `scripts/candidate-bundle archive`
+packs the verified manifest files into a tar archive, preserving hidden stage
+files and executable modes; `scripts/candidate-bundle extract` rejects unsafe
+members and rechecks every digest after download. The release workflow selects
+only the verified wheel and sdist for publication. The current approval and
+permission fields have no independently verifiable authority contract, so
+`check-release-candidate` keeps release qualification blocked even if
+transferred records self-report `PASS`.
+
+To prepare a transfer:
+
+```bash
+./scripts/candidate-bundle create \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --output-root build/candidate-bundles/local-001
+```
+
+A candidate with independently produced Phase 7 evidence uses the five explicit
+inputs below. `candidate-bundle` verifies that the Phase 7 source commit,
+stage digest, integration lock and host canary refer to the supplied wheel,
+then copies only the canary's path-bound evidence files from its evidence root.
+The equivalent `--qualification-root` form must contain
+`phase-7-verification.json`, `stage/`, `integration-lock.json`,
+`host-canary.json`, and the canary's referenced evidence files with the same
+relative paths and hashes.
+
+```bash
+./scripts/candidate-bundle create \
+  --wheel "$CANDIDATE_WHEEL" \
+  --build-evidence build/candidates/local-001/build-evidence.json \
+  --candidate-evidence-root build/evidence/candidates/local-001 \
+  --phase7-verification build/evidence/phase-07/phase-7-verification.json \
+  --qualified-stage build/stage/phase-07-qualified \
+  --integration-lock build/evidence/phase-07/integration-lock.json \
+  --host-canary build/evidence/phase-07/host-canary/canary.json \
+  --canary-evidence-root build/evidence/phase-07/host-canary \
+  --output-root build/candidate-bundles/qualified-local-001
+./scripts/candidate-bundle verify --bundle-root build/candidate-bundles/qualified-local-001
+./scripts/candidate-bundle archive \
+  --bundle-root build/candidate-bundles/qualified-local-001 \
+  --output build/candidate-bundles/qualified-local-001.tar.gz
+```
+
+`verify-phase-7` currently records `release_qualification: BLOCKED` while
+legal and accountable approval evidence is unresolved; packaging its technical
+result does not change that status. The release
+workflow takes the exact Actions run ID and artifact name, downloads and
+rehashes the bundle, checks its source commit and release gates, transfers it
+between jobs, then rehashes it again before publishing only the listed wheel
+and sdist. Missing qualification evidence blocks publication; it cannot be
+replaced by CI's technical bundle. Manual release dispatch supplies
+`candidate_run_id`, `candidate_artifact_name`, and `release_tag`; tag-triggered
+runs require `ARW_CANDIDATE_RUN_ID` and `ARW_CANDIDATE_ARTIFACT_NAME` repository
+variables for the exact qualified transfer.
 
 Only after that command succeeds, create and install the qualified marketplace
 copy:
@@ -251,5 +395,38 @@ permission evidence is resolved. If host canary evidence is not supplied,
 CI builds and tests every change, but CD is fail-closed: a release job stops
 unless the retained license verdict is `PASS`, accountable intended-use and
 distribution evidence is present, and the P04-09 human gate is complete.
+On a successful push to `main`, CI creates SLSA provenance for the candidate
+wheel, sdist, and retained CycloneDX SBOM file after Python validation. It also
+attests that CycloneDX SBOM as the predicate for the wheel and sdist. Release
+qualification checks both predicates for each package artifact, the SBOM file's
+provenance, and the predicate's content against the retained SBOM. Each claim
+must match the `ci.yml` signer, `refs/heads/main`, and the source commit bound
+to the release tag before transfer to publish.
+Consumers can verify downloaded candidate files with GitHub CLI:
+
+```bash
+REPO=OWNER/REPO
+TAG=vX.Y.Z
+SOURCE_COMMIT="$(git rev-parse "refs/tags/$TAG^{commit}")"
+for file in path/to/*.whl path/to/*.tar.gz; do
+  for predicate in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
+    gh attestation verify "$file" --repo "$REPO" \
+      --signer-workflow "$REPO/.github/workflows/ci.yml" \
+      --source-ref refs/heads/main --source-digest "$SOURCE_COMMIT" \
+      --predicate-type "$predicate"
+  done
+done
+gh attestation verify path/to/SBOM.cdx.json --repo "$REPO" \
+  --signer-workflow "$REPO/.github/workflows/ci.yml" \
+  --source-ref refs/heads/main --source-digest "$SOURCE_COMMIT" \
+  --predicate-type https://slsa.dev/provenance/v1
+```
+
+The attestation establishes build identity for those bytes; it does not
+establish scientific validity or human authorship. Hosted OIDC creation and
+retrieval/verification still require evidence from an authorized Actions run.
+The owner policy keeps reviewed Action major tags and open `>=` Python ranges
+without a lockfile. Issue #32's exact-SHA and zero-high `zizmor` criteria remain
+unmet under that policy; no finding is suppressed or reported as cleared.
 Planning files, local evidence, build directories, credentials, and materialized
 third-party sources are excluded from source archives and staged payloads.

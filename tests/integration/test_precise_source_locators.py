@@ -18,6 +18,7 @@ from arw.kernel.ledger.source_locations import (
     read_retained_bytes,
 )
 from arw.kernel.ledger.workflows import CORE_WORKFLOW
+from arw.kernel.policy.citations import ReferenceRecord, check_response, publish_check
 from arw.kernel.policy.schema_registry import (
     SchemaRegistryError,
     validate_instance,
@@ -25,6 +26,8 @@ from arw.kernel.policy.schema_registry import (
 )
 from arw.kernel.state.models import ArtifactAcceptanceRequest, InitRunRequest
 from arw.kernel.state.provenance import SourceLocator, provenance_schema_documents
+from arw.pdf_extraction import extract_grobid_tei, source_locator_from_pdf
+from tests.unit.test_pdf_extraction import _pdf
 
 RUN = "run-00000000-0000-4000-8000-000000000099"
 SOURCE = b"# Results\nAccuracy is 92%.\n# Limits\nSmall sample.\n"
@@ -123,6 +126,7 @@ def command(root, store, action, *extra):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
@@ -266,9 +270,76 @@ def test_changed_retained_source_blocks_live_complete_traceability(tmp_path):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "digest mismatch" in result.stderr
+
+
+@pytest.mark.parametrize("kind", ["section", "reference", "region"])
+def test_pdf_structural_locator_passes_artifact_accept_and_rejects_tampering(tmp_path, kind):
+    root, record = seed(tmp_path)
+    pdf = _pdf()
+    tei = b'''<TEI><text><body><pb n="1"/><head>Results and carefully checked evidence</head><p coords="1,10,20,90,60">A paragraph with enough text for the extraction quality threshold.</p><listBibl><biblStruct xml:id="smith2024"><analytic><title>Evidence for Alpha</title><author>Smith</author></analytic><monogr><imprint><date when="2024"/></imprint></monogr></biblStruct></listBibl></body></text></TEI>'''
+    extraction, text = extract_grobid_tei(pdf, tei, version="0.8.0")
+    assert extraction.quality_state == "complete"
+    if kind == "region":
+        assert next(item for item in extraction.locators if item.kind == "region").bbox == (10.0, 20.0, 100.0, 80.0)
+    (root / "paper.pdf").write_bytes(pdf)
+    (root / "extraction.txt").write_bytes(text)
+    manifest = canonical_json_bytes(extraction.model_dump(mode="json"))
+    (root / "extraction.json").write_bytes(manifest)
+    assert accept(root, "artifact.pdf-text", "extraction.txt", 3, kind="source").accepted
+    source_event = replay_run(root).events[-1]
+    pdf_locator = next(item for item in extraction.locators if item.kind == kind)
+    locator = source_locator_from_pdf(
+        extraction, text, pdf_locator, pdf_source_path="paper.pdf",
+        extraction_manifest_path="extraction.json", extraction_manifest_sha256=sha256_hex(manifest),
+        source_artifact_id="artifact.pdf-text", source_event_id=source_event.event_id,
+        source_event_sha256=source_event.event_sha256, producing_activity_id="activity.extract",
+    )
+    record["source_locator"] = locator.model_dump(mode="json")
+    (root / "assertion.json").write_bytes(canonical_json_bytes(record))
+    assert accept(root, "artifact.assertion", "assertion.json", 4).accepted
+
+    tampered_dir = tmp_path / "tampered"
+    tampered_dir.mkdir()
+    tampered_root, tampered_record = seed(tampered_dir)
+    (tampered_root / "paper.pdf").write_bytes(pdf)
+    (tampered_root / "extraction.txt").write_bytes(text)
+    (tampered_root / "extraction.json").write_bytes(manifest)
+    assert accept(tampered_root, "artifact.pdf-text", "extraction.txt", 3, kind="source").accepted
+    source_event = replay_run(tampered_root).events[-1]
+    tampered_record["source_locator"] = source_locator_from_pdf(
+        extraction, text, pdf_locator, pdf_source_path="paper.pdf",
+        extraction_manifest_path="extraction.json", extraction_manifest_sha256=sha256_hex(manifest),
+        source_artifact_id="artifact.pdf-text", source_event_id=source_event.event_id,
+        source_event_sha256=source_event.event_sha256, producing_activity_id="activity.extract",
+    ).model_dump(mode="json")
+    (tampered_root / "extraction.json").write_bytes(manifest + b" ")
+    (tampered_root / "assertion.json").write_bytes(canonical_json_bytes(tampered_record))
+    outcome = accept(tampered_root, "artifact.assertion", "assertion.json", 4)
+    assert not outcome.accepted
+    assert outcome.rejection.code == "source-locator-invalid"
+
+
+def test_parent_accepts_only_replayable_citation_receipt(tmp_path):
+    root, _ = seed(tmp_path)
+    reference = ReferenceRecord(reference_id="ref.alpha", citation_key="Smith2024",
+                                title="Evidence for Alpha", authors=("Smith",), year=2024,
+                                doi="10.1234/alpha")
+    (root / "reference.json").write_bytes(canonical_json_bytes(reference.model_dump(mode="json")))
+    reference_outcome = accept(root, "artifact.reference", "reference.json", 3, kind="reference-record")
+    assert reference_outcome.accepted, reference_outcome.rejection
+    response = b'{"message":{"items":[{"DOI":"10.1234/alpha"}]}}'
+    receipt = check_response(reference, "crossref", response, observed_at="2026-09-25T00:00:00Z")
+    publish_check(root, receipt, response)
+    path = f"citations/receipts/sha256/{receipt.receipt_sha256}.json"
+    assert accept(root, "artifact.receipt", path, 4, kind="citation-check-receipt").accepted
+    (root / "citations/responses/sha256" / receipt.response_sha256).write_bytes(b"changed")
+    outcome = accept(root, "artifact.second-receipt", path, 5, kind="citation-check-receipt")
+    assert not outcome.accepted
+    assert outcome.rejection.code == "citation-artifact-invalid"
 
 
 def test_locator_tamper_with_recomputed_sidecar_hash_is_refused(tmp_path):
@@ -303,6 +374,7 @@ def test_locator_tamper_with_recomputed_sidecar_hash_is_refused(tmp_path):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "semantica_checksum_mismatch" in result.stdout

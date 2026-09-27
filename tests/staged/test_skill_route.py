@@ -9,6 +9,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -115,6 +116,7 @@ def installed_route_evidence(
             "--clean",
             "--stage-root",
             str(stage_root),
+            *candidate_stage_args(),
         ],
         unrelated_cwd,
         environment,
@@ -140,6 +142,9 @@ def installed_route_evidence(
 
 
 @pytest.mark.codex_host
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_fresh_installed_skill_returns_schema_valid_route(
     installed_route_evidence: tuple[Path, subprocess.CompletedProcess[str]],
 ) -> None:

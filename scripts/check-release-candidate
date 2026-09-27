@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Fail closed unless a transferred candidate has independent release authority."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import runpy
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"check-release-candidate: release blocked: {message}")
+
+
+def digest(path: Path) -> str:
+    if path.is_symlink() or not path.is_file():
+        fail(f"required file is missing or unsafe: {path}")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as error:
+        fail(f"invalid JSON {path}: {error}")
+    if not isinstance(value, dict):
+        fail(f"expected JSON object: {path}")
+    return value
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--bundle-root", type=Path, required=True)
+    parser.add_argument("--source-commit", required=True)
+    args = parser.parse_args()
+    root = args.bundle_root
+    subprocess.run([sys.executable, str(Path(__file__).with_name("candidate-bundle")),
+                    "verify", "--bundle-root", str(root)], check=True)
+    build = read(root / "build-evidence.json")
+    if build.get("source_identity", {}).get("git_commit") != args.source_commit:
+        fail("candidate source commit differs from release tag commit")
+    if build.get("source_identity", {}).get("git_status") != "":
+        fail("candidate was built from an uncommitted source tree")
+    project_root = Path(__file__).resolve().parents[1]
+    if subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project_root, text=True).strip() != args.source_commit:
+        fail("release verifier must run from the candidate source commit")
+    wheel_rows = [item for item in build.get("artifacts", []) if isinstance(item, dict) and item.get("kind") == "wheel"]
+    if len(wheel_rows) != 1:
+        fail("candidate wheel selection is ambiguous")
+    wheel_sha = wheel_rows[0]["sha256"]
+    wheel = root / wheel_rows[0]["path"]
+    try:
+        validate_candidate = runpy.run_path(str(Path(__file__).with_name("license-gate")))["validate_candidate"]
+        validate_candidate(wheel, root / "build-evidence.json", project_root / "vendor/source-manifest.json")
+    except (OSError, ValueError, SystemExit, zipfile.BadZipFile) as error:
+        fail(f"candidate wheel or builder evidence failed source validation: {error}")
+    use = read(root / "evidence/supply-chain/use-distribution.json")
+    verdict = read(root / "evidence/supply-chain/license-verdict.json")
+    qualified = root / "qualification"
+    manifest = read(root / "bundle-manifest.json")
+    listed = {item["path"] for item in manifest["files"] if isinstance(item, dict) and isinstance(item.get("path"), str)}
+    qualified_files = {path.relative_to(root).as_posix() for path in qualified.rglob("*") if path.is_file()}
+    if not qualified_files or qualified_files != {path for path in listed if path.startswith("qualification/")}:
+        fail("qualified evidence files differ from the transferred manifest")
+    phase7 = read(qualified / "phase-7-verification.json")
+    if phase7.get("git_head") != args.source_commit or phase7.get("technical_qualification") != "PASS" or phase7.get("evidence_bound") is not True:
+        fail("candidate-bound Phase 7 technical evidence is missing or blocked")
+    stage = qualified / "stage"
+    if stage.is_symlink() or not stage.is_dir():
+        fail("qualified stage is missing")
+    wheels = list((stage / "share/arw/wheels").glob("*.whl"))
+    if len(wheels) != 1 or digest(wheels[0]) != wheel_sha:
+        fail("qualified installed wheel differs from candidate wheel")
+    observed_stage = sorted((path.relative_to(stage).as_posix(), digest(path)) for path in stage.rglob("*") if path.is_file())
+    stage_sha = hashlib.sha256((json.dumps(observed_stage, ensure_ascii=False, sort_keys=True,
+                                         separators=(",", ":"), allow_nan=False) + "\n").encode()).hexdigest()
+    summary = phase7.get("stage", {})
+    if summary.get("stage_sha256") != stage_sha:
+        fail("Phase 7 does not bind the exact qualified stage")
+    if summary.get("integration_lock_sha256") != digest(qualified / "integration-lock.json"):
+        fail("Phase 7 does not bind the exact integration lock")
+    if summary.get("host_canary_sha256") != digest(qualified / "host-canary.json"):
+        fail("Phase 7 does not bind the exact host canary")
+    sys.path.insert(0, str(project_root / "src"))
+    try:
+        from arw.kernel.policy.integration_lock import (
+            IntegrationLockError,
+            _validate_hook,
+            load_integration_lock,
+        )
+
+        lock = load_integration_lock(qualified / "integration-lock.json")
+        observed_hook = _validate_hook(stage, qualified / "host-canary.json", lock.codex_host, lock.arw_runtime)
+        if observed_hook != lock.hook:
+            fail("host canary does not bind the staged integration lock")
+        subprocess.run(
+            [str(Path(__file__).with_name("stage-plugin")), "--validate-only", "--stage-root", str(stage),
+             "--integration-lock", str(qualified / "integration-lock.json")],
+            cwd=project_root, check=True,
+        )
+    except (OSError, ValueError, IntegrationLockError, subprocess.CalledProcessError) as error:
+        fail(f"qualified stage, canary or integration lock failed validation: {error}")
+    if verdict.get("technical_qualification") != "PASS":
+        fail("candidate legal technical qualification is not PASS")
+    for field, expected in (("intended_use", "declared"), ("distribution_class", "declared"),
+                            ("accountable_approval", "approved")):
+        if use.get(field, {}).get("status") != expected:
+            fail(f"{field} is not {expected}")
+    # Current license and Phase 7 records contain no independent signature or
+    # approver identity contract. Their PASS strings and permission references
+    # are self assertions, even when all file hashes match. Fail closed until
+    # that separate authority contract is specified and independently checked.
+    fail("approval and permission references lack independently verifiable authority evidence")
+
+
+if __name__ == "__main__":
+    main()

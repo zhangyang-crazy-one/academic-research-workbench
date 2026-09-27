@@ -16,17 +16,21 @@ from pathlib import Path
 
 import pytest
 
-from arw.kernel.artifacts.audit_dossier import assemble_audit_dossier, replay_audit_dossier
-from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.graph_models import GraphProjectionReceipt
+from arw.kernel.artifacts.audit_dossier import (
+    assemble_audit_dossier,
+    replay_audit_dossier,
+)
 from arw.kernel.artifacts.evidence_access import (
     EvidenceAccessDecision,
     LifecycleEvidenceRecord,
     evaluate_claim_capability,
 )
-from arw.kernel.core.faults import InjectedFault
-from arw.kernel.artifacts.integrity import IntegrityReceipt
 from arw.kernel.artifacts.experiment_provenance import QualificationReceipt
-from arw.graph_models import GraphProjectionReceipt
+from arw.kernel.artifacts.integrity import IntegrityReceipt
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.core.faults import InjectedFault
+from arw.kernel.ledger.journal import replay_run
 from arw.kernel.policy.integration_lock import (
     EXPECTED_ARS_ADAPTER_VERSION,
     _tree_sha256,
@@ -34,7 +38,6 @@ from arw.kernel.policy.integration_lock import (
     observe_hook_definition,
     observe_stage_identity,
 )
-from arw.kernel.ledger.journal import replay_run
 from arw.kernel.state.models import LifecycleTransitionRequest
 from arw.kernel.state.orchestration_models import (
     FORMAL_REVIEW_ROLE_IDS,
@@ -47,10 +50,10 @@ from arw.kernel.state.orchestration_models import (
     ReviewReport,
     ReviewSynthesis,
 )
-
-from .test_orchestration_lifecycle import _run as _init_run
+from tests.candidate_inputs import candidate_stage_args
 from tests.qualification_support import discover_bundled_qualification
 
+from .test_orchestration_lifecycle import _run as _init_run
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -73,14 +76,10 @@ def _retained_bundled_qualification() -> tuple[Path, Path, Path | None]:
     )
 
 
-LOCK_PATH, CANARY_PATH, RETAINED_STAGE = _retained_bundled_qualification()
-CODEX_LAUNCHER = Path(
-    os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex"
-)
-CODEX_NATIVE = Path(
-    os.environ.get("ARW_CODEX_NATIVE_BINARY")
-    or discover_codex_native_binary(CODEX_LAUNCHER)
-)
+def _codex_host_paths() -> tuple[Path, Path]:
+    launcher = Path(os.environ.get("ARW_CODEX_LAUNCHER") or shutil.which("codex") or "codex")
+    native = Path(os.environ.get("ARW_CODEX_NATIVE_BINARY") or discover_codex_native_binary(launcher))
+    return launcher, native
 
 
 def _digest(path: Path) -> str:
@@ -127,28 +126,38 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     stage = tmp_path / "stage" / PLUGIN_NAME
     stage_tmp = tmp_path / "stage-tmp"
     evidence = tmp_path / "stage-evidence"
+    process_tmp = tmp_path / "process-tmp"
+    process_tmp.mkdir()
     environment = {
         "HOME": str(tmp_path / "caller-home"),
         "CODEX_HOME": str(tmp_path / "caller-codex-home"),
         "PATH": os.environ.get("PATH", os.defpath),
-        "PIP_NO_INDEX": "1",
         "PYTHONNOUSERSITE": "1",
-        "UV_OFFLINE": "1",
-        "TMPDIR": str(REPOSITORY_ROOT / "build/tmp/phase-07/ars-smoke"),
+        "TMPDIR": str(process_tmp),
         "ARW_STAGE_TMP_ROOT": str(stage_tmp),
     }
+    environment.update(
+        {
+            key: value
+            for key, value in os.environ.items()
+            if key.startswith(("PIP_INDEX_", "UV_INDEX_"))
+            or key in {"PIP_EXTRA_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX"}
+        }
+    )
+    assert "PIP_NO_INDEX" not in environment
+    assert "UV_OFFLINE" not in environment
     # Reuse the retained exact stage when it is available. Rebuilding a wheel
     # from a dirty checkout would produce a new runtime digest without a
     # matching host canary; that must remain a qualification failure rather
     # than silently weakening the lock. Clean environments still exercise the
     # normal stage-plugin path below.
-    retained_stage = RETAINED_STAGE
+    lock_path, canary_path, retained_stage = _retained_bundled_qualification()
     if (
         retained_stage is not None
         and retained_stage.is_dir()
         and (retained_stage / "skills/academic-research-suite/SKILL.md").is_file()
-        and LOCK_PATH.is_file()
-        and CANARY_PATH.is_file()
+        and lock_path.is_file()
+        and canary_path.is_file()
     ):
         shutil.copytree(retained_stage, stage)
     else:
@@ -159,9 +168,14 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
             str(stage),
             "--evidence-root",
             str(evidence),
+            *candidate_stage_args(),
         ]
-        staged = _run(stage_command, cwd=outside, environment=environment)
-        assert staged.returncode == 0, staged.stderr
+        staged = _run(
+            stage_command,
+            cwd=outside,
+            environment=environment,
+        )
+        assert staged.returncode == 0, f"stage-plugin exited {staged.returncode}"
 
     marketplace_root = tmp_path / "marketplace/plugins" / PLUGIN_NAME
     shutil.copytree(stage, marketplace_root)
@@ -173,10 +187,12 @@ def installed_stage(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     return marketplace_root, outside, environment
 
 
+@pytest.mark.requires_retained_evidence("candidate_or_phase7")
 def test_source_hidden_installed_ars_route_and_bounded_receipt(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
 ) -> None:
+    lock_path, canary_path, _ = _retained_bundled_qualification()
     installed, outside, environment = installed_stage
     run_root = tmp_path / "run"
     run_root.mkdir()
@@ -188,12 +204,13 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         "ARW_PLUGIN_ROOT": str(installed),
     }
     if (installed / "supply-chain/integration-lock.json").is_file():
+        codex_launcher, codex_native = _codex_host_paths()
         command_environment.update(
             {
-                "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
-                "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
-                "ARW_CODEX_NATIVE_BINARY": str(CODEX_NATIVE),
-                "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
+                "ARW_INTEGRATION_LOCK": str(lock_path),
+                "ARW_CODEX_LAUNCHER": str(codex_launcher),
+                "ARW_CODEX_NATIVE_BINARY": str(codex_native),
+                "ARW_HOST_CANARY_EVIDENCE": str(canary_path),
             }
         )
 
@@ -202,7 +219,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         cwd=outside,
         environment=command_environment,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, f"arw route exited {result.returncode}"
     route = json.loads(result.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
@@ -211,7 +228,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     assert route["paper_ast_export"] == "deferred-v2"
     if (installed / "supply-chain/integration-lock.json").is_file():
         assert route["integration_status"] == "PASS"
-        assert route["integration_lock_sha256"] == _digest(LOCK_PATH)
+        assert route["integration_lock_sha256"] == _digest(lock_path)
         assert route["reason_codes"] == []
     else:
         assert route["integration_status"] == "BLOCKED"
@@ -249,7 +266,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     assert b"auth.json" not in retained
     assert b"OPENAI_API_KEY" not in retained
 
-    lock_sha = _digest(LOCK_PATH) if LOCK_PATH.is_file() else None
+    lock_sha = _digest(lock_path) if lock_path.is_file() else None
     receipt = {
         "schema_version": "arw.installed-qualification.v1",
         "technical_qualification": "PASS" if route["integration_status"] == "PASS" else "BLOCKED",
@@ -258,7 +275,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         "integration_lock_sha256": lock_sha,
         "ars_route_evidence_sha256": _digest(ars_path),
         "hook_definition_sha256": observe_hook_definition(installed)[2],
-        "host_canary_sha256": _digest(CANARY_PATH) if CANARY_PATH.is_file() else None,
+        "host_canary_sha256": _digest(canary_path) if canary_path.is_file() else None,
         "mcp_status": "not-invoked-in-route-smoke",
         "route_result_sha256": hashlib.sha256(route_output).hexdigest(),
         "reason_codes": list(route["reason_codes"]),
@@ -271,6 +288,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     )
 
 
+@pytest.mark.requires_retained_evidence("candidate_or_phase7")
 def test_installed_route_requires_qualification_lock(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
@@ -292,7 +310,7 @@ def test_installed_route_requires_qualification_lock(
         cwd=outside,
         environment=command_environment,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, f"arw route exited {result.returncode}"
     route = json.loads(result.stdout)
     assert route["integration_status"] == "BLOCKED"
     assert route["reason_codes"] == ["integration_lock_not_verified"]
@@ -359,7 +377,9 @@ def _integrity(decision: EvidenceAccessDecision) -> IntegrityReceipt:
 def _qualification_receipts(provenance: object) -> dict[str, QualificationReceipt]:
     checked = provenance
     if not hasattr(checked, "provenance_sha256"):
-        from arw.kernel.artifacts.experiment_provenance import seal_experiment_provenance
+        from arw.kernel.artifacts.experiment_provenance import (
+            seal_experiment_provenance,
+        )
 
         checked = seal_experiment_provenance(checked)
     result: dict[str, QualificationReceipt] = {}
@@ -587,29 +607,32 @@ def test_phase7_representative_fixture_has_every_bounded_scientific_stage() -> N
     assert "review_gate_stale" in stale_review.reason_codes
 
 
+@pytest.mark.requires_retained_evidence("qualification:phase7")
 def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossier(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    lock_path, canary_path, _ = _retained_bundled_qualification()
     installed, outside, environment = installed_stage
     if not (installed / "supply-chain/integration-lock.json").is_file() or not (
-        LOCK_PATH.is_file() and CANARY_PATH.is_file()
+        lock_path.is_file() and canary_path.is_file()
     ):
-        pytest.skip("retained exact bundled host qualification evidence is absent")
+        pytest.fail("retained exact bundled host qualification evidence is absent")
+    codex_launcher, codex_native = _codex_host_paths()
     run_root, _ = _init_run(tmp_path)
     command_environment = {
         **environment,
         "HOME": str(tmp_path / "journey-home"),
         "CODEX_HOME": str(tmp_path / "journey-codex-home"),
         "ARW_PLUGIN_ROOT": str(installed),
-        "ARW_INTEGRATION_LOCK": str(LOCK_PATH),
-        "ARW_CODEX_LAUNCHER": str(CODEX_LAUNCHER),
-        "ARW_CODEX_NATIVE_BINARY": str(CODEX_NATIVE),
-        "ARW_HOST_CANARY_EVIDENCE": str(CANARY_PATH),
+        "ARW_INTEGRATION_LOCK": str(lock_path),
+        "ARW_CODEX_LAUNCHER": str(codex_launcher),
+        "ARW_CODEX_NATIVE_BINARY": str(codex_native),
+        "ARW_HOST_CANARY_EVIDENCE": str(canary_path),
     }
     route_run = _run([str(installed / "bin/arw"), "route", "--json"], cwd=outside, environment=command_environment)
-    assert route_run.returncode == 0, route_run.stderr
+    assert route_run.returncode == 0, f"arw route exited {route_run.returncode}"
     route = json.loads(route_run.stdout)
     assert route["workflow_family"] == "academic-pipeline"
     assert route["source_adapter_version"] == EXPECTED_ARS_ADAPTER_VERSION
@@ -695,7 +718,7 @@ def test_installed_ars_journey_cold_replay_survives_checkpoint_and_builds_dossie
         },
         graph={"status": "available", "receipts": (_graph_receipt(),)},
         source_identity_sha256=(decision.subject_sha256,),
-        integration_lock_sha256=_digest(LOCK_PATH),
+        integration_lock_sha256=_digest(lock_path),
     )
     assert dossier.technical_qualification.verdict == "PASS"
     assert dossier.release_qualification.verdict == "BLOCKED"

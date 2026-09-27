@@ -17,10 +17,14 @@ CODEX_NATIVE=""
 CREDENTIAL_SOURCE=""
 CLEAN=0
 RUN_NATIVE_TESTS=0
+CANDIDATE_WHEEL=""
+BUILD_EVIDENCE=""
+CANDIDATE_EVIDENCE_ROOT=""
 
 usage() {
   cat <<'EOF'
-Usage: prepare-qualified-stage --host-canary-evidence PATH \
+Usage: prepare-qualified-stage --candidate-wheel PATH --build-evidence PATH \
+       --candidate-evidence-root PATH --host-canary-evidence PATH \
        --codex-launcher PATH --codex-native-binary PATH \
        [--credential-source PATH] [--integration-lock PATH] [--clean] \
        [--stage-root PATH] [--evidence-root PATH] [--run-native-tests]
@@ -43,6 +47,18 @@ while [[ $# -gt 0 ]]; do
     --host-canary-evidence)
       [[ $# -ge 2 ]] || fail "--host-canary-evidence requires a path" 64
       HOST_CANARY="$2"; shift 2
+      ;;
+    --candidate-wheel)
+      [[ $# -ge 2 ]] || fail "--candidate-wheel requires a path" 64
+      CANDIDATE_WHEEL="$2"; shift 2
+      ;;
+    --build-evidence)
+      [[ $# -ge 2 ]] || fail "--build-evidence requires a path" 64
+      BUILD_EVIDENCE="$2"; shift 2
+      ;;
+    --candidate-evidence-root)
+      [[ $# -ge 2 ]] || fail "--candidate-evidence-root requires a path" 64
+      CANDIDATE_EVIDENCE_ROOT="$2"; shift 2
       ;;
     --codex-launcher)
       [[ $# -ge 2 ]] || fail "--codex-launcher requires a path" 64
@@ -97,8 +113,38 @@ if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13)
 fi
 STAGE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$STAGE_ROOT")"
 EVIDENCE_ROOT="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$EVIDENCE_ROOT")"
-[[ "$STAGE_ROOT" != "$PROJECT_ROOT" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
-  || fail "refusing a repository root as stage/evidence output" 64
+for output_root in "$STAGE_ROOT" "$EVIDENCE_ROOT"; do
+  [[ "$output_root" != "/" ]] || fail "refusing filesystem root as stage/evidence output" 64
+  case "$PROJECT_ROOT" in
+    "$output_root"|"$output_root"/*) fail "refusing a repository root or ancestor as stage/evidence output" 64 ;;
+  esac
+done
+case "$STAGE_ROOT" in
+  "$EVIDENCE_ROOT"|"$EVIDENCE_ROOT"/*) fail "stage and evidence roots must be disjoint" 64 ;;
+esac
+case "$EVIDENCE_ROOT" in
+  "$STAGE_ROOT"|"$STAGE_ROOT"/*) fail "stage and evidence roots must be disjoint" 64 ;;
+esac
+for temporary_root in "${TMPDIR:-$PROJECT_ROOT/build/tmp}" "${ARW_STAGE_TMP_ROOT:-$PROJECT_ROOT/build/tmp}"; do
+  temporary_root="$($PYTHON -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$temporary_root")"
+  [[ "$temporary_root" != "/" ]] || fail "refusing unsafe temporary root" 64
+  case "$PROJECT_ROOT" in
+    "$temporary_root"|"$temporary_root"/*) fail "refusing unsafe temporary root" 64 ;;
+  esac
+  for output_root in "$STAGE_ROOT" "$EVIDENCE_ROOT"; do
+    case "$temporary_root" in
+      "$output_root"|"$output_root"/*) fail "temporary root must be disjoint from stage/evidence roots" 64 ;;
+    esac
+    case "$output_root" in
+      "$temporary_root"|"$temporary_root"/*) fail "temporary root must be disjoint from stage/evidence roots" 64 ;;
+    esac
+  done
+done
+[[ -n "$CANDIDATE_WHEEL" && -n "$BUILD_EVIDENCE" && -n "$CANDIDATE_EVIDENCE_ROOT" ]] \
+  || fail "candidate wheel, build evidence and candidate evidence root are required" 64
+CANDIDATE_ARGS=(--candidate-wheel "$CANDIDATE_WHEEL" \
+  --build-evidence "$BUILD_EVIDENCE" \
+  --candidate-evidence-root "$CANDIDATE_EVIDENCE_ROOT")
 
 [[ -n "$HOST_CANARY" ]] || fail "exact retained host canary is required; run scripts/qualify-codex-host first" 65
 [[ -n "$CODEX_LAUNCHER" && -x "$CODEX_LAUNCHER" ]] \
@@ -142,7 +188,8 @@ if [[ ! -f "$LOCK_PATH" ]]; then
   [[ ! -e "$BOOTSTRAP_STAGE" && ! -e "$BOOTSTRAP_EVIDENCE" ]] \
     || fail "bootstrap output exists; choose a new --evidence-root or pass --clean" 73
   "$PROJECT_ROOT/scripts/stage-plugin" --clean \
-    --stage-root "$BOOTSTRAP_STAGE" --evidence-root "$BOOTSTRAP_EVIDENCE"
+    --stage-root "$BOOTSTRAP_STAGE" --evidence-root "$BOOTSTRAP_EVIDENCE" \
+    "${CANDIDATE_ARGS[@]}"
   "$PYTHON" - "$BOOTSTRAP_STAGE" "$CODEX_LAUNCHER" "$CODEX_NATIVE" "$HOST_CANARY" "$LOCK_PATH" <<'PY'
 from pathlib import Path
 import sys
@@ -162,14 +209,11 @@ else
 fi
 
 FINAL_EVIDENCE="$EVIDENCE_ROOT/final-stage"
-if [[ -e "$FINAL_EVIDENCE" ]]; then
-  [[ "$CLEAN" -eq 1 && -f "$FINAL_EVIDENCE/.arw-stage-evidence" ]] \
-    || fail "final stage evidence exists without an owned clean marker" 73
-  rm -rf -- "$FINAL_EVIDENCE"
-fi
-"$PROJECT_ROOT/scripts/stage-plugin" --clean \
+STAGE_CLEAN=()
+[[ "$CLEAN" -eq 0 ]] || STAGE_CLEAN=(--clean)
+"$PROJECT_ROOT/scripts/stage-plugin" "${STAGE_CLEAN[@]}" \
   --stage-root "$STAGE_ROOT" --evidence-root "$FINAL_EVIDENCE" \
-  --integration-lock "$LOCK_PATH"
+  --integration-lock "$LOCK_PATH" "${CANDIDATE_ARGS[@]}"
 "$PROJECT_ROOT/scripts/stage-plugin" --validate-only \
   --stage-root "$STAGE_ROOT" --integration-lock "$LOCK_PATH"
 

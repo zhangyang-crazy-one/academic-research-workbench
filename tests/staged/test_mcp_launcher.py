@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from arw.files import FilesAdminService
-
+from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -58,6 +58,41 @@ def _isolated_environment(root: Path) -> dict[str, str]:
     }
 
 
+def _configured_network_environment() -> dict[str, str]:
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key.startswith(("PIP_INDEX_", "UV_INDEX_"))
+        or key
+        in {
+            "PIP_EXTRA_INDEX_URL",
+            "UV_DEFAULT_INDEX",
+            "UV_INDEX",
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "NO_PROXY",
+            "ALL_PROXY",
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+        }
+    }
+
+
+def _configured_package_environment(root: Path) -> dict[str, str]:
+    environment = _isolated_environment(root)
+    environment.pop("PIP_NO_INDEX")
+    environment.pop("UV_OFFLINE")
+    environment.update(_configured_network_environment())
+    return environment
+
+
+def _redact_package_environment(output: str) -> str:
+    values = {value for value in _configured_network_environment().values() if value}
+    for value in sorted(values, key=len, reverse=True):
+        output = output.replace(value, "[REDACTED_NETWORK]")
+    return output
+
+
 def test_launcher_rejects_implicit_root_and_cache(tmp_path: Path) -> None:
     launcher = _required_executable("scripts/file-base-mcp")
     result = subprocess.run(
@@ -93,6 +128,9 @@ def test_launcher_rejects_partial_files_profile_capability(tmp_path: Path) -> No
     assert "control root and root ID" in result.stderr
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -118,6 +156,8 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
     control_before = _snapshot(control)
 
     stage_root = tmp_path / "stage" / PLUGIN_NAME
+    stage_environment = _configured_package_environment(tmp_path / "stage-isolation")
+    stage_environment["ARW_STAGE_TMP_ROOT"] = str(tmp_path / "stage-tmp")
     staged = subprocess.run(
         [
             str(_required_executable("scripts/stage-plugin")),
@@ -126,16 +166,17 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
             str(stage_root),
             "--evidence-root",
             str(tmp_path / "stage-evidence"),
+            *candidate_stage_args(),
         ],
         cwd=REPOSITORY_ROOT,
-        env={**os.environ, "PIP_NO_INDEX": "1", "UV_OFFLINE": "1"},
+        env=stage_environment,
         text=True,
         capture_output=True,
         check=False,
     )
-    assert staged.returncode == 0, staged.stderr
+    assert staged.returncode == 0, _redact_package_environment(staged.stderr)
 
-    environment = _isolated_environment(tmp_path / "installed-isolation")
+    environment = _configured_package_environment(tmp_path / "installed-isolation")
     environment.update(
         {
             "ARW_FILES_CONTROL_ROOT": str(control),
@@ -152,7 +193,7 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
         check=False,
         timeout=30,
     )
-    assert launched.returncode == 0, launched.stderr
+    assert launched.returncode == 0, _redact_package_environment(launched.stderr)
     response = json.loads(launched.stdout)
     assert {item["name"] for item in response["result"]["tools"]} == {
         "list_files",
@@ -165,6 +206,9 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
     assert _snapshot(control) == control_before
 
 
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
 def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> None:
     smoke_script = _required_executable("scripts/smoke-staged-plugin")
     unrelated_cwd = tmp_path / "unrelated-working-directory"
@@ -172,6 +216,26 @@ def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> N
     stage_root = tmp_path / "stage" / PLUGIN_NAME
     evidence_root = tmp_path / "evidence"
     environment = _isolated_environment(tmp_path / "caller-isolation")
+
+    stage_environment = _configured_package_environment(tmp_path / "stage-isolation")
+    stage_environment["ARW_STAGE_TMP_ROOT"] = str(tmp_path / "stage-tmp")
+    staged = subprocess.run(
+        [
+            str(_required_executable("scripts/stage-plugin")),
+            "--clean",
+            "--stage-root",
+            str(stage_root),
+            "--evidence-root",
+            str(tmp_path / "stage-evidence"),
+            *candidate_stage_args(),
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=stage_environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert staged.returncode == 0, _redact_package_environment(staged.stderr)
 
     smoke = subprocess.run(
         [
@@ -189,24 +253,14 @@ def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> N
         capture_output=True,
         check=False,
     )
-    assert smoke.returncode == 0, smoke.stderr
+    assert smoke.returncode == 0, _redact_package_environment(smoke.stderr)
 
     manifest = json.loads(
         (stage_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
     )
     assert manifest["mcpServers"] == "./.mcp.json"
     mcp_config = json.loads((stage_root / ".mcp.json").read_text(encoding="utf-8"))
-    assert mcp_config == {
-        "mcpServers": {
-            "file-base": {
-                "command": "./scripts/file-base-mcp",
-                "env": {
-                    "CBM_DISABLE_UPDATE_CHECK": "1",
-                    "CBM_LOG_LEVEL": "warn",
-                },
-            }
-        }
-    }
+    assert mcp_config == {"mcpServers": {}}
     assert os.access(stage_root / "scripts/file-base-mcp", os.X_OK)
     assert os.access(stage_root / "libexec/file-base-mcp", os.X_OK)
 
@@ -230,8 +284,8 @@ def test_exact_installed_mcp_launcher_performs_bounded_read(tmp_path: Path) -> N
         (evidence_root / "plugin/mcp/config-probe.json").read_text(encoding="utf-8")
     )
     assert config_probe == {
-        "configured_command": "./scripts/file-base-mcp",
-        "host_listed": True,
+        "launcher_command": "./scripts/file-base-mcp",
+        "host_listed": False,
         "resolved_inside_installed_plugin": True,
         "server_name": "file-base",
         "technical_qualification": "PASS",
