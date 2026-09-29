@@ -54,6 +54,18 @@ must report that degraded behavior.
   sources, verification dates, uncertainty, conflict precedence, and the
   October 2026 target brief; `scripts/validate_venue_profiles.py` rejects
   unsourced or silently invented deadlines.
+- `references/fact_locked_results_revision.md` and
+  `scripts/check_fact_locked_revision.py` define the author-side, fact-locked
+  rewrite of result descriptions, captions and figure/table discussion. The
+  gate reuses the upstream #570 token extractor and fails on new values,
+  unwaived dropped values, table rows whose labels and values no longer stay
+  together, and citation changes. A PASS always carries a manual semantic
+  checklist.
+- `references/manuscript_hygiene_audit.md` and
+  `scripts/check_manuscript_hygiene.py` scan a manuscript package for local
+  paths, dangling workspace paths, hard-coded citations and cross-references,
+  unreferenced floats, and low-resolution or fully rasterized figures. The
+  scan is advisory and detection-only.
 
 Upstream held-out evaluation contracts, schemas, fixtures, and measurement
 summaries remain available in the source checkout. Raw artifacts below

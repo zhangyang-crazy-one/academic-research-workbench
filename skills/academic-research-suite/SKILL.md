@@ -307,6 +307,16 @@ open full text, user-supplied local full text, or inaccessible full text.
 Read [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md)
 when drafting manuscript-facing text, figures, tables, captions or exports.
 
+## Fact-Locked Results Revision and Manuscript Hygiene
+
+When the author asks to rewrite result descriptions, captions or the
+discussion of tables and figures without changing any reported number, read
+[fact-locked results revision](codex/references/fact_locked_results_revision.md).
+Run `codex/scripts/check_fact_locked_revision.py` and complete its semantic
+checklist before presenting the revision. Before a submission package,
+camera-ready export or public release, run the advisory
+[manuscript hygiene audit](codex/references/manuscript_hygiene_audit.md).
+
 ## Science Workbench MVP Extension
 
 When the user asks for an auditable science workbench, strict academic PDF/export,

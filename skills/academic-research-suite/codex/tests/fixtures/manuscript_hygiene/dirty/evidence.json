@@ -1,0 +1,6 @@
+{
+  "input_sha256": {
+    "experiments/run_20260914/evaluation/gold.jsonl": "c18b9b47e74a6291512568fd1a846b7f31a254abeeea403b1c60c6dc6d06f639"
+  },
+  "figure": "figures/method.svg"
+}

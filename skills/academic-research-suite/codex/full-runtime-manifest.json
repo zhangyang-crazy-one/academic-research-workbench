@@ -19,7 +19,9 @@
     "hook_pack": "skills/academic-research-suite/codex/hooks/hooks.json",
     "annual_venue_profiles": "skills/academic-research-suite/codex/references/annual_venue_profiles.json",
     "quality_gate_runner": "skills/academic-research-suite/codex/scripts/ars_codex_quality_gates.py",
-    "runtime_planner": "skills/academic-research-suite/codex/scripts/ars_codex_full_runtime.py"
+    "runtime_planner": "skills/academic-research-suite/codex/scripts/ars_codex_full_runtime.py",
+    "fact_locked_revision_checker": "skills/academic-research-suite/codex/scripts/check_fact_locked_revision.py",
+    "manuscript_hygiene_checker": "skills/academic-research-suite/codex/scripts/check_manuscript_hygiene.py"
   },
   "commands": [
     {"aliases": ["/ars-plan", "ars-plan"], "recipe": "ars/commands/ars-plan.md", "workflow": "academic-paper", "mode": "plan", "model_hint": "sonnet"},
@@ -154,7 +156,9 @@
     {"id": "reviewer_independence", "kind": "agent-team", "runner": "fixture", "parity": "near"},
     {"id": "hook_safety", "kind": "hooks", "runner": "hook-safety", "parity": "partial"},
     {"id": "upstream_lock", "kind": "provenance", "runner": "manifest", "parity": "near"},
-    {"id": "annual_venue_profiles", "kind": "venue-provenance", "runner": "venue-profiles", "parity": "near"}
+    {"id": "annual_venue_profiles", "kind": "venue-provenance", "runner": "venue-profiles", "parity": "near"},
+    {"id": "fact_locked_revision", "kind": "integrity", "runner": "fact-locked-revision", "parity": "near"},
+    {"id": "manuscript_hygiene", "kind": "integrity", "runner": "manuscript-hygiene", "parity": "near"}
   ],
   "known_degradations": [
     "Codex does not install Claude Code slash commands. Aliases are parsed by the root skill and full-runtime planner.",
@@ -164,6 +168,7 @@
     "ARS model tiering is classification-compatible but remains advisory unless the Codex runtime exposes explicit per-dispatch model selection.",
     "External cross-model reviewers and re-review judges require explicit API configuration plus content consent and are not silently simulated.",
     "The PDF read-integrity preflight depends on pypdf. When it is unavailable, Codex preserves the upstream UNAVAILABLE advisory instead of asserting PASS.",
+    "The manuscript hygiene audit's PDF raster check (H7) depends on pypdf. When it is unavailable, the audit reports not_checked for PDF figures instead of asserting a pass.",
     "Claude agent tools allowlists are preserved as least-privilege role boundaries, but actual Codex tool availability remains controlled by the active runtime and task permissions.",
     "Raw upstream held-out evaluation run artifacts under ars/evals/heldout/*/runs are source-and-test-only and are deliberately excluded from staged plugins; public contracts, schemas, fixtures, and measurement summaries remain bundled."
   ]

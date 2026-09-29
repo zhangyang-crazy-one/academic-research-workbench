@@ -30,6 +30,10 @@ HOOK_PACK = CODEX_ROOT / "hooks" / "hooks.json"
 ROOT_HOOK_PATHS = ("hooks/hooks.json", "hooks/arw_hook.py")
 VENUE_PROFILES = CODEX_ROOT / "references" / "annual_venue_profiles.json"
 VENUE_PROFILE_VALIDATOR = CODEX_ROOT / "scripts" / "validate_venue_profiles.py"
+FACT_LOCKED_REVISION_CHECKER = CODEX_ROOT / "scripts" / "check_fact_locked_revision.py"
+FACT_LOCKED_REVISION_FIXTURES = CODEX_ROOT / "tests" / "fixtures" / "fact_locked"
+MANUSCRIPT_HYGIENE_CHECKER = CODEX_ROOT / "scripts" / "check_manuscript_hygiene.py"
+MANUSCRIPT_HYGIENE_FIXTURES = CODEX_ROOT / "tests" / "fixtures" / "manuscript_hygiene"
 
 FORBIDDEN_HOOK_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\benv\b"),
@@ -641,6 +645,73 @@ def check_venue_profiles() -> list[str]:
     ]
 
 
+def _load_codex_script(name: str, path: Path) -> Any:
+    spec: Any = importlib.util.spec_from_file_location(name, path)
+    _require(bool(spec and spec.loader), f"cannot load {path.name}")
+    typed_spec: Any = cast(Any, spec)
+    module = importlib.util.module_from_spec(typed_spec)  # type: ignore[arg-type]
+    typed_loader: Any = typed_spec.loader
+    typed_loader.exec_module(module)
+    return module
+
+
+def check_fact_locked_revision() -> list[str]:
+    module = _load_codex_script("check_fact_locked_revision", FACT_LOCKED_REVISION_CHECKER)
+    source = (FACT_LOCKED_REVISION_FIXTURES / "source.tex").read_text(encoding="utf-8")
+    expectations = {
+        "pass": [],
+        "new_value": ["F1"],
+        "dropped": ["F2"],
+        "row_swap": ["F3"],
+    }
+    for name, expected in expectations.items():
+        revision = (FACT_LOCKED_REVISION_FIXTURES / f"revision_{name}.tex").read_text(
+            encoding="utf-8"
+        )
+        report = module.audit(source, revision)
+        failed = [
+            item["check"] for item in report["findings"] if item["severity"] == "fail"
+        ]
+        _require(
+            failed == expected,
+            f"fact-locked fixture {name!r} expected fail checks {expected}, got {failed}",
+        )
+        _require(
+            bool(report["semantic_checklist"]),
+            "fact-locked report must always carry the semantic checklist",
+        )
+    return [
+        "fact-locked revision gate accepts restated/reordered results and rejects "
+        "new, dropped, and row-moved values on 4 fixtures",
+        "semantic checklist is reported with every result (PASS is never a "
+        "semantic-fidelity verdict)",
+    ]
+
+
+def check_manuscript_hygiene() -> list[str]:
+    module = _load_codex_script("check_manuscript_hygiene", MANUSCRIPT_HYGIENE_CHECKER)
+    dirty = module.audit_package(MANUSCRIPT_HYGIENE_FIXTURES / "dirty")
+    detected = sorted({item["check"] for item in dirty["findings"]})
+    _require(
+        detected == ["H1", "H2", "H3", "H4", "H5", "H6"],
+        f"manuscript hygiene dirty fixture detected {detected}",
+    )
+    _require(
+        all("example-user" not in item["detail"] for item in dirty["findings"]),
+        "local-path findings must redact the user segment",
+    )
+    clean = module.audit_package(MANUSCRIPT_HYGIENE_FIXTURES / "clean")
+    _require(
+        not clean["findings"],
+        f"manuscript hygiene clean fixture reported {clean['findings']}",
+    )
+    return [
+        "manuscript hygiene audit detects local paths, dangling paths, hard-coded "
+        "citations and cross-references, unreferenced floats, and low-dpi rasters",
+        "clean fixture produces no finding; local paths are redacted in reports",
+    ]
+
+
 GATES: dict[str, Callable[[], list[str]]] = {
     "desktop-plugin-bundle": check_desktop_plugin_bundle,
     "manifest": check_manifest,
@@ -650,6 +721,8 @@ GATES: dict[str, Callable[[], list[str]]] = {
     "reviewer-fixture": check_reviewer_fixture,
     "upstream-lock": check_upstream_lock,
     "venue-profiles": check_venue_profiles,
+    "fact-locked-revision": check_fact_locked_revision,
+    "manuscript-hygiene": check_manuscript_hygiene,
 }
 
 
