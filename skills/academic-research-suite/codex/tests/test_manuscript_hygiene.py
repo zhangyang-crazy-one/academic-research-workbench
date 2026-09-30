@@ -183,3 +183,15 @@ def test_cli_strict_exit_codes(tmp_path: Path) -> None:
         check=False,
     )
     assert missing.returncode == 2
+
+
+def test_dpi_within_tolerance_of_threshold_passes(tmp_path: Path) -> None:
+    source = (FIXTURES / "dirty" / "figures" / "method.svg").read_text(encoding="utf-8")
+    (tmp_path / "fig.svg").write_text(source, encoding="utf-8")
+    module = _load()
+    # The fixture raster prints at exactly 100 dpi: a 100.9 threshold is within
+    # the 1% tolerance and passes; a 102 threshold fails.
+    assert module.audit_package(tmp_path, min_dpi=100.9)["findings"] == []
+    assert [
+        f["check"] for f in module.audit_package(tmp_path, min_dpi=102)["findings"]
+    ] == ["H6"]

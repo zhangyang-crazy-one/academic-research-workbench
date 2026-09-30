@@ -65,6 +65,9 @@ TEXT_SUFFIXES = {
 }
 SKIP_DIRS = {".git", "__pycache__", ".venv", "node_modules", ".pytest_cache"}
 DEFAULT_MIN_DPI = 300.0
+# Placement sizes are stored rounded; allow 1% below the threshold before failing
+# so an image built for exactly 300 dpi does not report "~300 dpi (< 300)".
+DPI_TOLERANCE = 0.01
 MAX_TEXT_BYTES = 8 * 1024 * 1024
 
 LOCAL_PATH_RE = re.compile(
@@ -398,14 +401,14 @@ def check_svg_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
                 continue
             inches = shown_width * unit_in
             dpi = size[0] / inches if inches else 0.0
-            if dpi < min_dpi:
+            if dpi < min_dpi * (1 - DPI_TOLERANCE):
                 findings.append(
                     _finding(
                         "H6",
                         "fail",
                         rel,
                         f"embedded raster {size[0]}x{size[1]} px displayed at "
-                        f"{inches * 25.4:.1f} mm prints at ~{dpi:.0f} dpi "
+                        f"{inches * 25.4:.1f} mm prints at ~{dpi:.1f} dpi "
                         f"(< {min_dpi:.0f}); supply a higher-resolution or vector source",
                     )
                 )
@@ -537,14 +540,14 @@ def check_pdf_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
                             "labels cannot be searched or edited — export the vector source",
                         )
                     )
-                if dpi < min_dpi:
+                if dpi < min_dpi * (1 - DPI_TOLERANCE):
                     findings.append(
                         _finding(
                             "H7",
                             "fail",
                             rel,
                             f"page {number}: embedded image {px_w}x{px_h} px placed at "
-                            f"{w_pt / 72 * 25.4:.1f} mm prints at ~{dpi:.0f} dpi (< {min_dpi:.0f})",
+                            f"{w_pt / 72 * 25.4:.1f} mm prints at ~{dpi:.1f} dpi (< {min_dpi:.0f})",
                         )
                     )
     return findings
