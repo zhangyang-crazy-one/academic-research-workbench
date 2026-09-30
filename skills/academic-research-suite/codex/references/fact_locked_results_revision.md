@@ -112,6 +112,11 @@ Verify each number-to-key correspondence against the frozen bibliography and
 record that evidence in the change log: the gate cannot establish bibliographic
 identity itself.
 
+Existing LaTeX citation commands are preserved during bracket migration; their
+optional arguments (such as the page locator in `\cite[4]{other}`) are not
+bibliography labels. Table-row comparisons accept command variants for explicitly
+mapped identities while retaining optional arguments and unrelated keys.
+
 Only mapped citation labels are exempted from numeric checks. A reported `4`
 elsewhere remains protected when `[4]` migrates to `\cite{r4}`. The mapped
 identity's total occurrence count must survive, including pre-existing LaTeX

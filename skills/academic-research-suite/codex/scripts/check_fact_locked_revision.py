@@ -206,7 +206,32 @@ def _canonical_citations(
             "\\cite{" + mapping[number] + "}" if number in mapping else match.group(0)
         )
 
-    return upstream.SQUARE_CITATION_RE.sub(replace, text)
+    # Optional arguments such as \cite[4]{other} are page locators, not
+    # bracket bibliography labels. Rewriting them also corrupts the command
+    # before F4 extracts its unrelated key, so preserve complete commands.
+    chunks: list[str] = []
+    offset = 0
+    for citation in LATEX_CITE_RE.finditer(text):
+        chunks.append(
+            upstream.SQUARE_CITATION_RE.sub(replace, text[offset : citation.start()])
+        )
+        chunks.append(citation.group(0))
+        offset = citation.end()
+    chunks.append(upstream.SQUARE_CITATION_RE.sub(replace, text[offset:]))
+    return "".join(chunks)
+
+
+def _mapped_table_citation_forms(text: str, keys: set[str]) -> str:
+    """Fold command variants only for explicitly mapped citation identities."""
+
+    def replace(match: re.Match[str]) -> str:
+        cited_keys = {key.strip() for key in match.group(1).split(",")}
+        if not cited_keys or not cited_keys <= keys:
+            return match.group(0)
+        # Keep optional arguments and keys intact: page locators remain facts.
+        return re.sub(r"^\\cite[a-zA-Z]*\*?", lambda _: "\\cite", match.group(0))
+
+    return LATEX_CITE_RE.sub(replace, text)
 
 
 def _without_mapped_key_numbers(text: str, keys: set[str]) -> str:
@@ -285,8 +310,12 @@ def audit(
             )
         )
 
-    source_rows = _row_signatures(upstream, source)
-    revision_rows = _row_signatures(upstream, revision)
+    source_rows = _row_signatures(
+        upstream, _mapped_table_citation_forms(source, mapped_keys)
+    )
+    revision_rows = _row_signatures(
+        upstream, _mapped_table_citation_forms(revision, mapped_keys)
+    )
     lost_rows, gained_rows = _match_rows(source_rows, revision_rows)
     if lost_rows:
         findings.append(

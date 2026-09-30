@@ -239,3 +239,39 @@ def test_citation_mapping_cli(tmp_path: Path) -> None:
     )
     assert result.returncode == 2
     assert "invalid citation mapping" in result.stderr
+
+
+def test_citation_mapping_preserves_existing_optional_argument_and_key() -> None:
+    source = r"See [4] and \cite[4]{other}."
+    revision = r"See \cite{r4} and \cite{r4}."
+    report = _load().audit(source, revision, citation_map=("[4]=r4",))
+    assert "F4" in _failed(report)
+    assert "F2" in _failed(report)
+    assert _load().audit(
+        source, r"See \cite{r4} and \cite[4]{other}.", citation_map=("[4]=r4",)
+    )["passed"]
+
+
+def test_mapped_table_citation_command_variants_are_equivalent() -> None:
+    for command in ("cite", "citep", "citet", "citep*"):
+        source = "| Arm | Value | Source |\n|---|---|---|\n| A | 27.55 | [4] |"
+        revision = source.replace("[4]", "\\" + command + "{r4}")
+        assert _load().audit(source, revision, citation_map=("[4]=r4",))["passed"]
+
+
+def test_mapped_table_variants_keep_unmapped_keys_and_locator_facts() -> None:
+    module = _load()
+    assert (
+        module._mapped_table_citation_forms(r"\citep{other}", {"r4"})
+        == r"\citep{other}"
+    )
+    assert (
+        module._mapped_table_citation_forms(r"\citep[4]{r4}", {"r4"}) == r"\cite[4]{r4}"
+    )
+    report = module.audit(
+        r"| A | 27.55 | \citep[4]{r4} |",
+        r"| A | 27.55 | \cite{r4} |",
+        citation_map=("[4]=r4",),
+    )
+    assert "F2" in _failed(report)
+    assert "F3" in _failed(report)

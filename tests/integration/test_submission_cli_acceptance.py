@@ -1171,13 +1171,16 @@ def test_a5_projection_and_advisory_mutations_do_not_change_canonical_status(
         submission_id="submission.a5",
         number=2500,
     )
-    before = SubmissionWorkflowService(root).check(packet.submission_id)
+    # Compare the same historical evaluation before and after mutation; live
+    # checks intentionally report the current time in readiness.evaluated_at.
+    as_of = "2026-09-21T12:45:00Z"
+    before = SubmissionWorkflowService(root).check(packet.submission_id, as_of=as_of)
     (root / "submission-projection.sqlite").write_bytes(b"forged PASS")
     (root / "semantica-cache.sqlite").write_bytes(b"forged PASS")
     (root / "memory-approval.json").write_text(
         '{"approved":true,"actor":"memory"}', encoding="utf-8"
     )
-    after = SubmissionWorkflowService(root).check(packet.submission_id)
+    after = SubmissionWorkflowService(root).check(packet.submission_id, as_of=as_of)
     assert after == before
     assert after["readiness"]["readiness"] == "BLOCKED"
     assert not any(
@@ -1435,7 +1438,10 @@ def test_rollback_disables_provider_but_preserves_historical_readers_and_bytes(
         submission_id="submission.rollback",
         number=2700,
     )
-    before = SubmissionWorkflowService(root).check(packet.submission_id)
+    # Compare the same historical evaluation before and after rollback; live
+    # checks intentionally report the current time in readiness.evaluated_at.
+    as_of = "2026-09-21T12:45:00Z"
+    before = SubmissionWorkflowService(root).check(packet.submission_id, as_of=as_of)
     journal = root / "journal/segments/00000001.jsonl"
     journal_bytes = journal.read_bytes()
     manifest = root / "rollback-plugin.json"
@@ -1445,7 +1451,7 @@ def test_rollback_disables_provider_but_preserves_historical_readers_and_bytes(
     router = default_router(plugin_manifest=manifest)
     with pytest.raises(CapabilityUnavailable):
         router.resolve("submission.prepare")
-    after = SubmissionWorkflowService(root).check(packet.submission_id)
+    after = SubmissionWorkflowService(root).check(packet.submission_id, as_of=as_of)
     assert after == before
     assert journal.read_bytes() == journal_bytes
     assert replay_run(root).event_count == before["accepted_artifacts"][-1]["sequence"]
