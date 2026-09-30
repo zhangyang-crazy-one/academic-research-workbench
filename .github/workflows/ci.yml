@@ -39,6 +39,7 @@ jobs:
       - name: Run Codex overlay regressions and quality gates
         run: |
           .venv/bin/python -m pytest -q skills/academic-research-suite/codex/tests
+          .venv/bin/python -m pytest -q tests/staged/test_supply_chain_inventory.py::test_use_distribution_technical_provenance_hashes_are_fresh
           .venv/bin/python skills/academic-research-suite/codex/scripts/ars_codex_quality_gates.py all --json
 
   python:

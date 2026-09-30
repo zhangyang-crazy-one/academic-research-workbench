@@ -78,7 +78,10 @@ print("AST:", len(dump), hashlib.sha256(dump.encode("utf-8")).hexdigest())
 For future changes, review the executable diff and parent-consumer contract
 before refreshing the SBOM row and per-minor AST constants. Do not derive an
 allowlist value automatically at gate runtime or assume another minor has the
-same AST. Run `tests/unit/test_hook_contracts.py` and
+same AST. Refresh the SBOM's technical-provenance digest in
+`supply-chain/use-distribution.json` too, without changing use, permission or
+approval declarations. Run its freshness regression in
+`tests/staged/test_supply_chain_inventory.py`, `tests/unit/test_hook_contracts.py` and
 `skills/academic-research-suite/codex/tests/test_root_hook_ast_policy.py` on each
 supported minor. These cover real-host and legacy receipts, malformed inputs,
 additive-field guards, rebound-SBOM executable mutations, unsupported minors,
