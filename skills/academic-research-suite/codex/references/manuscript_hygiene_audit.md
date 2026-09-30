@@ -26,16 +26,28 @@ python3 skills/academic-research-suite/codex/scripts/check_manuscript_hygiene.py
 | H7 | deterministic (needs pypdf) | PDFs that are one full-page raster with no vector text (warn), and embedded PDF images below `--min-dpi` (fail). Reports `not_checked` when pypdf is unavailable. | warn / fail |
 
 Citation `[Sec.~3, Fig.~1]` optional arguments and `thebibliography` bodies are
-masked before H3 and H4, and LaTeX comments are ignored.
+masked before H3 and H4, and LaTeX comments are ignored. H3 citation/bibliography
+usage and H5 references are collected across all scanned `.tex` files in the
+package, so a main file can reference a float defined in an included source.
+This is package-wide heuristic state, not a TeX include-graph parser; unrelated
+manuscripts in one package can therefore affect these checks.
 
 ## Boundaries
 
 - Advisory by default: exit 0 unless `--strict` is set and a `fail` exists.
 - Detection only. The script never edits, moves, or redacts package files,
   and the scholar decides each fix.
+- H6 reads only regular raster files inside the package, rejecting absolute
+  hrefs, escapes outside the root, and file or directory symlinks. SVG documents
+  and raster sources are each bounded to 8 MiB; embedded data URIs must be
+  valid base64 and satisfy encoded and decoded size limits. Unsafe, missing,
+  oversized, or unsupported image sources are reported as `not_checked`, not
+  treated as a pass. No remote image sources are fetched.
 - H6 ignores SVG transforms and uses the declared display width. H7 follows
   `cm` and Form XObject matrices but not every PDF construct. Treat an H7
   `not_checked` as "not checked", never as a pass.
+- H6 and H7 allow 1% below the requested DPI threshold to accommodate rounded
+  placement sizes.
 - A clean report is not an anonymity or camera-ready verdict. The #394
   submission-package verifier (`ars/scripts/verify_submission_package.py`)
   remains the authority for reference integrity, venue limits, and

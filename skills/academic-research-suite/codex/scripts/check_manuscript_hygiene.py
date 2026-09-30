@@ -43,7 +43,9 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
+import stat
 import struct
 import sys
 import xml.etree.ElementTree as ET
@@ -69,6 +71,7 @@ DEFAULT_MIN_DPI = 300.0
 # so an image built for exactly 300 dpi does not report "~300 dpi (< 300)".
 DPI_TOLERANCE = 0.01
 MAX_TEXT_BYTES = 8 * 1024 * 1024
+MAX_RASTER_BYTES = 8 * 1024 * 1024
 
 LOCAL_PATH_RE = re.compile(
     r"(?P<prefix>/home/|/Users/|[A-Za-z]:\\\\?Users\\\\?)(?P<user>[^/\\\s\"'`<>|]+)"
@@ -260,12 +263,27 @@ def _latex_body(text: str) -> str:
 
 def check_latex(root: Path, texts: dict[Path, str]) -> list[dict[str, Any]]:
     findings = []
-    for path, text in texts.items():
-        if path.suffix != ".tex":
-            continue
+    # Sources are often split with \input/\include. Package-wide state avoids
+    # treating references or bibliography commands in another file as absent.
+    tex_sources = {
+        path: text for path, text in texts.items() if path.suffix.lower() == ".tex"
+    }
+    bodies = {path: _latex_body(text) for path, text in tex_sources.items()}
+    uses_cite = any(
+        re.search(
+            r"\\(?:cite[a-zA-Z]*\*?[\[{]|bibitem\b|bibliography\b|addbibresource\b|printbibliography\b)",
+            "\n".join(LATEX_COMMENT_RE.sub("", line) for line in text.splitlines()),
+        )
+        for text in tex_sources.values()
+    )
+    referenced = {
+        key.strip()
+        for body in bodies.values()
+        for group in REF_RE.findall(body)
+        for key in group.split(",")
+    }
+    for path, body in bodies.items():
         rel = path.relative_to(root).as_posix()
-        body = _latex_body(text)
-        uses_cite = bool(re.search(r"\\cite[a-zA-Z]*\*?[\[{]|\\bibitem", text))
         masked = CITE_OPT_RE.sub(lambda m: " " * len(m.group(0)), body)
         if uses_cite:
             for match in HARD_CITE_RE.finditer(masked):
@@ -292,9 +310,6 @@ def check_latex(root: Path, texts: dict[Path, str]) -> list[dict[str, Any]]:
                     signal_class="heuristic",
                 )
             )
-        referenced = {
-            key.strip() for group in REF_RE.findall(body) for key in group.split(",")
-        }
         for env in FLOAT_ENV_RE.finditer(body):
             for label in LABEL_RE.findall(env.group(2)):
                 if label not in referenced:
@@ -369,6 +384,65 @@ def _svg_user_unit_inches(svg: ET.Element) -> float:
     return UNIT_TO_INCH["px"]
 
 
+def _read_package_bytes(root: Path, target: Path, limit: int) -> bytes | None:
+    """Read a bounded regular file without following any package symlinks.
+
+    Walk directory descriptors with O_NOFOLLOW so checking a path and then
+    opening it cannot race a directory-symlink replacement.
+    """
+    root = root.resolve()
+    try:
+        relative = Path(os.path.abspath(target)).relative_to(root)
+    except ValueError:
+        return None
+    descriptors: list[int] = []
+    try:
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        descriptors.append(directory)
+        for part in relative.parts[:-1]:
+            directory = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+            )
+            descriptors.append(directory)
+        fd = os.open(
+            relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+        )
+        descriptors.append(fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            return None
+        # The extra byte detects growth after fstat without an unbounded read.
+        with os.fdopen(os.dup(fd), "rb") as stream:
+            data = stream.read(limit + 1)
+        return data if len(data) <= limit else None
+    except (OSError, ValueError):
+        return None
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
+def _svg_raster_data(root: Path, path: Path, href: str) -> bytes | None:
+    if href.startswith("data:image/"):
+        header, separator, payload = href.partition(",")
+        # Only base64 image URIs are supported. Bound before removing whitespace
+        # or decoding, and validate rather than silently ignoring malformed bytes.
+        if not separator or not header.endswith(";base64"):
+            return None
+        if len(payload) > 4 * ((MAX_RASTER_BYTES + 2) // 3):
+            return None
+        try:
+            data = base64.b64decode(re.sub(r"\s", "", payload), validate=True)
+        except ValueError:
+            return None
+        return data if len(data) <= MAX_RASTER_BYTES else None
+    if not href or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", href):
+        return None
+    if Path(href).is_absolute():
+        return None
+    return _read_package_bytes(root, path.parent / href, MAX_RASTER_BYTES)
+
+
 def check_svg_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
     findings = []
     for path in _iter_files(root):
@@ -376,23 +450,36 @@ def check_svg_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
             continue
         rel = path.relative_to(root).as_posix()
         try:
-            svg = ET.parse(path).getroot()
+            source = _read_package_bytes(root, path, MAX_TEXT_BYTES)
+            if source is None:
+                findings.append(
+                    _finding(
+                        "H6",
+                        "not_checked",
+                        rel,
+                        "SVG is unreadable or exceeds the size limit",
+                    )
+                )
+                continue
+            svg = ET.fromstring(source)
         except (ET.ParseError, OSError):
             continue
         unit_in = _svg_user_unit_inches(svg)
         for image in svg.iter("{http://www.w3.org/2000/svg}image"):
             href = image.get(XLINK_HREF) or image.get("href") or ""
-            data: bytes | None = None
-            if href.startswith("data:image/"):
-                try:
-                    data = base64.b64decode(re.sub(r"\s", "", href.split(",", 1)[1]))
-                except (IndexError, ValueError):
-                    data = None
-            elif href and not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", href):
-                target = path.parent / href
-                if target.is_file():
-                    data = target.read_bytes()
+            data = _svg_raster_data(root, path, href)
             size = _raster_size(data) if data else None
+            if size is None:
+                findings.append(
+                    _finding(
+                        "H6",
+                        "not_checked",
+                        rel,
+                        "SVG raster could not be checked: unsupported, missing, oversized, "
+                        "or unsafe image source",
+                    )
+                )
+                continue
             try:
                 shown_width = float(image.get("width", "0"))
             except ValueError:

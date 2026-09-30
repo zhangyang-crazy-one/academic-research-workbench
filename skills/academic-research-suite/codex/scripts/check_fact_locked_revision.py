@@ -29,7 +29,8 @@ set-level and table-row checks such a rewrite needs:
       values, and the attachment of re-stated numbers is checked by hand.
   F4  **citations** — the upstream citation-token multiset (markers, bracket
       groups, author-year) and the set of LaTeX ``\\cite`` keys must be
-      unchanged. ``fail`` on any delta.
+      unchanged, except explicitly mapped bracket-to-key migrations. Mapped
+      identities also conserve occurrence counts. ``fail`` on any other delta.
 
 Contract boundaries:
 
@@ -178,6 +179,64 @@ def _latex_cite_keys(text: str) -> set[str]:
     }
 
 
+def _citation_mapping(entries: tuple[str, ...]) -> dict[str, str]:
+    """Accept only explicit singleton bracket-number to bibliography-key pairs."""
+    mapping: dict[str, str] = {}
+    for entry in entries:
+        match = re.fullmatch(r"\s*\[(\d+)\]\s*=\s*([A-Za-z][A-Za-z0-9_:.-]*)\s*", entry)
+        if not match:
+            raise ValueError(f"invalid citation mapping {entry!r}; expected [4]=r4")
+        number, key = match.groups()
+        if number in mapping or key in mapping.values():
+            raise ValueError("citation mappings must have unique numbers and keys")
+        mapping[number] = key
+    return mapping
+
+
+def _canonical_citations(
+    upstream: ModuleType, text: str, mapping: dict[str, str]
+) -> str:
+    # Decode Pandoc's escaped brackets before tokenization. Match a complete
+    # citation group: [4] must never rewrite the 4 inside [4, 5] or [4-6].
+    text = upstream.normalize_text(text).replace("{[}", "[").replace("{]}", "]")
+
+    def replace(match: re.Match[str]) -> str:
+        number = match.group(0)[1:-1]
+        return (
+            "\\cite{" + mapping[number] + "}" if number in mapping else match.group(0)
+        )
+
+    return upstream.SQUARE_CITATION_RE.sub(replace, text)
+
+
+def _without_mapped_key_numbers(text: str, keys: set[str]) -> str:
+    # A citation migration exempts its citation label, never a same-valued fact
+    # elsewhere in the prose. Also avoid treating digits in a mapped key as data.
+    def replace(match: re.Match[str]) -> str:
+        remaining = [
+            key for key in match.group(1).split(",") if key.strip() not in keys
+        ]
+        start, end = match.span(1)
+        return (
+            match.group(0)[: start - match.start()]
+            + ",".join(remaining)
+            + match.group(0)[end - match.start() :]
+        )
+
+    return LATEX_CITE_RE.sub(replace, text)
+
+
+def _mapped_citation_counts(text: str, keys: set[str]) -> Counter:
+    # Match the upstream extractor's treatment of hidden HTML comments.
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    return Counter(
+        key.strip()
+        for group in LATEX_CITE_RE.findall(text)
+        for key in group.split(",")
+        if key.strip() in keys
+    )
+
+
 def _finding(
     check: str, severity: str, detail: str, values: list[str]
 ) -> dict[str, Any]:
@@ -185,11 +244,21 @@ def _finding(
 
 
 def audit(
-    source: str, revision: str, *, allow_drop: tuple[str, ...] = ()
+    source: str,
+    revision: str,
+    *,
+    allow_drop: tuple[str, ...] = (),
+    citation_map: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     upstream = _load_upstream()
-    source_numbers = upstream.extract_numbers(source)
-    revision_numbers = upstream.extract_numbers(revision)
+    mapping = _citation_mapping(citation_map)
+    source = _canonical_citations(upstream, source, mapping)
+    revision = _canonical_citations(upstream, revision, mapping)
+    mapped_keys = set(mapping.values())
+    source_numeric = _without_mapped_key_numbers(source, mapped_keys)
+    revision_numeric = _without_mapped_key_numbers(revision, mapped_keys)
+    source_numbers = upstream.extract_numbers(source_numeric)
+    revision_numbers = upstream.extract_numbers(revision_numeric)
     findings: list[dict[str, Any]] = []
 
     new_values = sorted(set(revision_numbers) - set(source_numbers))
@@ -248,6 +317,13 @@ def audit(
         + [f"-\\cite{{{k}}}" for k in sorted(source_keys - revision_keys)]
         + [f"+\\cite{{{k}}}" for k in sorted(revision_keys - source_keys)]
     )
+    source_mapped = _mapped_citation_counts(source, mapped_keys)
+    revision_mapped = _mapped_citation_counts(revision, mapped_keys)
+    for key in sorted(mapped_keys):
+        if source_mapped[key] != revision_mapped[key]:
+            citation_changes.append(
+                f"mapped citation {key}: {source_mapped[key]} -> {revision_mapped[key]} occurrences"
+            )
     if citation_changes:
         findings.append(
             _finding(
@@ -258,12 +334,13 @@ def audit(
             )
         )
 
-    multiset = upstream.audit_pair(source, revision)["numbers_delta"]
+    multiset = upstream.audit_pair(source_numeric, revision_numeric)["numbers_delta"]
     return {
         "schema": "arw.fact-locked-revision-report.v1",
         "passed": not any(item["severity"] == "fail" for item in findings),
         "findings": findings,
         "waived_drops": waived,
+        "citation_mapping": {f"[{number}]": key for number, key in mapping.items()},
         "table_rows": {"source": len(source_rows), "revision": len(revision_rows)},
         "mention_count_delta": multiset,
         "semantic_checklist": list(SEMANTIC_CHECKLIST),
@@ -286,6 +363,13 @@ def _render(report: dict[str, Any]) -> str:
         )
     if report["waived_drops"]:
         lines.append("  waived drops: " + ", ".join(report["waived_drops"]))
+    if report["citation_mapping"]:
+        lines.append(
+            "  citation mapping: "
+            + ", ".join(
+                f"{number}={key}" for number, key in report["citation_mapping"].items()
+            )
+        )
     lines.append(
         f"  table rows checked: source {report['table_rows']['source']}, "
         f"revision {report['table_rows']['revision']}"
@@ -308,6 +392,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="VALUE",
         help="waive one dropped source value (repeatable); record the reason",
     )
+    parser.add_argument(
+        "--citation-map",
+        action="append",
+        default=[],
+        metavar="[NUMBER]=KEY",
+        help="explicit citation equivalence, e.g. '[4]=r4' (repeatable); verify against bibliography",
+    )
     parser.add_argument("--json", action="store_true", help="emit the JSON report")
     args = parser.parse_args(argv)
     try:
@@ -316,7 +407,16 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, UnicodeDecodeError) as exc:
         print(f"cannot read input: {exc}", file=sys.stderr)
         return 2
-    report = audit(source, revision, allow_drop=tuple(args.allow_drop))
+    try:
+        report = audit(
+            source,
+            revision,
+            allow_drop=tuple(args.allow_drop),
+            citation_map=tuple(args.citation_map),
+        )
+    except ValueError as exc:
+        print(f"invalid arguments: {exc}", file=sys.stderr)
+        return 2
     print(
         json.dumps(report, ensure_ascii=False, indent=2)
         if args.json

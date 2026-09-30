@@ -148,3 +148,94 @@ def test_cli_exit_codes_and_json() -> None:
         check=False,
     )
     assert missing.returncode == 2
+
+
+def test_explicit_citation_migration_preserves_identity() -> None:
+    for citation in ("[4]", "{[}4{]}"):
+        source = f"Score 27.55, following {citation}."
+        revision = r"Score 27.55, following \cite{r4}."
+        assert "F4" in _failed(_load().audit(source, revision, allow_drop=("4",)))
+        report = _load().audit(source, revision, citation_map=("[4]=r4",))
+        assert report["passed"]
+        assert report["citation_mapping"] == {"[4]": "r4"}
+        assert report["waived_drops"] == []
+
+
+def test_citation_mapping_does_not_waive_same_valued_reported_fact() -> None:
+    report = _load().audit(
+        "Score 4. See [4].", r"See \cite{ref_4}.", citation_map=("[4]=ref_4",)
+    )
+    assert _failed(report) == ["F2"]
+    assert report["findings"][0]["values"] == ["4"]
+
+
+def test_citation_mapping_preserves_table_cells() -> None:
+    source = "| Arm | Value | Source |\n|---|---|---|\n| A | 27.55 | {[}4{]} |"
+    revision = source.replace("{[}4{]}", r"\cite{r4}")
+    assert _load().audit(source, revision, citation_map=("[4]=r4",))["passed"]
+
+
+def test_citation_mapping_cannot_hide_wrong_or_unrelated_citations() -> None:
+    for source, revision in (
+        ("[4]", r"\cite{wrong}"),
+        (r"[4] \cite{other}", r"\cite{r4} \cite{wrong}"),
+        ("[4] [5]", r"\cite{r4} [6]"),
+        ("[4] [4]", r"\cite{r4}"),
+        ("[4]", r"\cite{r4} \cite{r4}"),
+        (r"[4] \cite{r4}", r"\cite{r4}"),
+        ("[4]", r"<!-- \cite{r4} -->"),
+        ("[4, 5]", r"\cite{r4} [5]"),
+        ("[4-6]", r"\cite{r4} [6]"),
+    ):
+        report = _load().audit(source, revision, citation_map=("[4]=r4",))
+        assert "F4" in _failed(report), (source, revision, report)
+
+
+def test_mapping_allows_partial_migration_and_grouped_latex_keys() -> None:
+    report = _load().audit(
+        "[4] [4] [5]", r"[4] \cite{r4,r5}", citation_map=("[4]=r4", "[5]=r5")
+    )
+    assert report["passed"]
+
+
+def test_mapping_rejects_ambiguous_or_broad_entries() -> None:
+    import pytest
+
+    for entries in (
+        ("[4]=r4", "[4]=r5"),
+        ("[4]=r4", "[5]=r4"),
+        ("[4]=r4", "[4]=r4"),
+        ("Score 4=r4",),
+        ("[4,5]=r4",),
+        ("[4]=r4,r5",),
+        ("[4]=",),
+        ("[4]=\\cite{r4}",),
+    ):
+        with pytest.raises(ValueError):
+            _load().audit("[4]", r"\cite{r4}", citation_map=entries)
+
+
+def test_citation_mapping_cli(tmp_path: Path) -> None:
+    source, revision = tmp_path / "source.tex", tmp_path / "revision.tex"
+    source.write_text("See {[}4{]}.", encoding="utf-8")
+    revision.write_text(r"See \cite{r4}.", encoding="utf-8")
+    command = [
+        sys.executable,
+        str(SCRIPT),
+        "--source",
+        str(source),
+        "--revision",
+        str(revision),
+        "--json",
+        "--citation-map",
+    ]
+    result = subprocess.run(
+        command + ["[4]=r4"], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["citation_mapping"] == {"[4]": "r4"}
+    result = subprocess.run(
+        command + ["[4]=r4,r5"], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 2
+    assert "invalid citation mapping" in result.stderr

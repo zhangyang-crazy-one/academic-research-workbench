@@ -87,7 +87,7 @@ Run both checks before presenting the revision:
 ```bash
 python3 skills/academic-research-suite/codex/scripts/check_fact_locked_revision.py \
   --source <original.tex|md> --revision <revised.tex|md> \
-  [--allow-drop <value> ...] --json
+  [--allow-drop <value> ...] [--citation-map '[4]=r4' ...] --json
 
 python3 skills/academic-research-suite/codex/scripts/check_manuscript_hygiene.py \
   <revised package dir> --json
@@ -100,6 +100,25 @@ survive together (F3), and citation-token changes (F4). A new label-only row
 is a warning. Each `--allow-drop` must carry a reason in the change log, for
 example "LaTeX column width" or "erroneous cross-reference replaced by
 `\ref`".
+
+For a citation-format migration, supply an explicit equivalence for each
+bibliography identity, for example `--citation-map '[4]=r4'`. This accepts
+both `[4]` and `{[}4{]}` as equivalent to `\cite{r4}` (including variants
+such as `\citep{r4}`). Repeat the option for different identities. Mappings
+must have unique bracket numbers and unique keys; arbitrary text replacements,
+bracket ranges/groups, and multiple target keys are rejected. A partial
+migration is allowed, and mapped keys may appear in grouped LaTeX citations.
+Verify each number-to-key correspondence against the frozen bibliography and
+record that evidence in the change log: the gate cannot establish bibliographic
+identity itself.
+
+Only mapped citation labels are exempted from numeric checks. A reported `4`
+elsewhere remains protected when `[4]` migrates to `\cite{r4}`. The mapped
+identity's total occurrence count must survive, including pre-existing LaTeX
+mentions; unrelated citation tokens and keys remain protected by F4. Mapping
+is an equivalence, not permission to add, drop, or substitute a source.
+`--allow-drop` alone never authorizes a citation change. The report records
+`citation_mapping` separately from `waived_drops`.
 
 A PASS is necessary, not sufficient. Complete the semantic checklist that the
 report prints: attachment of every number to the same arm, view, and metric;
@@ -114,6 +133,7 @@ causal upgrade. Record the result in the change log.
   - base and revision hashes;
   - the gate reports;
   - each waived drop and its reason;
+  - each citation mapping and its verified bibliography correspondence;
   - every wording change that the semantic checklist flagged and how it was
     resolved;
   - the sections left untouched;

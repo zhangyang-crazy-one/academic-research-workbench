@@ -195,3 +195,208 @@ def test_dpi_within_tolerance_of_threshold_passes(tmp_path: Path) -> None:
     assert [
         f["check"] for f in module.audit_package(tmp_path, min_dpi=102)["findings"]
     ] == ["H6"]
+
+
+@pytest.mark.parametrize(
+    "reference", [r"\ref{fig:included}", r"\cref{fig:included,tab:included}"]
+)
+def test_float_references_are_package_wide(tmp_path: Path, reference: str) -> None:
+    (tmp_path / "main.tex").write_text(reference + r"\input{sections/results}")
+    (tmp_path / "sections").mkdir()
+    (tmp_path / "sections/results.tex").write_text(
+        "\\begin{figure}\n\\label{fig:included}\n\\end{figure}\n"
+        "\\begin{table}\\label{tab:unused}\\end{table}\n"
+    )
+    findings = _load().audit_package(tmp_path)["findings"]
+    assert len(findings) == 1
+    assert findings[0]["check"] == "H5"
+    assert "tab:unused" in findings[0]["detail"]
+    assert findings[0]["path"] == "sections/results.tex"
+    assert findings[0]["line"] == 4
+
+
+@pytest.mark.parametrize(
+    "citation",
+    [
+        r"\cite{key}",
+        r"\bibliography{refs}",
+        r"\addbibresource{refs.bib}",
+        r"\printbibliography",
+        r"\begin{thebibliography}{9}\bibitem{key} Title [2].\end{thebibliography}",
+    ],
+)
+def test_citation_state_is_package_wide(tmp_path: Path, citation: str) -> None:
+    (tmp_path / "main.tex").write_text(citation)
+    (tmp_path / "chapter.tex").write_text("Introduction.\nPrior work [3].\n")
+    findings = _load().audit_package(tmp_path)["findings"]
+    assert [(f["check"], f["path"], f["line"]) for f in findings] == [
+        ("H3", "chapter.tex", 2)
+    ]
+
+
+def test_commented_package_state_is_ignored(tmp_path: Path) -> None:
+    (tmp_path / "main.tex").write_text(
+        "% \\cite{key} \\bibliography{refs} \\ref{fig:unused}\n"
+    )
+    (tmp_path / "chapter.tex").write_text(
+        "Prior work [3].\n\\begin{figure}\\label{fig:unused}\\end{figure}\n"
+    )
+    assert _checks(_load().audit_package(tmp_path)) == [("H5", "warn")]
+
+
+def _png_header() -> bytes:
+    import struct
+
+    return b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR" + struct.pack(">II", 100, 100)
+
+
+def _svg_with_href(path: Path, href: str) -> None:
+    from xml.sax.saxutils import quoteattr
+
+    path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1in" viewBox="0 0 100 100">'
+        f'<image width="100" height="100" href={quoteattr(href)}/></svg>'
+    )
+
+
+def test_svg_relative_raster_inside_package_is_checked(tmp_path: Path) -> None:
+    (tmp_path / "figures").mkdir()
+    (tmp_path / "raster.png").write_bytes(_png_header())
+    _svg_with_href(tmp_path / "figures/fig.svg", "../raster.png")
+    assert _checks(_load().audit_package(tmp_path)) == [("H6", "fail")]
+
+
+@pytest.mark.parametrize(
+    "source",
+    ["traversal", "absolute", "file_symlink", "directory_symlink", "internal_symlink"],
+)
+def test_svg_does_not_read_unsafe_raster_sources(
+    tmp_path: Path, monkeypatch, source: str
+) -> None:
+    module = _load()
+    package = tmp_path / "package"
+    package.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    raster = outside / "raster.png"
+    raster.write_bytes(_png_header())
+    if source == "traversal":
+        href = "../outside/raster.png"
+    elif source == "absolute":
+        href = str(raster)
+    elif source == "file_symlink":
+        (package / "link.png").symlink_to(raster)
+        href = "link.png"
+    elif source == "directory_symlink":
+        (package / "link").symlink_to(outside, target_is_directory=True)
+        href = "link/raster.png"
+    else:
+        (package / "raster.png").write_bytes(_png_header())
+        (package / "link.png").symlink_to(package / "raster.png")
+        href = "link.png"
+    _svg_with_href(package / "fig.svg", href)
+
+    # Any successfully read raster would reach this function.
+    def unexpected_raster_read(data):
+        pytest.fail("unsafe raster data was read")
+
+    monkeypatch.setattr(module, "_raster_size", unexpected_raster_read)
+    assert _checks(module.audit_package(package)) == [("H6", "not_checked")]
+
+
+def test_svg_oversized_raster_is_not_read(tmp_path: Path, monkeypatch) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "MAX_RASTER_BYTES", 24)
+    (tmp_path / "raster.png").write_bytes(_png_header() + b"x")
+    _svg_with_href(tmp_path / "fig.svg", "raster.png")
+    assert _checks(module.audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+@pytest.mark.parametrize("payload", ["A" * 40, "!invalid!", "%89PNG"])
+def test_svg_data_uri_rejects_oversized_or_malformed_payload(
+    tmp_path: Path, monkeypatch, payload: str
+) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "MAX_RASTER_BYTES", 24)
+    _svg_with_href(tmp_path / "fig.svg", "data:image/png;base64," + payload)
+    assert _checks(module.audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+def test_svg_non_base64_data_uri_is_not_checked(tmp_path: Path) -> None:
+    _svg_with_href(tmp_path / "fig.svg", "data:image/png,not-base64")
+    assert _checks(_load().audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+def test_svg_document_read_is_bounded(tmp_path: Path, monkeypatch) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "MAX_TEXT_BYTES", 24)
+    _svg_with_href(tmp_path / "fig.svg", "raster.png")
+    assert _checks(module.audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+def test_svg_data_uri_size_boundary(tmp_path: Path, monkeypatch) -> None:
+    import base64
+
+    module = _load()
+    monkeypatch.setattr(module, "MAX_RASTER_BYTES", 24)
+    _svg_with_href(
+        tmp_path / "fig.svg",
+        "data:image/png;base64," + base64.b64encode(_png_header()).decode(),
+    )
+    assert _checks(module.audit_package(tmp_path)) == [("H6", "fail")]
+    # 25 bytes and 27 bytes have the same encoded length. Check decoded size too.
+    monkeypatch.setattr(module, "MAX_RASTER_BYTES", 25)
+    _svg_with_href(
+        tmp_path / "fig.svg",
+        "data:image/png;base64," + base64.b64encode(_png_header() + b"xx").decode(),
+    )
+    assert _checks(module.audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+def test_oversized_data_uri_is_rejected_before_decoding(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "MAX_RASTER_BYTES", 24)
+
+    def unexpected_decode(*args, **kwargs):
+        pytest.fail("oversized data URI was decoded")
+
+    monkeypatch.setattr(module.base64, "b64decode", unexpected_decode)
+    assert (
+        module._svg_raster_data(
+            tmp_path, tmp_path / "fig.svg", "data:image/png;base64," + "A" * 40
+        )
+        is None
+    )
+
+
+def test_svg_nonregular_raster_is_not_checked(tmp_path: Path) -> None:
+    import os
+
+    os.mkfifo(tmp_path / "raster.png")
+    _svg_with_href(tmp_path / "fig.svg", "raster.png")
+    assert _checks(_load().audit_package(tmp_path)) == [("H6", "not_checked")]
+
+
+def test_package_reader_uses_bounded_read_even_if_file_grows(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import io
+
+    module = _load()
+    raster = tmp_path / "raster.png"
+    raster.write_bytes(_png_header())
+    original_fdopen = module.os.fdopen
+
+    class GrowingFile(io.BytesIO):
+        def read(self, size=-1):
+            assert size == 25
+            return super().read(size)
+
+    def growing_fdopen(fd, mode):
+        original_fdopen(fd, mode).close()
+        return GrowingFile(_png_header() + b"extra data after stat")
+
+    monkeypatch.setattr(module.os, "fdopen", growing_fdopen)
+    assert module._read_package_bytes(tmp_path, raster, 24) is None

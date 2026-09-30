@@ -42,7 +42,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ab94f35ff2995fdc1106d9dfdae5e707a125414eb560c1ea8b99044d1c73b589"
+          "content": "9176bb1d874344556aed0c1e46e5666a750a638a691c056c182d23d1b89df81e"
         }
       ],
       "name": "hooks/arw_hook.py",

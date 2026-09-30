@@ -85,13 +85,17 @@ FORBIDDEN_HOOK_PATTERNS: tuple[re.Pattern[str], ...] = (
 # and the SBOM digest identity remain as independent, additive checks
 # performed earlier in :func:`check_root_hook_supply_chain`.
 #
+# Audited source: hooks/arw_hook.py from 9a1053d88fb9a019fc069df70cfc445dde4e436c
+# (issue #28 additive host fields). See hooks/COMPATIBILITY.md for the
+# review scope, independently measured fingerprints, and refresh procedure.
+#
 # **Python-minor portability.**
 #
 # The CI matrix is ``python-version: ['3.13', '3.14']`` (see
 # ``.github/workflows/ci.yml``).  The current handler's AST dump is
-# byte-identical across both minors (verified — the dump is 40240
-# chars and the SHA-256 is identical under ``python3.13`` and
-# ``python3.14``), so :data:`ROOT_HOOK_AST_SHA256_BY_PYTHON` lists
+# byte-identical across both minors (verified — the dump is 41317
+# chars and the SHA-256 is identical under CPython 3.13.5 and
+# 3.14.7), so :data:`ROOT_HOOK_AST_SHA256_BY_PYTHON` lists
 # the same digest for both entries.  A future AST-shape change in
 # either minor must be reflected by recomputing the digest under that
 # minor only — never by silently sharing a digest across minors
@@ -115,10 +119,10 @@ FORBIDDEN_HOOK_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 ROOT_HOOK_AST_SHA256_BY_PYTHON: dict[tuple[int, int], str] = {
     (3, 13): (
-        "aa3873700205ce4a64d6d45ea813a80ee1cf3d18a8681f34a27d7f43cdad37ba"
+        "bd5d9841b584ad653ebc0890f8f25d01848a78be2d34e7978b747e811218236f"
     ),
     (3, 14): (
-        "aa3873700205ce4a64d6d45ea813a80ee1cf3d18a8681f34a27d7f43cdad37ba"
+        "bd5d9841b584ad653ebc0890f8f25d01848a78be2d34e7978b747e811218236f"
     ),
 }
 
