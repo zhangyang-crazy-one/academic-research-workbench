@@ -96,6 +96,41 @@ def test_real_handler_passes(gates, tmp_path):
     assert any("SBOM" in m for m in msgs), msgs
 
 
+def test_checked_in_root_hook_evidence_passes(gates):
+    """Check the committed SBOM too, without the staging helper rebinding it."""
+    messages = gates.check_root_hook_supply_chain(REPOSITORY_ROOT)
+    assert any("SBOM" in message for message in messages)
+
+
+def test_stale_hook_bytes_fail_before_ast_check(gates, tmp_path):
+    """Even an AST-identical cosmetic edit requires refreshed byte evidence."""
+    root = _stage(tmp_path, REAL_HANDLER)
+    (root / "hooks/arw_hook.py").write_text(
+        REAL_HANDLER + "\n# unbound cosmetic change\n", encoding="utf-8"
+    )
+    with pytest.raises(gates.GateFailure, match="SBOM digest differs"):
+        gates.check_root_hook_supply_chain(root)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ("if not _EVENT_FIELDS[event] <= value.keys():", "if False:"),
+        ("if _bounded_string(name, limit=128)", "if True"),
+        (")[:32]", ")[:64]"),
+        ('"permission_mode": value["permission_mode"] if known_permission_mode else None,',
+         '"permission_mode": value["permission_mode"],'),
+    ],
+    ids=["required-fields", "field-name-bounds", "field-count-bound", "mode-redaction"],
+)
+def test_additive_field_guards_cannot_be_weakened(gates, tmp_path, before, after):
+    """Issue #28's audited boundaries remain pinned even with a rebound SBOM."""
+    assert REAL_HANDLER.count(before) == 1
+    handler = REAL_HANDLER.replace(before, after)
+    with pytest.raises(gates.GateFailure, match="fingerprint"):
+        gates.check_root_hook_supply_chain(_stage(tmp_path, handler))
+
+
 # Every entry below breaks the AST digest and must be rejected.  The
 # list mirrors the closed exploit classes the brief enumerates plus a
 # constant-edit to confirm the digest covers string-literal changes too.
