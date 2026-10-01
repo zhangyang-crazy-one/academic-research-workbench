@@ -12,6 +12,7 @@ CAPABILITIES = tuple(
         "citation_aware_rewrite",
     )
 )
+AUDIT_CAPABILITY = "writing.audit"
 
 
 @runtime_checkable
@@ -24,4 +25,16 @@ class WritingTransformer(Protocol):
         *,
         protected_terms: list[str],
         protected_spans: list[str],
+    ) -> dict: ...
+
+
+@runtime_checkable
+class WritingAuditor(Protocol):
+    def audit_texts(
+        self,
+        source: str,
+        revision: str,
+        *,
+        detector_config: dict,
+        allow_network: bool = False,
     ) -> dict: ...

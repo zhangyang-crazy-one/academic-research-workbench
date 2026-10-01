@@ -1,0 +1,8 @@
+{
+  "schema_version": "arw.naive-bayes-model.v1",
+  "tokenizer": "lowercase_ascii_words",
+  "class_token_counts": {
+    "synthetic_a": {"alpha": 40, "beta": 2, "gamma": 1},
+    "synthetic_b": {"alpha": 1, "beta": 35, "gamma": 2}
+  }
+}

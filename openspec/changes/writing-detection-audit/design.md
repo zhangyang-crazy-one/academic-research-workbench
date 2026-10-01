@@ -1,0 +1,8 @@
+# Design
+
+- `arw_writing.detection` registers named adapters returning one envelope (`kind`, backend/version, public configuration fingerprint, input hash, status, raw score, score meaning). New providers register with the backend registry without changing CLI or the comparison logic.
+- Local multinomial Naive Bayes reads a bounded user-supplied model; optional Transformers uses already present offline weights. Neither downloads weights. The included Naive Bayes model is synthetic and proves execution only, not AI-authorship performance.
+- The fixed OpenAI GPT-2 detector preset verifies six published files against SHA-256, loads only safetensors and local tokenizer/model code, fixes `Fake` and 512 tokens, and reports its full model revision. An explicit public-file fetch script is separate from detection; the CLI never fetches weights. Scope is English GPT-2 output detection, not newer models or general authorship judgment.
+- `hmac_green` calculates a one-sided green-token z score for the bundled exact whitespace/HMAC generator rule and vocabulary/key supplied by the user. It does not assert compatibility with other KGW implementations or unknown generators. Key bytes never appear in results.
+- HTTP JSON sends text only with `--allow-network`, requires HTTPS except loopback, forbids URL credentials/query and redirects, validates returned version and score, and records errors without response bodies.
+- Compare only same available backend, version and public configuration within the same run. Raw before/after remain even when comparison is unavailable. The bundled fact-lock checker reports mechanical pass/fail separately from human semantic review. Existing exact-span preservation remains the acceptance gate.

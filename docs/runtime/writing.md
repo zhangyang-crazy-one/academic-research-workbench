@@ -43,8 +43,127 @@ map, sentence/paragraph lengths and paragraph variance. Inputs under 50 tokens
 carry a short-text caution. Other scripts are unsupported; mixed foreign-language
 text is not fully characterized. No syntactic parser or semantic-equivalence model
 is claimed. The exact fixture metrics are pinned in `tests/integration/test_writing.py`.
-Statistical detector status is `unsupported`, with no detector/model/key configured.
-Metric changes never establish watermark absence, human authorship or meaning.
+No detector runs by default. Metric changes never establish watermark absence,
+human authorship or meaning. The separate detection report below is opt-in.
+
+## Optional detector audit
+
+`writing audit` reads two local UTF-8 files without editing them. `writing
+prepare` and `writing record` also accept `--detectors CONFIG.json` and attach
+the same audit to the source-bound candidate bundle. All three commands accept
+`--allow-network` only for a configured HTTP detector; this sends **both full
+texts** to its configured endpoint. There is no automatic external request.
+
+```sh
+PYTHONPATH=src:extensions/academic-humanization/src python -m arw.cli writing audit \
+  --source original.txt --revision revised.txt --detectors detectors.json
+```
+
+The JSON configuration is `{"detectors": [{"backend": ..., ...}]}`. Supported
+backends are:
+
+| Backend | Required config | Scope |
+| --- | --- | --- |
+| `naive_bayes_local` | `model_path`, `label` | Offline multinomial model JSON (`arw.naive-bayes-model.v1`), lowercase ASCII word tokenizer. User supplies training counts. |
+| `transformers_local` | `model_path`, `label` | Optional installed `transformers` and `torch`, with a local sequence-classification model directory. Loads with `local_files_only=True`, CPU inference and full input length check; it never downloads weights. |
+| `openai_gpt2_detector_local` | `model_path` | Fixed offline preset for OpenAI's English GPT-2 output detector, target class `Fake`; checks all six pinned files and accepts safetensors only. |
+| `hmac_green` | `key`, `vocabulary`, `gamma`, `min_tokens` | Exact `arw.hmac-green-whitespace.v1` generator contract only. `key_id` is a non-secret reference. |
+| `http_json` | `endpoint`, `model`, `version` | Explicit `--allow-network`; POST JSON `{text, model}`, response JSON `{score, label, version}`. HTTPS is required except loopback. Redirects and URL credentials/query are rejected. No provider has been qualified by this adapter alone. |
+
+The `tests/fixtures/writing_detection/synthetic_nb.json` model provides a
+reproducible **synthetic** classification example. Its score has no measured
+accuracy on real AI or human writing. For `transformers_local`, the author must
+supply and separately validate an offline model, its license, language coverage,
+class labels and false-positive rate. This repository does not download or
+endorse a model. The digest of local model bytes, package version, token count,
+target label and configured length limit are recorded. Inputs exceeding that
+limit are `unsupported` rather than silently truncated.
+
+### Official GPT-2 detector preset
+
+The `openai_gpt2_detector_local` preset pins
+[`openai-community/roberta-base-openai-detector`](https://huggingface.co/openai-community/roberta-base-openai-detector/tree/6cba99c003b711c7fe94f8a3aa2be35a792cb6fa)
+at revision `6cba99c003b711c7fe94f8a3aa2be35a792cb6fa` (MIT). Its six
+exact file SHA-256 digests live in `arw_writing.gpt2_preset`; the 500,975,390
+byte `model.safetensors` digest is
+`3abd6d2b005f5876b945cb5b68ddde04f6e28fbd9c5d6dc5adfb06ba647e0546`.
+The downloader never selects `pytorch_model.bin` or other pickle weights.
+No weights are bundled with ARW. Local inference requires an explicitly
+supplied `model_path`; missing, changed or extra model files cannot score.
+The preset checks package versions, input hash and full pinned model identity
+in each report. It refuses non-ASCII alphabetic input conservatively, and
+input over 512 model tokens is unsupported rather than truncated.
+
+For a separate temporary CPU environment, use the following commands. The
+`--download` flag is the only step that fetches the public model files; its
+destination is the local directory you choose. It never sends manuscript
+text. The installation commands fetch Python packages, so review their
+licenses in your environment before running them.
+
+```sh
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv venv /tmp/arw-gpt2-detector-venv --python python3.13
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv pip install --python /tmp/arw-gpt2-detector-venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv pip install --python /tmp/arw-gpt2-detector-venv/bin/python 'transformers>=4.45,<5' safetensors 'pydantic>=2.13.4' 'jsonschema>=4.26.0' 'portalocker>=3.2.0' 'platformdirs>=4.11.6'
+/tmp/arw-gpt2-detector-venv/bin/python examples/fetch_openai_gpt2_detector.py --destination /tmp/arw-gpt2-detector --download
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /tmp/arw-gpt2-detector-venv/bin/python examples/openai_gpt2_detector_demo.py --model-path /tmp/arw-gpt2-detector --output-dir /tmp/arw-gpt2-demo
+```
+
+Without `--download`, `fetch_openai_gpt2_detector.py` only verifies already
+present files. The demo contains two fixed public English paragraphs with no
+known GPT-2 or human ground-truth labels. Its two scores prove that this pinned
+model ran locally; they do not measure classification accuracy. The
+[model card](https://huggingface.co/openai-community/roberta-base-openai-detector)
+describes this as a detector trained for English GPT-2 outputs and explicitly
+warns against using it as a ChatGPT detector for serious misconduct
+allegations. Its softmax score is not an authorship probability. No validity is
+claimed for newer models, Chinese, mixed-language papers, or short passages;
+false-positive rates for a particular manuscript domain are unknown.
+
+Run the exact local example with `python examples/writing_detection_demo.py
+--output-dir /tmp/arw-writing-demo`. It writes public synthetic input/config
+files and invokes `writing audit`. The deliberately repetitive all-green
+sequence violates the independent-null approximation; its z score is an
+algorithm execution check, **not** a calibrated p value or significance claim.
+
+The watermark z score tests green-token excess under an approximate independent
+null. It requires the exact key, vocabulary, literal whitespace tokenization,
+and HMAC/hash green-list generator described in the code. This is a local
+synthetic analogue of green-list statistical watermarking, **not a detector
+for arbitrary KGW or other language-model watermarks**. If the generation
+algorithm, tokenizer, key or vocabulary is unknown, do not substitute these
+parameters: report `not_run` or `unsupported`. The key itself and its hash are
+excluded from reports. A user-supplied z threshold is labeled `user_config`;
+there is no calibrated operating threshold here.
+
+Each detector's `classification` or `watermark` result records backend,
+version, public parameter fingerprint, input SHA-256, raw score and meaning,
+status (`available`, `not_run`, `unsupported`, `error`), and a bounded failure
+class where applicable. A delta is emitted only if both results are available
+and share backend, version and public configuration in the same invocation.
+Custom adapters must return a JSON-object `parameters` value and set
+`config_sha256` to SHA-256 of the repository's canonical JSON serialization of
+`{"kind": kind, "backend": backend, "version": version, "parameters": parameters}`.
+Available results must name and explain their score. The runtime rejects a
+stale or malformed fingerprint and checks parameter equality again before
+computing a delta. A regression fixture changes `model_sha256` while reusing
+one stale fingerprint; detection raises `invalid envelope`, so no delta is
+reported.
+Configuration fingerprints omit secret key bytes, so reports from separate
+runs cannot independently prove key equality. Classifier softmax or normalized
+likelihood is uncalibrated and is not the probability of AI authorship. Scores
+are not author-identity conclusions, proof of watermark absence, or evidence
+that a revision evades a detector. This workflow does not search edits against
+detectors or optimize writing to lower their scores.
+
+The audit reuses the bundled fact-locked results checker for numeric values,
+citations and table-row associations. `mechanical_status` may be `passed` or
+`failed`; `semantic_status` remains `human_review_required`. Installed plugin
+runs resolve the checker inside the launcher-bound `ARW_PLUGIN_ROOT`; source
+runs use the source tree. If the checker is missing, the status is `unsupported`;
+unsafe symlink paths report `error`. The existing
+exact-span writing preservation checks still apply. A mechanical failure
+rejects a writing proposal. Human review is still required for logical
+direction, conclusion strength, citation scope, conditions and meaning.
 
 ## Execution and review
 

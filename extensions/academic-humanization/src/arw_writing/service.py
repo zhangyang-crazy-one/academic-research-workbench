@@ -20,6 +20,19 @@ from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandReq
 from .transformer import SessionWritingTransformer
 
 
+class WritingAuditService:
+    def audit_texts(self, source, revision, *, detector_config, allow_network=False):
+        from .detection import compare
+        from .fact_audit import audit
+
+        return {
+            "detection": compare(
+                source, revision, detector_config, allow_network=allow_network
+            ),
+            "fact_lock": audit(source, revision),
+        }
+
+
 class WritingService(SessionWritingTransformer):
     def __init__(self, run_root):
         self.run_root = Path(run_root)
@@ -49,15 +62,36 @@ class WritingService(SessionWritingTransformer):
                 "manifest_sha256": event.payload.manifest_sha256,
             }
 
-    def prepare(self, source_id, proposal):
+    def prepare(
+        self, source_id, proposal, *, detector_config=None, allow_network=False
+    ):
         raw, binding = self._source(source_id)
-        result = self.transform(raw.decode("utf-8"), proposal)
+        result = self.transform(
+            raw.decode("utf-8"),
+            proposal,
+            detector_config=detector_config,
+            allow_network=allow_network,
+        )
         result["source_binding"] = binding
         return result
 
-    def record(self, source_id, proposal, *, request, review_artifact_id=None):
+    def record(
+        self,
+        source_id,
+        proposal,
+        *,
+        request,
+        review_artifact_id=None,
+        detector_config=None,
+        allow_network=False,
+    ):
         request = RuntimeCommandRequest.model_validate(request.model_dump(mode="json"))
-        result = self.prepare(source_id, proposal)
+        result = self.prepare(
+            source_id,
+            proposal,
+            detector_config=detector_config,
+            allow_network=allow_network,
+        )
         result["review_binding"] = None
         # Rejected/ineffective candidates can be recorded as evidence, never accepted prose.
         if review_artifact_id is not None:

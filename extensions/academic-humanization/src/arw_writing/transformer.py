@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.ports.writing import CAPABILITIES
 
+from .detection import compare
 from .diagnostics import CONTROL_METRICS, diagnose, effects
+from .fact_audit import audit as fact_audit
 from .preservation import verify
 
 
@@ -63,7 +65,7 @@ class SessionWritingTransformer:
     ):
         return verify(source, candidate, protected_terms, protected_spans)
 
-    def transform(self, source, proposal):
+    def transform(self, source, proposal, *, detector_config=None, allow_network=False):
         p = Proposal.model_validate(proposal)
         if (
             len(source.encode()) > 65536
@@ -92,6 +94,20 @@ class SessionWritingTransformer:
             protected_terms=p.protected_terms,
             protected_spans=p.protected_spans,
         )
+        detection = compare(
+            source,
+            candidate,
+            detector_config or {"detectors": []},
+            allow_network=allow_network,
+        )
+        facts = fact_audit(source, candidate)
+        verification["fact_lock"] = {
+            "status": facts["status"],
+            "mechanical_status": facts["mechanical_status"],
+            "semantic_status": facts["semantic_status"],
+        }
+        if facts["mechanical_status"] == "failed":
+            verification["disposition"] = "reject"
         return {
             "schema_version": "arw.writing-candidate.v1",
             "transformer": "session-exact-span",
@@ -105,15 +121,26 @@ class SessionWritingTransformer:
             "candidate": candidate,
             "candidate_sha256": sha256_hex(candidate.encode()),
             "diagnostics": {"before": before, "after": after, "controls": effect},
+            "detection": detection,
+            "fact_lock": facts,
             "controls_effective": all(
                 v["status"] == "effective" for v in effect.values()
             ),
             "watermark": {
-                "status": "unsupported",
+                "status": "not_run"
+                if detector_config is None
+                else next(
+                    (
+                        p["after"]["status"]
+                        for p in detection["pairs"]
+                        if p["after"]["kind"] == "watermark"
+                    ),
+                    "not_run",
+                ),
                 "detector": None,
                 "model_key_assumptions": None,
                 "verified_absence": False,
-                "reason": "No qualified statistical detector configured; surface metrics do not establish watermark removal",
+                "reason": "See detection pairs; no score verifies watermark absence",
             },
             "verification": verification,
             "verification_sha256": sha256_hex(canonical_json_bytes(verification)),

@@ -14,8 +14,11 @@ regularities), `writing.claim_preserving_rewrite` (claim-centered wording), or
 2. Call `bin/arw writing prepare --run-root RUN --source-id ARTIFACT --proposal FILE`.
    Inspect actual before/after metrics and each control's effective/ineffective
    outcome. Revise ineffective edits; Unicode or metadata cleanup does not fulfill
-   statistical controls. Surface metrics are not human-authorship evidence and
-   no statistical watermark detector is currently qualified.
+   statistical controls. Surface metrics are not human-authorship evidence.
+   For separate opt-in text detection, use `--detectors CONFIG.json` or
+   `writing audit --source ORIGINAL --revision REVISED --detectors CONFIG.json`.
+   Consult `docs/runtime/writing.md` for local model and exact generator
+   assumptions; detector scores never certify authorship or evasion.
 3. Record rejected or unresolved candidates with `writing record` and the same
    arguments plus `--request REQUEST`. The request is the existing parent runtime
    command envelope. A ledger-bound review receipt is not accepted manuscript prose.
