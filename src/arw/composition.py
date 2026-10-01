@@ -62,6 +62,12 @@ def default_router(
         return module.WritingService(writing_run_root)
     for capability in WRITING_CAPABILITIES:
         router.register_optional(capability, _writing)
+    from arw.ports.writing import AUDIT_CAPABILITY
+
+    router.register_optional(
+        AUDIT_CAPABILITY,
+        lambda: import_module("arw_writing.service").WritingAuditService(),
+    )
     def _semantic():
         module = import_module("arw_ext.local_store.semantic")
         # Probe before configuration checks so a minimal install receives the
@@ -199,7 +205,7 @@ def default_router(
             "evidence": (),
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
-            "writing": WRITING_CAPABILITIES,
+            "writing": (*WRITING_CAPABILITIES, AUDIT_CAPABILITY),
             "semantic": ("knowledge.semantic_search",),
             "provenance": ("knowledge.provenance",),
             "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),

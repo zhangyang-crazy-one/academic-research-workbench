@@ -1,5 +1,6 @@
 """Explicit source-bound writing proposals and parent receipt admission."""
 
+import os
 from pathlib import Path
 
 from arw.kernel.core.canonical import strict_json_loads
@@ -44,29 +45,43 @@ def load(path):
 
 
 def handle(args):
+    from arw.composition import default_router
+
+    manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
+    if manifest_env:
+        manifest_path = Path(manifest_env)
+        if not manifest_path.is_file():
+            raise ValueError("plugin_manifest_unreadable")
+    elif os.environ.get("ARW_PLUGIN_ROOT"):
+        raise ValueError("plugin_manifest_missing")
+    else:
+        candidate = (
+            Path(__file__).resolve().parents[2] / ".codex-plugin" / "plugin.json"
+        )
+        manifest_path = candidate if candidate.is_file() else None
+
     detector_config = load(args.detectors) if args.detectors else None
     if args.writing_command == "audit":
-        from arw_writing.detection import compare
-        from arw_writing.fact_audit import audit
-
         source = read_retained_bytes(
             args.source.parent, args.source.name, max_bytes=65536
         ).decode("utf-8")
         revision = read_retained_bytes(
             args.revision.parent, args.revision.name, max_bytes=65536
         ).decode("utf-8")
-        return {
-            "detection": compare(
-                source, revision, detector_config, allow_network=args.allow_network
-            ),
-            "fact_lock": audit(source, revision),
-        }
-    from arw.composition import default_router
-
+        return (
+            default_router(plugin_manifest=manifest_path)
+            .resolve("writing.audit")
+            .audit_texts(
+                source,
+                revision,
+                detector_config=detector_config,
+                allow_network=args.allow_network,
+            )
+        )
     proposal = load(args.proposal)
-    provider = default_router(writing_run_root=args.run_root).resolve(
-        proposal.get("capability", "writing.unavailable")
-    )
+    provider = default_router(
+        writing_run_root=args.run_root, plugin_manifest=manifest_path
+    ).resolve(proposal.get("capability", "writing.unavailable"))
     if args.writing_command == "prepare":
         return provider.prepare(
             args.source_id,

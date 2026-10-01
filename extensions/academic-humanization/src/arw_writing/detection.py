@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 
+from . import gpt2_preset
+
 SCHEMA = "arw.writing-detection.v1"
 MAX_TEXT_BYTES = 65536
 
@@ -271,7 +273,7 @@ def _naive_bayes_classifier(text, config):
         return {**out, "status": "error", "reason": type(exc).__name__}
 
 
-def _local_classifier(text, config):
+def _local_classifier(text, config, *, verified_model_digest=None):
     backend = "transformers_local"
     model_path = config.get("model_path")
     maximum = config.get("max_tokens", 512)
@@ -302,15 +304,15 @@ def _local_classifier(text, config):
             raise ValueError("max_tokens must be 2..4096")
         if not _valid_threshold(config.get("threshold")):
             raise ValueError("invalid threshold")
-        params["model_sha256"] = _model_digest(root)
+        params["model_sha256"] = verified_model_digest or _model_digest(root)
         params["transformers_version"] = transformers.__version__
         params["torch_version"] = torch.__version__
         out = _result("classification", backend, transformers.__version__, params, text)
         tokenizer = transformers.AutoTokenizer.from_pretrained(
-            root, local_files_only=True
+            root, local_files_only=True, trust_remote_code=False
         )
         model = transformers.AutoModelForSequenceClassification.from_pretrained(
-            root, local_files_only=True
+            root, local_files_only=True, use_safetensors=True, trust_remote_code=False
         )
         batch = tokenizer(text, return_tensors="pt", truncation=False)
         input_count = int(batch["input_ids"].shape[-1])
@@ -357,6 +359,57 @@ def _local_classifier(text, config):
         }
     except (OSError, ValueError, RuntimeError) as exc:
         return {**out, "status": "error", "reason": type(exc).__name__}
+
+
+def _openai_gpt2_detector(text, config):
+    """Exact offline OpenAI GPT-2 output detector preset, English only."""
+    backend = "openai_gpt2_detector_local"
+    params = {
+        "model_id": gpt2_preset.MODEL_ID,
+        "revision": gpt2_preset.REVISION,
+        "license": gpt2_preset.LICENSE,
+        "model_file_sha256": dict(gpt2_preset.FILES),
+        "label": "Fake",
+        "language": "en",
+        "max_tokens": 512,
+    }
+    out = _result("classification", backend, gpt2_preset.REVISION, params, text)
+    model_path = config.get("model_path")
+    if not model_path:
+        return {**out, "reason": "explicit local model_path required"}
+    root = Path(model_path)
+    fault = gpt2_preset.verify_files(root)
+    if fault:
+        return {
+            **out,
+            "status": "unsupported" if "missing" in fault else "error",
+            "reason": fault,
+        }
+    if any(char.isalpha() and not char.isascii() for char in text):
+        return {
+            **out,
+            "status": "unsupported",
+            "reason": "input outside conservative English character scope",
+        }
+    base = _local_classifier(
+        text,
+        {"model_path": str(root), "label": "Fake", "language": "en", "max_tokens": 512},
+        verified_model_digest=_fingerprint(gpt2_preset.FILES),
+    )
+    params["transformers_version"] = base["parameters"].get("transformers_version")
+    params["torch_version"] = base["parameters"].get("torch_version")
+    out = _result("classification", backend, gpt2_preset.REVISION, params, text)
+    return {
+        **out,
+        "status": base["status"],
+        "reason": base["reason"],
+        "score": base["score"],
+        "score_name": base["score_name"],
+        "score_meaning": "Uncalibrated softmax for the GPT-2 Fake class; not probability of authorship",
+        "label": "Fake" if base["status"] == "available" else None,
+        "input_tokens": base.get("input_tokens"),
+        "limitations": "OpenAI's English GPT-2 output detector. No validated inference for ChatGPT, newer models, Chinese, or academic misconduct; false positives remain possible.",
+    }
 
 
 def _http_classifier(text, config, *, allow_network=False):
@@ -474,6 +527,10 @@ register_backend(
 register_backend(
     "transformers_local",
     lambda text, item, allow_network: _local_classifier(text, item),
+)
+register_backend(
+    "openai_gpt2_detector_local",
+    lambda text, item, allow_network: _openai_gpt2_detector(text, item),
 )
 register_backend(
     "http_json",

@@ -14,6 +14,9 @@ The writing workflow SHALL offer an offline, fixed-model classification adapter 
 #### Scenario: Local synthetic fixture
 Given the checked-in synthetic classification model and exact watermark generator inputs, the CLI reports raw before/after scores and hashes. These scores make no authorship or evasion claim.
 
+#### Scenario: Pinned public GPT-2 detector
+Given all six hash-verified files of the fixed official OpenAI GPT-2 detector in a user-supplied local directory, the CLI runs offline English inference with `Fake` class scores and records the model revision, file digests, package versions and input hashes. Missing or changed weights remain unavailable or error; no network fetch occurs during detection.
+
 ### Requirement: Explicit external transmission
 The writing workflow SHALL require an explicit CLI flag for HTTP transmission, restrict destinations to HTTPS or loopback, and avoid exposing credentials or response bodies in reports.
 

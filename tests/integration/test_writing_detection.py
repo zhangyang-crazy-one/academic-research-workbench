@@ -156,6 +156,30 @@ def test_cli_audit_fact_lock_and_local_detection(tmp_path):
     )
     assert bad.returncode == 65
     assert json.loads(bad.stdout)["code"] == "writing_invalid"
+    manifest = tmp_path / "plugin.json"
+    manifest.write_text('{"interface":{"capabilities":["research"]}}')
+    config.write_text('{"detectors":[]}')
+    disabled = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "arw.cli",
+            "writing",
+            "audit",
+            "--source",
+            str(source),
+            "--revision",
+            str(revision),
+            "--detectors",
+            str(config),
+        ],
+        capture_output=True,
+        text=True,
+        env={**env, "ARW_PLUGIN_MANIFEST": str(manifest)},
+        check=False,
+    )
+    assert disabled.returncode == 65
+    assert json.loads(disabled.stdout)["code"] == "CapabilityUnavailable"
 
 
 def test_source_bound_prepare_retains_unavailable_detector_and_review(tmp_path):

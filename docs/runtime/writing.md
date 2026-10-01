@@ -66,6 +66,7 @@ backends are:
 | --- | --- | --- |
 | `naive_bayes_local` | `model_path`, `label` | Offline multinomial model JSON (`arw.naive-bayes-model.v1`), lowercase ASCII word tokenizer. User supplies training counts. |
 | `transformers_local` | `model_path`, `label` | Optional installed `transformers` and `torch`, with a local sequence-classification model directory. Loads with `local_files_only=True`, CPU inference and full input length check; it never downloads weights. |
+| `openai_gpt2_detector_local` | `model_path` | Fixed offline preset for OpenAI's English GPT-2 output detector, target class `Fake`; checks all six pinned files and accepts safetensors only. |
 | `hmac_green` | `key`, `vocabulary`, `gamma`, `min_tokens` | Exact `arw.hmac-green-whitespace.v1` generator contract only. `key_id` is a non-secret reference. |
 | `http_json` | `endpoint`, `model`, `version` | Explicit `--allow-network`; POST JSON `{text, model}`, response JSON `{score, label, version}`. HTTPS is required except loopback. Redirects and URL credentials/query are rejected. No provider has been qualified by this adapter alone. |
 
@@ -77,6 +78,46 @@ class labels and false-positive rate. This repository does not download or
 endorse a model. The digest of local model bytes, package version, token count,
 target label and configured length limit are recorded. Inputs exceeding that
 limit are `unsupported` rather than silently truncated.
+
+### Official GPT-2 detector preset
+
+The `openai_gpt2_detector_local` preset pins
+[`openai-community/roberta-base-openai-detector`](https://huggingface.co/openai-community/roberta-base-openai-detector/tree/6cba99c003b711c7fe94f8a3aa2be35a792cb6fa)
+at revision `6cba99c003b711c7fe94f8a3aa2be35a792cb6fa` (MIT). Its six
+exact file SHA-256 digests live in `arw_writing.gpt2_preset`; the 500,975,390
+byte `model.safetensors` digest is
+`3abd6d2b005f5876b945cb5b68ddde04f6e28fbd9c5d6dc5adfb06ba647e0546`.
+The downloader never selects `pytorch_model.bin` or other pickle weights.
+No weights are bundled with ARW. Local inference requires an explicitly
+supplied `model_path`; missing, changed or extra model files cannot score.
+The preset checks package versions, input hash and full pinned model identity
+in each report. It refuses non-ASCII alphabetic input conservatively, and
+input over 512 model tokens is unsupported rather than truncated.
+
+For a separate temporary CPU environment, use the following commands. The
+`--download` flag is the only step that fetches the public model files; its
+destination is the local directory you choose. It never sends manuscript
+text. The installation commands fetch Python packages, so review their
+licenses in your environment before running them.
+
+```sh
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv venv /tmp/arw-gpt2-detector-venv --python python3.13
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv pip install --python /tmp/arw-gpt2-detector-venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+UV_CACHE_DIR=/tmp/arw-gpt2-uv-cache uv pip install --python /tmp/arw-gpt2-detector-venv/bin/python 'transformers>=4.45,<5' safetensors 'pydantic>=2.13.4' 'jsonschema>=4.26.0' 'portalocker>=3.2.0' 'platformdirs>=4.11.6'
+/tmp/arw-gpt2-detector-venv/bin/python examples/fetch_openai_gpt2_detector.py --destination /tmp/arw-gpt2-detector --download
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /tmp/arw-gpt2-detector-venv/bin/python examples/openai_gpt2_detector_demo.py --model-path /tmp/arw-gpt2-detector --output-dir /tmp/arw-gpt2-demo
+```
+
+Without `--download`, `fetch_openai_gpt2_detector.py` only verifies already
+present files. The demo contains two fixed public English paragraphs with no
+known GPT-2 or human ground-truth labels. Its two scores prove that this pinned
+model ran locally; they do not measure classification accuracy. The
+[model card](https://huggingface.co/openai-community/roberta-base-openai-detector)
+describes this as a detector trained for English GPT-2 outputs and explicitly
+warns against using it as a ChatGPT detector for serious misconduct
+allegations. Its softmax score is not an authorship probability. No validity is
+claimed for newer models, Chinese, mixed-language papers, or short passages;
+false-positive rates for a particular manuscript domain are unknown.
 
 Run the exact local example with `python examples/writing_detection_demo.py
 --output-dir /tmp/arw-writing-demo`. It writes public synthetic input/config

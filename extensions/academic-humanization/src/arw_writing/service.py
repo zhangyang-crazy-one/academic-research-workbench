@@ -20,6 +20,19 @@ from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandReq
 from .transformer import SessionWritingTransformer
 
 
+class WritingAuditService:
+    def audit_texts(self, source, revision, *, detector_config, allow_network=False):
+        from .detection import compare
+        from .fact_audit import audit
+
+        return {
+            "detection": compare(
+                source, revision, detector_config, allow_network=allow_network
+            ),
+            "fact_lock": audit(source, revision),
+        }
+
+
 class WritingService(SessionWritingTransformer):
     def __init__(self, run_root):
         self.run_root = Path(run_root)

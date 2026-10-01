@@ -1,0 +1,46 @@
+{
+  "schema": "arw.public-gpt2-detector-smoke.v1",
+  "date_utc": "2026-10-01",
+  "source": "examples/openai_gpt2_detector_demo.py:SOURCE",
+  "revision": "examples/openai_gpt2_detector_demo.py:REVISION",
+  "model_id": "openai-community/roberta-base-openai-detector",
+  "model_revision": "6cba99c003b711c7fe94f8a3aa2be35a792cb6fa",
+  "model_license": "MIT",
+  "weights_format": "safetensors",
+  "weights_sha256": "3abd6d2b005f5876b945cb5b68ddde04f6e28fbd9c5d6dc5adfb06ba647e0546",
+  "all_six_model_files_verified": true,
+  "runtime": {
+    "python": "3.13.14",
+    "torch": "2.14.1+cpu",
+    "transformers": "4.57.6",
+    "safetensors": "0.8.0",
+    "network_during_inference": false,
+    "input_destination": "local_cpu"
+  },
+  "classification": {
+    "backend": "openai_gpt2_detector_local",
+    "label": "Fake",
+    "score_name": "model_softmax_target_label",
+    "score_is_calibrated_authorship_probability": false,
+    "config_sha256": "20aa40b1c31948b18aa54a420a44d48ea2e5e3b4bc45fbcc417386851c2e04bb",
+    "before": {
+      "input_sha256": "cd17668a3619b34d397044b2d46a919ebd6963735c255056a5e5fd81ffdf305d",
+      "input_tokens": 77,
+      "status": "available",
+      "score": 0.0258585587143898
+    },
+    "after": {
+      "input_sha256": "ab0cfd139ced32f5d5606ccd74ec8ffe3ea0e4a55c4d5c1d02a8e11b3bfbe01f",
+      "input_tokens": 79,
+      "status": "available",
+      "score": 0.42560768127441406
+    },
+    "comparable_same_run": true,
+    "delta_after_minus_before": 0.39974912256002426
+  },
+  "fact_lock": {
+    "mechanical_status": "passed",
+    "semantic_status": "human_review_required"
+  },
+  "limits": "The two public paragraphs have no GPT-2 or human ground-truth labels. This is real offline model execution, not an accuracy, false-positive, authorship, ChatGPT, modern-model, Chinese, or evasion evaluation."
+}
