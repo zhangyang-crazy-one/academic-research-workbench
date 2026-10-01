@@ -553,6 +553,21 @@ def detect(text, config, *, allow_network=False):
         if backend not in BACKENDS:
             raise ValueError("unsupported detector backend")
         result = BACKENDS[backend](text, item, allow_network)
+        if not isinstance(result, dict) or not isinstance(
+            result.get("parameters"), dict
+        ):
+            raise TypeError("detector adapter returned invalid envelope")
+        try:
+            expected_fingerprint = _fingerprint(
+                {
+                    "kind": result.get("kind"),
+                    "backend": result.get("backend"),
+                    "version": result.get("version"),
+                    "parameters": result["parameters"],
+                }
+            )
+        except (TypeError, ValueError):
+            raise ValueError("detector adapter returned invalid envelope") from None
         if (
             result.get("kind") not in ("classification", "watermark")
             or result.get("status")
@@ -561,11 +576,15 @@ def detect(text, config, *, allow_network=False):
             or not isinstance(result.get("version"), str)
             or not result["version"]
             or result.get("input_sha256") != sha256_hex(text.encode())
-            or not isinstance(result.get("config_sha256"), str)
+            or result.get("config_sha256") != expected_fingerprint
             or (
                 result["status"] == "available"
                 and (
-                    not isinstance(result.get("score"), (int, float))
+                    not isinstance(result.get("score_name"), str)
+                    or not result["score_name"]
+                    or not isinstance(result.get("score_meaning"), str)
+                    or not result["score_meaning"]
+                    or not isinstance(result.get("score"), (int, float))
                     or isinstance(result["score"], bool)
                     or not math.isfinite(result["score"])
                 )
@@ -590,6 +609,7 @@ def compare(source, revision, config, *, allow_network=False):
                 "kind",
                 "backend",
                 "version",
+                "parameters",
                 "config_sha256",
                 "score_name",
                 "label",

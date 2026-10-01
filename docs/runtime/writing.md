@@ -140,6 +140,14 @@ version, public parameter fingerprint, input SHA-256, raw score and meaning,
 status (`available`, `not_run`, `unsupported`, `error`), and a bounded failure
 class where applicable. A delta is emitted only if both results are available
 and share backend, version and public configuration in the same invocation.
+Custom adapters must return a JSON-object `parameters` value and set
+`config_sha256` to SHA-256 of the repository's canonical JSON serialization of
+`{"kind": kind, "backend": backend, "version": version, "parameters": parameters}`.
+Available results must name and explain their score. The runtime rejects a
+stale or malformed fingerprint and checks parameter equality again before
+computing a delta. A regression fixture changes `model_sha256` while reusing
+one stale fingerprint; detection raises `invalid envelope`, so no delta is
+reported.
 Configuration fingerprints omit secret key bytes, so reports from separate
 runs cannot independently prove key equality. Classifier softmax or normalized
 likelihood is uncalibrated and is not the probability of AI authorship. Scores
