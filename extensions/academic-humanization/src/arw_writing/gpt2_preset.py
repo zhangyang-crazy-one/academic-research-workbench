@@ -23,7 +23,11 @@ def verify_files(root: Path) -> str | None:
     """Return a bounded fault code, or None when exact safe files match."""
     if root.is_symlink() or not root.is_dir():
         return "model_directory_missing_or_symlink"
-    if {item.name for item in root.iterdir()} != set(FILES):
+    try:
+        names = {item.name for item in root.iterdir()}
+    except OSError:
+        return "model_directory_unreadable"
+    if names != set(FILES):
         return "unexpected_or_missing_model_files"
     if (root / "pytorch_model.bin").exists():
         return "pickle_weights_not_allowed"
