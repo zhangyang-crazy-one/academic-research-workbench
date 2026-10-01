@@ -503,12 +503,12 @@ def check_svg_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
                     )
                 )
                 continue
-            inches = (
-                shown_width * unit_in
-                if width_match.group(2) == ""
-                else _length_in_inches(raw_width)
+            # CSS absolute lengths become 96-dpi SVG user units before the
+            # viewBox maps those units to the figure's physical width.
+            user_width = (
+                shown_width * UNIT_TO_INCH[width_match.group(2)] / UNIT_TO_INCH["px"]
             )
-            assert inches is not None
+            inches = user_width * unit_in
             dpi = size[0] / inches if inches else 0.0
             if dpi < min_dpi * (1 - DPI_TOLERANCE):
                 findings.append(

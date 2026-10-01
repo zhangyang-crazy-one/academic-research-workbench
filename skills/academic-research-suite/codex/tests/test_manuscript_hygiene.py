@@ -266,12 +266,25 @@ def test_svg_relative_raster_inside_package_is_checked(tmp_path: Path) -> None:
     assert _checks(_load().audit_package(tmp_path)) == [("H6", "fail")]
 
 
-def test_svg_absolute_image_width_in_px_is_checked(tmp_path: Path) -> None:
+@pytest.mark.parametrize("width", ["100", "100px"])
+def test_svg_image_width_in_user_units_is_checked(tmp_path: Path, width: str) -> None:
     (tmp_path / "raster.png").write_bytes(_png_header())
-    _svg_with_href(tmp_path / "fig.svg", "raster.png", width="100px")
+    _svg_with_href(tmp_path / "fig.svg", "raster.png", width=width)
     report = _load().audit_package(tmp_path)
     assert _checks(report) == [("H6", "fail")]
-    assert "~96.0 dpi" in report["findings"][0]["detail"]
+    assert "25.4 mm" in report["findings"][0]["detail"]
+    assert "~100.0 dpi" in report["findings"][0]["detail"]
+
+
+@pytest.mark.parametrize("width", ["1in", "2.54cm", "72pt"])
+def test_svg_absolute_image_width_scales_through_viewbox(
+    tmp_path: Path, width: str
+) -> None:
+    (tmp_path / "raster.png").write_bytes(_png_header())
+    _svg_with_href(tmp_path / "fig.svg", "raster.png", width=width)
+    report = _load().audit_package(tmp_path)
+    assert _checks(report) == [("H6", "fail")]
+    assert "~104.2 dpi" in report["findings"][0]["detail"]
 
 
 def test_svg_unsupported_image_width_is_not_checked(tmp_path: Path) -> None:
