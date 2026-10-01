@@ -1,0 +1,3 @@
+# Writing rule review
+
+The writing candidate already requires a human semantic review, but its receipt does not give reviewers a bounded, traceable checklist for argument, claims and limitations. Add five provider-neutral review tasks and validate an optional structured finding report against source and candidate bytes. Review artifacts without the new report can approve candidates prepared by this version and explicitly remain `not_run` for rule review. Previously accepted bundles stay readable; a pending review with an older verification digest must be regenerated. Preserve existing mechanical rejection authority.
