@@ -149,8 +149,10 @@ detectors or optimize writing to lower their scores.
 
 The audit reuses the bundled fact-locked results checker for numeric values,
 citations and table-row associations. `mechanical_status` may be `passed` or
-`failed`; `semantic_status` remains `human_review_required`. If the checker is
-unavailable in an installation, the status is `unsupported`; the existing
+`failed`; `semantic_status` remains `human_review_required`. Installed plugin
+runs resolve the checker inside the launcher-bound `ARW_PLUGIN_ROOT`; source
+runs use the source tree. If the checker is missing, the status is `unsupported`;
+unsafe symlink paths report `error`. The existing
 exact-span writing preservation checks still apply. A mechanical failure
 rejects a writing proposal. Human review is still required for logical
 direction, conclusion strength, citation scope, conditions and meaning.
