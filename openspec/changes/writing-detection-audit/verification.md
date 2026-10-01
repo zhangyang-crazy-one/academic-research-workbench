@@ -1,5 +1,7 @@
 # Verification
 
+- Final combined detector/preset/writing/CLI/capability/dependency-direction suite with `ARW_GPT2_PYTHON=/tmp/arw-gpt2-detector-venv/bin/python` and `ARW_GPT2_MODEL_DIR=/tmp/arw-gpt2-detector-6cba99c`, using authorized loopback access: **45 passed in 7.83s**, including the real offline public GPT-2 model and real loopback HTTP server; no skipped tests in this suite.
+
 - `PYTHONPATH=src:extensions/academic-humanization/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python -m pytest tests/unit/test_writing_detection.py tests/integration/test_writing.py tests/integration/test_writing_detection.py tests/unit/test_capability_activation.py -q`: 36 passed, 1 skipped (sandbox denies loopback sockets). HTTP success, version and label validation are covered by an in-process protocol simulation; no real supplier API was contacted.
 - `ruff check` on writing extension, writing CLI, affected CLI branch, new integration test and demo: passed. `ruff format --check` on changed dedicated files: passed. The existing full `src/arw/cli.py` was left at repository formatting, with only one exception-handler line changed.
 - `pyright` on new detector/fact audit and writing CLI modules: 0 errors. Wider service type checking reports pre-existing ledger union narrowing errors; no claim of full-repository typecheck success.
