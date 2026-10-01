@@ -243,7 +243,7 @@ def test_metrics_pinned_and_controls_measured():
     result = SessionWritingTransformer().transform(source, p)
     assert result["controls_effective"]
     assert (
-        result["watermark"]["status"] == "unsupported"
+        result["watermark"]["status"] == "not_run"
         and not result["watermark"]["verified_absence"]
     )
     assert "not authorship proof" in result["diagnostics"]["before"]["label"]

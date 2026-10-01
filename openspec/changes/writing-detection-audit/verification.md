@@ -1,0 +1,8 @@
+# Verification
+
+- `PYTHONPATH=src:extensions/academic-humanization/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python -m pytest tests/unit/test_writing_detection.py tests/integration/test_writing.py tests/integration/test_writing_detection.py tests/unit/test_capability_activation.py -q`: 36 passed, 1 skipped (sandbox denies loopback sockets). HTTP success, version and label validation are covered by an in-process protocol simulation; no real supplier API was contacted.
+- `ruff check` on writing extension, writing CLI, affected CLI branch, new integration test and demo: passed. `ruff format --check` on changed dedicated files: passed. The existing full `src/arw/cli.py` was left at repository formatting, with only one exception-handler line changed.
+- `pyright` on new detector/fact audit and writing CLI modules: 0 errors. Wider service type checking reports pre-existing ledger union narrowing errors; no claim of full-repository typecheck success.
+- `openspec validate writing-detection-audit --strict`: passed.
+- `python examples/writing_detection_demo.py --output-dir /tmp/arw-writing-demo-check`: local real algorithm execution; synthetic Naive Bayes target score `1.0` to `3.4548333100722964e-92`, exact HMAC green-list z `8.94427190999916` to `8.94427190999916`; mechanical fact-lock `passed`, semantic review `human_review_required`. These synthetic scores do not measure authorship detection accuracy, watermark false positives, or evasion.
+- Supply-chain/reproducible-wheel staged tests: 2 passed, 27 skipped due missing native file-base, materialized vendored sources and gated candidate build inputs in this isolated checkout. No canary was run.

@@ -43,8 +43,76 @@ map, sentence/paragraph lengths and paragraph variance. Inputs under 50 tokens
 carry a short-text caution. Other scripts are unsupported; mixed foreign-language
 text is not fully characterized. No syntactic parser or semantic-equivalence model
 is claimed. The exact fixture metrics are pinned in `tests/integration/test_writing.py`.
-Statistical detector status is `unsupported`, with no detector/model/key configured.
-Metric changes never establish watermark absence, human authorship or meaning.
+No detector runs by default. Metric changes never establish watermark absence,
+human authorship or meaning. The separate detection report below is opt-in.
+
+## Optional detector audit
+
+`writing audit` reads two local UTF-8 files without editing them. `writing
+prepare` and `writing record` also accept `--detectors CONFIG.json` and attach
+the same audit to the source-bound candidate bundle. All three commands accept
+`--allow-network` only for a configured HTTP detector; this sends **both full
+texts** to its configured endpoint. There is no automatic external request.
+
+```sh
+PYTHONPATH=src:extensions/academic-humanization/src python -m arw.cli writing audit \
+  --source original.txt --revision revised.txt --detectors detectors.json
+```
+
+The JSON configuration is `{"detectors": [{"backend": ..., ...}]}`. Supported
+backends are:
+
+| Backend | Required config | Scope |
+| --- | --- | --- |
+| `naive_bayes_local` | `model_path`, `label` | Offline multinomial model JSON (`arw.naive-bayes-model.v1`), lowercase ASCII word tokenizer. User supplies training counts. |
+| `transformers_local` | `model_path`, `label` | Optional installed `transformers` and `torch`, with a local sequence-classification model directory. Loads with `local_files_only=True`, CPU inference and full input length check; it never downloads weights. |
+| `hmac_green` | `key`, `vocabulary`, `gamma`, `min_tokens` | Exact `arw.hmac-green-whitespace.v1` generator contract only. `key_id` is a non-secret reference. |
+| `http_json` | `endpoint`, `model`, `version` | Explicit `--allow-network`; POST JSON `{text, model}`, response JSON `{score, label, version}`. HTTPS is required except loopback. Redirects and URL credentials/query are rejected. No provider has been qualified by this adapter alone. |
+
+The `tests/fixtures/writing_detection/synthetic_nb.json` model provides a
+reproducible **synthetic** classification example. Its score has no measured
+accuracy on real AI or human writing. For `transformers_local`, the author must
+supply and separately validate an offline model, its license, language coverage,
+class labels and false-positive rate. This repository does not download or
+endorse a model. The digest of local model bytes, package version, token count,
+target label and configured length limit are recorded. Inputs exceeding that
+limit are `unsupported` rather than silently truncated.
+
+Run the exact local example with `python examples/writing_detection_demo.py
+--output-dir /tmp/arw-writing-demo`. It writes public synthetic input/config
+files and invokes `writing audit`. The deliberately repetitive all-green
+sequence violates the independent-null approximation; its z score is an
+algorithm execution check, **not** a calibrated p value or significance claim.
+
+The watermark z score tests green-token excess under an approximate independent
+null. It requires the exact key, vocabulary, literal whitespace tokenization,
+and HMAC/hash green-list generator described in the code. This is a local
+synthetic analogue of green-list statistical watermarking, **not a detector
+for arbitrary KGW or other language-model watermarks**. If the generation
+algorithm, tokenizer, key or vocabulary is unknown, do not substitute these
+parameters: report `not_run` or `unsupported`. The key itself and its hash are
+excluded from reports. A user-supplied z threshold is labeled `user_config`;
+there is no calibrated operating threshold here.
+
+Each detector's `classification` or `watermark` result records backend,
+version, public parameter fingerprint, input SHA-256, raw score and meaning,
+status (`available`, `not_run`, `unsupported`, `error`), and a bounded failure
+class where applicable. A delta is emitted only if both results are available
+and share backend, version and public configuration in the same invocation.
+Configuration fingerprints omit secret key bytes, so reports from separate
+runs cannot independently prove key equality. Classifier softmax or normalized
+likelihood is uncalibrated and is not the probability of AI authorship. Scores
+are not author-identity conclusions, proof of watermark absence, or evidence
+that a revision evades a detector. This workflow does not search edits against
+detectors or optimize writing to lower their scores.
+
+The audit reuses the bundled fact-locked results checker for numeric values,
+citations and table-row associations. `mechanical_status` may be `passed` or
+`failed`; `semantic_status` remains `human_review_required`. If the checker is
+unavailable in an installation, the status is `unsupported`; the existing
+exact-span writing preservation checks still apply. A mechanical failure
+rejects a writing proposal. Human review is still required for logical
+direction, conclusion strength, citation scope, conditions and meaning.
 
 ## Execution and review
 

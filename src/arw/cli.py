@@ -643,7 +643,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = handle(args)
             _write_json(result)
             return 65 if result.get("status") == "rejected" else 0
-        except (ValueError, RuntimeError, OSError) as error:
+        except (ValueError, TypeError, RuntimeError, OSError) as error:
             _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else "writing_invalid", "message": str(error)[:256]})
             return 65
     if args.command == "semantic":
