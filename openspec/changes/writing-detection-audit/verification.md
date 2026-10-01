@@ -6,3 +6,4 @@
 - `openspec validate writing-detection-audit --strict`: passed.
 - `python examples/writing_detection_demo.py --output-dir /tmp/arw-writing-demo-check`: local real algorithm execution; synthetic Naive Bayes target score `1.0` to `3.4548333100722964e-92`, exact HMAC green-list z `8.94427190999916` to `8.94427190999916`; mechanical fact-lock `passed`, semantic review `human_review_required`. These synthetic scores do not measure authorship detection accuracy, watermark false positives, or evasion.
 - Supply-chain/reproducible-wheel staged tests: 2 passed, 27 skipped due missing native file-base, materialized vendored sources and gated candidate build inputs in this isolated checkout. No canary was run.
+- The same 37-test detector/writing/capability suite was rerun with authorized loopback socket access: **37 passed in 2.12s**, including the real local HTTP simulation. This still does not constitute a real supplier API test.
