@@ -107,14 +107,36 @@ def _table_rows(text: str) -> list[str]:
         for line in body.splitlines():
             if "&" in line and "\\\\" in line:
                 rows.append(line.strip())
-    for line in text.splitlines():
-        stripped = line.strip()
+
+    def markdown_cells(line: str) -> list[str] | None:
+        line = line.strip()
+        if "|" not in line:
+            return None
+        line = line.removeprefix("|").removesuffix("|")
+        cells = [cell.strip() for cell in line.split("|")]
+        return cells if len(cells) >= 2 else None
+
+    lines = text.splitlines()
+    index = 0
+    while index + 1 < len(lines):
+        header = markdown_cells(lines[index])
+        separator = markdown_cells(lines[index + 1])
         if (
-            stripped.startswith("|")
-            and stripped.count("|") >= 3
-            and not MD_SEPARATOR_RE.match(stripped)
+            header is None
+            or separator is None
+            or len(header) != len(separator)
+            or not MD_SEPARATOR_RE.fullmatch(lines[index + 1].strip())
         ):
-            rows.append(stripped)
+            index += 1
+            continue
+        rows.append("| " + " | ".join(header) + " |")
+        index += 2
+        while index < len(lines):
+            cells = markdown_cells(lines[index])
+            if cells is None or len(cells) != len(header):
+                break
+            rows.append("| " + " | ".join(cells) + " |")
+            index += 1
     return rows
 
 

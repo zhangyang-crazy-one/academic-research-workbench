@@ -88,6 +88,27 @@ def test_markdown_values_swapped_between_arms_fail() -> None:
     assert _load().audit(source, reordered.replace("**", ""))["passed"] is True
 
 
+def test_unwrapped_markdown_rows_preserve_values_with_their_arms() -> None:
+    source = "Arm | Value\n--- | ---:\nL | 27.55\nG | 56.71\n"
+    swapped = "Arm | Value\n--- | ---:\nL | 56.71\nG | 27.55\n"
+    module = _load()
+    report = module.audit(source, swapped)
+    assert _failed(report) == ["F3"]
+    assert report["table_rows"] == {"source": 2, "revision": 2}
+    assert module.audit(source, source)["passed"] is True
+    reordered = "Value | Arm\n---: | ---\n56.71 | G\n27.55 | L\n"
+    assert module.audit(source, reordered)["passed"] is True
+
+
+def test_pipe_prose_without_markdown_table_context_is_not_a_row() -> None:
+    for text in (
+        "L | 27.55\nG | 56.71\n",
+        "| L | 27.55 |\n| G | 56.71 |\n",
+        "Arm | Value\nnot a separator | here\nL | 27.55\n",
+    ):
+        assert _load().audit(text, text)["table_rows"] == {"source": 0, "revision": 0}
+
+
 def test_latex_bold_and_column_reorder_are_layout_only() -> None:
     source = (FIXTURES / "source.tex").read_text(encoding="utf-8")
     revision = source.replace(
@@ -269,8 +290,8 @@ def test_mapped_table_variants_keep_unmapped_keys_and_locator_facts() -> None:
         module._mapped_table_citation_forms(r"\citep[4]{r4}", {"r4"}) == r"\cite[4]{r4}"
     )
     report = module.audit(
-        r"| A | 27.55 | \citep[4]{r4} |",
-        r"| A | 27.55 | \cite{r4} |",
+        "| Arm | Value | Source |\n|---|---|---|\n" r"| A | 27.55 | \citep[4]{r4} |",
+        "| Arm | Value | Source |\n|---|---|---|\n" r"| A | 27.55 | \cite{r4} |",
         citation_map=("[4]=r4",),
     )
     assert "F2" in _failed(report)

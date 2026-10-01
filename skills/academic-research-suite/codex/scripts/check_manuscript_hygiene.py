@@ -480,13 +480,35 @@ def check_svg_rasters(root: Path, min_dpi: float) -> list[dict[str, Any]]:
                     )
                 )
                 continue
-            try:
-                shown_width = float(image.get("width", "0"))
-            except ValueError:
-                shown_width = 0.0
-            if not size or shown_width <= 0:
+            raw_width = image.get("width")
+            width_match = LENGTH_RE.match(raw_width) if raw_width is not None else None
+            if width_match is None or width_match.group(2) not in UNIT_TO_INCH:
+                findings.append(
+                    _finding(
+                        "H6",
+                        "not_checked",
+                        rel,
+                        "SVG raster could not be checked: missing or unsupported image width",
+                    )
+                )
                 continue
-            inches = shown_width * unit_in
+            shown_width = float(width_match.group(1))
+            if shown_width <= 0:
+                findings.append(
+                    _finding(
+                        "H6",
+                        "not_checked",
+                        rel,
+                        "SVG raster could not be checked: non-positive image width",
+                    )
+                )
+                continue
+            inches = (
+                shown_width * unit_in
+                if width_match.group(2) == ""
+                else _length_in_inches(raw_width)
+            )
+            assert inches is not None
             dpi = size[0] / inches if inches else 0.0
             if dpi < min_dpi * (1 - DPI_TOLERANCE):
                 findings.append(

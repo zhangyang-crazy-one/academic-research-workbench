@@ -250,12 +250,12 @@ def _png_header() -> bytes:
     return b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR" + struct.pack(">II", 100, 100)
 
 
-def _svg_with_href(path: Path, href: str) -> None:
+def _svg_with_href(path: Path, href: str, *, width: str = "100") -> None:
     from xml.sax.saxutils import quoteattr
 
     path.write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" width="1in" viewBox="0 0 100 100">'
-        f'<image width="100" height="100" href={quoteattr(href)}/></svg>'
+        f'<image width={quoteattr(width)} height="100" href={quoteattr(href)}/></svg>'
     )
 
 
@@ -264,6 +264,20 @@ def test_svg_relative_raster_inside_package_is_checked(tmp_path: Path) -> None:
     (tmp_path / "raster.png").write_bytes(_png_header())
     _svg_with_href(tmp_path / "figures/fig.svg", "../raster.png")
     assert _checks(_load().audit_package(tmp_path)) == [("H6", "fail")]
+
+
+def test_svg_absolute_image_width_in_px_is_checked(tmp_path: Path) -> None:
+    (tmp_path / "raster.png").write_bytes(_png_header())
+    _svg_with_href(tmp_path / "fig.svg", "raster.png", width="100px")
+    report = _load().audit_package(tmp_path)
+    assert _checks(report) == [("H6", "fail")]
+    assert "~96.0 dpi" in report["findings"][0]["detail"]
+
+
+def test_svg_unsupported_image_width_is_not_checked(tmp_path: Path) -> None:
+    (tmp_path / "raster.png").write_bytes(_png_header())
+    _svg_with_href(tmp_path / "fig.svg", "raster.png", width="100%")
+    assert _checks(_load().audit_package(tmp_path)) == [("H6", "not_checked")]
 
 
 @pytest.mark.parametrize(
