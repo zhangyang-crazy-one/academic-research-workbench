@@ -178,7 +178,7 @@ def test_installed_cli_reports_actionable_error_without_home(tmp_path: Path) -> 
     result = subprocess.run(
         [str(launcher), "status", "--help"],
         cwd=tmp_path,
-        env={"PATH": os.environ["PATH"]},
+        env={"PATH": os.environ["PATH"], "ARW_RUNTIME": "plugin"},
         text=True,
         capture_output=True,
         check=False,
@@ -193,7 +193,11 @@ def test_installed_cli_reports_missing_runtime_artifact(tmp_path: Path) -> None:
     result = subprocess.run(
         [str(launcher), "status", "--help"],
         cwd=tmp_path,
-        env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")},
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "home"),
+            "ARW_RUNTIME": "plugin",
+        },
         text=True,
         capture_output=True,
         check=False,

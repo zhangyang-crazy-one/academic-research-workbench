@@ -270,11 +270,12 @@ def test_read_only_route_import_never_probes_a_writable_temp_directory(
 
     assert result.returncode == 0, result.stderr
     route = json.loads(result.stdout)
-    assert route["integration_status"] == "BLOCKED"
+    assert route["integration_status"] == "UNVERIFIED"
+    assert route["execution_mode"] == "inline-role-prompts"
     assert route["reason_codes"] == ["integration_lock_not_verified"]
 
 
-def test_installed_route_discovers_staged_lock_but_requires_host_canary(
+def test_installed_route_discovers_staged_lock_and_reports_missing_host_canary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from arw import cli
@@ -293,7 +294,8 @@ def test_installed_route_discovers_staged_lock_but_requires_host_canary(
         monkeypatch.delenv(name, raising=False)
 
     route = cli._installed_route_from_environment().model_dump(mode="json")
-    assert route["integration_status"] == "BLOCKED"
+    assert route["integration_status"] == "UNVERIFIED"
+    assert route["execution_mode"] == "inline-role-prompts"
     assert route["integration_lock_sha256"] is None
     assert route["reason_codes"] == ["integration_inputs_incomplete"]
 

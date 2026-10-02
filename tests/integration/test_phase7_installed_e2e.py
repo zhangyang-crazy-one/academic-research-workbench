@@ -231,7 +231,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
         assert route["integration_lock_sha256"] == _digest(lock_path)
         assert route["reason_codes"] == []
     else:
-        assert route["integration_status"] == "BLOCKED"
+        assert route["integration_status"] == "UNVERIFIED"
         assert route["reason_codes"] == ["integration_lock_not_verified"]
 
     workflow = installed / "skills/academic-research-suite/ars/academic-pipeline/WORKFLOW.md"
@@ -312,7 +312,7 @@ def test_installed_route_requires_qualification_lock(
     )
     assert result.returncode == 0, f"arw route exited {result.returncode}"
     route = json.loads(result.stdout)
-    assert route["integration_status"] == "BLOCKED"
+    assert route["integration_status"] == "UNVERIFIED"
     assert route["reason_codes"] == ["integration_lock_not_verified"]
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
