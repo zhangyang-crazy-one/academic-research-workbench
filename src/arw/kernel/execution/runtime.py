@@ -1294,6 +1294,14 @@ class RuntimeCommandService:
         )
 
     def resume(self, request: ResumeRequest) -> CommandOutcome:
+        from arw.kernel.ledger.narrative import NarrativeError, guard_run
+
+        with guard_run(self.run_root, expected_sha256=request.narrative_sha256) as snapshot:
+            if snapshot is not None and request.narrative_sha256 is None:
+                raise NarrativeError("missing_narrative_binding", "paper resume request must echo current narrative SHA-256")
+            return self._resume_bound(request)
+
+    def _resume_bound(self, request: ResumeRequest) -> CommandOutcome:
         now = datetime.strptime(request.occurred_at, "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=UTC
         )

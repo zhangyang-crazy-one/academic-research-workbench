@@ -185,6 +185,15 @@ class ResearchMemoryService:
         }
 
     def save(self, value: MemoryInput, *, request):
+        if value.handoff is not None and self.run_root is not None:
+            from arw.kernel.ledger.narrative import NarrativeError, guard_run
+            with guard_run(self.run_root, expected_sha256=value.handoff.narrative_sha256) as snapshot:
+                if snapshot is not None and value.handoff.narrative_sha256 is None:
+                    raise NarrativeError("missing_narrative_binding", "paper handoff must echo current narrative SHA-256")
+                return self._save_bound(value, request=request)
+        return self._save_bound(value, request=request)
+
+    def _save_bound(self, value: MemoryInput, *, request):
         reject_secret_shapes(canonical_json_bytes(value.model_dump(mode="json")))
         if request.actor_role != "parent_control_plane":
             raise MemoryAccessDenied("only the parent writer can admit memory")
@@ -734,6 +743,20 @@ class ResearchMemoryService:
             return marker
 
     def resume_handoff(self, memory_id, *, query):
+        if self.run_root is None:
+            raise MemoryAccessDenied("resume requires the current canonical run")
+        from arw.kernel.ledger.narrative import NarrativeError, guard_run
+        with guard_run(self.run_root) as snapshot:
+            result = self._resume_handoff_bound(memory_id, query=query, snapshot=snapshot)
+            if snapshot is not None:
+                if result.get("narrative_sha256") != snapshot.sha256:
+                    raise NarrativeError("stale_narrative", "handoff carries an obsolete or missing narrative version")
+                result["narrative"] = snapshot.model_dump(mode="json")
+                if len(canonical_json_bytes(result)) > query.max_tokens:
+                    raise MemoryIntegrityError("narrative handoff exceeds continuation context budget")
+            return result
+
+    def _resume_handoff_bound(self, memory_id, *, query, snapshot):
         result = self.read(memory_id, query=query)
         document = ResearchMemory.model_validate_json(json.dumps(result["memory"]))
         if document.handoff is None:
@@ -830,6 +853,8 @@ class ResearchMemoryService:
             else document.handoff.next_concrete_action,
             "interpretation": INTERPRETATION,
         }
+        if document.handoff.narrative_sha256 is not None:
+            result["narrative_sha256"] = document.handoff.narrative_sha256
 
         if len(canonical_json_bytes(result)) > query.max_tokens:
             raise MemoryIntegrityError(

@@ -23,6 +23,13 @@ writing proposals and source-bound review, read
 lookup may be proposed only through an explicit ARW assignment; first read
 [database lookup advisory](references/database-lookup-advisory.md).
 
+For an ARW paper project, register and select the project narrative before
+outlining or drafting, then load the current version on each handoff or resume.
+Read the bundled ARS adapter file at
+`skills/academic-research-suite/codex/references/project_narrative_protocol.md`
+for selection, status, handoff, and structure rules.
+General non-paper tasks do not need a paper narrative.
+
 The modified Academic Research Suite is bundled at
 `<installed-plugin-root>/skills/academic-research-suite/`; use that exact router and
 its workflow files for ARS tasks. Do not substitute an external ARS installation.
