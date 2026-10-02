@@ -7,6 +7,7 @@ of `skills/`. The parent runtime alone writes canonical state.
 | Request | Route and boundary |
 | --- | --- |
 | General run/research status | `bin/arw route --json` for workflow selection; `bin/arw status --run-root RUN --json` for existing run state. Do not infer a different family or permission. |
+| Project paper narrative | `bin/arw narrative register/select/status/propose/approve --project-root PROJECT`; select before `init --task-kind paper` and load status on handoff/resume. Read the bundled `skills/academic-research-suite/codex/references/project_narrative_protocol.md`. A non-paper run needs no narrative. |
 | Literature review, citation methods, peer review, experiment design | Read `academic-research-suite/SKILL.md` and its selected `ars/*/WORKFLOW.md`; do not use a generic control-plane query as a substitute. |
 | Bounded local files and search | `bin/arw files status --control-root ROOT --root-id ID`; MCP exposes `list_files`, `read_file`, `search_files`, `get_outline`, `get_context` under the parent-supplied root. Stale metadata needs explicit parent sync. |
 | Research graph and assertion provenance | Read `bin/arw status --run-root RUN --json`, then query the graph capability. The graph is a rebuildable projection; every accepted assertion requires an admitting ledger event. |

@@ -326,6 +326,16 @@ class ImmutableInput(StrictModel):
         return value
 
 
+class NarrativeRunBinding(StrictModel):
+    """Immutable project association established at paper-run initialization."""
+
+    schema_version: Literal["arw.narrative-run-binding.v1"] = "arw.narrative-run-binding.v1"
+    project_relative_path: Annotated[str, Field(min_length=1, max_length=4096)]
+    project_id: StableRuntimeId
+    initial_version: Annotated[int, Field(ge=1)]
+    initial_sha256: Sha256
+
+
 class RunManifest(StrictModel):
     """Immutable identity written exactly once when a run is initialized."""
 
@@ -339,6 +349,8 @@ class RunManifest(StrictModel):
     workflow_definition_sha256: Sha256 | None = None
     journal_layout: JournalLayout | None = None
     capabilities: list[Capability] = Field(min_length=1)
+    narrative_binding: NarrativeRunBinding | None = None
+    task_kind: Literal["paper", "other"] | None = None
 
     @field_validator("capabilities")
     @classmethod
@@ -353,6 +365,8 @@ class RunManifest(StrictModel):
             raise ValueError("workflow definition ID and digest must be provided together")
         if self.journal_layout is not None and self.workflow_definition_id is None:
             raise ValueError("segmented journals require a bound workflow definition")
+        if (self.task_kind == "paper") != (self.narrative_binding is not None):
+            raise ValueError("paper task kind and narrative binding must occur together")
         return self
 
 
@@ -1275,6 +1289,7 @@ class CheckpointRequest(RuntimeCommandRequest):
 
 class ResumeRequest(RuntimeCommandRequest):
     passport_sha256: Sha256
+    narrative_sha256: Sha256 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RecoveryRequest(RuntimeCommandRequest):
@@ -1298,6 +1313,8 @@ class InitRunRequest(StrictModel):
     workflow_definition_sha256: Sha256 | None = None
     journal_layout: JournalLayout | None = None
     capabilities: list[Capability] = Field(min_length=1)
+    narrative_binding: NarrativeRunBinding | None = None
+    task_kind: Literal["paper", "other"] | None = None
     event_id: EventId
     command_id: CommandId
     actor_id: ActorId

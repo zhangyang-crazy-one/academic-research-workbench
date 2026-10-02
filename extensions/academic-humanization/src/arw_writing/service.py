@@ -13,6 +13,7 @@ from arw.kernel.ledger.manifests import (
     load_artifact_manifest,
     validate_accepted_event_manifests,
 )
+from arw.kernel.ledger.narrative import NarrativeError, guard_run
 from arw.kernel.ledger.research_records import publish_once
 from arw.kernel.ledger.source_locations import read_retained_bytes
 from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandRequest
@@ -65,6 +66,12 @@ class WritingService(SessionWritingTransformer):
     def prepare(
         self, source_id, proposal, *, detector_config=None, allow_network=False
     ):
+        with guard_run(self.run_root, expected_sha256=proposal.get("narrative_sha256")) as snapshot:
+            if snapshot is not None and proposal.get("narrative_sha256") is None:
+                raise NarrativeError("missing_narrative_binding", "paper writing proposal must echo current narrative SHA-256")
+            return self._prepare_bound(source_id, proposal, snapshot, detector_config=detector_config, allow_network=allow_network)
+
+    def _prepare_bound(self, source_id, proposal, snapshot, *, detector_config=None, allow_network=False):
         raw, binding = self._source(source_id)
         result = self.transform(
             raw.decode("utf-8"),
@@ -73,6 +80,8 @@ class WritingService(SessionWritingTransformer):
             allow_network=allow_network,
         )
         result["source_binding"] = binding
+        if snapshot is not None:
+            result["narrative_binding"] = snapshot.model_dump(mode="json")
         return result
 
     def record(
@@ -85,10 +94,17 @@ class WritingService(SessionWritingTransformer):
         detector_config=None,
         allow_network=False,
     ):
+        with guard_run(self.run_root, expected_sha256=proposal.get("narrative_sha256")) as snapshot:
+            if snapshot is not None and proposal.get("narrative_sha256") is None:
+                raise NarrativeError("missing_narrative_binding", "paper writing proposal must echo current narrative SHA-256")
+            return self._record_bound(source_id, proposal, request=request, review_artifact_id=review_artifact_id, detector_config=detector_config, allow_network=allow_network, snapshot=snapshot)
+
+    def _record_bound(self, source_id, proposal, *, request, review_artifact_id, detector_config, allow_network, snapshot):
         request = RuntimeCommandRequest.model_validate(request.model_dump(mode="json"))
-        result = self.prepare(
+        result = self._prepare_bound(
             source_id,
             proposal,
+            snapshot,
             detector_config=detector_config,
             allow_network=allow_network,
         )

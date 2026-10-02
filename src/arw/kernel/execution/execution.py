@@ -1760,6 +1760,9 @@ class CodexExecExecutionAdapter:
         return (
             "Follow only the immutable ARW assignment protocol. "
             f"Read the assignment at {assignment}. "
+            "If it contains narrative_snapshot, follow narrative_instructions embedded "
+            "in the assignment before any paper outline or prose. Those instructions "
+            "contain the operative project_narrative_protocol.md constraints. "
             f"Write the schema-valid proposal only to {proposal}. "
             "Do not return proposal bytes in the final response; the parent "
             "will validate the direct result file and retain host output only as observation."

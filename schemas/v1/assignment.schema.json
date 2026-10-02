@@ -112,6 +112,140 @@
       "title": "CompletionContract",
       "type": "object"
     },
+    "NarrativePlan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Stable order and warrant, never a frozen finding or scientific conclusion.",
+      "properties": {
+        "schema_version": {
+          "const": "arw.narrative-plan.v1",
+          "default": "arw.narrative-plan.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "route": {
+          "enum": [
+            "method_rq",
+            "observation_mechanism",
+            "resource_evaluation",
+            "theory",
+            "custom"
+          ],
+          "title": "Route",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 2048,
+          "minLength": 12,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "problem_to_contribution": {
+          "maxLength": 2048,
+          "minLength": 8,
+          "title": "Problem To Contribution",
+          "type": "string"
+        },
+        "contribution_to_evidence": {
+          "maxLength": 2048,
+          "minLength": 8,
+          "title": "Contribution To Evidence",
+          "type": "string"
+        },
+        "evidence_to_conclusion": {
+          "maxLength": 2048,
+          "minLength": 8,
+          "title": "Evidence To Conclusion",
+          "type": "string"
+        },
+        "scope_boundary": {
+          "maxLength": 2048,
+          "minLength": 8,
+          "title": "Scope Boundary",
+          "type": "string"
+        },
+        "function_order": {
+          "items": {
+            "enum": [
+              "problem",
+              "gap",
+              "contribution",
+              "argument",
+              "evidence",
+              "knowledge_boundary"
+            ],
+            "type": "string"
+          },
+          "title": "Function Order",
+          "type": "array"
+        },
+        "evidence_forms": {
+          "items": {
+            "enum": [
+              "proof",
+              "experiment",
+              "observation",
+              "annotation_validation",
+              "theoretical_argument",
+              "other"
+            ],
+            "type": "string"
+          },
+          "title": "Evidence Forms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "route",
+        "rationale",
+        "problem_to_contribution",
+        "contribution_to_evidence",
+        "evidence_to_conclusion",
+        "scope_boundary",
+        "function_order",
+        "evidence_forms"
+      ],
+      "title": "NarrativePlan",
+      "type": "object"
+    },
+    "NarrativeSnapshot": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.narrative-snapshot.v1",
+          "default": "arw.narrative-snapshot.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/NarrativePlan"
+        }
+      },
+      "required": [
+        "project_id",
+        "version",
+        "sha256",
+        "plan"
+      ],
+      "title": "NarrativeSnapshot",
+      "type": "object"
+    },
     "OutputPolicy": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -295,6 +429,29 @@
     },
     "acceptance_key": {
       "$ref": "#/$defs/AssignmentKey"
+    },
+    "narrative_snapshot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NarrativeSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "narrative_instructions": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Narrative Instructions"
     }
   },
   "required": [
