@@ -12,9 +12,11 @@ installed launcher from that root:
 "<installed-plugin-root>/bin/arw" route --json
 ```
 
-Return the command's JSON result unchanged. It must declare the ARS workflow family,
-execution mode, source adapter version, and disabled experiment status. Do not infer a
-different family, mode, domain ontology, or experiment permission outside that result.
+Return the command's JSON result unchanged. It declares the ARS workflow family,
+execution mode, source adapter version, and host integration status. An `UNVERIFIED`
+integration status is advisory and does not block the ARS workflow. Do not infer a
+different family, mode, or domain ontology outside that result, and do not treat the
+route as permission to execute experiments.
 
 For concrete control-plane commands and preserved capability routes, read
 [control-plane capabilities](references/control-plane-capabilities.md). For

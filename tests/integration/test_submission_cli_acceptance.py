@@ -1423,9 +1423,10 @@ def test_a7_security_rejection_is_bounded_and_qualification_axes_stay_independen
         if item["component_id"] in {"academic-research-skills", "experiment-agent"}
     } == {"CC-BY-NC-4.0"}
 
-    route = installed_route(blocked_reason="integration_inputs_incomplete")
-    assert route.integration_status == "BLOCKED"
-    assert route.release_qualification == "BLOCKED"
+    route = installed_route(unverified_reason="integration_inputs_incomplete")
+    assert route.integration_status == "UNVERIFIED"
+    assert route.execution_mode == "inline-role-prompts"
+    assert "release_qualification" not in route.model_dump()
 
 
 def test_rollback_disables_provider_but_preserves_historical_readers_and_bytes(

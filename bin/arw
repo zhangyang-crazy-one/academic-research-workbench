@@ -65,14 +65,20 @@ esac
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
 
-# Runtime mode is an explicit gate. Unset / plugin / codex stay fail-closed on
-# the staged first-party wheel. agent / local-dev may use an editable checkout
-# interpreter; they never qualify a Codex release and do not invent host canary
-# evidence. bin/arw-agent is a checkout-only wrapper that sets ARW_RUNTIME=agent.
+# Runtime mode. plugin / codex stay fail-closed on the staged first-party wheel.
+# agent / local-dev may use an editable checkout interpreter; they never qualify
+# a Codex release and do not invent host canary evidence. When ARW_RUNTIME is
+# unset, a source checkout without a staged wheel selects agent mode; a staged
+# plugin (which carries share/arw/wheels) keeps plugin mode.
 ARW_RUNTIME_MODE="plugin"
 REQUESTED_RUNTIME="${ARW_RUNTIME:-}"
 if [[ "$(basename -- "${BASH_SOURCE[0]}")" == "arw-agent" ]]; then
   REQUESTED_RUNTIME="${REQUESTED_RUNTIME:-agent}"
+fi
+ARW_AUTO_AGENT=0
+if [[ -z "$REQUESTED_RUNTIME" && -f "$PLUGIN_ROOT/src/arw/cli.py" && ! -e "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+  REQUESTED_RUNTIME="agent"
+  ARW_AUTO_AGENT=1
 fi
 case "$REQUESTED_RUNTIME" in
   ""|plugin|codex)
@@ -92,14 +98,15 @@ if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
 fi
 
 ARW_JSON_DIAGNOSTIC=0
-if [[ "$ARW_RUNTIME_MODE" != "agent" && ( ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ) ]]; then
+if [[ ( "$ARW_RUNTIME_MODE" != "agent" || "$ARW_AUTO_AGENT" == 1 ) && ( ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ) ]]; then
   ARW_JSON_DIAGNOSTIC=1
 fi
 
-# A source checkout in plugin mode has no staged wheel. Keep the opt-in preflight and health
-# available there so a missing native binary is reported as JSON before any
-# runtime bootstrap attempt. The installed package continues below.
-if [[ "$ARW_RUNTIME_MODE" != "agent" && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py" && ! -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+# A source checkout has no staged wheel. Unless agent mode was requested
+# explicitly, keep the opt-in preflight and health available there so a missing
+# native binary is reported as JSON before any runtime bootstrap attempt. The
+# installed package continues below.
+if [[ ( "$ARW_RUNTIME_MODE" != "agent" || "$ARW_AUTO_AGENT" == 1 ) && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py" && ! -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
   if [[ "$COMMAND" == "health" || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ]]; then
     SOURCE_PYTHON=""
     if [[ -n "${ARW_PYTHON:-}" ]]; then

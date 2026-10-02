@@ -65,8 +65,9 @@ or re-run `create-claude-marketplace` before `claude plugin marketplace update a
 
 ## Route unlock (integration lock)
 
-A Claude install only returns `execution_mode: inline-role-prompts` after an exact
-Codex host canary is bound into the package:
+A Claude install always returns `execution_mode: inline-role-prompts`; without a
+bound Codex host canary it reports `integration_status: UNVERIFIED`. To record
+`integration_status: PASS`, bind an exact Codex host canary into the package:
 
 1. `stage-plugin` → `create-claude-marketplace` (keeps `.codex-plugin` + Codex hooks)
 2. `qualify-codex-host` against `build/claude-stage/academic-research-workbench`
@@ -81,7 +82,8 @@ Codex host canary is bound into the package:
 - `supply-chain/host-canary/canary.json`
 - the lock-recorded Codex launcher path
 
-`release_qualification` remains `BLOCKED` until CC BY-NC legal gates are resolved.
+Release qualification (`supply-chain/license-verdict.json`) remains `BLOCKED`
+until CC BY-NC legal gates are resolved; `route` no longer reports it.
 Minimum host version for this unlock path: Codex CLI `>=0.144.4`. The
 qualification lock still records the exact binary tuple and requires a fresh
 canary for each host version.

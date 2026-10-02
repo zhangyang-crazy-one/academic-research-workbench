@@ -54,9 +54,7 @@ ROUTE_REQUIRED_FIELDS = (
     "source_bundled",
     "integration_status",
     "integration_lock_sha256",
-    "release_qualification",
     "reason_codes",
-    "experiment_execution",
     "paper_ast_export",
 )
 
@@ -168,7 +166,7 @@ def test_adaptation_does_not_claim_codex_plugin_on_grok() -> None:
     assert "do not claim grok can run the codex plugin" in lowered
     assert "do not tell the user to `git clone`" in lowered
     assert "do not clone onto the user's machine" in lowered
-    assert 'release_qualification` = `"blocked"`' in lowered
+    assert "release qualification stays `blocked`" in lowered
 
 
 def test_bundled_ars_pointers_exist_and_are_not_copied_into_grok_bot() -> None:
@@ -186,7 +184,7 @@ def test_route_skill_separates_control_plane_from_advisory_tree() -> None:
     advisory = _normalized(_section(route, "## B. Advisory workflow-file tree"))
     assert "exit code `0`" in plain
     assert "stdout is one JSON object" in plain
-    assert "`schema_version` = `1.0.0`" in plain
+    assert "`schema_version` = `1.1.0`" in plain
     assert "`workflow_family` = `academic-pipeline`" in plain
     assert "No synthetic `RouteResult`" in plain
     assert "Say **advisory**" in advisory

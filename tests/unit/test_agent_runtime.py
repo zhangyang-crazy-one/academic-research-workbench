@@ -90,7 +90,7 @@ def test_install_python_prints_unmanaged_dependency_groups() -> None:
     assert "uv pip install --python .venv/bin/python --editable . --group" not in workflows
 
 
-def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) -> None:
+def test_checkout_without_runtime_or_wheels_selects_agent_mode(tmp_path: Path) -> None:
     result = _run(
         [str(LAUNCHER), "route", "--json"],
         env={
@@ -100,9 +100,10 @@ def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) ->
             "ARW_PYTHON": sys.executable,
         },
     )
-    assert result.returncode == 66, result.stderr
-    assert "runtime-artifact-missing" in result.stderr
-    assert "agent-runtime-missing" not in result.stderr
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["execution_mode"] == "inline-role-prompts"
+    assert payload["integration_status"] == "UNVERIFIED"
 
 
 def test_explicit_plugin_runtime_does_not_use_checkout_venv(tmp_path: Path) -> None:
@@ -201,9 +202,10 @@ def test_agent_mode_route_and_version_and_phase2_help_without_codex(
     route = _run([str(LAUNCHER), "route", "--json"], env=env)
     assert route.returncode == 0, route.stderr
     route_payload = json.loads(route.stdout)
-    assert route_payload["schema_version"] == "1.0.0"
-    assert route_payload["integration_status"] == "BLOCKED"
-    assert route_payload["release_qualification"] == "BLOCKED"
+    assert route_payload["schema_version"] == "1.1.0"
+    assert route_payload["execution_mode"] == "inline-role-prompts"
+    assert route_payload["integration_status"] == "UNVERIFIED"
+    assert "release_qualification" not in route_payload
     assert route_payload["reason_codes"]
 
     status_help = _run([str(LAUNCHER), "status", "--help"], env=env)

@@ -30,7 +30,7 @@ def _crossref(*, retracted=False, items=None):
     if items is None:
         items = [{"DOI": "10.1234/alpha", "title": ["Evidence for Alpha"],
                   "published": {"date-parts": [[2024]]}, "author": [{"family": "Smith"}],
-                  "update-to": [{"type": "retraction"}] if retracted else []}]
+                  "updated-by": [{"type": "retraction", "source": "retraction-watch", "DOI": "10.1234/notice"}] if retracted else []}]
     return json.dumps({"message": {"items": items}}).encode()
 
 
@@ -146,3 +146,30 @@ def test_ars_source_bridge_binds_existing_manifest():
     reference = reference_from_source_manifest(source)
     assert reference.citation_key == source.citation_key
     assert reference.source_manifest_sha256 is not None
+
+
+def test_crossref_retraction_is_read_from_updated_by_on_the_work(reference):
+    """The retracted work carries `updated-by`; `update-to` marks the notice."""
+    notice = [{"DOI": "10.1234/alpha", "title": ["Evidence for Alpha"],
+               "published": {"date-parts": [[2024]]}, "author": [{"family": "Smith"}],
+               "update-to": [{"type": "retraction", "DOI": "10.1234/other"}]}]
+    observed = "2026-09-25T00:00:00Z"
+    assert check_response(reference, "crossref", _crossref(items=notice), observed_at=observed).status == "verified"
+    retracted = check_response(reference, "crossref", _crossref(retracted=True), observed_at=observed)
+    assert retracted.status == "retracted"
+    assert retracted.parser_version == "1.1.0"
+    withdrawn = [{**notice[0], "update-to": [], "updated-by": [{"type": "withdrawal"}]}]
+    assert check_response(reference, "crossref", _crossref(items=withdrawn), observed_at=observed).status == "retracted"
+    corrected = [{**notice[0], "update-to": [], "updated-by": [{"type": "correction"}]}]
+    assert check_response(reference, "crossref", _crossref(items=corrected), observed_at=observed).status == "verified"
+
+
+def test_parser_1_0_0_receipts_still_replay(reference, tmp_path):
+    raw = _crossref(items=[{"DOI": "10.1234/alpha", "title": ["Evidence for Alpha"],
+                            "published": {"date-parts": [[2024]]}, "author": [{"family": "Smith"}],
+                            "update-to": [{"type": "retraction"}]}])
+    legacy = check_response(reference, "crossref", raw, observed_at="2026-09-25T00:00:00Z",
+                            parser_version="1.0.0")
+    assert legacy.status == "retracted"
+    publish_check(tmp_path, legacy, raw)
+    assert replay_check(tmp_path, reference, legacy.receipt_sha256) == legacy

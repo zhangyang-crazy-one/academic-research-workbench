@@ -156,19 +156,22 @@ uv venv
 ./bin/arw help
 ```
 
-`./bin/arw help` works from a checkout. Other commands on `bin/arw` stay
-fail-closed unless a staged first-party wheel exists under
-`share/arw/wheels/`; that is the Codex plugin path. A headless agent that
+`./bin/arw help` works from a checkout, and with `.venv` installed the other
+commands run in agent mode. `ARW_RUNTIME=plugin` keeps the Codex plugin path,
+which fails closed unless a staged first-party wheel exists under
+`share/arw/wheels/`. A headless agent that
 already has this checkout and `.venv` should use agent mode instead of
 staging a plugin or installing Codex CLI.
 
 ### Agent self-use
 
-Agent / local-dev runtime is an explicit gate (`ARW_RUNTIME=agent` or the
-checkout-only `bin/arw-agent` wrapper). It is not a Codex qualification
-bypass: route still reports `integration_status: BLOCKED` until a verified
-integration lock and host canary are present, and the staged plugin launcher
-still requires the first-party wheel when `ARW_RUNTIME` is unset.
+Agent / local-dev runtime is selected with `ARW_RUNTIME=agent`, the
+checkout-only `bin/arw-agent` wrapper, or automatically when `ARW_RUNTIME` is
+unset on a source checkout that has no staged `share/arw/wheels/`. It is not a
+Codex qualification: route reports `execution_mode: inline-role-prompts` with
+`integration_status: UNVERIFIED` until a verified integration lock and host
+canary are present. A staged plugin, or `ARW_RUNTIME=plugin`, still requires
+the first-party wheel.
 
 Install once, then call ARW without a `codex` binary:
 
@@ -384,11 +387,13 @@ marketplace manifest. Do not install an unlocked bootstrap stage.
 The helper never fabricates a canary or silently upgrades a missing lock. A
 qualified stage still reports `release_qualification: BLOCKED` until the
 retained CC BY-NC intended-use, distribution, accountable-approval, and
-permission evidence is resolved. If host canary evidence is not supplied,
-`bin/arw route --json` remains blocked with
-`integration_inputs_incomplete` by design; supplying the exact retained
+permission evidence is resolved. Host integration evidence is advisory for
+`route`: without host canary evidence `bin/arw route --json` still returns
+`execution_mode: inline-role-prompts`, reporting `integration_status:
+UNVERIFIED` with `integration_inputs_incomplete`; supplying the exact retained
 `ARW_HOST_CANARY_EVIDENCE` makes the verifier recompute the lock and can return
-`integration_status: PASS` on the same host.
+`integration_status: PASS` on the same host. A drifted lock is reported as
+`integration_lock_invalid_or_drifted`, not a blocked route.
 
 ## Release boundary
 

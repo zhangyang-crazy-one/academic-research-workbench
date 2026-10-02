@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://academic-research-workbench.local/schemas/v1/route-result.schema.json",
   "additionalProperties": false,
-  "description": "Read-only routing decision exposed by the installed skill.",
+  "description": "Read-only routing decision exposed by the installed skill.\n\nHost integration evidence is advisory: a missing, incomplete, or drifted\nintegration lock yields ``UNVERIFIED`` with a reason code, never a blocked\nroute. Release qualification and experiment execution are reported by\ntheir own commands, not by ``route``.",
   "properties": {
     "schema_version": {
-      "const": "1.0.0",
+      "const": "1.1.0",
       "title": "Schema Version",
       "type": "string"
     },
@@ -15,10 +15,7 @@
       "type": "string"
     },
     "execution_mode": {
-      "enum": [
-        "inline-role-prompts",
-        "blocked"
-      ],
+      "const": "inline-role-prompts",
       "title": "Execution Mode",
       "type": "string"
     },
@@ -40,7 +37,7 @@
     "integration_status": {
       "enum": [
         "PASS",
-        "BLOCKED"
+        "UNVERIFIED"
       ],
       "title": "Integration Status",
       "type": "string"
@@ -56,11 +53,6 @@
       ],
       "title": "Integration Lock Sha256"
     },
-    "release_qualification": {
-      "const": "BLOCKED",
-      "title": "Release Qualification",
-      "type": "string"
-    },
     "reason_codes": {
       "items": {
         "enum": [
@@ -72,11 +64,6 @@
       },
       "title": "Reason Codes",
       "type": "array"
-    },
-    "experiment_execution": {
-      "const": "disabled",
-      "title": "Experiment Execution",
-      "type": "string"
     },
     "paper_ast_export": {
       "const": "deferred-v2",
@@ -93,9 +80,7 @@
     "source_bundled",
     "integration_status",
     "integration_lock_sha256",
-    "release_qualification",
     "reason_codes",
-    "experiment_execution",
     "paper_ast_export"
   ],
   "title": "RouteResult",
