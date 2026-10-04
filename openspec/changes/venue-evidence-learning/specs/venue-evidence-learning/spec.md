@@ -37,7 +37,7 @@ The capsule SHALL contain the exact sections, figure roles, evidence forms and o
 
 #### Scenario: Transient PDF and offline reconstruction
 - **WHEN** an agent supplies a reviewed full PDF and its bounded structural capsule
-- **THEN** local E2E tooling verifies actual PDF size, digest and page count before source acceptance, records the capsule and reviewed PDF hashes separately, and reconstructs the learning inventory from retained artifacts after deleting the disposable index.
+- **THEN** the caller independently verifies actual PDF size, digest and page count before admission; ARW binds the retained capsule and declared reviewed PDF provenance separately and can reconstruct the learning inventory from retained artifacts after deleting the disposable index.
 - **WHEN** the transient PDF is unavailable during later replay
 - **THEN** replay verifies capsule bytes and agent declarations, and does not claim to reverify absent PDF bytes.
 
