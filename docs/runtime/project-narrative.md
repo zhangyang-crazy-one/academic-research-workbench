@@ -19,6 +19,75 @@ observations, annotation validation, and theoretical arguments are all
 possible evidence. A prior hypothesis is optional, and a negative result can
 be a complete contribution. Mark post hoc explanations as post hoc.
 
+## Content-bound realization
+
+Paper output admission uses `arw.narrative-realization.v1`. The parent accepts
+`narrative-outline`, `narrative-blueprint`, and `narrative-draft` JSON artifacts
+through `artifact-accept`. Each JSON record names the current narrative SHA,
+the actual retained UTF-8 source path and digest, and annotated paragraph byte
+spans with their own digests. Nodes carry one of the six function IDs and,
+where relevant, claim, contribution, evidence, and knowledge-boundary IDs.
+Blueprint records name an accepted outline artifact; drafts name an accepted
+blueprint. A draft must realize each blueprint claim. A newly discovered claim
+needs an explicit revision reason and human review. The content reader checks
+the manuscript itself and rejects changed bytes or forged spans, including on
+replay after acceptance.
+
+New admission rejects annotations bound only to explicit Markdown ATX or
+Setext headings as `narrative_heading_only`. Bind the function to its body
+paragraph instead; a heading and body prose in one paragraph remain valid.
+This syntax check cannot determine whether arbitrary prose actually performs
+the claimed function. Historical accepted v1 events retain their original
+reports and replay byte/span checks; this added admission policy does not
+reinterpret their scientific review.
+The `arw.narrative-fit-snapshot.v1` advisory capture and offline replay both use
+the explicit `structural-v1` validator policy, preserving the original frozen
+report. They still revalidate source, graph, ordering, and evidence bindings;
+they do not infer trust from the snapshot's declared validation result. New
+artifact, writing, and Phase 4 admission use `admission-v2`, which additionally
+enforces the heading rule. This policy distinction adds no fields to old wire
+records.
+
+A survey can use `other` evidence for a documented taxonomy, cross-paper
+comparison, or literature synthesis. Its source artifacts should bind the
+reviewed literature or retained synthesis records, and its knowledge boundary
+should describe selection, coverage, versions, and unverified source claims.
+It needs no invented new experiment. Semantic support still remains unknown
+until reviewed, as it does for a proof or experimental paper.
+
+The deterministic check requires six function annotations, a connected
+claim–contribution–evidence–boundary path, and the selected first-occurrence
+order. Local interleaving needs an explicit reason and enters human review.
+Two functions may occupy one paragraph or section; this is reported for human
+review without imposing a chapter count. An accepted `narrative-check` report
+under `narrative/reports/sha256/` is digest-bound to the event. Its mechanical
+result can be `PASS` while its semantic support remains `UNKNOWN`; a node's
+declaration that evidence supports a claim does not prove that science. If an
+evidence node names an accepted evidence artifact, its retained digest is
+checked. Without one, the report records `evidence_source_unknown`.
+
+An optional accepted `arw.hypothesis-history.v1` annotation binds a claim's
+declared `prespecified`, `post_hoc`, or `unknown` designation to a retained
+note and span. A contradictory draft label is rejected. An unknown or absent
+history stays in human review. The check cannot infer an unannotated post hoc
+explanation from natural language or establish that a claimed prior note was
+in fact recorded before data collection.
+
+For new plans, `arw.narrative-plan.v2` includes three typed
+`transition_anchors`. Each transition description cites a concrete planned
+contribution ID, evidence form, or scope-boundary ID. Realization resolves
+those references to actual nodes. Existing v1 plans and historical journal
+bytes remain valid; reports mark their absent transition anchors as unknown.
+These anchors identify argumentative objects and do not freeze results.
+
+Phase 4 assignments that produce paper output declare a frozen
+`paper_output_role` (`outline`, `blueprint`, or `draft`); their proposed output
+artifact declares the same role and carries the realization. A paper-body
+assignment must select `draft` at preparation. The writing revision service
+also requires an accepted, exact human review binding before recording
+accepted paper prose. ARW controls these admission paths; an arbitrary ARS
+inline file write outside the control plane is not automatically intercepted.
+
 ## Startup and handoff
 
 From the project root, initialize the existing ARW project identity if needed,

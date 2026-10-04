@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "SectionAnnotation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Section",
+          "type": "string"
+        },
+        "locator": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        },
+        "function": {
+          "enum": [
+            "problem",
+            "gap",
+            "contribution",
+            "argument",
+            "evidence",
+            "knowledge_boundary"
+          ],
+          "title": "Function",
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "locator",
+        "function"
+      ],
+      "title": "SectionAnnotation",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-exemplar.v1",
+      "default": "arw.venue-exemplar.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "exemplar_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Exemplar Id",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "official_url": {
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s]+$",
+      "title": "Official Url",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "source_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Source Artifact Id",
+      "type": "string"
+    },
+    "source_review_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Source Review Artifact Id",
+      "type": "string"
+    },
+    "source_reviewer": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Source Reviewer",
+      "type": "string"
+    },
+    "accepted_category": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Accepted Category",
+      "type": "string"
+    },
+    "accepted_year": {
+      "maximum": 2200,
+      "minimum": 1900,
+      "title": "Accepted Year",
+      "type": "integer"
+    },
+    "venue_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Venue Id",
+      "type": "string"
+    },
+    "domain_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Domain Id",
+      "type": "string"
+    },
+    "sections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SectionAnnotation"
+      },
+      "maxItems": 64,
+      "title": "Sections",
+      "type": "array"
+    },
+    "figure_roles": {
+      "default": [],
+      "items": {
+        "maxLength": 1200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Figure Roles",
+      "type": "array"
+    },
+    "evidence_forms": {
+      "default": [],
+      "items": {
+        "maxLength": 1200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evidence Forms",
+      "type": "array"
+    },
+    "observed_patterns": {
+      "default": [],
+      "items": {
+        "maxLength": 1200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Observed Patterns",
+      "type": "array"
+    },
+    "access_basis": {
+      "enum": [
+        "official_full_text",
+        "official_metadata_only"
+      ],
+      "title": "Access Basis",
+      "type": "string"
+    }
+  },
+  "required": [
+    "exemplar_id",
+    "official_url",
+    "source_sha256",
+    "source_artifact_id",
+    "source_review_artifact_id",
+    "source_reviewer",
+    "accepted_category",
+    "accepted_year",
+    "venue_id",
+    "domain_id",
+    "access_basis"
+  ],
+  "title": "VenueExemplar",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-exemplar.schema.json"
+}

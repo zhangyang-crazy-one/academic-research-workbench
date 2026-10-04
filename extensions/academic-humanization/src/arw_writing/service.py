@@ -16,7 +16,11 @@ from arw.kernel.ledger.manifests import (
 from arw.kernel.ledger.narrative import NarrativeError, guard_run
 from arw.kernel.ledger.research_records import publish_once
 from arw.kernel.ledger.source_locations import read_retained_bytes
-from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandRequest
+from arw.kernel.state.models import (
+    ArtifactAcceptanceRequest,
+    RunManifest,
+    RuntimeCommandRequest,
+)
 
 from .transformer import SessionWritingTransformer
 
@@ -54,6 +58,20 @@ class WritingService(SessionWritingTransformer):
             raw = read_retained_bytes(root, manifest.content_path, max_bytes=65536)
             if sha256_hex(raw) != event.payload.artifact_sha256:
                 raise ValueError("accepted source digest mismatch")
+            paper_run = RunManifest.model_validate_json((root / "run-manifest.json").read_bytes()).task_kind == "paper"
+            if paper_run and manifest.artifact_kind in {"narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"}:
+                from arw.kernel.state.narrative_realization import NarrativeRealization
+                realization = NarrativeRealization.model_validate(strict_json_loads(raw))
+                raw = read_retained_bytes(root, realization.source_path, max_bytes=65536)
+                if sha256_hex(raw) != realization.source_sha256:
+                    raise ValueError("accepted manuscript source changed")
+            elif manifest.artifact_kind == "writing-derived":
+                receipt = strict_json_loads(raw)
+                if not isinstance(receipt, dict) or not isinstance(receipt.get("candidate"), str):
+                    raise ValueError("accepted writing source is malformed")
+                raw = receipt["candidate"].encode("utf-8")
+                if sha256_hex(raw) != receipt.get("candidate_sha256"):
+                    raise ValueError("accepted writing candidate changed")
             return raw, {
                 "artifact_id": artifact_id,
                 "sha256": sha256_hex(raw),
@@ -82,6 +100,22 @@ class WritingService(SessionWritingTransformer):
         result["source_binding"] = binding
         if snapshot is not None:
             result["narrative_binding"] = snapshot.model_dump(mode="json")
+            realization_value = proposal.get("narrative_realization")
+            if realization_value is not None:
+                from arw.kernel.policy.narrative_realization import validate_realization
+                from arw.kernel.state.narrative_realization import NarrativeRealization
+                realization = NarrativeRealization.model_validate(realization_value)
+                candidate_path = f"writing/candidate/{result['candidate_sha256']}.md"
+                if realization.stage != "draft" or realization.source_path != candidate_path:
+                    raise ValueError("writing realization must bind the candidate manuscript path")
+                with locked_replay(self.run_root) as (_root, replay):
+                    report = validate_realization(
+                        self.run_root, realization, snapshot,
+                        events=replay.events, source_bytes=result["candidate"].encode("utf-8"),
+                    )
+                result["candidate_path"] = candidate_path
+                result["narrative_realization"] = realization.model_dump(mode="json")
+                result["narrative_check"] = report
         return result
 
     def record(
@@ -143,6 +177,10 @@ class WritingService(SessionWritingTransformer):
                 accepted=True,
                 review_binding=binding,
             )
+        if snapshot is not None and result["accepted"]:
+            if "narrative_realization" not in result:
+                raise ValueError("accepted paper writing requires content-bound realization")
+            publish_once(self.run_root, result["candidate_path"], result["candidate"].encode("utf-8"))
         result["request_identity"] = request.model_dump(mode="json")
         body = canonical_json_bytes(result)
         digest = sha256_hex(body)
@@ -192,7 +230,7 @@ class WritingService(SessionWritingTransformer):
                     raise ValueError("writing command identity conflict")
         publish_once(self.run_root, path, body)
         outcome = RuntimeCommandService(self.run_root).accept_artifact(
-            canonical_request
+            canonical_request, _reviewed_writing_admission=result["accepted"]
         )
         if not outcome.accepted:
             return {

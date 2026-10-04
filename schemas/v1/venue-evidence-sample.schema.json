@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-evidence-sample.v1",
+      "default": "arw.venue-evidence-sample.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "heuristic_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Heuristic Id",
+      "type": "string"
+    },
+    "policy_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "policy_version": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "exemplar_observation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Exemplar Observation Id",
+      "type": "string"
+    },
+    "finding": {
+      "enum": [
+        "supporting",
+        "counterexample",
+        "unknown"
+      ],
+      "title": "Finding",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "heuristic_id",
+    "policy_id",
+    "policy_version",
+    "exemplar_observation_id",
+    "finding",
+    "rationale",
+    "reviewer"
+  ],
+  "title": "VenueEvidenceSample",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-evidence-sample.schema.json"
+}

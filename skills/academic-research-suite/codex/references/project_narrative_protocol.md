@@ -32,6 +32,19 @@ current snapshot rather than reconstructing one from prior prose. An agent with
 an older version must request fresh context; it cannot overwrite the project
 selection.
 
+For optional governed venue/domain advice at Phase 2, route `ars-plan` or
+`ars-outline` through `codex/scripts/ars_codex_full_runtime.py` with all five
+options: `--arw-project-root`, `--arw-run-root`, `--venue-id`, `--domain-id`,
+and `--applicability-file`. The planner calls ARW's read-only suggestion
+interface and places the bound result in `phase2_venue_context`, including
+the applicability input hash, current narrative version/digest, and advice-set
+hash. The structure architect receives the same snapshot in its task context;
+an inline outline uses the top-level context. Preserve the hashes in handoff
+and reload narrative status before dispatch or output. Stale or missing
+selection fails, and unpromoted candidates are never supplied as advice.
+The context is advisory and does not alter the selected narrative, authorize
+execution, or turn empirical patterns into venue requirements.
+
 Apply this ARW adapter rule when a vendored ARS example assumes a universal
 IMRaD order, exactly 3–5 sub-arguments, at least 150 words under every heading,
 or at least three body paragraphs per section. Those counts and structures are
@@ -59,3 +72,17 @@ the then-current version. A later conclusion that narrows or rejects
 the intended claim is an honest scientific update; it does not by itself change
 the narrative method. If the method truly no longer fits, propose a versioned
 change and explain why.
+
+At ARW paper artifact admission, attach `arw.narrative-realization.v1` to the
+actual retained Outline, Blueprint, and manuscript bytes. Use exact paragraph
+byte spans, source and span digests, current narrative SHA, and explicit graph
+IDs. The Blueprint names its accepted Outline; the draft names its accepted
+Blueprint and realizes its claims. A Phase 4 paper output assignment declares
+its `paper_output_role`, and its artifact repeats that role. For new narrative
+plans, use v2 typed transition anchors and cite their IDs/forms in all three
+transition descriptions. Legacy v1 plans remain readable and their absent
+anchors stay reviewable. Inspect the accepted narrative-check report:
+mechanical completeness is separate from semantic support, which remains
+unknown until a human reviews the evidence and scope. Record post hoc status
+explicitly and link an accepted history annotation when available. Do not
+claim automatic detection of unannotated post hoc reasoning.

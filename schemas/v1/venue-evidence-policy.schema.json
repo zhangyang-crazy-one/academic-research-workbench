@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-evidence-policy.v1",
+      "default": "arw.venue-evidence-policy.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "policy_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "mode": {
+      "const": "venue-evidence",
+      "default": "venue-evidence",
+      "title": "Mode",
+      "type": "string"
+    },
+    "exemplar_observation_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "title": "Exemplar Observation Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "policy_id",
+    "version",
+    "exemplar_observation_ids"
+  ],
+  "title": "VenueEvidencePolicy",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-evidence-policy.schema.json"
+}

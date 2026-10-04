@@ -520,6 +520,43 @@ def validate_accepted_event_manifests(
                 raise ManifestError(
                     "artifact acceptance event differs from its manifest"
                 )
+            if event.payload.narrative_report_sha256 is not None:
+                from arw.kernel.ledger.narrative_content import (
+                    verify_realization_source,
+                )
+                from arw.kernel.ledger.source_locations import read_retained_bytes
+                from arw.kernel.state.narrative_realization import NarrativeRealization
+                digest = event.payload.narrative_report_sha256
+                try:
+                    raw = read_retained_bytes(
+                        root, f"narrative/reports/sha256/{digest}.json", max_bytes=65_536
+                    )
+                    report = strict_json_loads(raw)
+                except (ValueError, OSError, RuntimeError) as error:
+                    raise ManifestError("narrative check report is missing or unsafe") from error
+                if (sha256_hex(raw) != digest or not isinstance(report, dict)
+                        or report.get("artifact_id") != manifest.artifact_id
+                        or report.get("artifact_sha256") != manifest.content_sha256
+                        or report.get("mechanical_status") != "PASS"
+                        or report.get("semantic_status") != "UNKNOWN"):
+                    raise ManifestError("narrative check report differs from accepted artifact")
+                try:
+                    realization_raw = read_retained_bytes(root, manifest.content_path, max_bytes=1_048_576)
+                    if sha256_hex(realization_raw) != manifest.content_sha256:
+                        raise ValueError("realization content changed")
+                    body = strict_json_loads(realization_raw)
+                    if manifest.artifact_kind == "writing-derived":
+                        realization = NarrativeRealization.model_validate(body["narrative_realization"])
+                        if body.get("candidate_sha256") != realization.source_sha256:
+                            raise ValueError("writing candidate digest changed")
+                    else:
+                        realization = NarrativeRealization.model_validate(body)
+                    verify_realization_source(root, realization)
+                    if (report.get("source_sha256") != realization.source_sha256
+                            or report.get("narrative_sha256") != realization.narrative_sha256):
+                        raise ValueError("report source binding changed")
+                except (ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
+                    raise ManifestError("accepted narrative source or span changed") from error
         elif event.event_type == "passport.accepted":
             assert isinstance(event.payload, PassportAcceptedPayload)
             passport = load_material_passport(root, event.payload.passport_sha256)
@@ -537,6 +574,30 @@ def validate_accepted_event_manifests(
                 raise ManifestError(
                     "Passport acceptance event differs from its manifest"
                 )
+        elif event.event_type == "proposal.accepted" and event.payload.narrative_report_sha256 is not None:
+            from arw.kernel.ledger.narrative_content import (
+                verify_realization_source,
+            )
+            from arw.kernel.ledger.source_locations import read_retained_bytes
+            digest = event.payload.narrative_report_sha256
+            realization = event.payload.proposal.narrative_realization
+            try:
+                raw = read_retained_bytes(root, f"narrative/reports/sha256/{digest}.json", max_bytes=65_536)
+                report = strict_json_loads(raw)
+                if (sha256_hex(raw) != digest or realization is None
+                        or report.get("proposal_sha256") != event.payload.proposal_sha256
+                        or report.get("assignment_id") != event.payload.assignment_id
+                        or report.get("source_sha256") != realization.source_sha256):
+                    raise ValueError("report differs from accepted proposal")
+                matching = [artifact for artifact in event.payload.proposal.artifacts
+                            if realization.source_path == f"attempts/{event.payload.attempt_id}/result/{artifact.relative_path}"]
+                if len(matching) != 1:
+                    raise ValueError("prose artifact is not declared in proposal")
+                source = verify_realization_source(root, realization)
+                if sha256_hex(source) != matching[0].sha256 or len(source) != matching[0].byte_count:
+                    raise ValueError("prose artifact bytes differ from proposal")
+            except (ValueError, OSError, RuntimeError, TypeError) as error:
+                raise ManifestError("accepted Phase 4 prose or narrative check changed") from error
 
 
 def validate_event_manifest_semantics(

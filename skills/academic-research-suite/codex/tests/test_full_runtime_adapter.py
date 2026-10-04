@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
 CODEX_ROOT = Path(__file__).resolve().parents[1]
 SUITE_ROOT = CODEX_ROOT.parent
@@ -54,6 +55,51 @@ def test_ars_plan_routes_to_academic_paper_plan_when_rq_exists() -> None:
     assert plan["workflow"] == "academic-paper"
     assert plan["mode"] == "plan"
     assert plan["command_recipe"] == "ars/commands/ars-plan.md"
+
+
+def test_no_phase2_options_preserve_plan_shape_and_explicit_none() -> None:
+    planner = _load_planner()
+    request = "ars-outline Research question: How do agents expose evidence boundaries?"
+    original = planner.plan_request(request, env={})
+    assert "phase2_venue_context" not in original
+    assert planner.plan_request(request, env={}, arw_project_root=None, arw_run_root=None,
+                                venue_id=None, domain_id=None, applicability_file=None) == original
+
+
+def test_phase2_options_reject_partial_and_wrong_workflow_before_loading_arw() -> None:
+    planner = _load_planner()
+    with pytest.raises(ValueError, match="requires project, run"):
+        planner.plan_request("ars-outline", arw_project_root=Path("unused"))
+    with pytest.raises(ValueError, match="requires academic-paper"):
+        planner.plan_request("ars-reviewer", arw_project_root=Path("unused"),
+                             arw_run_root=Path("unused"), venue_id="venue.test",
+                             domain_id="domain.test", applicability_file=Path("unused"))
+
+
+def test_partial_phase2_cli_returns_explicit_json_error() -> None:
+    response = subprocess.run([sys.executable, str(PLANNER_PATH), "ars-outline",
+                               "--arw-project-root", "unused"],
+                              capture_output=True, text=True, check=False)
+    assert response.returncode == 2
+    assert json.loads(response.stdout)["status"] == "error"
+
+
+def test_phase2_provider_without_current_api_fails_explicitly(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from arw import composition
+    from arw.kernel.capabilities import CapabilityUnavailable
+
+    planner = _load_planner()
+    conditions = tmp_path / "conditions.json"
+    conditions.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(composition, "default_router", lambda **_: SimpleNamespace(
+        resolve=lambda _: SimpleNamespace(),
+    ))
+    with pytest.raises(CapabilityUnavailable, match="research.learning.phase2_advisories"):
+        planner.plan_request("ars-outline", env={}, arw_project_root=tmp_path,
+                             arw_run_root=tmp_path, venue_id="venue.test",
+                             domain_id="domain.test", applicability_file=conditions)
 
 
 def test_ars_lit_review_alias_routes_to_lit_review_mode() -> None:

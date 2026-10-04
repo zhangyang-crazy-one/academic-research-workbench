@@ -1289,6 +1289,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from arw.kernel.policy.core_integrity import (
+        CoreIntegrityError,
+        installed_core_preflight,
+    )
+
+    try:
+        installed_core_preflight()
+    except CoreIntegrityError as error:
+        print(f"files-mcp: startup-error: core integrity: {error}", file=sys.stderr)
+        return 78
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments.count("--control-root") != 1 or arguments.count("--root-id") != 1:
         print(

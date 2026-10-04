@@ -9,12 +9,22 @@ Resolve the plugin root as the parent of this installed `skills/` directory, the
 installed launcher from that root:
 
 ```bash
-"<installed-plugin-root>/bin/arw" route --json
+"<installed-plugin-root>/bin/arw" route --core --json
 ```
 
-Return the command's JSON result unchanged. It must declare the ARS workflow family,
-execution mode, source adapter version, and disabled experiment status. Do not infer a
-different family, mode, domain ontology, or experiment permission outside that result.
+Return the command's JSON result unchanged. Use `core_integrity` and the
+capability/provider records as selected, nonexhaustive guidance for local
+research, manuscript, file, and audit operations. A missing route row does not
+mean the command has no provider; the command resolves its own provider and
+configuration. Read each record's `reason_code`: `module_present` reports package
+presence only; `not_evaluated` may mean import, operation configuration, or
+core integrity has not passed. Neither grants file access. An editable
+checkout reports `UNVERIFIED` and cannot claim staged integrity. Do not infer
+permission to use a missing provider or execute experiments from this route.
+
+For the Codex execution adapter only, run `route --json` and require its strict
+integration qualification before dispatch. That legacy route remains bound to
+the exact Codex host and canary; it does not gate local core operations.
 
 For concrete control-plane commands and preserved capability routes, read
 [control-plane capabilities](references/control-plane-capabilities.md). For
@@ -35,7 +45,7 @@ The modified Academic Research Suite is bundled at
 its workflow files for ARS tasks. Do not substitute an external ARS installation.
 
 This installed skill is the canonical model-invocable route. Plugin-native custom-agent
-distribution is unproven; when delegation is later requested, use native Codex subagents
+distribution is unproven; for qualified Codex delegation, use native Codex subagents
 with immutable assignment-injected ARS role instructions. The companion hook is
 observational only, may be skipped until trusted, and is never an authorization or
 canonical-state boundary. Only future explicit control-plane mutation commands may write

@@ -173,6 +173,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Explain the exact read-only integration layer that blocks routing.",
     )
+    route.add_argument(
+        "--core", action="store_true",
+        help="Report local core integrity and provider availability without host qualification.",
+    )
     version = subparsers.add_parser(
         "version",
         help="Report the installed packaged build identity.",
@@ -568,6 +572,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 65
     args = parser.parse_args(raw_args)
+    if args.command not in {"route", "version", "health"}:
+        from arw.kernel.policy.core_integrity import (
+            CoreIntegrityError,
+            installed_core_preflight,
+        )
+
+        try:
+            installed_core_preflight()
+        except CoreIntegrityError as error:
+            _write_json({"status": "BLOCKED", "reason_code": "core_integrity_invalid_or_drifted", "message": str(error)[:256]})
+            return 65
     if args.command == "artifact" and args.artifact_command in {"ro-crate-export", "ro-crate-verify"}:
         from arw.cli_ro_crate import handle as handle_ro_crate
         from arw.kernel.artifacts.ro_crate import CrateError
@@ -777,6 +792,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "route":
         if not args.json_output:
             parser.error("route requires --json")
+        if args.core:
+            if args.diagnostics:
+                parser.error("route --core cannot be combined with --diagnostics")
+            from arw.core_route import core_route_report
+
+            report = core_route_report()
+            _write_json(report)
+            return 0 if report["core_integrity"] != "BLOCKED" else 65
         if args.diagnostics:
             report = _installed_route_diagnostics_from_environment()
             _write_json(report.model_dump(mode="json"))

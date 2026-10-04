@@ -713,7 +713,7 @@ def test_paper_writing_record_real_receipt_and_stale_change(tmp_path):
     initialize_run(run, request)
     (run / "manuscript.txt").write_text(SOURCE, encoding="utf-8")
     assert _accept_paper_artifact(
-        run, "artifact.manuscript", "manuscript.txt", 40, kind="manuscript"
+        run, "artifact.manuscript", "manuscript.txt", 40, kind="writing-source"
     ).accepted
     service = WritingService(run)
     p = writing_proposal(SOURCE, CANDIDATE)

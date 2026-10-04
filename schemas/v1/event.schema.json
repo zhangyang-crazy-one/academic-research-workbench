@@ -231,7 +231,8 @@
         "artifact_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
         "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
         "artifact_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
-        "attempt_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]}
+        "attempt_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"}, {"type": "null"}]},
+        "narrative_report_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]}
       },
       "required": ["artifact_id", "manifest_sha256", "artifact_sha256"],
       "type": "object"
@@ -336,6 +337,7 @@
         "attempt_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
         "proposal": {"type": "object"},
         "proposal_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "narrative_report_sha256": {"anyOf": [{"pattern": "^[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
         "acceptance_key": {"items": {}, "minItems": 3, "maxItems": 3, "type": "array"},
         "accepted_status": {"const": "accepted", "type": "string"}
       },

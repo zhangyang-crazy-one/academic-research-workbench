@@ -486,6 +486,16 @@ def _classify_via_ancestor_walk(store_path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from arw.kernel.policy.core_integrity import (
+        CoreIntegrityError,
+        installed_core_preflight,
+    )
+
+    try:
+        installed_core_preflight()
+    except CoreIntegrityError as error:
+        print(f"files-store-mcp: startup-error: core integrity: {error}", file=sys.stderr)
+        return 78
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments.count("--store") > 1:
         print(

@@ -174,6 +174,7 @@ class AssignmentSpec:
     role_id: str
     worker_identity_id: str
     acceptance_key: tuple[int, int]
+    paper_output_role: str = "analysis"
     input_sha256: tuple[str, ...] = ()
     capability_ids: tuple[str, ...] = ("files.read",)
     allowed_read_root_ids: tuple[str, ...] = ("research-root",)
@@ -187,6 +188,12 @@ class AssignmentSpec:
     supersedes_assignment_id: str | None = None
 
     def __post_init__(self) -> None:
+        if self.paper_output_role not in {"analysis", "outline", "blueprint", "draft"}:
+            raise ValueError("paper output role is invalid")
+        if (self.stage_id in {"paper-body", "writing", "drafting"}
+                or any(kind in {"paper-body", "paper-draft", "manuscript", "draft"}
+                       for kind in self.required_artifact_kinds)) and self.paper_output_role == "analysis":
+            raise ValueError("paper body assignment must declare a draft output role")
         if len(self.acceptance_key) != 2 or any(
             not isinstance(value, int) or value < 0 for value in self.acceptance_key
         ):
@@ -969,6 +976,7 @@ class OrchestrationService:
                     assignment_id=spec.assignment_id,
                 ),
                 narrative_snapshot=narrative_snapshot,
+                paper_output_role=spec.paper_output_role,
                 narrative_instructions=(
                     PAPER_NARRATIVE_INSTRUCTIONS if narrative_snapshot is not None else None
                 ),
@@ -1414,6 +1422,66 @@ class OrchestrationService:
                 ),
             )
         proposal = evidence.proposal
+        narrative_report_sha256 = None
+        if assignment.narrative_snapshot is not None:
+            from arw.kernel.ledger.research_records import publish_once
+            from arw.kernel.ledger.source_locations import read_retained_bytes
+            from arw.kernel.policy.narrative_realization import (
+                NarrativeRealizationError,
+                validate_realization,
+            )
+
+            declared = assignment.paper_output_role
+            prose = [artifact for artifact in proposal.artifacts if artifact.paper_output_role != "analysis"]
+            realization = proposal.narrative_realization
+            reason = None
+            if declared == "analysis" and (prose or realization is not None):
+                reason = "narrative_output_role_mismatch"
+            elif declared != "analysis" and (len(prose) != 1 or realization is None):
+                reason = "narrative_realization_missing"
+            elif declared != "analysis" and prose[0].paper_output_role != declared:
+                reason = "narrative_output_role_mismatch"
+            elif declared != "analysis" and prose[0].media_type not in {"text/plain", "text/markdown", "application/x-tex"}:
+                reason = "narrative_source_invalid"
+            elif realization is not None:
+                try:
+                    expected = f"attempts/{attempt.attempt_id}/result/{prose[0].relative_path}" if len(prose) == 1 else None
+                    if realization.stage != declared or realization.source_path != expected:
+                        raise NarrativeRealizationError("narrative_source_invalid", "Phase 4 prose path differs from realization")
+                    source = read_retained_bytes(self.run_root, expected, max_bytes=8_388_608)
+                    if sha256_hex(source) != prose[0].sha256 or len(source) != prose[0].byte_count:
+                        raise NarrativeRealizationError("narrative_source_digest_mismatch", "Phase 4 proposal content differs")
+                    report = validate_realization(
+                        self.run_root, realization, assignment.narrative_snapshot,
+                        events=replay_run(self.run_root).events,
+                    )
+                    body = canonical_json_bytes({
+                        "schema_version": "arw.narrative-check.v1",
+                        "proposal_sha256": evidence.sha256,
+                        "assignment_id": assignment.assignment_id,
+                        **report,
+                    })
+                    narrative_report_sha256 = sha256_hex(body)
+                    publish_once(self.run_root, f"narrative/reports/sha256/{narrative_report_sha256}.json", body)
+                except NarrativeRealizationError as error:
+                    reason = error.code
+                except (ValueError, RuntimeError, OSError):
+                    reason = "narrative_realization_invalid"
+            if reason is not None:
+                return self.runtime.append_phase4_event(
+                    request,
+                    event_type="proposal.rejected",
+                    payload=ProposalRejectedPayload(
+                        assignment_id=assignment.assignment_id,
+                        assignment_sha256=assignment.canonical_sha256(),
+                        attempt_id=attempt.attempt_id,
+                        proposal_sha256=evidence.sha256,
+                        outcome="rejected_invalid",
+                        reason_code=reason,
+                        acceptance_key=assignment.acceptance_key.value,
+                        raw_bytes_retained=True,
+                    ),
+                )
         return self.runtime.append_phase4_event(
             request,
             event_type="proposal.accepted",
@@ -1423,6 +1491,7 @@ class OrchestrationService:
                 attempt_id=attempt.attempt_id,
                 proposal=proposal,
                 proposal_sha256=evidence.sha256,
+                narrative_report_sha256=narrative_report_sha256,
                 acceptance_key=assignment.acceptance_key.value,
                 source_host_agent_id=attempt.host_agent_id,
                 source_evidence_sha256=(evidence.sha256,),

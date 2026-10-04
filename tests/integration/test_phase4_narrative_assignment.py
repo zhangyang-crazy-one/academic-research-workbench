@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,8 @@ from arw.kernel.state.orchestration_models import (
     AttemptDescriptor,
     GateDecision,
     ImmutableAssignment,
+    WorkerProposal,
+    canonical_orchestration_model_bytes,
 )
 
 
@@ -177,6 +180,95 @@ def _approve_new_route(project: Path, old_sha256: str):
     return approve(
         project, proposal_sha256=pending["proposal_sha256"], author_id="author"
     )
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "output_role", "media_type", "include_realization", "with_blueprint", "expected_event", "expected_reason"),
+    [
+        ("paper-body", "draft", "text/markdown", False, False, "proposal.rejected", "narrative_realization_missing"),
+        ("paper-body", "draft", "application/pdf", True, False, "proposal.rejected", "narrative_source_invalid"),
+        ("preparing", "analysis", "text/markdown", False, False, "proposal.accepted", None),
+        ("paper-body", "draft", "text/markdown", True, True, "proposal.accepted", None),
+    ],
+)
+def test_phase4_paper_prose_proposal_requires_realization(
+    tmp_path: Path, stage_id: str, output_role: str, media_type: str,
+    include_realization: bool, with_blueprint: bool, expected_event: str, expected_reason: str | None,
+) -> None:
+    project = _project(tmp_path)
+    root, command = _run(project, 97)
+    blueprint = None
+    if with_blueprint:
+        from arw.kernel.ledger.journal import replay_run
+        from tests.unit.test_narrative import _accept_paper_artifact
+        from tests.unit.test_narrative_realization import _fixture
+
+        blueprint = _fixture(root, project_root=project)
+        (root / "outline.json").write_bytes(canonical_json_bytes(blueprint))
+        assert _accept_paper_artifact(root, "outline.seed", "outline.json", 969, kind="narrative-outline").accepted
+        blueprint = {**blueprint, "stage": "blueprint", "predecessor_artifact_id": "outline.seed"}
+        (root / "blueprint.json").write_bytes(canonical_json_bytes(blueprint))
+        assert _accept_paper_artifact(root, "blueprint.seed", "blueprint.json", 970, kind="narrative-blueprint").accepted
+        command = command.model_copy(update={"expected_revision": replay_run(root).revision})
+    service = OrchestrationService(root, adapter=DeterministicFakeAdapter({}))
+    prepared = service.prepare(command, assignments=(replace(_spec(), stage_id=stage_id, paper_output_role=output_role),))
+    assignment = prepared.assignments[0]
+    attempt = _attempt()
+    started = service.prepare_attempt(
+        _command(command.run_id, prepared.state.accepted_revision, 971),
+        assignment=assignment, attempt=attempt,
+    )
+    assert started.accepted
+    observed = attempt.model_copy(update={"status": "completed", "host_agent_id": "host.architect-001"})
+    result_dir = root / "attempts" / attempt.attempt_id / "result"
+    source = (root / "paper.md").read_bytes() if with_blueprint else b"A proposed manuscript without paragraph realization."
+    (result_dir / "output.md").write_bytes(source)
+    realization = None
+    if with_blueprint:
+        realization = {**blueprint, "stage": "draft", "predecessor_artifact_id": "blueprint.seed",
+                       "source_path": f"attempts/{attempt.attempt_id}/result/output.md"}
+    elif include_realization:
+        realization = {
+            "schema_version": "arw.narrative-realization.v1",
+            "stage": "draft",
+            "narrative_sha256": assignment.narrative_snapshot.sha256,
+            "predecessor_artifact_id": "blueprint.claimed",
+            "source_path": f"attempts/{attempt.attempt_id}/result/output.md",
+            "source_sha256": hashlib.sha256(source).hexdigest(),
+            "nodes": [{
+                "node_id": "problem.one", "function_id": "problem",
+                "narrative_sha256": assignment.narrative_snapshot.sha256,
+                "span": {"start": 0, "end": len(source), "sha256": hashlib.sha256(source).hexdigest()},
+            }],
+        }
+    proposal = WorkerProposal(
+        schema_version="arw.worker-proposal.v1", protocol_version="1.0.0",
+        run_id=command.run_id, assignment_id=assignment.assignment_id,
+        attempt_id=attempt.attempt_id, role_id=assignment.role_id,
+        worker_identity_id=assignment.worker_identity_id,
+        host_agent_id="host.architect-001", execution_mode=assignment.execution_mode,
+        execution_provenance=assignment.execution_provenance,
+        independence_eligible=assignment.independence_eligible,
+        assignment_sha256=assignment.canonical_sha256(),
+        context_manifest_sha256=assignment.context_manifest_sha256,
+        policy_sha256=assignment.policy_sha256, base_revision=assignment.base_revision,
+        input_sha256=assignment.input_sha256, proposal_nonce=attempt.proposal_nonce,
+        status="completed", result_provenance_mode="executed", requested_next_action="accept",
+        artifacts=({"relative_path": "output.md", "sha256": hashlib.sha256(source).hexdigest(),
+                    "media_type": media_type, "schema_id": None,
+                    "byte_count": len(source), "paper_output_role": output_role},),
+        evidence_sha256=(), summary="Manuscript body", unresolved=(),
+        narrative_realization=realization,
+    )
+    (result_dir / "proposal.json").write_bytes(canonical_orchestration_model_bytes(proposal))
+    outcome = service.admit_proposal(
+        _command(command.run_id, started.state.accepted_revision, 972),
+        assignment=assignment, attempt=observed,
+    )
+    assert outcome.accepted
+    assert outcome.event.event_type == expected_event
+    if expected_reason is not None:
+        assert outcome.event.payload.reason_code == expected_reason
 
 
 def test_assignment_freezes_complete_project_narrative_across_service_instances(

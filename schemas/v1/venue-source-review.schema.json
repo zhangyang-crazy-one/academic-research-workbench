@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-source-review.v1",
+      "default": "arw.venue-source-review.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "review_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "source_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Source Artifact Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "official_url": {
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s]+$",
+      "title": "Official Url",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "accepted_category": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Accepted Category",
+      "type": "string"
+    },
+    "accepted_year": {
+      "maximum": 2200,
+      "minimum": 1900,
+      "title": "Accepted Year",
+      "type": "integer"
+    },
+    "access_basis": {
+      "enum": [
+        "official_full_text",
+        "official_metadata_only"
+      ],
+      "title": "Access Basis",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "decision": {
+      "const": "VERIFIED",
+      "title": "Decision",
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "source_artifact_id",
+    "source_sha256",
+    "official_url",
+    "accepted_category",
+    "accepted_year",
+    "access_basis",
+    "reviewer",
+    "decision"
+  ],
+  "title": "VenueSourceReview",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-source-review.schema.json"
+}
