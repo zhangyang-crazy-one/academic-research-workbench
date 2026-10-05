@@ -100,7 +100,7 @@
     },
     {
       "mechanism": "cross_model_unavailable",
-      "failure_class": "Transport-level failure of a CONFIGURED cross-model verifier mid-run (API error, rate limit, expired key, or selected Codex citation transport unavailable). An unset ARS_CROSS_MODEL is NOT a degradation — it is the standard single-model configuration and produces no error marker or disclosure; an unset or api ARS_CROSS_MODEL_TRANSPORT is likewise ordinary API-route selection, while an invalid selector is a visible configuration error",
+      "failure_class": "Transport-level failure of a CONFIGURED cross-model verifier mid-run (API error, rate limit, expired key, selected Codex citation transport unavailable, or a provider-side safety / misalignment intervention that surfaces as an API error or an adapter failure). An unset ARS_CROSS_MODEL is NOT a degradation — it is the standard single-model configuration and produces no error marker or disclosure; an unset or api ARS_CROSS_MODEL_TRANSPORT is likewise ordinary API-route selection, while an invalid selector is a visible configuration error",
       "degraded_state": "Warn-and-continue: pipeline proceeds single-model; NEVER blocks on cross-model transport failure; a NOT_SEARCHED grounded-lookup result is NOT a transport failure and does not fall back (it is counted separately and surfaced for re-run/human review)",
       "diagnostic_marker": "[CROSS-MODEL-ERROR: reason] log line + required report disclosure 'Cross-model verification was configured but unavailable for this run. Results are single-model only.'",
       "downstream_consumer": "integrity_verification_agent (Stage 2.5/4.5 sample checks), devils_advocate reviewers, blind disagreement checkpoints (#518)",
@@ -117,6 +117,10 @@
         {
           "file": "shared/cross_model_verification.md",
           "anchor": "A `NOT_SEARCHED` result is **not** a transport failure and is handled differently."
+        },
+        {
+          "file": "shared/cross_model_verification.md",
+          "anchor": "An intervention is never a verdict."
         }
       ],
       "pinned_by": [
@@ -328,7 +332,7 @@
           "anchor": "no permissionDecision => falls back to the normal permission"
         },
         {
-          "file": "README.md",
+          "file": "docs/SETUP.md",
           "anchor": "if no real Python is found it cleanly no-ops and the guard is simply inactive"
         }
       ],
@@ -353,7 +357,7 @@
           "anchor": "the guard is then inactive (accepted degradation"
         },
         {
-          "file": "README.md",
+          "file": "docs/SETUP.md",
           "anchor": "the guard is inactive and the `PreToolUse` hook will log an error per call rather than no-op quietly"
         }
       ],
@@ -423,6 +427,52 @@
         }
       ],
       "pinned_by": []
+    },
+    {
+      "mechanism": "acronym_check_not_checked",
+      "failure_class": "The acronym check cannot read its input (not a Markdown or plain-text file, not UTF-8 text, an unknown scope name, an unreadable allowlist file, or no requested scope with a line of prose in the input, as in an empty file), or the script cannot run at all (for example, no Python interpreter)",
+      "degraded_state": "not_checked: the script exits 2 and its report states the reason; no finding is emitted. When the script cannot run, the caller reports that the acronym check did not run",
+      "diagnostic_marker": "JSON status not_checked with a closed reason code; Markdown report line 'Not checked: <reason>.' ('未檢查：<原因>。' in zh-TW)",
+      "downstream_consumer": "The caller that runs scripts/check_acronyms.py, the writer or abstract_bilingual_agent that receives the report, the Editorial Decision Letter that carries it as an advisory attachment after a review, and the user, who is shown it",
+      "terminal_policy_effect": "none: the acronym check is advisory; findings and degraded states never block a handoff, change a decision, or stop a run",
+      "authority": [
+        {
+          "file": "scripts/check_acronyms.py",
+          "anchor": "Exit 2: nothing was checked (``not_checked``: unsupported format, unreadable"
+        },
+        {
+          "file": "academic-paper/references/writing_quality_check.md",
+          "anchor": "If the script cannot run at all, say that the acronym check did not run; never report it as clean."
+        }
+      ],
+      "pinned_by": [
+        "scripts/test_check_acronyms.py::test_clean_result_is_distinct_from_not_checked",
+        "scripts/test_check_acronyms.py::test_cli_exit_codes_and_outputs"
+      ]
+    },
+    {
+      "mechanism": "acronym_check_partial_coverage",
+      "failure_class": "The acronym check reads the input only in part: an acronym uses a definition form the check does not read, or a parenthetical the check cannot confirm as its definition; an abstract is in a language the check does not read; or a requested scope is not in the input",
+      "degraded_state": "partial: the script exits 0, its coverage line says partial, and the report lists each unread part; an acronym with an unread or unconfirmed definition gets no finding in that scope",
+      "diagnostic_marker": "JSON status partial, with coverage marking a requested scope not_in_input, or a non-empty coverage_limits or unread_sections; Markdown report coverage line ending '(partial)', a 'Not checked:' line listing coverage_limits and unread_sections when either is non-empty, and a 'Not in this input:' line when a requested scope is absent ('（部分）', '未檢查：', and '此檔沒有：' in zh-TW)",
+      "downstream_consumer": "The caller that runs scripts/check_acronyms.py, the writer or abstract_bilingual_agent that receives the report, the Editorial Decision Letter that carries it as an advisory attachment after a review, and the user, who is shown it",
+      "terminal_policy_effect": "none: the acronym check is advisory; a partial report is not a clean result and blocks nothing",
+      "authority": [
+        {
+          "file": "scripts/check_acronyms.py",
+          "anchor": "status = \"partial\" if limits or doc.unread_sections or missing else \"checked\""
+        },
+        {
+          "file": "academic-paper/references/writing_quality_check.md",
+          "anchor": "A `partial` report lists what it did not read"
+        }
+      ],
+      "pinned_by": [
+        "scripts/test_check_acronyms.py::test_unread_definition_form_is_a_coverage_limit_not_a_finding",
+        "scripts/test_check_acronyms.py::test_a_parenthetical_it_cannot_confirm_is_a_coverage_limit",
+        "scripts/test_check_acronyms.py::test_unread_abstract_section_makes_coverage_partial",
+        "scripts/test_check_acronyms.py::test_requested_scope_absent_from_the_input"
+      ]
     }
   ]
 }

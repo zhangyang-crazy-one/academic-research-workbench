@@ -296,3 +296,57 @@ def test_mapped_table_variants_keep_unmapped_keys_and_locator_facts() -> None:
     )
     assert "F2" in _failed(report)
     assert "F3" in _failed(report)
+
+
+def _tabular(rows: str) -> str:
+    return "\\begin{tabular}{lr}\n" + rows + "\n\\end{tabular}\n"
+
+
+def test_unterminated_last_latex_row_is_checked() -> None:
+    # Issue #58: \endtabular closes the final row without an explicit \\.
+    source = _tabular("ModelA & 1 \\\\\nModelB & 2")
+    changed = _load().audit(source, _tabular("ModelA & 1 \\\\\nModelC & 2"))
+    assert changed["table_rows"] == {"source": 2, "revision": 2}
+    assert _failed(changed) == ["F3"]
+    kept = _load().audit(source, _tabular("ModelA & 1 \\\\\nModelB & 2"))
+    assert kept["passed"] is True
+    assert kept["table_rows"] == {"source": 2, "revision": 2}
+
+
+def test_logical_latex_rows_on_one_physical_line_are_checked() -> None:
+    # Issue #59: LaTeX rows end at \\, not at a newline.
+    source = _tabular("ModelA & 1 \\\\ ModelB & 2 \\\\ ModelC & 3 \\\\")
+    swapped = _load().audit(source, _tabular("ModelA & 1 \\\\ ModelB & 3 \\\\ ModelC & 2 \\\\"))
+    assert swapped["table_rows"] == {"source": 3, "revision": 3}
+    assert _failed(swapped) == ["F3"]
+    split = _load().audit(source, _tabular("ModelA & 1 \\\\\nModelB & 2 \\\\[2pt]\nModelC & 3 \\\\"))
+    assert split["passed"] is True
+
+
+def test_latex_row_break_inside_a_braced_cell_does_not_split_the_row() -> None:
+    source = _tabular("\\makecell{ModelA\\\\base} & 1 \\\\\nModelB & 2 \\\\")
+    report = _load().audit(source, source)
+    assert report["passed"] is True
+    assert report["table_rows"] == {"source": 2, "revision": 2}
+
+
+def _markdown(header: str, rows: list[str]) -> str:
+    columns = header.count("|") - 1
+    return "\n".join([header, "|" + " --- |" * columns, *rows]) + "\n"
+
+
+def test_row_matching_reassigns_rows_with_added_description_columns() -> None:
+    # Issue #60: a complete one-to-one assignment exists; greedy matching missed it.
+    source = _markdown("| Label | Value | Note |", ["| ModelA | 1 | |", "| ModelA | 1 | GroupB |"])
+    revision = _markdown(
+        "| Label | Value | Note | Added |", ["| ModelA | 1 | GroupB | X |", "| ModelA | 1 | C | Y |"]
+    )
+    assert _load().audit(source, revision)["passed"] is True
+    reordered = _markdown(
+        "| Label | Value | Note | Added |", ["| ModelA | 1 | C | Y |", "| ModelA | 1 | GroupB | X |"]
+    )
+    assert _load().audit(source, reordered)["passed"] is True
+    incomplete = _markdown(
+        "| Label | Value | Note | Added |", ["| ModelA | 1 | C | X |", "| ModelA | 1 | D | Y |"]
+    )
+    assert _failed(_load().audit(source, incomplete)) == ["F3"]

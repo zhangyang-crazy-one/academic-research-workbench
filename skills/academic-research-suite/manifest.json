@@ -1,14 +1,14 @@
 {
   "name": "academic-research-suite",
-  "adapter_version": "0.1.27",
+  "adapter_version": "3.22.2",
   "version_file": "VERSION",
   "generated_for": "codex",
-  "generated_date": "2026-08-24",
+  "generated_date": "2026-09-28",
   "source_repositories": [
     {
       "name": "academic-research-skills",
       "url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "commit": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb",
+      "commit": "7de1c9dfb7af9c02a9b57750761323f35a743aa2",
       "included_paths": [
         "deep-research",
         "academic-paper",
@@ -33,7 +33,7 @@
         "pyproject.toml",
         ".gitattributes",
         ".gitleaks.toml",
-        "top-level README, README.zh-TW, README.zh-CN, README.ja-JP, README.ko-KR, QUICKSTART, SECURITY, GOVERNANCE, NOTICE, CONTRIBUTING, MODE_REGISTRY, POSITIONING, CITATION.cff, THIRD_PARTY.md",
+        "top-level README, README.zh-TW, README.zh-CN, README.ja-JP, README.ko-KR, README.es-ES, QUICKSTART, SECURITY, GOVERNANCE, NOTICE, CONTRIBUTING, MODE_REGISTRY, POSITIONING, CITATION.cff, THIRD_PARTY.md",
         "requirements-dev.txt",
         "requirements-pdf-content-classifier.txt",
         ".command-invariants.toml",
@@ -42,8 +42,13 @@
         "LICENSE",
         "pi",
         "package.json",
-        ".gitleaksignore"
-      ]
+        ".gitleaksignore",
+        "plugin-evals",
+        "plugin-evals-citation-check",
+        "plugin-evals-citation-locale"
+      ],
+      "version": "3.22.2",
+      "tag": "v3.22.2"
     },
     {
       "name": "experiment-agent",
@@ -83,6 +88,10 @@
       "reason": "Validates upstream .claude-plugin distribution manifests and a Claude plugin agent-count claim that are intentionally absent and not semantically equivalent in the Codex package. The script remains vendored for traceability, while its pytest-manifest entry is inactive here."
     },
     {
+      "path": "skills/academic-research-suite/ars/scripts/check_skill_inventory_parity.py",
+      "reason": "Validates the upstream Claude distribution across top-level SKILL.md files, skills/ symlinks, .claude/CLAUDE.md, and .claude-plugin manifests. Those loader surfaces are intentionally excluded or renamed in the single-router Codex package, so direct real-tree execution is inactive; the script and its hermetic mutation tests remain vendored."
+    },
+    {
       "path": "skills/academic-research-suite/ars/scripts/check_promotion_bakeoff_preregistration.py",
       "reason": "The direct verify-tree command requires the original upstream Git top-level, complete non-shallow history, and root-relative evals/bakeoff ancestry to prove seal/reveal chronology. A re-rooted Codex vendor snapshot cannot independently re-prove that history; the script is retained for traceability while its hermetic contract tests remain active."
     }
@@ -118,16 +127,16 @@
     "The spec-consistency validator is patched for the Codex distribution: non-vendored .claude/CLAUDE.md is skipped, excluded showcase PDF links are not treated as broken, and WORKFLOW.md replaces internal SKILL.md entry files.",
     "The shared metadata linter auto-detects this Codex distribution and validates vendored WORKFLOW.md entry files instead of upstream SKILL.md files.",
     "The Codex package carries scripts/codex_v3_6_7_block_baseline.json so first-time vendored trees can enforce v3.6.7 block byte-equivalence before Git history contains the upstream manifest.",
-    "The Codex audit wrapper is patched to run on macOS stock Bash 3.2+ instead of requiring Bash 4+.",
+    "The Codex audit wrapper requires Bash 4+; macOS stock Bash 3.2 fails its version guard, and wrapper e2e tests skip unless Bash 4+ is available on PATH.",
     "Vendored test utilities keep macOS stock Python 3.9 compatibility where Codex local validation depends on it.",
-    "ARS v3.21.1 release content (peeled commit 127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb, 2026-08-24) is the tracked upstream content; component versions are deep-research 2.12.1, academic-paper 3.3.1, academic-paper-reviewer 1.11.1, and academic-pipeline/suite 3.21.1. Nested upstream .github workflows, release-discipline tools, and root agents mirrors are preserved for traceability and upstream self-tests but are not repo-level CI or Codex entrypoints. Claude/plugin loader files under .claude, .claude-plugin, upstream skills aliases, and runtime log files remain intentionally excluded.",
+    "ARS v3.22.2 at 7de1c9dfb7af9c02a9b57750761323f35a743aa2 is the upstream source lock. Component versions remain deep-research 2.12.1, academic-paper 3.3.1, academic-paper-reviewer 1.11.1; academic-pipeline/suite is 3.22.2. Claude loader files remain excluded and nested .github workflows remain inactive traceability inputs.",
     "ARS_MODEL_TIERING is classification-compatible but remains advisory in Codex unless the runtime exposes explicit per-dispatch model selection; unset and unsupported cases keep the active model.",
     "The upstream model-tiering validator excludes the separately vendored experiment-agent tree from its frozen 39-agent ARS classification sweep.",
-    "Korean intent triggers are propagated into the root Codex router and optional full-runtime planner because vendored WORKFLOW.md frontmatter is not independently registered.",
+    "Korean and Spanish intent triggers are propagated into the root Codex router and optional full-runtime planner because vendored WORKFLOW.md frontmatter is not independently registered.",
     "The live cross-model smoke test remains manual-only and cross-model verification retains the explicit provider, content, credential, and consent gate.",
     "The v3.17 canonical cross-model handoff envelope is preserved; dispatched owners emit a transport request and the dispatching Codex context validates and routes it without widening owner capabilities.",
     "The v3.17 tools allowlist remains a least-privilege role boundary; Codex inline execution does not reinterpret Claude tool names as additional authority.",
-    "The degradation registry, executable panel checker, pipeline-boundary lock, tools-allowlist lock, and hermetic transport fixtures are vendored with their upstream tests; the pipeline-orchestrator content-lock hash is updated only for the Codex WORKFLOW.md path overlay.",
+    "The degradation registry, executable panel checker, pipeline-boundary lock, tools-allowlist lock, and hermetic transport fixtures are vendored with their upstream tests; the pipeline workflow and orchestrator content-lock hashes are updated only for the Codex WORKFLOW.md path overlay.",
     "The v3.18 fixed-seat cross-model Reviewer 2 track and re-review judge pass remain gated by explicit provider configuration and content consent; dispatch failure or single-family execution is disclosed rather than simulated.",
     "The v3.18 citation-cache staleness advisory, opt-in live re-validation, risk-stratified claim gate, scope and novelty advisories, and held-out pipeline-behavior set are preserved with their upstream tests and schemas.",
     "The upstream SessionStart update reminder is vendored for traceability and testing but is not installed or executed by Codex; plugin users update by refreshing the ars-codex marketplace and re-adding the plugin, while direct skill users reinstall manually.",
@@ -159,44 +168,37 @@
     "The v3.21.1 Codex subscription citation transport accepts the exact ChatGPT login attestation from stdout or stderr, omits provider-rejected uniqueItems while preserving local duplicate-source refusal, and keeps the standalone search host available while the closed event grammar and citation-only consent boundary remain fail-closed.",
     "The v3.21.1 sealed promotion-bakeoff contracts and hermetic tests are vendored, but direct verify-tree execution is inactive because this re-rooted package does not contain complete upstream Git history. The retained 2026-08-19 bakeoff evidence remains a measurement artifact, not permission for live calls or a first-party API-route validation claim.",
     "The v3.21.1 source-backed review-criteria proving set preserves exact-profile author confirmation, official-source receipts, immutable guidance provenance, three-consumer digest binding, and unresolved/advisory states; it demonstrates one architecture slice rather than venue or discipline coverage.",
+    "The post-v3.21.1 main snapshot adds Chinese-aware title matching and balanced CJK wrapper normalization, declares the Markdown parser dependency used by surface-form checks, makes missing PyYAML fail visibly, and vendors the September harness-retirement audit plus documentation corrections.",
+    "The upstream skill-inventory parity checker is preserved with its hermetic mutation tests, but its direct real-tree gate is inactive because this package intentionally replaces four top-level SKILL.md entries and Claude loader surfaces with one Codex router plus WORKFLOW.md files. The Codex-native gate requires exact core-inventory parity among disk workflows, the root router, and the full-runtime manifest; source-path ownership must also remain unambiguous.",
     "Codex bibliographic network routing is defined by the root SKILL.md: ordinary discovery and inline ingest use Codex browsing, the four Python resolver clients require an explicit programmatic-verification request, and invoking ars-full alone does not launch them. This is an intentional adapter boundary, not an upstream runtime claim.",
     "The separately vendored experiment-agent tree tracks its upstream v1.1.0 (session resume for study_manager_agent, study-state protocol and templates); its .claude/ and .github/ upstream dev files remain excluded and its entry file keeps the WORKFLOW.md rename with the Codex data_access_level/task_type frontmatter overlay.",
     "The Codex-side annual venue registry composes official review-system and venue-year rules, preserves not-announced dates, and keeps accepted-paper style inferences non-normative.",
-    "The ARW overlay preserves five academic PDF/figure/venue reference packs, the manuscript-artifact boundary, and the layout-export validator/test on top of the verified v0.1.27 ARS snapshot; these files remain ARW-owned and are not presented as upstream content."
+    "The ARW overlay preserves five academic PDF/figure/venue reference packs, the manuscript-artifact boundary, and the layout-export validator/test on top of the verified v3.22.2 ARS snapshot; these files remain ARW-owned and are not presented as upstream content.",
+    "ARS v3.22.0 incorporates the earlier Codex API-effort, contained-transport, audit-provenance, and writing-diagnostic fixes upstream. Use those canonical implementations: unknown judge identity isolates cache entries by audit_run_id while preserving within-run deduplication. General Codex research sessions may still explicitly select ultra; the citation-only transport rejects it.",
+    "Starting at 3.22.0, the Codex package version matches the vendored ARS suite release; VERSION, root router, package manifest, plugin manifest, source version, and academic-pipeline metadata must agree. Historical 0.1.x releases retain their original numbers.",
+    "The Phase-1 output_language_pair contract supports only zh-tw-en, defaults to the legacy Traditional Chinese/English abstract surfaces when omitted, and rejects malformed or unregistered values visibly. Spanish intent routing does not imply a Spanish output-locale pack or a manuscript-body language change.",
+    "Upstream plugin-evals and plugin-evals-citation-check are retained as Claude evaluation source material, not native Codex eval runners or evidence of Codex effectiveness. The reviewer-calibration harness is vendored without launching live provider calls or corpus downloads.",
+    "The v3.22.2 routing core is preserved across the four core WORKFLOW.md entries and adapted at the single Codex router: explicit modes retain their intent with missing inputs, cross-phase ambiguity is clarified before dispatch, and direct-mode is recognized only at the first non-whitespace position of the first request. Claude command Skill-tool calls and CLAUDE_PLUGIN_ROOT paths resolve to local vendored workflow recipes in Codex, with required load failures reported rather than silently bypassed.",
+    "The v3.22.2 local run ledger records exact initial instructions and checkpoint answers, completed-step receipts, counters, and named-file hashes. The caller checks it after compaction, resume, subagent returns, and stage close; missing or changed provenance prevents relying on the affected decision or step and is rendered visibly. Completeness remains caller-dependent, exact author words remain local, and the hash chain detects accidental damage rather than deliberate edits, rollback, or a lost tail. Ledger entries never create user authorization.",
+    "The v3.22.2 acronym scan is an advisory writing diagnostic for drafts, abstracts, and revision, with a post-decision review attachment kept outside editorial decisions, revision roadmaps, re-review criteria, and integrity gates. Missing or partial coverage is visible and never becomes a clean result. Instruction/data boundary text covers pasted, retrieved, and tool-returned content across the updated agents and core workflows.",
+    "The v3.22.1 and v3.22.2 Chinese APA rules preserve disambiguation exceptions and full reference-list authors, distinguish visible syntax faults from unresolved source checks, and require evidence before alleging stroke-order inversions. Additional citation-locale plugin evals remain upstream Claude measurement inputs, not measured Codex performance."
   ],
   "sync_provenance": {
     "ars_codex_base": {
+      "url": "https://github.com/Imbad0202/academic-research-skills-codex.git",
+      "commit": "70b412fe69d3b5bf6b16adf64a96160bdd3c2d28",
+      "adapter_version": "3.22.2",
+      "ars_commit": "7de1c9dfb7af9c02a9b57750761323f35a743aa2"
+    },
+    "previous_sync": {
       "url": "https://github.com/Imbad0202/academic-research-skills-codex.git",
       "commit": "7600799a41266379ed5e7716eef963a7161277c0",
       "adapter_version": "0.1.27",
       "ars_commit": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
     },
-    "previous_sync": {
-      "ars_codex_base": {
-        "url": "https://github.com/Imbad0202/academic-research-skills-codex.git",
-        "commit": "1f17aa452f5a7def3eb906c181e6ae9d80f91f77",
-        "adapter_version": "0.1.24",
-        "ars_commit": "5769d7b51adfba45593ad95721436fd114aaa735"
-      },
-      "ars_increment": {
-        "from_commit": "5769d7b51adfba45593ad95721436fd114aaa735",
-        "to_commit": "8cc7f8f4cccda721646d9df590b42721c93cba31",
-        "applied_date": "2026-08-09",
-        "method": "mechanical upstream diff with Codex WORKFLOW.md path translation",
-        "manual_conflict_files": [
-          "ars/commands/ars-revision-coach.md",
-          "ars/scripts/check_pipeline_boundary_semantics.py",
-          "ars/scripts/check_human_subjects_output_contract.py",
-          "ars/scripts/test_check_committee_correspondence.py",
-          "ars/scripts/test_resolve_human_subjects_authority.py",
-          "ars/scripts/check_human_subjects_reference_migration.py",
-          "ars/scripts/test_check_human_subjects_reference_migration.py"
-        ]
-      }
-    },
     "local_overlay": {
-      "applied_date": "2026-08-25",
-      "method": "three-way merge from the recorded 0.1.24 Codex base; verified v0.1.27 target wins overlapping upstream changes while ARW-owned additions remain byte-preserved",
+      "applied_date": "2026-10-05",
+      "method": "three-way merge from the recorded 0.1.27 Codex base (7600799) to the v3.22.2 Codex target (70b412f) for files the Codex package carries, and from upstream ARS 127ff85 to 7de1c9d (with WORKFLOW.md path translation) for upstream files the Codex package omits; the v3.22.2 target wins overlapping upstream changes while ARW-owned additions remain byte-preserved",
       "preserved_files": [
         "ars/academic-paper/references/academic_pdf_format_reference.md",
         "ars/academic-paper/references/academic_svg_box_diagram_standards.md",
@@ -208,60 +210,18 @@
         "ars/shared/manuscript_artifact_boundary.md"
       ],
       "reapplied_contract_files": [
-        "ars/academic-paper/WORKFLOW.md",
-        "ars/academic-paper/agents/formatter_agent.md",
-        "ars/academic-paper/references/academic_pdf_format_reference.md",
-        "ars/academic-paper/references/latex_template_reference.md",
-        "ars/academic-paper/references/venue_family_hard_packs.md"
+        "ars/academic-paper/WORKFLOW.md"
       ],
-      "overlapping_conflict_resolution": "academic-research-skills-codex v0.1.27 target, followed by the ARW layout-export contract gate",
+      "overlapping_conflict_resolution": "academic-research-skills-codex v3.22.2 target, followed by the ARW layout-export contract gate; ARW keeps its own codex/ adapter, inline-first execution and current-model policy instead of the Codex package's model/delegation policy",
       "overlapping_conflict_files": [
-        ".github/workflows/spec-consistency.yml",
-        "CHANGELOG.md",
+        "SKILL.md",
         "academic-paper/WORKFLOW.md",
-        "academic-paper/agents/formatter_agent.md",
-        "academic-paper/agents/peer_reviewer_agent.md",
-        "academic-paper/agents/revision_coach_agent.md",
-        "academic-pipeline/agents/integrity_verification_agent.md",
-        "academic-pipeline/agents/pipeline_orchestrator_agent.md",
-        "academic-pipeline/references/claim_verification_protocol.md",
-        "agents/research_architect_agent.md",
-        "deep-research/WORKFLOW.md",
-        "deep-research/agents/bibliography_agent.md",
-        "deep-research/agents/ethics_review_agent.md",
-        "deep-research/agents/research_architect_agent.md",
-        "deep-research/references/irb_decision_tree.md",
-        "docs/design/2026-08-08-683-review-target-context-spec.md",
-        "docs/design/2026-08-09-656-shared-evidence-row-contract-spec.md",
-        "evals/heldout/MEASUREMENT_CONTRACT.md",
-        "evals/heldout/measurement_report.schema.json",
-        "evals/heldout/suite_registry.json",
-        "scripts/_ci_pytest_manifest.toml",
-        "scripts/adapters/tests/test_check_literature_corpus_schema.py",
-        "scripts/bibliographic_integrity_signals.py",
-        "scripts/check_bibliographic_integrity_signals.py",
-        "scripts/check_heldout_measurement_report.py",
-        "scripts/check_literature_corpus_schema.py",
-        "scripts/check_pipeline_boundary_semantics.py",
-        "scripts/check_reviewer_sprint_prompt_sync.py",
-        "scripts/check_v3_9_4_temporal_verification.py",
-        "scripts/evidence_rows.py",
-        "scripts/test_check_bibliographic_integrity_signals.py",
-        "scripts/test_check_heldout_measurement_report.py",
-        "scripts/test_evidence_rows.py",
-        "scripts/test_resolve_review_target_context.py",
-        "scripts/test_v3_6_7_phase_6_6.py",
-        "shared/bibliographic_integrity_signals.md",
-        "shared/contracts/README.md",
-        "shared/contracts/passport/bibliographic_integrity_signal.schema.json",
-        "shared/handoff_schemas.md",
-        "shared/human_subjects_authority_registry.json",
-        "shared/references/evidence_row_protocol.md",
-        "shared/references/human_subjects_authority_protocol.md",
-        "shared/review_criteria_registry.json"
+        "requirements-dev.txt",
+        "manifest.json"
       ],
       "merged_adapter_surfaces": [
-        "SKILL.md"
+        "SKILL.md",
+        "manifest.json"
       ],
       "preserved_adapter_surfaces": [
         "codex/"

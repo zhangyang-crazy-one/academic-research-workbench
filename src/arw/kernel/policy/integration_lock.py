@@ -47,13 +47,13 @@ from arw.kernel.policy.hook_contracts import (
     parse_codex_hook_receipt_bytes,
 )
 
-EXPECTED_ARS_ADAPTER_VERSION = "0.1.27"
+EXPECTED_ARS_ADAPTER_VERSION = "3.22.2"
 MINIMUM_CODEX_CLI_VERSION = (0, 144, 4)
 CODEX_CLI_VERSION_REQUIREMENT = ">=0.144.4"
 _CODEX_CLI_STABLE_VERSION_RE = re.compile(
     r"^codex-cli (?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)(?:\+[0-9A-Za-z.-]+)?$"
 )
-EXPECTED_ARS_UPSTREAM_COMMIT = "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
+EXPECTED_ARS_UPSTREAM_COMMIT = "7de1c9dfb7af9c02a9b57750761323f35a743aa2"
 EXPECTED_EXPERIMENT_AGENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 
 EXPECTED_FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
@@ -64,8 +64,8 @@ EXPECTED_UPSTREAM_URLS = {
 EXPECTED_SOURCE_IDENTITIES = {
     "academic-research-skills": {
         "commit": EXPECTED_ARS_UPSTREAM_COMMIT,
-        "git_tree": "7ce111463102462479835ce5f7c2b597d7ccfe22",
-        "source_tree_sha256": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
+        "git_tree": "0486927f4b13c10be69bb30cd17f8f4c2daaf5b7",
+        "source_tree_sha256": "8e0430014ecba14ede7d31c5cb2085d6b2f0587f779c6cf5859b3a1cb5cb3cc7",
     },
     "experiment-agent": {
         "commit": EXPECTED_EXPERIMENT_AGENT_COMMIT,
@@ -107,7 +107,7 @@ EXPECTED_FILE_BASE_TEST_TREE = (
     "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
 )
 EXPECTED_PRE_VENDOR_RECEIPT_SHA256 = (
-    "e0e23637bb2c8c45f5487e33cf9b0c41f173f7830ed4c42eec0d0406c06e81c9"
+    "24f895a8738c1e68ae744d03f797cc6db7ded7df9492261214d4db1898e585aa"
 )
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
@@ -312,7 +312,7 @@ class ARSBinding(LockModel):
     dependency_model: Literal["bundled-pinned-adapter"]
     bundled: Literal[True]
     adapter_name: Literal["academic-research-suite"]
-    adapter_version: Literal["0.1.27"]
+    adapter_version: Literal["3.22.2"]
     adapter_tree_sha256: Sha256
     upstream_content_tree_sha256: Sha256
     manifest: FileBinding

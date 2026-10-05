@@ -30,6 +30,19 @@ from pathlib import Path
 
 import yaml
 
+# One row of the `.claude/CLAUDE.md` § "Skills Overview" table. The first cell is
+# the backticked skill directory name followed by its `vX.Y.Z` token. Two forms
+# are shared so the lints agree on what a row is:
+#   PREFIX — name only. check_skill_inventory_parity.py uses it to find every
+#            row that names a skill, so a row can never hide from the parity
+#            check by omitting its version.
+#   FULL   — name + version. check_version_consistency.py parses versions with
+#            it; the parity lint reports any PREFIX row that is not also a FULL
+#            row, closing the gap where a version-less row is invisible to the
+#            version lint (it only iterates FULL matches).
+SKILLS_TABLE_ROW_PREFIX = r"^\|\s*`([a-z0-9-]+)`"
+SKILLS_TABLE_ROW_FULL = SKILLS_TABLE_ROW_PREFIX + r"\s+v([A-Za-z0-9.\-_+]+)\s*\|"
+
 SKIP_DIRS = frozenset(
     {"shared", "scripts", "docs", ".git", ".github", "examples", ".local-plans", ".claude"}
 )
@@ -246,14 +259,15 @@ def norm_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def read_or_exit2(root: Path, rel: str) -> str:
+def read_or_exit2(root: Path, rel: str, *, exact: bool = False) -> str:
     """Read a required lint surface; a missing file is an invocation error
-    (exit 2), never a lint failure (exit 1)."""
+    (exit 2), never a lint failure (exit 1). With `exact`, line endings stay
+    as stored instead of being translated to LF."""
     p = root / rel
     if not p.is_file():
         print(f"ERROR: required file missing: {rel}", file=sys.stderr)
         raise SystemExit(2)
-    return p.read_text(encoding="utf-8")
+    return p.read_bytes().decode("utf-8") if exact else p.read_text(encoding="utf-8")
 
 
 def run_lint(field: str, legal_values: set[str] | frozenset[str], ok_message: str) -> int:

@@ -1,8 +1,8 @@
 """Read-only upstream release observations and bounded drift reports.
 
 Source commits in the manifest are provenance identities, not Python dependency pins.
-Commit ancestry is used because the ARS manifest version is the adapter
-version (0.1.27), not the upstream suite's v3.x release number. Only commit
+Commit ancestry is used because the ARS manifest version is the Codex adapter
+version, which is not guaranteed to name an upstream release tag. Only commit
 list metadata is requested; the compare endpoint would include source patches.
 """
 

@@ -9,7 +9,36 @@ A suite of Claude Code skills for rigorous academic research, paper writing, pee
 | `deep-research` v2.12.1 | 13-agent research team | full, quick, socratic, review, lit-review, three-way-scan, fact-check, systematic-review |
 | `academic-paper` v3.3.1 | 12-agent paper writing | full, plan, outline-only, revision, revision-coach, abstract-only, lit-review, format-convert, citation-check, disclosure, rebuttal-audit |
 | `academic-paper-reviewer` v1.11.1 | Multi-perspective paper review (5 reviewers + optional cross-model DA critique) | full, re-review, quick, methodology-focus, guided, calibration |
-| `academic-pipeline` v3.21.1 | Full pipeline orchestrator | (coordinates all above) |
+| `academic-pipeline` v3.22.2 | Full pipeline orchestrator | (coordinates all above) |
+
+## v3.22.2 Key Additions (run ledger and handoff check + acronym check + wider instruction/data boundary + routing and front-page repairs)
+
+- **A run ledger backs the handoff after compaction, resume, and subagent returns (#887, #898).** When a run has a passport file, the orchestrator appends the user's initial instructions, checkpoint questions and answers in the user's exact words, step receipts, and file hashes to `<passport-stem>_run_ledger.yaml` through `scripts/run_ledger.py` (schema `shared/contracts/passport/run_ledger.schema.json`). `report` compares the ledger with what a summary or report claims, renders the handoff check in English or Traditional Chinese, and re-checks file digests. `docs/RISK_REGISTER.md` adds R12 and `docs/DATA_FLOWS.md` lists the new local store, which holds the user's exact words. Synthetic scenarios pin the report; whether the orchestrator writes the entries is prompt-level and unmeasured.
+- **A deterministic acronym check (#849, proposed by @reiropke in #848).** `scripts/check_acronyms.py` reports undefined, late, or duplicate acronym definitions per scope without calling a model. The prompts have the calling session run it on saved drafts and abstracts, and a review appends its report to the Editorial Decision Letter as an advisory attachment that the decision, the revision roadmap, and re-review criteria do not draw on. Tests use synthetic fixtures; whether runs call it is unmeasured.
+- **The instruction/data boundary reaches dispatches, passport imports, tool-call receivers, and the main session (#890, #894).** Seventeen more agents and the four `SKILL.md` files inline the canonical block, pinned by `scripts/check_instruction_data_boundary.py`; the opt-in claim-audit judge prompt changes with it, so cached verdicts from the old prompt are not reused. The layer is prompt-level and unmeasured.
+- **Routing and front-page repairs (#892, #889, #897, #854, #888, #908).** The routing core reaches plugin and skills-copy installs through `shared/references/routing_core.md`; explicit requests stay explicit when the mode's usual input is missing; `/ars-lit-review` stays in its mode; the revision coach keeps peer review out of the committee-correspondence variant; "authoritative" skill output is scoped to deliverable ownership; and the front page and showcase match their sources. Routing results come from one session per fixture, a smoke test rather than a rate.
+
+## v3.22.1 Key Additions (Opus 5.5 model currency + citation-check loading and Chinese APA 7 repairs + Pi wrapper fix)
+
+- **Claude Opus 5.5 joins Claude Fable 5.1 as a supported session model (#883).** A two-reader audit of the Opus 5.5 system card (`audits/harness-retirement-2026-09-opus-5-5.md`, DM-001 to DM-021) retires no guardrail. `docs/PERFORMANCE.md` (en / zh-TW) adds effort guidance (heavy runs at `high` or above, since Claude Code starts Opus 5.5 at `medium`), one 2026-09 list-price re-derivation for both models, tiering guidance for the pair, and a files-over-pastes recommendation; `shared/model_tiering.md` defines family and tier (tier order is lineup order, not a capability ranking) and corrects the classifier-fallback note. No command `model:` or `effort:` setting changes.
+- **The revision coach treats pasted third-party text as data (DG-1).** It inlines the canonical instruction/data boundary, pinned by `scripts/check_instruction_data_boundary.py`, whose mutation tests are now parametrized over every hot-spot agent; `docs/RISK_REGISTER.md` R3 names pasted text. The guard is prompt-level and its effect is unmeasured.
+- **Mode-loading and citation-check repairs (#857, #882, #858, #864).** The 13 plugin mode commands invoke their namespaced core skill and use plugin-root reference paths; Chinese APA 7 checks cover missing author abbreviation, ambiguity exceptions, reference-list author fields, and ordering evidence; citation checks distinguish visible syntax errors from unverified resolution or source claims; English, Traditional Chinese, and Korean trigger phrases route citation-check, with a CI bound of 1,024 code points per skill description.
+- **Pi wrapper (#880).** String-array system prompts are accepted without flattening blocks or mutating host input.
+
+## v3.22.0 Key Additions (output-language-pair contract + locale track + plugin eval suites + Windows / transport repairs)
+
+- **A run can declare its output language pair; absence is the legacy state (#862 Phase 1, PR #869 by @didacrios).** `shared/output_language_pair.md` is the registry-keyed contract (initial entry `zh-tw-en`); Schema 4 gains the optional `output_language_pair` field; ten consumer surfaces name it and omit the value when absent; the abstract length / keyword regime table has one home in `academic-paper/references/abstract_writing_guide.md`. `check_output_language_pair_contract()` pins registry membership, the default token, the table's location, and a malformed-value self-check. The values held fixed are file-level literals; no rendered-output or model-behaviour equivalence is claimed.
+- **Locale track around it.** es-ES README (#855) and conservative trigger phrases (#856, #867) by @didacrios; locale packs are community-maintained, with a provisional single-owner application route recorded in `CONTRIBUTING.md` (#861, #862).
+- **Evaluation substrates, no measured claims.** `claude plugin eval` suites for revision-coach (`plugin-evals/`) and citation-check (`plugin-evals-citation-check/`, #859) run as with/without-plugin ablations; the reviewer-calibration harness (#835) adds isolated dispatch, audited scoring, and a credential preflight. Each is a regression guard or dispatch substrate; none ships an uplift figure or a calibration value.
+- **Repairs.** Windows file locks through one shared `msvcrt`-backed helper (#843 / #844 by @dajiaohuang, #845); the OpenAI request builders drop Astra-rejected parameters and validate the effort set (#823); the contained Codex transport rejects `effort=ultra` (#824); audit provenance records the actual judge identity (#826); Socratic path F6 lists directions unranked (#834); unsupported claims route to a source, an omission, or `[MATERIAL GAP]`, never a hedge (#825); revision-coach triggers reach the frontmatter description (#851).
+- **Docs.** READMEs keep the three most recent releases (#870); Gartenberg et al. (#833) and Wang, Li et al. (#873) join the human-in-the-loop anchors. Roadmap Phase 4 (stage-level evidence ceilings) is not delivered in this release.
+
+## v3.21.2 Key Additions (model currency + checkpoint provenance + CJK title-matching repairs)
+
+- **Model currency follows the September 2026 system cards.** Docs name Claude Fable 5.1 as the current frontier model; `gpt-6-astra` is listed as a provisional cross-model verifier on both transports and becomes the recommended OpenAI verifier under the #783 generation-currency policy, while `gpt-5.6-sol` keeps its transport-qualified validated status. The contained Codex citation transport accepted `ultra` reasoning effort as part of its closed set at the 3.21.2 tag; #824 reverted that — `ultra` is a delegation request on the codex app-server, so the transport now rejects it with `REASONING_EFFORT_REQUIRES_DELEGATION`. No new bakeoff result is claimed.
+- **Two vendor-motivated guardrails, both prompt-level.** Checkpoint decision provenance (authority in the pipeline state machine, mirrored by the orchestrator, indexed as risk R11): only a user turn is a checkpoint decision, and decisions are re-transmitted to subagents verbatim. Provider-side monitoring and safety interventions are named as a transport-failure case that is never a verdict; model tiering records that the resolved tier is the declared model, not a per-call attestation.
+- **Harness-retirement audit retires nothing.** `audits/harness-retirement-2026-09-model-update.md` maps both cards' behavioral findings to the ARS mechanisms that assume them: 0 prompt-text retirements, 4 applied currency fixes, 2 deferred items, 8 keep-as-debt annotations now backed by a system-card citation.
+- **Matching and lint repairs.** CJK titles pass the shared exact-title gate in the four index resolvers, and wrapper marks are stripped only as one balanced unit (#798, #800); a skill-inventory parity lint (#809) requires set-equality across the skill directories, `skills/` symlinks, the CLAUDE.md table, and the marketplace manifest; the autolink round-trip test declares its dependency (#801); `check_surface_form_parity` names a broken environment instead of the manifest; the R10 residual gap and an MLA key-rules line are de-staled (#813, #805).
 
 ## v3.21.1 Key Additions (bounded workflow substrates + transport-qualified verification)
 
@@ -291,19 +320,23 @@ Spec: `docs/design/2026-05-17-ars-v3.9.0-cross-index-triangulation-measurement-s
 
 - **Anti-sycophancy protocols**: DA agents score rebuttals 1-5 before conceding. No concession below 4/5. Frame-lock detection.
 - **Intent detection**: Socratic Mentor classifies user intent as exploratory vs. goal-oriented. Exploratory mode disables auto-convergence.
-- **Cross-model verification** (optional): Set `ARS_CROSS_MODEL` env var to enable a non-Anthropic verifier (currently GPT-5.6 Sol (provisional) or Gemini 3.1 Pro; GPT-5.5 / GPT-5.5 Pro remain validated previous-generation options) for integrity sample checks, a blind and separately executed Devil's Advocate critique, and blind disagreement checkpoints at design freeze + final editorial decision (#518). The once-planned generic sixth reviewer is retired, not deferred — see the "Why there is no generic 6th reviewer" note in `shared/cross_model_verification.md`, which also carries the supported-model table. These execution facts are not a binary independence claim.
+- **Cross-model verification** (optional): Set `ARS_CROSS_MODEL` env var to enable a non-Anthropic verifier (currently GPT-6 Astra (provisional) or Gemini 3.1 Pro; per-transport statuses of every id live in the supported-model table) for integrity sample checks, a blind and separately executed Devil's Advocate critique, and blind disagreement checkpoints at design freeze + final editorial decision (#518). The once-planned generic sixth reviewer is retired, not deferred — see the "Why there is no generic 6th reviewer" note in `shared/cross_model_verification.md`, which also carries the supported-model table. These execution facts are not a binary independence claim.
 - **AI Self-Reflection Report**: Pipeline Stage 6 now includes AI behavioral self-assessment (concession rate, health alerts, sycophancy risk rating).
 
 ## Routing Discipline (v3.9.2)
 
 **Routing precedence:** This section runs BEFORE Routing Rules 1-5. Once this section settles on a destination, Rules 1-5 apply within that destination's skill family.
 
-**Step 0 — Escape hatch check (before any classification):** If the user's first message begins with `[direct-mode]` (case-insensitive byte-0 token, optionally preceded by whitespace/newlines that are stripped on parse), record this fact, strip the prefix and surrounding whitespace from the message, and skip directly to **Step 1 explicit-intent handling** on the stripped content. The literal `[direct-mode]` is NOT passed through to the dispatched agent. If the stripped message itself has no clear skill named, Step 1 falls through to Step 3 clarification (the escape hatch bypasses cross-phase clarification (Step 2), not all routing).
+The routing core below is the same block as `shared/references/routing_core.md`, which carries it to plugin installs (SessionStart announce) and to every install path (the four `SKILL.md` files), because Claude Code loads this file only for sessions started inside the checkout (#892). `scripts/check_routing_core_sync.py` keeps the copies identical.
+
+<!-- routing-core:begin -->
+**Step 0 — Escape hatch check (before any classification):** If the user's first message begins with `[direct-mode]` (case-insensitive byte-0 token, optionally preceded by whitespace/newlines that are stripped on parse), record this fact, strip the prefix and surrounding whitespace from the message, and skip directly to **Step 1 explicit-intent handling** on the stripped content. The literal `[direct-mode]` is NOT passed through to the dispatched agent. If the stripped message itself has no clear skill named, Step 1 falls through to Step 3 clarification (the escape hatch bypasses cross-phase clarification (Step 2), not all routing). When the token is honored and the named agent or skill needs inputs the message does not supply, read that agent's or skill's file and ask for what it requires, in its terms. Without the byte-0 token, naming an agent is not explicit intent: such a message goes through Steps 1-3 like any other, so cross-phase materials still get Step 2 clarification.
 
 Otherwise, classify the user's input:
 
 1. **Explicit clear intent** — user invokes a specific skill via `/ars-*` slash command, or uses an unambiguous trigger keyword that maps to a single skill (e.g., "lit-review this", "review my paper", "draft an abstract"):
    → Route directly; no clarification, no orchestrator detour.
+   → The request stays explicit when the mode's usual input is absent or a word in it has other everyday senses. A revision request with no reviewer comments is revision mode's "feel certain sections need improvement" case, and "revisar artículo" is the reviewer's trigger. Route to that mode and let the mode handle what is missing; do not reopen the choice of workflow.
 
 2. **Cross-phase materials detected** — user provides artifacts spanning ≥ 2 pipeline phases without naming a specific skill (e.g., pre-written abstract + pre-collected literature; full draft + reviewer comments + bibliography):
    → **Clarify**. Do NOT auto-route to a single-phase agent. List candidate workflows as a-d options in markdown body (NOT via AskUserQuestion tool). See `shared/references/intent_clarification_protocol.md` for the message template.
@@ -313,6 +346,7 @@ Otherwise, classify the user's input:
    → Clarify per `shared/references/intent_clarification_protocol.md`.
 
 **Anti-pattern (caused #133):** Receiving ambiguous cross-phase materials and silently auto-routing to a single-phase agent based on which phase the materials "look closest to." This bypasses orchestrator-level reconciliation and lets the subagent inherit the full ambiguity without independent oversight.
+<!-- routing-core:end -->
 
 **Forward note (v3.10):** Active conductor (#134) will reframe this gate as structured intake with task envelope dispatch. v3.9.2 ships clarification-only as interim hot-fix.
 
@@ -365,7 +399,7 @@ Materials: Complete paper text. field_analyst_agent auto-detects domain and conf
 Materials: Editorial Decision Letter, Revision Roadmap, Per-reviewer detailed comments
 
 ## Version Info
-- **Suite version**: 3.21.1 (per CHANGELOG.md)
-- **Last Updated**: 2026-08-24
+- **Suite version**: 3.22.2 (per CHANGELOG.md)
+- **Last Updated**: 2026-09-25
 - **Author**: Cheng-I Wu
 - **License**: CC-BY-NC 4.0

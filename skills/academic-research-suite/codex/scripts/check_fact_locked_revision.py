@@ -100,13 +100,52 @@ def _load_upstream() -> ModuleType:
     return module
 
 
+LATEX_COMMENT_RE = re.compile(r"(?<!\\)%.*$", re.MULTILINE)
+LATEX_ROW_BREAK_RE = re.compile(r"\\\\\*?|\\tabularnewline\b")
+LATEX_ROW_SPACING_RE = re.compile(r"\s*\[\s*-?[\d.]+\s*[a-zA-Z]{2}\s*\]")
+
+
+def _latex_logical_rows(body: str) -> list[str]:
+    """Split a tabular body at row breaks outside braces.
+
+    LaTeX rows end at ``\\\\`` (or ``\\tabularnewline``), not at a physical newline,
+    and ``\\endtabular`` closes a final row that has no explicit break. A
+    ``\\\\`` nested inside a braced cell such as ``\\makecell{a\\\\b}`` stays
+    within its row.
+    """
+    body = LATEX_COMMENT_RE.sub("", body)
+    rows: list[str] = []
+    start = depth = index = 0
+    while index < len(body):
+        char = body[index]
+        if char == "\\" and index + 1 < len(body) and body[index + 1] in "{}":
+            index += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth = max(depth - 1, 0)
+        elif char == "\\" and depth == 0:
+            match = LATEX_ROW_BREAK_RE.match(body, index)
+            if match:
+                rows.append(body[start:index])
+                index = match.end()
+                spacing = LATEX_ROW_SPACING_RE.match(body, index)
+                if spacing:
+                    index = spacing.end()
+                start = index
+                continue
+        index += 1
+    rows.append(body[start:])
+    return [row.strip() for row in rows if "&" in row]
+
+
 def _table_rows(text: str) -> list[str]:
     rows: list[str] = []
     for block in TABULAR_RE.findall(text):
         body = TABULAR_SPEC_RE.sub("", block, count=1)
-        for line in body.splitlines():
-            if "&" in line and "\\\\" in line:
-                rows.append(line.strip())
+        body = re.sub(r"\\end\{tabular\*?\}\s*$", "", body)
+        rows.extend(_latex_logical_rows(body))
 
     def markdown_cells(line: str) -> list[str] | None:
         line = line.strip()
@@ -146,7 +185,7 @@ def _cells(upstream: ModuleType, row: str) -> tuple[str, ...]:
     if row.lstrip().startswith("|"):
         raw_cells = row.strip().strip("|").split("|")
     else:
-        raw_cells = row.split("\\\\", 1)[0].split("&")
+        raw_cells = row.split("&")
     cells = []
     for cell in raw_cells:
         cleaned = CELL_FORMAT_RE.sub("", cell)
@@ -171,24 +210,34 @@ def _match_rows(
     """Match each source row to a distinct revision row containing all its cells.
 
     A revision row may add cells (a new descriptive column) but must keep every
-    source cell of the row it matches. Exact matches are consumed first so an
-    added column elsewhere cannot steal a row's exact counterpart.
+    source cell of the row it matches. The assignment is a maximum bipartite
+    matching (augmenting paths), so it does not depend on row order; exact
+    counterparts are tried first to keep the reported leftovers stable.
     """
-    remaining = list(revision_rows)
-    lost: list[tuple[str, ...]] = []
-    pending: list[tuple[str, ...]] = []
-    for row in source_rows:
-        if row in remaining:
-            remaining.remove(row)
-        else:
-            pending.append(row)
-    for row in pending:
-        need = Counter(row)
-        match = next((cand for cand in remaining if not (need - Counter(cand))), None)
-        if match is None:
-            lost.append(row)
-        else:
-            remaining.remove(match)
+    needs = [Counter(row) for row in source_rows]
+    have = [Counter(row) for row in revision_rows]
+    candidates = [
+        sorted(
+            (j for j, cells in enumerate(have) if not (need - cells)),
+            key=lambda j: (revision_rows[j] != source_rows[i], j),
+        )
+        for i, need in enumerate(needs)
+    ]
+    owner: dict[int, int] = {}
+
+    def assign(i: int, seen: set[int]) -> bool:
+        for j in candidates[i]:
+            if j in seen:
+                continue
+            seen.add(j)
+            if j not in owner or assign(owner[j], seen):
+                owner[j] = i
+                return True
+        return False
+
+    matched = {i for i in range(len(source_rows)) if assign(i, set())}
+    lost = [row for i, row in enumerate(source_rows) if i not in matched]
+    remaining = [row for j, row in enumerate(revision_rows) if j not in owner]
     return lost, remaining
 
 
