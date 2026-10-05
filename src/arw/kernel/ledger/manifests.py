@@ -585,9 +585,13 @@ def validate_accepted_event_manifests(
                 raw = read_retained_bytes(root, f"narrative/reports/sha256/{digest}.json", max_bytes=65_536)
                 report = strict_json_loads(raw)
                 if (sha256_hex(raw) != digest or realization is None
+                        or not isinstance(report, dict)
                         or report.get("proposal_sha256") != event.payload.proposal_sha256
                         or report.get("assignment_id") != event.payload.assignment_id
-                        or report.get("source_sha256") != realization.source_sha256):
+                        or report.get("source_sha256") != realization.source_sha256
+                        or report.get("narrative_sha256") != realization.narrative_sha256
+                        or report.get("mechanical_status") != "PASS"
+                        or report.get("semantic_status") != "UNKNOWN"):
                     raise ValueError("report differs from accepted proposal")
                 matching = [artifact for artifact in event.payload.proposal.artifacts
                             if realization.source_path == f"attempts/{event.payload.attempt_id}/result/{artifact.relative_path}"]
