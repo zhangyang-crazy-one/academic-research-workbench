@@ -17,6 +17,7 @@ from arw.kernel.ledger.research_records import publish_once
 from arw.kernel.ledger.source_locations import read_retained_bytes
 from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandRequest
 
+from .review_rules import validate_report
 from .transformer import SessionWritingTransformer
 
 
@@ -122,6 +123,29 @@ class WritingService(SessionWritingTransformer):
                 raise ValueError(
                     "hard preservation drift or ineffective controls cannot be approved"
                 )
+            if "rule_review" in review:
+                try:
+                    report = validate_report(
+                        review["rule_review"],
+                        result["verification"]["rule_review"]["plan"],
+                        result["source"],
+                        result["candidate"],
+                    )
+                    if (
+                        report["reviewer"] != review["reviewer"]
+                        or any(
+                            entry["status"] == "not_reviewed"
+                            for entry in report["coverage"]
+                        )
+                        or any(
+                            finding["review_status"] == "open"
+                            for finding in report["findings"]
+                        )
+                    ):
+                        raise ValueError("incomplete rule review")
+                except (ValueError, TypeError) as exc:
+                    raise ValueError("invalid or incomplete rule review") from exc
+                result["rule_review"] = {"status": "reviewed", "report": report}
             result.update(
                 disposition="accepted_after_human_review",
                 accepted=True,
@@ -172,6 +196,7 @@ class WritingService(SessionWritingTransformer):
                             "bundle_path": path,
                             "disposition": result["disposition"],
                             "candidate_accepted": result["accepted"],
+                            "rule_review_status": result["rule_review"]["status"],
                         }
                     raise ValueError("writing command identity conflict")
         publish_once(self.run_root, path, body)
@@ -184,6 +209,7 @@ class WritingService(SessionWritingTransformer):
                 "reason_code": outcome.rejection.code,
                 "candidate_accepted": False,
                 "bundle_path": path,
+                "rule_review_status": result["rule_review"]["status"],
             }
         return {
             "status": "recorded",
@@ -192,4 +218,5 @@ class WritingService(SessionWritingTransformer):
             "bundle_path": path,
             "disposition": result["disposition"],
             "candidate_accepted": result["accepted"],
+            "rule_review_status": result["rule_review"]["status"],
         }
