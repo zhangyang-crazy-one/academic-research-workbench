@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "FitPredicate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "heading_present",
+            "literal_present",
+            "pdf_page_count_at_most",
+            "bounded_marker_absent"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "FitPredicate",
+      "type": "object"
+    },
+    "FitRule": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "statement": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "source_url": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_locator": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Source Locator",
+          "type": "string"
+        },
+        "predicate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FitPredicate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reviewed_by": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed By"
+        }
+      },
+      "required": [
+        "rule_id",
+        "statement",
+        "source_url",
+        "source_sha256",
+        "source_locator"
+      ],
+      "title": "FitRule",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-fit-profile.v1",
+      "default": "arw.venue-fit-profile.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "venue_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Venue Id",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "verified_on": {
+      "format": "date",
+      "title": "Verified On",
+      "type": "string"
+    },
+    "review_due": {
+      "format": "date",
+      "title": "Review Due",
+      "type": "string"
+    },
+    "official_hard_requirements": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FitRule"
+      },
+      "maxItems": 128,
+      "title": "Official Hard Requirements",
+      "type": "array"
+    },
+    "structural_expectations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FitRule"
+      },
+      "maxItems": 128,
+      "title": "Structural Expectations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "venue_id",
+    "version",
+    "verified_on",
+    "review_due"
+  ],
+  "title": "VenueFitProfile",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-fit-profile.schema.json"
+}

@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "NarrativeSpan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "UTF-8 byte offsets of one paragraph in retained source content.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "sha256"
+      ],
+      "title": "NarrativeSpan",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Accepted author annotation; temporal truth still needs human scrutiny.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.hypothesis-history.v1",
+      "default": "arw.hypothesis-history.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "claim_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "designation": {
+      "enum": [
+        "prespecified",
+        "post_hoc",
+        "unknown"
+      ],
+      "title": "Designation",
+      "type": "string"
+    },
+    "narrative_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Narrative Sha256",
+      "type": "string"
+    },
+    "source_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Source Path",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "span": {
+      "$ref": "#/$defs/NarrativeSpan"
+    }
+  },
+  "required": [
+    "claim_id",
+    "designation",
+    "narrative_sha256",
+    "source_path",
+    "source_sha256",
+    "span"
+  ],
+  "title": "HypothesisHistory",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/hypothesis-history.schema.json"
+}

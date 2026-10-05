@@ -63,9 +63,21 @@ Installed copy lives under
 The marketplace source still points at `build/claude-marketplace`; keep that directory
 or re-run `create-claude-marketplace` before `claude plugin marketplace update arw-claude-local`.
 
-## Route unlock (integration lock)
+## Core route and Codex execution qualification
 
-A Claude install only returns `execution_mode: inline-role-prompts` after an exact
+The Claude package can use local text, manuscript, research, file, and audit
+commands when its staged core integrity passes and each operation has its
+required explicit roots and providers. Check `bin/arw route --core --json`.
+This route reports provider availability separately from authorization and
+does not claim a Claude execution adapter or Codex host qualification. Its
+capability rows are selected and nonexhaustive; each command resolves its own
+provider and configuration when invoked.
+
+The legacy `bin/arw route --json` contract remains the Codex execution route.
+Only that adapter's delegated Phase 4 dispatch requires the following exact
+Codex host qualification. Local core commands do not require this canary.
+
+A Claude install returns legacy `execution_mode: inline-role-prompts` only after an exact
 Codex host canary is bound into the package:
 
 1. `stage-plugin` → `create-claude-marketplace` (keeps `.codex-plugin` + Codex hooks)

@@ -118,8 +118,11 @@
       "description": "Stable order and warrant, never a frozen finding or scientific conclusion.",
       "properties": {
         "schema_version": {
-          "const": "arw.narrative-plan.v1",
           "default": "arw.narrative-plan.v1",
+          "enum": [
+            "arw.narrative-plan.v1",
+            "arw.narrative-plan.v2"
+          ],
           "title": "Schema Version",
           "type": "string"
         },
@@ -193,6 +196,21 @@
           },
           "title": "Evidence Forms",
           "type": "array"
+        },
+        "transition_anchors": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NarrativeTransitionAnchor"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transition Anchors"
         }
       },
       "required": [
@@ -244,6 +262,42 @@
         "plan"
       ],
       "title": "NarrativeSnapshot",
+      "type": "object"
+    },
+    "NarrativeTransitionAnchor": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "transition": {
+          "enum": [
+            "problem_to_contribution",
+            "contribution_to_evidence",
+            "evidence_to_conclusion"
+          ],
+          "title": "Transition",
+          "type": "string"
+        },
+        "object_kind": {
+          "enum": [
+            "contribution",
+            "evidence_form",
+            "scope"
+          ],
+          "title": "Object Kind",
+          "type": "string"
+        },
+        "object_ref": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Object Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transition",
+        "object_kind",
+        "object_ref"
+      ],
+      "title": "NarrativeTransitionAnchor",
       "type": "object"
     },
     "OutputPolicy": {
@@ -440,6 +494,17 @@
         }
       ],
       "default": null
+    },
+    "paper_output_role": {
+      "default": "analysis",
+      "enum": [
+        "analysis",
+        "outline",
+        "blueprint",
+        "draft"
+      ],
+      "title": "Paper Output Role",
+      "type": "string"
     },
     "narrative_instructions": {
       "anyOf": [

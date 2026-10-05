@@ -426,6 +426,7 @@ class ArtifactAcceptedPayload(StrictModel):
     manifest_sha256: Sha256
     artifact_sha256: Sha256
     attempt_id: StableRuntimeId | None = None
+    narrative_report_sha256: Sha256 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class ResearchArtifactStagePayload(StrictModel):
@@ -809,6 +810,7 @@ class ProposalAcceptedPayload(Phase4Payload):
     attempt_id: StableRuntimeId
     proposal: Annotated[object, BeforeValidator(lambda value: _phase4_record(value, "WorkerProposal"))]
     proposal_sha256: Sha256
+    narrative_report_sha256: Sha256 | None = Field(default=None, exclude_if=lambda value: value is None)
     acceptance_key: Annotated[
         tuple[Annotated[int, Field(ge=0)], Annotated[int, Field(ge=0)], StableRuntimeId],
         BeforeValidator(_phase4_hashes),
@@ -820,6 +822,8 @@ class ProposalAcceptedPayload(Phase4Payload):
         proposal = self.proposal
         if proposal.assignment_id != self.assignment_id or proposal.attempt_id != self.attempt_id:  # type: ignore[attr-defined]
             raise ValueError("proposal does not bind the assignment attempt")
+        if (proposal.narrative_realization is None) != (self.narrative_report_sha256 is None):  # type: ignore[attr-defined]
+            raise ValueError("narrative proposal and check report must occur together")
         if _phase4_record_digest(proposal) != self.proposal_sha256:
             raise ValueError("proposal digest does not match immutable bytes")
         return self

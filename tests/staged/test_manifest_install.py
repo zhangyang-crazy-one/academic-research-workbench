@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.candidate_inputs import candidate_stage_args
+from tests.candidate_inputs import candidate_stage_args, configured_package_environment
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -21,6 +21,7 @@ def _isolated_environment(root: Path) -> dict[str, str]:
         "PYTHONNOUSERSITE": "1",
         "PIP_NO_INDEX": "1",
         "UV_OFFLINE": "1",
+        **configured_package_environment(),
     }
     return environment
 

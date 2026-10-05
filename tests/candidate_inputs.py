@@ -7,6 +7,15 @@ import os
 import pytest
 
 
+def configured_package_environment() -> dict[str, str]:
+    """Forward explicit index URLs without copying user configuration files."""
+    return {
+        name: os.environ[name]
+        for name in ("PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL")
+        if name in os.environ
+    }
+
+
 def candidate_stage_args() -> list[str]:
     names = (
         "ARW_CANDIDATE_WHEEL",

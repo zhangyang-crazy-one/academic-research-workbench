@@ -35,6 +35,7 @@ from arw.kernel.state.models import (
     UtcTimestamp,
 )
 from arw.kernel.state.narrative import NarrativeSnapshot
+from arw.kernel.state.narrative_realization import NarrativeRealization
 
 PAPER_NARRATIVE_INSTRUCTIONS = (
     "ARW paper protocol source: skills/academic-research-suite/codex/references/"
@@ -517,6 +518,9 @@ class ImmutableAssignment(StrictModel):
     narrative_snapshot: NarrativeSnapshot | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    paper_output_role: Literal["analysis", "outline", "blueprint", "draft"] = Field(
+        default="analysis", exclude_if=lambda value: value == "analysis"
+    )
     narrative_instructions: str | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -546,6 +550,14 @@ class ImmutableAssignment(StrictModel):
     def immutable_bindings_are_coherent(self) -> Self:
         if (self.narrative_snapshot is None) != (self.narrative_instructions is None):
             raise ValueError("paper narrative snapshot and instructions must occur together")
+        if self.narrative_snapshot is None and self.paper_output_role != "analysis":
+            raise ValueError("paper output role requires a selected paper narrative")
+        if self.paper_output_role == "analysis" and (
+            self.stage_id in {"paper-body", "writing", "drafting"}
+            or any(kind in {"paper-body", "paper-draft", "manuscript", "draft"}
+                   for kind in self.completion_contract.required_artifact_kinds)
+        ):
+            raise ValueError("paper body assignment must declare a draft output role")
         _validate_execution_claim(
             execution_mode=self.execution_mode,
             execution_provenance=self.execution_provenance,
@@ -618,6 +630,9 @@ class ProposedArtifact(StrictModel):
     media_type: Annotated[str, Field(min_length=3, max_length=127)]
     schema_id: StableRuntimeId | None
     byte_count: Annotated[int, Field(ge=0, le=MAX_OUTPUT_BYTES)]
+    paper_output_role: Literal["analysis", "outline", "blueprint", "draft"] = Field(
+        default="analysis", exclude_if=lambda value: value == "analysis"
+    )
 
     @field_validator("relative_path")
     @classmethod
@@ -660,6 +675,7 @@ class WorkerProposal(StrictModel):
         tuple[Sha256, ...], BeforeValidator(_freeze_json_array), Field(max_length=128)
     ]
     summary: Annotated[str, Field(min_length=1, max_length=4096)]
+    narrative_realization: NarrativeRealization | None = Field(default=None, exclude_if=lambda value: value is None)
     unresolved: Annotated[
         tuple[Annotated[str, Field(min_length=1, max_length=1024)], ...],
         BeforeValidator(_freeze_json_array),

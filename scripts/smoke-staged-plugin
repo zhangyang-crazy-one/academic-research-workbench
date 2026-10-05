@@ -30,7 +30,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 
 PROJECT_ROOT = Path(sys.argv[1]).resolve()
@@ -76,6 +76,15 @@ HOOK_RECEIPT_KEYS = {
 
 class CanaryDefect(RuntimeError):
     pass
+
+
+class EnvironmentPrerequisiteError(CanaryDefect):
+    required_capability = "original-bwrap-network-namespace-isolation"
+    actionable_safe_hint = (
+        "Original bwrap --unshare-net isolation is required; inspect "
+        "network-isolation.json and rerun in an environment that supports "
+        "this original isolation capability."
+    )
 
 
 class _DuplicateJsonKey(ValueError):
@@ -221,6 +230,9 @@ def command_environment(home: Path, codex_home: Path) -> dict[str, str]:
         "PYTHONNOUSERSITE": "1",
         "PIP_NO_INDEX": "1",
     }
+    for name in ("PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL"):
+        if name in os.environ:
+            environment[name] = os.environ[name]
     for name in (
         "ALL_PROXY",
         "HTTPS_PROXY",
@@ -311,7 +323,13 @@ def marketplace_payload(path: Path) -> None:
     )
 
 
-def bwrap_prefix(fresh_root: Path, unrelated_cwd: Path, *, offline: bool) -> list[str]:
+def bwrap_prefix(
+    fresh_root: Path,
+    unrelated_cwd: Path,
+    *,
+    offline: bool,
+    isolation_evidence: Path | None = None,
+) -> list[str]:
     command = [
         "bwrap",
         "--die-with-parent",
@@ -335,9 +353,116 @@ def bwrap_prefix(fresh_root: Path, unrelated_cwd: Path, *, offline: bool) -> lis
         "--chdir",
         str(unrelated_cwd),
     ]
-    if offline:
-        command.insert(1, "--unshare-net")
-    return command
+    if not offline:
+        return command
+
+    command.extend(["--cap-drop", "ALL"])
+
+    def unavailable(attempts: list[dict[str, object]]) -> NoReturn:
+        if isolation_evidence is not None:
+            write_json(
+                isolation_evidence,
+                {
+                    "selected_backend": None,
+                    "preflight": attempts,
+                    "status": "FAIL",
+                    "classification": "environment-prerequisite-unavailable",
+                    "required_capability": EnvironmentPrerequisiteError.required_capability,
+                    "actionable_safe_hint": EnvironmentPrerequisiteError.actionable_safe_hint,
+                },
+            )
+        raise EnvironmentPrerequisiteError(
+            "offline network namespace isolation is unavailable"
+        )
+
+    try:
+        parent_namespace = os.readlink("/proc/self/ns/net")
+    except OSError as error:
+        unavailable(
+            [
+                {
+                    "phase": "parent-namespace",
+                    "failure": type(error).__name__,
+                    "errno": error.errno,
+                    "isolated": False,
+                }
+            ]
+        )
+    if not re.fullmatch(r"net:\[\d+\]", parent_namespace):
+        raise CanaryDefect("offline network namespace identity is invalid")
+
+    # A denied original namespace path is a blocker. Do not try an alternate
+    # outer user/network namespace that could change the denial's authority.
+    backends = (("bwrap-unshare-net", [command[0], "--unshare-net", *command[1:]]),)
+    attempts: list[dict[str, object]] = []
+    for backend, prefix in backends:
+        # Probe the complete source-hiding/bind surface with a cleared
+        # environment. A successful command alone does not prove isolation:
+        # the observed network namespace must differ from this process.
+        try:
+            probe = subprocess.run(
+                [
+                    *prefix,
+                    "--clearenv",
+                    "--",
+                    "/usr/bin/readlink",
+                    "/proc/self/ns/net",
+                ],
+                cwd=unrelated_cwd,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            attempts.append(
+                {
+                    "backend": backend,
+                    "failure": type(error).__name__,
+                    "errno": getattr(error, "errno", None),
+                    "isolated": False,
+                }
+            )
+            unavailable(attempts)
+        namespace_valid = bool(re.fullmatch(r"net:\[\d+\]\n", probe.stdout))
+        namespace_changed = namespace_valid and probe.stdout[:-1] != parent_namespace
+        isolated = (
+            probe.returncode == 0
+            and not probe.stderr
+            and namespace_valid
+            and namespace_changed
+        )
+        attempts.append(
+            {
+                "backend": backend,
+                "status": probe.returncode,
+                "namespace_output_valid": namespace_valid,
+                "stderr_empty": not probe.stderr,
+                "namespace_changed": namespace_changed,
+                "isolated": isolated,
+                "stderr": probe.stderr[:2048],
+            }
+        )
+        if probe.returncode != 0:
+            unavailable(attempts)
+        if isolated:
+            if isolation_evidence is not None:
+                write_json(
+                    isolation_evidence,
+                    {"selected_backend": backend, "preflight": attempts, "status": "PASS"},
+                )
+            return prefix
+    if isolation_evidence is not None:
+        write_json(
+            isolation_evidence,
+            {
+                "selected_backend": None,
+                "preflight": attempts,
+                "status": "FAIL",
+                "classification": "isolation-evidence-invalid",
+            },
+        )
+    raise CanaryDefect("offline network namespace isolation is unavailable")
 
 
 def inspect_installed_hook_definition(installed_root: Path) -> dict[str, object]:
@@ -666,7 +791,12 @@ def offline_installed_command(
         tool_network_access="disabled",
     )
     command = [
-        *bwrap_prefix(installed["fresh_root"], installed["unrelated_cwd"], offline=True),
+        *bwrap_prefix(
+            installed["fresh_root"],
+            installed["unrelated_cwd"],
+            offline=True,
+            isolation_evidence=evidence / "network-isolation.json",
+        ),
         "--clearenv",
         "--setenv",
         "PATH",
@@ -875,7 +1005,12 @@ def run_mcp(args: argparse.Namespace) -> int:
         tool_network_access="disabled",
     )
     command = [
-        *bwrap_prefix(fresh_root, installed["unrelated_cwd"], offline=True),
+        *bwrap_prefix(
+            fresh_root,
+            installed["unrelated_cwd"],
+            offline=True,
+            isolation_evidence=mcp_dir / "network-isolation.json",
+        ),
         "--clearenv",
         "--setenv",
         "PATH",
@@ -914,6 +1049,11 @@ def run_mcp(args: argparse.Namespace) -> int:
         input_text="\n".join(requests) + "\n",
         timeout=15,
     )
+    if invoked.returncode != 0:
+        raise CanaryDefect(
+            "installed MCP launcher failed before JSON-RPC; "
+            "inspect plugin/mcp/stderr.log"
+        )
     try:
         responses = [
             json.loads(line) for line in invoked.stdout.splitlines() if line.strip()
@@ -1543,6 +1683,9 @@ def run_route(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 77
+        except EnvironmentPrerequisiteError:
+            (attempt_fresh / "codex-home/auth.json").unlink(missing_ok=True)
+            raise
         except CanaryDefect as error:
             (attempt_fresh / "codex-home/auth.json").unlink(missing_ok=True)
             classification = {
@@ -1559,16 +1702,20 @@ def run_route(args: argparse.Namespace) -> int:
             last_reason = str(error)
             continue
 
-        health = offline_installed_command(
-            installed,
-            ["health", "--json"],
-            attempt_dir / "health",
-        )
-        direct = offline_installed_command(
-            installed,
-            ["route", "--json"],
-            attempt_dir / "direct",
-        )
+        try:
+            health = offline_installed_command(
+                installed,
+                ["health", "--json"],
+                attempt_dir / "health",
+            )
+            direct = offline_installed_command(
+                installed,
+                ["route", "--json"],
+                attempt_dir / "direct",
+            )
+        except CanaryDefect:
+            (installed["codex_home"] / "auth.json").unlink(missing_ok=True)
+            raise
         if health.returncode != 0 or direct.returncode != 0:
             (installed["codex_home"] / "auth.json").unlink(missing_ok=True)
             classification = {
@@ -1673,6 +1820,13 @@ def main() -> int:
         if args.route:
             return run_route(args)
         return run_install_cli(args)
+    except EnvironmentPrerequisiteError as error:
+        print(
+            f"smoke-staged-plugin: environment prerequisite unavailable: {error}. "
+            f"{error.actionable_safe_hint}",
+            file=sys.stderr,
+        )
+        return 78
     except CanaryDefect as error:
         print(f"smoke-staged-plugin: {error}", file=sys.stderr)
         return 70

@@ -21,6 +21,20 @@ external client ──▶ MCP adapter (file-base / arw files MCP) ──▶ the 
 
 ## Capability activation
 
+`bin/arw route --core --json` reports staged core integrity and provider
+records without qualifying an execution host. Installed commands verify the
+closed stage inventory, wheel, source/build evidence, licenses, and SBOM before
+operation. The legacy `route --json` and Phase 4 dispatch retain their exact
+Codex IntegrationLock gate. An editable source checkout is `UNVERIFIED`.
+The capability rows are selected, nonexhaustive observations; each command
+resolves its own provider and configuration when invoked.
+Direct Python `health` and `version` are diagnostics; their success does not
+attest installed core integrity or execution qualification. Use
+`route --core --json` for the staged-integrity report.
+For an installed launcher, an explicit `ARW_PLUGIN_ROOT` must equal that
+launcher's stage root. Use agent mode only with a source checkout; it cannot
+relabel an installed bundle as editable source.
+
 - The plugin manifest (`.codex-plugin/plugin.json`) declares the capability
   set (`research`, `literature`, `experiment`, `evidence`, `files`, `graph`,
   `provenance`, `artifact`, `audit`).

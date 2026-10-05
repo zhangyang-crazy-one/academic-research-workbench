@@ -418,7 +418,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 raise JournalError("first journal event does not bind the manifest bytes")
         elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted"}:
             try:
                 validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:

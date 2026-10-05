@@ -36,6 +36,9 @@ class LearningObservation(StrictModel):
         "human_signal",
         "experiment",
         "tool_receipt",
+        "venue_exemplar",
+        "venue_outcome",
+        "legacy_venue_style",
     ]
     source_activity_id: StableRuntimeId | None = None
     source_tool_id: StableRuntimeId | None = None
@@ -66,6 +69,36 @@ class Applicability(StrictModel):
     metric: Text
 
 
+class VenueApplicability(StrictModel):
+    """Scientific fit of a lesson, independent of its approved sharing scope."""
+
+    domain_id: StableRuntimeId
+    venue_id: StableRuntimeId
+
+
+class VenueQuantityGuidance(StrictModel):
+    """A descriptive range with explicit exceptions, never an official rule."""
+
+    minimum: int = Field(ge=0)
+    maximum: int = Field(ge=0)
+    unit: Text
+    nonmandatory: Literal[True] = True
+    counterexample_needs: Text
+    exception_conditions: tuple[Text, ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.maximum < self.minimum:
+            raise ValueError("quantity maximum precedes minimum")
+        return self
+
+
+class LegacyGuidanceReview(StrictModel):
+    nonmandatory: Literal[True] = True
+    counterexample_needs: Text
+    exception_conditions: tuple[Text, ...] = Field(min_length=1, max_length=16)
+
+
 class HeuristicInput(StrictModel):
     heuristic_id: StableRuntimeId
     scope: Scope = "project"
@@ -74,9 +107,13 @@ class HeuristicInput(StrictModel):
     trigger: Text
     proposed_action: Text
     applicability: Applicability
+    venue_applicability: VenueApplicability | None = None
+    venue_quantity_guidance: VenueQuantityGuidance | None = None
+    migration_status: Literal["unverified_legacy"] | None = None
+    legacy_guidance_review: LegacyGuidanceReview | None = None
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     supporting_observation_ids: tuple[StableRuntimeId, ...] = Field(
-        min_length=1, max_length=64
+        max_length=64
     )
     counterexample_observation_ids: tuple[StableRuntimeId, ...] = Field(
         default=(), max_length=64
@@ -93,6 +130,11 @@ class HeuristicInput(StrictModel):
 
     @model_validator(mode="after")
     def valid_buckets(self):
+        if self.migration_status == "unverified_legacy":
+            if self.supporting_observation_ids or not self.unknown or self.legacy_guidance_review is None:
+                raise ValueError("legacy candidate requires unknown evidence, nonmandatory review and no asserted support")
+        elif not self.supporting_observation_ids:
+            raise ValueError("candidate requires supporting observations")
         ids = [
             *self.supporting_observation_ids,
             *self.counterexample_observation_ids,

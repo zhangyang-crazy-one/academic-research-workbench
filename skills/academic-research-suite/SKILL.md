@@ -58,6 +58,24 @@ an unsuitable fixed number of sub-arguments, headings, words, or paragraphs.
 The project choice fixes the argument strategy and order, not findings or
 scientific conclusions. General non-paper tasks do not require this selection.
 
+For venue/domain advice during ARW `ars-plan` or `ars-outline`, invoke
+`codex/scripts/ars_codex_full_runtime.py` with `--arw-project-root PROJECT`,
+`--arw-run-root RUN`, `--venue-id VENUE`, `--domain-id DOMAIN`, and
+`--applicability-file CONDITIONS.json`. Use the context only with the current
+ARW wheel/extension interpreter, or the explicit
+source-checkout environment shown in the ARW runtime guide. An older editable
+installation is not the current runtime; an absent Phase 2 API fails explicitly.
+Use the returned
+`phase2_venue_context` as optional outline context. It contains only approved
+matching lessons, the selected narrative digest, and exact input/advisory-set
+hashes; an empty set stays empty. Pass the context to the structure architect
+as emitted in its `task_context`, or consume the same top-level context when
+working inline. Recheck narrative status immediately before dispatch/output.
+Do not treat suggestions as official requirements or permission to modify
+the selected plan. These options read local ARW state and do not enable hooks
+or agent dispatch. For the bounded input contract and CLI example, see
+`docs/runtime/research-heuristic-learning.md` in the ARW package.
+
 ### Time-Sensitive Venue, Deadline, and Template Override
 
 If the user asks which conference to target, names a venue and year, asks for a

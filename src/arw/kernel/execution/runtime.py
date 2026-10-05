@@ -133,6 +133,7 @@ class RuntimeCommandService:
 
     def read_state(self, *, now: datetime | None = None) -> RuntimeState:
         replayed = replay_run(self.run_root, lock_timeout=self.lock_timeout)
+        validate_accepted_event_manifests(self.run_root, replayed.events)
         return reduce_events(
             replayed.workflow_definition_id,
             replayed.events,
@@ -613,8 +614,21 @@ class RuntimeCommandService:
             ),
         )
 
-    def accept_artifact(self, request: ArtifactAcceptanceRequest) -> CommandOutcome:
+    def accept_artifact(
+        self, request: ArtifactAcceptanceRequest, *, _reviewed_writing_admission: bool = False
+    ) -> CommandOutcome:
+        from arw.kernel.core.canonical import sha256_hex, strict_json_loads
+        from arw.kernel.ledger.narrative import guard_run
+        from arw.kernel.ledger.source_locations import read_retained_bytes
+        from arw.kernel.policy.narrative_realization import (
+            STAGE_KINDS,
+            NarrativeRealizationError,
+            validate_realization,
+        )
+        from arw.kernel.state.narrative_realization import NarrativeRealization
+
         digest_holder: dict[str, str] = {}
+        report_holder: dict[str, str] = {}
 
         def validate(state, replayed):
             if any(
@@ -655,6 +669,101 @@ class RuntimeCommandService:
                 )
             except ManifestError as error:
                 return "artifact-content-invalid", str(error)
+            if narrative_snapshot is not None and request.artifact_kind in STAGE_KINDS:
+                try:
+                    if request.artifact_kind == "writing-derived" and not _reviewed_writing_admission:
+                        raise NarrativeRealizationError("writing_service_required", "reviewed writing must use WritingService admission")
+                    if request.media_type != "application/json":
+                        raise NarrativeRealizationError("narrative_contract_invalid", "paper realization requires JSON")
+                    raw = read_retained_bytes(self.run_root, request.content_path, max_bytes=1_048_576)
+                    if sha256_hex(raw) != request.content_sha256:
+                        raise NarrativeRealizationError("narrative_contract_invalid", "realization content changed")
+                    payload = strict_json_loads(raw)
+                    if request.artifact_kind == "writing-derived":
+                        if not isinstance(payload, dict) or not payload.get("accepted"):
+                            raise NarrativeRealizationError("narrative_contract_invalid", "writing receipt is not accepted prose")
+                        review_binding = payload.get("review_binding")
+                        source_binding = payload.get("source_binding")
+                        verification = payload.get("verification")
+                        if (not isinstance(review_binding, dict) or not isinstance(source_binding, dict)
+                                or not isinstance(verification, dict)
+                                or payload.get("disposition") != "accepted_after_human_review"
+                                or payload.get("controls_effective") is not True):
+                            raise NarrativeRealizationError("writing_review_missing", "accepted writing requires a verified review binding")
+                        bindings = []
+                        for binding in (source_binding, review_binding):
+                            matching = [e for e in replayed.events if e.event_type == "artifact.accepted"
+                                        and e.payload.artifact_id == binding.get("artifact_id")
+                                        and e.event_id == binding.get("event_id")
+                                        and e.event_sha256 == binding.get("event_sha256")
+                                        and e.payload.manifest_sha256 == binding.get("manifest_sha256")]
+                            if len(matching) != 1:
+                                raise NarrativeRealizationError("writing_review_missing", "writing source or review is not accepted")
+                            bindings.append(load_artifact_manifest(self.run_root, matching[0].payload.manifest_sha256))
+                        if bindings[1].artifact_kind != "writing-human-review":
+                            raise NarrativeRealizationError("writing_review_missing", "review artifact has the wrong kind")
+                        source_raw = read_retained_bytes(self.run_root, bindings[0].content_path, max_bytes=65_536)
+                        if sha256_hex(source_raw) != bindings[0].content_sha256:
+                            raise NarrativeRealizationError("writing_source_invalid", "accepted writing source changed")
+                        if bindings[0].artifact_kind in {"narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"}:
+                            source_realization = NarrativeRealization.model_validate(strict_json_loads(source_raw))
+                            source_raw = read_retained_bytes(self.run_root, source_realization.source_path, max_bytes=65_536)
+                        elif bindings[0].artifact_kind == "writing-derived":
+                            prior_receipt = strict_json_loads(source_raw)
+                            source_raw = prior_receipt["candidate"].encode("utf-8")
+                        if (sha256_hex(source_raw) != payload.get("source_sha256")
+                                or source_binding.get("sha256") != payload.get("source_sha256")):
+                            raise NarrativeRealizationError("writing_source_invalid", "source binding differs from actual accepted text")
+                        from arw.kernel.core.canonical import canonical_json_bytes
+                        candidate = payload.get("candidate")
+                        if (not isinstance(candidate, str)
+                                or sha256_hex(candidate.encode("utf-8")) != payload.get("candidate_sha256")
+                                or sha256_hex(canonical_json_bytes(verification)) != payload.get("verification_sha256")
+                                or not isinstance(payload.get("proposal"), dict)
+                                or sha256_hex(canonical_json_bytes(payload["proposal"])) != payload.get("proposal_sha256")
+                                or verification.get("disposition") == "reject"
+                                or verification.get("fact_lock", {}).get("mechanical_status") == "failed"):
+                            raise NarrativeRealizationError("writing_receipt_invalid", "writing candidate or verification hashes differ")
+                        review_raw = read_retained_bytes(self.run_root, bindings[1].content_path, max_bytes=65_536)
+                        if sha256_hex(review_raw) != bindings[1].content_sha256:
+                            raise NarrativeRealizationError("writing_review_missing", "review content changed")
+                        review = strict_json_loads(review_raw)
+                        expected_review = {
+                            "schema_version": "arw.writing-review.v1",
+                            "source_sha256": payload.get("source_sha256"),
+                            "candidate_sha256": payload.get("candidate_sha256"),
+                            "proposal_sha256": payload.get("proposal_sha256"),
+                            "verification_sha256": payload.get("verification_sha256"),
+                            "decision": "APPROVED",
+                            "reviewed_dimensions": verification.get("unresolved_dimensions"),
+                        }
+                        if (not isinstance(review, dict) or any(review.get(k) != v for k, v in expected_review.items())
+                                or not isinstance(review.get("reviewer"), str) or not review["reviewer"].strip()
+                                or not isinstance(review.get("rationale"), str) or not review["rationale"].strip()):
+                            raise NarrativeRealizationError("writing_review_missing", "review does not approve this candidate")
+                        realization = NarrativeRealization.model_validate(payload["narrative_realization"])
+                        if payload.get("candidate_path") != realization.source_path or payload.get("candidate_sha256") != realization.source_sha256:
+                            raise NarrativeRealizationError("narrative_source_digest_mismatch", "writing candidate differs from realization")
+                    else:
+                        realization = NarrativeRealization.model_validate(payload)
+                    if realization.stage != STAGE_KINDS[request.artifact_kind] or realization.source_path == request.content_path:
+                        raise NarrativeRealizationError("narrative_contract_invalid", "artifact kind or source path differs from realization")
+                    report = validate_realization(self.run_root, realization, narrative_snapshot, events=replayed.events)
+                    from arw.kernel.core.canonical import canonical_json_bytes
+                    from arw.kernel.ledger.research_records import publish_once
+                    report_bytes = canonical_json_bytes({
+                        "schema_version": "arw.narrative-check.v1",
+                        "artifact_id": request.artifact_id,
+                        "artifact_sha256": request.content_sha256,
+                        **report,
+                    })
+                    report_digest = sha256_hex(report_bytes)
+                    publish_once(self.run_root, f"narrative/reports/sha256/{report_digest}.json", report_bytes)
+                    report_holder["value"] = report_digest
+                except NarrativeRealizationError as error:
+                    return error.code, str(error)
+                except (ValueError, KeyError, OSError, RuntimeError) as error:
+                    return "narrative_contract_invalid", str(error)[:256]
             submission_error = self._validate_submission_artifact(request, replayed, state)
             if submission_error is not None:
                 return submission_error
@@ -665,14 +774,11 @@ class RuntimeCommandService:
                 except (ValueError, RuntimeError, OSError) as error:
                     return "citation-artifact-invalid", str(error)
             if request.artifact_kind == "provenance-record":
-                from arw.kernel.core.canonical import strict_json_loads
                 from arw.kernel.ledger.source_locations import (
-                    read_retained_bytes,
                     validate_precise_provenance,
                 )
                 try:
                     raw = read_retained_bytes(self.run_root, request.content_path, max_bytes=65_536)
-                    from arw.kernel.core.canonical import sha256_hex
                     if sha256_hex(raw) != request.content_sha256:
                         return "source-locator-invalid", "provenance changed during validation"
                     payload = strict_json_loads(raw)
@@ -708,18 +814,20 @@ class RuntimeCommandService:
                 self.run_root, "manifests/artifacts/sha256", digest_holder.get("value")
             )
 
-        return self._execute(
-            request,
-            event_type="artifact.accepted",
-            prevalidate=validate,
-            payload_factory=lambda _state, _replayed: ArtifactAcceptedPayload(
-                artifact_id=request.artifact_id,
-                manifest_sha256=digest_holder["value"],
-                artifact_sha256=request.content_sha256,
-                attempt_id=request.attempt_id,
-            ),
-            rollback=rollback,
-        )
+        with guard_run(self.run_root) as narrative_snapshot:
+            return self._execute(
+                request,
+                event_type="artifact.accepted",
+                prevalidate=validate,
+                payload_factory=lambda _state, _replayed: ArtifactAcceptedPayload(
+                    artifact_id=request.artifact_id,
+                    manifest_sha256=digest_holder["value"],
+                    artifact_sha256=request.content_sha256,
+                    attempt_id=request.attempt_id,
+                    narrative_report_sha256=report_holder.get("value"),
+                ),
+                rollback=rollback,
+            )
 
     def _validate_submission_artifact(self, request, replayed, state):
         """Validate reserved submission kinds before generic artifact admission."""

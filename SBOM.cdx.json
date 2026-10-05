@@ -114,7 +114,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4b73cb4a4c542c788b9d12ef5fd9550003c74afea9a4f58bafe67d09955fa84f"
+          "content": "7b5b7de918fd926e9c097ff606aa8463a5fc979ddbb9beda97e46374ca9b57b2"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -126,7 +126,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6b451546dbbb045aef407b05e11870b042cc87f7633becaeae2cf7ffc0ab7995"
+          "content": "5e7dfc9b78aac7dc0d097b6493f0803170859412c8e97733d2ca004953228d66"
         }
       ],
       "name": "skills/academic-research-suite/SKILL.md",
@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4302f4db1acdbe7f57a247712af9fea2b7cd0361fca9dc4af5e1e0be1bc1ad03"
+          "content": "7035f7e5129fa77a50f83c13f0351cb5cec27ca9f32180d26a7cbe58d747a18f"
         }
       ],
       "name": "vendor/mcp-manifest.json",

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.narrative-fit-report.v1",
+      "default": "arw.narrative-fit-report.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Target",
+      "type": "string"
+    },
+    "input_binding": {
+      "additionalProperties": true,
+      "title": "Input Binding",
+      "type": "object"
+    },
+    "official_hard_requirements": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Official Hard Requirements",
+      "type": "array"
+    },
+    "structural_expectations": {
+      "additionalProperties": true,
+      "title": "Structural Expectations",
+      "type": "object"
+    },
+    "empirical_status": {
+      "enum": [
+        "not_evaluated",
+        "evaluated_selected"
+      ],
+      "title": "Empirical Status",
+      "type": "string"
+    },
+    "empirical_patterns": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Empirical Patterns",
+      "type": "array"
+    },
+    "judgment_status": {
+      "enum": [
+        "not_supplied",
+        "supplied"
+      ],
+      "title": "Judgment Status",
+      "type": "string"
+    },
+    "reviewer_judgment": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewer Judgment"
+    },
+    "limits": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limits",
+      "type": "array"
+    }
+  },
+  "required": [
+    "target",
+    "input_binding",
+    "official_hard_requirements",
+    "structural_expectations",
+    "empirical_status",
+    "empirical_patterns",
+    "judgment_status",
+    "reviewer_judgment",
+    "limits"
+  ],
+  "title": "FitReport",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/narrative-fit-report.schema.json"
+}
