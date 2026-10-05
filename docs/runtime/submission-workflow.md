@@ -99,11 +99,34 @@ suite, the existing writing/artifact/gate/orchestration/memory/learning
 integration suite, strict OpenSpec validation, and a successful plugin staging
 run.  The installed launcher suite has one environment-blocked smoke case when
 the container cannot create the host network namespace (`bwrap`/`NETLINK_ROUTE`);
-that is not treated as live-host qualification.  The current host reports
-`codex-cli 0.155.1`, while the newest retained v2 integration lock is for
-`codex-cli 0.149.1`; its verification also reports that the staged ARW wheel
-omits the integration-lock runtime.  Therefore no qualified bundle is
-available for 7.5, and the live-host checkbox remains intentionally open.
+that is not treated as live-host qualification.  As of 2026-09-30, this
+environment reports `codex-cli 0.157.1`.  The retained
+`submission-workflow-live-v3` acceptance and its exact integration lock bind
+`codex-cli 0.155.1`; that remains historical technical acceptance for that
+host tuple, not qualification of the current host.  The current
+`tests.qualification_support.discover_bundled_qualification()` check returns
+no matching retained stage/lock/canary for `0.157.1`.  This is the intended
+fail-closed result after a host upgrade: the lock binds the observed version
+and exact launcher/native executable identities, so the old canary cannot be
+reused and the tuple check must not be weakened.
+
+There was also a separate discovery-helper defect: it scanned only
+`build/stage/*`, while the retained v3 acceptance summary points to a qualified
+stage under `build/.submission-skill-acceptance-final.*`.  The helper now uses
+the retained acceptance summary to locate that stage only after checking the
+summary's lock/canary/stage digests and confining the resolved path to `build/`;
+full lock verification still runs unchanged.  This repairs discovery of the
+historical `0.155.1` triple on its matching host, but does not qualify
+`0.157.1`; the host-specific canary and lock remain distinct requirements.
+
+The earlier note that the staged wheel omitted the integration-lock runtime
+was incorrect for the inspected `submission-workflow-live-v3` stage: its
+wheel contains `arw/kernel/policy/integration_lock.py`.  A fresh wheel built
+from the current source also contains that module.  The remaining task is to
+run a new live host canary for the current host and prepare a new qualified
+stage; that host qualification has not been performed here.  Release
+qualification remains blocked by the unresolved license/use-distribution
+declarations in the integration lock.
 Full portal automation, Word or PDF editing/remapping, and strict manuscript
 audit engines remain explicitly unsupported follow-ups.  Source-level rollback
 verification covers disabling the optional provider while retaining historical
