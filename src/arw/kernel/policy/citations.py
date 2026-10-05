@@ -26,7 +26,10 @@ CheckStatus = Literal[
 ]
 UseRole = Literal["supporting", "background", "research_object"]
 MAX_RESPONSE_BYTES = 1_048_576
-PARSER_VERSION = "1.0.0"
+PARSER_VERSION = "1.1.0"
+# 1.0.0 read Crossref retractions from `update-to`; kept so its receipts replay.
+ParserVersion = Literal["1.0.0", "1.1.0"]
+_CROSSREF_RETRACTION_TYPES = frozenset({"retraction", "withdrawal", "removal"})
 
 
 class ReferenceRecord(StrictModel):
@@ -107,7 +110,7 @@ class CheckReceipt(StrictModel):
     query: str
     response_sha256: Sha256
     http_status: int | None = Field(default=None, ge=100, le=599)
-    parser_version: Literal["1.0.0"] = "1.0.0"
+    parser_version: ParserVersion = PARSER_VERSION
     observed_at: UtcTimestamp
     status: CheckStatus
     matched_id: str | None = None
@@ -154,7 +157,9 @@ def _query(reference: ReferenceRecord, provider: Provider) -> str:
     return reference.title
 
 
-def _candidates(provider: Provider, raw: bytes) -> list[dict[str, object]]:
+def _candidates(
+    provider: Provider, raw: bytes, parser_version: ParserVersion = PARSER_VERSION
+) -> list[dict[str, object]]:
     if provider == "arxiv":
         if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
             raise ValueError("XML entity declarations forbidden")
@@ -203,10 +208,22 @@ def _candidates(provider: Provider, raw: bytes) -> list[dict[str, object]]:
                 "title": (x.get("title") or [""])[0],
                 "year": str((x.get("published", {}).get("date-parts") or [[""]])[0][0]),
                 "authors": [a.get("family", "") for a in x.get("author", [])],
-                "retracted": any(
-                    "retract" in str(y.get("type", "")).casefold()
-                    for y in x.get("update-to", [])
-                    if isinstance(y, dict)
+                # A retracted work lists its retraction under `updated-by`
+                # (publisher- or Retraction Watch-sourced). `update-to` sits on
+                # the retraction notice and points at the work it retracts.
+                "retracted": (
+                    any(
+                        "retract" in str(y.get("type", "")).casefold()
+                        for y in x.get("update-to", [])
+                        if isinstance(y, dict)
+                    )
+                    if parser_version == "1.0.0"
+                    else any(
+                        str(y.get("type", "")).casefold()
+                        in _CROSSREF_RETRACTION_TYPES
+                        for y in (x.get("updated-by") or [])
+                        if isinstance(y, dict)
+                    )
                 ),
             }
             for x in items
@@ -255,10 +272,13 @@ def _candidates(provider: Provider, raw: bytes) -> list[dict[str, object]]:
 
 
 def _result(
-    reference: ReferenceRecord, provider: Provider, raw: bytes
+    reference: ReferenceRecord,
+    provider: Provider,
+    raw: bytes,
+    parser_version: ParserVersion = PARSER_VERSION,
 ) -> tuple[CheckStatus, str | None, str | None]:
     try:
-        candidates = _candidates(provider, raw)
+        candidates = _candidates(provider, raw, parser_version)
     except (ValueError, TypeError, IndexError, KeyError, ET.ParseError):
         return "unknown", None, None
     matched = []
@@ -315,6 +335,7 @@ def check_response(
     http_status: int = 200,
     check_id: str | None = None,
     batch_id: str | None = None,
+    parser_version: ParserVersion = PARSER_VERSION,
 ) -> CheckReceipt:
     """Evaluate supplied bytes only; never opens a network connection."""
     if len(raw) > MAX_RESPONSE_BYTES:
@@ -326,7 +347,9 @@ def check_response(
     elif http_status != 200:
         status, matched_id, retraction = "unknown", None, None
     else:
-        status, matched_id, retraction = _result(reference, provider, raw)
+        status, matched_id, retraction = _result(
+            reference, provider, raw, parser_version
+        )
     reference_digest = sha256_hex(
         canonical_json_bytes(reference.model_dump(mode="json"))
     )
@@ -347,7 +370,7 @@ def check_response(
         "query": _query(reference, provider),
         "response_sha256": sha256_hex(raw),
         "http_status": http_status,
-        "parser_version": PARSER_VERSION,
+        "parser_version": parser_version,
         "observed_at": observed_at,
         "status": status,
         "matched_id": matched_id,
@@ -369,6 +392,7 @@ def check_unavailable(
     error_code: str,
     check_id: str | None = None,
     batch_id: str | None = None,
+    parser_version: ParserVersion = PARSER_VERSION,
 ) -> CheckReceipt:
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", error_code):
         raise ValueError("invalid transport error code")
@@ -392,7 +416,7 @@ def check_unavailable(
         "query": _query(reference, provider),
         "response_sha256": sha256_hex(b""),
         "http_status": None,
-        "parser_version": PARSER_VERSION,
+        "parser_version": parser_version,
         "observed_at": observed_at,
         "status": "unavailable",
         "matched_id": None,
@@ -485,6 +509,7 @@ def replay_check(
             error_code=receipt.error_code,
             check_id=receipt.check_id,
             batch_id=receipt.batch_id,
+            parser_version=receipt.parser_version,
         )
         if receipt.status == "unavailable"
         and receipt.error_code is not None
@@ -497,6 +522,7 @@ def replay_check(
             http_status=receipt.http_status or 200,
             check_id=receipt.check_id,
             batch_id=receipt.batch_id,
+            parser_version=receipt.parser_version,
         )
     )
     if replayed != receipt:
