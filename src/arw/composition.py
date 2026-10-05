@@ -10,11 +10,56 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from importlib import import_module
+from importlib.util import find_spec
 from pathlib import Path
 
 from arw.kernel.capabilities import CapabilityRouter
 
 _PROVENANCE_PLATFORM_SUPPORTED = os.name != "nt"
+
+
+def core_provider_records(*, probe: bool = True) -> list[dict[str, object]]:
+    """Describe shipped providers without constructing them or probing services.
+
+    Configuration-bound providers remain not_evaluated until an operation
+    supplies its allowed root, run, store, or model. A registered lazy factory
+    alone is never reported as ready.
+    """
+
+    candidates = (
+        ("artifact.inspect", "arw_artifact_integrity.service", "local_artifact", False),
+        ("artifact.sanitize", "arw_artifact_integrity.service", "local_artifact", True),
+        ("research.literature", "arw_ars", "bundled_ars", False),
+        ("research.artifact.compile", "arw_research_artifact.service", "research_artifact", True),
+        ("research.memory.search", "arw_research_memory.service", "research_memory", True),
+        ("writing.narrative_fit", "arw_writing.narrative_fit", "writing", True),
+        ("files.local", "arw.adapters.files", "local_files", True),
+        ("knowledge.semantic_search", "arw_ext.local_store.semantic", "semantic_search", True),
+    )
+    records: list[dict[str, object]] = []
+    for capability, module, adapter, needs_configuration in candidates:
+        installed: bool | None = None
+        if probe:
+            try:
+                installed = find_spec(module) is not None
+            except (ImportError, ModuleNotFoundError, ValueError):
+                installed = False
+        records.append({
+            "capability": capability,
+            "adapter": adapter,
+            "module_present": installed,
+            "provider_status": (
+                "not_evaluated" if installed is None else
+                "not_provided" if not installed else "not_evaluated"
+            ),
+            "reason_code": (
+                "core_integrity_blocked" if installed is None else
+                "provider_module_missing" if not installed else
+                "operation_configuration_required" if needs_configuration else
+                "module_present_import_not_evaluated"
+            ),
+        })
+    return records
 
 
 def default_router(
@@ -67,6 +112,10 @@ def default_router(
     router.register_optional(
         AUDIT_CAPABILITY,
         lambda: import_module("arw_writing.service").WritingAuditService(),
+    )
+    router.register_optional(
+        "writing.narrative_fit",
+        lambda: import_module("arw_writing.narrative_fit").WritingNarrativeFitService(writing_run_root),
     )
     def _semantic():
         module = import_module("arw_ext.local_store.semantic")
@@ -205,7 +254,7 @@ def default_router(
             "evidence": (),
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
-            "writing": (*WRITING_CAPABILITIES, AUDIT_CAPABILITY),
+            "writing": (*WRITING_CAPABILITIES, AUDIT_CAPABILITY, "writing.narrative_fit"),
             "semantic": ("knowledge.semantic_search",),
             "provenance": ("knowledge.provenance",),
             "learning": ("research.learning.observe", "research.learning.heuristic.extract", "research.learning.heuristic.inspect", "research.learning.heuristic.evaluate", "research.learning.heuristic.qualify", "research.learning.heuristic.reject", "research.learning.promote"),

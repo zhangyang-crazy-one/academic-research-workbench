@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/core-route.schema.json",
+  "title": "Core route report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "core_integrity", "source_mode", "reason_codes", "verified_digests", "capabilities", "execution_adapters"],
+  "properties": {
+    "schema_version": {"const": "arw.core-route.v1"},
+    "core_integrity": {"enum": ["PASS", "BLOCKED", "UNVERIFIED"]},
+    "source_mode": {"enum": ["staged", "editable_checkout"]},
+    "reason_codes": {"type": "array", "items": {"type": "string"}},
+    "verified_digests": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["stage_inventory_sha256", "build_identity_sha256", "first_party_wheel_sha256"], "properties": {
+          "stage_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "build_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "first_party_wheel_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }}
+      ]
+    },
+    "capabilities": {"type": "array", "items": {"$ref": "#/$defs/provider"}},
+    "execution_adapters": {"type": "array", "items": {"$ref": "#/$defs/adapter"}}
+  },
+  "$defs": {
+    "provider": {"type": "object", "additionalProperties": false, "required": ["capability", "adapter", "provider_status", "reason_code", "module_present"], "properties": {
+      "capability": {"type": "string"}, "adapter": {"type": "string"}, "module_present": {"type": ["boolean", "null"]}, "provider_status": {"enum": ["not_provided", "not_evaluated"]}, "reason_code": {"enum": ["provider_module_missing", "operation_configuration_required", "module_present_import_not_evaluated", "core_integrity_blocked"]}
+    }},
+    "adapter": {"type": "object", "additionalProperties": false, "required": ["adapter", "provider_status"], "properties": {
+      "adapter": {"type": "string"}, "provider_status": {"enum": ["requires_host_qualification", "not_provided", "not_evaluated"]}
+    }}
+  }
+}

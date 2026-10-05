@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.state.narrative_realization import NarrativeRealization
 from arw.ports.writing import CAPABILITIES
 
 from .detection import compare
@@ -36,6 +37,8 @@ class Proposal(Strict):
     schema_version: Literal["arw.writing-proposal.v1"]
     capability: str
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    narrative_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    narrative_realization: NarrativeRealization | None = None
     author_target: str = Field(min_length=1, max_length=4096)
     language: Literal["en", "zh", "en-zh"]
     protected_terms: list[str] = Field(max_length=100)
@@ -112,9 +115,9 @@ class SessionWritingTransformer:
             "schema_version": "arw.writing-candidate.v1",
             "transformer": "session-exact-span",
             "transformer_version": "1",
-            "proposal": p.model_dump(mode="json"),
+            "proposal": p.model_dump(mode="json", exclude_none=True),
             "proposal_sha256": sha256_hex(
-                canonical_json_bytes(p.model_dump(mode="json"))
+                canonical_json_bytes(p.model_dump(mode="json", exclude_none=True))
             ),
             "source": source,
             "source_sha256": p.source_sha256,

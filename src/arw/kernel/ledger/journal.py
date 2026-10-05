@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import re
 import signal
-from contextlib import contextmanager
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import portalocker
 from pydantic import ValidationError
@@ -243,6 +244,8 @@ def initialize_run(
         workflow_definition_sha256=request.workflow_definition_sha256,
         journal_layout=request.journal_layout,
         capabilities=request.capabilities,
+        narrative_binding=request.narrative_binding,
+        task_kind=request.task_kind,
     )
     manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True))
     unsigned: dict[str, object] = {
@@ -271,7 +274,9 @@ def initialize_run(
     journal_root = root / "journal"
     segments_root = root / SEGMENTS_RELATIVE
     try:
-        with _lock(root, lock_timeout):
+        from arw.kernel.ledger.narrative import guard_start
+        narrative_guard = guard_start(root, request.narrative_binding) if request.narrative_binding else nullcontext()
+        with narrative_guard, _lock(root, lock_timeout):
             if (
                 manifest_path.exists()
                 or (root / JOURNAL_NAME).exists()
@@ -413,7 +418,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 raise JournalError("first journal event does not bind the manifest bytes")
         elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted"}:
             try:
                 validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:

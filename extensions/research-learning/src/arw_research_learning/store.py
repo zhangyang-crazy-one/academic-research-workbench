@@ -226,6 +226,128 @@ def inventory(root, held=None):
                         accepted_artifact(
                             run_root, state.events, artifact_id, source_cache
                         )
+                    if doc.observation_kind == "venue_exemplar":
+                        from arw.kernel.state.venue_learning import (
+                            parse_venue_exemplar,
+                            parse_venue_source_review,
+                            verify_venue_source_binding,
+                        )
+
+                        if len(doc.source_artifact_ids) != 3:
+                            raise LearningFault(
+                                "exemplar observation source set is incomplete"
+                            )
+                        exemplar = parse_venue_exemplar(
+                            accepted_artifact(
+                                run_root,
+                                state.events,
+                                doc.source_artifact_ids[0],
+                                source_cache,
+                            )[1]
+                        )
+                        if exemplar.source_artifact_id != doc.source_artifact_ids[1]:
+                            raise LearningFault(
+                                "exemplar source artifact binding mismatch"
+                            )
+                        if (
+                            exemplar.source_sha256
+                            != accepted_artifact(
+                                run_root,
+                                state.events,
+                                exemplar.source_artifact_id,
+                                source_cache,
+                            )[0].payload.artifact_sha256
+                        ):
+                            raise LearningFault("exemplar source hash mismatch")
+                        if (
+                            exemplar.source_review_artifact_id
+                            != doc.source_artifact_ids[2]
+                        ):
+                            raise LearningFault(
+                                "exemplar review artifact binding mismatch"
+                            )
+                        review = parse_venue_source_review(
+                            accepted_artifact(
+                                run_root,
+                                state.events,
+                                exemplar.source_review_artifact_id,
+                                source_cache,
+                            )[1]
+                        )
+                        if (
+                            review.source_sha256 != exemplar.source_sha256
+                            or review.official_url != exemplar.official_url
+                            or review.doi != exemplar.doi
+                            or review.accepted_category != exemplar.accepted_category
+                            or review.accepted_year != exemplar.accepted_year
+                            or review.access_basis != exemplar.access_basis
+                            or review.reviewer != exemplar.source_reviewer
+                        ):
+                            raise LearningFault("exemplar source review mismatch")
+                        review_event, _ = accepted_artifact(
+                            run_root,
+                            state.events,
+                            exemplar.source_review_artifact_id,
+                            source_cache,
+                        )
+                        exemplar_event, _ = accepted_artifact(
+                            run_root,
+                            state.events,
+                            doc.source_artifact_ids[0],
+                            source_cache,
+                        )
+                        if review_event.sequence >= exemplar_event.sequence:
+                            raise LearningFault(
+                                "exemplar review must precede annotation"
+                            )
+                        try:
+                            verify_venue_source_binding(
+                                exemplar,
+                                review,
+                                accepted_artifact(
+                                    run_root,
+                                    state.events,
+                                    exemplar.source_artifact_id,
+                                    source_cache,
+                                )[1],
+                            )
+                        except (ValueError, TypeError) as error:
+                            raise LearningFault(str(error)) from error
+                    elif doc.observation_kind == "venue_outcome":
+                        from arw.kernel.state.venue_learning import VenueOutcome
+
+                        if len(doc.source_artifact_ids) < 2:
+                            raise LearningFault(
+                                "venue outcome observation source set is incomplete"
+                            )
+                        outcome = VenueOutcome.model_validate_json(
+                            accepted_artifact(
+                                run_root,
+                                state.events,
+                                doc.source_artifact_ids[0],
+                                source_cache,
+                            )[1]
+                        )
+                        if tuple(doc.source_artifact_ids) != (
+                            doc.source_artifact_ids[0],
+                            outcome.evidence_artifact_id,
+                            *outcome.heuristic_use_artifact_ids,
+                        ):
+                            raise LearningFault("venue outcome source set mismatch")
+                        if outcome.evidence_artifact_id != doc.source_artifact_ids[1]:
+                            raise LearningFault(
+                                "venue outcome evidence binding mismatch"
+                            )
+                        if (
+                            outcome.evidence_digest
+                            != accepted_artifact(
+                                run_root,
+                                state.events,
+                                outcome.evidence_artifact_id,
+                                source_cache,
+                            )[0].payload.artifact_sha256
+                        ):
+                            raise LearningFault("venue outcome evidence hash mismatch")
                 elif p.status == "candidate":
                     doc = ResearchHeuristic.model_validate_json(json.dumps(body))
                     if (

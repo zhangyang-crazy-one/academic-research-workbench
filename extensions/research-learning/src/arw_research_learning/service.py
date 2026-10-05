@@ -13,6 +13,7 @@ from arw.kernel.ledger.journal import (
     append_runtime_event_unlocked,
     build_runtime_event,
     locked_replay,
+    replay_run,
 )
 from arw.kernel.ledger.reducer import reduce_events
 from arw.kernel.ledger.research_records import (
@@ -21,7 +22,7 @@ from arw.kernel.ledger.research_records import (
     unlink_retained,
 )
 from arw.kernel.ledger.source_locations import read_retained_bytes
-from arw.kernel.state.models import ResearchLearningPayload
+from arw.kernel.state.models import ResearchLearningPayload, RunManifest
 from arw.kernel.state.research_learning import (
     Applicability,
     EvaluationPolicy,
@@ -29,6 +30,16 @@ from arw.kernel.state.research_learning import (
     HeuristicInput,
     LearningObservation,
     ResearchHeuristic,
+)
+from arw.kernel.state.venue_learning import (
+    VenueEvidencePolicy,
+    VenueEvidenceSample,
+    VenueOutcome,
+    exemplar_identity_keys,
+    legacy_style_drafts,
+    parse_venue_exemplar,
+    parse_venue_source_review,
+    verify_venue_source_binding,
 )
 
 from .operations import ACTIVE_INTENT, command_path, replayable
@@ -262,6 +273,219 @@ class ResearchLearningService:
         return self._finish(result)
 
     @replayable
+    def observe_venue(self, artifact_id, *, request):
+        """Project a reviewed exemplar or bound outcome from accepted artifacts."""
+        with self._writer(request) as state:
+            event, raw = accepted_artifact(self.run_root, state.events, artifact_id)
+            reject_secret_shapes(raw)
+            document = json.loads(raw)
+            kind = document.get("schema_version")
+            sources = [event]
+            if kind in {"arw.venue-exemplar.v1", "arw.venue-exemplar.v2"}:
+                exemplar = parse_venue_exemplar(raw)
+                source_event, source = accepted_artifact(
+                    self.run_root, state.events, exemplar.source_artifact_id
+                )
+                if sha256_hex(source) != exemplar.source_sha256:
+                    raise LearningFault("exemplar source digest mismatch")
+                review_event, review_raw = accepted_artifact(
+                    self.run_root, state.events, exemplar.source_review_artifact_id
+                )
+                review = parse_venue_source_review(review_raw)
+                if any((
+                    review.source_artifact_id != exemplar.source_artifact_id,
+                    review.source_sha256 != exemplar.source_sha256,
+                    review.official_url != exemplar.official_url,
+                    review.doi != exemplar.doi,
+                    review.accepted_category != exemplar.accepted_category,
+                    review.accepted_year != exemplar.accepted_year,
+                    review.access_basis != exemplar.access_basis,
+                    review.reviewer != exemplar.source_reviewer,
+                    review_event.sequence >= event.sequence,
+                )):
+                    raise LearningFault("exemplar lacks a prior exact accepted source review")
+                try:
+                    verify_venue_source_binding(exemplar, review, source)
+                except (ValueError, TypeError) as error:
+                    raise LearningFault(str(error)) from error
+                records, runs = inventory(self.root, held=(self.run_root, state))
+                for prior in records.values():
+                    body = prior["body"]
+                    if body is None or body.get("observation_kind") != "venue_exemplar":
+                        continue
+                    previous_root = prior["run_root"]
+                    previous_state = runs[body["run_id"]][1]
+                    previous = parse_venue_exemplar(accepted_artifact(
+                        previous_root, previous_state.events, body["source_artifact_ids"][0]
+                    )[1])
+                    if exemplar_identity_keys(exemplar) & exemplar_identity_keys(previous):
+                        raise LearningFault("duplicate venue exemplar DOI, URL or source digest")
+                sources.extend((source_event, review_event))
+                observation_kind = "venue_exemplar"
+                description = (
+                    f"Reviewed {exemplar.accepted_year} {exemplar.accepted_category} "
+                    f"exemplar {exemplar.exemplar_id}; source and annotation retained"
+                )
+                source_ids = (artifact_id, exemplar.source_artifact_id, exemplar.source_review_artifact_id)
+            elif kind == "arw.venue-outcome.v1":
+                outcome = VenueOutcome.model_validate_json(raw)
+                from arw.kernel.ledger import narrative
+
+                manifest = RunManifest.model_validate_json(read_retained_bytes(
+                    self.run_root, "run-manifest.json", max_bytes=65536
+                ))
+                binding = manifest.narrative_binding
+                if (
+                    manifest.task_kind != "paper" or binding is None
+                    or binding.initial_sha256 != outcome.narrative_sha256
+                    or binding.initial_version != outcome.narrative_version
+                ):
+                    raise LearningFault("venue outcome must bind the paper run's selected narrative")
+                narrative_root = narrative._binding_root(self.run_root, binding)
+                with narrative._locked(narrative_root, write=False):
+                    history, _, _ = narrative._read(narrative_root)
+                    if not any(
+                        item["event_sha256"] == outcome.narrative_sha256
+                        and item["version"] == outcome.narrative_version
+                        for item in history
+                    ):
+                        raise LearningFault("venue outcome narrative history is missing")
+                evidence_event, evidence = accepted_artifact(
+                    self.run_root, state.events, outcome.evidence_artifact_id
+                )
+                if sha256_hex(evidence) != outcome.evidence_digest:
+                    raise LearningFault("venue outcome evidence digest mismatch")
+                sources.append(evidence_event)
+                records, _ = inventory(self.root, held=(self.run_root, state))
+                for heuristic_id, use_artifact_id in zip(
+                    outcome.heuristic_ids, outcome.heuristic_use_artifact_ids, strict=True
+                ):
+                    entry = records.get(heuristic_id)
+                    promotions = [
+                        prior for prior in state.events[:event.sequence]
+                        if prior.event_type == "research_heuristic_promoted"
+                        and prior.payload.record_id == heuristic_id
+                    ]
+                    if not entry or not promotions:
+                        raise LearningFault("venue outcome needs historical promotion in its run")
+                    use_event, use_raw = accepted_artifact(
+                        self.run_root, state.events, use_artifact_id
+                    )
+                    use = json.loads(use_raw)
+                    if (
+                        use_event.sequence >= event.sequence
+                        or use.get("schema_version") != "arw.learning-decision.v1"
+                        or use.get("heuristic_id") != heuristic_id
+                        or use.get("promotion_event_id") not in {p.event_id for p in promotions}
+                        or use.get("applicability") != entry["candidate"]["applicability"]
+                        or not isinstance(use.get("author"), str)
+                        or not use["author"].strip()
+                        or not isinstance(use.get("chosen_action"), str)
+                        or not use["chosen_action"].strip()
+                    ):
+                        raise LearningFault("venue outcome needs prior accepted heuristic-use evidence")
+                    measured_outcome = use.get("outcome")
+                    if not isinstance(measured_outcome, dict) or type(measured_outcome.get("measured")) is not bool:
+                        raise LearningFault("heuristic use must distinguish measured and unmeasured outcome")
+                    if measured_outcome["measured"]:
+                        metric_event, metric_raw = accepted_artifact(
+                            self.run_root, state.events, measured_outcome.get("source_artifact_id")
+                        )
+                        metric = json.loads(metric_raw)
+                        if (
+                            metric_event.sequence >= use_event.sequence
+                            or metric.get("metric") != entry["candidate"]["applicability"]["metric"]
+                            or metric.get("value") != measured_outcome.get("value")
+                        ):
+                            raise LearningFault("measured heuristic use lacks prior matched metric evidence")
+                        sources.append(metric_event)
+                    elif measured_outcome.get("value") is not None:
+                        raise LearningFault("unmeasured heuristic use cannot assert value")
+                    sources.append(use_event)
+                    fit = entry["candidate"].get("venue_applicability")
+                    if fit and (fit["venue_id"], fit["domain_id"]) != (
+                        outcome.venue_id, outcome.domain_id
+                    ):
+                        raise LearningFault("venue outcome heuristic applicability mismatch")
+                observation_kind = "venue_outcome"
+                description = f"Venue outcome {outcome.outcome_id} bound to narrative {outcome.narrative_sha256}"
+                source_ids = (artifact_id, outcome.evidence_artifact_id, *outcome.heuristic_use_artifact_ids)
+            elif kind == "1.0" and isinstance(document.get("style_learning"), dict):
+                legacy_style_drafts(raw)
+                observation_kind = "legacy_venue_style"
+                description = "Unverified legacy editorial profile retained for migration"
+                source_ids = (artifact_id,)
+            else:
+                raise LearningFault("unsupported venue evidence artifact")
+            record_id = "observation-" + str(
+                uuid.UUID(request.command_id.removeprefix("cmd-"))
+            )
+            body = LearningObservation(
+                observation_id=record_id,
+                project_id=self.project_id,
+                run_id=state.run_id,
+                ledger_event_id=event.event_id,
+                observation_kind=observation_kind,
+                source_artifact_ids=source_ids,
+                trigger=kind,
+                outcome=description,
+                created_at=request.occurred_at,
+                source_digest=event.payload.artifact_sha256,
+            )
+            result = self._commit(
+                state, request, "learning_observation_recorded",
+                body.model_dump(mode="json"), sources=sources, status="recorded",
+            )
+        return self._finish(result)
+
+    def migrate_style_candidate(self, value, *, request):
+        """Record a single unverified legacy clause as a candidate ledger event."""
+        if not isinstance(value, dict):
+            raise LearningFault("legacy migration input must be an object")
+        records, runs = inventory(self.root)
+        observed = records.get(value.get("legacy_observation_id"))
+        if (
+            observed is None or observed["body"] is None
+            or observed["body"].get("observation_kind") != "legacy_venue_style"
+        ):
+            raise LearningFault("legacy migration requires a retained profile observation")
+        run_root = observed["run_root"]
+        state = runs[observed["body"]["run_id"]][1]
+        _, raw = accepted_artifact(
+            run_root, state.events, observed["body"]["source_artifact_ids"][0]
+        )
+        matching = [d for d in legacy_style_drafts(raw)["drafts"] if d["draft_id"] == value.get("draft_id")]
+        if len(matching) != 1:
+            raise LearningFault("legacy draft is missing or ambiguous")
+        draft = matching[0]
+        quantity = value.get("venue_quantity_guidance")
+        if value.get("legacy_guidance_review") is None:
+            raise LearningFault("legacy guidance requires explicit nonmandatory review and counterexample needs")
+        if value.get("venue_applicability") is None:
+            raise LearningFault("legacy candidate requires explicit venue/domain applicability")
+        candidate = HeuristicInput.model_validate_json(json.dumps({
+            "heuristic_id": value.get("heuristic_id"),
+            "scope": "project",
+            "domain": value.get("domain"),
+            "trigger": value.get("trigger", "Review venue-specific editorial fit"),
+            "proposed_action": draft["proposed_action"],
+            "applicability": value.get("applicability"),
+            "venue_applicability": value.get("venue_applicability"),
+            "venue_quantity_guidance": quantity,
+            "migration_status": "unverified_legacy",
+            "legacy_guidance_review": value["legacy_guidance_review"],
+            "confidence": 0,
+            "supporting_observation_ids": [],
+            "unknown": [{"observation_id": value["legacy_observation_id"],
+                         "rationale": "Legacy editorial inference lacks source-bound exemplar review"}],
+            "search_coverage": "Legacy profile only; no verified exemplar search",
+            "evaluation_coverage": "Not evaluated; create a verified successor candidate",
+            "producer": "legacy-style-migration",
+            "producer_version": "1",
+        }))
+        return self.extract(candidate, request=request)
+
+    @replayable
     def extract(self, value: HeuristicInput, *, request):
         # Canonical input is validated even for direct Python callers.
         value = HeuristicInput.model_validate_json(value.model_dump_json())
@@ -269,7 +493,7 @@ class ResearchLearningService:
         if value.scope not in {"run", "project"}:
             raise LearningFault("broader scopes require explicit qualified promotion")
         with self._writer(request) as state:
-            records, _ = inventory(self.root, held=(self.run_root, state))
+            records, runs = inventory(self.root, held=(self.run_root, state))
             existing = records.get(value.heuristic_id)
             old_command = next(
                 (e for e in state.events if e.command_id == request.command_id), None
@@ -300,6 +524,25 @@ class ResearchLearningService:
                         "duplicate observation must reference the original sample"
                     )
                 observations.append(entry)
+            if value.venue_applicability is not None and value.migration_status is None:
+                for observation_id in (
+                    *value.supporting_observation_ids,
+                    *value.counterexample_observation_ids,
+                ):
+                    if records[observation_id]["body"]["observation_kind"] != "venue_exemplar":
+                        raise LearningFault("venue support and counterexamples require source-bound exemplars")
+                    observed = records[observation_id]
+                    observed_root = observed["run_root"]
+                    observed_state = runs[observed["body"]["run_id"]][1]
+                    exemplar = parse_venue_exemplar(accepted_artifact(
+                        observed_root, observed_state.events,
+                        observed["body"]["source_artifact_ids"][0],
+                    )[1])
+                    if (
+                        exemplar.venue_id != value.venue_applicability.venue_id
+                        or exemplar.domain_id != value.venue_applicability.domain_id
+                    ):
+                        raise LearningFault("venue candidate evidence applicability mismatch")
             if value.supersedes:
                 predecessor = records.get(value.supersedes)
                 if not predecessor or predecessor["head"].payload.status in {
@@ -340,6 +583,14 @@ class ResearchLearningService:
                 status="candidate",
                 trust="unreviewed",
             )
+            candidate_body = body.model_dump(mode="json")
+            # Preserve historical v1 bytes when new optional venue fields are absent.
+            for optional_name in (
+                "venue_applicability", "venue_quantity_guidance", "migration_status",
+                "legacy_guidance_review",
+            ):
+                if candidate_body.get(optional_name) is None:
+                    candidate_body.pop(optional_name, None)
             # References to other registered runs are retained in the body; this run binds its own events.
             sources = [
                 e["head"] for e in observations if e["run_root"] == self.run_root
@@ -348,7 +599,7 @@ class ResearchLearningService:
                 state,
                 request,
                 "research_heuristic_proposed",
-                body.model_dump(mode="json"),
+                candidate_body,
                 sources=sources,
                 status="candidate",
             )
@@ -426,6 +677,9 @@ class ResearchLearningService:
         if not artifact_id:
             raise LearningFault("an accepted versioned evaluation policy is required")
         event, raw = accepted_artifact(self.run_root, state.events, artifact_id)
+        document = json.loads(raw)
+        if document.get("schema_version") == "arw.venue-evidence-policy.v1":
+            return VenueEvidencePolicy.model_validate_json(raw), event
         return EvaluationPolicy.model_validate_json(raw), event
 
     @replayable
@@ -436,9 +690,13 @@ class ResearchLearningService:
             or len(sample_artifact_ids) != len(set(sample_artifact_ids))
         ):
             raise LearningFault("evaluation requires unique bounded accepted samples")
+        if isinstance(self._policy(replay_run(self.run_root))[0], VenueEvidencePolicy):
+            return self._evaluate_venue(heuristic_id, sample_artifact_ids, request=request)
         with self._writer(request) as state:
             records, runs = inventory(self.root, held=(self.run_root, state))
             entry = self._entry(records, heuristic_id, writable=True)
+            if entry["candidate"].get("migration_status") == "unverified_legacy":
+                raise LearningFault("legacy candidate needs a verified successor before evaluation")
             policy, policy_event = self._policy(state)
             if entry["head"].payload.status not in {
                 "candidate",
@@ -555,6 +813,103 @@ class ResearchLearningService:
                 sources=sources,
                 status="evaluated",
                 evaluation_receipt_id=digest,
+            )
+            result.update(qualification=body["qualification"], metrics=body["metrics"])
+        return self._finish(result)
+
+    def _evaluate_venue(self, heuristic_id, sample_artifact_ids, *, request):
+        with self._writer(request) as state:
+            records, runs = inventory(self.root, held=(self.run_root, state))
+            entry = self._entry(records, heuristic_id, writable=True)
+            if entry["candidate"].get("migration_status") == "unverified_legacy":
+                raise LearningFault("legacy candidate needs a verified successor before evaluation")
+            policy, policy_event = self._policy(state)
+            if not isinstance(policy, VenueEvidencePolicy):
+                raise ReevaluationRequired("venue policy changed during evaluation")
+            if entry["head"].payload.status not in {"candidate", "evaluated", "qualified"}:
+                raise LearningFault("terminal heuristic requires a new successor version")
+            fit = entry["candidate"].get("venue_applicability")
+            if fit is None:
+                raise LearningFault("venue evaluation requires explicit venue/domain applicability")
+            samples = []
+            independent_keys = set()
+            for artifact_id in sample_artifact_ids:
+                event, raw = accepted_artifact(self.run_root, state.events, artifact_id)
+                reject_secret_shapes(raw)
+                sample = VenueEvidenceSample.model_validate_json(raw)
+                if (
+                    sample.heuristic_id != heuristic_id
+                    or sample.policy_id != policy.policy_id
+                    or sample.policy_version != policy.version
+                ):
+                    raise LearningFault("venue sample candidate/policy mismatch")
+                observed = records.get(sample.exemplar_observation_id)
+                if (
+                    not observed
+                    or observed["body"] is None
+                    or observed["body"].get("observation_kind") != "venue_exemplar"
+                    or observed["body"].get("duplicate_of") is not None
+                ):
+                    raise LearningFault("venue sample must reference a source-bound exemplar")
+                observed_root = observed["run_root"]
+                observed_state = runs[observed["body"]["run_id"]][1]
+                exemplar = parse_venue_exemplar(
+                    accepted_artifact(
+                        observed_root, observed_state.events,
+                        observed["body"]["source_artifact_ids"][0],
+                    )[1]
+                )
+                if (
+                    exemplar.venue_id != fit["venue_id"]
+                    or exemplar.domain_id != fit["domain_id"]
+                ):
+                    raise LearningFault("venue sample applicability mismatch")
+                if sample.finding in {"supporting", "counterexample"} and exemplar.access_basis not in {"official_full_text", "accepted_author_full_text", "preprint_full_text"}:
+                    raise LearningFault("metadata-only exemplar cannot establish a pattern finding")
+                keys = exemplar_identity_keys(exemplar)
+                if independent_keys & keys:
+                    raise LearningFault("venue policy includes duplicate paper identity")
+                independent_keys.update(keys)
+                samples.append({
+                    "artifact_id": artifact_id,
+                    "event_id": event.event_id,
+                    "source_digest": event.payload.artifact_sha256,
+                    "sample": sample.model_dump(mode="json"),
+                })
+            observed_ids = [s["sample"]["exemplar_observation_id"] for s in samples]
+            if len(set(observed_ids)) != len(observed_ids) or set(observed_ids) != set(policy.exemplar_observation_ids):
+                raise LearningFault("venue samples must cover exact independent exemplar subset")
+            counts = {
+                name: sum(s["sample"]["finding"] == name for s in samples)
+                for name in ("supporting", "counterexample", "unknown")
+            }
+            passed = counts["supporting"] > counts["counterexample"]
+            body = {
+                "schema_version": "arw.heuristic-evaluation.v2",
+                "record_id": heuristic_id,
+                "project_id": self.project_id,
+                "heuristic_digest": entry["creation"].payload.content_digest,
+                "policy": policy.model_dump(mode="json"),
+                "policy_digest": policy_event.payload.artifact_sha256,
+                "mode": policy.mode,
+                "samples": samples,
+                "run_ids": sorted({records[observation_id]["body"]["run_id"] for observation_id in observed_ids}),
+                "metrics": {"counts": counts, "rule": "counterexample-ge-supporting-reject-v1"},
+                "qualification": "PASS" if passed else "FAIL",
+                "supporting": [s["sample"]["exemplar_observation_id"] for s in samples if s["sample"]["finding"] == "supporting"],
+                "counterexample": [s["sample"]["exemplar_observation_id"] for s in samples if s["sample"]["finding"] == "counterexample"],
+                "unknown": [s["sample"]["exemplar_observation_id"] for s in samples if s["sample"]["finding"] == "unknown"],
+                "search_coverage": entry["candidate"]["search_coverage"],
+                "evaluation_coverage": entry["candidate"]["evaluation_coverage"],
+                "confidence": None,
+                "workflow_modified": False,
+            }
+            digest = sha256_hex(canonical_json_bytes(body))
+            result = self._commit(
+                state, request, "research_heuristic_evaluated", body,
+                prior=entry["head"], sources=[policy_event, *(
+                    e for e in state.events if e.event_id in {s["event_id"] for s in samples}
+                )], status="evaluated", evaluation_receipt_id=digest,
             )
             result.update(qualification=body["qualification"], metrics=body["metrics"])
         return self._finish(result)
@@ -831,7 +1186,7 @@ class ResearchLearningService:
             "status": "tombstoned",
         }
 
-    def applicable(self, conditions: Applicability, *, max_items=10):
+    def applicable(self, conditions: Applicability, *, max_items=10, venue_id=None, domain_id=None):
         if not configuration(self.root).enabled:
             return {"items": [], "activation": "disabled", "executable": False}
         if not 1 <= max_items <= 20:
@@ -846,10 +1201,19 @@ class ResearchLearningService:
                 != conditions.model_dump(mode="json")
             ):
                 continue
+            if entry["head"].payload.scope == "run" and (
+                self.run_root is None or entry["run_root"] != self.run_root
+            ):
+                continue
+            venue_fit = entry["candidate"].get("venue_applicability")
+            if venue_fit and (
+                venue_id != venue_fit["venue_id"]
+                or domain_id != venue_fit["domain_id"]
+            ):
+                continue
             # Reading the current receipt verifies retained qualification/evaluation evidence.
             item = self.inspect(key)
-            result.append(
-                {
+            advisory = {
                     "heuristic_id": key,
                     "suggested_action": item["proposed_action"],
                     "applicability": item["applicability"],
@@ -857,13 +1221,57 @@ class ResearchLearningService:
                     "counterexample": item["counterexample_observation_ids"],
                     "unknown": item["unknown"],
                     "promotion_event_id": item["accepted_ledger_event_id"],
+                    "approved_scope": item["scope"],
+                    "venue_applicability": venue_fit,
+                    "evidence_counts": item.get("evaluation", {}).get("metrics", {}).get("counts"),
                     "author_choice_required": True,
                     "outcome": "unmeasured until an accepted decision/outcome receipt exists",
                 }
-            )
+            if item.get("evaluation", {}).get("schema_version") == "arw.heuristic-evaluation.v2":
+                advisory.update(
+                    evaluated_supporting=item["evaluation"]["supporting"],
+                    evaluated_counterexample=item["evaluation"]["counterexample"],
+                    evaluated_unknown=item["evaluation"]["unknown"],
+                )
+            result.append(advisory)
             if len(result) >= max_items:
                 break
         return {"items": result, "executable": False}
+
+    def phase2_advisories(self, conditions: Applicability, *, venue_id, domain_id, max_items=10):
+        """Read-only suggestions bound to the paper run's selected narrative."""
+        if self.run_root is None or not venue_id or not domain_id:
+            raise LearningFault("Phase 2 advisories require a paper run, venue and domain")
+        from arw.kernel.ledger.narrative import guard_run
+
+        manifest = RunManifest.model_validate_json(read_retained_bytes(
+            self.run_root, "run-manifest.json", max_bytes=65536
+        ))
+        if manifest.task_kind != "paper" or manifest.narrative_binding is None:
+            raise LearningFault("Phase 2 advisories require a selected paper narrative")
+        if (manifest.narrative_binding.project_id != self.project_id
+                or (self.run_root / manifest.narrative_binding.project_relative_path).resolve()
+                != self.root.resolve()):
+            raise LearningFault("Phase 2 run is bound to a different selected project")
+        with guard_run(
+            self.run_root, expected_sha256=manifest.narrative_binding.initial_sha256
+        ) as snapshot:
+            if snapshot is None:
+                raise LearningFault("paper narrative is missing")
+            advice = self.applicable(
+                conditions, max_items=max_items, venue_id=venue_id, domain_id=domain_id
+            )
+            return {
+                "schema_version": "arw.phase2-venue-advisories.v1",
+                "narrative_sha256": snapshot.sha256,
+                "narrative_version": snapshot.version,
+                "venue_id": venue_id,
+                "domain_id": domain_id,
+                "items": advice["items"],
+                "advisory_set_sha256": sha256_hex(canonical_json_bytes(advice["items"])),
+                "executable": False,
+                "narrative_modified": False,
+            }
 
     def decision_context(self, heuristic_id, decision_artifact_id):
         """Inspect an already accepted author choice; this read grants no authority."""

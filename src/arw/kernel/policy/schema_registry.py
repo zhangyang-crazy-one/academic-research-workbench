@@ -27,6 +27,10 @@ from arw.kernel.policy.research_integrity import (
 )
 from arw.kernel.state.execution_schema import execution_provenance_schema_document
 from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES
+from arw.kernel.state.narrative_fit import narrative_fit_schema_documents
+from arw.kernel.state.narrative_realization import (
+    narrative_realization_schema_documents,
+)
 from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
     generate_phase4_schema_documents,
@@ -39,13 +43,17 @@ from arw.kernel.state.submission import (
     SUBMISSION_SCHEMA_NAMES,
     submission_schema_documents,
 )
+from arw.kernel.state.venue_learning import venue_learning_schema_documents
 
 LEARNING_SCHEMA_NAMES = tuple(learning_schema_documents())
+VENUE_LEARNING_SCHEMA_NAMES = tuple(venue_learning_schema_documents())
+NARRATIVE_FIT_SCHEMA_NAMES = tuple(narrative_fit_schema_documents())
 
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
 PROVENANCE_SCHEMA_NAMES = tuple(provenance_schema_documents())
 RESEARCH_ARTIFACT_SCHEMA_NAMES = tuple(research_artifact_schema_documents())
+NARRATIVE_REALIZATION_SCHEMA_NAMES = tuple(narrative_realization_schema_documents())
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "build-identity.schema.json",
@@ -57,12 +65,14 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "source-manifest.schema.json",
     "version-report.schema.json",
 )
+CORE_ROUTE_SCHEMA_NAMES: tuple[str, ...] = ("core-route.schema.json",)
 QUALIFICATION_SCHEMA_NAMES: tuple[str, ...] = ("integration-lock.schema.json",)
 RESEARCH_INTEGRITY_SCHEMA_NAME = "research-integrity-contracts.schema.json"
 RESEARCH_INTEGRITY_SCHEMA_NAMES: tuple[str, ...] = (RESEARCH_INTEGRITY_SCHEMA_NAME,)
 AUDIT_SCHEMA_NAMES: tuple[str, ...] = (AUDIT_DOSSIER_SCHEMA_NAME,)
 SCHEMA_NAMES: tuple[str, ...] = (
     PHASE1_SCHEMA_NAMES
+    + CORE_ROUTE_SCHEMA_NAMES
     + (
         "execution-provenance.schema.json",
         "artifact-manifest.schema.json",
@@ -90,8 +100,11 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + AUDIT_SCHEMA_NAMES
     + PROVENANCE_SCHEMA_NAMES
     + LEARNING_SCHEMA_NAMES
+    + VENUE_LEARNING_SCHEMA_NAMES
+    + NARRATIVE_FIT_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
+    + NARRATIVE_REALIZATION_SCHEMA_NAMES
     + SUBMISSION_SCHEMA_NAMES
 )
 
@@ -252,9 +265,15 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in LEARNING_SCHEMA_NAMES and candidate != learning_schema_documents()[name]:
         raise SchemaRegistryError("learning schema drift")
+    if name in VENUE_LEARNING_SCHEMA_NAMES and candidate != venue_learning_schema_documents()[name]:
+        raise SchemaRegistryError("venue learning schema drift")
+    if name in NARRATIVE_FIT_SCHEMA_NAMES and candidate != narrative_fit_schema_documents()[name]:
+        raise SchemaRegistryError("narrative fit schema drift")
     if name in RESEARCH_MEMORY_SCHEMA_NAMES and candidate != research_memory_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESEARCH_ARTIFACT_SCHEMA_NAMES and candidate != research_artifact_schema_documents()[name]:
+        raise SchemaRegistryError(f"{name} differs from its model projection")
+    if name in NARRATIVE_REALIZATION_SCHEMA_NAMES and candidate != narrative_realization_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in SUBMISSION_SCHEMA_NAMES and candidate != submission_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its submission model projection")
@@ -291,10 +310,16 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = research_integrity_contracts_schema_document()
         elif name in LEARNING_SCHEMA_NAMES:
             document = learning_schema_documents()[name]
+        elif name in VENUE_LEARNING_SCHEMA_NAMES:
+            document = venue_learning_schema_documents()[name]
+        elif name in NARRATIVE_FIT_SCHEMA_NAMES:
+            document = narrative_fit_schema_documents()[name]
         elif name in RESEARCH_MEMORY_SCHEMA_NAMES:
             document = research_memory_schema_documents()[name]
         elif name in RESEARCH_ARTIFACT_SCHEMA_NAMES:
             document = research_artifact_schema_documents()[name]
+        elif name in NARRATIVE_REALIZATION_SCHEMA_NAMES:
+            document = narrative_realization_schema_documents()[name]
         elif name in PROVENANCE_SCHEMA_NAMES:
             document = provenance_schema_documents()[name]
         elif name == "execution-provenance.schema.json":

@@ -1,5 +1,74 @@
 # Source-bound writing transformations
 
+## Advisory narrative fit
+
+`arw writing narrative-fit` reads one accepted manuscript artifact, the selected
+project narrative, a reviewed venue profile, and optionally promoted venue
+heuristics. It never changes the narrative, journal, manuscript, acceptance
+decision, or venue profile. A capture writes a self-contained snapshot when
+`--snapshot-out` is supplied; replay reads that file offline and emits the same
+canonical report bytes even after the active narrative or profile changes.
+The smallest live invocation is `arw writing narrative-fit --run-root RUN
+--target VENUE_ID`: it selects the latest accepted draft in that run and
+converts the matching entry in the bundled annual venue registry into a frozen
+profile. The bundled hard-gate prose remains `unknown` until an exact reviewed
+typed predicate is supplied. Each rule points to the exact bundled file digest
+and JSON locator; the registry does not assign a single official source URL to
+each statement, so the report does not invent one. An absent target or draft
+is an actionable error.
+
+```sh
+PYTHONPATH=src:extensions/academic-humanization/src:extensions/research-learning/src \
+  python -m arw.cli writing narrative-fit --run-root PROJECT/runs/RUN \
+  --target venue-id --manuscript-artifact-id draft-artifact \
+  --profile reviewed-venue-profile.json --snapshot-out fit-snapshot.json
+PYTHONPATH=src:extensions/academic-humanization/src \
+  python -m arw.cli writing narrative-fit --target venue-id --snapshot fit-snapshot.json
+```
+
+For a proposed realization whose graph may fail, accept the exact UTF-8
+manuscript source through the ordinary artifact path and pass its artifact ID
+with `--realization PROPOSED.json` (a path relative to the run root). The
+proposed sidecar must name those same bytes. Mechanical graph or span failures
+appear in the structural layer with a reason code. Changed accepted bytes,
+source digests, or frozen evidence are input-integrity errors.
+
+The profile contract (`arw.venue-fit-profile.v1`) names a venue, version,
+`verified_on`, `review_due`, and provenance for each official or structural
+rule: source URL, exact source SHA-256, locator, and reviewer for typed
+predicates. Rules expressed only in natural language remain `unknown`. The
+bounded typed predicates are exact Markdown heading presence, exact text
+presence, a maximum page count measured only from an explicitly accepted PDF,
+and a listed-marker search. The last predicate reports a bounded observation,
+never comprehensive anonymity. Page count without `--pdf-artifact-id` is
+`not_evaluated`. Fit snapshots contain manuscript and referenced predecessor
+or evidence bytes, so store them as private project data.
+
+`--heuristic-id` selects only a promoted heuristic reviewed by the local
+learning service for the specified `--domain-id` and venue. Its inspected
+record, promotion event ID, supporting, counterexample and unknown evidence
+remain separate from official requirements. A heuristic without a reviewed
+typed match stays `unknown`; learned counts are descriptive, with no
+acceptance probability. With no selected heuristic, the empirical layer says
+`not_evaluated`, not that the venue has no relevant patterns. Optional
+`--judgment` accepts an existing
+`arw.fit-judgment.v1` JSON with reviewer, assessment, input digest, and, when
+model assisted, model ID, provider and prompt version. This command never
+invokes a model. Judgment cannot change the three deterministic layers.
+The initial report exposes `input_binding.judgment_input_sha256`; use that
+digest in a reviewed judgment file. For a promoted heuristic, a separate
+`--heuristic-annotations` JSON may bind its ID to a reviewed typed predicate
+and reviewer, for example `{"heuristic.id":{"predicate":{"kind":
+"heading_present","value":"Limitations"},"reviewed_by":"reviewer.id"}}`.
+
+Freshness is a separate live comparison: add `--freshness --run-root RUN
+--profile PROFILE --as-of YYYY-MM-DD`. It checks selected narrative and
+profile bytes against the frozen input and flags `needs_recheck` after the
+profile's `review_due`, even when its bytes are unchanged. Offline replay
+does not silently refresh source facts. The report is advisory and supplies
+minimal review suggestions for typed mismatches; it does not revise a plan,
+create an acceptance decision, or infer compliance from prose.
+
 The optional `arw_writing` package implements `WritingTransformer` outside the
 kernel. The composition root resolves five operations. Missing extension files
 produce the ordinary `CapabilityUnavailable` receipt. There is no nested model
@@ -214,3 +283,39 @@ hashes. The existing runtime writer handles admission, stale revisions and gates
 no new event decoder is needed. Exact retries are idempotent and changed command
 inputs conflict. Files are create-only. Rollback disables new extension calls but
 existing artifact events/bundles remain readable and replayable.
+
+## Public evidence without a selected narrative
+
+For a run without an author-selected narrative, explicitly pass
+`--without-selected-narrative --manuscript-artifact-id ACCEPTED_ID`. This bounded
+mode accepts retained Markdown, plain text, PDF, or an
+`arw.venue-source-capsule.v2` JSON artifact. It requires an explicit accepted ID,
+never silently falls back from the selected-narrative path, and rejects a run
+that already has a narrative binding. It does not accept realization, judgment,
+or heuristic selection options. The empirical layer remains `not_evaluated`;
+source-corpus annotations do not become promoted venue patterns.
+
+Public captures use the separate `arw.narrative-fit-public-snapshot.v1`
+contract. Existing selected-narrative snapshots and report contracts retain
+their versions. Replay dispatches by snapshot version and checks the accepted
+event, manifest, retained content, exact profile bytes, and any actual accepted
+PDF proof. The report uses `selected_narrative_status=not_selected`, null
+narrative digest/version, and structural `UNKNOWN`/`not_evaluated`. It makes no
+claim about an author's argument graph.
+
+For a source capsule, `retained_source_capsule_sha256` binds the accepted capsule;
+`external_reviewed_pdf_sha256` records the separately reviewed external PDF.
+`manuscript_source_sha256` is null because the capsule is not the full manuscript.
+A capsule's recorded page count cannot satisfy a PDF-page predicate: only
+actual accepted PDF bytes supplied through `--pdf-artifact-id` are counted and
+re-counted. That PDF must match the capsule's recorded external PDF digest.
+Text predicates are unevaluated for capsules and PDFs; heading predicates
+require actual Markdown. Plain-text literal checks remain bounded exact matches.
+
+A historical corpus audit may use an explicitly curated profile with empty
+rule lists when official rules have not been supplied. Its profile date records
+curation, not verification of absent venue requirements. Reports then include
+`official_requirements_status=not_evaluated` and the limit
+`official_profile_requirements_not_supplied`. Empty rule lists do not constitute
+an overall fit or compliance result. No historical venue rules are inferred
+from a different annual venue profile.

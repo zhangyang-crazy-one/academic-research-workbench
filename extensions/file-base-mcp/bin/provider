@@ -75,6 +75,14 @@ fi
 [[ "$CBM_CACHE_DIR" == /* ]] \
   || { printf 'file-base-mcp: CBM_CACHE_DIR must be absolute\n' >&2; exit 64; }
 
+# An installed ARW bundle must pass its live core gate before the direct
+# native provider operates. A standalone extracted provider has only the
+# explicit CBM root checks below and makes no ARW core-integrity claim.
+if [[ -e "$PLUGIN_ROOT/.codex-plugin/plugin.json" || -e "$PLUGIN_ROOT/bin/arw" || -d "$PLUGIN_ROOT/share/arw" ]]; then
+  "$PLUGIN_ROOT/bin/arw" route --core --json >/dev/null \
+    || { printf 'file-base-mcp: installed core integrity failed\n' >&2; exit 78; }
+fi
+
 mkdir -p -- "$CBM_CACHE_DIR"
 [[ -d "$CBM_CACHE_DIR" && ! -L "$CBM_CACHE_DIR" ]] \
   || { printf 'file-base-mcp: CBM_CACHE_DIR must be a non-symlink directory\n' >&2; exit 66; }

@@ -17,6 +17,10 @@ def configure(subparsers):
     for name in (
         "status",
         "observe",
+        "observe-venue",
+        "legacy-style-drafts",
+        "migrate-style-candidate",
+        "phase2-advisories",
         "extract",
         "import",
         "list",
@@ -36,6 +40,8 @@ def configure(subparsers):
         p.add_argument("--run-root", type=Path)
         if name in {
             "observe",
+            "observe-venue",
+            "migrate-style-candidate",
             "extract",
             "import",
             "evaluate",
@@ -55,10 +61,12 @@ def configure(subparsers):
             "evolve",
         }:
             p.add_argument("heuristic_id")
-        if name in {"extract", "import", "applicable"}:
+        if name in {"extract", "import", "applicable", "legacy-style-drafts", "migrate-style-candidate", "phase2-advisories"}:
             p.add_argument("--input", type=Path, required=True)
         if name == "observe":
             p.add_argument("--event-id", required=True)
+        if name == "observe-venue":
+            p.add_argument("--artifact-id", required=True)
         if name == "evaluate":
             p.add_argument("--sample-artifact-id", action="append", required=True)
         if name == "promote":
@@ -75,8 +83,11 @@ def configure(subparsers):
             p.add_argument("--digest", required=True)
             p.add_argument("--authorization-artifact-id", required=True)
             p.add_argument("--consent", action="store_true")
-        if name in {"list", "applicable"}:
+        if name in {"list", "applicable", "phase2-advisories"}:
             p.add_argument("--max-items", type=int, default=10)
+        if name in {"applicable", "phase2-advisories"}:
+            p.add_argument("--venue-id", required=name == "phase2-advisories")
+            p.add_argument("--domain-id", required=name == "phase2-advisories")
         if name == "use":
             p.add_argument("--decision-artifact-id", required=True)
         if name == "evolve":
@@ -94,19 +105,27 @@ def handle(args):
             "capability": "research.learning.evolve",
             "follow_up": "research-workflow-evolver",
         }
+    if action == "legacy-style-drafts":
+        from arw.kernel.state.venue_learning import legacy_style_drafts
+
+        return legacy_style_drafts(
+            read_retained_bytes(args.input.absolute().parent, args.input.name, max_bytes=65536)
+        )
     operation = (
         "research.learning.observe"
-        if action == "observe"
+        if action in {"observe", "observe-venue"}
         else "research.learning.promote"
         if action == "promote"
         else "research.learning.heuristic."
         + (
             {
                 "import": "extract",
+                "migrate-style-candidate": "extract",
                 "list": "inspect",
                 "status": "inspect",
                 "rebuild": "inspect",
                 "applicable": "inspect",
+                "phase2-advisories": "inspect",
                 "purge": "reject",
                 "use": "inspect",
             }.get(action, action)
@@ -136,8 +155,12 @@ def handle(args):
         return getattr(service, action)()
     if action == "observe":
         return service.observe(args.event_id, request=request)
+    if action == "observe-venue":
+        return service.observe_venue(args.artifact_id, request=request)
     if action == "extract":
         return service.extract(HeuristicInput.model_validate_json(raw), request=request)
+    if action == "migrate-style-candidate":
+        return service.migrate_style_candidate(json.loads(raw), request=request)
     if action == "import":
         return service.import_heuristic(json.loads(raw), request=request)
     if action == "list":
@@ -169,6 +192,13 @@ def handle(args):
             authorization_artifact_id=args.authorization_artifact_id,
             request=request,
         )
+    if action == "phase2-advisories":
+        return service.phase2_advisories(
+            Applicability.model_validate_json(raw),
+            venue_id=args.venue_id, domain_id=args.domain_id,
+            max_items=args.max_items,
+        )
     return service.applicable(
-        Applicability.model_validate_json(raw), max_items=args.max_items
+        Applicability.model_validate_json(raw), max_items=args.max_items,
+        venue_id=args.venue_id, domain_id=args.domain_id,
     )

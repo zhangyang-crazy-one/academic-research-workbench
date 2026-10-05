@@ -4137,6 +4137,8 @@ def validate_live_audit_manifests(
     stage_root: Path,
     expected_build_identity: BuildIdentityBinding | None = None,
     host_canary_evidence: Path | None = None,
+    *,
+    verify_host_canary_closure: bool = True,
 ) -> None:
     """Fail-closed gate over the live stage-inventory and build-identity manifests.
 
@@ -4176,7 +4178,7 @@ def validate_live_audit_manifests(
         if host_canary_evidence is not None
         else frozenset()
     )
-    if excluded_canary_paths != referenced_canary_paths:
+    if verify_host_canary_closure and excluded_canary_paths != referenced_canary_paths:
         unreferenced = sorted(excluded_canary_paths - referenced_canary_paths)
         missing = sorted(referenced_canary_paths - excluded_canary_paths)
         raise IntegrationLockError(

@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -124,6 +125,16 @@ class MemoryMcpServer:
 
 
 def main():
+    from arw.kernel.policy.core_integrity import (
+        CoreIntegrityError,
+        installed_core_preflight,
+    )
+
+    try:
+        installed_core_preflight()
+    except CoreIntegrityError as error:
+        print(f"memory-mcp: startup-error: core integrity: {error}", file=sys.stderr)
+        return 78
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--run-root", type=Path)

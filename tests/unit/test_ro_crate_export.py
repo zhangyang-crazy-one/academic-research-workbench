@@ -10,6 +10,7 @@ import os
 import socket
 import stat
 import struct
+import sys
 import tomllib
 import warnings
 import zipfile
@@ -902,8 +903,14 @@ def test_verify_rejects_special_roots_before_opening_as_zip(
     if special == "fifo":
         os.mkfifo(target)
     elif special == "socket":
-        with socket.socket(socket.AF_UNIX) as listener:
-            listener.bind(str(target))
+        if sys.platform == "linux":
+            # The verifier rejects the inode type before ZIP parsing; a
+            # listener is unnecessary and bind may be denied by the sandbox.
+            os.mknod(target, stat.S_IFSOCK | 0o600)
+            assert stat.S_ISSOCK(target.lstat().st_mode)
+        else:
+            with socket.socket(socket.AF_UNIX) as listener:
+                listener.bind(str(target))
     elif special == "symlink":
         referent = tmp_path / "referent.zip"
         referent.write_bytes(b"not a crate")

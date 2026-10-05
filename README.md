@@ -285,6 +285,13 @@ do not install it. For host qualification, use
 `./scripts/smoke-staged-plugin` so the marketplace, fresh homes, hook trust,
 and installed inventory are isolated and recorded together.
 
+Offline installed smoke requires the original `bwrap --unshare-net` isolation
+capability. An unavailable prerequisite returns exit 78 with a failed
+`network-isolation.json` receipt and an environment diagnostic; invalid
+isolation evidence or a product defect returns exit 70. Inspect that receipt
+and retry in an environment supporting the original isolation capability.
+There is no alternate namespace retry, and neither result qualifies the host.
+
 The staging and smoke scripts record the exact stage identity, installed
 inventory, hook definition, MCP launcher, and version tuple. Do not install
 from a dirty source checkout when making a qualification claim.
