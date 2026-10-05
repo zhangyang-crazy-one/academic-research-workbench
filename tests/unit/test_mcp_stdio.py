@@ -243,6 +243,34 @@ def test_initialize_negotiates_only_legacy(requested):
     assert "resultType" not in response["result"]
 
 
+@pytest.mark.parametrize(
+    ("method", "params"),
+    [
+        ("tools/call", {"name": "x", "arguments": {}, "_meta": {"progressToken": 7}}),
+        ("tools/list", {"_meta": {"claudecode/toolUseId": "toolu_1"}}),
+        ("ping", {"_meta": {}}),
+    ],
+)
+def test_legacy_request_meta_stays_legacy(method, params):
+    protocol = StdioProtocol(
+        name="fixture",
+        version="1",
+        tools=list,
+        call_tool=lambda _: {"content": [], "isError": False},
+    )
+    response = protocol.handle({"id": 1, "method": method, "params": params})
+    assert "error" not in response
+    assert "resultType" not in response["result"]
+
+
+def test_non_object_meta_is_invalid_params():
+    protocol = StdioProtocol(
+        name="fixture", version="1", tools=list, call_tool=lambda _: {}
+    )
+    response = protocol.handle({"id": 1, "method": "tools/list", "params": {"_meta": 1}})
+    assert response["error"]["code"] == -32602
+
+
 def test_modern_metadata_errors_and_response_budget(monkeypatch):
     protocol = StdioProtocol(
         name="fixture", version="1", tools=list, call_tool=lambda _: {}
