@@ -77,9 +77,13 @@ def configure(subparsers):
     fit.add_argument("--as-of", help="Explicit YYYY-MM-DD for profile review freshness")
 
 
+# Mirrors arw_writing.transformer.MAX_TEXT_BYTES without importing the extension.
+_MAX_WRITING_TEXT_BYTES = 1_048_576
+
+
 def load(path):
     return strict_json_loads(
-        read_retained_bytes(path.parent, path.name, max_bytes=262144)
+        read_retained_bytes(path.parent, path.name, max_bytes=2 * 1024 * 1024)
     )
 
 
@@ -190,10 +194,10 @@ def handle(args):
     detector_config = load(args.detectors) if args.detectors else None
     if args.writing_command == "audit":
         source = read_retained_bytes(
-            args.source.parent, args.source.name, max_bytes=65536
+            args.source.parent, args.source.name, max_bytes=_MAX_WRITING_TEXT_BYTES
         ).decode("utf-8")
         revision = read_retained_bytes(
-            args.revision.parent, args.revision.name, max_bytes=65536
+            args.revision.parent, args.revision.name, max_bytes=_MAX_WRITING_TEXT_BYTES
         ).decode("utf-8")
         return (
             default_router(plugin_manifest=manifest_path)

@@ -14,6 +14,10 @@ from .fact_audit import audit as fact_audit
 from .preservation import verify
 from .review_rules import plan as review_plan
 
+# One manuscript (source or candidate) per writing proposal. Receipts embed the
+# source and candidate once, so they stay well inside the retained-file budget.
+MAX_TEXT_BYTES = 1_048_576
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -72,7 +76,7 @@ class SessionWritingTransformer:
     def transform(self, source, proposal, *, detector_config=None, allow_network=False):
         p = Proposal.model_validate(proposal)
         if (
-            len(source.encode()) > 65536
+            len(source.encode()) > MAX_TEXT_BYTES
             or sha256_hex(source.encode()) != p.source_sha256
         ):
             raise ValueError("source size or digest mismatch")
@@ -88,7 +92,7 @@ class SessionWritingTransformer:
             pieces.extend((source[cursor : edit.start], edit.replacement))
             cursor = edit.end
         candidate = "".join(pieces) + source[cursor:]
-        if len(candidate.encode()) > 65536 or candidate == source:
+        if len(candidate.encode()) > MAX_TEXT_BYTES or candidate == source:
             raise ValueError("unchanged or oversized candidate")
         before, after = diagnose(source), diagnose(candidate)
         effect = effects(before, after, p.controls)
