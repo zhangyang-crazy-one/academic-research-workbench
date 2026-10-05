@@ -117,9 +117,13 @@ def _accepted(root: Path, events, artifact_id: str):
 def _pdf_pages(raw: bytes) -> int:
     try:
         from pypdf import PdfReader
-
+    except ImportError as error:
+        raise NarrativeFitError(
+            "pdf_page_count_unavailable", "actual accepted PDF could not be counted"
+        ) from error
+    try:
         return len(PdfReader(io.BytesIO(raw)).pages)
-    except (ImportError, ValueError, OSError) as error:
+    except Exception as error:  # noqa: BLE001 - pypdf raises several unrelated parser errors.
         raise NarrativeFitError(
             "pdf_page_count_unavailable", "actual accepted PDF could not be counted"
         ) from error
@@ -396,7 +400,27 @@ def _validation(root, realization, narrative, events, manuscript):
         }
 
 
-def _predicate(predicate: FitPredicate | None, text: str, pages: int | None) -> dict:
+_LATEX_HEADING = re.compile(
+    r"\\(?:part|chapter|(?:sub){0,2}section|(?:sub)?paragraph)\*?"
+    r"[ \t]*(?:\[[^\]\n]*\])?[ \t]*\{([^{}\n]*)\}"
+)
+
+
+def _source_format(source_path: str) -> str:
+    suffix = Path(source_path).suffix.casefold()
+    if suffix in {".md", ".markdown"}:
+        return "markdown"
+    if suffix in {".tex", ".ltx"}:
+        return "latex"
+    return "text"
+
+
+def _predicate(
+    predicate: FitPredicate | None,
+    text: str,
+    pages: int | None,
+    source_format: str = "markdown",
+) -> dict:
     if predicate is None:
         return {"status": "unknown", "reason": "no_reviewed_typed_predicate"}
     if predicate.kind == "pdf_page_count_at_most":
@@ -408,6 +432,14 @@ def _predicate(predicate: FitPredicate | None, text: str, pages: int | None) -> 
             "observed_page_count": pages,
         }
     assert predicate.value is not None
+    if predicate.kind == "heading_present" and source_format == "latex":
+        headings = [m.group(1).strip() for m in _LATEX_HEADING.finditer(text)]
+        return {
+            "status": "met" if predicate.value in headings else "not_met",
+            "bounded_to": "latex_sectioning_commands",
+        }
+    if predicate.kind == "heading_present" and source_format != "markdown":
+        return {"status": "not_evaluated", "reason": "heading_format_unsupported"}
     if predicate.kind == "heading_present":
         headings = [
             m.group(1).strip()
@@ -699,6 +731,11 @@ def report(snapshot: FitSnapshot | PublicFitSnapshot) -> dict:
         return _public_report(snapshot)
     raw = _check_snapshot(snapshot)
     text = raw.decode("utf-8")
+    source_format = (
+        _source_format(snapshot.realization.source_path)
+        if snapshot.predicate_policy == "source-format-v2"
+        else "markdown"
+    )
 
     def rule_result(rule):
         return {
@@ -710,7 +747,9 @@ def report(snapshot: FitSnapshot | PublicFitSnapshot) -> dict:
                 "source_locator": rule.source_locator,
                 "reviewed_by": rule.reviewed_by,
             },
-            "assessment": _predicate(rule.predicate, text, snapshot.pdf_page_count),
+            "assessment": _predicate(
+                rule.predicate, text, snapshot.pdf_page_count, source_format
+            ),
         }
 
     hard = [rule_result(r) for r in snapshot.profile.official_hard_requirements]
@@ -749,7 +788,9 @@ def report(snapshot: FitSnapshot | PublicFitSnapshot) -> dict:
                 "evaluation_counts": item.get("evaluation", {})
                 .get("metrics", {})
                 .get("counts"),
-                "assessment": _predicate(h.predicate, text, snapshot.pdf_page_count),
+                "assessment": _predicate(
+                    h.predicate, text, snapshot.pdf_page_count, source_format
+                ),
                 "reviewed_by": h.reviewed_by,
                 "typed_official_conflicts": sorted(conflicts),
                 "selected_narrative_conflict": "unknown_requires_reviewer",
@@ -1035,6 +1076,7 @@ def freeze(
         pdf_artifact_id=pdf_artifact_id,
         pdf_sha256=pdf_sha,
         pdf_base64=pdf_base64,
+        predicate_policy="source-format-v2",
     )
     if judgment_path:
         raw = _read_local(judgment_path, 16384)
