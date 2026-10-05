@@ -46,6 +46,18 @@ Choose the workflow by intent:
 If the request spans multiple workflows, start with `ars/academic-pipeline/WORKFLOW.md`
 unless the user clearly asked for a single phase.
 
+### ARW Project Paper Narrative
+
+For an ARW project registered for paper writing, read
+[project narrative protocol](codex/references/project_narrative_protocol.md)
+before `ars-plan`, `ars-outline`, academic-paper Phase 2/3/4, delegated role
+dispatch, or a resumed paper session. Load the project's current selected
+snapshot from the ARW control plane; do not choose a fresh narrative from
+agent memory. The adapter protocol governs where vendored ARS examples prescribe
+an unsuitable fixed number of sub-arguments, headings, words, or paragraphs.
+The project choice fixes the argument strategy and order, not findings or
+scientific conclusions. General non-paper tasks do not require this selection.
+
 ### Time-Sensitive Venue, Deadline, and Template Override
 
 If the user asks which conference to target, names a venue and year, asks for a

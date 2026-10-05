@@ -8,7 +8,7 @@ import os
 import stat
 import sys
 from collections.abc import Sequence
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
@@ -150,6 +150,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_memory(subparsers)
     from arw.cli_writing import configure as configure_writing
     configure_writing(subparsers)
+    from arw.cli_narrative import configure as configure_narrative
+    configure_narrative(subparsers)
     from arw.cli_semantic import configure as configure_semantic
     configure_semantic(subparsers)
     from arw.cli_learning import configure as configure_learning
@@ -245,6 +247,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Initialize an immutable run manifest and first canonical event.",
     )
     _add_run_request_arguments(init)
+    init.add_argument("--task-kind", choices=("paper", "other"), default="other")
+    init.add_argument("--project-root", type=Path)
     append = subparsers.add_parser(
         "append",
         help="Append one Phase 1 baseline event through the sole writer.",
@@ -644,7 +648,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(result)
             return 65 if result.get("status") == "rejected" else 0
         except (ValueError, TypeError, RuntimeError, OSError) as error:
-            _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else "writing_invalid", "message": str(error)[:256]})
+            _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "writing_invalid"), "message": str(error)[:256]})
+            return 65
+    if args.command == "narrative":
+        from arw.cli_narrative import handle
+        from arw.kernel.ledger.narrative import NarrativeError
+        try:
+            result = handle(args)
+            _write_json(result)
+            return 65 if result.get("status") in {"missing_selection"} else 0
+        except (NarrativeError, ValueError, OSError) as error:
+            _write_json({"status": "error", "code": getattr(error, "code", "invalid_narrative"), "message": str(error)[:256]})
             return 65
     if args.command == "semantic":
         from arw.cli_semantic import handle
@@ -1141,6 +1155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         replay_run,
     )
     from arw.kernel.ledger.manifests import ManifestError
+    from arw.kernel.ledger.narrative import NarrativeError
     from arw.kernel.ledger.reducer import ReducerError, reduce_events
     from arw.kernel.state.models import (
         AppendProbeRequest,
@@ -1165,6 +1180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ManifestError,
         ReducerError,
         OrchestrationError,
+        NarrativeError,
         ValidationError,
         OSError,
     )
@@ -1172,6 +1188,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "init":
             request = _load_request(args.request, InitRunRequest)
+            if args.task_kind == "paper":
+                if args.project_root is None:
+                    raise CLIInputError("paper startup requires --project-root")
+                from arw.kernel.ledger.narrative import binding_for_start
+                binding = binding_for_start(args.project_root, args.run_root)
+                if request.narrative_binding is not None and request.narrative_binding != binding:
+                    raise CLIInputError("request narrative binding differs from project selection")
+                request = request.model_copy(update={"narrative_binding": binding, "task_kind": "paper"})
+            elif args.project_root is not None or request.narrative_binding is not None:
+                raise CLIInputError("narrative project binding requires --task-kind paper")
+            elif request.task_kind == "paper":
+                raise CLIInputError("paper startup requires --project-root")
             state = initialize_run(
                 args.run_root,
                 request,
@@ -1617,14 +1645,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 except (ValueError, RuntimeError, OSError) as error:
                     _write_json({"status": "error", "code": getattr(error, "code", "memory_request_invalid")})
                     return 65
-            outcome = getattr(service, method_name)(request)
-            result = outcome.model_dump(mode="json")
-            if handoff is not None:
-                if not outcome.accepted:
-                    handoff = {**handoff, "next_concrete_action": None, "requires_reconciliation": True, "resume_accepted": False}
-                result["memory_handoff"] = handoff
-            _write_json(result)
-            return 0 if outcome.accepted else 65
+            if args.command == "resume":
+                from arw.kernel.ledger.narrative import guard_run
+                narrative_context = guard_run(args.run_root, expected_sha256=request.narrative_sha256)
+            else:
+                narrative_context = nullcontext(None)
+            with narrative_context as snapshot:
+                outcome = getattr(service, method_name)(request)
+                result = outcome.model_dump(mode="json")
+                if args.command == "resume" and outcome.accepted and snapshot is not None:
+                    result["narrative"] = snapshot.model_dump(mode="json")
+                if handoff is not None:
+                    if not outcome.accepted:
+                        handoff = {**handoff, "next_concrete_action": None, "requires_reconciliation": True, "resume_accepted": False}
+                    if snapshot is not None:
+                        handoff = {**handoff, "narrative": snapshot.model_dump(mode="json")}
+                    result["memory_handoff"] = handoff
+                _write_json(result)
+                return 0 if outcome.accepted else 65
         if args.command == "passport-pointer-rebuild":
             pointer = RuntimeCommandService(
                 args.run_root, lock_timeout=args.lock_timeout

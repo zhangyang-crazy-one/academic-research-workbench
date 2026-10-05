@@ -11,6 +11,14 @@
     {
       "if": {"required": ["journal_layout"]},
       "then": {"required": ["workflow_definition_id", "workflow_definition_sha256"]}
+    },
+    {
+      "if": {"properties": {"task_kind": {"const": "paper"}}, "required": ["task_kind"]},
+      "then": {"required": ["narrative_binding"]}
+    },
+    {
+      "if": {"required": ["narrative_binding"]},
+      "then": {"properties": {"task_kind": {"const": "paper"}}, "required": ["task_kind"]}
     }
   ],
   "properties": {
@@ -23,6 +31,8 @@
     "workflow_definition_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
     "workflow_definition_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "journal_layout": {"const": "segmented-v1", "type": "string"},
+    "task_kind": {"enum": ["paper", "other"], "type": "string"},
+    "narrative_binding": {"$ref": "#/$defs/narrative_run_binding"},
     "capabilities": {
       "items": {"enum": ["canonical-journal", "forced-stop-replay"], "type": "string"},
       "minItems": 1,
@@ -34,6 +44,18 @@
   "title": "RunManifest",
   "type": "object",
   "$defs": {
+    "narrative_run_binding": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": "arw.narrative-run-binding.v1", "type": "string"},
+        "project_relative_path": {"minLength": 1, "maxLength": 4096, "type": "string"},
+        "project_id": {"pattern": "^[a-z][a-z0-9._-]{2,95}$", "type": "string"},
+        "initial_version": {"minimum": 1, "type": "integer"},
+        "initial_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["schema_version", "project_relative_path", "project_id", "initial_version", "initial_sha256"],
+      "type": "object"
+    },
     "immutable_input": {
       "additionalProperties": false,
       "properties": {

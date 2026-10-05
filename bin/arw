@@ -11,6 +11,7 @@ Commands:
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
   writing        Prepare and record source-bound manuscript revisions.
+  narrative      Register and select a fixed project paper argument strategy.
   semantic       Query an explicitly built, optional semantic projection.
   learn          Evaluate and explicitly promote evidence-bound research lessons.
   memory         Save, recall, and hand off canonical project context.
@@ -56,7 +57,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|writing|semantic|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
+  health|route|version|files|writing|narrative|semantic|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;

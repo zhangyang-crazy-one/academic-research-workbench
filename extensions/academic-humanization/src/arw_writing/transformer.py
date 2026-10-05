@@ -37,6 +37,7 @@ class Proposal(Strict):
     schema_version: Literal["arw.writing-proposal.v1"]
     capability: str
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    narrative_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     author_target: str = Field(min_length=1, max_length=4096)
     language: Literal["en", "zh", "en-zh"]
     protected_terms: list[str] = Field(max_length=100)
@@ -118,9 +119,9 @@ class SessionWritingTransformer:
             "schema_version": "arw.writing-candidate.v1",
             "transformer": "session-exact-span",
             "transformer_version": "1",
-            "proposal": p.model_dump(mode="json"),
+            "proposal": p.model_dump(mode="json", exclude_none=True),
             "proposal_sha256": sha256_hex(
-                canonical_json_bytes(p.model_dump(mode="json"))
+                canonical_json_bytes(p.model_dump(mode="json", exclude_none=True))
             ),
             "source": source,
             "source_sha256": p.source_sha256,

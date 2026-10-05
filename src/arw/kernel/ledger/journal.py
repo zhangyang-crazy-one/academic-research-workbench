@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import re
 import signal
-from contextlib import contextmanager
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import portalocker
 from pydantic import ValidationError
@@ -243,6 +244,8 @@ def initialize_run(
         workflow_definition_sha256=request.workflow_definition_sha256,
         journal_layout=request.journal_layout,
         capabilities=request.capabilities,
+        narrative_binding=request.narrative_binding,
+        task_kind=request.task_kind,
     )
     manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True))
     unsigned: dict[str, object] = {
@@ -271,7 +274,9 @@ def initialize_run(
     journal_root = root / "journal"
     segments_root = root / SEGMENTS_RELATIVE
     try:
-        with _lock(root, lock_timeout):
+        from arw.kernel.ledger.narrative import guard_start
+        narrative_guard = guard_start(root, request.narrative_binding) if request.narrative_binding else nullcontext()
+        with narrative_guard, _lock(root, lock_timeout):
             if (
                 manifest_path.exists()
                 or (root / JOURNAL_NAME).exists()

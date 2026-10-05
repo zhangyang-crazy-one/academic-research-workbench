@@ -41,6 +41,7 @@ class SourceRunHarness(StrictModel):
 
 class Handoff(StrictModel):
     objective: Note
+    narrative_sha256: Sha256 | None = Field(default=None, exclude_if=lambda value: value is None)
     current_state: Note
     completed_work: tuple[Note, ...] = Field(max_length=32)
     evidence_gathered: tuple[Note, ...] = Field(max_length=32)
