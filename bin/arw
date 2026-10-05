@@ -185,7 +185,7 @@ select_python() {
       printf '%s\n' "$resolved"
       return
     fi
-  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u -r)
 
   fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
@@ -225,7 +225,7 @@ select_agent_python() {
       printf '%s\n' "$resolved"
       return 0
     fi
-  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u -r)
 
   return 1
 }

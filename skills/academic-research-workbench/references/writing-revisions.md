@@ -25,7 +25,13 @@ regularities), `writing.claim_preserving_rewrite` (claim-centered wording), or
 4. Compare claims, logical direction, values/units/equations, citations and scope,
    hedging, negation, comparisons, experimental conditions, method/dataset names
    and quoted meaning. Hard drift must be corrected. Every other changed candidate
-   needs explicit human review; never fabricate approval. The parent may admit
+   needs explicit human review; never fabricate approval. Use the five-category
+   `verification.rule_review.plan` from `writing prepare` for argument structure,
+   fact integrity, claim strength, definitions/boundaries and traceable revision.
+   A reviewer may attach a structured `rule_review` report to the review JSON;
+   its source/candidate/plan hashes and exact quoted spans are validated. Without
+   that report, `rule_review.status` remains `not_run`, not a semantic pass.
+   The parent may admit
    the real review as artifact kind `writing-human-review`, then use
    `writing record ... --review-artifact-id REVIEW --request NEW_REQUEST`.
    Review JSON binds source/candidate/proposal/verification digests, decision

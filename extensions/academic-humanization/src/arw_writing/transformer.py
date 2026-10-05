@@ -12,6 +12,7 @@ from .detection import compare
 from .diagnostics import CONTROL_METRICS, diagnose, effects
 from .fact_audit import audit as fact_audit
 from .preservation import verify
+from .review_rules import plan as review_plan
 
 
 class Strict(BaseModel):
@@ -111,6 +112,11 @@ class SessionWritingTransformer:
         }
         if facts["mechanical_status"] == "failed":
             verification["disposition"] = "reject"
+        rules = review_plan(source, candidate)
+        verification["rule_review"] = {
+            "semantic_status": "human_review_required",
+            "plan": rules,
+        }
         return {
             "schema_version": "arw.writing-candidate.v1",
             "transformer": "session-exact-span",
@@ -126,6 +132,7 @@ class SessionWritingTransformer:
             "diagnostics": {"before": before, "after": after, "controls": effect},
             "detection": detection,
             "fact_lock": facts,
+            "rule_review": {"status": "not_run", "report": None},
             "controls_effective": all(
                 v["status"] == "effective" for v in effect.values()
             ),

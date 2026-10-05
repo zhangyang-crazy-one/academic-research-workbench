@@ -236,6 +236,58 @@ direction, conclusion strength, citation scope, conditions and meaning.
 
 ## Execution and review
 
+### Rule review tasks and findings
+
+Every `writing prepare` result includes `verification.rule_review.plan`: five
+provider-neutral tasks for argument structure, fact integrity, claim strength,
+definitions/boundaries, and traceable revision. The plan binds the exact source
+and candidate SHA-256 values and has its own digest inside `verification_sha256`.
+It is a task list, not an automatic language-model judgment. The result's
+`rule_review.status` is `not_run` until a reviewer submits a report. Reviewer
+guidance does not prescribe paragraph order, a fixed number of contributions,
+or vocabulary changes; it explicitly preserves already cautious claims.
+
+A human reviewer or explicitly chosen review provider can add `rule_review` to
+the accepted `writing-human-review` artifact described below. Its schema is
+`arw.writing-rule-review.v1` with `source_sha256`, `candidate_sha256`,
+`plan_sha256`, nonempty `provider` and `reviewer`, all five `coverage` entries in
+plan order, and zero or more `findings`. Each coverage entry records `category`,
+`status` (`reviewed`, `not_applicable`, `not_reviewed`) and an explanation.
+Each finding records `category`, advisory `severity` (`warning` or `suggestion`),
+independent `confidence` (`low`, `medium`, `high`), `review_status` (`open`,
+`resolved`, `accepted_risk`), exact `candidate_span` character offsets and quote,
+optional exact `source_span`, `evidence`, `reason` and `minimal_change`. For an
+`accepted_risk` or `resolved` finding, `resolution_reason` explains that state.
+For an
+`APPROVED` review, every category must have been reviewed or explicitly marked
+not applicable, and no finding may remain open. An empty findings list means
+only that the named reviewer recorded no findings; it does **not** prove semantic
+equivalence or absence of defects. The parent review artifact also binds the
+proposal and verification hashes, decision, and unresolved preservation
+dimensions. The accepted artifact manifest digest is retained in `review_binding`.
+
+For a public synthetic example, a reviewer could mark a local passage about
+`ModelX` as a low-confidence `suggestion` in `claim_strength`, quote its exact
+candidate character span, explain the source evidence, and request one small
+scope clarification. `tests/integration/test_writing_review_rules.py` exercises
+this report end to end. It labels its reviewer as a **synthetic fixture** and
+does not submit a real manuscript for model review. Changing the quote, span,
+plan or text digest invalidates the report. A submitted but incomplete report
+cannot approve a candidate. New reviews using the earlier v1 envelope without
+`rule_review` remain valid for a candidate prepared by this version; their bundle
+states `rule_review.status: not_run` rather than claiming the five tasks passed.
+Previously accepted bundles remain readable. A pending review bound to a
+pre-change `verification_sha256` must be regenerated against the new plan; stale
+approval is not silently reused. The bundle retains the validated report values;
+`review_binding` identifies the
+accepted artifact containing the reviewer's exact submitted bytes.
+
+Semantic findings remain reviewer opinions. High confidence does not turn them
+into mechanically proven contradictions. Only the existing exact preservation
+and fact-lock checks produce automatic `reject`; writing diagnostics and AI
+classifier/watermark scores do not determine writing quality or reviewer
+approval. No reviewer provider runs or transmits text automatically.
+
 ```sh
 bin/arw writing prepare --run-root RUN --source-id artifact.manuscript --proposal proposal.json
 bin/arw writing record --run-root RUN --source-id artifact.manuscript --proposal proposal.json --request request.json
