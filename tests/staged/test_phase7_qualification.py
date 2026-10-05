@@ -133,8 +133,7 @@ def test_exact_stage_inventory_sbmom_build_identity_and_host_lock(
         assert route_payload["integration_status"] == "PASS"
         assert route_payload["integration_lock_sha256"] == _digest(LOCK_PATH)
     else:
-        assert route_payload["integration_status"] == "UNVERIFIED"
-        assert route_payload["execution_mode"] == "inline-role-prompts"
+        assert route_payload["integration_status"] == "BLOCKED"
         assert route_payload["reason_codes"] == ["integration_lock_invalid_or_drifted"]
 
     help_result = subprocess.run(

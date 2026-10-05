@@ -102,12 +102,15 @@ def _installed_route_from_environment():
     launcher_path = values["launcher"]
     native_path = values["native"]
     canary_path = values["canary"]
-    # A codex binary on PATH alone supplies launcher/native defaults, so only an
-    # integration lock marks an attempted qualification.
-    if lock_path is None:
+    if not any((lock_path, launcher_path, native_path, canary_path)):
         return installed_route()
-    if launcher_path is None or native_path is None or canary_path is None:
-        return installed_route(unverified_reason="integration_inputs_incomplete")
+    if (
+        lock_path is None
+        or launcher_path is None
+        or native_path is None
+        or canary_path is None
+    ):
+        return installed_route(blocked_reason="integration_inputs_incomplete")
     from arw.kernel.policy.integration_lock import (
         IntegrationLockError,
         load_and_verify_integration_lock,
@@ -122,7 +125,7 @@ def _installed_route_from_environment():
             host_canary_evidence=canary_path,
         )
     except (IntegrationLockError, OSError, ValueError):
-        return installed_route(unverified_reason="integration_lock_invalid_or_drifted")
+        return installed_route(blocked_reason="integration_lock_invalid_or_drifted")
     return installed_route(verification)
 
 def _installed_route_diagnostics_from_environment():

@@ -168,8 +168,8 @@ staging a plugin or installing Codex CLI.
 Agent / local-dev runtime is selected with `ARW_RUNTIME=agent`, the
 checkout-only `bin/arw-agent` wrapper, or automatically when `ARW_RUNTIME` is
 unset on a source checkout that has no staged `share/arw/wheels/`. It is not a
-Codex qualification: route reports `execution_mode: inline-role-prompts` with
-`integration_status: UNVERIFIED` until a verified integration lock and host
+Codex qualification: the legacy Codex execution route (`route --json`) still
+reports `integration_status: BLOCKED` until a verified integration lock and host
 canary are present. A staged plugin, or `ARW_RUNTIME=plugin`, still requires
 the first-party wheel.
 
@@ -387,13 +387,11 @@ marketplace manifest. Do not install an unlocked bootstrap stage.
 The helper never fabricates a canary or silently upgrades a missing lock. A
 qualified stage still reports `release_qualification: BLOCKED` until the
 retained CC BY-NC intended-use, distribution, accountable-approval, and
-permission evidence is resolved. Host integration evidence is advisory for
-`route`: without host canary evidence `bin/arw route --json` still returns
-`execution_mode: inline-role-prompts`, reporting `integration_status:
-UNVERIFIED` with `integration_inputs_incomplete`; supplying the exact retained
+permission evidence is resolved. If host canary evidence is not supplied,
+`bin/arw route --json` remains blocked with
+`integration_inputs_incomplete` by design; supplying the exact retained
 `ARW_HOST_CANARY_EVIDENCE` makes the verifier recompute the lock and can return
-`integration_status: PASS` on the same host. A drifted lock is reported as
-`integration_lock_invalid_or_drifted`, not a blocked route.
+`integration_status: PASS` on the same host.
 
 ## Release boundary
 

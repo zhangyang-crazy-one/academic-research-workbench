@@ -42,7 +42,7 @@ acceptance of provenance, state, and gates.
 - Do not relicense ARS-derived material. CC BY-NC 4.0 still applies.
   Intended use is personal non-commercial research.
 - Do not claim qualified-plugin or tagged-release success.
-  Release qualification stays `BLOCKED` in `supply-chain/license-verdict.json`.
+  `release_qualification` is `BLOCKED` on the current contract.
 
 ## Invoke ARW
 

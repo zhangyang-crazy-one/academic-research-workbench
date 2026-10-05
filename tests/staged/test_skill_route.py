@@ -22,7 +22,9 @@ ROUTE_KEYS = {
     "source_bundled",
     "integration_status",
     "integration_lock_sha256",
+    "release_qualification",
     "reason_codes",
+    "experiment_execution",
     "paper_ast_export",
 }
 
@@ -166,10 +168,12 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     assert route["source_adapter_version"] == "0.1.27"
     assert route["source_dependency_model"] == "bundled-pinned-adapter"
     assert route["source_bundled"] is True
-    assert route["integration_status"] == "UNVERIFIED"
-    assert route["execution_mode"] == "inline-role-prompts"
+    assert route["integration_status"] == "BLOCKED"
+    assert route["execution_mode"] == "blocked"
     assert route["integration_lock_sha256"] is None
+    assert route["release_qualification"] == "BLOCKED"
     assert route["reason_codes"] == ["integration_lock_not_verified"]
+    assert route["experiment_execution"] == "disabled"
     assert route["paper_ast_export"] == "deferred-v2"
     assert direct == route
 

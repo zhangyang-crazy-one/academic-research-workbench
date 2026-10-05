@@ -41,10 +41,9 @@ uv pip install --python .venv/bin/python --editable . -r pyproject.toml
 .venv/bin/python -m arw.cli route --json
 ```
 
-Checkout `./bin/arw route --json` selects agent mode only when `.venv`
-already has the package; prefer the explicit `.venv/bin/python -m arw.cli`
-form above. `ARW_RUNTIME=plugin` on a source tree fails closed with
-`runtime-artifact-missing`. Do not invent JSON after
+Do **not** use checkout `./bin/arw route --json`. That launcher needs
+staged `share/arw/wheels/` and fails closed with
+`runtime-artifact-missing` on a source tree. Do not invent JSON after
 that failure. Do not run `stage-plugin` / `qualify-codex-host` as a
 Grok unlock.
 
@@ -57,21 +56,24 @@ Succeed only if all are true:
 - required keys present: `schema_version`, `workflow_family`,
   `execution_mode`, `source_adapter_version`,
   `source_dependency_model`, `source_bundled`, `integration_status`,
-  `integration_lock_sha256`, `reason_codes`, `paper_ast_export`
-- `schema_version` = `1.1.0`
+  `integration_lock_sha256`, `release_qualification`, `reason_codes`,
+  `experiment_execution`, `paper_ast_export`
+- `schema_version` = `1.0.0`
 - `workflow_family` = `academic-pipeline`
-- `execution_mode` = `inline-role-prompts`
+- `execution_mode` ∈ {`inline-role-prompts`, `blocked`}
 - `source_adapter_version` = `0.1.27`
 - `source_dependency_model` = `bundled-pinned-adapter`
 - `source_bundled` = `true`
-- `integration_status` ∈ {`PASS`, `UNVERIFIED`}
+- `integration_status` ∈ {`PASS`, `BLOCKED`}
+- `release_qualification` = `BLOCKED`
+- `experiment_execution` = `disabled`
 - `paper_ast_export` = `deferred-v2`
 - `reason_codes` items, if any, ∈
   {`integration_lock_not_verified`, `integration_inputs_incomplete`,
   `integration_lock_invalid_or_drifted`}
 
-Return the JSON **unchanged**. `UNVERIFIED` is success of the command
-(host integration evidence is advisory), not a cue to guess a family.
+Return the JSON **unchanged**. `BLOCKED` + `execution_mode: blocked`
+is success of the command, not a cue to guess a family.
 On any other plain-route outcome: report stderr/exit. No synthetic
 `RouteResult` and no silent fallback that claims to be `route --json`.
 Schema: `schemas/v1/route-result.schema.json`.

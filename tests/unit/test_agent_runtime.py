@@ -102,8 +102,9 @@ def test_checkout_without_runtime_or_wheels_selects_agent_mode(tmp_path: Path) -
     )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["execution_mode"] == "inline-role-prompts"
-    assert payload["integration_status"] == "UNVERIFIED"
+    # Agent mode runs without a staged wheel; the legacy Codex execution
+    # route itself stays strict without host qualification.
+    assert payload["integration_status"] == "BLOCKED"
 
 
 def test_explicit_plugin_runtime_does_not_use_checkout_venv(tmp_path: Path) -> None:
@@ -202,10 +203,9 @@ def test_agent_mode_route_and_version_and_phase2_help_without_codex(
     route = _run([str(LAUNCHER), "route", "--json"], env=env)
     assert route.returncode == 0, route.stderr
     route_payload = json.loads(route.stdout)
-    assert route_payload["schema_version"] == "1.1.0"
-    assert route_payload["execution_mode"] == "inline-role-prompts"
-    assert route_payload["integration_status"] == "UNVERIFIED"
-    assert "release_qualification" not in route_payload
+    assert route_payload["schema_version"] == "1.0.0"
+    assert route_payload["integration_status"] == "BLOCKED"
+    assert route_payload["release_qualification"] == "BLOCKED"
     assert route_payload["reason_codes"]
 
     status_help = _run([str(LAUNCHER), "status", "--help"], env=env)

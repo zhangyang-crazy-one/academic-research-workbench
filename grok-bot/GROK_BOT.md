@@ -109,25 +109,24 @@ Optional diagnostics (still fail-closed; not a second family):
 ```
 
 These are separate output contracts. Plain `route --json` writes a
-`RouteResult` to stdout and returns `0` for a valid route, including an
-`UNVERIFIED` route. `route --json --diagnostics` writes an
+`RouteResult` to stdout and returns `0` for a valid route, including a
+`BLOCKED` route. `route --json --diagnostics` writes an
 `arw.integration-diagnostic.v1` object to stdout; it returns `0` for
 `status: PASS` and `65` for `status: BLOCKED`. Parse the diagnostics stdout
 even on exit `65`, including when stderr is empty. Never validate that object
 as `RouteResult`, substitute it for a route, or discard it because stderr has
 no text. Report the diagnostic status and layers to the parent for decisions.
 
-`./bin/arw route --json` runs inside a staged plugin tree that contains
-`share/arw/wheels/`, and on a source checkout whose `.venv` already has the
-package (the launcher then selects agent mode). With `ARW_RUNTIME=plugin` a
-checkout still fails closed with `runtime-artifact-missing`. A Grok CloudAgent on a source checkout should not run
+`./bin/arw route --json` is valid **only** inside a staged plugin tree
+that already contains `share/arw/wheels/` (see repo `README.md`
+staging). A Grok CloudAgent on a source checkout should not run
 `scripts/stage-plugin` / `scripts/qualify-codex-host` /
 `scripts/prepare-qualified-stage` as a workaround: those are Codex host
 qualification gates, not Grok unlocks.
 
 STORM (`storm --topic …`) is opt-in, never the default route, and is
-not canonical experiment evidence. The route contract does not enable
-experiment execution. Do not present STORM or experiment execution as
+not canonical experiment evidence. `experiment_execution` on the route
+contract is `disabled`. Do not present STORM or experiment execution as
 enabled because Grok asked.
 
 ### Success criteria (no silent fallback)
@@ -140,33 +139,35 @@ The route command **succeeds** only when **all** of the following hold:
 
   `schema_version`, `workflow_family`, `execution_mode`,
   `source_adapter_version`, `source_dependency_model`, `source_bundled`,
-  `integration_status`, `integration_lock_sha256`, `reason_codes`,
+  `integration_status`, `integration_lock_sha256`,
+  `release_qualification`, `reason_codes`, `experiment_execution`,
   `paper_ast_export`
 
 - constants match the installed contract (see
   `schemas/v1/route-result.schema.json` and
   `src/arw/kernel/policy/contracts.py`):
-  - `schema_version` = `"1.1.0"`
+  - `schema_version` = `"1.0.0"`
   - `workflow_family` = `"academic-pipeline"` (the control plane emits
     this family only; do not add others)
-  - `execution_mode` = `"inline-role-prompts"`
+  - `execution_mode` is `"inline-role-prompts"` or `"blocked"`
   - `source_adapter_version` = `"0.1.27"`
   - `source_dependency_model` = `"bundled-pinned-adapter"`
   - `source_bundled` = `true`
-  - `integration_status` is `"PASS"` or `"UNVERIFIED"`
+  - `integration_status` is `"PASS"` or `"BLOCKED"`
+  - `release_qualification` = `"BLOCKED"`
+  - `experiment_execution` = `"disabled"`
   - `paper_ast_export` = `"deferred-v2"`
   - `reason_codes` is an array whose items, if any, are only
     `integration_lock_not_verified`, `integration_inputs_incomplete`,
     or `integration_lock_invalid_or_drifted`
 
-An `UNVERIFIED` `integration_status` is a **valid** route: the host
-integration lock is advisory and never blocks the ARS workflow. Return it
-unchanged. It is not permission to guess a family, skip ARS files, or
-pretend qualification passed.
+A `BLOCKED` `integration_status` with `execution_mode: "blocked"` is a
+**valid** route. Return it unchanged. It is not permission to guess a
+family, skip ARS files, or pretend qualification passed.
 
 The command **fails** when stdout is missing, not JSON, missing a
 required field, or the process is non-zero (including
-`runtime-artifact-missing` from `ARW_RUNTIME=plugin ./bin/arw` on a checkout). Then:
+`runtime-artifact-missing` from checkout `bin/arw`). Then:
 
 - report the actual stderr/exit
 - do **not** emit a hand-built JSON object
