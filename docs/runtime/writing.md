@@ -297,8 +297,11 @@ bin/arw writing record --run-root RUN --source-id artifact.manuscript --proposal
 The proposal schema is `Proposal` in `arw_writing.transformer`: explicit capability,
 source SHA-256, author target, language, protected terms/spans, controls, generation
 identity and ordered edits with character offsets. Invalid, overlapping, unchanged
-or oversized candidates fail. Text is bounded to 64 KiB per source/candidate.
-CLI proposal JSON is bounded to 256 KiB. Sources must already be accepted and their
+or oversized candidates fail. Text is bounded to 1 MiB per source/candidate, so a
+complete manuscript fits; configured detectors still score at most 64 KiB per
+text. Preservation findings reference the whole source and candidate by SHA-256
+(`arw.writing-preservation.v2`) instead of copying them per review dimension.
+CLI proposal JSON is bounded to 2 MiB. Sources must already be accepted and their
 current bytes must match their canonical manifest.
 
 Exact observed drift in protected quantities, equations, citation IDs, quotes,

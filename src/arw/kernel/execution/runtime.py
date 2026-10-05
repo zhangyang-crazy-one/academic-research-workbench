@@ -619,7 +619,7 @@ class RuntimeCommandService:
     ) -> CommandOutcome:
         from arw.kernel.core.canonical import sha256_hex, strict_json_loads
         from arw.kernel.ledger.narrative import guard_run
-        from arw.kernel.ledger.source_locations import read_retained_bytes
+        from arw.kernel.ledger.source_locations import MAX_SOURCE_BYTES, read_retained_bytes
         from arw.kernel.policy.narrative_realization import (
             STAGE_KINDS,
             NarrativeRealizationError,
@@ -675,7 +675,12 @@ class RuntimeCommandService:
                         raise NarrativeRealizationError("writing_service_required", "reviewed writing must use WritingService admission")
                     if request.media_type != "application/json":
                         raise NarrativeRealizationError("narrative_contract_invalid", "paper realization requires JSON")
-                    raw = read_retained_bytes(self.run_root, request.content_path, max_bytes=1_048_576)
+                    # Writing receipts embed the source and candidate; other
+                    # realizations are bounded JSON contracts.
+                    raw = read_retained_bytes(
+                        self.run_root, request.content_path,
+                        max_bytes=MAX_SOURCE_BYTES if request.artifact_kind == "writing-derived" else 1_048_576,
+                    )
                     if sha256_hex(raw) != request.content_sha256:
                         raise NarrativeRealizationError("narrative_contract_invalid", "realization content changed")
                     payload = strict_json_loads(raw)
@@ -702,12 +707,12 @@ class RuntimeCommandService:
                             bindings.append(load_artifact_manifest(self.run_root, matching[0].payload.manifest_sha256))
                         if bindings[1].artifact_kind != "writing-human-review":
                             raise NarrativeRealizationError("writing_review_missing", "review artifact has the wrong kind")
-                        source_raw = read_retained_bytes(self.run_root, bindings[0].content_path, max_bytes=65_536)
+                        source_raw = read_retained_bytes(self.run_root, bindings[0].content_path, max_bytes=MAX_SOURCE_BYTES)
                         if sha256_hex(source_raw) != bindings[0].content_sha256:
                             raise NarrativeRealizationError("writing_source_invalid", "accepted writing source changed")
                         if bindings[0].artifact_kind in {"narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"}:
                             source_realization = NarrativeRealization.model_validate(strict_json_loads(source_raw))
-                            source_raw = read_retained_bytes(self.run_root, source_realization.source_path, max_bytes=65_536)
+                            source_raw = read_retained_bytes(self.run_root, source_realization.source_path, max_bytes=MAX_SOURCE_BYTES)
                         elif bindings[0].artifact_kind == "writing-derived":
                             prior_receipt = strict_json_loads(source_raw)
                             source_raw = prior_receipt["candidate"].encode("utf-8")
@@ -724,7 +729,7 @@ class RuntimeCommandService:
                                 or verification.get("disposition") == "reject"
                                 or verification.get("fact_lock", {}).get("mechanical_status") == "failed"):
                             raise NarrativeRealizationError("writing_receipt_invalid", "writing candidate or verification hashes differ")
-                        review_raw = read_retained_bytes(self.run_root, bindings[1].content_path, max_bytes=65_536)
+                        review_raw = read_retained_bytes(self.run_root, bindings[1].content_path, max_bytes=MAX_SOURCE_BYTES)
                         if sha256_hex(review_raw) != bindings[1].content_sha256:
                             raise NarrativeRealizationError("writing_review_missing", "review content changed")
                         review = strict_json_loads(review_raw)
