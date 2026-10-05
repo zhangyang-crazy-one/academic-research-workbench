@@ -1541,6 +1541,8 @@ phase5_schema_names = {
 }
 static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
 extension_schema_names = {
+    "experiment-acceptance.schema.json",
+    "experiment-contract.schema.json",
     "fit-judgment.schema.json",
     "hypothesis-history.schema.json",
     "narrative-fit-public-snapshot.schema.json",

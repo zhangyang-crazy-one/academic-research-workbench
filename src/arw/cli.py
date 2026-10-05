@@ -154,6 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_narrative(subparsers)
     from arw.cli_semantic import configure as configure_semantic
     configure_semantic(subparsers)
+    from arw.cli_experiment import configure as configure_experiment
+    configure_experiment(subparsers)
     from arw.cli_learning import configure as configure_learning
     configure_learning(subparsers)
     from arw.cli_submission import configure as configure_submission
@@ -674,6 +676,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65 if result.get("status") in {"missing_selection"} else 0
         except (NarrativeError, ValueError, OSError) as error:
             _write_json({"status": "error", "code": getattr(error, "code", "invalid_narrative"), "message": str(error)[:256]})
+            return 65
+    if args.command == "experiment":
+        from arw.cli_experiment import handle
+        try:
+            _write_json(handle(args))
+            return 0
+        except (ValueError, OSError) as error:
+            _write_json({"status": "error", "code": getattr(error, "code", "experiment_invalid"), "message": str(error)[:512]})
             return 65
     if args.command == "semantic":
         from arw.cli_semantic import handle
