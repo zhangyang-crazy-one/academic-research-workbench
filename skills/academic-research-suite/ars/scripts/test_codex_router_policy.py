@@ -43,10 +43,13 @@ def test_router_blocks_outline_before_rq_convergence() -> None:
     assert "until the user has converged" in text
 
 
-def test_alias_router_defers_to_socratic_override() -> None:
+def test_alias_router_is_not_redirected_by_socratic_override() -> None:
+    # ARW: ARS v3.22.2 reversed the alias policy (explicit aliases select their
+    # mode and are never redirected to Socratic scoping) but kept the stale
+    # pre-3.22 assertions. These assert the v3.22.2 contract instead.
     text = _router_text()
-    assert "before the Claude-Style Alias Router" in text
-    assert "defer to the Paper Topic Scoping Override" in text
+    assert "An `ars-*` alias is never redirected by this override." in text
+    assert "An alias selects its mode even when the request contains only a vague topic" in text
 
 
 def test_bibliographic_clients_are_not_inferred_from_ars_full() -> None:
