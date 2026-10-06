@@ -49,6 +49,7 @@ capability profile. It is not an unpinned external MCP dependency.
 
 - Upstream revision: `8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798`
 - Materialized source: `vendor/sources/file-base`
+- Upgrade (2026-10-06, issue #47): rebased from `ee68144` (v0.9.0-2) to v0.11.0. Patches 0001–0003 were regenerated against the new source; 0004 is byte-identical. 0003 also adds `files-build` to the daemon bootstrap's stateless command list. Upstream v0.11's unsanitized GCC test build rejects one upstream test (`tests/test_daemon_application.c`, `-Wfree-nonheap-object` on a sentinel pointer). The test tree stays unchanged, so `scripts/build-file-base` keeps that one diagnostic a warning for the unsanitized suite only and records it in `flags.json`.
 - License: MIT, with the preserved generated third-party notices for bundled dependencies.
 - Ordered patch 0001: `vendor/patches/file-base/0001-file-base-server-name.patch`
 - Patch SHA-256: `713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f`
