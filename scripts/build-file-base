@@ -217,7 +217,14 @@ for relative in test_sources:
         raise SystemExit(f"duplicate upstream test source: {relative}")
     seen.add(relative)
     path = source / relative
-    if not relative.startswith("tests/") or "/repro/" in relative or not path.is_file():
+    # Upstream v0.11 promotes fixed (GREEN) reproductions from tests/repro/
+    # into the gating ALL_TEST_SRCS set; the intentionally RED repro runner
+    # (TEST_REPRO_SRCS, entry point repro_main.c) must still never enter it.
+    if (
+        not relative.startswith("tests/")
+        or relative == "tests/repro/repro_main.c"
+        or not path.is_file()
+    ):
         raise SystemExit(f"invalid ALL_TEST_SRCS member: {relative}")
     normalized.append({"path": relative, "sha256": digest(path)})
 
