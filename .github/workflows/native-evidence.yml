@@ -120,15 +120,13 @@ jobs:
           for f in "$out"/*; do
             case "$f" in *source-manifest.json) continue ;; esac
             echo "=== BEGIN $(basename "$f")"
-            head -c 20000 "$f"
+            case "$f" in
+              *.log) tail -c 6000 "$f" ;;
+              *) head -c 4000 "$f" ;;
+            esac
             echo
             echo "=== END $(basename "$f")"
           done
-          tar -C "$out" -czf - . | base64 -w0 > evidence.b64
-          echo "=== BEGIN evidence.tgz.b64"
-          cat evidence.b64
-          echo
-          echo "=== END evidence.tgz.b64"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
