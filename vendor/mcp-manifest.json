@@ -3,10 +3,10 @@
   "name": "codebase-memory-mcp",
   "arw_component_id": "file-base",
   "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
-  "upstream_commit": "ee68144af5453addda995a27cce8142999f318fb",
-  "upstream_git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
-  "upstream_source_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
-  "patched_source_tree_sha256": "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1",
+  "upstream_commit": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
+  "upstream_git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
+  "upstream_source_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
+  "patched_source_tree_sha256": "ca48f88e6ff2d010ff6abb2411018d06c2ae6658a0ebba46a0291cb89bd739dd",
   "source_materialization": "vendor/sources/file-base",
   "binary": {
     "path": ".file-base/bin/file-base",
@@ -17,17 +17,17 @@
     {
       "order": 1,
       "path": "vendor/patches/file-base/0001-file-base-server-name.patch",
-      "sha256": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+      "sha256": "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
     },
     {
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "sha256": "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029"
+      "sha256": "decc6a1074e6770a6ea4f848a4f17060fc83066037769b5773ded6fc52bbab5f"
     },
     {
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "sha256": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+      "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "order": 4,

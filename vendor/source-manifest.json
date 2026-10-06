@@ -52,7 +52,7 @@
       "version": "1.1.0"
     },
     {
-      "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
+      "git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
       "id": "file-base",
       "legal_inputs": [
         {
@@ -63,7 +63,7 @@
         {
           "kind": "package-lock",
           "path": "vendor/sources/file-base/graph-ui/package-lock.json",
-          "sha256": "123eafae09498a3a807916963549011a21b561889f8108215c1083618951e19a"
+          "sha256": "adaa69c82d586d096f7b8b5a18d7b63dac0439b65917817933f0fc1be50b5837"
         },
         {
           "kind": "license",
@@ -89,6 +89,11 @@
           "kind": "license",
           "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/apex/LICENSE",
           "sha256": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+        },
+        {
+          "kind": "license",
+          "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/arkts/LICENSE",
+          "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
         },
         {
           "kind": "license",
@@ -164,6 +169,11 @@
           "kind": "license",
           "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/cfscript/LICENSE",
           "sha256": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+        },
+        {
+          "kind": "license",
+          "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/chialisp/LICENSE",
+          "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
         },
         {
           "kind": "license",
@@ -587,6 +597,11 @@
         },
         {
           "kind": "license",
+          "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/plsql/LICENSE",
+          "sha256": "02de05cd6828df53aff548f348f6e6f9d596ae4e01b382977094dc059be72620"
+        },
+        {
+          "kind": "license",
           "path": "vendor/sources/file-base/internal/cbm/vendored/grammars/po/LICENSE",
           "sha256": "109ed1ed2db40c798111e05757f5b8576fe14bdb17aa24c7f2515b300c78572c"
         },
@@ -903,7 +918,7 @@
         {
           "kind": "generator",
           "path": "vendor/sources/file-base/scripts/gen-third-party-notices.sh",
-          "sha256": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+          "sha256": "41b7d3723628371e16b3757a6f458dcca4eeaa0145fc07766274c6a719024adf"
         },
         {
           "kind": "checker",
@@ -918,12 +933,12 @@
         {
           "kind": "checker",
           "path": "vendor/sources/file-base/scripts/license-gate.sh",
-          "sha256": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+          "sha256": "b8ec7c9b3c6ad4aa922babf93cff35c788d922ae0233598051ea1c08aeb1f222"
         },
         {
           "kind": "policy",
           "path": "vendor/sources/file-base/scripts/license-policy.json",
-          "sha256": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+          "sha256": "b3777d9facbe0058d18ffdf8c40afd0869b1c94d218c6d4828b8b6217b65a859"
         },
         {
           "kind": "license",
@@ -968,11 +983,11 @@
           "spdx": "MIT"
         }
       ],
-      "revision": "ee68144af5453addda995a27cce8142999f318fb",
+      "revision": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
       "source_path": "vendor/sources/file-base",
-      "tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+      "tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
       "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     }
   ],
   "declared_artifacts": [
@@ -992,7 +1007,7 @@
       "class": "build-evidence",
       "path": "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
       "required_before_staging": true,
-      "sha256": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+      "sha256": "57df11de7391283832f4b0d1f015acddbd93bbd94ce1b49e8e05ab68fbad3e8c"
     },
     {
       "class": "schema",
@@ -1018,7 +1033,7 @@
       "component": "file-base",
       "path": "vendor/sources/file-base/tests",
       "runner": "Makefile.cbm:test",
-      "tree_sha256": "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
+      "tree_sha256": "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
     }
   ],
   "patches": [
@@ -1026,38 +1041,38 @@
       "component": "file-base",
       "order": 1,
       "path": "vendor/patches/file-base/0001-file-base-server-name.patch",
-      "post_tree_sha256": "39ee8f274443a40f2abcf8efc5e0b0c6cceb9e40ff4bc4a75d654f8abeb9b64c",
-      "pre_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
-      "sha256": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+      "post_tree_sha256": "9905a98073320d5f48e09a1d9279d8d4869bbb018e459475e91cfe331351a8f8",
+      "pre_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
+      "sha256": "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
     },
     {
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "04460b941a8da073d40cd7921455b233f41650fe0d251d9ace3f593e4550804b",
-      "pre_tree_sha256": "39ee8f274443a40f2abcf8efc5e0b0c6cceb9e40ff4bc4a75d654f8abeb9b64c",
-      "sha256": "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029"
+      "post_tree_sha256": "06d03bf17852e4b204e450e00e943447b8933731b741ab931f9ef92a0cf9c932",
+      "pre_tree_sha256": "9905a98073320d5f48e09a1d9279d8d4869bbb018e459475e91cfe331351a8f8",
+      "sha256": "decc6a1074e6770a6ea4f848a4f17060fc83066037769b5773ded6fc52bbab5f"
     },
     {
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "82923432ef291240f0bd901e39f97c23e86abcc8499b34c486ed4af265ada393",
-      "pre_tree_sha256": "04460b941a8da073d40cd7921455b233f41650fe0d251d9ace3f593e4550804b",
-      "sha256": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+      "post_tree_sha256": "2f151470d7e49949fd44c9014e42d61b92a3973dbb751206da5ab0ec55887393",
+      "pre_tree_sha256": "06d03bf17852e4b204e450e00e943447b8933731b741ab931f9ef92a0cf9c932",
+      "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1",
-      "pre_tree_sha256": "82923432ef291240f0bd901e39f97c23e86abcc8499b34c486ed4af265ada393",
+      "post_tree_sha256": "ca48f88e6ff2d010ff6abb2411018d06c2ae6658a0ebba46a0291cb89bd739dd",
+      "pre_tree_sha256": "2f151470d7e49949fd44c9014e42d61b92a3973dbb751206da5ab0ec55887393",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "24f895a8738c1e68ae744d03f797cc6db7ded7df9492261214d4db1898e585aa"
+    "sha256": "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523"
   },
   "schema_version": "1.0.0"
 }

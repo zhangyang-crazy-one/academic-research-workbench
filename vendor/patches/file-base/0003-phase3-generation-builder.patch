@@ -1,7 +1,22 @@
+diff --git a/src/daemon/bootstrap.c b/src/daemon/bootstrap.c
+index 0e4cbed6..1fa85ac8 100644
+--- a/src/daemon/bootstrap.c
++++ b/src/daemon/bootstrap.c
+@@ -178,6 +178,9 @@ cbm_daemon_process_role_t cbm_daemon_process_role(int argc, char *const argv[])
+          * project, so it needs no daemon. Listed here rather than routed through
+          * the daemon so enrolling a root cannot depend on daemon state. */
+         "allow-root",
++        /* ARW: the parent-only generation validator opens one candidate
++         * database read-only and touches no daemon or project state. */
++        "files-build",
+     };
+     /* Stop at the first top-level mode token. Tool names, flag values, and JSON
+      * following `cli` are opaque user input: a search query named "install"
 diff --git a/src/main.c b/src/main.c
+index 49709f41..f81386b5 100644
 --- a/src/main.c
 +++ b/src/main.c
-@@ -20,6 +20,8 @@
+@@ -36,6 +36,8 @@
  #include "cli/cli.h"
  #include "cli/progress_sink.h"
  #include "foundation/constants.h"
@@ -10,20 +25,15 @@ diff --git a/src/main.c b/src/main.c
  
  enum {
      MAIN_MIN_ARGC = 1,
-@@ -45,9 +46,12 @@
- #include <stdio.h>
- #include <stdlib.h>
- #include <string.h>
-+#include <errno.h>
- #include <signal.h>
- #include <stdatomic.h>
+@@ -95,6 +97,7 @@ enum {
  #ifndef _WIN32
+ #include <arpa/inet.h>
+ #include <fcntl.h>
 +#include <limits.h>
-+#include <sys/stat.h>
- #include <unistd.h>
- #endif
- 
-@@ -501,6 +505,136 @@ static int run_cli(int argc, char **argv) {
+ #include <netinet/in.h>
+ #include <poll.h>
+ #include <sys/socket.h>
+@@ -1068,6 +1071,136 @@ static int run_cli(int argc, char **argv, cbm_project_lock_manager_t *project_lo
      return exit_code;
  }
  
@@ -160,20 +170,21 @@ diff --git a/src/main.c b/src/main.c
  /* ── Help ───────────────────────────────────────────────────────── */
  
  static void print_help(void) {
-@@ -510,5 +644,6 @@ static void print_help(void) {
+@@ -1084,6 +1217,7 @@ static void print_help(void) {
      printf("  file-base uninstall [-y|-n] [--dry-run]\n");
      printf("  file-base update [-y|-n]\n");
      printf("  file-base config <list|get|set|reset>\n");
 +    printf("  file-base files-build --root PATH --candidate PATH\n");
      printf("  file-base --version    Print version\n");
      printf("  file-base --help       Print this help\n");
-@@ -549,6 +684,9 @@ static int handle_subcommand(int argc, char **argv) {
-             cbm_mem_init(cbm_mem_ram_fraction_for_total(cbm_system_info().total_ram));
-             return run_cli(argc - i - SKIP_ONE, argv + i + SKIP_ONE);
+     printf("\nCLI output options:\n");
+@@ -1250,6 +1384,9 @@ static int handle_subcommand(int argc, char **argv, cbm_project_lock_manager_t *
+             return run_cli(argc - i - SKIP_ONE, argv + i + SKIP_ONE, project_locks,
+                            maintenance_context);
          }
 +        if (strcmp(argv[i], "files-build") == 0) {
 +            return run_files_build(argc - i - SKIP_ONE, argv + i + SKIP_ONE);
 +        }
          if (strcmp(argv[i], "hook-augment") == 0) {
              cbm_mem_init(cbm_mem_ram_fraction_for_total(cbm_system_info().total_ram));
-             return cbm_cmd_hook_augment();
+             return cbm_cmd_hook_augment(argc - i - SKIP_ONE, argv + i + SKIP_ONE);

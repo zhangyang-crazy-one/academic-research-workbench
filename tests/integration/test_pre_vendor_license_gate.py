@@ -22,7 +22,7 @@ EXPECTED_PINS = {
         "upstream_url": "https://github.com/Imbad0202/experiment-agent.git",
     },
     "file-base": {
-        "revision": "ee68144af5453addda995a27cce8142999f318fb",
+        "revision": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
         "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
     },
 }

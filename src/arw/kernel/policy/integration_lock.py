@@ -56,7 +56,7 @@ _CODEX_CLI_STABLE_VERSION_RE = re.compile(
 EXPECTED_ARS_UPSTREAM_COMMIT = "7de1c9dfb7af9c02a9b57750761323f35a743aa2"
 EXPECTED_EXPERIMENT_AGENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
 
-EXPECTED_FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
+EXPECTED_FILE_BASE_COMMIT = "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798"
 EXPECTED_UPSTREAM_URLS = {
     "academic-research-skills": "https://github.com/Imbad0202/academic-research-skills.git",
     "experiment-agent": "https://github.com/Imbad0202/experiment-agent.git",
@@ -74,25 +74,25 @@ EXPECTED_SOURCE_IDENTITIES = {
     },
     "file-base": {
         "commit": EXPECTED_FILE_BASE_COMMIT,
-        "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
-        "source_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+        "git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
+        "source_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
     },
 }
 EXPECTED_FILE_BASE_PATCHES = (
     (
         1,
         "vendor/patches/file-base/0001-file-base-server-name.patch",
-        "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a",
+        "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f",
     ),
     (
         2,
         "vendor/patches/file-base/0002-phase1-confined-read.patch",
-        "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029",
+        "decc6a1074e6770a6ea4f848a4f17060fc83066037769b5773ded6fc52bbab5f",
     ),
     (
         3,
         "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-        "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc",
+        "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316",
     ),
     (
         4,
@@ -101,13 +101,13 @@ EXPECTED_FILE_BASE_PATCHES = (
     ),
 )
 EXPECTED_FILE_BASE_POST_PATCH_TREE = (
-    "a75f538244503d8cd4e7b178dce93bdea4c80ac546220bfb4e6022cfcf491fd1"
+    "ca48f88e6ff2d010ff6abb2411018d06c2ae6658a0ebba46a0291cb89bd739dd"
 )
 EXPECTED_FILE_BASE_TEST_TREE = (
-    "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
+    "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
 )
 EXPECTED_PRE_VENDOR_RECEIPT_SHA256 = (
-    "24f895a8738c1e68ae744d03f797cc6db7ded7df9492261214d4db1898e585aa"
+    "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523"
 )
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
@@ -373,7 +373,7 @@ class OrderedPatchBinding(LockModel):
 
 class FileBaseBinding(LockModel):
     component_id: Literal["file-base"]
-    commit: Literal["ee68144af5453addda995a27cce8142999f318fb"]
+    commit: Literal["8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798"]
     git_tree: GitObjectId
     source_tree_sha256: Sha256
     source_manifest: FileBinding
@@ -2921,7 +2921,7 @@ class _PreVendorNativeFileBaseGate(LockModel):
                 )
         expected_notice = (
             "generated/THIRD_PARTY_NOTICES.md",
-            "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af",
+            "57df11de7391283832f4b0d1f015acddbd93bbd94ce1b49e8e05ab68fbad3e8c",
         )
         observed_notices = tuple(
             (item.path, item.sha256) for item in self.generated_notices
@@ -2934,7 +2934,7 @@ class _PreVendorNativeFileBaseGate(LockModel):
         expected_tools = (
             (
                 "scripts/gen-third-party-notices.sh",
-                "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9",
+                "41b7d3723628371e16b3757a6f458dcca4eeaa0145fc07766274c6a719024adf",
             ),
             (
                 "scripts/license-gate-check-npm.py",
@@ -2946,11 +2946,11 @@ class _PreVendorNativeFileBaseGate(LockModel):
             ),
             (
                 "scripts/license-gate.sh",
-                "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b",
+                "b8ec7c9b3c6ad4aa922babf93cff35c788d922ae0233598051ea1c08aeb1f222",
             ),
             (
                 "scripts/license-policy.json",
-                "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a",
+                "b3777d9facbe0058d18ffdf8c40afd0869b1c94d218c6d4828b8b6217b65a859",
             ),
         )
         observed_tools = tuple(sorted((item.path, item.sha256) for item in self.tools))
