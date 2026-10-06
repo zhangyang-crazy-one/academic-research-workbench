@@ -75,6 +75,16 @@ case "$SANITIZERS" in
     fail "unsupported sanitizer set: $SANITIZERS" 64
     ;;
 esac
+# Upstream tests/test_daemon_application.c frees a (uint8_t *)1 sentinel on a
+# setup-failure path. Upstream builds its suite only with sanitizers, where GCC
+# does not diagnose it; the unsanitized GCC build rejects it under -Werror. The
+# test tree must stay byte-identical to upstream, so for this suite only the
+# diagnostic stays a visible warning, and flags.json records the exception.
+CC_MACROS="$(cc -dM -E - </dev/null 2>/dev/null || true)"
+if [[ "$SUITE_KIND" == "upstream" && "$CC_MACROS" == *__GNUC__* \
+  && "$CC_MACROS" != *__clang__* ]]; then
+  SANITIZE_FLAGS="-Wno-error=free-nonheap-object"
+fi
 [[ "$SANITIZERS" == "none" || "$RUN_UPSTREAM_TESTS" -eq 1 ]] \
   || fail "sanitizer builds require --run-upstream-tests" 64
 
