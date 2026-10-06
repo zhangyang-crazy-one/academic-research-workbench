@@ -117,6 +117,10 @@ jobs:
           cp vendor/source-manifest.json "$out/source-manifest.json"
           find "$root" -maxdepth 2 -name '*.log' -size -2M -exec cp {} "$out/" \; || true
           ls -la "$out"
+          echo "=== BEGIN failure-summary"
+          grep -h -n -E ' FAIL |runtime error:|ERROR: [A-Za-z]+Sanitizer|WARNING: ThreadSanitizer|SUMMARY: |error:' \
+            "$root"/test-stdout.log "$root"/test-stderr.log 2>/dev/null | head -n 200 || true
+          echo "=== END failure-summary"
           for f in "$out"/*; do
             case "$f" in *source-manifest.json) continue ;; esac
             echo "=== BEGIN $(basename "$f")"
