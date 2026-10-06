@@ -1049,24 +1049,24 @@
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "06d03bf17852e4b204e450e00e943447b8933731b741ab931f9ef92a0cf9c932",
+      "post_tree_sha256": "ad0191b06960e935da0c09c8686ee66e92042621289b504a4f16de8d88cc70b1",
       "pre_tree_sha256": "9905a98073320d5f48e09a1d9279d8d4869bbb018e459475e91cfe331351a8f8",
-      "sha256": "decc6a1074e6770a6ea4f848a4f17060fc83066037769b5773ded6fc52bbab5f"
+      "sha256": "4a790bac7748724810382d5ca02547e5f7f46142773159d43f2537d2163b685a"
     },
     {
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "2f151470d7e49949fd44c9014e42d61b92a3973dbb751206da5ab0ec55887393",
-      "pre_tree_sha256": "06d03bf17852e4b204e450e00e943447b8933731b741ab931f9ef92a0cf9c932",
+      "post_tree_sha256": "bc66749a69ea2cfd4907434d99b946fb847b661bdb26a52c16e91164de700194",
+      "pre_tree_sha256": "ad0191b06960e935da0c09c8686ee66e92042621289b504a4f16de8d88cc70b1",
       "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "ca48f88e6ff2d010ff6abb2411018d06c2ae6658a0ebba46a0291cb89bd739dd",
-      "pre_tree_sha256": "2f151470d7e49949fd44c9014e42d61b92a3973dbb751206da5ab0ec55887393",
+      "post_tree_sha256": "82ac2177e0b1ae30d6bf86a3549e7d448c78c7bfb84b20460a017e9df6ff58cf",
+      "pre_tree_sha256": "bc66749a69ea2cfd4907434d99b946fb847b661bdb26a52c16e91164de700194",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
