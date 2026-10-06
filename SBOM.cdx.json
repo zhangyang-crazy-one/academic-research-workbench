@@ -66,7 +66,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "492f7677a3dfddeb985870e0741577362efa29528836e58867fda054a223efaf"
+          "content": "ea8d251e227f7c031aeb52b46134305ef3363620d8957714fb53c1056927ba6d"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -114,7 +114,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "fb4ace959661066ca583efe54efe3b321abdbb7698947f1e36941cf8fc04d9c7"
+          "content": "67dea451696117689144141edf673f7d972f2cee99fa7285509afdaa502ba93e"
         }
       ],
       "name": "skills/academic-research-suite",
@@ -126,7 +126,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "66234be91cda42e8890069d911c645ad606c2608f969d481a5bfe0fd85fd6e9d"
+          "content": "8b6a609047515760b6a06db52a7b7db7bc112b4cbf9e786986d8e3b6f58eb00e"
         }
       ],
       "name": "skills/academic-research-suite/SKILL.md",
