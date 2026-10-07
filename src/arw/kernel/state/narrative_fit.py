@@ -142,6 +142,11 @@ class FitSnapshot(StrictModel):
     pdf_sha256: Sha256 | None = None
     pdf_base64: str | None = Field(default=None, max_length=11_184_812)
     judgment: FitJudgment | None = None
+    # Absent on snapshots frozen before source-format-aware predicates, which
+    # keep replaying their original Markdown-only heading evaluation.
+    predicate_policy: Literal["source-format-v2"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def consistent(self):
