@@ -82,8 +82,11 @@ jobs:
           RUNTIMES: ${{ matrix.runtimes }}
         run: |
           root="build/evidence/phase-01/native/$SURFACE"
+          # Root creates the namespaces without a user namespace; offline-exec
+          # runs the build and suite as this runner user (SUDO_UID).
+          as_root=(sudo --preserve-env env "PATH=$PATH" "HOME=$HOME")
           if [[ -z "$SANITIZERS" ]]; then
-            ./scripts/offline-exec --evidence-root "$root" \
+            "${as_root[@]}" ./scripts/offline-exec --evidence-root "$root" \
               ./scripts/build-file-base --clean --run-upstream-tests
           else
             mkdir -p build/sanitizer-runtime
@@ -93,7 +96,7 @@ jobs:
               install -m 0644 "$resolved" "build/sanitizer-runtime/$(basename "$resolved")"
               ln -sf "$(basename "$resolved")" "build/sanitizer-runtime/$library"
             done
-            ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
+            "${as_root[@]}" ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
               ./scripts/offline-exec --evidence-root "$root" \
               ./scripts/build-file-base --clean --sanitizers "$SANITIZERS" \
                 --run-upstream-tests
