@@ -195,6 +195,47 @@ def test_phase4_paper_prose_proposal_requires_realization(
     tmp_path: Path, stage_id: str, output_role: str, media_type: str,
     include_realization: bool, with_blueprint: bool, expected_event: str, expected_reason: str | None,
 ) -> None:
+    _, outcome = _admit_paper_prose(
+        tmp_path, stage_id, output_role, media_type, include_realization, with_blueprint
+    )
+    assert outcome.accepted
+    assert outcome.event.event_type == expected_event
+    if expected_reason is not None:
+        assert outcome.event.payload.reason_code == expected_reason
+
+
+def test_replay_rejects_proposal_report_that_did_not_pass(tmp_path: Path) -> None:
+    import json
+
+    from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.ledger.journal import replay_run
+    from arw.kernel.ledger.manifests import ManifestError, validate_accepted_event_manifests
+
+    root, outcome = _admit_paper_prose(tmp_path, "paper-body", "draft", "text/markdown", True, True)
+    assert outcome.event.event_type == "proposal.accepted"
+    events = replay_run(root).events
+    validate_accepted_event_manifests(root, events)
+    accepted = events[-1]
+    digest = accepted.payload.narrative_report_sha256
+    original = json.loads((root / f"narrative/reports/sha256/{digest}.json").read_bytes())
+    for field, value in (
+        ("mechanical_status", "FAIL"),
+        ("semantic_status", "PASS"),
+        ("narrative_sha256", "0" * 64),
+    ):
+        forged = canonical_json_bytes({**original, field: value})
+        forged_digest = sha256_hex(forged)
+        (root / f"narrative/reports/sha256/{forged_digest}.json").write_bytes(forged)
+        payload = accepted.payload.model_copy(update={"narrative_report_sha256": forged_digest})
+        forged_event = accepted.model_copy(update={"payload": payload})
+        with pytest.raises(ManifestError):
+            validate_accepted_event_manifests(root, (*events[:-1], forged_event))
+
+
+def _admit_paper_prose(
+    tmp_path: Path, stage_id: str, output_role: str, media_type: str,
+    include_realization: bool, with_blueprint: bool,
+):
     project = _project(tmp_path)
     root, command = _run(project, 97)
     blueprint = None
@@ -265,10 +306,7 @@ def test_phase4_paper_prose_proposal_requires_realization(
         _command(command.run_id, started.state.accepted_revision, 972),
         assignment=assignment, attempt=observed,
     )
-    assert outcome.accepted
-    assert outcome.event.event_type == expected_event
-    if expected_reason is not None:
-        assert outcome.event.payload.reason_code == expected_reason
+    return root, outcome
 
 
 def test_assignment_freezes_complete_project_narrative_across_service_instances(
