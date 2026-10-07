@@ -32,27 +32,26 @@ for only `Imbad0202/academic-research-skills` and
 `DeusData/codebase-memory-mcp`. It compares each release tag with the exact
 source commit in `source-manifest.json` using GitHub's commit-list metadata
 (capped at 3,000 commits per direction; no compare patches or source files).
-The ARS manifest's `0.1.27` is the **Codex adapter version**; the source at
-`127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb` is ARS **v3.21.1** (see
+The ARS manifest's `3.22.2` is the **Codex adapter version**; the source at
+`7de1c9dfb7af9c02a9b57750761323f35a743aa2` is ARS **v3.22.2** (see
 `skills/academic-research-suite/manifest.json` and the materialized upstream
-`.claude-plugin/plugin.json`). Neither source identity is a Python package
-compatibility pin. Python dependency declarations remain open lower bounds.
-Missing API metadata and histories beyond the scan cap are reported as
+`.claude-plugin/plugin.json`). From 3.22.0 the ARS-Codex package numbers its
+releases after the suite, so the two values coincide here; the watcher still
+compares commits, not version strings. Neither source identity is a Python
+package compatibility pin. Python dependency declarations remain open lower
+bounds. Missing API metadata and histories beyond the scan cap are reported as
 unknown, not as proof that the vendor is current. A release tag is an
 approved source revision. The job never downloads or executes upstream code,
 and it does not edit source manifests, snapshots, patches, or binaries.
 
-ARS [v3.22.1](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.22.1)
-includes citation-check loading and Chinese APA 7 repairs. Those changes are
-relevant to ARW's citation integrity, but this watcher change **defers source
-admission**. The present source license is CC BY-NC 4.0, and the current
-adapter binds the v3.21.1 source commit, integration lock, notices, and
-ARW-owned overlays. Admission of v3.22.1 requires checking its license and
-notices, materializing and hashing the exact source commit, rebuilding the
-adapter/integration lock and manifest, reviewing overlay conflicts and plugin
-eval suites, then running the ARS self-tests and ARW qualification. None of
-those upgrade tests was run for v3.22.1 in this change; its release notes are
-not evidence that the adapted runtime passes.
+ARS was synced from v3.21.1 to
+[v3.22.2](https://github.com/Imbad0202/academic-research-skills/releases/tag/v3.22.2)
+on 2026-10-05 (issue #47). The license and NOTICE bytes are unchanged
+(CC BY-NC 4.0). The adapter, integration lock, manifests, notices, and
+pre-vendor receipt were regenerated for the new commit; `MODIFICATIONS.md`
+records the merge method and the ARW-owned overlays. The CC BY-NC permission,
+intended-use, distribution-class and accountable-approval blockers are
+unchanged by a source sync.
 
 file-base is currently `ee68144af5453addda995a27cce8142999f318fb`
 (`v0.9.0-2-gee68144`) with four local patches in `mcp-manifest.json`:
@@ -85,4 +84,5 @@ release classification, source-manifest byte preservation, sanitization,
 idempotent issue planning, and workflow permissions/YAML. The hosted schedule,
 GitHub token behavior and actual issue update were not exercised locally;
 those require a future hosted run. The four-patch rebase, v0.11 index migration,
-and v3.22.1 ARS self-tests remain separate source-admission work.
+remain separate source-admission work; the ARS v3.22.2 sync ran the bundled
+ARS self-tests separately.

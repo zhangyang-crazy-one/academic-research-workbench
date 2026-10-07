@@ -21,9 +21,9 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
-The bundled adapter is version `0.1.27`. It tracks
-`academic-research-skills@127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
-(ARS v3.21.1, released 2026-08-24) and
+The bundled adapter is version `3.22.2`. It tracks
+`academic-research-skills@7de1c9dfb7af9c02a9b57750761323f35a743aa2`
+(ARS v3.22.2, released 2026-09-25) and
 `experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
 The ARW core requires Codex CLI `>=0.144.4`; the optional contained
 subscription citation transport is capability-gated and requires Codex CLI

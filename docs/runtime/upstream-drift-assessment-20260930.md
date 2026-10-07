@@ -1,7 +1,12 @@
 # Upstream drift assessment: 2026-09-30
 
 Tracking: [issue #47](https://github.com/zhangyang-crazy-one/academic-research-workbench/issues/47).
-Disposition: **assessed; source admission deferred**. This document does not
+Disposition: **assessed; source admission deferred**.
+
+Update 2026-10-05: ARS was synced to v3.22.2 (`7de1c9d`) following
+checklist items 1, 2 and 5; see `MODIFICATIONS.md` and `vendor/README.md`.
+The file-base upgrade and the CC BY-NC / use-distribution approvals are
+tracked separately. This document does not
 admit a source, accept a license, qualify an upgraded runtime, or close the
 drift tracker. Keep the existing source pins until the gates below pass.
 

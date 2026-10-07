@@ -25,6 +25,14 @@
 #      locally before opening a PR.
 
 [[pytest]]
+id = "857-command-skill-dispatch"
+path = "scripts/test_check_command_skill_dispatch.py"
+
+[[pytest]]
+id = "864-skill-description-length"
+path = "scripts/test_check_skill_description_length.py"
+
+[[pytest]]
 id = "v3.7.1-sha-gate"
 path = "scripts/test_check_v3_6_8_pattern_protection.py"
 
@@ -51,6 +59,10 @@ path = "scripts/test_check_v3_9_0_triangulation.py"
 [[pytest]]
 id = "v3.10-firm-rules-sync"
 path = "scripts/test_check_firm_rules_sync.py"
+
+[[pytest]]
+id = "892-routing-core-sync"
+path = "scripts/test_check_routing_core_sync.py"
 
 [[pytest]]
 id = "v3.10-policy-layer"
@@ -203,6 +215,10 @@ path = "scripts/test_check_risk_register.py"
 [[pytest]]
 id = "756-data-access-level-pins"
 path = "scripts/test_check_data_access_level.py"
+
+[[pytest]]
+id = "809-skill-inventory-parity"
+path = "scripts/test_check_skill_inventory_parity.py"
 
 [[pytest]]
 id = "v3.10-182-verification-cache"
@@ -651,3 +667,35 @@ path = "scripts/test_inquiry_branch_ledger.py"
 [[pytest]]
 id = "789-sealed-promotion-bakeoff"
 path = "scripts/test_check_promotion_bakeoff_preregistration.py"
+
+[[pytest]]
+id = "653-calibration-corpus-assembler"
+path = "scripts/test_assemble_calibration_corpus.py"
+
+[[pytest]]
+id = "653-calibration-dispatcher"
+path = "scripts/test_dispatch_calibration_panel.py"
+
+[[pytest]]
+id = "653-calibration-scorer"
+path = "scripts/test_score_calibration_run.py"
+
+[[pytest]]
+id = "653-calibration-measurement-row"
+path = "scripts/test_build_calibration_measurement_row.py"
+
+[[pytest]]
+id = "845-shared-file-lock"
+path = "scripts/test_file_lock.py"
+
+[[pytest]]
+id = "862-output-language-pair-contract"
+path = "scripts/test_output_language_pair.py"
+
+[[pytest]]
+id = "887-run-ledger"
+path = "scripts/test_run_ledger.py"
+
+[[pytest]]
+id = "849-acronym-check"
+path = "scripts/test_check_acronyms.py"

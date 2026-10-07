@@ -150,7 +150,7 @@ The route command **succeeds** only when **all** of the following hold:
   - `workflow_family` = `"academic-pipeline"` (the control plane emits
     this family only; do not add others)
   - `execution_mode` is `"inline-role-prompts"` or `"blocked"`
-  - `source_adapter_version` = `"0.1.27"`
+  - `source_adapter_version` = `"3.22.2"`
   - `source_dependency_model` = `"bundled-pinned-adapter"`
   - `source_bundled` = `true`
   - `integration_status` is `"PASS"` or `"BLOCKED"`
@@ -195,13 +195,15 @@ from memory as if it were the bundled file.
 | Experiment planning, human-study protocol, statistical interpretation, reproducibility planning | `skills/academic-research-suite/ars/experiment-agent/WORKFLOW.md` |
 | Auditable science workbench, run ledger, paper AST/XML, semantic claims | `skills/academic-research-suite/codex/references/science_workbench_mvp.md` first, then the closest workflow above |
 
-For that scoping override, ask 3–5 narrowing questions before outlining or
-drafting. It applies to natural language and `ars-*` aliases. Follow the source
-router's exceptions when the user has a clear research question, approved
-study frame, data/results, literature matrix, or draft, or explicitly asks to
-skip scoping. If the request spans multiple workflows, start with
-`ars/academic-pipeline/WORKFLOW.md` unless the user clearly asked for
-one phase or the scoping override applies.
+For that scoping override, ask only the material narrowing questions needed
+before outlining or drafting. It applies to natural language only after explicit
+`ars-*` aliases and unambiguous mode intent are ruled out; an `ars-*` alias is
+never redirected. Follow the source router's exceptions when the user has a
+clear research question, approved study frame, data/results, literature matrix,
+or draft, or explicitly asks to skip scoping. An explicit end-to-end request
+selects `ars/academic-pipeline/WORKFLOW.md`; materials spanning phases without
+a named workflow need clarification first under the source router's routing
+core.
 
 Venue, deadline, and template questions still require the academic-paper
 workflow plus a live check of official venue pages.

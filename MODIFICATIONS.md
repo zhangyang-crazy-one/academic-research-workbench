@@ -5,10 +5,12 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
-- Upstream revision: `127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
-- Upstream suite version: `v3.21.1` (2026-08-24)
-- Adapter version: `0.1.27`
+- Upstream revision: `7de1c9dfb7af9c02a9b57750761323f35a743aa2`
+- Upstream suite version: `v3.22.2` (2026-09-25)
+- Adapter version: `3.22.2` (adapter numbering follows the upstream ARS-Codex package, which aligns with the ARS suite release from 3.22.0)
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
+- ARS v3.22.2 sync (2026-10-05, issue #47): `ars/` is three-way merged from the recorded ARS-Codex 0.1.27 base to the ARS-Codex v3.22.2 target (`70b412f`), with upstream-only files (raw eval transcripts) merged from ARS `127ff85` to `7de1c9d` under the `WORKFLOW.md` path translation. ARW-owned overlays (layout-export gate, five reference packs, manuscript-artifact boundary) are byte-preserved. The router `SKILL.md` adopts the v3.22.2 routing core, Spanish intent routing, `Skill`/`${CLAUDE_PLUGIN_ROOT}` mapping, and caller contracts (run ledger, acronym check, Chinese APA, instruction/data boundary; moved intact into `codex/references/ars_v3_22_caller_contracts.md` for progressive loading), but keeps ARW's inline-first execution and current-model policy instead of the ARS-Codex package's model/delegation policy; ARW's own `codex/` adapter is preserved.
+- Stale upstream regression test (2026-10-06): ARS v3.22.2 reversed the alias policy, so an explicit `ars-*` alias selects its mode and is never redirected to Socratic scoping. Its `ars/scripts/test_codex_router_policy.py` still asserted the removed pre-3.22 wording and fails against the upstream router as well. ARW renamed that one test and made it assert the v3.22.2 alias contract instead; the router text is unchanged.
 - Progressive-loading modification (2026-09-25): moved the manuscript artifact/figure guidance and agent/shared-resource index from the 603-line Codex adapter `SKILL.md` into `codex/references/manuscript_artifact_and_figures.md` and `codex/references/agent_file_index.md`, with explicit links in the router. The moved contract text and upstream CC BY-NC 4.0 attribution are preserved; the adapter remains a modified downstream work, not a new upstream release.
 - Agent Skills metadata correction (2026-09-25): represented `codex_adapter` as the string `"true"` required for metadata string values. The adapter behavior is unchanged.
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
