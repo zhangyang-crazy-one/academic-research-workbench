@@ -70,6 +70,20 @@ to 18 tools because v0.11 removed `tools/list` pagination; the capability
 profile and ARW's confinement contract are unchanged. Existing indexes must be
 rebuilt after the upgrade.
 
+v0.11's upstream suite is kept byte-identical and passes on all three native
+surfaces. To achieve that, the ARW patches changed how they extend upstream
+(`MODIFICATIONS.md` has the details):
+
+- The Text and PDF file kinds sit outside the language enum.
+- Text is indexed only through explicit extensions.
+- `read_file` is listed only when an allowed root is configured.
+
+The upstream suite is qualified by running `scripts/offline-exec` through
+sudo. Root creates the network and PID namespaces without a user namespace,
+the suite runs as the invoking user, and the strace network audit uses
+`--seccomp-bpf`. The three native evidence runs built a byte-identical binary,
+and a local `build-file-base` reproduces it.
+
 Local report replay uses `python scripts/vendor-drift-report --fixture <json>`.
 `scripts/vendor-drift-issue` defaults to no write; it requires `--write` and a
 token for a remote update. The workflow's manual dispatch defaults to dry-run,
