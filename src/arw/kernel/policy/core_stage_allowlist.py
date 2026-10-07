@@ -112,6 +112,8 @@ STATIC_STAGE_PATHS = frozenset({
     'share/arw/schemas/files-read-result.schema.json',
     'share/arw/schemas/files-search-request.schema.json',
     'share/arw/schemas/files-search-result.schema.json',
+    'share/arw/schemas/experiment-acceptance.schema.json',
+    'share/arw/schemas/experiment-contract.schema.json',
     'share/arw/schemas/fit-judgment.schema.json',
     'share/arw/schemas/gate-decision.schema.json',
     'share/arw/schemas/graph-edge.schema.json',

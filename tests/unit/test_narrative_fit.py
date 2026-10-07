@@ -357,3 +357,79 @@ def test_old_frozen_heading_report_replays_exactly_under_current_admission_polic
     assert canonical_json_bytes(report(restored)) == original
     # Capturing the same accepted old artifact also retains the replay policy.
     assert freeze(paper, "venue.synthetic", "draft.fit", venue).validation == snapshot.validation
+
+
+def test_malformed_accepted_pdf_reports_structured_page_count_error(paper, tmp_path):
+    from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.journal import replay_run
+    from arw.kernel.state.models import ArtifactAcceptanceRequest
+
+    _accepted_draft(paper)
+    venue = _profile(tmp_path / "profile.json")
+    broken = b"%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n"
+    (paper / "broken.pdf").write_bytes(broken)
+    state = replay_run(paper)
+    accepted = RuntimeCommandService(paper).accept_artifact(
+        ArtifactAcceptanceRequest.model_validate({
+            "schema_version": "1.0.0", "run_id": state.run_id,
+            "event_id": "evt-00000000-0000-4000-8000-000000009310",
+            "command_id": "cmd-00000000-0000-4000-8000-000000009310",
+            "expected_revision": state.revision, "occurred_at": "2026-07-13T00:01:00Z",
+            "actor_id": "parent.runtime", "actor_role": "parent_control_plane",
+            "artifact_id": "pdf.broken", "artifact_kind": "paper-pdf",
+            "media_type": "application/pdf", "content_path": "broken.pdf",
+            "content_sha256": sha256_hex(broken),
+            "base_revision": state.revision,
+            "consumed_sha256": [state.last_event_sha256],
+        }))
+    assert accepted.accepted, accepted.rejection
+    with pytest.raises(NarrativeFitError) as error:
+        freeze(paper, "venue.synthetic", "draft.fit", venue, pdf_artifact_id="pdf.broken")
+    assert error.value.code == "pdf_page_count_unavailable"
+
+
+def _accepted_draft_in(paper, suffix, tail, base):
+    value = _fixture(paper)
+    raw = (paper / "paper.md").read_bytes() + b"\n\n" + tail
+    name = f"paper{suffix}"
+    (paper / name).write_bytes(raw)
+    value.update(source_path=name, source_sha256=sha256_hex(raw))
+    previous = None
+    for offset, stage in enumerate(("outline", "blueprint", "draft")):
+        artifact_id = f"{stage}.{suffix.strip('.')}"
+        body = {**value, "stage": stage, "predecessor_artifact_id": previous}
+        path = f"{stage}{suffix}.json"
+        (paper / path).write_bytes(canonical_json_bytes(body))
+        accepted = _accept_paper_artifact(paper, artifact_id, path, base + offset, kind=f"narrative-{stage}")
+        assert accepted.accepted, accepted.rejection
+        previous = artifact_id
+    return previous
+
+
+@pytest.mark.parametrize(
+    ("suffix", "tail", "expected"),
+    [
+        (".tex", rb"\section*{Limitations}" b"\nThe lemma assumes finite inputs.", "met"),
+        (".tex", rb"\section{Discussion}" b"\nThe lemma assumes finite inputs.", "not_met"),
+        (".txt", b"Limitations\nThe lemma assumes finite inputs.", "not_evaluated"),
+    ],
+)
+def test_heading_requirement_follows_manuscript_source_format(paper, tmp_path, suffix, tail, expected):
+    draft = _accepted_draft_in(paper, suffix, tail, 9601)
+    snapshot = freeze(paper, "venue.synthetic", draft, _profile(tmp_path / "profile.json"))
+    assert snapshot.predicate_policy == "source-format-v2"
+    heading = report(snapshot)["official_hard_requirements"][0]
+    assert heading["rule_id"] == "official.section"
+    assert heading["assessment"]["status"] == expected
+
+
+def test_snapshot_without_predicate_policy_replays_markdown_only_heading_rule(paper, tmp_path):
+    draft = _accepted_draft_in(paper, ".tex", rb"\section*{Limitations}" b"\nScope.", 9611)
+    snapshot = freeze(paper, "venue.synthetic", draft, _profile(tmp_path / "profile.json"))
+    legacy_body = snapshot.model_dump(mode="json")
+    legacy_body.pop("predicate_policy")
+    legacy = type(snapshot).model_validate_json(canonical_json_bytes(legacy_body))
+    assert "predicate_policy" not in legacy.model_dump(mode="json")
+    assert report(legacy)["official_hard_requirements"][0]["assessment"] == {
+        "status": "not_met", "bounded_to": "markdown_headings"}

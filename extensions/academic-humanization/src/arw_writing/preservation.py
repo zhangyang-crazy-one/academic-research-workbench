@@ -3,6 +3,8 @@
 import re
 from collections import Counter
 
+from arw.kernel.core.canonical import sha256_hex
+
 from .diagnostics import sentences
 
 PATTERNS = {
@@ -66,18 +68,24 @@ def verify(source, candidate, protected_terms, protected_spans):
         for s in sentences(text)
         for c in re.findall(citation, s)
     ]
+    # Whole-text review scope is referenced by digest; the receipt already
+    # carries the source and candidate once, so they are not copied per
+    # dimension.
+    source_sha256 = sha256_hex(source.encode("utf-8"))
+    candidate_sha256 = sha256_hex(candidate.encode("utf-8"))
     for dimension in CONTEXT:
         findings.append(
             {
                 "dimension": dimension,
                 "status": "human_review",
-                "source_spans": [source],
-                "candidate_spans": [candidate],
+                "scope": "whole_text",
+                "source_sha256": source_sha256,
+                "candidate_sha256": candidate_sha256,
                 "action": "Reviewer must compare meaning, scope and evidence against the author target",
             }
         )
     return {
-        "version": "arw.writing-preservation.v1",
+        "version": "arw.writing-preservation.v2",
         "disposition": "reject"
         if any(f["status"] == "reject" for f in findings)
         else "human_review",

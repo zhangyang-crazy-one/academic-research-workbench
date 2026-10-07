@@ -15,7 +15,7 @@ from arw.kernel.ledger.manifests import (
 )
 from arw.kernel.ledger.narrative import NarrativeError, guard_run
 from arw.kernel.ledger.research_records import publish_once
-from arw.kernel.ledger.source_locations import read_retained_bytes
+from arw.kernel.ledger.source_locations import MAX_SOURCE_BYTES, read_retained_bytes
 from arw.kernel.state.models import (
     ArtifactAcceptanceRequest,
     RunManifest,
@@ -23,7 +23,7 @@ from arw.kernel.state.models import (
 )
 
 from .review_rules import validate_report
-from .transformer import SessionWritingTransformer
+from .transformer import MAX_TEXT_BYTES, SessionWritingTransformer
 
 
 class WritingAuditService:
@@ -56,14 +56,14 @@ class WritingService(SessionWritingTransformer):
                 raise ValueError("accepted source is missing or ambiguous")
             event = matches[0]
             manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
-            raw = read_retained_bytes(root, manifest.content_path, max_bytes=65536)
+            raw = read_retained_bytes(root, manifest.content_path, max_bytes=MAX_SOURCE_BYTES)
             if sha256_hex(raw) != event.payload.artifact_sha256:
                 raise ValueError("accepted source digest mismatch")
             paper_run = RunManifest.model_validate_json((root / "run-manifest.json").read_bytes()).task_kind == "paper"
             if paper_run and manifest.artifact_kind in {"narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"}:
                 from arw.kernel.state.narrative_realization import NarrativeRealization
                 realization = NarrativeRealization.model_validate(strict_json_loads(raw))
-                raw = read_retained_bytes(root, realization.source_path, max_bytes=65536)
+                raw = read_retained_bytes(root, realization.source_path, max_bytes=MAX_TEXT_BYTES)
                 if sha256_hex(raw) != realization.source_sha256:
                     raise ValueError("accepted manuscript source changed")
             elif manifest.artifact_kind == "writing-derived":

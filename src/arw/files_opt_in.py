@@ -121,7 +121,27 @@ def health(root: Path | None = None) -> dict[str, object]:
         "native_binary": "ready" if native_ready else "missing",
         "project_configs": project_configs,
         "enable_command": "arw files enable --provider native --host codex|claude --target PATH --root PATH --root-id ID --cache-dir PATH",
+        "recommendation": _recommendation(state, native_ready),
     }
+
+
+NATIVE_MISSING_RECOMMENDATION = (
+    "optional: build the native file-base (scripts/build-file-base) or "
+    "install a staged plugin, then run enable_command for bounded local "
+    "file search; routing and research workflows do not require it"
+)
+
+
+def _recommendation(state: str, native_ready: bool) -> str | None:
+    """Advisory next step; file-base is optional and never gates research routing."""
+    if state in {"enabled", "bundled"}:
+        return None
+    if not native_ready:
+        return NATIVE_MISSING_RECOMMENDATION
+    return (
+        "optional: run enable_command for a project to add bounded local file "
+        "search; routing and research workflows do not require it"
+    )
 
 
 def _safe_directory(path: Path, label: str) -> Path:
@@ -316,12 +336,15 @@ def enable(
 
 
 def diagnostic(error: OptInError) -> dict[str, str]:
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "status": "rejected",
         "reason_code": error.code,
         "message": str(error),
     }
+    if error.code == "native_binary_missing":
+        result["recommendation"] = NATIVE_MISSING_RECOMMENDATION
+    return result
 
 
 def source_main(argv: list[str] | None = None) -> int:

@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "CheckResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "kind": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "evidence_missing",
+            "invalid_contract",
+            "invalid_artifact",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected"
+        },
+        "sample_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Count"
+        },
+        "excluded_missing": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excluded Missing"
+        },
+        "artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Sha256"
+        }
+      },
+      "required": [
+        "check_id",
+        "kind",
+        "status"
+      ],
+      "title": "CheckResult",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Deterministic, timestamp-free outcome; identical inputs replay byte-for-byte.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.experiment-acceptance.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evaluator_version": {
+      "const": "1.0.0",
+      "title": "Evaluator Version",
+      "type": "string"
+    },
+    "scope": {
+      "const": "contract_conformance_only",
+      "title": "Scope",
+      "type": "string"
+    },
+    "contract_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "contract_version": {
+      "minimum": 1,
+      "title": "Contract Version",
+      "type": "integer"
+    },
+    "contract_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Contract Sha256",
+      "type": "string"
+    },
+    "provenance_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provenance Sha256",
+      "type": "string"
+    },
+    "claim_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "claim_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Claim Sha256",
+      "type": "string"
+    },
+    "predeclaration": {
+      "enum": [
+        "verified_predeclared",
+        "predeclaration_unverified",
+        "predeclaration_contradicted",
+        "exploratory"
+      ],
+      "title": "Predeclaration",
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/CheckResult"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Checks",
+      "type": "array"
+    },
+    "overall_status": {
+      "enum": [
+        "passed",
+        "failed",
+        "evidence_missing",
+        "invalid_contract",
+        "invalid_artifact",
+        "unsupported"
+      ],
+      "title": "Overall Status",
+      "type": "string"
+    },
+    "budget_status": {
+      "enum": [
+        "not_declared",
+        "within_budget",
+        "exceeded",
+        "unverifiable",
+        "invalid_contract"
+      ],
+      "title": "Budget Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluator_version",
+    "scope",
+    "contract_id",
+    "contract_version",
+    "contract_sha256",
+    "provenance_sha256",
+    "claim_id",
+    "claim_sha256",
+    "predeclaration",
+    "checks",
+    "overall_status",
+    "budget_status"
+  ],
+  "title": "ExperimentAcceptanceResult",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/experiment-acceptance.schema.json"
+}
