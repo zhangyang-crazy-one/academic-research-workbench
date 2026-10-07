@@ -15,6 +15,9 @@ from referencing import Registry, Resource
 from arw.file_contracts import FILE_SCHEMA_NAMES
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
 from arw.kernel.artifacts.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
+from arw.kernel.artifacts.experiment_acceptance import (
+    experiment_acceptance_schema_documents,
+)
 from arw.kernel.artifacts.integrity import (
     PHASE6_SCHEMA_NAMES,
     generate_phase6_schema_documents,
@@ -48,6 +51,7 @@ from arw.kernel.state.venue_learning import venue_learning_schema_documents
 LEARNING_SCHEMA_NAMES = tuple(learning_schema_documents())
 VENUE_LEARNING_SCHEMA_NAMES = tuple(venue_learning_schema_documents())
 NARRATIVE_FIT_SCHEMA_NAMES = tuple(narrative_fit_schema_documents())
+EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES = tuple(experiment_acceptance_schema_documents())
 
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
@@ -102,6 +106,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + LEARNING_SCHEMA_NAMES
     + VENUE_LEARNING_SCHEMA_NAMES
     + NARRATIVE_FIT_SCHEMA_NAMES
+    + EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
     + NARRATIVE_REALIZATION_SCHEMA_NAMES
@@ -314,6 +319,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = venue_learning_schema_documents()[name]
         elif name in NARRATIVE_FIT_SCHEMA_NAMES:
             document = narrative_fit_schema_documents()[name]
+        elif name in EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES:
+            document = experiment_acceptance_schema_documents()[name]
         elif name in RESEARCH_MEMORY_SCHEMA_NAMES:
             document = research_memory_schema_documents()[name]
         elif name in RESEARCH_ARTIFACT_SCHEMA_NAMES:

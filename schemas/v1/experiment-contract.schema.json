@@ -1,0 +1,516 @@
+{
+  "$defs": {
+    "BaselineComparisonCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "baseline_comparison",
+          "title": "Kind",
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/ComparisonSide"
+        },
+        "baseline": {
+          "$ref": "#/$defs/ComparisonSide"
+        },
+        "direction": {
+          "enum": [
+            "higher_is_better",
+            "lower_is_better"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "threshold": {
+          "$ref": "#/$defs/Threshold"
+        },
+        "valid_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValueRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "check_id",
+        "kind",
+        "candidate",
+        "baseline",
+        "direction",
+        "threshold"
+      ],
+      "title": "BaselineComparisonCheck",
+      "type": "object"
+    },
+    "BudgetDeclaration": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "usage_metric": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Usage Metric",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "limit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Limit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "usage_metric",
+        "unit",
+        "limit"
+      ],
+      "title": "BudgetDeclaration",
+      "type": "object"
+    },
+    "ComparisonContext": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Everything that must agree before two values may be compared.",
+      "properties": {
+        "metric_definition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Metric Definition",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "dataset": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Dataset",
+          "type": "string"
+        },
+        "split": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        },
+        "evaluation_condition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Evaluation Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_definition",
+        "unit",
+        "dataset",
+        "split",
+        "evaluation_condition"
+      ],
+      "title": "ComparisonContext",
+      "type": "object"
+    },
+    "ComparisonSide": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "reported_metric": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Reported Metric",
+          "type": "string"
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        }
+      },
+      "required": [
+        "label",
+        "reported_metric",
+        "context"
+      ],
+      "title": "ComparisonSide",
+      "type": "object"
+    },
+    "DataSelector": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "One numeric column of a provenance-named CSV artifact.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "format": {
+          "const": "csv",
+          "title": "Format",
+          "type": "string"
+        },
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "row_id_column": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Id Column"
+        },
+        "missing_values": {
+          "default": "reject",
+          "enum": [
+            "reject",
+            "exclude"
+          ],
+          "title": "Missing Values",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "format",
+        "column"
+      ],
+      "title": "DataSelector",
+      "type": "object"
+    },
+    "NumericReproductionCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "numeric_reproduction",
+          "title": "Kind",
+          "type": "string"
+        },
+        "reported_metric": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Reported Metric",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "count@1",
+            "max@1",
+            "mean@1",
+            "median@1",
+            "min@1",
+            "sum@1"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/DataSelector"
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance"
+        },
+        "valid_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValueRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "check_id",
+        "kind",
+        "reported_metric",
+        "unit",
+        "operator",
+        "data",
+        "tolerance"
+      ],
+      "title": "NumericReproductionCheck",
+      "type": "object"
+    },
+    "Threshold": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "absolute",
+            "relative"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "value"
+      ],
+      "title": "Threshold",
+      "type": "object"
+    },
+    "Tolerance": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "absolute": {
+          "default": "0",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Absolute",
+          "type": "string"
+        },
+        "relative": {
+          "default": "0",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Relative",
+          "type": "string"
+        }
+      },
+      "title": "Tolerance",
+      "type": "object"
+    },
+    "UnsupportedClaimCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A declared claim type the MVP refuses rather than weakening into a pass.",
+      "properties": {
+        "check_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "causal_effect",
+            "conditional_effect",
+            "interaction_effect",
+            "leaderboard_rank",
+            "statistical_significance"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "kind",
+        "description"
+      ],
+      "title": "UnsupportedClaimCheck",
+      "type": "object"
+    },
+    "ValueRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
+        }
+      },
+      "title": "ValueRange",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable, versioned acceptance contract for one claim.\n\nA changed threshold, tolerance, or analysis is a new contract version with a\nnew digest; the earlier contract and its results stay replayable. The\n``declared_timing`` field is the author's declaration only: whether it was\nreally fixed in advance is decided from parent-ledger ordering at\nevaluation time, never from a self-reported timestamp.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.experiment-contract.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "contract_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "contract_version": {
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Contract Version",
+      "type": "integer"
+    },
+    "supersedes_contract_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Contract Sha256"
+    },
+    "claim_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "claim_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Claim Sha256",
+      "type": "string"
+    },
+    "declared_timing": {
+      "enum": [
+        "predeclared",
+        "exploratory"
+      ],
+      "title": "Declared Timing",
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "baseline_comparison": "#/$defs/BaselineComparisonCheck",
+            "causal_effect": "#/$defs/UnsupportedClaimCheck",
+            "conditional_effect": "#/$defs/UnsupportedClaimCheck",
+            "interaction_effect": "#/$defs/UnsupportedClaimCheck",
+            "leaderboard_rank": "#/$defs/UnsupportedClaimCheck",
+            "numeric_reproduction": "#/$defs/NumericReproductionCheck",
+            "statistical_significance": "#/$defs/UnsupportedClaimCheck"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/NumericReproductionCheck"
+          },
+          {
+            "$ref": "#/$defs/BaselineComparisonCheck"
+          },
+          {
+            "$ref": "#/$defs/UnsupportedClaimCheck"
+          }
+        ]
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Checks",
+      "type": "array"
+    },
+    "budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BudgetDeclaration"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "schema_version",
+    "contract_id",
+    "contract_version",
+    "claim_id",
+    "claim_sha256",
+    "declared_timing",
+    "checks"
+  ],
+  "title": "ExperimentContract",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/experiment-contract.schema.json"
+}
