@@ -6,7 +6,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
+          "content": "3253e3663267324ae0bb54a192968a97751d35c7853b4a6117399c17146b3de7"
         }
       ],
       "name": ".file-base/bin/file-base",
@@ -18,7 +18,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "92bba6fe4799bcf3bc1ef5bd0f0f1c7830b060d9f7409d367605c760b92a3e10"
+          "content": "1d0cef0b6eba2484b0eee81c270a61e7afdbe160af8dccbee45ad8c690b26d02"
         }
       ],
       "name": ".file-base/build-evidence.json",
@@ -66,7 +66,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ea8d251e227f7c031aeb52b46134305ef3363620d8957714fb53c1056927ba6d"
+          "content": "03e115b9808164295260f34c3ae3a72d4609f2d43677501e3a21e11139848684"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7035f7e5129fa77a50f83c13f0351cb5cec27ca9f32180d26a7cbe58d747a18f"
+          "content": "87880f5e24008911de79daeed231340b2160f7cbad00c44a2321871b63f24b51"
         }
       ],
       "name": "vendor/mcp-manifest.json",

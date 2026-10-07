@@ -2614,14 +2614,14 @@ _NATIVE_STATUS_ZERO_BYTES: bytes = b"0\n"
 
 
 _NATIVE_VERDICT_SHA256_BY_SURFACE = {
-    "upstream": "8b30b76aea2732abdf52cf8f28c27d6670cb1c1dc57bafcd0cdb4bfb59244cac",
-    "asan_ubsan": "672741e6f3db1c9a056f82fc5a6947f5b2be5cfb777a8b28f89c88cefa983e0e",
-    "tsan": "849724d83b199b2ef124c28e22e007227ab1937f33085e9c1985d6459b51d269",
+    "upstream": "23af4cf61d5d2725baca9296ba14dd4a1c6af84f03cceab840c58d2320af4eed",
+    "asan_ubsan": "904db8310adb56c9ba628801bba504a29b0da1eb00500b3ea21b1c0b818001c7",
+    "tsan": "fc896bb5ab4ff968c1468fc657e84dcfaffc0ea75d508e2fda0021c308914b9a",
 }
 _NATIVE_COMMAND_SHA256_BY_SURFACE = {
-    "upstream": "0b3ac7a4f01a6e7516b4e8dbf9f6464fa8bc2240f2ff90c9ffbff01d2ac7d083",
-    "asan_ubsan": "f3642356554e51454b60e54d671f89e1d42006cd899d3af0a685fa2adc2afd65",
-    "tsan": "7c150b5d52556404fae2ea5fb0a3624c8578a5151397588e2d729cbc67f582f4",
+    "upstream": "e8eebbf52e0ed74ae451984acd0bb79ccc51cd3a00cb8cf60606caab8aee1873",
+    "asan_ubsan": "dd03770a6be248fa478e34ad743ae16c2da838a1fd658d9b320790a52f4b9be8",
+    "tsan": "d96348ed2c1ef94dba0ae3783321ec7be6b1a2a2bb9387ea6c1bb419550d9528",
 }
 
 

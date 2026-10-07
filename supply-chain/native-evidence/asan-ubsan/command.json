@@ -6,15 +6,15 @@
     "asan,ubsan",
     "--run-upstream-tests"
   ],
-  "cwd": "/home/zhangyangrui/my_programes/academic-research-workbench",
-  "ended_at": "2026-07-13T07:24:15Z",
+  "cwd": "/home/runner/work/academic-research-workbench/academic-research-workbench",
+  "ended_at": "2026-10-07T15:33:50Z",
   "environment": {
     "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
-    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/zhangyangrui/my_programes/academic-research-workbench/build/evidence/phase-01/native/asan-ubsan",
+    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/evidence/phase-01/native/asan-ubsan",
     "ARW_OFFLINE_EXEC_ACTIVE": "1",
-    "ARW_SANITIZER_RUNTIME_DIR": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/sanitizer-root/usr/lib64"
+    "ARW_SANITIZER_RUNTIME_DIR": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/sanitizer-runtime"
   },
   "network_denial_mechanism": "bwrap-unshare-net",
-  "started_at": "2026-07-13T07:10:29Z",
-  "strace": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/strace/root/usr/bin/strace"
+  "started_at": "2026-10-07T14:46:44Z",
+  "strace": "/usr/bin/strace"
 }

@@ -4,14 +4,14 @@
     "--clean",
     "--run-upstream-tests"
   ],
-  "cwd": "/home/zhangyangrui/my_programes/academic-research-workbench",
-  "ended_at": "2026-07-13T06:04:00Z",
+  "cwd": "/home/runner/work/academic-research-workbench/academic-research-workbench",
+  "ended_at": "2026-10-07T15:02:49Z",
   "environment": {
     "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
-    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/zhangyangrui/my_programes/academic-research-workbench/build/evidence/phase-01/native/upstream",
+    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/evidence/phase-01/native/upstream",
     "ARW_OFFLINE_EXEC_ACTIVE": "1"
   },
   "network_denial_mechanism": "bwrap-unshare-net",
-  "started_at": "2026-07-13T05:55:01Z",
-  "strace": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/strace/root/usr/bin/strace"
+  "started_at": "2026-10-07T14:46:30Z",
+  "strace": "/usr/bin/strace"
 }

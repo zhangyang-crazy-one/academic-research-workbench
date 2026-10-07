@@ -995,13 +995,13 @@
       "class": "binary",
       "path": ".file-base/bin/file-base",
       "required_before_staging": true,
-      "sha256": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
+      "sha256": "3253e3663267324ae0bb54a192968a97751d35c7853b4a6117399c17146b3de7"
     },
     {
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "92bba6fe4799bcf3bc1ef5bd0f0f1c7830b060d9f7409d367605c760b92a3e10"
+      "sha256": "1d0cef0b6eba2484b0eee81c270a61e7afdbe160af8dccbee45ad8c690b26d02"
     },
     {
       "class": "build-evidence",

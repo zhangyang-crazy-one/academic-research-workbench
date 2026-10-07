@@ -9,17 +9,17 @@
     {
       "path": "vendor/source-manifest.json",
       "purpose": "technical-provenance-only",
-      "sha256": "b76723a7773a29fe607992bdf7a1d7f5e0d2de5024aeb142362a5443a2f2d555"
+      "sha256": "626c385376aee41f4f1d694198ea921b55a15fa39ac5c0ab6ec6bce6800507e3"
     },
     {
       "path": "SBOM.cdx.json",
       "purpose": "technical-provenance-only",
-      "sha256": "9b5f6be226fa71efdf26bc0646e27493563d15ae90ad523041def3513120b5f3"
+      "sha256": "11ce09aee52eecaf8574f2225e170b372e4bbc83fac34fb5bbb38062a9e20fec"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
       "purpose": "technical-provenance-only",
-      "sha256": "c4a10f02b8603b6eeefa154c9bdec38102e28d0db2c7ea7d3df515c5127ca8d4"
+      "sha256": "7eb2df4b76d30958b0b1f96968e3e7de8bcdfa805eb697dea6e3f1f2ab67ffb5"
     }
   ],
   "intended_use": {

@@ -1,8 +1,8 @@
 {
-  "child_network_namespace": "net:[4026533200]",
+  "child_network_namespace": "net:[4026532317]",
   "command_status": 0,
   "host_network_namespace": "net:[4026531833]",
-  "namespace_local_network_syscall_count": 58,
+  "namespace_local_network_syscall_count": 117,
   "network_denial_mechanism": "bwrap-unshare-net",
   "network_namespace_denied": true,
   "network_syscall_attempts": [],
