@@ -524,7 +524,7 @@ def validate_accepted_event_manifests(
                 from arw.kernel.ledger.narrative_content import (
                     verify_realization_source,
                 )
-                from arw.kernel.ledger.source_locations import read_retained_bytes
+                from arw.kernel.ledger.source_locations import MAX_SOURCE_BYTES, read_retained_bytes
                 from arw.kernel.state.narrative_realization import NarrativeRealization
                 digest = event.payload.narrative_report_sha256
                 try:
@@ -541,7 +541,10 @@ def validate_accepted_event_manifests(
                         or report.get("semantic_status") != "UNKNOWN"):
                     raise ManifestError("narrative check report differs from accepted artifact")
                 try:
-                    realization_raw = read_retained_bytes(root, manifest.content_path, max_bytes=1_048_576)
+                    realization_raw = read_retained_bytes(
+                        root, manifest.content_path,
+                        max_bytes=MAX_SOURCE_BYTES if manifest.artifact_kind == "writing-derived" else 1_048_576,
+                    )
                     if sha256_hex(realization_raw) != manifest.content_sha256:
                         raise ValueError("realization content changed")
                     body = strict_json_loads(realization_raw)

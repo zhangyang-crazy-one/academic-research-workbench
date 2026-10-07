@@ -293,3 +293,36 @@ def test_optional_routing_and_cli(tmp_path, monkeypatch):
     outcome = subprocess.run(command, capture_output=True, text=True, check=False)
     assert outcome.returncode == 0, outcome.stdout + outcome.stderr
     assert json.loads(outcome.stdout)["candidate"] == CANDIDATE
+
+
+def test_full_manuscript_beyond_64_kib_is_reviewed_accepted_and_replayed(tmp_path):
+    from arw.kernel.ledger.manifests import validate_accepted_event_manifests
+
+    filler = "\n\n".join(
+        f"Section {index} discusses ModelX and keeps every limitation stated in our experiments."
+        for index in range(4000)
+    )
+    source = SOURCE + "\n\n" + filler
+    assert len(source.encode()) > 4 * 65536
+    candidate = source.replace("Moreover, ", "", 1)
+    root, _ = seed(tmp_path)
+    (root / "manuscript.txt").write_text(source)
+    assert accept(root, "artifact.manuscript", "manuscript.txt", 40, kind="manuscript").accepted
+    service = WritingService(root)
+    p = proposal(source=source, candidate=candidate)
+    p["edits"] = [{"start": 0, "end": len("Moreover, "), "before": "Moreover, ", "replacement": ""}]
+    prepared_candidate = service.prepare("artifact.manuscript", p)
+    assert prepared_candidate["candidate"] == candidate
+    assert prepared_candidate["controls_effective"]
+    verification = prepared_candidate["verification"]
+    assert verification["version"] == "arw.writing-preservation.v2"
+    context = [f for f in verification["findings"] if f["status"] == "human_review"]
+    assert context and all("source_spans" not in f for f in context)
+    assert {f["source_sha256"] for f in context} == {sha256_hex(source.encode())}
+    review = approve(root, prepared_candidate)
+    done = service.record("artifact.manuscript", p, request=request(root, 70), review_artifact_id=review)
+    assert done["candidate_accepted"], done
+    body = (root / done["bundle_path"]).read_bytes()
+    # Source and candidate appear once each instead of once per review dimension.
+    assert len(body) < 3 * len(source.encode())
+    validate_accepted_event_manifests(root, replay_run(root).events)
