@@ -61,7 +61,7 @@ Succeed only if all are true:
 - `schema_version` = `1.0.0`
 - `workflow_family` = `academic-pipeline`
 - `execution_mode` ∈ {`inline-role-prompts`, `blocked`}
-- `source_adapter_version` = `0.1.27`
+- `source_adapter_version` = `3.22.2`
 - `source_dependency_model` = `bundled-pinned-adapter`
 - `source_bundled` = `true`
 - `integration_status` ∈ {`PASS`, `BLOCKED`}
@@ -105,10 +105,12 @@ its overrides take precedence over this summary. Do not add families.
 | Experiment planning / protocols / stats interpretation | `skills/academic-research-suite/ars/experiment-agent/WORKFLOW.md` |
 | Ledger / science workbench / paper AST | `skills/academic-research-suite/codex/references/science_workbench_mvp.md` then closest row above |
 
-For the scoping override, ask 3–5 narrowing questions before outlining or
-drafting. Apply it to natural language and `ars-*` aliases. Follow the source
-router's exceptions for a clear research question, approved study frame,
-data/results, literature matrix, draft, or an explicit request to skip scoping.
-Spanning phases → `academic-pipeline` unless the user named one phase or the
-scoping override applies.
+For the scoping override, ask only the material narrowing questions needed
+before outlining or drafting. Apply it to natural language only after explicit
+`ars-*` aliases and unambiguous mode intent are ruled out; never redirect an
+`ars-*` alias. Follow the source router's exceptions for a clear research
+question, approved study frame, data/results, literature matrix, draft, or an
+explicit request to skip scoping. An explicit end-to-end request →
+`academic-pipeline`; materials spanning phases without a named workflow →
+clarify first under the source router's routing core.
 If GitHub cannot fetch the file, stop and say so.

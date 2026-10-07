@@ -1,0 +1,5 @@
+# Design
+
+The local core route is an additive `route --core --json` contract with generic capability and adapter records. Its integrity state is `PASS` only after a complete staged bundle passes live closed-inventory, payload/build-identity, wheel, source, candidate, license, and SBOM checks. An explicit editable source checkout is `UNVERIFIED`. Provider presence, unresolved configuration, and host execution qualification are distinct states.
+
+The installed launcher compares the candidate wheel bytes with the staged build identity before installing or using a cached runtime. CLI and Python MCP operation entry points run the shared core verifier before work. The native standalone file-base provider retains its existing bounded-root contract; it is outside the ARW staged-core qualification claim. The existing `route --json`, IntegrationLock v2, and Codex dispatch retain their current semantics. An explicit `ARW_PLUGIN_ROOT` for the installed launcher must equal that launcher's stage root, and agent mode is reserved for a source checkout.

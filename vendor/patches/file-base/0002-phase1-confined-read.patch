@@ -1,8 +1,42 @@
+diff --git a/internal/cbm/vendored/grammars/objectscript_routine/scanner.c b/internal/cbm/vendored/grammars/objectscript_routine/scanner.c
+index 771db9ee..492ea45d 100644
+--- a/internal/cbm/vendored/grammars/objectscript_routine/scanner.c
++++ b/internal/cbm/vendored/grammars/objectscript_routine/scanner.c
+@@ -115,7 +115,11 @@ unsigned tree_sitter_objectscript_routine_external_scanner_serialize(void *paylo
+ 
+ void tree_sitter_objectscript_routine_external_scanner_deserialize(
+     void *payload, const char *buffer, unsigned length) {
+-  memcpy(payload, buffer, length);
++  // ARW: tree-sitter resets a scanner with (NULL, 0); memcpy forbids NULL even
++  // for zero bytes (UBSan nonnull-attribute), so a reset copies nothing.
++  if (length > 0) {
++    memcpy(payload, buffer, length);
++  }
+ }
+ 
+ void tree_sitter_objectscript_routine_external_scanner_destroy(void *payload) {
+diff --git a/internal/cbm/vendored/grammars/objectscript_udl/scanner.c b/internal/cbm/vendored/grammars/objectscript_udl/scanner.c
+index fb1d0132..4ea45fac 100644
+--- a/internal/cbm/vendored/grammars/objectscript_udl/scanner.c
++++ b/internal/cbm/vendored/grammars/objectscript_udl/scanner.c
+@@ -119,7 +119,11 @@ void tree_sitter_objectscript_udl_external_scanner_deserialize(
+     void *payload, const char *buffer, unsigned length) {
+   // This one is a bit funky.
+   // length includes the sizeof(struct Scanner) and the structs it points to
+-  memcpy(payload, buffer, length);
++  // ARW: tree-sitter resets a scanner with (NULL, 0); memcpy forbids NULL even
++  // for zero bytes (UBSan nonnull-attribute), so a reset copies nothing.
++  if (length > 0) {
++    memcpy(payload, buffer, length);
++  }
+ }
+ 
+ void tree_sitter_objectscript_udl_external_scanner_destroy(void *payload) {
 diff --git a/src/discover/discover.c b/src/discover/discover.c
-index 1fb5b93..99b4284 100644
+index 3b69d233..96f80a9e 100644
 --- a/src/discover/discover.c
 +++ b/src/discover/discover.c
-@@ -70,7 +70,7 @@ static const char *ALWAYS_IGNORED_SUFFIXES[] = {
+@@ -71,7 +71,7 @@ static const char *ALWAYS_IGNORED_SUFFIXES[] = {
  static const char *FAST_IGNORED_SUFFIXES[] = {
      ".zip", ".tar",  ".gz",       ".bz2",  ".xz",  ".rar",    ".7z",      ".jar",
      ".war", ".ear",  ".mp3",      ".mp4",  ".avi", ".mov",    ".wav",     ".flac",
@@ -11,51 +45,42 @@ index 1fb5b93..99b4284 100644
      ".ppt", ".pptx", ".odt",      ".ods",  ".map", ".min.js", ".min.css", ".pem",
      ".crt", ".key",  ".cer",      ".p12",  ".pb",  ".avro",   ".parquet", ".beam",
      ".elc", ".rlib", ".coverage", ".prof", ".out", NULL};
-@@ -526,13 +526,17 @@ static bool should_skip_directory(const char *entry_name, const char *rel_path,
- }
- 
- /* Check if a regular file should be skipped (filters + gitignore + size). */
--static bool should_skip_file(const char *entry_name, const char *rel_path,
+@@ -692,13 +692,18 @@ static bool should_skip_directory(const char *entry_name, const char *rel_path,
+  * "purposely not indexed" class) or NULL to keep the file. Check order and
+  * semantics — including the .cbmignore negation un-ignoring a global-gitignore
+  * match — are IDENTICAL to the original boolean predicate. */
+-static const char *file_skip_reason(const char *entry_name, const char *rel_path,
+-                                    const cbm_discover_opts_t *opts,
 +static bool pdf_has_direct_text(const char *abs_path);
 +
-+static bool should_skip_file(const char *abs_path, const char *entry_name, const char *rel_path,
-                              const cbm_discover_opts_t *opts, const cbm_gitignore_t *gitignore,
-                              const cbm_gitignore_t *global_gi, const cbm_gitignore_t *cbmignore,
-                              const cbm_gitignore_t *local_gi, const char *local_gi_prefix,
-                              off_t file_size) {
++static const char *file_skip_reason(const char *abs_path, const char *entry_name,
++                                    const char *rel_path, const cbm_discover_opts_t *opts,
+                                     const gitignore_link_t *ignore_chain,
+                                     const cbm_gitignore_t *global_gi,
+                                     const cbm_gitignore_t *cbmignore, off_t file_size) {
      cbm_index_mode_t mode = opts ? opts->mode : CBM_MODE_FULL;
 -    if (cbm_has_ignored_suffix(entry_name, mode)) {
++    /* ARW: a PDF with directly extractable text is indexed structure-only. */
 +    const char *dot = strrchr(entry_name, '.');
 +    bool readable_pdf = dot && ascii_ieq(dot, ".pdf") && pdf_has_direct_text(abs_path);
 +    if (cbm_has_ignored_suffix(entry_name, mode) && !readable_pdf) {
-         return true;
+         return "ignored-suffix";
      }
      if (cbm_should_skip_filename(entry_name, mode)) {
-@@ -730,6 +734,10 @@ static CBMLanguage detect_file_language(const char *entry_name, const char *abs_
- 
-     CBMLanguage lang = cbm_language_for_filename(entry_name);
-     if (lang == CBM_LANG_COUNT) {
-+        if (entry_name[0] == '.' || strcmp(entry_name, "commondir") == 0 ||
-+            strcmp(entry_name, "exclude") == 0) {
-+            return CBM_LANG_COUNT;
-+        }
-         return detect_text_fallback_language(abs_path);
-     }
-     /* Special: .m files need content-based disambiguation */
-@@ -797,7 +805,7 @@ static void walk_dir_process_file(const char *abs_path, const char *rel_path, co
+@@ -951,7 +956,7 @@ static void walk_dir_process_file(const char *abs_path, const char *rel_path, co
                                    const cbm_gitignore_t *global_gi,
-                                   const cbm_gitignore_t *cbmignore, const cbm_gitignore_t *local_gi,
-                                   const char *local_gi_prefix, off_t size, file_list_t *out) {
--    if (should_skip_file(name, rel_path, opts, gitignore, global_gi, cbmignore, local_gi,
-+    if (should_skip_file(abs_path, name, rel_path, opts, gitignore, global_gi, cbmignore, local_gi,
-                          local_gi_prefix, size)) {
-         return;
-     }
+                                   const cbm_gitignore_t *cbmignore, off_t size, file_list_t *out) {
+     const char *skip_reason =
+-        file_skip_reason(name, rel_path, opts, ignore_chain, global_gi, cbmignore, size);
++        file_skip_reason(abs_path, name, rel_path, opts, ignore_chain, global_gi, cbmignore, size);
+     if (skip_reason) {
+         /* Deliberately not indexed (#963) — record so callers can surface it.
+          * Unsupported-language files below are NOT recorded: "no grammar for
 diff --git a/src/discover/language.c b/src/discover/language.c
-index 88d848a..d2b8017 100644
+index d0c1ee9e..f0572f22 100644
 --- a/src/discover/language.c
 +++ b/src/discover/language.c
-@@ -674,8 +674,6 @@ static const filename_entry_t FILENAME_TABLE[] = {
+@@ -723,8 +723,6 @@ static const filename_entry_t FILENAME_TABLE[] = {
      {".env", CBM_LANG_DOTENV},
      {".env.local", CBM_LANG_DOTENV},
      {".gitattributes", CBM_LANG_GITATTRIBUTES},
@@ -65,12 +90,12 @@ index 88d848a..d2b8017 100644
  
  #define FILENAME_TABLE_SIZE (sizeof(FILENAME_TABLE) / sizeof(FILENAME_TABLE[0]))
 diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
-index 012c992..5e37be1 100644
+index f0d3189e..fcbe31b7 100644
 --- a/src/mcp/mcp.c
 +++ b/src/mcp/mcp.c
-@@ -28,6 +28,9 @@ enum {
-     MCP_DEFAULT_LIMIT = 10,
-     MCP_BFS_LIMIT = 100,
+@@ -30,6 +30,9 @@ enum {
+     MCP_DEFAULT_IMPACT_LIMIT = 200, /* detect_changes per-symbol rows; rollup stays complete */
+     MCP_SNIPPET_MAX_LINES = 500,    /* get_code_snippet line cap (whole-file Module guard) */
      MCP_N_DEFAULTS_2 = 2,
 +    MCP_READ_MAX_BYTES = 4096,
 +    MCP_READ_MAX_LINES = 200,
@@ -78,11 +103,11 @@ index 012c992..5e37be1 100644
      MCP_URI_PREFIX = 7,      /* strlen("file://") */
      MCP_CONTENT_PREFIX = 15, /* strlen("Content-Length:") */
      MCP_RETURN_2 = 2,
-@@ -312,6 +315,19 @@ typedef struct {
+@@ -463,6 +466,19 @@ typedef struct {
  } tool_def_t;
  
  static const tool_def_t TOOLS[] = {
-+    {"read_file", "Read confined file",
++    {"read_file",
 +     "Read one bounded UTF-8 file beneath an explicitly configured allowed-root capability. "
 +     "The native process rejects traversal, absolute paths, symlinks, sensitive names, "
 +     "non-regular files, and requests above the Phase 1 byte or line ceilings before content.",
@@ -95,10 +120,91 @@ index 012c992..5e37be1 100644
 +     "\"required\":[\"schema_version\",\"allowed_root\",\"relative_path\","
 +     "\"max_bytes\",\"max_lines\"]}"},
 +
-     {"index_repository", "Index repository",
-      "Index a repository into the knowledge graph. "
-      "Special mode 'cross-repo-intelligence': skip extraction, only match Routes/Channels "
-@@ -665,6 +681,7 @@ char *cbm_mcp_initialize_response(const char *params_json) {
+     {"index_repository",
+      "Index a repository. full/moderate add semantics; fast omits them; cross-repo-intelligence "
+      "links services. Reports coverage gaps.",
+@@ -921,10 +937,28 @@ bool cbm_mcp_tool_profile_allows_http(cbm_mcp_tool_profile_t profile) {
+     return profile == CBM_MCP_TOOL_PROFILE_ALL;
+ }
+ 
++/* ARW: read_file (TOOLS[0]) is part of the public registry -- tools/list,
++ * the tool count and names, and the help list -- only when the launcher
++ * configured an allowed root, so the stock registry keeps upstream's shape.
++ * Calls stay routed to the handler, which denies any request without a
++ * configured root. */
++static int mcp_public_tool_start(void) {
++    if (strcmp(TOOLS[0].name, "read_file") != 0) {
++        return 0;
++    }
++    const char *root_id = getenv("CBM_ALLOWED_ROOT_ID");
++    const char *root_path = getenv("CBM_ALLOWED_ROOT");
++    return root_id && *root_id && root_path && root_path[0] == '/' ? 0 : 1;
++}
++
++static bool mcp_tool_listed(cbm_mcp_tool_profile_t profile, int index) {
++    return index >= mcp_public_tool_start() && mcp_tool_allowed(profile, TOOLS[index].name);
++}
++
+ static int mcp_allowed_tool_count(cbm_mcp_tool_profile_t profile) {
+     int count = 0;
+     for (int i = 0; i < TOOL_COUNT; i++) {
+-        if (mcp_tool_allowed(profile, TOOLS[i].name)) {
++        if (mcp_tool_listed(profile, i)) {
+             count++;
+         }
+     }
+@@ -957,7 +991,7 @@ static char *cbm_mcp_tools_list_range(cbm_mcp_tool_profile_t profile, int offset
+ 
+     int visible = 0;
+     for (int i = 0; i < TOOL_COUNT && visible < end; i++) {
+-        if (!mcp_tool_allowed(profile, TOOLS[i].name)) {
++        if (!mcp_tool_listed(profile, i)) {
+             continue;
+         }
+         if (visible >= offset) {
+@@ -998,14 +1032,15 @@ const char *cbm_mcp_tool_input_schema(const char *tool_name) {
+ }
+ 
+ int cbm_mcp_tool_count(void) {
+-    return TOOL_COUNT;
++    return TOOL_COUNT - mcp_public_tool_start();
+ }
+ 
+ const char *cbm_mcp_tool_name(int index) {
+-    if (index < 0 || index >= TOOL_COUNT) {
++    int start = mcp_public_tool_start();
++    if (index < 0 || index >= TOOL_COUNT - start) {
+         return NULL;
+     }
+-    return TOOLS[index].name;
++    return TOOLS[index + start].name;
+ }
+ 
+ const char *cbm_mcp_tool_description(const char *tool_name) {
+@@ -1052,7 +1087,8 @@ static size_t help_append(char *out, size_t cap, size_t len, const char *fmt, ..
+ 
+ char *cbm_mcp_tools_help_list(void) {
+     size_t cap = SLEN("Tools:") + 2; /* trailing newline + NUL */
+-    for (int i = 0; i < TOOL_COUNT; i++) {
++    int start = mcp_public_tool_start();
++    for (int i = start; i < TOOL_COUNT; i++) {
+         cap += strlen(TOOLS[i].name) + SLEN(" ,\n "); /* per-tool worst case incl. a wrap */
+     }
+     char *out = malloc(cap);
+@@ -1061,10 +1097,10 @@ char *cbm_mcp_tools_help_list(void) {
+     }
+     size_t len = help_append(out, cap, 0, "Tools:");
+     size_t col = len;
+-    for (int i = 0; i < TOOL_COUNT; i++) {
++    for (int i = start; i < TOOL_COUNT; i++) {
+         const char *sep = (i + 1 < TOOL_COUNT) ? "," : "";
+         size_t item = SLEN(" ") + strlen(TOOLS[i].name) + strlen(sep);
+-        if (i > 0 && col + item > MCP_HELP_TOOLS_WRAP_COL) {
++        if (i > start && col + item > MCP_HELP_TOOLS_WRAP_COL) {
+             len += help_append(out, cap, len, "\n ");
+             col = 1;
+         }
+@@ -1358,6 +1394,7 @@ static char *cbm_mcp_initialize_response_for_profile(const char *params_json,
  
      yyjson_mut_val *impl = yyjson_mut_obj(doc);
      yyjson_mut_obj_add_str(doc, impl, "name", "file-base");
@@ -106,7 +212,20 @@ index 012c992..5e37be1 100644
      yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
      yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
  
-@@ -5758,6 +5775,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
+@@ -2932,7 +2969,11 @@ static char *handle_list_projects(cbm_mcp_server_t *srv, const char *args) {
+         free(records);
+         return cbm_mcp_text_result("out of memory while listing projects", true);
+     }
+-    qsort(records, (size_t)record_count, sizeof(*records), project_record_compare);
++    /* ARW: records is NULL when no project exists; qsort forbids NULL even
++     * for zero elements (UBSan nonnull-attribute). */
++    if (record_count > 1) {
++        qsort(records, (size_t)record_count, sizeof(*records), project_record_compare);
++    }
+ 
+     int limit = cbm_mcp_get_int_arg(args, "limit", 50);
+     int offset = cbm_mcp_get_int_arg(args, "offset", 0);
+@@ -17271,6 +17312,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
      return result;
  }
  
@@ -494,45 +613,23 @@ index 012c992..5e37be1 100644
 +
  /* ── Tool dispatch ────────────────────────────────────────────── */
  
- char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
-@@ -5765,6 +6164,10 @@ char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const ch
-         return cbm_mcp_text_result("missing tool name", true);
+ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
+@@ -17284,6 +17707,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
+         return cbm_mcp_text_result(message, true);
      }
  
 +    if (strcmp(tool_name, "read_file") == 0) {
 +        return handle_read_file(srv, args_json);
 +    }
-+
      if (strcmp(tool_name, "list_projects") == 0) {
          return handle_list_projects(srv, args_json);
      }
-@@ -6047,6 +6450,11 @@ static void start_update_check(cbm_mcp_server_t *srv) {
-         return;
-     }
-     srv->update_checked = true; /* prevent double-launch */
-+    const char *disabled = getenv("CBM_DISABLE_UPDATE_CHECK");
-+    if (disabled && *disabled && strcmp(disabled, "0") != 0) {
-+        cbm_log_info("update.skip", "reason", "disabled_by_environment");
-+        return;
-+    }
-     if (cbm_thread_create(&srv->update_tid, 0, update_check_thread, srv) == 0) {
-         srv->update_thread_active = true;
-     }
 diff --git a/src/pipeline/pass_semantic_edges.c b/src/pipeline/pass_semantic_edges.c
+index b71c85a8..e33dce1f 100644
 --- a/src/pipeline/pass_semantic_edges.c
 +++ b/src/pipeline/pass_semantic_edges.c
-@@ -993,7 +993,9 @@ static int phase1_scan_functions(cbm_gbuf_t *gbuf, cbm_sem_func_t **out_funcs,
-      * emitted. Sort the cheap pointer array by qualified name (unique) and
-      * re-derive the three fields set so far; the heavy per-func payloads are
-      * filled in later phases, so no 12.7 KB structs are moved. */
--    qsort(node_ptrs, (size_t)func_count, sizeof(node_ptrs[0]), cmp_node_ptr_by_qn);
-+    if (func_count > 1) {
-+        qsort(node_ptrs, (size_t)func_count, sizeof(node_ptrs[0]), cmp_node_ptr_by_qn);
-+    }
-     for (int k = 0; k < func_count; k++) {
-         funcs[k].node_id = node_ptrs[k]->id;
-         funcs[k].file_path = node_ptrs[k]->file_path;
-@@ -1072,7 +1074,9 @@ static int phase6b_merge_edges(cbm_gbuf_t *gbuf, deferred_edge_buf_t *worker_buf
+@@ -1117,8 +1117,10 @@ static int phase6b_merge_edges(cbm_gbuf_t *gbuf, deferred_edge_buf_t *worker_buf
+     }
      int n = 0;
      for (int w = 0; w < worker_count; w++) {
 -        memcpy(&pairs[n], worker_bufs[w].edges,
@@ -544,17 +641,3 @@ diff --git a/src/pipeline/pass_semantic_edges.c b/src/pipeline/pass_semantic_edg
          n += worker_bufs[w].count;
          deferred_buf_free(&worker_bufs[w]);
      }
-diff --git a/src/pipeline/pass_similarity.c b/src/pipeline/pass_similarity.c
---- a/src/pipeline/pass_similarity.c
-+++ b/src/pipeline/pass_similarity.c
-@@ -149,7 +149,9 @@ static int collect_fp_entries(cbm_gbuf_t *gbuf, fp_entry_t **out_entries) {
-         }
-     }
-     /* Canonicalize (determinism) — see cmp_fp_entry_by_qn. */
--    qsort(entries, (size_t)count, sizeof(fp_entry_t), cmp_fp_entry_by_qn);
-+    if (count > 1) {
-+        qsort(entries, (size_t)count, sizeof(fp_entry_t), cmp_fp_entry_by_qn);
-+    }
-     *out_entries = entries;
-     return count;
- }

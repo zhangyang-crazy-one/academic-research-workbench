@@ -15,7 +15,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 SCRIPT = Path(__file__).resolve()
 CODEX_ROOT = SCRIPT.parents[1]
 SUITE_ROOT = SCRIPT.parents[2]
@@ -275,8 +274,52 @@ def build_agent_plan(manifest: dict[str, Any], workflow: str, mode: str, profile
     ]
 
 
-def plan_request(request: str, env: dict[str, str] | None = None) -> dict[str, Any]:
-    env = env or os.environ
+def _phase2_venue_context(project_root, run_root, venue_id, domain_id, applicability_file, env):
+    """Read governed advice through ARW's existing optional capability port."""
+    from arw.composition import default_router
+    from arw.kernel.capabilities import CapabilityUnavailable
+    from arw.kernel.core.canonical import sha256_hex
+    from arw.kernel.ledger.source_locations import read_retained_bytes
+    from arw.kernel.state.research_learning import Applicability
+
+    operation = "research.learning.heuristic.inspect"
+    plugin_manifest = env.get("ARW_PLUGIN_MANIFEST")
+    if env.get("ARW_PLUGIN_ROOT") and not plugin_manifest:
+        raise CapabilityUnavailable(operation)
+    raw = read_retained_bytes(
+        applicability_file.absolute().parent, applicability_file.name, max_bytes=65536
+    )
+    service = default_router(
+        learning_project_root=project_root,
+        learning_run_root=run_root,
+        plugin_manifest=Path(plugin_manifest) if plugin_manifest else None,
+    ).resolve(operation)
+    phase2_advisories = getattr(service, "phase2_advisories", None)
+    if not callable(phase2_advisories):
+        raise CapabilityUnavailable("research.learning.phase2_advisories")
+    advice = phase2_advisories(
+        Applicability.model_validate_json(raw), venue_id=venue_id, domain_id=domain_id
+    )
+    return {
+        "consumer": "structure_architect_agent",
+        "applicability_sha256": sha256_hex(raw),
+        "advisories": advice,
+        "executable": False,
+        "author_choice_required": True,
+        "runtime_sources": {
+            "core": default_router.__code__.co_filename,
+            "learning": getattr(getattr(phase2_advisories, "__code__", None), "co_filename", None),
+        },
+    }
+
+
+def plan_request(
+    request: str, env: dict[str, str] | None = None, *,
+    arw_project_root: Path | None = None, arw_run_root: Path | None = None,
+    venue_id: str | None = None, domain_id: str | None = None,
+    applicability_file: Path | None = None,
+) -> dict[str, Any]:
+    env = env or dict(os.environ)
     manifest = load_manifest()
     profile = profile_from_env(env)
     alias = find_alias(request)
@@ -302,7 +345,7 @@ def plan_request(request: str, env: dict[str, str] | None = None) -> dict[str, A
     agent_plan = build_agent_plan(manifest, workflow, mode, profile)
     gates = [gate for gate in manifest["quality_gates"] if gate["kind"] in {"routing", "agent-team", "integrity", "material-passport"}]
 
-    return {
+    result = {
         "adapter": manifest["adapter"]["name"],
         "profile": profile,
         "command_alias": alias,
@@ -318,6 +361,18 @@ def plan_request(request: str, env: dict[str, str] | None = None) -> dict[str, A
         "quality_gates": gates,
         "degraded_behavior": [] if profile["full_runtime_enabled"] else ["full-runtime disabled; executing inline role prompts only"],
     }
+    options = (arw_project_root, arw_run_root, venue_id, domain_id, applicability_file)
+    if any(option is not None for option in options):
+        if not all(option is not None for option in options):
+            raise ValueError("Phase 2 venue context requires project, run, venue, domain and applicability file")
+        if workflow != "academic-paper" or mode not in {"plan", "outline-only", "full"}:
+            raise ValueError("Phase 2 venue context requires academic-paper plan, outline-only or full routing")
+        context = _phase2_venue_context(*options, env)
+        result["phase2_venue_context"] = context
+        for agent in agent_plan:
+            if agent["agent"] == context["consumer"]:
+                agent["task_context"] = {"phase2_venue_context": context}
+    return result
 
 
 def main() -> int:
@@ -325,13 +380,26 @@ def main() -> int:
     parser.add_argument("request", nargs="*", help="User request to route")
     parser.add_argument("--request-file", type=Path, help="Read request text from file")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+    parser.add_argument("--arw-project-root", type=Path, help="Opt in to governed Phase 2 venue context")
+    parser.add_argument("--arw-run-root", type=Path)
+    parser.add_argument("--venue-id")
+    parser.add_argument("--domain-id")
+    parser.add_argument("--applicability-file", type=Path)
     args = parser.parse_args()
 
     if args.request_file:
         request = args.request_file.read_text(encoding="utf-8")
     else:
         request = " ".join(args.request)
-    result = plan_request(request)
+    try:
+        result = plan_request(
+            request, arw_project_root=args.arw_project_root, arw_run_root=args.arw_run_root,
+            venue_id=args.venue_id, domain_id=args.domain_id,
+            applicability_file=args.applicability_file,
+        )
+    except (ValueError, RuntimeError, OSError) as error:
+        print(json.dumps({"status": "error", "code": getattr(error, "code", type(error).__name__), "message": str(error)}))
+        return 2
     print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, sort_keys=args.pretty))
     return 0
 

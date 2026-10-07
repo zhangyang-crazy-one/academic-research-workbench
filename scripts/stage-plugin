@@ -514,6 +514,8 @@ if set(payloads) != payload_expected:
 for relative, record in payloads.items():
     if record.get("sha256") != digest(stage_root / relative):
         raise SystemExit(f"build identity payload digest mismatch: {relative}")
+from arw.kernel.policy.core_integrity import verify_staged_core
+verify_staged_core(stage_root)
 PY
   printf 'stage valid: %s\n' "$STAGE_ROOT"
   exit 0
@@ -694,6 +696,7 @@ copy_file "scripts/verify-phase-2" 0755
 copy_file "scripts/verify-phase-6" 0755
 copy_file "tests/integration/test_phase2_durable_runtime.py"
 copy_file "schemas/v1/route-result.schema.json"
+copy_file "schemas/v1/core-route.schema.json"
 copy_file "schemas/v1/source-manifest.schema.json"
 copy_file "schemas/v1/mcp-read-request.schema.json"
 copy_file "schemas/v1/mcp-read-result.schema.json"
@@ -724,6 +727,7 @@ copy_as "schemas/v1/execution-provenance.schema.json" "share/arw/schemas/executi
 copy_as "schemas/v1/mcp-read-request.schema.json" "share/arw/schemas/mcp-read-request.schema.json"
 copy_as "schemas/v1/mcp-read-result.schema.json" "share/arw/schemas/mcp-read-result.schema.json"
 copy_as "schemas/v1/route-result.schema.json" "share/arw/schemas/route-result.schema.json"
+copy_as "schemas/v1/core-route.schema.json" "share/arw/schemas/core-route.schema.json"
 copy_as "schemas/v1/run-manifest.schema.json" "share/arw/schemas/run-manifest.schema.json"
 copy_as "schemas/v1/source-manifest.schema.json" "share/arw/schemas/source-manifest.schema.json"
 copy_as "schemas/v1/version-report.schema.json" "share/arw/schemas/version-report.schema.json"
@@ -1403,6 +1407,7 @@ static_files = {
     "schemas/v1/build-identity.schema.json",
     "schemas/v1/version-report.schema.json",
     "schemas/v1/route-result.schema.json",
+    "schemas/v1/core-route.schema.json",
     "schemas/v1/source-manifest.schema.json",
     "schemas/v1/assignment.schema.json",
     "schemas/v1/gate-decision.schema.json",
@@ -1462,6 +1467,7 @@ static_files = {
     "share/arw/schemas/material-passport.schema.json",
     "share/arw/schemas/passport-pointer.schema.json",
     "share/arw/schemas/route-result.schema.json",
+    "share/arw/schemas/core-route.schema.json",
     "share/arw/schemas/run-manifest.schema.json",
     "share/arw/schemas/rejection.schema.json",
     "share/arw/schemas/recovery-receipt.schema.json",
@@ -1535,6 +1541,14 @@ phase5_schema_names = {
 }
 static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
 extension_schema_names = {
+    "experiment-acceptance.schema.json",
+    "experiment-contract.schema.json",
+    "fit-judgment.schema.json",
+    "hypothesis-history.schema.json",
+    "narrative-fit-public-snapshot.schema.json",
+    "narrative-fit-report.schema.json",
+    "narrative-fit-snapshot.schema.json",
+    "narrative-realization.schema.json",
     "source-locator.schema.json",
     "provenance-record-v2.schema.json",
     "research-artifact-ir.schema.json",
@@ -1547,6 +1561,15 @@ extension_schema_names = {
     "research-heuristic-input.schema.json",
     "research-learning-policy.schema.json",
     "research-learning-sample.schema.json",
+    "venue-evidence-policy.schema.json",
+    "venue-evidence-sample.schema.json",
+    "venue-exemplar.schema.json",
+    "venue-exemplar-v2.schema.json",
+    "venue-fit-profile.schema.json",
+    "venue-outcome.schema.json",
+    "venue-source-capsule-v2.schema.json",
+    "venue-source-review.schema.json",
+    "venue-source-review-v2.schema.json",
     "journal-requirements.schema.json",
     "submission-check-report.schema.json",
     "submission-packet.schema.json",

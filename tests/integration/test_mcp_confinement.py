@@ -22,7 +22,7 @@ SCHEMA_ROOT = REPOSITORY_ROOT / "schemas/v1"
 EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/confinement"
 NATIVE_EVIDENCE_ROOT = REPOSITORY_ROOT / "build/evidence/phase-01/native"
 ROOT_CAPABILITY = "phase1-fixture"
-UPSTREAM_TEST_TREE_SHA256 = "4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a"
+UPSTREAM_TEST_TREE_SHA256 = "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
 
 
 @dataclass(frozen=True)

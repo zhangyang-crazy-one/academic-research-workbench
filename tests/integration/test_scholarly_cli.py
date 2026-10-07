@@ -22,7 +22,7 @@ def test_fixture_citation_gate_and_pdf_registration(tmp_path, capsys):
     response = tmp_path / "crossref.json"
     response.write_text(json.dumps({"message": {"items": [{"DOI": "10.1234/alpha", "title": ["Evidence for Alpha"],
                               "published": {"date-parts": [[2024]]}, "author": [{"family": "Smith"}],
-                              "update-to": [{"type": "retraction"}]}]}}), encoding="utf-8")
+                              "updated-by": [{"type": "retraction", "source": "retraction-watch"}]}]}}), encoding="utf-8")
     assert main(["citation", "check", "--reference", str(ref_file), "--provider", "crossref",
                  "--store", str(store), "--response", str(response), "--observed-at", "2026-09-25T00:00:00Z"]) == 0
     check = json.loads(capsys.readouterr().out)

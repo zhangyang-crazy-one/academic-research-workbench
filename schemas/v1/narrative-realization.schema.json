@@ -1,0 +1,298 @@
+{
+  "$defs": {
+    "NarrativeNode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "function_id": {
+          "enum": [
+            "problem",
+            "gap",
+            "contribution",
+            "argument",
+            "evidence",
+            "knowledge_boundary"
+          ],
+          "title": "Function Id",
+          "type": "string"
+        },
+        "narrative_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Narrative Sha256",
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/NarrativeSpan"
+        },
+        "claim_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Id"
+        },
+        "contribution_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contribution Id"
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Ref"
+        },
+        "evidence_form": {
+          "anyOf": [
+            {
+              "enum": [
+                "proof",
+                "experiment",
+                "observation",
+                "annotation_validation",
+                "theoretical_argument",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Form"
+        },
+        "knowledge_boundary_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Boundary Id"
+        },
+        "conclusion": {
+          "default": false,
+          "title": "Conclusion",
+          "type": "boolean"
+        },
+        "within_scope_boundary": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Within Scope Boundary"
+        },
+        "post_hoc": {
+          "default": false,
+          "title": "Post Hoc",
+          "type": "boolean"
+        },
+        "hypothesis_history_ref": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hypothesis History Ref"
+        },
+        "evidence_source_artifact_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Source Artifact Id"
+        },
+        "evidence_source_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Source Sha256"
+        },
+        "new_claim_reason": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Claim Reason"
+        },
+        "interleave_reason": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interleave Reason"
+        }
+      },
+      "required": [
+        "node_id",
+        "function_id",
+        "narrative_sha256",
+        "span"
+      ],
+      "title": "NarrativeNode",
+      "type": "object"
+    },
+    "NarrativeSpan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "UTF-8 byte offsets of one paragraph in retained source content.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "sha256"
+      ],
+      "title": "NarrativeSpan",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.narrative-realization.v1",
+      "default": "arw.narrative-realization.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "stage": {
+      "enum": [
+        "outline",
+        "blueprint",
+        "draft"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "narrative_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Narrative Sha256",
+      "type": "string"
+    },
+    "source_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Source Path",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "predecessor_artifact_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Predecessor Artifact Id"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/NarrativeNode"
+      },
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Nodes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "stage",
+    "narrative_sha256",
+    "source_path",
+    "source_sha256",
+    "nodes"
+  ],
+  "title": "NarrativeRealization",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/narrative-realization.schema.json"
+}

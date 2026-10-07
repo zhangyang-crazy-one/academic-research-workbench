@@ -5,12 +5,18 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.state.narrative_realization import NarrativeRealization
 from arw.ports.writing import CAPABILITIES
 
 from .detection import compare
 from .diagnostics import CONTROL_METRICS, diagnose, effects
 from .fact_audit import audit as fact_audit
 from .preservation import verify
+from .review_rules import plan as review_plan
+
+# One manuscript (source or candidate) per writing proposal. Receipts embed the
+# source and candidate once, so they stay well inside the retained-file budget.
+MAX_TEXT_BYTES = 1_048_576
 
 
 class Strict(BaseModel):
@@ -36,6 +42,8 @@ class Proposal(Strict):
     schema_version: Literal["arw.writing-proposal.v1"]
     capability: str
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    narrative_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    narrative_realization: NarrativeRealization | None = None
     author_target: str = Field(min_length=1, max_length=4096)
     language: Literal["en", "zh", "en-zh"]
     protected_terms: list[str] = Field(max_length=100)
@@ -68,7 +76,7 @@ class SessionWritingTransformer:
     def transform(self, source, proposal, *, detector_config=None, allow_network=False):
         p = Proposal.model_validate(proposal)
         if (
-            len(source.encode()) > 65536
+            len(source.encode()) > MAX_TEXT_BYTES
             or sha256_hex(source.encode()) != p.source_sha256
         ):
             raise ValueError("source size or digest mismatch")
@@ -84,7 +92,7 @@ class SessionWritingTransformer:
             pieces.extend((source[cursor : edit.start], edit.replacement))
             cursor = edit.end
         candidate = "".join(pieces) + source[cursor:]
-        if len(candidate.encode()) > 65536 or candidate == source:
+        if len(candidate.encode()) > MAX_TEXT_BYTES or candidate == source:
             raise ValueError("unchanged or oversized candidate")
         before, after = diagnose(source), diagnose(candidate)
         effect = effects(before, after, p.controls)
@@ -108,13 +116,18 @@ class SessionWritingTransformer:
         }
         if facts["mechanical_status"] == "failed":
             verification["disposition"] = "reject"
+        rules = review_plan(source, candidate)
+        verification["rule_review"] = {
+            "semantic_status": "human_review_required",
+            "plan": rules,
+        }
         return {
             "schema_version": "arw.writing-candidate.v1",
             "transformer": "session-exact-span",
             "transformer_version": "1",
-            "proposal": p.model_dump(mode="json"),
+            "proposal": p.model_dump(mode="json", exclude_none=True),
             "proposal_sha256": sha256_hex(
-                canonical_json_bytes(p.model_dump(mode="json"))
+                canonical_json_bytes(p.model_dump(mode="json", exclude_none=True))
             ),
             "source": source,
             "source_sha256": p.source_sha256,
@@ -123,6 +136,7 @@ class SessionWritingTransformer:
             "diagnostics": {"before": before, "after": after, "controls": effect},
             "detection": detection,
             "fact_lock": facts,
+            "rule_review": {"status": "not_run", "report": None},
             "controls_effective": all(
                 v["status"] == "effective" for v in effect.values()
             ),

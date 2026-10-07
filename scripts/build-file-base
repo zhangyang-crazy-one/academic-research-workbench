@@ -75,6 +75,19 @@ case "$SANITIZERS" in
     fail "unsupported sanitizer set: $SANITIZERS" 64
     ;;
 esac
+# Upstream tests/test_daemon_application.c frees a (uint8_t *)1 sentinel on a
+# setup-failure path. Upstream builds its suite only with sanitizers, where GCC
+# does not diagnose it; the unsanitized GCC build rejects it under -Werror. The
+# test tree must stay byte-identical to upstream, so for this suite only the
+# diagnostic stays a visible warning, and flags.json records the exception.
+# It is passed through CC rather than SANITIZE: any non-empty SANITIZE makes
+# Makefile.cbm define CBM_SANITIZED_BUILD and widen the timing budgets.
+TEST_CC="cc"
+CC_MACROS="$(cc -dM -E - </dev/null 2>/dev/null || true)"
+if [[ "$SUITE_KIND" == "upstream" && "$CC_MACROS" == *__GNUC__* \
+  && "$CC_MACROS" != *__clang__* ]]; then
+  TEST_CC="cc -Wno-error=free-nonheap-object"
+fi
 [[ "$SANITIZERS" == "none" || "$RUN_UPSTREAM_TESTS" -eq 1 ]] \
   || fail "sanitizer builds require --run-upstream-tests" 64
 
@@ -149,7 +162,7 @@ mapfile -t TEST_SOURCES < <(
 
 python3 - \
   "$PROJECT_ROOT" "$BUILD_SOURCE" "$EVIDENCE_ROOT" "$SUITE_KIND" "$SANITIZE_FLAGS" \
-  "$SANITIZER_RUNTIME_DIR" \
+  "$TEST_CC" "$SANITIZER_RUNTIME_DIR" \
   "${TEST_SOURCES[@]}" <<'PY'
 from __future__ import annotations
 
@@ -167,8 +180,9 @@ source = Path(sys.argv[2])
 evidence = Path(sys.argv[3])
 suite_kind = sys.argv[4]
 sanitize_flags = sys.argv[5]
-sanitizer_runtime = Path(sys.argv[6]) if sys.argv[6] else None
-test_sources = sys.argv[7:]
+test_compiler = sys.argv[6]
+sanitizer_runtime = Path(sys.argv[7]) if sys.argv[7] else None
+test_sources = sys.argv[8:]
 
 
 def digest(path: Path) -> str:
@@ -217,7 +231,14 @@ for relative in test_sources:
         raise SystemExit(f"duplicate upstream test source: {relative}")
     seen.add(relative)
     path = source / relative
-    if not relative.startswith("tests/") or "/repro/" in relative or not path.is_file():
+    # Upstream v0.11 promotes fixed (GREEN) reproductions from tests/repro/
+    # into the gating ALL_TEST_SRCS set; the intentionally RED repro runner
+    # (TEST_REPRO_SRCS, entry point repro_main.c) must still never enter it.
+    if (
+        not relative.startswith("tests/")
+        or relative == "tests/repro/repro_main.c"
+        or not path.is_file()
+    ):
         raise SystemExit(f"invalid ALL_TEST_SRCS member: {relative}")
     normalized.append({"path": relative, "sha256": digest(path)})
 
@@ -233,6 +254,7 @@ flags = {
     "path_policy": "generated wrappers plus /usr/bin:/bin only",
     "sanitizer_set": suite_kind,
     "sanitize_variable": sanitize_flags,
+    "test_compiler": test_compiler,
     "address_leak_detection": (
         "disabled: mandatory strace network audit uses ptrace"
         if suite_kind == "asan-ubsan"
@@ -396,7 +418,7 @@ PY
   export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
   export TSAN_OPTIONS="halt_on_error=1:abort_on_error=1"
   set +e
-  make -C "$BUILD_SOURCE" -f Makefile.cbm test SANITIZE="$SANITIZE_FLAGS" \
+  make -C "$BUILD_SOURCE" -f Makefile.cbm test SANITIZE="$SANITIZE_FLAGS" CC="$TEST_CC" \
     > >(tee "$EVIDENCE_ROOT/test-stdout.log") \
     2> >(tee "$EVIDENCE_ROOT/test-stderr.log" >&2)
   TEST_STATUS=$?

@@ -90,7 +90,7 @@ def _receipt(
         "title": [ref.title],
         "published": {"date-parts": [[ref.year]]},
         "author": [{"family": "Smith"}],
-        "update-to": [{"type": "retraction"}] if status == "retracted" else [],
+        "updated-by": [{"type": "retraction", "source": "publisher", "DOI": "10.1234/notice"}] if status == "retracted" else [],
     }
     items = (
         []

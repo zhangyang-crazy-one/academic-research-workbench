@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from tests.candidate_inputs import candidate_stage_args
+from tests.candidate_inputs import candidate_stage_args, configured_package_environment
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -24,6 +26,63 @@ def _required_executable(relative_path: str) -> Path:
     if not executable.is_file() or not os.access(executable, os.X_OK):
         pytest.fail(f"required installed-path behavior is absent: {relative_path}")
     return executable
+
+
+def test_installed_health_rejects_incomplete_stage_and_foreign_root(
+    tmp_path: Path,
+) -> None:
+    """A wheel-shaped file cannot substitute for a closed installed stage."""
+    stage = tmp_path / "installed-plugin"
+    (stage / "bin").mkdir(parents=True)
+    shutil.copy2(REPOSITORY_ROOT / "bin/arw", stage / "bin/arw")
+    (stage / ".mcp.json").write_text('{"mcpServers": {}}\n', encoding="utf-8")
+    native = stage / "libexec/file-base-mcp"
+    native.parent.mkdir()
+    native.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    native.chmod(0o755)
+    wheel = (
+        stage / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
+    )
+    wheel.parent.mkdir(parents=True)
+    wheel.write_bytes(b"local launcher test wheel")
+    project = tmp_path / "project"
+    project.mkdir()
+    environment = {
+        "HOME": str(tmp_path / "home"),
+        "CODEX_HOME": str(tmp_path / "codex-home"),
+        "PATH": os.environ["PATH"],
+        "ARW_PYTHON": str(REPOSITORY_ROOT / ".venv/bin/python") if (REPOSITORY_ROOT / ".venv/bin/python").exists() else sys.executable,
+    }
+
+    def health(root: str | None = None) -> tuple[int, dict[str, object]]:
+        env = {**environment, **({"ARW_PLUGIN_ROOT": root} if root is not None else {})}
+        result = subprocess.run(
+            [str(stage / "bin/arw"), "health", "--json"],
+            cwd=project,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode, json.loads(result.stdout)
+
+    status, automatic = health()
+    assert status == 65
+    assert automatic["reason_code"] == "runtime_artifact_invalid"
+
+    explicit = tmp_path / "explicit-plugin-root"
+    explicit.mkdir()
+    (explicit / ".mcp.json").write_text('{"mcpServers": {}}\n', encoding="utf-8")
+    assert health(str(explicit)) == (65, {
+        "schema_version": "arw.files-opt-in.v1",
+        "status": "rejected",
+        "reason_code": "plugin_root_mismatch",
+        "action": "repair the installed ARW runtime and retry",
+    })
+    assert health("relative-plugin-root")[1]["reason_code"] == "plugin_root_mismatch"
+    linked = tmp_path / "linked-plugin-root"
+    linked.symlink_to(explicit, target_is_directory=True)
+    assert health(str(linked))[1]["reason_code"] == "plugin_root_mismatch"
 
 
 @pytest.mark.requires_retained_evidence("candidate")
@@ -43,6 +102,7 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
         "CODEX_HOME": str(tmp_path / "isolated-codex-home"),
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
+        **configured_package_environment(),
     }
 
     staged = subprocess.run(
@@ -148,6 +208,7 @@ def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
         "HOME": str(isolated_home),
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
+        **configured_package_environment(),
     }
 
     staged = subprocess.run(
@@ -178,7 +239,7 @@ def test_installed_cli_reports_actionable_error_without_home(tmp_path: Path) -> 
     result = subprocess.run(
         [str(launcher), "status", "--help"],
         cwd=tmp_path,
-        env={"PATH": os.environ["PATH"]},
+        env={"PATH": os.environ["PATH"], "ARW_RUNTIME": "plugin"},
         text=True,
         capture_output=True,
         check=False,
@@ -193,7 +254,11 @@ def test_installed_cli_reports_missing_runtime_artifact(tmp_path: Path) -> None:
     result = subprocess.run(
         [str(launcher), "status", "--help"],
         cwd=tmp_path,
-        env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")},
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "home"),
+            "ARW_RUNTIME": "plugin",
+        },
         text=True,
         capture_output=True,
         check=False,

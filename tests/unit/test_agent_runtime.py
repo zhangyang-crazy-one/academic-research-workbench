@@ -90,7 +90,7 @@ def test_install_python_prints_unmanaged_dependency_groups() -> None:
     assert "uv pip install --python .venv/bin/python --editable . --group" not in workflows
 
 
-def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) -> None:
+def test_checkout_without_runtime_or_wheels_selects_agent_mode(tmp_path: Path) -> None:
     result = _run(
         [str(LAUNCHER), "route", "--json"],
         env={
@@ -100,9 +100,11 @@ def test_plugin_mode_stays_fail_closed_when_wheels_are_absent(tmp_path: Path) ->
             "ARW_PYTHON": sys.executable,
         },
     )
-    assert result.returncode == 66, result.stderr
-    assert "runtime-artifact-missing" in result.stderr
-    assert "agent-runtime-missing" not in result.stderr
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    # Agent mode runs without a staged wheel; the legacy Codex execution
+    # route itself stays strict without host qualification.
+    assert payload["integration_status"] == "BLOCKED"
 
 
 def test_explicit_plugin_runtime_does_not_use_checkout_venv(tmp_path: Path) -> None:

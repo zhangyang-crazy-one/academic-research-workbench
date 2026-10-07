@@ -61,7 +61,14 @@ class StdioProtocol:
         if not isinstance(params, Mapping):
             return rpc_error(-32602, "Invalid params", identifier)
         meta = params.get("_meta")
-        modern = method == "server/discover" or "_meta" in params
+        if "_meta" in params and not isinstance(meta, Mapping):
+            return rpc_error(-32602, "Invalid params", identifier)
+        # Legacy (<= 2025-11-25) requests may carry `_meta` too, e.g. a
+        # `progressToken` or host-specific keys; only the per-request protocol
+        # version marks a 2026-07-28 request.
+        modern = method == "server/discover" or (
+            isinstance(meta, Mapping) and _VERSION_KEY in meta
+        )
         if modern:
             if not isinstance(meta, Mapping):
                 return rpc_error(-32602, "Invalid params", identifier)

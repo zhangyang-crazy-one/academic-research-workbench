@@ -13,11 +13,17 @@ from arw.kernel.ledger.manifests import (
     load_artifact_manifest,
     validate_accepted_event_manifests,
 )
+from arw.kernel.ledger.narrative import NarrativeError, guard_run
 from arw.kernel.ledger.research_records import publish_once
-from arw.kernel.ledger.source_locations import read_retained_bytes
-from arw.kernel.state.models import ArtifactAcceptanceRequest, RuntimeCommandRequest
+from arw.kernel.ledger.source_locations import MAX_SOURCE_BYTES, read_retained_bytes
+from arw.kernel.state.models import (
+    ArtifactAcceptanceRequest,
+    RunManifest,
+    RuntimeCommandRequest,
+)
 
-from .transformer import SessionWritingTransformer
+from .review_rules import validate_report
+from .transformer import MAX_TEXT_BYTES, SessionWritingTransformer
 
 
 class WritingAuditService:
@@ -50,9 +56,23 @@ class WritingService(SessionWritingTransformer):
                 raise ValueError("accepted source is missing or ambiguous")
             event = matches[0]
             manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
-            raw = read_retained_bytes(root, manifest.content_path, max_bytes=65536)
+            raw = read_retained_bytes(root, manifest.content_path, max_bytes=MAX_SOURCE_BYTES)
             if sha256_hex(raw) != event.payload.artifact_sha256:
                 raise ValueError("accepted source digest mismatch")
+            paper_run = RunManifest.model_validate_json((root / "run-manifest.json").read_bytes()).task_kind == "paper"
+            if paper_run and manifest.artifact_kind in {"narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"}:
+                from arw.kernel.state.narrative_realization import NarrativeRealization
+                realization = NarrativeRealization.model_validate(strict_json_loads(raw))
+                raw = read_retained_bytes(root, realization.source_path, max_bytes=MAX_TEXT_BYTES)
+                if sha256_hex(raw) != realization.source_sha256:
+                    raise ValueError("accepted manuscript source changed")
+            elif manifest.artifact_kind == "writing-derived":
+                receipt = strict_json_loads(raw)
+                if not isinstance(receipt, dict) or not isinstance(receipt.get("candidate"), str):
+                    raise ValueError("accepted writing source is malformed")
+                raw = receipt["candidate"].encode("utf-8")
+                if sha256_hex(raw) != receipt.get("candidate_sha256"):
+                    raise ValueError("accepted writing candidate changed")
             return raw, {
                 "artifact_id": artifact_id,
                 "sha256": sha256_hex(raw),
@@ -65,6 +85,12 @@ class WritingService(SessionWritingTransformer):
     def prepare(
         self, source_id, proposal, *, detector_config=None, allow_network=False
     ):
+        with guard_run(self.run_root, expected_sha256=proposal.get("narrative_sha256")) as snapshot:
+            if snapshot is not None and proposal.get("narrative_sha256") is None:
+                raise NarrativeError("missing_narrative_binding", "paper writing proposal must echo current narrative SHA-256")
+            return self._prepare_bound(source_id, proposal, snapshot, detector_config=detector_config, allow_network=allow_network)
+
+    def _prepare_bound(self, source_id, proposal, snapshot, *, detector_config=None, allow_network=False):
         raw, binding = self._source(source_id)
         result = self.transform(
             raw.decode("utf-8"),
@@ -73,6 +99,24 @@ class WritingService(SessionWritingTransformer):
             allow_network=allow_network,
         )
         result["source_binding"] = binding
+        if snapshot is not None:
+            result["narrative_binding"] = snapshot.model_dump(mode="json")
+            realization_value = proposal.get("narrative_realization")
+            if realization_value is not None:
+                from arw.kernel.policy.narrative_realization import validate_realization
+                from arw.kernel.state.narrative_realization import NarrativeRealization
+                realization = NarrativeRealization.model_validate(realization_value)
+                candidate_path = f"writing/candidate/{result['candidate_sha256']}.md"
+                if realization.stage != "draft" or realization.source_path != candidate_path:
+                    raise ValueError("writing realization must bind the candidate manuscript path")
+                with locked_replay(self.run_root) as (_root, replay):
+                    report = validate_realization(
+                        self.run_root, realization, snapshot,
+                        events=replay.events, source_bytes=result["candidate"].encode("utf-8"),
+                    )
+                result["candidate_path"] = candidate_path
+                result["narrative_realization"] = realization.model_dump(mode="json")
+                result["narrative_check"] = report
         return result
 
     def record(
@@ -85,10 +129,17 @@ class WritingService(SessionWritingTransformer):
         detector_config=None,
         allow_network=False,
     ):
+        with guard_run(self.run_root, expected_sha256=proposal.get("narrative_sha256")) as snapshot:
+            if snapshot is not None and proposal.get("narrative_sha256") is None:
+                raise NarrativeError("missing_narrative_binding", "paper writing proposal must echo current narrative SHA-256")
+            return self._record_bound(source_id, proposal, request=request, review_artifact_id=review_artifact_id, detector_config=detector_config, allow_network=allow_network, snapshot=snapshot)
+
+    def _record_bound(self, source_id, proposal, *, request, review_artifact_id, detector_config, allow_network, snapshot):
         request = RuntimeCommandRequest.model_validate(request.model_dump(mode="json"))
-        result = self.prepare(
+        result = self._prepare_bound(
             source_id,
             proposal,
+            snapshot,
             detector_config=detector_config,
             allow_network=allow_network,
         )
@@ -122,11 +173,38 @@ class WritingService(SessionWritingTransformer):
                 raise ValueError(
                     "hard preservation drift or ineffective controls cannot be approved"
                 )
+            if "rule_review" in review:
+                try:
+                    report = validate_report(
+                        review["rule_review"],
+                        result["verification"]["rule_review"]["plan"],
+                        result["source"],
+                        result["candidate"],
+                    )
+                    if (
+                        report["reviewer"] != review["reviewer"]
+                        or any(
+                            entry["status"] == "not_reviewed"
+                            for entry in report["coverage"]
+                        )
+                        or any(
+                            finding["review_status"] == "open"
+                            for finding in report["findings"]
+                        )
+                    ):
+                        raise ValueError("incomplete rule review")
+                except (ValueError, TypeError) as exc:
+                    raise ValueError("invalid or incomplete rule review") from exc
+                result["rule_review"] = {"status": "reviewed", "report": report}
             result.update(
                 disposition="accepted_after_human_review",
                 accepted=True,
                 review_binding=binding,
             )
+        if snapshot is not None and result["accepted"]:
+            if "narrative_realization" not in result:
+                raise ValueError("accepted paper writing requires content-bound realization")
+            publish_once(self.run_root, result["candidate_path"], result["candidate"].encode("utf-8"))
         result["request_identity"] = request.model_dump(mode="json")
         body = canonical_json_bytes(result)
         digest = sha256_hex(body)
@@ -172,11 +250,12 @@ class WritingService(SessionWritingTransformer):
                             "bundle_path": path,
                             "disposition": result["disposition"],
                             "candidate_accepted": result["accepted"],
+                            "rule_review_status": result["rule_review"]["status"],
                         }
                     raise ValueError("writing command identity conflict")
         publish_once(self.run_root, path, body)
         outcome = RuntimeCommandService(self.run_root).accept_artifact(
-            canonical_request
+            canonical_request, _reviewed_writing_admission=result["accepted"]
         )
         if not outcome.accepted:
             return {
@@ -184,6 +263,7 @@ class WritingService(SessionWritingTransformer):
                 "reason_code": outcome.rejection.code,
                 "candidate_accepted": False,
                 "bundle_path": path,
+                "rule_review_status": result["rule_review"]["status"],
             }
         return {
             "status": "recorded",
@@ -192,4 +272,5 @@ class WritingService(SessionWritingTransformer):
             "bundle_path": path,
             "disposition": result["disposition"],
             "candidate_accepted": result["accepted"],
+            "rule_review_status": result["rule_review"]["status"],
         }

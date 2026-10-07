@@ -28,13 +28,13 @@
   "components": [
     {
       "clean": true,
-      "git_tree": "7ce111463102462479835ce5f7c2b597d7ccfe22",
+      "git_tree": "0486927f4b13c10be69bb30cd17f8f4c2daaf5b7",
       "id": "academic-research-skills",
-      "revision": "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb",
+      "revision": "7de1c9dfb7af9c02a9b57750761323f35a743aa2",
       "status_porcelain": "",
-      "tree_sha256": "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
+      "tree_sha256": "8e0430014ecba14ede7d31c5cb2085d6b2f0587f779c6cf5859b3a1cb5cb3cc7",
       "upstream_url": "https://github.com/Imbad0202/academic-research-skills.git",
-      "version": "0.1.27"
+      "version": "3.22.2"
     },
     {
       "clean": true,
@@ -48,16 +48,16 @@
     },
     {
       "clean": true,
-      "git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
+      "git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
       "id": "file-base",
-      "revision": "ee68144af5453addda995a27cce8142999f318fb",
+      "revision": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
       "status_porcelain": "",
-      "tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+      "tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
       "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     }
   ],
-  "created_at": "2026-08-30T11:55:15Z",
+  "created_at": "2026-10-06T10:09:42Z",
   "legal_inputs": [
     {
       "component": "academic-research-skills",
@@ -87,7 +87,7 @@
       "component": "file-base",
       "kind": "package-lock",
       "path": "graph-ui/package-lock.json",
-      "sha256": "123eafae09498a3a807916963549011a21b561889f8108215c1083618951e19a"
+      "sha256": "adaa69c82d586d096f7b8b5a18d7b63dac0439b65917817933f0fc1be50b5837"
     },
     {
       "component": "file-base",
@@ -118,6 +118,12 @@
       "kind": "license",
       "path": "internal/cbm/vendored/grammars/apex/LICENSE",
       "sha256": "c3d045abbc0a8dec1b00737c0668f6dbb028d248521b74e79778c726671925ed"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/arkts/LICENSE",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
     },
     {
       "component": "file-base",
@@ -208,6 +214,12 @@
       "kind": "license",
       "path": "internal/cbm/vendored/grammars/cfscript/LICENSE",
       "sha256": "7e17ba5e26b0438ca04ebf2d9e7931da3080509da6625e117f6feb943ecf767a"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
+      "path": "internal/cbm/vendored/grammars/chialisp/LICENSE",
+      "sha256": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
     },
     {
       "component": "file-base",
@@ -716,6 +728,12 @@
     {
       "component": "file-base",
       "kind": "license",
+      "path": "internal/cbm/vendored/grammars/plsql/LICENSE",
+      "sha256": "02de05cd6828df53aff548f348f6e6f9d596ae4e01b382977094dc059be72620"
+    },
+    {
+      "component": "file-base",
+      "kind": "license",
       "path": "internal/cbm/vendored/grammars/po/LICENSE",
       "sha256": "109ed1ed2db40c798111e05757f5b8576fe14bdb17aa24c7f2515b300c78572c"
     },
@@ -1095,7 +1113,7 @@
       "component": "file-base",
       "kind": "generator",
       "path": "scripts/gen-third-party-notices.sh",
-      "sha256": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+      "sha256": "41b7d3723628371e16b3757a6f458dcca4eeaa0145fc07766274c6a719024adf"
     },
     {
       "component": "file-base",
@@ -1113,13 +1131,13 @@
       "component": "file-base",
       "kind": "checker",
       "path": "scripts/license-gate.sh",
-      "sha256": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+      "sha256": "b8ec7c9b3c6ad4aa922babf93cff35c788d922ae0233598051ea1c08aeb1f222"
     },
     {
       "component": "file-base",
       "kind": "policy",
       "path": "scripts/license-policy.json",
-      "sha256": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+      "sha256": "b3777d9facbe0058d18ffdf8c40afd0869b1c94d218c6d4828b8b6217b65a859"
     },
     {
       "component": "file-base",
@@ -1171,9 +1189,9 @@
           "./scripts/license-gate.sh",
           "--selftest"
         ],
-        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.HRt8ne/sources/file-base",
-        "ended_at": "2026-08-30T11:54:11Z",
-        "started_at": "2026-08-30T11:54:10Z",
+        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
+        "ended_at": "2026-10-06T10:05:49Z",
+        "started_at": "2026-10-06T10:05:45Z",
         "status": 0,
         "stderr_path": "commands/001-native-gate-selftest/stderr.log",
         "stdout_path": "commands/001-native-gate-selftest/stdout.log"
@@ -1182,9 +1200,9 @@
         "argv": [
           "./scripts/license-gate.sh"
         ],
-        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.HRt8ne/sources/file-base",
-        "ended_at": "2026-08-30T11:55:12Z",
-        "started_at": "2026-08-30T11:54:11Z",
+        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
+        "ended_at": "2026-10-06T10:09:27Z",
+        "started_at": "2026-10-06T10:05:49Z",
         "status": 0,
         "stderr_path": "commands/002-native-gate/stderr.log",
         "stdout_path": "commands/002-native-gate/stdout.log"
@@ -1192,11 +1210,11 @@
       {
         "argv": [
           "./scripts/gen-third-party-notices.sh",
-          "/home/zhangyangrui/build-tmp/arw-pr5-pre-vendor/generated/THIRD_PARTY_NOTICES.md"
+          "/home/user/academic-research-workbench/build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md"
         ],
-        "cwd": "/home/zhangyangrui/build-tmp/arw-pre-vendor.HRt8ne/sources/file-base",
-        "ended_at": "2026-08-30T11:55:12Z",
-        "started_at": "2026-08-30T11:55:12Z",
+        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
+        "ended_at": "2026-10-06T10:09:28Z",
+        "started_at": "2026-10-06T10:09:27Z",
         "status": 0,
         "stderr_path": "commands/003-notice-generator/stderr.log",
         "stdout_path": "commands/003-notice-generator/stdout.log"
@@ -1206,17 +1224,17 @@
     "generated_notices": [
       {
         "path": "generated/THIRD_PARTY_NOTICES.md",
-        "sha256": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+        "sha256": "57df11de7391283832f4b0d1f015acddbd93bbd94ce1b49e8e05ab68fbad3e8c"
       }
     ],
     "tools": [
       {
         "path": "scripts/license-gate.sh",
-        "sha256": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+        "sha256": "b8ec7c9b3c6ad4aa922babf93cff35c788d922ae0233598051ea1c08aeb1f222"
       },
       {
         "path": "scripts/license-policy.json",
-        "sha256": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+        "sha256": "b3777d9facbe0058d18ffdf8c40afd0869b1c94d218c6d4828b8b6217b65a859"
       },
       {
         "path": "scripts/license-gate-check.py",
@@ -1228,7 +1246,7 @@
       },
       {
         "path": "scripts/gen-third-party-notices.sh",
-        "sha256": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+        "sha256": "41b7d3723628371e16b3757a6f458dcca4eeaa0145fc07766274c6a719024adf"
       }
     ],
     "unmodified": true
@@ -1236,7 +1254,7 @@
   "raw_evidence": [
     {
       "path": "commands/001-native-gate-selftest/command.json",
-      "sha256": "fdb35b6b0eab4f54c73fb68650332eec61a01b1b56cadbc0cd3b4b54534f32ef"
+      "sha256": "7026b04bb25a0b208f46850f90bddf5dee2555be14e0e77858890ae510394494"
     },
     {
       "path": "commands/001-native-gate-selftest/status.txt",
@@ -1252,7 +1270,7 @@
     },
     {
       "path": "commands/002-native-gate/command.json",
-      "sha256": "e5ac2c441491c5a10dd6f516ed2f8572784d3efb9237dd0a541c8bb7f9f7562b"
+      "sha256": "b8d54d44a10b9b6666f99d948df8c46691f6cd9a2d4b8718d5a14fe9c883538b"
     },
     {
       "path": "commands/002-native-gate/status.txt",
@@ -1264,11 +1282,11 @@
     },
     {
       "path": "commands/002-native-gate/stdout.log",
-      "sha256": "42e78069ed195b6914096c7f7113396f60981cb53d9cfb81d7613053ca5aa45f"
+      "sha256": "2182de18e0c25f1d23bb0ce4b1d4a2e180d59751bfc41b24ff5b5dd065d482fc"
     },
     {
       "path": "commands/003-notice-generator/command.json",
-      "sha256": "3c0b27c8eadc6d3e828613ba7b2619d4aa33c611e57f8930d08d0bf85d1bc1b1"
+      "sha256": "cba5fc46c779275168b4f450a490a0e36850265b8c99660dabe3dedb66061aa3"
     },
     {
       "path": "commands/003-notice-generator/status.txt",
@@ -1280,19 +1298,19 @@
     },
     {
       "path": "commands/003-notice-generator/stdout.log",
-      "sha256": "bd7ac0d0f348b0df59d460557aced873e00c64e72856c2a5457519793f3ba696"
+      "sha256": "203ef25194d32a149c4e6a4bb50353f3e7a1efaf5ce7864729c2854400f3793f"
     },
     {
       "path": "commands/native-invocations.log",
-      "sha256": "cb410976ef2d8afd7d7f8c52086fae072bf950718bafe018c7e6ffdff8b39f07"
+      "sha256": "5415dea5c6ae6623d73c688e8d2f681b0fb521c1f670995c677b71e8f215f7e6"
     },
     {
       "path": "generated/THIRD_PARTY_NOTICES.md",
-      "sha256": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+      "sha256": "57df11de7391283832f4b0d1f015acddbd93bbd94ce1b49e8e05ab68fbad3e8c"
     },
     {
       "path": "source-archives/academic-research-skills.tar",
-      "sha256": "57e819cd94d5569cb09da349bef323638972f8773abae252281b6cc4e4504ee8"
+      "sha256": "8c0d1647135eba9fc6a2acc92d827f8604f76b612912e43c0b3826a617e4baa7"
     },
     {
       "path": "source-archives/experiment-agent.tar",
@@ -1300,7 +1318,7 @@
     },
     {
       "path": "source-archives/file-base.tar",
-      "sha256": "448062c9e75daf93e8bb449771bfcd67bd226ce5fc25cbf678c6eab035469bef"
+      "sha256": "9c93ab188c916d78504e6c7842a03ade05c1b577af21fb21f4d9828e4c65e536"
     }
   ],
   "schema_version": "1.0.0",

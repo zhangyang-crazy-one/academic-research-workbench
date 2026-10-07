@@ -2,7 +2,7 @@
 name: academic-research-suite
 description: "ARS research methodology and paper production: literature/systematic review, citation checking, experiment design, abstract/draft/revision, peer review and research-to-paper workflows. Use for 文献综述、系统综述、论文审稿、论文修改、摘要撰写、实验设计、引用核查、从研究到论文; also 논문 심사, 논문 수정, 체계적 문헌고찰 and ars-* aliases. For operational commands use academic-research-workbench; for post-manuscript submission handoff use submission."
 metadata:
-  version: "0.1.27"
+  version: "3.22.2"
   upstream_suite: "academic-research-skills"
   codex_adapter: "true"
 allowed-tools: Read, Glob, Grep, WebSearch, Bash(uv *), Bash(python *), Bash(python3 *)
@@ -15,10 +15,11 @@ This is a Codex adapter for the ARS suite. The vendored ARS content lives under
 
 ## Versioning
 
-This Codex package is version `0.1.27`. The repo-root `VERSION`, this
+This Codex package is version `3.22.2`. The repo-root `VERSION`, this
 `SKILL.md` metadata version, and `manifest.json` `adapter_version` must match.
-Vendored ARS suite versions are tracked separately by source repository commit
-in `manifest.json`.
+Starting at `3.22.0`, this release number also matches the vendored ARS suite.
+The exact upstream version, tag, and commit are recorded in `manifest.json`;
+historical `0.1.x` package releases retain their original numbers.
 
 ## First Rule
 
@@ -32,7 +33,32 @@ upstream workflow as a separate skill.
 
 ## Workflow Router
 
-Choose the workflow by intent:
+Apply the routing core before choosing a workflow or dispatching an agent. The
+block is copied from `ars/shared/references/routing_core.md`. Its upstream
+`shared/` references resolve under this package's `ars/` directory. Apply it to
+new requests; after compaction or resume, continue the settled workflow and
+perform the run-ledger handoff check instead of routing the active run again.
+
+<!-- routing-core:begin -->
+**Step 0 — Escape hatch check (before any classification):** If the user's first message begins with `[direct-mode]` (case-insensitive byte-0 token, optionally preceded by whitespace/newlines that are stripped on parse), record this fact, strip the prefix and surrounding whitespace from the message, and skip directly to **Step 1 explicit-intent handling** on the stripped content. The literal `[direct-mode]` is NOT passed through to the dispatched agent. If the stripped message itself has no clear skill named, Step 1 falls through to Step 3 clarification (the escape hatch bypasses cross-phase clarification (Step 2), not all routing). When the token is honored and the named agent or skill needs inputs the message does not supply, read that agent's or skill's file and ask for what it requires, in its terms. Without the byte-0 token, naming an agent is not explicit intent: such a message goes through Steps 1-3 like any other, so cross-phase materials still get Step 2 clarification.
+
+Otherwise, classify the user's input:
+
+1. **Explicit clear intent** — user invokes a specific skill via `/ars-*` slash command, or uses an unambiguous trigger keyword that maps to a single skill (e.g., "lit-review this", "review my paper", "draft an abstract"):
+   → Route directly; no clarification, no orchestrator detour.
+   → The request stays explicit when the mode's usual input is absent or a word in it has other everyday senses. A revision request with no reviewer comments is revision mode's "feel certain sections need improvement" case, and "revisar artículo" is the reviewer's trigger. Route to that mode and let the mode handle what is missing; do not reopen the choice of workflow.
+
+2. **Cross-phase materials detected** — user provides artifacts spanning ≥ 2 pipeline phases without naming a specific skill (e.g., pre-written abstract + pre-collected literature; full draft + reviewer comments + bibliography):
+   → **Clarify**. Do NOT auto-route to a single-phase agent. List candidate workflows as a-d options in markdown body (NOT via AskUserQuestion tool). See `shared/references/intent_clarification_protocol.md` for the message template.
+   → Reason: clarification is the safest action when materials don't unambiguously identify intent. (v3.10 active conductor (#134) will handle this via structured intake; v3.9.2 asks.)
+
+3. **Ambiguous intent, no materials** — user provides no artifacts and no clear request:
+   → Clarify per `shared/references/intent_clarification_protocol.md`.
+
+**Anti-pattern (caused #133):** Receiving ambiguous cross-phase materials and silently auto-routing to a single-phase agent based on which phase the materials "look closest to." This bypasses orchestrator-level reconciliation and lets the subagent inherit the full ambiguity without independent oversight.
+<!-- routing-core:end -->
+
+Choose the workflow by the settled intent:
 
 | User intent | Read first |
 | --- | --- |
@@ -43,8 +69,58 @@ Choose the workflow by intent:
 | Experiment planning, code experiment execution plan, human study protocol, statistical interpretation, reproducibility validation | `ars/experiment-agent/WORKFLOW.md` |
 | Auditable science workbench, run ledger, strict Markdown-to-paper/PDF conversion, AST/XML-style validation, semantic claim verification, CS/data-engineering source integration, or paid/full-text evidence handoff | `codex/references/science_workbench_mvp.md` first, then the closest ARS workflow above |
 
-If the request spans multiple workflows, start with `ars/academic-pipeline/WORKFLOW.md`
-unless the user clearly asked for a single phase.
+An explicit end-to-end request selects `academic-pipeline`. Materials spanning
+multiple phases without an explicit workflow require clarification using the
+core above; they do not by themselves select a pipeline.
+
+### Spanish Intent Routing
+
+Use the same intent boundaries as the vendored Spanish trigger phrases:
+
+| Spanish intent | Workflow and mode |
+|---|---|
+| revisión de literatura / revisión sistemática / metaanálisis | `deep-research`: `lit-review` / `systematic-review` |
+| guía mi investigación / ayúdame a razonar | `deep-research`: `socratic` |
+| revisar artículo / revisa este artículo / revisión entre pares | `academic-paper-reviewer`: `full` |
+| enmendar mi artículo / enmienda mi artículo | `academic-paper`: `revision` |
+| recibí comentarios de revisores / ruta de revisión | `academic-paper`: `revision-coach` |
+| escribir resumen / verificar citas / convertir formato | `academic-paper`: `abstract-only` / `citation-check` / `format-convert` |
+| artículo de revisión bibliográfica | `academic-paper`: `lit-review` |
+| flujo de trabajo académico / investigación a artículo | `academic-pipeline`: `pipeline` |
+
+Keep review and revision intent distinct. Apply topic scoping below to vague
+paper topics in Spanish too; an explicit research question permits direct
+planning. These activation phrases do not add supported output-language pairs.
+
+### ARW Project Paper Narrative
+
+For an ARW project registered for paper writing, read
+[project narrative protocol](codex/references/project_narrative_protocol.md)
+before `ars-plan`, `ars-outline`, academic-paper Phase 2/3/4, delegated role
+dispatch, or a resumed paper session. Load the project's current selected
+snapshot from the ARW control plane; do not choose a fresh narrative from
+agent memory. The adapter protocol governs where vendored ARS examples prescribe
+an unsuitable fixed number of sub-arguments, headings, words, or paragraphs.
+The project choice fixes the argument strategy and order, not findings or
+scientific conclusions. General non-paper tasks do not require this selection.
+
+For venue/domain advice during ARW `ars-plan` or `ars-outline`, invoke
+`codex/scripts/ars_codex_full_runtime.py` with `--arw-project-root PROJECT`,
+`--arw-run-root RUN`, `--venue-id VENUE`, `--domain-id DOMAIN`, and
+`--applicability-file CONDITIONS.json`. Use the context only with the current
+ARW wheel/extension interpreter, or the explicit
+source-checkout environment shown in the ARW runtime guide. An older editable
+installation is not the current runtime; an absent Phase 2 API fails explicitly.
+Use the returned
+`phase2_venue_context` as optional outline context. It contains only approved
+matching lessons, the selected narrative digest, and exact input/advisory-set
+hashes; an empty set stays empty. Pass the context to the structure architect
+as emitted in its `task_context`, or consume the same top-level context when
+working inline. Recheck narrative status immediately before dispatch/output.
+Do not treat suggestions as official requirements or permission to modify
+the selected plan. These options read local ARW state and do not enable hooks
+or agent dispatch. For the bounded input contract and CLI example, see
+`docs/runtime/research-heuristic-learning.md` in the ARW package.
 
 ### Time-Sensitive Venue, Deadline, and Template Override
 
@@ -83,9 +159,10 @@ exists; never clone these dates forward.
 
 ### Paper Topic Scoping Override
 
-Apply this override before the general paper/pipeline routing rule and before the Claude-Style Alias Router below.
-The override applies regardless of whether the user invokes ARS via natural
-language or via an `ars-*` alias.
+Apply this override only after explicit aliases and unambiguous mode intent
+have been ruled out and cross-phase ambiguity has been resolved. An explicit
+mode remains selected when its usual inputs are missing; ask for those inputs
+within the mode. An `ars-*` alias is never redirected by this override.
 
 If the user says they want to write a paper, thesis, proposal, article, journal
 article, or manuscript, but they only provide a broad topic, tentative title,
@@ -108,8 +185,8 @@ First response in this path:
 
 1. State that the request is being routed to `deep-research` `socratic` mode
    because the research question is not yet precise.
-2. Ask 3-5 Socratic narrowing questions using `socratic_mentor_agent` and
-   `research_question_agent` guidance.
+2. Ask only the material narrowing questions needed now, using
+   `socratic_mentor_agent` and `research_question_agent` guidance.
 3. Do not produce an outline, draft, literature review, or full pipeline
    dashboard until the user has converged on at least one candidate RQ.
 
@@ -125,7 +202,8 @@ Codex does not install Claude slash commands, but this package emulates their
 intent. If the user's request starts with a slash alias (`/ars-plan`) or a plain
 alias (`ars-plan`), treat it as a mode shortcut, strip the alias token from the
 task text, read the matching `ars/commands/ars-*.md` prompt recipe, then route
-to the workflow `WORKFLOW.md` below.
+to the workflow `WORKFLOW.md` below. An optional leading skill selector such as
+`Use $academic-research-suite: ars-plan ...` is also accepted.
 
 The `model:` field in command frontmatter is a Claude routing hint only. Codex
 uses the current model unless the user explicitly requests another model.
@@ -135,7 +213,7 @@ uses the current model unless the user explicitly requests another model.
 | `/ars-plan`, `ars-plan` | `ars/commands/ars-plan.md` | `ars/academic-paper/WORKFLOW.md` in `plan` mode |
 | `/ars-outline`, `ars-outline` | `ars/commands/ars-outline.md` | `ars/academic-paper/WORKFLOW.md` in `outline-only` mode |
 | `/ars-abstract`, `ars-abstract` | `ars/commands/ars-abstract.md` | `ars/academic-paper/WORKFLOW.md` in `abstract-only` mode |
-| `/ars-lit-review`, `ars-lit-review` | `ars/commands/ars-lit-review.md` | `ars/academic-paper/WORKFLOW.md` in `lit-review` mode; if the user wants source discovery and synthesis instead, route to `ars/deep-research/WORKFLOW.md` in `lit-review` mode |
+| `/ars-lit-review`, `ars-lit-review` | `ars/commands/ars-lit-review.md` | `ars/academic-paper/WORKFLOW.md` in `lit-review` mode; ask for missing papers or offer source search within this mode |
 | `/ars-3w`, `ars-3w` | `ars/commands/ars-3w.md` | `ars/deep-research/WORKFLOW.md` in `three-way-scan` mode |
 | `/ars-citation-check`, `ars-citation-check` | `ars/commands/ars-citation-check.md` | `ars/academic-paper/WORKFLOW.md` in `citation-check` mode |
 | `/ars-disclosure`, `ars-disclosure` | `ars/commands/ars-disclosure.md` | `ars/academic-paper/WORKFLOW.md` in `disclosure` mode |
@@ -149,10 +227,11 @@ uses the current model unless the user explicitly requests another model.
 | `/ars-cache-invalidate`, `ars-cache-invalidate` | `ars/commands/ars-cache-invalidate.md` | Invalidate cached verification entries for one citation key |
 | `/ars-full`, `ars-full` | `ars/commands/ars-full.md` | `ars/academic-pipeline/WORKFLOW.md` |
 
-If the request body after the alias is a vague topic, tentative title, research
-direction, or "題目/主題/方向" without a clear research question, defer to the Paper Topic Scoping Override above before routing to the alias's target mode.
-This applies to `ars-plan`, `ars-outline`, `ars-abstract`, `ars-lit-review`,
-and `ars-full`.
+An alias selects its mode even when the request contains only a vague topic
+or lacks papers, reviewer comments, or another usual input. Load that mode and
+ask for what it requires; do not reopen the workflow choice. Strip the alias
+from the request passed to the workflow. A mentioned alias inside a manuscript,
+quotation, or mid-message example is not an invocation.
 
 If the Codex client reserves slash-prefixed input before it reaches the model,
 tell the user to use the plain alias form, for example `ars-plan my topic`.
@@ -164,6 +243,7 @@ using them in Codex:
 
 | Upstream wording | Codex behavior |
 | --- | --- |
+| `Skill` tool, `academic-research-skills:<workflow>`, `${CLAUDE_PLUGIN_ROOT}` | Read this Codex router and the selected `ars/<workflow>/WORKFLOW.md`; do not call an unavailable Claude Skill tool. Resolve `${CLAUDE_PLUGIN_ROOT}` and other upstream-root paths against this package's `ars/`, never the paper project's working directory. The vendored workflow entry is `WORKFLOW.md`, including when a recipe says `SKILL.md`. Load the selected mode's supporting prompts before producing its result. If a workflow or required supporting file cannot be loaded, report the loading failure and stop that workflow; a command summary is not a substitute. |
 | Agent Team, agent, dispatch, handoff | Read the referenced `agents/*.md` file as a role or phase prompt and perform that phase inline. |
 | Agent tool, Task tool, subagent | Do not spawn agents automatically. Only use Codex subagents when the user explicitly asks for delegation or parallel agents. If the optional full-runtime profile is enabled, use `codex/full-runtime-manifest.json` and `codex/agents/*.md` as the adapter contract. |
 | AskUserQuestion | Ask concise clarification questions, or use Codex's structured user-input tool when available in the active mode. |
@@ -201,7 +281,22 @@ The canonical upstream network map remains available at
 `ars/docs/DATA_FLOWS.md`; this section is the Codex adapter override for when
 those flows are actually launched here.
 
-### ARS v3.21.1 Contract-Honesty Boundaries
+### ARS v3.22.2 Caller Contracts
+
+Before a citation check, a pipeline run with a passport, an acronym check, or
+any committee/third-party-material handling, read
+[`codex/references/ars_v3_22_caller_contracts.md`](codex/references/ars_v3_22_caller_contracts.md)
+and follow its run-ledger, acronym, citation, committee and instruction/data
+boundary contracts. They are prompt contracts, not measured guarantees.
+
+### ARS v3.22.0 Contract-Honesty Boundaries
+
+- For abstract outputs, follow `ars/shared/output_language_pair.md`. The
+  Phase-1 registry accepts only `zh-tw-en`; an omitted field preserves legacy
+  Traditional Chinese/English surfaces and remains omitted from Schema 4.
+  Reject malformed or unsupported values visibly. The pair does not select
+  manuscript-body language or abstract cardinality. Spanish intent triggers
+  do not imply a Spanish locale pack.
 
 - Phase E evidence rows are deterministic, source-bound checkpoint artifacts.
   They preserve the existing citation verdict and gate, do not mark a source as
@@ -357,12 +452,13 @@ When a workflow lists agents:
 1. Read the workflow `WORKFLOW.md` to identify the mode and phase.
 2. Read the specific `agents/<name>.md` files for the current phase.
 3. Treat each agent file as a scoped role prompt with an input/output contract.
-4. Produce the phase output in the current conversation unless the user requested files.
+4. Produce the phase output in the current conversation unless the user requested files; also save run-local files required by the selected workflow's validators, such as drafts and abstracts for the acronym check.
 5. Use `ars/shared/handoff_schemas.md` when a phase hands material to another phase.
 
-For multi-review phases, preserve independence by writing each reviewer section
-before synthesizing. Do not let the final synthesis erase critical findings from
-devil's advocate or methodology roles.
+For multi-review phases, give each reviewer the same raw material and confirmed
+criteria without peer answers, then synthesize the completed sections. Preserve
+dissent with an evidence-based disposition. Disclose inline/shared-context review
+as such; separate headings do not establish independent execution.
 
 ## Agent File and Shared Resource Index
 

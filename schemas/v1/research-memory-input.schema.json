@@ -60,6 +60,19 @@
           "title": "Intended Target Harness",
           "type": "string"
         },
+        "narrative_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Narrative Sha256"
+        },
         "next_concrete_action": {
           "maxLength": 1200,
           "minLength": 1,

@@ -11,10 +11,33 @@ import pytest
 from referencing import Registry, Resource
 
 from arw.kernel.policy.schema_registry import SCHEMA_NAMES
-
+from tests.candidate_inputs import candidate_stage_args, configured_package_environment
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
+
+
+def _stage_candidate(
+    stage_root: Path, tmp_path: Path, environment: dict[str, str]
+) -> None:
+    """Assemble the explicit gated candidate before installed version probes."""
+    result = subprocess.run(
+        [
+            str(REPOSITORY_ROOT / "scripts/stage-plugin"),
+            "--clean",
+            "--stage-root",
+            str(stage_root),
+            "--evidence-root",
+            str(tmp_path / "stage-evidence"),
+            *candidate_stage_args(),
+        ],
+        cwd=tmp_path,
+        env={**environment, "ARW_STAGE_TMP_ROOT": str(tmp_path / "stage-tmp")},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.requires_retained_evidence("candidate", "build/evidence/phase-01/pre-vendor-license/receipt.json")
@@ -29,7 +52,9 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
         "CODEX_HOME": str(tmp_path / "caller-codex-home"),
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
+        **configured_package_environment(),
     }
+    _stage_candidate(stage_root, tmp_path, environment)
     result = subprocess.run(
         [
             str(smoke_script),
@@ -136,6 +161,14 @@ def test_identity_loader_rejects_tampered_packaged_schema(
 ) -> None:
     smoke_script = REPOSITORY_ROOT / "scripts/smoke-staged-plugin"
     stage_root = tmp_path / "stage" / PLUGIN_NAME
+    environment = {
+        "HOME": str(tmp_path / "caller-home"),
+        "CODEX_HOME": str(tmp_path / "caller-codex-home"),
+        "PATH": os.environ["PATH"],
+        "PYTHONNOUSERSITE": "1",
+        **configured_package_environment(),
+    }
+    _stage_candidate(stage_root, tmp_path, environment)
     result = subprocess.run(
         [
             str(smoke_script),
@@ -147,12 +180,7 @@ def test_identity_loader_rejects_tampered_packaged_schema(
             str(stage_root),
         ],
         cwd=tmp_path,
-        env={
-            "HOME": str(tmp_path / "caller-home"),
-            "CODEX_HOME": str(tmp_path / "caller-codex-home"),
-            "PATH": os.environ["PATH"],
-            "PYTHONNOUSERSITE": "1",
-        },
+        env=environment,
         text=True,
         capture_output=True,
         check=False,

@@ -5,10 +5,12 @@ the locally reshaped ARS adapter as a bundled, digest-bound plugin skill.
 
 ## academic-research-skills
 
-- Upstream revision: `127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
-- Upstream suite version: `v3.21.1` (2026-08-24)
-- Adapter version: `0.1.27`
+- Upstream revision: `7de1c9dfb7af9c02a9b57750761323f35a743aa2`
+- Upstream suite version: `v3.22.2` (2026-09-25)
+- Adapter version: `3.22.2` (adapter numbering follows the upstream ARS-Codex package, which aligns with the ARS suite release from 3.22.0)
 - Bundled adapter: `skills/academic-research-suite/` (Codex router plus `ars/` workflows and references)
+- ARS v3.22.2 sync (2026-10-05, issue #47): `ars/` is three-way merged from the recorded ARS-Codex 0.1.27 base to the ARS-Codex v3.22.2 target (`70b412f`), with upstream-only files (raw eval transcripts) merged from ARS `127ff85` to `7de1c9d` under the `WORKFLOW.md` path translation. ARW-owned overlays (layout-export gate, five reference packs, manuscript-artifact boundary) are byte-preserved. The router `SKILL.md` adopts the v3.22.2 routing core, Spanish intent routing, `Skill`/`${CLAUDE_PLUGIN_ROOT}` mapping, and caller contracts (run ledger, acronym check, Chinese APA, instruction/data boundary; moved intact into `codex/references/ars_v3_22_caller_contracts.md` for progressive loading), but keeps ARW's inline-first execution and current-model policy instead of the ARS-Codex package's model/delegation policy; ARW's own `codex/` adapter is preserved.
+- Stale upstream regression test (2026-10-06): ARS v3.22.2 reversed the alias policy, so an explicit `ars-*` alias selects its mode and is never redirected to Socratic scoping. Its `ars/scripts/test_codex_router_policy.py` still asserted the removed pre-3.22 wording and fails against the upstream router as well. ARW renamed that one test and made it assert the v3.22.2 alias contract instead; the router text is unchanged.
 - Progressive-loading modification (2026-09-25): moved the manuscript artifact/figure guidance and agent/shared-resource index from the 603-line Codex adapter `SKILL.md` into `codex/references/manuscript_artifact_and_figures.md` and `codex/references/agent_file_index.md`, with explicit links in the router. The moved contract text and upstream CC BY-NC 4.0 attribution are preserved; the adapter remains a modified downstream work, not a new upstream release.
 - Agent Skills metadata correction (2026-09-25): represented `codex_adapter` as the string `"true"` required for metadata string values. The adapter behavior is unchanged.
 - Local source modifications: this repository's Codex adapter packaging and workflow reshaping are carried in the bundled snapshot. The formatter additionally enforces class-aware paragraph indentation, role-based one-/two-column float sizing, starred-float/barrier source-order auditing, and full-document rendered-page inspection before a LaTeX/PDF export can be called camera-ready. Upstream commit identities remain pinned in `manifest.json`.
@@ -46,16 +48,17 @@ launcher keeps the upstream-compatible `file-base` name, while
 upstream commit, patched tree, ordered ARW patch series, protocol, binary, and
 capability profile. It is not an unpinned external MCP dependency.
 
-- Upstream revision: `ee68144af5453addda995a27cce8142999f318fb`
+- Upstream revision: `8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798`
 - Materialized source: `vendor/sources/file-base`
+- Upgrade (2026-10-06, issue #47): rebased from `ee68144` (v0.9.0-2) to v0.11.0. Patches 0001–0003 were regenerated against the new source; 0004 is byte-identical. 0003 also adds `files-build` to the daemon bootstrap's stateless command list. Upstream v0.11's unsanitized GCC test build rejects one upstream test (`tests/test_daemon_application.c`, `-Wfree-nonheap-object` on a sentinel pointer). The test tree stays unchanged, so `scripts/build-file-base` keeps that one diagnostic a warning for the unsanitized suite only (passed through `CC`, so the build is not marked sanitized) and records it in `flags.json`. To satisfy v0.11's new upstream tests without editing them, 0001 places the ARW `Text`/`PDF Text` file kinds after `CBM_LANG_COUNT`, so upstream's per-language tables and capability ledger are unchanged, and it indexes text only through explicit extensions (`.txt`, `.text`, `.tex`, `.latex`) and readable PDFs. ARW no longer content-sniffs files with unknown or missing extensions. 0002 lists `read_file` in the tool registry (tools/list, tool count and names, help) only when `CBM_ALLOWED_ROOT_ID` and `CBM_ALLOWED_ROOT` are configured, which ARW's launcher always sets. `scripts/offline-exec` audits with `strace --seccomp-bpf` and runs the command in a private PID namespace, so time-bounded process tests run at native speed and leaked process trees are reaped.
 - License: MIT, with the preserved generated third-party notices for bundled dependencies.
 - Ordered patch 0001: `vendor/patches/file-base/0001-file-base-server-name.patch`
-- Patch SHA-256: `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`
+- Patch SHA-256: `d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4`
 - Effect: applies the existing server-name/file-discovery integration patch without rewriting the upstream legal tooling.
 - Ordered patch 0002: `vendor/patches/file-base/0002-phase1-confined-read.patch`
-- Patch SHA-256: `1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029`
-- Effect: adds the Phase 1 native `read_file` MCP capability with explicit allowed-root capabilities, descriptor-relative no-follow traversal, sensitive-path denials, regular-file enforcement, strict UTF-8 output, and byte/line ceilings. It also disables the upstream update probe when the launcher explicitly sets `CBM_DISABLE_UPDATE_CHECK`, retains upstream-suite compatibility for MCP identity, control-file discovery, and bounded text/PDF discovery behavior, and avoids passing null zero-length fingerprint/function arrays to `qsort` or empty worker buffers to `memcpy` as diagnosed by UBSan.
-- Upstream test policy: `vendor/sources/file-base/tests` remains unchanged and is manifest-bound at SHA-256 `4ace6a4c832b8d3e04d9366f5d7684833eadf338fd4be367e03fb7f8d274da2a`; the same `Makefile.cbm:test` inventory is used for normal, ASan+UBSan, and separate TSan runs.
+- Patch SHA-256: `663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5`
+- Effect: adds the Phase 1 native `read_file` MCP capability with explicit allowed-root capabilities, descriptor-relative no-follow traversal, sensitive-path denials, regular-file enforcement, strict UTF-8 output, and byte/line ceilings. It also disables the upstream update probe when the launcher explicitly sets `CBM_DISABLE_UPDATE_CHECK`, retains upstream-suite compatibility for MCP identity, control-file discovery, and bounded text/PDF discovery behavior, avoids passing null zero-length fingerprint/function arrays to `qsort` or empty worker buffers to `memcpy` as diagnosed by UBSan, and (from v0.11.0) skips the zero-length `memcpy` from a NULL buffer when tree-sitter resets the ObjectScript routine/UDL external scanners, and the `qsort` of an empty project list in `list_projects`.
+- Upstream test policy: `vendor/sources/file-base/tests` remains unchanged and is manifest-bound at SHA-256 `80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0`; the same `Makefile.cbm:test` inventory is used for normal, ASan+UBSan, and separate TSan runs.
 
 The machine-readable source manifest is authoritative for exact tree, patch, artifact, and legal-input digests. Later patches must be appended in order and must update this document, the manifest, generated notices, and the SBOM.
 

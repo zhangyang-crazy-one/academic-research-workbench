@@ -221,7 +221,8 @@ def test_copied_skills_identify_one_canonical_source_revision() -> None:
 
 def test_advisory_writing_override_follows_source_router() -> None:
     source = _normalized(_section(_read(SOURCE_ROUTER), "### Paper Topic Scoping Override"))
-    assert "before the general paper/pipeline routing rule" in source
+    assert "only after explicit aliases and unambiguous mode intent have been ruled out" in source
+    assert "An `ars-*` alias is never redirected by this override" in source
     assert "do **not** provide a clear, answerable research question" in source
     assert "`ars/deep-research/WORKFLOW.md` in `socratic` mode first" in source
     for exception in ("clear RQ", "approved study frame", "data/results", "literature matrix", "draft", "explicitly asks to skip scoping"):
@@ -238,7 +239,8 @@ def test_advisory_writing_override_follows_source_router() -> None:
         assert "without a clear, answerable research question" in rows[1][0]
         assert rows[1][1] == f"`{DEEP_RESEARCH}` in `socratic` mode first"
         assert "ars-*" in section
-        assert "3–5 narrowing questions" in section
+        assert "material narrowing questions" in section
+        assert "never redirect" in section
         assert "explicit" in section and "skip scoping" in section
         for exception in ("clear research question", "approved study frame", "data/results", "literature matrix", "draft"):
             assert exception in section, (path, exception)

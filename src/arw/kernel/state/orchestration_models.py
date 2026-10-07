@@ -21,8 +21,47 @@ from pydantic import (
     model_validator,
 )
 
-from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
-from arw.kernel.state.models import ActorId, RunId, Sha256, StableRuntimeId, StrictModel, UtcTimestamp
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_hex,
+    strict_json_loads,
+)
+from arw.kernel.state.models import (
+    ActorId,
+    RunId,
+    Sha256,
+    StableRuntimeId,
+    StrictModel,
+    UtcTimestamp,
+)
+from arw.kernel.state.narrative import NarrativeSnapshot
+from arw.kernel.state.narrative_realization import NarrativeRealization
+
+PAPER_NARRATIVE_INSTRUCTIONS = (
+    "ARW paper protocol source: skills/academic-research-suite/codex/references/"
+    "project_narrative_protocol.md. These are the operative rules inside this immutable "
+    "assignment; no access to that source file is required. Use narrative_snapshot's "
+    "project_id, version, sha256, route, rationale, function_order, evidence_forms, "
+    "and problem–contribution–evidence–bounded-conclusion links for all paper planning, "
+    "outlines, argument blueprints, and prose. The six argument functions are problem "
+    "positioning, gap and importance, intended contribution, argument path, evidence "
+    "test, and knowledge gain with scope boundary; their order is not a six-chapter "
+    "template. Let the contribution type determine section order. Phase 2 Outline + "
+    "Evidence Map and Phase 3 Argument Blueprint must follow this snapshot; CARS may "
+    "shape an introduction and CER individual claims without replacing the project "
+    "plan. Legacy universal IMRaD, exactly 3–5 subarguments, 150 words per heading, "
+    "and three paragraphs per section are examples, not mandatory limits when "
+    "inapplicable. Use proof, experiment, observation, annotation validation, theoretical "
+    "argument, or justified other evidence as appropriate. Hypotheses may be absent; "
+    "negative or null results may be a complete contribution. Never disguise a post hoc "
+    "explanation as a prespecified hypothesis. The strategy fixes argument method and "
+    "presentation order, never facts, results, or scientific conclusions. A pending "
+    "proposal leaves the current snapshot active. A strategy change needs a reason, "
+    "proposal against the current SHA-256, and author approval of that exact proposal. "
+    "After approval the old assignment is stale: stop paper output and obtain a new "
+    "run and assignment with the current snapshot. Missing, invalid, or conflicting "
+    "paper narrative state also blocks paper output."
+)
 
 
 PHASE4_SCHEMA_NAMES: tuple[str, ...] = (
@@ -476,6 +515,22 @@ class ImmutableAssignment(StrictModel):
     deadline_at: UtcTimestamp
     completion_contract: CompletionContract
     acceptance_key: AssignmentKey
+    narrative_snapshot: NarrativeSnapshot | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    paper_output_role: Literal["analysis", "outline", "blueprint", "draft"] = Field(
+        default="analysis", exclude_if=lambda value: value == "analysis"
+    )
+    narrative_instructions: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @field_validator("narrative_instructions")
+    @classmethod
+    def narrative_instruction_is_protocol(cls, value: str | None) -> str | None:
+        if value is not None and value != PAPER_NARRATIVE_INSTRUCTIONS:
+            raise ValueError("paper narrative instructions must match the frozen protocol")
+        return value
 
     @field_validator("input_sha256", "capability_ids", "allowed_read_root_ids")
     @classmethod
@@ -493,6 +548,16 @@ class ImmutableAssignment(StrictModel):
 
     @model_validator(mode="after")
     def immutable_bindings_are_coherent(self) -> Self:
+        if (self.narrative_snapshot is None) != (self.narrative_instructions is None):
+            raise ValueError("paper narrative snapshot and instructions must occur together")
+        if self.narrative_snapshot is None and self.paper_output_role != "analysis":
+            raise ValueError("paper output role requires a selected paper narrative")
+        if self.paper_output_role == "analysis" and (
+            self.stage_id in {"paper-body", "writing", "drafting"}
+            or any(kind in {"paper-body", "paper-draft", "manuscript", "draft"}
+                   for kind in self.completion_contract.required_artifact_kinds)
+        ):
+            raise ValueError("paper body assignment must declare a draft output role")
         _validate_execution_claim(
             execution_mode=self.execution_mode,
             execution_provenance=self.execution_provenance,
@@ -565,6 +630,9 @@ class ProposedArtifact(StrictModel):
     media_type: Annotated[str, Field(min_length=3, max_length=127)]
     schema_id: StableRuntimeId | None
     byte_count: Annotated[int, Field(ge=0, le=MAX_OUTPUT_BYTES)]
+    paper_output_role: Literal["analysis", "outline", "blueprint", "draft"] = Field(
+        default="analysis", exclude_if=lambda value: value == "analysis"
+    )
 
     @field_validator("relative_path")
     @classmethod
@@ -607,6 +675,7 @@ class WorkerProposal(StrictModel):
         tuple[Sha256, ...], BeforeValidator(_freeze_json_array), Field(max_length=128)
     ]
     summary: Annotated[str, Field(min_length=1, max_length=4096)]
+    narrative_realization: NarrativeRealization | None = Field(default=None, exclude_if=lambda value: value is None)
     unresolved: Annotated[
         tuple[Annotated[str, Field(min_length=1, max_length=1024)], ...],
         BeforeValidator(_freeze_json_array),

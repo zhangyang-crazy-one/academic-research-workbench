@@ -543,7 +543,9 @@ register_backend(
 def detect(text, config, *, allow_network=False):
     if not isinstance(config, dict):
         raise TypeError("detector config must be a JSON object")
-    if len(text.encode()) > MAX_TEXT_BYTES:
+    # Detector backends keep their own 64 KiB input bound; without configured
+    # detectors nothing is scored, so manuscript size is not constrained here.
+    if config.get("detectors") and len(text.encode()) > MAX_TEXT_BYTES:
         raise ValueError("detection input exceeds 64 KiB")
     results = []
     for item in config.get("detectors", []):

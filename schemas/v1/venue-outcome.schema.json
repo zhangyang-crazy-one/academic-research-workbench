@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-outcome.v1",
+      "default": "arw.venue-outcome.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "outcome_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Outcome Id",
+      "type": "string"
+    },
+    "venue_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Venue Id",
+      "type": "string"
+    },
+    "domain_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Domain Id",
+      "type": "string"
+    },
+    "narrative_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Narrative Sha256",
+      "type": "string"
+    },
+    "narrative_version": {
+      "minimum": 1,
+      "title": "Narrative Version",
+      "type": "integer"
+    },
+    "heuristic_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Heuristic Ids",
+      "type": "array"
+    },
+    "heuristic_use_artifact_ids": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Heuristic Use Artifact Ids",
+      "type": "array"
+    },
+    "outcome": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Outcome",
+      "type": "string"
+    },
+    "evidence_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Evidence Artifact Id",
+      "type": "string"
+    },
+    "evidence_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "outcome_id",
+    "venue_id",
+    "domain_id",
+    "narrative_sha256",
+    "narrative_version",
+    "heuristic_ids",
+    "outcome",
+    "evidence_artifact_id",
+    "evidence_digest"
+  ],
+  "title": "VenueOutcome",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-outcome.schema.json"
+}

@@ -998,12 +998,12 @@ def test_validate_only_rejects_paired_header_and_identity_rebind(
 @pytest.mark.requires_retained_evidence("candidate")
 @pytest.mark.requires_materialized_sources
 @pytest.mark.requires_native_file_base
-def test_validate_only_accepts_unbounded_python_build_version(
+def test_validate_only_rejects_build_interpreter_different_from_candidate(
     tmp_path: Path,
 ) -> None:
-    """A build interpreter above 3.14 remains valid and needs no pin file."""
+    """Rebinding identity bytes cannot replace the candidate's builder."""
 
-    stage_root = tmp_path / "python-315-stage" / PLUGIN_NAME
+    stage_root = tmp_path / "different-builder-stage" / PLUGIN_NAME
     result = _stage(stage_root)
     assert result.returncode == 0, result.stderr
 
@@ -1011,6 +1011,53 @@ def test_validate_only_accepts_unbounded_python_build_version(
     identity["runtime"]["build_interpreter"] = "3.25.0"
     _write_pretty(stage_root / "share/arw/build-identity.json", identity)
     _rebind_inventory(stage_root, "share/arw/build-identity.json")
+
+    validated = _validate_stage(stage_root)
+    assert validated.returncode != 0
+    assert (
+        "candidate build evidence does not bind builder and wheel" in validated.stderr
+    )
+
+
+@pytest.mark.requires_retained_evidence("candidate")
+@pytest.mark.requires_materialized_sources
+@pytest.mark.requires_native_file_base
+def test_validate_only_accepts_unbounded_python_build_version(
+    tmp_path: Path,
+) -> None:
+    """A consistent synthetic future builder has no upper version bound.
+
+    This tests the version contract, not an actual build with Python 3.25.
+    Candidate, license and identity observations must still bind exactly.
+    """
+
+    stage_root = tmp_path / "future-python-stage" / PLUGIN_NAME
+    result = _stage(stage_root)
+    assert result.returncode == 0, result.stderr
+
+    candidate_relative = "share/arw/evidence/candidate-build.json"
+    license_relative = "share/arw/evidence/license-inventory.json"
+    identity_relative = "share/arw/build-identity.json"
+    candidate = _load(stage_root / candidate_relative)
+    candidate["build"]["python"]["version"] = "3.25.0"
+    _write_pretty(stage_root / candidate_relative, candidate)
+
+    license_inventory = _load(stage_root / license_relative)
+    license_inventory["build_observation"] = candidate["build"]
+    license_inventory["build_evidence"]["sha256"] = _sha256(
+        stage_root / candidate_relative
+    )
+    _write_pretty(stage_root / license_relative, license_inventory)
+
+    identity = _load(stage_root / identity_relative)
+    identity["runtime"]["build_interpreter"] = candidate["build"]["python"]["version"]
+    for entry in identity["staged_payloads"]:
+        if entry["path"] in {candidate_relative, license_relative}:
+            entry["sha256"] = _sha256(stage_root / entry["path"])
+    _write_pretty(stage_root / identity_relative, identity)
+    _rebind_inventory(
+        stage_root, candidate_relative, license_relative, identity_relative
+    )
     assert not (stage_root / ".python-version").exists()
 
     validated = _validate_stage(stage_root)

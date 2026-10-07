@@ -11,7 +11,9 @@ Commands:
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
   writing        Prepare and record source-bound manuscript revisions.
+  narrative      Register and select a fixed project paper argument strategy.
   semantic       Query an explicitly built, optional semantic projection.
+  experiment     Accept numeric experiment claims against a versioned contract.
   learn          Evaluate and explicitly promote evidence-bound research lessons.
   memory         Save, recall, and hand off canonical project context.
   provenance     Operate the opt-in Semantica-compatible Lite sidecar.
@@ -35,7 +37,7 @@ fail() {
     case "$error_type" in
       bootstrap-config) action="set HOME or CODEX_HOME before running ARW" ;;
       runtime-artifact-missing) action="install a qualified plugin stage containing the ARW wheel" ;;
-      interpreter-*) action="select an executable Python >=3.13 interpreter" ;;
+      interpreter-*|incompatible-interpreter) action="select an executable Python >=3.13 interpreter" ;;
       bootstrap-install-failed) action="check the configured package index and retry runtime installation" ;;
       *) action="repair the installed ARW runtime and retry" ;;
     esac
@@ -56,7 +58,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|writing|semantic|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
+  health|route|version|files|writing|narrative|semantic|experiment|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -65,14 +67,20 @@ esac
 SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd)"
 
-# Runtime mode is an explicit gate. Unset / plugin / codex stay fail-closed on
-# the staged first-party wheel. agent / local-dev may use an editable checkout
-# interpreter; they never qualify a Codex release and do not invent host canary
-# evidence. bin/arw-agent is a checkout-only wrapper that sets ARW_RUNTIME=agent.
+# Runtime mode. plugin / codex stay fail-closed on the staged first-party wheel.
+# agent / local-dev may use an editable checkout interpreter; they never qualify
+# a Codex release and do not invent host canary evidence. When ARW_RUNTIME is
+# unset, a source checkout without a staged wheel selects agent mode; a staged
+# plugin (which carries share/arw/wheels) keeps plugin mode.
 ARW_RUNTIME_MODE="plugin"
 REQUESTED_RUNTIME="${ARW_RUNTIME:-}"
 if [[ "$(basename -- "${BASH_SOURCE[0]}")" == "arw-agent" ]]; then
   REQUESTED_RUNTIME="${REQUESTED_RUNTIME:-agent}"
+fi
+ARW_AUTO_AGENT=0
+if [[ -z "$REQUESTED_RUNTIME" && -f "$PLUGIN_ROOT/src/arw/cli.py" && ! -e "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+  REQUESTED_RUNTIME="agent"
+  ARW_AUTO_AGENT=1
 fi
 case "$REQUESTED_RUNTIME" in
   ""|plugin|codex)
@@ -92,14 +100,21 @@ if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
 fi
 
 ARW_JSON_DIAGNOSTIC=0
-if [[ "$ARW_RUNTIME_MODE" != "agent" && ( ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ) ]]; then
+if [[ ( "$ARW_RUNTIME_MODE" != "agent" || "$ARW_AUTO_AGENT" == 1 ) && ( ( "$COMMAND" == "health" && "${1:-}" == "--json" ) || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ) ]]; then
   ARW_JSON_DIAGNOSTIC=1
 fi
+if [[ "$ARW_RUNTIME_MODE" == "plugin" && -n "${ARW_PLUGIN_ROOT:-}" && "$ARW_PLUGIN_ROOT" != "$PLUGIN_ROOT" ]]; then
+  fail "plugin-root-mismatch" "installed plugin root differs from launcher root" 65
+fi
+if [[ "$ARW_RUNTIME_MODE" == "agent" && -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+  fail "agent-runtime-invalid" "agent mode requires an editable source checkout" 65
+fi
 
-# A source checkout in plugin mode has no staged wheel. Keep the opt-in preflight and health
-# available there so a missing native binary is reported as JSON before any
-# runtime bootstrap attempt. The installed package continues below.
-if [[ "$ARW_RUNTIME_MODE" != "agent" && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py" && ! -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
+# A source checkout has no staged wheel. Unless agent mode was requested
+# explicitly, keep the opt-in preflight and health available there so a missing
+# native binary is reported as JSON before any runtime bootstrap attempt. The
+# installed package continues below.
+if [[ ( "$ARW_RUNTIME_MODE" != "agent" || "$ARW_AUTO_AGENT" == 1 ) && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py" && ! -d "$PLUGIN_ROOT/share/arw/wheels" ]]; then
   if [[ "$COMMAND" == "health" || ( "$COMMAND" == "files" && "${1:-}" == "enable" ) ]]; then
     SOURCE_PYTHON=""
     if [[ -n "${ARW_PYTHON:-}" ]]; then
@@ -109,7 +124,7 @@ if [[ "$ARW_RUNTIME_MODE" != "agent" && -f "$PLUGIN_ROOT/src/arw/files_opt_in.py
     fi
     for candidate in "${source_candidates[@]}"; do
       resolved="$(command -v -- "$candidate" 2>/dev/null || true)"
-      if [[ -n "$resolved" ]] && "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null; then
+      if [[ -n "$resolved" ]] && "$resolved" -I -S -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null; then
         SOURCE_PYTHON="$resolved"
         break
       fi
@@ -133,13 +148,13 @@ fi
 python_is_supported() {
   local candidate="$1"
   [[ -n "$candidate" && -x "$candidate" ]] || return 1
-  "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null
+  "$candidate" -I -S -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 13) else 1)' 2>/dev/null
 }
 
 python_has_arw() {
   local candidate="$1"
   python_is_supported "$candidate" || return 1
-  "$candidate" -c 'import importlib.metadata as m; raise SystemExit(0 if m.version("academic-research-workbench") else 1)' 2>/dev/null
+  "$candidate" -I -c 'import importlib.metadata as m; raise SystemExit(0 if m.version("academic-research-workbench") else 1)' 2>/dev/null
 }
 
 select_python() {
@@ -171,7 +186,7 @@ select_python() {
       printf '%s\n' "$resolved"
       return
     fi
-  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u -r)
 
   fail "interpreter-not-found" "Python >=3.13 is required" 78
 }
@@ -211,7 +226,7 @@ select_agent_python() {
       printf '%s\n' "$resolved"
       return 0
     fi
-  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u)
+  done < <(compgen -c | awk '/^python3\.[0-9]+$/ { print }' | sort -u -r)
 
   return 1
 }
@@ -252,7 +267,7 @@ bootstrap_wheel_runtime() {
     fi
     exit "$status"
   fi
-  PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
+  PYTHON_VERSION="$("$PYTHON" -I -S -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
     || fail "interpreter-failed" "selected Python could not report its version" 78
   if ! python_is_supported "$PYTHON"; then
     fail "incompatible-interpreter" "requires Python >=3.13; got $PYTHON_VERSION" 78
@@ -262,16 +277,57 @@ bootstrap_wheel_runtime() {
   export PYTHONNOUSERSITE=1
   export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-  RUNTIME_IDENTITY="$($PYTHON - "$PLUGIN_ROOT" "$WHEEL_PATH" <<'PY'
+  RUNTIME_IDENTITY="$("$PYTHON" -I -S - "$PLUGIN_ROOT" "$WHEEL_PATH" <<'PY'
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
 
 plugin_root = Path(sys.argv[1]).resolve()
 wheel_dir = Path(sys.argv[2]).resolve()
+def sha(path):
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+def object_at(relative):
+    path = plugin_root / relative
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit(f"staged metadata is missing or unsafe: {relative}")
+    value = json.loads(path.read_bytes())
+    if not isinstance(value, dict):
+        raise SystemExit(f"staged metadata is malformed: {relative}")
+    return value
+
+inventory = object_at("supply-chain/stage-inventory.json")
+identity = object_at("share/arw/build-identity.json")
+actual = set()
+for path in plugin_root.rglob("*"):
+    if path.is_symlink():
+        raise SystemExit("staged tree contains a symlink")
+    if path.is_file():
+        actual.add(path.relative_to(plugin_root).as_posix())
+    elif not path.is_dir():
+        raise SystemExit("staged tree contains a special file")
+if inventory.get("files") != sorted(actual) or inventory.get("symlinks") != []:
+    raise SystemExit("staged closed inventory differs from live files")
+covered = inventory.get("covered_files")
+if not isinstance(covered, list) or {row.get("path") for row in covered if isinstance(row, dict)} != actual - {"supply-chain/stage-inventory.json"}:
+    raise SystemExit("staged coverage inventory is incomplete")
+for row in covered:
+    if not isinstance(row, dict) or row.get("sha256") != sha(plugin_root / row["path"]):
+        raise SystemExit("staged coverage digest differs")
+payloads = identity.get("staged_payloads")
+if not isinstance(payloads, list) or {row.get("path") for row in payloads if isinstance(row, dict)} != actual - {"share/arw/build-identity.json", "supply-chain/stage-inventory.json"}:
+    raise SystemExit("build identity payload coverage is incomplete")
+for row in payloads:
+    if not isinstance(row, dict) or row.get("sha256") != sha(plugin_root / row["path"]):
+        raise SystemExit("build identity payload digest differs")
 wheels = tuple(sorted(wheel_dir.glob("academic_research_workbench-*.whl")))
 if len(wheels) != 1 or wheels[0].is_symlink() or not wheels[0].is_file():
     raise SystemExit("staged first-party ARW wheel is missing or ambiguous")
@@ -281,7 +337,34 @@ digest = hashlib.sha256()
 with wheels[0].open("rb") as stream:
     for block in iter(lambda: stream.read(1024 * 1024), b""):
         digest.update(block)
-print(digest.hexdigest())
+observed = digest.hexdigest()
+identity_path = plugin_root / "share/arw/build-identity.json"
+try:
+    binding = identity["runtime_artifact"]["first_party_wheel"]
+    if binding["path"] != wheels[0].relative_to(plugin_root).as_posix() or binding["sha256"] != observed:
+        raise ValueError("staged wheel differs from declared build identity")
+except (OSError, ValueError, KeyError, TypeError) as error:
+    raise SystemExit(f"staged wheel binding is invalid: {error}") from error
+candidate = object_at("share/arw/evidence/candidate-build.json")
+license_inventory = object_at("share/arw/evidence/license-inventory.json")
+sbom = object_at("SBOM.cdx.json")
+if license_inventory.get("build_evidence", {}).get("sha256") != sha(plugin_root / "share/arw/evidence/candidate-build.json"):
+    raise SystemExit("staged license inventory does not bind candidate build")
+if license_inventory.get("build_observation") != candidate.get("build") or license_inventory.get("runtime_resolution_environment") != candidate.get("runtime_resolution_environment"):
+    raise SystemExit("staged license inventory build observation differs")
+candidate_wheels = [row for row in candidate.get("artifacts", []) if row.get("kind") == "wheel"]
+if len(candidate_wheels) != 1 or candidate_wheels[0].get("sha256") != observed or Path(candidate_wheels[0].get("path", "")).name != wheels[0].name:
+    raise SystemExit("staged candidate wheel identity differs")
+if license_inventory.get("first_party_wheel", {}).get("sha256") != observed:
+    raise SystemExit("staged license inventory wheel identity differs")
+components = sbom.get("components", [])
+if not isinstance(components, list) or not all(isinstance(row, dict) for row in components):
+    raise SystemExit("staged SBOM components are malformed")
+lock_path = plugin_root / "supply-chain/integration-lock.json"
+lock_rows = [row for row in components if row.get("bom-ref") == "artifact:supply-chain/integration-lock.json"]
+if lock_path.is_file() and (len(lock_rows) != 1 or lock_rows[0].get("hashes") != [{"alg": "SHA-256", "content": sha(lock_path)}]):
+    raise SystemExit("staged SBOM does not bind integration lock")
+print(observed)
 PY
 )" || fail "runtime-artifact-invalid" "staged ARW wheel could not be verified" 65
 
@@ -320,9 +403,9 @@ PY
 
     if ! runtime_ready; then
       rm -rf -- "$runtime_root" "$temp_root"
-      "$PYTHON" -m venv "$temp_root/venv" \
+      "$PYTHON" -I -m venv "$temp_root/venv" \
         || fail "bootstrap-venv-failed" "could not create the cache-local runtime" 70
-      "$temp_root/venv/bin/python" -m pip install \
+      "$temp_root/venv/bin/python" -I -m pip install \
         --quiet \
         "$ARW_WHEEL" \
         || fail "bootstrap-install-failed" "could not resolve ARW dependencies from the configured package index" 70
@@ -399,8 +482,108 @@ elif ! bind_agent_python; then
     fail "agent-runtime-missing" "agent mode needs checkout .venv with academic-research-workbench installed, ARW_PYTHON pointing at that interpreter, or a staged first-party wheel" 66
   fi
 fi
+if [[ "$ARW_RUNTIME_MODE" == "agent" && -d "$PLUGIN_ROOT/src/arw" ]]; then
+  # Editable checkout self-use imports this checkout's code, so its
+  # UNVERIFIED state cannot be borrowed by an unrelated installed wheel.
+  export PYTHONPATH="$PLUGIN_ROOT/src:$PLUGIN_ROOT/extensions/ars/src:$PLUGIN_ROOT/extensions/local-store/src:$PLUGIN_ROOT/extensions/semantica/src:$PLUGIN_ROOT/extensions/artifact-integrity/src:$PLUGIN_ROOT/extensions/research-artifact/src:$PLUGIN_ROOT/extensions/research-memory/src:$PLUGIN_ROOT/extensions/research-learning/src:$PLUGIN_ROOT/extensions/academic-humanization/src:$PLUGIN_ROOT/extensions/submission-workflow/src"
+fi
 
 SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+if [[ "$ARW_RUNTIME_MODE" == "plugin" ]]; then
+  export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+  export PYTHONDONTWRITEBYTECODE=1
+  # Use a fresh bytecode lookup namespace so cached package .pyc files cannot
+  # run before the wheel-content check. No bytecode is written in this mode.
+  ARW_FRESH_PYCACHE_PREFIX="${TMPDIR:-/tmp}/arw-pycache-$$-$RANDOM-$RANDOM"
+  "$PYTHON" -I -S - "$RUNTIME_PYTHON" "$STAGED_WHEEL" "$PYTHON" <<'PY' || fail "core-integrity-invalid" "cached interpreter, configuration, or first-party runtime differs from the selected Python and staged wheel; clear the ARW runtime cache and retry" 65
+import hashlib
+import os
+import sys
+import zipfile
+from pathlib import Path
+
+cached_python = Path(sys.argv[1]).absolute()
+venv_root = cached_python.parent.parent
+selected_python = Path(sys.argv[3]).absolute()
+if venv_root.is_symlink() or cached_python.parent.is_symlink() or venv_root.parent.is_symlink():
+    raise SystemExit("cached runtime path contains a symlinked directory")
+try:
+    selected_real = selected_python.resolve(strict=True)
+    cached_real = cached_python.resolve(strict=True)
+except (OSError, RuntimeError) as error:
+    raise SystemExit("cached or selected interpreter cannot be resolved") from error
+if not selected_real.is_file() or not os.access(selected_real, os.X_OK):
+    raise SystemExit("selected interpreter is not executable")
+if cached_python.is_symlink():
+    if cached_real != selected_real:
+        raise SystemExit("cached interpreter symlink targets a different executable")
+elif not cached_python.is_file() or hashlib.sha256(cached_python.read_bytes()).digest() != hashlib.sha256(selected_real.read_bytes()).digest():
+    raise SystemExit("cached interpreter differs from selected executable")
+cfg_path = venv_root / "pyvenv.cfg"
+if cfg_path.is_symlink() or not cfg_path.is_file():
+    raise SystemExit("cached runtime configuration is missing or unsafe")
+cfg = {}
+for line in cfg_path.read_text(encoding="utf-8").splitlines():
+    if "=" in line:
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key in cfg:
+            raise SystemExit("cached runtime configuration repeats a key")
+        cfg[key] = value
+if cfg.get("include-system-site-packages", "").lower() != "false":
+    raise SystemExit("cached runtime enables system site packages")
+if not cfg.get("executable") or Path(cfg["executable"]).resolve() != selected_real:
+    raise SystemExit("cached runtime declares a different base executable")
+if not cfg.get("home") or Path(cfg["home"]).resolve() != Path(sys._base_executable).resolve().parent:
+    raise SystemExit("cached runtime declares a different base home")
+site_dirs = sorted((venv_root / "lib").glob("python*/site-packages"))
+if len(site_dirs) != 1 or not site_dirs[0].is_dir() or site_dirs[0].is_symlink():
+    raise SystemExit("cached runtime site-packages directory is missing")
+purelib = site_dirs[0]
+for pth in purelib.glob("*.pth"):
+    if pth.is_symlink() or any(line.lstrip().startswith(("import ", "import\t")) for line in pth.read_text(encoding="utf-8").splitlines()):
+        raise SystemExit("cached runtime contains executable path startup code")
+expected = set()
+with zipfile.ZipFile(sys.argv[2]) as wheel:
+    for member in wheel.infolist():
+        if member.is_dir() or member.filename.endswith(".dist-info/RECORD"):
+            continue
+        relative = Path(member.filename)
+        target = purelib / relative
+        if relative.is_absolute() or ".." in relative.parts or any(part.is_symlink() for part in (target, *target.parents) if part.is_relative_to(purelib)) or not target.is_file() or target.read_bytes() != wheel.read(member):
+            raise SystemExit("cached first-party package differs from staged wheel")
+        expected.add(relative.as_posix())
+    for top in {name.split("/", 1)[0] for name in expected if "/" in name}:
+        if top.endswith(".dist-info"):
+            continue
+        if (purelib / top).is_symlink():
+            raise SystemExit("cached first-party package root is a symlink")
+        for path in (purelib / top).rglob("*"):
+            if "__pycache__" in path.parts:
+                if path.is_symlink():
+                    raise SystemExit("cached bytecode path is a symlink")
+                continue
+            if path.is_symlink() or (path.is_file() and path.relative_to(purelib).as_posix() not in expected):
+                raise SystemExit("cached first-party package has an undeclared file")
+PY
+  if [[ "$COMMAND" != "route" && "$COMMAND" != "version" ]]; then
+  "$RUNTIME_PYTHON" -I -B -X "pycache_prefix=$ARW_FRESH_PYCACHE_PREFIX" - "$RUNTIME_PYTHON" <<'PY' || fail "core-integrity-invalid" "staged core integrity or runtime origin check failed" 65
+import sys
+from pathlib import Path
+import arw
+from arw.kernel.policy.core_integrity import installed_core_preflight
+runtime = Path(sys.argv[1]).absolute().parents[2]
+if not Path(arw.__file__).resolve().is_relative_to(runtime):
+    raise SystemExit("ARW module did not load from the staged-wheel runtime")
+status, _ = installed_core_preflight()
+if status != "PASS":
+    raise SystemExit("staged core integrity is not PASS")
+PY
+  fi
+fi
+PYTHON_FLAGS=()
+if [[ "$ARW_RUNTIME_MODE" == "plugin" ]]; then
+  PYTHON_FLAGS=(-I -B -X "pycache_prefix=$ARW_FRESH_PYCACHE_PREFIX")
+fi
 FILES_CONTRACT_HEADER="$PLUGIN_ROOT/share/arw/file-contracts.h"
 BUILD_IDENTITY="$PLUGIN_ROOT/share/arw/build-identity.json"
 if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
@@ -416,7 +599,7 @@ case "$COMMAND" in
   health)
     [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
     if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
-      exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" "$INTERPRETER_SOURCE" <<'PY'
+      exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - "$RUNTIME_IDENTITY" "$INTERPRETER_SOURCE" <<'PY'
 import importlib.metadata
 import json
 import platform
@@ -441,7 +624,10 @@ json.dump(
 sys.stdout.write("\n")
 PY
     fi
-    exec "$RUNTIME_PYTHON" - "$RUNTIME_IDENTITY" <<'PY'
+    # The installed wheel cannot infer its plugin bundle from __file__. Bind
+    # the launcher root while leaving explicit roots to files_opt_in validation.
+    export ARW_PLUGIN_ROOT="${ARW_PLUGIN_ROOT:-$PLUGIN_ROOT}"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - "$RUNTIME_IDENTITY" <<'PY'
 import importlib.metadata
 import json
 import platform
@@ -474,7 +660,7 @@ PY
     # canary evidence is intentionally not fabricated or inferred here; the
     # Python verifier requires the retained exact evidence and rejects drift.
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
-    exec "$RUNTIME_PYTHON" -m arw.cli route "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli route "$@"
     ;;
   version)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
@@ -482,7 +668,7 @@ PY
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
     if [[ "$ARW_RUNTIME_MODE" == "agent" && ( ! -f "$BUILD_IDENTITY" || -L "$BUILD_IDENTITY" ) ]]; then
       [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "version requires --json" 64
-      exec "$RUNTIME_PYTHON" - <<'PY'
+      exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - <<'PY'
 import importlib.metadata
 import json
 import sys
@@ -503,16 +689,17 @@ json.dump(
 sys.stdout.write("\n")
 PY
     fi
-    exec "$RUNTIME_PYTHON" -m arw.cli version "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli version "$@"
     ;;
   _memory-mcp)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
-    exec "$RUNTIME_PYTHON" -m arw.memory_mcp "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.memory_mcp "$@"
     ;;
   _files-mcp)
-    exec "$RUNTIME_PYTHON" -m arw.files_mcp "$@"
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.files_mcp "$@"
     ;;
   _files-store-mcp)
     # The store-backed files MCP server inherits the same installed-mode
@@ -523,7 +710,7 @@ PY
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
-    exec "$RUNTIME_PYTHON" -m arw.files_store_mcp "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.files_store_mcp "$@"
     ;;
   _graph-mcp)
     # The graph MCP server only stays fail-closed when the installed
@@ -535,14 +722,14 @@ PY
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
-    exec "$RUNTIME_PYTHON" -m arw.cli _graph-mcp "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli _graph-mcp "$@"
     ;;
   writing|semantic|learn|memory|artifact|submission)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
-    exec "$RUNTIME_PYTHON" -m arw.cli "$COMMAND" "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli "$COMMAND" "$@"
     ;;
   files)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
@@ -552,7 +739,7 @@ PY
       export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
       export ARW_FILES_CONTRACT_HEADER="$FILES_CONTRACT_HEADER"
     fi
-    exec "$RUNTIME_PYTHON" -m arw.cli files "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli files "$@"
     ;;
   *)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
@@ -560,6 +747,6 @@ PY
     if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
       export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
     fi
-    exec "$RUNTIME_PYTHON" -m arw.cli "$COMMAND" "$@"
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli "$COMMAND" "$@"
     ;;
 esac

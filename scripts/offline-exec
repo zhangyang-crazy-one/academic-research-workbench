@@ -11,6 +11,9 @@ Usage: offline-exec --evidence-root PATH COMMAND [ARG ...]
 Run a command in a denied Linux network namespace while auditing every network
 syscall with strace. Namespace-local loopback traffic is permitted for native
 server tests; external-address and unclassified INET sockets fail the run.
+
+Run it through sudo to qualify the upstream native suite: root then creates
+the namespaces without a user namespace, and COMMAND runs as the invoking user.
 EOF
 }
 
@@ -54,7 +57,20 @@ EVIDENCE_ROOT="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1])
 [[ "$EVIDENCE_ROOT" != "/" && "$EVIDENCE_ROOT" != "$PROJECT_ROOT" ]] \
   || fail "refusing unsafe evidence root" 64
 [[ ! -e "$EVIDENCE_ROOT" ]] || fail "evidence root already exists" 73
-mkdir -p "$EVIDENCE_ROOT"
+
+# Invoked through sudo, root creates the namespaces without a user namespace
+# and the command runs as the invoking user. An unprivileged user namespace
+# shows root-owned directories such as / as the overflow uid, which upstream's
+# activation-transaction ownership checks rightly refuse.
+RUN_AS=()
+if [[ "$(id -u)" -eq 0 && -n "${SUDO_UID:-}" && "$SUDO_UID" != "0" ]]; then
+  [[ -n "${SUDO_GID:-}" ]] || fail "SUDO_GID is absent" 69
+  command -v setpriv >/dev/null 2>&1 \
+    || fail "setpriv is required to run the command as the invoking user" 69
+  RUN_AS=(setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups
+    --inh-caps=-all --bounding-set=-all --)
+fi
+"${RUN_AS[@]}" mkdir -p "$EVIDENCE_ROOT"
 
 if [[ -n "${ARW_SANITIZER_RUNTIME_DIR:-}" ]]; then
   ARW_SANITIZER_RUNTIME_DIR="$(
@@ -68,10 +84,11 @@ fi
 
 MECHANISM=""
 if command -v bwrap >/dev/null 2>&1 \
-  && bwrap --die-with-parent --unshare-net --dev-bind / / -- /bin/true >/dev/null 2>&1; then
+  && bwrap --die-with-parent --unshare-net --unshare-pid --dev-bind / / --proc /proc \
+    -- /bin/true >/dev/null 2>&1; then
   MECHANISM="bwrap-unshare-net"
 elif command -v unshare >/dev/null 2>&1 \
-  && unshare --user --map-root-user --net /bin/true >/dev/null 2>&1; then
+  && unshare --user --map-root-user --net --pid --fork --mount-proc /bin/true >/dev/null 2>&1; then
   MECHANISM="unshare-user-net"
 else
   fail "neither bwrap nor unshare can establish a denied network namespace" 69
@@ -97,14 +114,25 @@ namespace_command=(
   "$@"
 )
 
+# A private PID namespace makes the sandbox init reap orphaned descendants and
+# kill any that outlive the command, so a leaked process tree can neither look
+# alive to a supervisor nor keep the audit (and the job) running forever.
 if [[ "$MECHANISM" == "bwrap-unshare-net" ]]; then
-  denied_command=(bwrap --die-with-parent --unshare-net --dev-bind / / -- "${namespace_command[@]}")
+  denied_command=(bwrap --die-with-parent --unshare-net --unshare-pid --dev-bind / / --proc /proc
+    -- "${RUN_AS[@]}" "${namespace_command[@]}")
 else
-  denied_command=(unshare --user --map-root-user --net --mount-proc "${namespace_command[@]}")
+  denied_command=(unshare --user --map-root-user --net --pid --fork --mount-proc
+    "${RUN_AS[@]}" "${namespace_command[@]}")
 fi
 
 set +e
-"$STRACE" -f -qq -s 256 -e trace=network -o "$TRACE_FILE" -- "${denied_command[@]}" \
+# --seccomp-bpf stops tracees only on the audited network syscalls instead of
+# on every syscall, so time-bounded upstream tests run at native speed under
+# the same audit. setpgid is traced too: without that stop, upstream's
+# process-group supervision tests (tests/test_subprocess.c) fail repeatably
+# under ptrace while passing natively. The verdict only reads socket, bind,
+# connect and sendto lines, so the extra syscall does not change the audit.
+"$STRACE" -f --seccomp-bpf -qq -s 256 -e trace=network,setpgid -o "$TRACE_FILE" -- "${denied_command[@]}" \
   >"$STDOUT_FILE" 2>"$STDERR_FILE"
 COMMAND_STATUS=$?
 set -e

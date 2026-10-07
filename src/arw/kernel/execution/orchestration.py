@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
 from arw.kernel.core.canonical import (
@@ -47,6 +49,7 @@ from arw.kernel.ledger.manifests import (
     materialize_attempt_tree,
     validate_content_file,
 )
+from arw.kernel.ledger.narrative import NarrativeError, guard_run
 from arw.kernel.ledger.reducer import RuntimeState
 from arw.kernel.ledger.workflows import PHASE4_WORKFLOW_ID
 from arw.kernel.state.models import (
@@ -74,8 +77,10 @@ from arw.kernel.state.models import (
     RuntimeCommandRequest,
     StrictModel,
 )
+from arw.kernel.state.narrative import NarrativeSnapshot
 from arw.kernel.state.orchestration_models import (
     FORMAL_REVIEW_ROLE_IDS,
+    PAPER_NARRATIVE_INSTRUCTIONS,
     AssignmentKey,
     AttemptDescriptor,
     AttemptStatus,
@@ -105,6 +110,28 @@ from arw.kernel.state.orchestration_models import (
 
 class OrchestrationError(RuntimeError):
     """A parent lifecycle request could not be prepared or admitted."""
+
+
+def _checked_assignment_operation(method):
+    """Keep the project narrative read lock across one canonical operation."""
+
+    @wraps(method)
+    def checked(self, *args, assignment: ImmutableAssignment, **kwargs):
+        with self._guard_narrative(assignment):
+            return method(self, *args, assignment=assignment, **kwargs)
+
+    return checked
+
+
+def _checked_run_assignments_operation(method):
+    """Exclude narrative approval while final review or gate state is written."""
+
+    @wraps(method)
+    def checked(self, *args, **kwargs):
+        with self._guard_current_assignments():
+            return method(self, *args, **kwargs)
+
+    return checked
 
 
 def _deterministic_uuid(seed: str) -> str:
@@ -147,6 +174,7 @@ class AssignmentSpec:
     role_id: str
     worker_identity_id: str
     acceptance_key: tuple[int, int]
+    paper_output_role: str = "analysis"
     input_sha256: tuple[str, ...] = ()
     capability_ids: tuple[str, ...] = ("files.read",)
     allowed_read_root_ids: tuple[str, ...] = ("research-root",)
@@ -160,6 +188,12 @@ class AssignmentSpec:
     supersedes_assignment_id: str | None = None
 
     def __post_init__(self) -> None:
+        if self.paper_output_role not in {"analysis", "outline", "blueprint", "draft"}:
+            raise ValueError("paper output role is invalid")
+        if (self.stage_id in {"paper-body", "writing", "drafting"}
+                or any(kind in {"paper-body", "paper-draft", "manuscript", "draft"}
+                       for kind in self.required_artifact_kinds)) and self.paper_output_role == "analysis":
+            raise ValueError("paper body assignment must declare a draft output role")
         if len(self.acceptance_key) != 2 or any(
             not isinstance(value, int) or value < 0 for value in self.acceptance_key
         ):
@@ -215,6 +249,47 @@ class OrchestrationService:
         if canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True)) != raw:
             raise OrchestrationError("run manifest is not canonical")
         return manifest
+
+    @contextmanager
+    def _guard_narrative(
+        self,
+        assignment: ImmutableAssignment | None = None,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Iterator[NarrativeSnapshot | None]:
+        """Validate paper assignment bytes while approval is excluded by the read lock."""
+
+        if assignment is not None and assignment.narrative_snapshot is not None:
+            expected_sha256 = assignment.narrative_snapshot.sha256
+        try:
+            with guard_run(self.run_root, expected_sha256=expected_sha256) as snapshot:
+                if assignment is not None:
+                    if (snapshot is None) != (assignment.narrative_snapshot is None):
+                        raise OrchestrationError("assignment paper narrative binding differs from run")
+                    if snapshot is not None and assignment.narrative_snapshot != snapshot:
+                        raise OrchestrationError("assignment narrative snapshot differs from current project")
+                yield snapshot
+        except NarrativeError as error:
+            raise OrchestrationError(f"{error.code}: {error}") from error
+
+    @contextmanager
+    def _guard_current_assignments(self) -> Iterator[None]:
+        """Require every paper assignment to match the current project strategy."""
+
+        with self._guard_narrative() as snapshot:
+            if snapshot is not None:
+                assignments = self.runtime.read_state().assignments
+                if not assignments:
+                    raise OrchestrationError("paper review requires a prepared narrative assignment")
+                if any(
+                    not isinstance(item.assignment, ImmutableAssignment)
+                    or item.assignment.narrative_snapshot != snapshot
+                    for item in assignments
+                ):
+                    raise OrchestrationError(
+                        "stale_narrative: paper assignment differs from current project; start a new run"
+                    )
+            yield
 
     @staticmethod
     def _child_request(
@@ -336,6 +411,7 @@ class OrchestrationService:
             prevalidate=validate,
         )
 
+    @_checked_run_assignments_operation
     def prepare_formal_panel(
         self,
         request: RuntimeCommandRequest,
@@ -492,6 +568,7 @@ class OrchestrationService:
             None,
         )
 
+    @_checked_run_assignments_operation
     def admit_review_report(
         self,
         request: RuntimeCommandRequest,
@@ -551,6 +628,7 @@ class OrchestrationService:
             ),
         )
 
+    @_checked_run_assignments_operation
     def admit_review_synthesis(
         self,
         request: RuntimeCommandRequest,
@@ -672,6 +750,7 @@ class OrchestrationService:
         )
         return evidence
 
+    @_checked_run_assignments_operation
     def evaluate_gate(
         self,
         request: RuntimeCommandRequest,
@@ -715,6 +794,7 @@ class OrchestrationService:
 
         return self._append_gate_decision(request, decision, prevalidate=validate)
 
+    @_checked_run_assignments_operation
     def record_human_decision(
         self,
         request: RuntimeCommandRequest,
@@ -825,6 +905,7 @@ class OrchestrationService:
         execution_provenance: str,
         policy_sha256: str,
         context_manifest_sha256: str,
+        narrative_snapshot: NarrativeSnapshot | None,
         base_revision: int,
         occurred_at: str,
     ) -> tuple[ImmutableAssignment, ...]:
@@ -894,6 +975,11 @@ class OrchestrationService:
                     task_ordinal=spec.acceptance_key[1],
                     assignment_id=spec.assignment_id,
                 ),
+                narrative_snapshot=narrative_snapshot,
+                paper_output_role=spec.paper_output_role,
+                narrative_instructions=(
+                    PAPER_NARRATIVE_INSTRUCTIONS if narrative_snapshot is not None else None
+                ),
             )
             assignments.append(assignment)
         return tuple(assignments)
@@ -905,6 +991,26 @@ class OrchestrationService:
         assignments: Iterable[AssignmentSpec],
         execution_mode: ExecutionMode = "assignment_injected_subagent",
         execution_provenance: str | None = None,
+    ) -> PreparedRun:
+        """Freeze a paper's selected narrative under the project read lock."""
+
+        with self._guard_narrative() as snapshot:
+            return self._prepare_locked(
+                request,
+                assignments=assignments,
+                execution_mode=execution_mode,
+                execution_provenance=execution_provenance,
+                narrative_snapshot=snapshot,
+            )
+
+    def _prepare_locked(
+        self,
+        request: LifecycleTransitionRequest,
+        *,
+        assignments: Iterable[AssignmentSpec],
+        execution_mode: ExecutionMode = "assignment_injected_subagent",
+        execution_provenance: str | None = None,
+        narrative_snapshot: NarrativeSnapshot | None,
     ) -> PreparedRun:
         """Freeze one crash-resumable preparation saga before dispatch.
 
@@ -984,16 +1090,17 @@ class OrchestrationService:
             "policy_sha256": policy_sha256,
             "role_catalog_sha256": catalog_sha256,
         }
+        if narrative_snapshot is not None:
+            intent["narrative_snapshot"] = narrative_snapshot.model_dump(mode="json")
         dag_sha256 = sha256_hex(canonical_json_bytes(intent))
-        context_sha256 = sha256_hex(
-            canonical_json_bytes(
-                {
-                    "immutable_input": manifest.immutable_input.model_dump(mode="json"),
-                    "preparation_intent_sha256": dag_sha256,
-                    "role_catalog_sha256": catalog_sha256,
-                }
-            )
-        )
+        context = {
+            "immutable_input": manifest.immutable_input.model_dump(mode="json"),
+            "preparation_intent_sha256": dag_sha256,
+            "role_catalog_sha256": catalog_sha256,
+        }
+        if narrative_snapshot is not None:
+            context["narrative_snapshot"] = narrative_snapshot.model_dump(mode="json")
+        context_sha256 = sha256_hex(canonical_json_bytes(context))
         role_modes = tuple(
             ExecutionRoleMode(
                 role_id=spec.role_id,
@@ -1030,6 +1137,7 @@ class OrchestrationService:
             execution_provenance=execution_provenance,
             policy_sha256=policy_sha256,
             context_manifest_sha256=context_sha256,
+            narrative_snapshot=narrative_snapshot,
             base_revision=predicted_mode_revision,
             occurred_at=request.occurred_at,
         )
@@ -1073,6 +1181,7 @@ class OrchestrationService:
                 execution_provenance=execution_provenance,
                 policy_sha256=policy_sha256,
                 context_manifest_sha256=context_sha256,
+                narrative_snapshot=narrative_snapshot,
                 base_revision=mode_revision,
                 occurred_at=request.occurred_at,
             )
@@ -1158,6 +1267,7 @@ class OrchestrationService:
             message = outcome.rejection.message if outcome.rejection else "unknown rejection"
             raise OrchestrationError(f"{label} was rejected: {message}")
 
+    @_checked_assignment_operation
     def prepare_attempt(
         self,
         request: RuntimeCommandRequest,
@@ -1187,6 +1297,7 @@ class OrchestrationService:
             ),
         )
 
+    @_checked_assignment_operation
     def record_attempt_lifecycle(
         self,
         request: RuntimeCommandRequest,
@@ -1228,6 +1339,7 @@ class OrchestrationService:
         except OSError:
             return "0" * 64, False
 
+    @_checked_assignment_operation
     def admit_proposal(
         self,
         request: RuntimeCommandRequest,
@@ -1310,6 +1422,66 @@ class OrchestrationService:
                 ),
             )
         proposal = evidence.proposal
+        narrative_report_sha256 = None
+        if assignment.narrative_snapshot is not None:
+            from arw.kernel.ledger.research_records import publish_once
+            from arw.kernel.ledger.source_locations import read_retained_bytes
+            from arw.kernel.policy.narrative_realization import (
+                NarrativeRealizationError,
+                validate_realization,
+            )
+
+            declared = assignment.paper_output_role
+            prose = [artifact for artifact in proposal.artifacts if artifact.paper_output_role != "analysis"]
+            realization = proposal.narrative_realization
+            reason = None
+            if declared == "analysis" and (prose or realization is not None):
+                reason = "narrative_output_role_mismatch"
+            elif declared != "analysis" and (len(prose) != 1 or realization is None):
+                reason = "narrative_realization_missing"
+            elif declared != "analysis" and prose[0].paper_output_role != declared:
+                reason = "narrative_output_role_mismatch"
+            elif declared != "analysis" and prose[0].media_type not in {"text/plain", "text/markdown", "application/x-tex"}:
+                reason = "narrative_source_invalid"
+            elif realization is not None:
+                try:
+                    expected = f"attempts/{attempt.attempt_id}/result/{prose[0].relative_path}" if len(prose) == 1 else None
+                    if realization.stage != declared or realization.source_path != expected:
+                        raise NarrativeRealizationError("narrative_source_invalid", "Phase 4 prose path differs from realization")
+                    source = read_retained_bytes(self.run_root, expected, max_bytes=8_388_608)
+                    if sha256_hex(source) != prose[0].sha256 or len(source) != prose[0].byte_count:
+                        raise NarrativeRealizationError("narrative_source_digest_mismatch", "Phase 4 proposal content differs")
+                    report = validate_realization(
+                        self.run_root, realization, assignment.narrative_snapshot,
+                        events=replay_run(self.run_root).events,
+                    )
+                    body = canonical_json_bytes({
+                        "schema_version": "arw.narrative-check.v1",
+                        "proposal_sha256": evidence.sha256,
+                        "assignment_id": assignment.assignment_id,
+                        **report,
+                    })
+                    narrative_report_sha256 = sha256_hex(body)
+                    publish_once(self.run_root, f"narrative/reports/sha256/{narrative_report_sha256}.json", body)
+                except NarrativeRealizationError as error:
+                    reason = error.code
+                except (ValueError, RuntimeError, OSError):
+                    reason = "narrative_realization_invalid"
+            if reason is not None:
+                return self.runtime.append_phase4_event(
+                    request,
+                    event_type="proposal.rejected",
+                    payload=ProposalRejectedPayload(
+                        assignment_id=assignment.assignment_id,
+                        assignment_sha256=assignment.canonical_sha256(),
+                        attempt_id=attempt.attempt_id,
+                        proposal_sha256=evidence.sha256,
+                        outcome="rejected_invalid",
+                        reason_code=reason,
+                        acceptance_key=assignment.acceptance_key.value,
+                        raw_bytes_retained=True,
+                    ),
+                )
         return self.runtime.append_phase4_event(
             request,
             event_type="proposal.accepted",
@@ -1319,6 +1491,7 @@ class OrchestrationService:
                 attempt_id=attempt.attempt_id,
                 proposal=proposal,
                 proposal_sha256=evidence.sha256,
+                narrative_report_sha256=narrative_report_sha256,
                 acceptance_key=assignment.acceptance_key.value,
                 source_host_agent_id=attempt.host_agent_id,
                 source_evidence_sha256=(evidence.sha256,),
@@ -1333,6 +1506,9 @@ class OrchestrationService:
         """Record one parent dispatch saga when an exact context was accepted."""
 
         self._require_parent(request)
+        for assignment in prepared.assignments:
+            with self._guard_narrative(assignment):
+                pass
         state = self.runtime.read_state()
         if state.accepted_revision != request.expected_revision:
             raise OrchestrationError("dispatch request revision is stale")
@@ -1557,6 +1733,9 @@ class OrchestrationService:
         """Dispatch prepared assignments and admit outcomes in frozen order."""
 
         self._require_parent(request)
+        for assignment in prepared.assignments:
+            with self._guard_narrative(assignment):
+                pass
         current = self.runtime.read_state()
         if current.accepted_revision != request.expected_revision:
             raise OrchestrationError("dispatch request revision is stale")
@@ -1614,7 +1793,11 @@ class OrchestrationService:
         canonical_event_lock = asyncio.Lock()
 
         async def observe_adapter(spec: DispatchSpec, invoke) -> HostResult:
-            assert workflow_action_id is not None
+            assignment = assignment_by_id[spec.assignment_id]
+            if workflow_action_id is None:
+                with self._guard_narrative(assignment):
+                    pass
+                return await invoke()
             context_event = self.runtime.read_execution_provenance().context
             assert context_event is not None
             step = context_event.payload.steps[0]
@@ -1622,30 +1805,31 @@ class OrchestrationService:
                 f"tool.{_deterministic_uuid(f'{request.run_id}:{spec.attempt_id}')}"
             )
             async with canonical_event_lock:
-                try:
-                    self._bind_assignment_inputs(request, spec, workflow_action_id)
-                except (OrchestrationError, ManifestError) as error:
-                    raise StaleAttempt(str(error)) from error
-                state = self.runtime.read_state()
-                started = self.runtime.start_execution_action(
-                    self._child_request(
-                        request,
-                        revision=state.accepted_revision,
-                        label=f"tool-start:{spec.attempt_id}",
-                    ),
-                    ExecutionActionStartedPayload(
-                        action_id=action_id,
-                        kind="tool",
-                        workflow_action_id=workflow_action_id,
-                        assignment_id=spec.assignment_id,
-                        attempt_id=spec.attempt_id,
-                        step_id=step.step_id,
-                        tool_id=step.tool_id,
-                        started_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    ),
-                )
-                if not started.accepted:
-                    raise StaleAttempt(started.rejection.message)
+                with self._guard_narrative(assignment):
+                    try:
+                        self._bind_assignment_inputs(request, spec, workflow_action_id)
+                    except (OrchestrationError, ManifestError) as error:
+                        raise StaleAttempt(str(error)) from error
+                    state = self.runtime.read_state()
+                    started = self.runtime.start_execution_action(
+                        self._child_request(
+                            request,
+                            revision=state.accepted_revision,
+                            label=f"tool-start:{spec.attempt_id}",
+                        ),
+                        ExecutionActionStartedPayload(
+                            action_id=action_id,
+                            kind="tool",
+                            workflow_action_id=workflow_action_id,
+                            assignment_id=spec.assignment_id,
+                            attempt_id=spec.attempt_id,
+                            step_id=step.step_id,
+                            tool_id=step.tool_id,
+                            started_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        ),
+                    )
+                    if not started.accepted:
+                        raise StaleAttempt(started.rejection.message)
             try:
                 result = await invoke()
             except asyncio.CancelledError as error:
@@ -1814,7 +1998,7 @@ class OrchestrationService:
             policy=self.policy,
             cancel_observer=record_cancel_request,
             result_validator=validate_host_result,
-            dispatch_wrapper=observe_adapter if workflow_action_id is not None else None,
+            dispatch_wrapper=observe_adapter,
         )
 
         def mark_generation_dispatched(specs: Sequence[DispatchSpec]) -> None:
@@ -2073,6 +2257,7 @@ class OrchestrationService:
             )
         return DispatchReport(state=current, outcomes=tuple(combined))
 
+    @_checked_run_assignments_operation
     def recover_orphans(
         self,
         request: RuntimeCommandRequest,

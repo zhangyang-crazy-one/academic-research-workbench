@@ -48,9 +48,9 @@ from arw.kernel.policy.integration_lock import (
     write_integration_lock,
 )
 
-ARS_COMMIT = "127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb"
+ARS_COMMIT = "7de1c9dfb7af9c02a9b57750761323f35a743aa2"
 EXPERIMENT_COMMIT = "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651"
-FILE_BASE_COMMIT = "ee68144af5453addda995a27cce8142999f318fb"
+FILE_BASE_COMMIT = "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 LEGACY_RECEIPT = (
     REPOSITORY_ROOT / "tests" / "fixtures" / "hooks" / "legacy-v1"
@@ -577,10 +577,10 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             _component(
                 "academic-research-skills",
                 ARS_COMMIT,
-                "7ce111463102462479835ce5f7c2b597d7ccfe22",
-                "9f195460e1e299d7ce0a833e3a242957db315ef16ec9e8c80d29163e300afbd6",
+                "0486927f4b13c10be69bb30cd17f8f4c2daaf5b7",
+                "8e0430014ecba14ede7d31c5cb2085d6b2f0587f779c6cf5859b3a1cb5cb3cc7",
                 "https://github.com/Imbad0202/academic-research-skills.git",
-                version="0.1.27",
+                version="3.22.2",
             ),
             _component(
                 "experiment-agent",
@@ -593,10 +593,10 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             _component(
                 "file-base",
                 FILE_BASE_COMMIT,
-                "de88f52c6614473d04aa1596304a328ef91267e8",
-                "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+                "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
+                "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
                 "https://github.com/DeusData/codebase-memory-mcp.git",
-                version="v0.9.0-2-gee68144",
+                version="v0.11.0",
             ),
         ],
         "patches": patches,
@@ -625,8 +625,8 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
             "arw_component_id": "file-base",
             "upstream_url": "https://github.com/DeusData/codebase-memory-mcp.git",
             "upstream_commit": FILE_BASE_COMMIT,
-            "upstream_git_tree": "de88f52c6614473d04aa1596304a328ef91267e8",
-            "upstream_source_tree_sha256": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3",
+            "upstream_git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
+            "upstream_source_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
             "patched_source_tree_sha256": patches[-1]["post_tree_sha256"],
             "source_materialization": "vendor/sources/file-base",
             "binary": {
@@ -704,13 +704,13 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         },
     )
 
-    _write(external / "VERSION", "0.1.27\n")
+    _write(external / "VERSION", "3.22.2\n")
     _write(
         external / "SKILL.md",
         "---\n"
         "name: academic-research-suite\n"
         "metadata:\n"
-        '  version: "0.1.27"\n'
+        '  version: "3.22.2"\n'
         "---\n"
         "# ARS\n",
     )
@@ -718,7 +718,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
         external / "manifest.json",
         {
             "name": "academic-research-suite",
-            "adapter_version": "0.1.27",
+            "adapter_version": "3.22.2",
             "source_repositories": [
                 {
                     "name": "academic-research-skills",
@@ -1060,7 +1060,7 @@ def test_exact_external_integration_lock_round_trips_and_retains_legal_block(
     integration_fixture: dict[str, Path],
 ) -> None:
     lock = _build(integration_fixture)
-    assert lock.ars.adapter_version == "0.1.27"
+    assert lock.ars.adapter_version == "3.22.2"
     assert lock.ars.bundled is True
     assert lock.ars.source_repositories[0].commit == ARS_COMMIT
     assert lock.file_base.commit == FILE_BASE_COMMIT

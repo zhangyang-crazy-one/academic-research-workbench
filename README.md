@@ -21,9 +21,9 @@ not convert that material to MIT. The file-base component remains MIT, and the
 complete component inventory is in `LICENSE`, `LICENSES/`, `MODIFICATIONS.md`,
 `THIRD_PARTY_NOTICES.md`, and `vendor/source-manifest.json`.
 
-The bundled adapter is version `0.1.27`. It tracks
-`academic-research-skills@127ff85e4bbfcdd10b95040537b6c6bd7ad17aeb`
-(ARS v3.21.1, released 2026-08-24) and
+The bundled adapter is version `3.22.2`. It tracks
+`academic-research-skills@7de1c9dfb7af9c02a9b57750761323f35a743aa2`
+(ARS v3.22.2, released 2026-09-25) and
 `experiment-agent@e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651` (v1.1.0).
 The ARW core requires Codex CLI `>=0.144.4`; the optional contained
 subscription citation transport is capability-gated and requires Codex CLI
@@ -156,19 +156,22 @@ uv venv
 ./bin/arw help
 ```
 
-`./bin/arw help` works from a checkout. Other commands on `bin/arw` stay
-fail-closed unless a staged first-party wheel exists under
-`share/arw/wheels/`; that is the Codex plugin path. A headless agent that
+`./bin/arw help` works from a checkout, and with `.venv` installed the other
+commands run in agent mode. `ARW_RUNTIME=plugin` keeps the Codex plugin path,
+which fails closed unless a staged first-party wheel exists under
+`share/arw/wheels/`. A headless agent that
 already has this checkout and `.venv` should use agent mode instead of
 staging a plugin or installing Codex CLI.
 
 ### Agent self-use
 
-Agent / local-dev runtime is an explicit gate (`ARW_RUNTIME=agent` or the
-checkout-only `bin/arw-agent` wrapper). It is not a Codex qualification
-bypass: route still reports `integration_status: BLOCKED` until a verified
-integration lock and host canary are present, and the staged plugin launcher
-still requires the first-party wheel when `ARW_RUNTIME` is unset.
+Agent / local-dev runtime is selected with `ARW_RUNTIME=agent`, the
+checkout-only `bin/arw-agent` wrapper, or automatically when `ARW_RUNTIME` is
+unset on a source checkout that has no staged `share/arw/wheels/`. It is not a
+Codex qualification: the legacy Codex execution route (`route --json`) still
+reports `integration_status: BLOCKED` until a verified integration lock and host
+canary are present. A staged plugin, or `ARW_RUNTIME=plugin`, still requires
+the first-party wheel.
 
 Install once, then call ARW without a `codex` binary:
 
@@ -281,6 +284,13 @@ This bootstrap stage is only the deterministic input for host qualification;
 do not install it. For host qualification, use
 `./scripts/smoke-staged-plugin` so the marketplace, fresh homes, hook trust,
 and installed inventory are isolated and recorded together.
+
+Offline installed smoke requires the original `bwrap --unshare-net` isolation
+capability. An unavailable prerequisite returns exit 78 with a failed
+`network-isolation.json` receipt and an environment diagnostic; invalid
+isolation evidence or a product defect returns exit 70. Inspect that receipt
+and retry in an environment supporting the original isolation capability.
+There is no alternate namespace retry, and neither result qualifies the host.
 
 The staging and smoke scripts record the exact stage identity, installed
 inventory, hook definition, MCP launcher, and version tuple. Do not install

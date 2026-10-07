@@ -1,6 +1,6 @@
 """Shared qualification discovery for phase-7 tests.
 
-Retained build evidence (``build/evidence/*`` + ``build/stage/*``) binds an
+Retained build evidence (``build/evidence/*`` + stages under ``build/``) binds an
 integration lock to one exact Codex host tuple. A Codex upgrade changes the
 host tuple, so any retained qualification goes stale — tests that hard-code
 candidate paths start failing with "Codex host canary was produced by another
@@ -19,10 +19,51 @@ never be mixed with the wrong canary or stage:
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from arw.kernel.policy.integration_lock import IntegrationLock
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _acceptance_stage(
+    lock_path: Path, lock_bytes: bytes, lock: IntegrationLock, canary_sha256: str
+) -> Path | None:
+    """Use an acceptance receipt only to locate a build-confined stage candidate."""
+
+    build_root = (REPOSITORY_ROOT / "build").resolve()
+    evidence_root = (build_root / "evidence").resolve()
+    summary_path = lock_path.parent / "acceptance-summary.json"
+    try:
+        if not evidence_root.is_relative_to(build_root):
+            return None
+        if not summary_path.resolve(strict=True).is_relative_to(evidence_root):
+            return None
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        stage_ref = summary["qualified_stage"]
+        relative = Path(stage_ref["path"])
+        if (
+            summary["status"] != "PASS"
+            or summary["integration_lock"]["sha256"]
+            != hashlib.sha256(lock_bytes).hexdigest()
+            or summary["host_canary"]["sha256"] != canary_sha256
+            or stage_ref["sha256"] != lock.hook.stage_sha256
+            or relative.is_absolute()
+            or not relative.parts
+            or relative.parts[0] != "build"
+            or ".." in relative.parts
+        ):
+            return None
+        stage_root = (REPOSITORY_ROOT / relative).resolve(strict=True)
+        if stage_root.is_dir() and stage_root.is_relative_to(build_root):
+            return stage_root
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
+    return None
 
 
 def discover_bundled_qualification() -> tuple[Path, Path, Path] | None:
@@ -37,8 +78,14 @@ def discover_bundled_qualification() -> tuple[Path, Path, Path] | None:
         verify_integration_lock,
     )
 
-    evidence_root = REPOSITORY_ROOT / "build" / "evidence"
-    stages_root = REPOSITORY_ROOT / "build" / "stage"
+    build_root = (REPOSITORY_ROOT / "build").resolve()
+    try:
+        evidence_root = (build_root / "evidence").resolve(strict=True)
+    except OSError:
+        return None
+    if not evidence_root.is_relative_to(build_root):
+        return None
+    stages_root = build_root / "stage"
     launcher_path = shutil.which("codex")
     if launcher_path is None:
         return None
@@ -58,7 +105,9 @@ def discover_bundled_qualification() -> tuple[Path, Path, Path] | None:
     stage_by_lock_bytes: dict[bytes, Path] = {}
     for staged_lock in stages_root.glob("*/supply-chain/integration-lock.json"):
         try:
-            stage_by_lock_bytes[staged_lock.read_bytes()] = staged_lock.parent.parent
+            stage_root = staged_lock.parent.parent.resolve(strict=True)
+            if stage_root.is_relative_to(build_root):
+                stage_by_lock_bytes[staged_lock.read_bytes()] = stage_root
         except OSError:
             continue
 
@@ -71,18 +120,29 @@ def discover_bundled_qualification() -> tuple[Path, Path, Path] | None:
         try:
             lock = load_integration_lock(lock_path)
             lock_bytes = lock_path.read_bytes()
-            stage_root = stage_by_lock_bytes.get(lock_bytes)
             canary_path = canary_by_sha256.get(lock.hook.host_canary_evidence_sha256)
-            if stage_root is None or canary_path is None:
+            if canary_path is None:
                 continue
-            verify_integration_lock(
-                lock,
-                stage_root=stage_root,
-                codex_launcher=launcher,
-                codex_native_binary=native,
-                host_canary_evidence=canary_path,
+            stages = (
+                stage_by_lock_bytes.get(lock_bytes),
+                _acceptance_stage(
+                    lock_path, lock_bytes, lock, lock.hook.host_canary_evidence_sha256
+                ),
             )
-            return stage_root, lock_path, canary_path
+            for stage_root in stages:
+                if stage_root is None:
+                    continue
+                try:
+                    verify_integration_lock(
+                        lock,
+                        stage_root=stage_root,
+                        codex_launcher=launcher,
+                        codex_native_binary=native,
+                        host_canary_evidence=canary_path,
+                    )
+                    return stage_root, lock_path, canary_path
+                except (OSError, ValueError, IntegrationLockError):
+                    continue
         except (OSError, ValueError, IntegrationLockError):
             continue
     return None

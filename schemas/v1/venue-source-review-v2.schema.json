@@ -1,0 +1,257 @@
+{
+  "$defs": {
+    "ReviewedPdfProvenance": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Agent review provenance for transient PDF bytes, never an author attestation.",
+      "properties": {
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "pdf_url": {
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s]+$",
+          "title": "Pdf Url",
+          "type": "string"
+        },
+        "pdf_byte_count": {
+          "maximum": 67108864,
+          "minimum": 1,
+          "title": "Pdf Byte Count",
+          "type": "integer"
+        },
+        "pdf_page_count": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Pdf Page Count",
+          "type": "integer"
+        },
+        "extractor": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Extractor",
+          "type": "string"
+        },
+        "reviewer": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "review_authority": {
+          "const": "agent_source_review",
+          "default": "agent_source_review",
+          "title": "Review Authority",
+          "type": "string"
+        },
+        "read_scope": {
+          "items": {
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Read Scope",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Limitations",
+          "type": "array"
+        },
+        "document_version": {
+          "anyOf": [
+            {
+              "enum": [
+                "publisher_version",
+                "accepted_author_manuscript",
+                "author_preprint"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Version"
+        },
+        "source_authority": {
+          "anyOf": [
+            {
+              "enum": [
+                "official_publisher",
+                "author_repository",
+                "preprint_repository"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Authority"
+        },
+        "related_formal_publication_url": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "pattern": "^https://[^\\s]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Related Formal Publication Url"
+        },
+        "related_formal_publication_doi": {
+          "anyOf": [
+            {
+              "maxLength": 1200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Related Formal Publication Doi"
+        },
+        "version_relationship_note": {
+          "anyOf": [
+            {
+              "maxLength": 1200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version Relationship Note"
+        }
+      },
+      "required": [
+        "pdf_sha256",
+        "pdf_url",
+        "pdf_byte_count",
+        "pdf_page_count",
+        "extractor",
+        "reviewer",
+        "read_scope",
+        "limitations"
+      ],
+      "title": "ReviewedPdfProvenance",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.venue-source-review.v2",
+      "default": "arw.venue-source-review.v2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "review_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "source_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Source Artifact Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "official_url": {
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s]+$",
+      "title": "Official Url",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "maxLength": 1200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "accepted_category": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Accepted Category",
+      "type": "string"
+    },
+    "accepted_year": {
+      "maximum": 2200,
+      "minimum": 1900,
+      "title": "Accepted Year",
+      "type": "integer"
+    },
+    "access_basis": {
+      "default": "official_full_text",
+      "enum": [
+        "official_full_text",
+        "accepted_author_full_text",
+        "preprint_full_text"
+      ],
+      "title": "Access Basis",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "decision": {
+      "const": "AGENT_REVIEW_RECORDED",
+      "default": "AGENT_REVIEW_RECORDED",
+      "title": "Decision",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ReviewedPdfProvenance"
+    }
+  },
+  "required": [
+    "review_id",
+    "source_artifact_id",
+    "source_sha256",
+    "official_url",
+    "accepted_category",
+    "accepted_year",
+    "reviewer",
+    "provenance"
+  ],
+  "title": "VenueSourceReviewV2",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/venue-source-review-v2.schema.json"
+}
