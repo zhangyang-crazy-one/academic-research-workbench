@@ -1,14 +1,18 @@
 diff --git a/internal/cbm/cbm.h b/internal/cbm/cbm.h
-index d875459c..2d246516 100644
+index d875459c..fe6a26d9 100644
 --- a/internal/cbm/cbm.h
 +++ b/internal/cbm/cbm.h
-@@ -177,9 +177,15 @@ typedef enum {
+@@ -177,9 +177,18 @@ typedef enum {
      CBM_LANG_ARKTS,    // ArkTS (HarmonyOS/OpenHarmony .ets — TypeScript superset + ArkUI)
      CBM_LANG_PLSQL,    // Oracle PL/SQL
      CBM_LANG_CHIALISP, // Chialisp (.clsp/.clib/.clinc — Chia smart-coin s-expression language)
+-    CBM_LANG_COUNT
++    CBM_LANG_COUNT,
++    /* ARW structure-only file kinds. They sit past CBM_LANG_COUNT so upstream's
++     * per-language tables, capability ledger and "unknown == CBM_LANG_COUNT"
++     * contract are unchanged; they never reach AST extraction. */
 +    CBM_LANG_TEXT,     // Generic local text/document file; structure-only, no AST extraction
 +    CBM_LANG_PDF_TEXT, // PDF with directly extractable text; structure-only, no AST extraction
-     CBM_LANG_COUNT
  } CBMLanguage;
  
 +static inline bool cbm_language_is_file_only(CBMLanguage lang) {
@@ -19,26 +23,17 @@ index d875459c..2d246516 100644
  
  typedef struct {
 diff --git a/internal/cbm/lang_specs.c b/internal/cbm/lang_specs.c
-index 3a5fad0d..5d4b0b51 100644
+index 3a5fad0d..f07bdf44 100644
 --- a/internal/cbm/lang_specs.c
 +++ b/internal/cbm/lang_specs.c
-@@ -2730,6 +2730,16 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
+@@ -2730,7 +2730,6 @@ static const CBMLangSpec lang_specs[CBM_LANG_COUNT] = {
                          plsql_module_types, plsql_call_types, empty_types, empty_types,
                          plsql_branch_types, empty_types, plsql_assign_types, plsql_throw_types,
                          NULL, empty_types, NULL, NULL, tree_sitter_plsql, NULL},
-+    // CBM_LANG_TEXT — structure-only local text/document files.
-+    [CBM_LANG_TEXT] = {CBM_LANG_TEXT, empty_types, empty_types, empty_types, empty_types,
-+                       empty_types, empty_types, empty_types, empty_types, empty_types,
-+                       empty_types, empty_types, NULL, empty_types, NULL, NULL, NULL, NULL},
-+
-+    // CBM_LANG_PDF_TEXT — PDFs with directly extractable text; structure-only.
-+    [CBM_LANG_PDF_TEXT] = {CBM_LANG_PDF_TEXT, empty_types, empty_types, empty_types,
-+                           empty_types, empty_types, empty_types, empty_types, empty_types,
-+                           empty_types, empty_types, empty_types, NULL, empty_types, NULL, NULL,
-+                           NULL, NULL},
- 
+-
  };
  
+ _Static_assert(sizeof(lang_specs) / sizeof(lang_specs[0]) == CBM_LANG_COUNT,
 diff --git a/src/daemon/application.c b/src/daemon/application.c
 index ca600b46..a97c0bd4 100644
 --- a/src/daemon/application.c
@@ -55,7 +50,7 @@ index ca600b46..a97c0bd4 100644
                         cbm_cli_get_version(), latest_version);
          cbm_log_info("update.available", "current", cbm_cli_get_version(), "latest",
 diff --git a/src/discover/discover.c b/src/discover/discover.c
-index 5cadaed7..46e1acc5 100644
+index 5cadaed7..3b69d233 100644
 --- a/src/discover/discover.c
 +++ b/src/discover/discover.c
 @@ -57,8 +57,8 @@ static const char *FAST_SKIP_DIRS[] = {
@@ -82,7 +77,7 @@ index 5cadaed7..46e1acc5 100644
  
  /* ── Fast-mode skip filenames ─────────────────────── */
  
-@@ -726,18 +726,182 @@ static const char *file_skip_reason(const char *entry_name, const char *rel_path
+@@ -726,18 +726,131 @@ static const char *file_skip_reason(const char *entry_name, const char *rel_path
      return global_ignored ? "gitignore" : NULL;
  }
  
@@ -194,53 +189,6 @@ index 5cadaed7..46e1acc5 100644
 +    return false;
 +}
 +
-+static bool sample_contains(const unsigned char *buf, size_t n, const char *needle) {
-+    size_t m = strlen(needle);
-+    if (m == 0 || m > n) {
-+        return false;
-+    }
-+    for (size_t i = 0; i + m <= n; i++) {
-+        if (memcmp(buf + i, needle, m) == 0) {
-+            return true;
-+        }
-+    }
-+    return false;
-+}
-+
-+static CBMLanguage detect_text_fallback_language(const char *abs_path) {
-+    enum { TEXT_SAMPLE_MAX = 4096, TEXT_RATIO_MIN = 85 };
-+    FILE *f = cbm_fopen(abs_path, "rb");
-+    if (!f) {
-+        return CBM_LANG_COUNT;
-+    }
-+    unsigned char buf[TEXT_SAMPLE_MAX];
-+    size_t n = fread(buf, SKIP_ONE, sizeof(buf), f);
-+    (void)fclose(f);
-+    if (n == 0) {
-+        return CBM_LANG_COUNT;
-+    }
-+
-+    size_t textish = 0;
-+    for (size_t i = 0; i < n; i++) {
-+        unsigned char c = buf[i];
-+        if (c == '\0') {
-+            return CBM_LANG_COUNT;
-+        }
-+        if (c == '\n' || c == '\r' || c == '\t' || c >= 0x20) {
-+            textish++;
-+        }
-+    }
-+    if (textish * 100 < n * TEXT_RATIO_MIN) {
-+        return CBM_LANG_COUNT;
-+    }
-+    if (n >= PAIR_LEN && buf[0] == '#' && buf[SKIP_ONE] == '!' &&
-+        (sample_contains(buf, n, "bash") || sample_contains(buf, n, "/sh") ||
-+         sample_contains(buf, n, " zsh") || sample_contains(buf, n, "/zsh"))) {
-+        return CBM_LANG_BASH;
-+    }
-+    return CBM_LANG_TEXT;
-+}
-+
  /* Detect language for a file, handling .m disambiguation and JSON filtering. */
  static CBMLanguage detect_file_language(const char *entry_name, const char *abs_path) {
 +    const char *dot = strrchr(entry_name, '.');
@@ -254,14 +202,9 @@ index 5cadaed7..46e1acc5 100644
           * shebang probe so extensionless scripts get indexed (#1199). Filename
           * detection stays authoritative — this runs only when it returns
 -         * unknown. */
--        return cbm_language_from_shebang(abs_path);
-+         * unknown. ARW: a file that is neither a known language nor a
-+         * shebang script may still be indexed as structure-only text. */
-+        CBMLanguage shebang = cbm_language_from_shebang(abs_path);
-+        if (shebang != CBM_LANG_COUNT) {
-+            return shebang;
-+        }
-+        return detect_text_fallback_language(abs_path);
++         * unknown. ARW indexes text only through explicit extensions
++         * (language.c) and readable PDFs, never by sniffing unknown files. */
+         return cbm_language_from_shebang(abs_path);
      }
      /* Special: .m files need content-based disambiguation */
 -    const char *dot = strrchr(entry_name, '.');
@@ -269,7 +212,7 @@ index 5cadaed7..46e1acc5 100644
          lang = cbm_disambiguate_m(abs_path);
      }
 diff --git a/src/discover/language.c b/src/discover/language.c
-index e61a07c4..0440622c 100644
+index e61a07c4..d0c1ee9e 100644
 --- a/src/discover/language.c
 +++ b/src/discover/language.c
 @@ -626,6 +626,12 @@ static const ext_entry_t EXT_TABLE[] = {
@@ -293,15 +236,20 @@ index e61a07c4..0440622c 100644
  
  };
  
-@@ -891,6 +898,8 @@ static const char *LANG_NAMES[CBM_LANG_COUNT] = {
-     [CBM_LANG_OBJECTSCRIPT_EXPORT] = "ObjectScript Export XML",
-     [CBM_LANG_ARKTS] = "ArkTS",
-     [CBM_LANG_PLSQL] = "PL/SQL",
-+    [CBM_LANG_TEXT] = "Text",
-+    [CBM_LANG_PDF_TEXT] = "PDF Text",
+@@ -980,6 +987,13 @@ CBMLanguage cbm_language_for_filename(const char *filename) {
+ }
  
- };
- 
+ const char *cbm_language_name(CBMLanguage lang) {
++    /* ARW file-only kinds live past CBM_LANG_COUNT (see cbm.h). */
++    if (lang == CBM_LANG_TEXT) {
++        return "Text";
++    }
++    if (lang == CBM_LANG_PDF_TEXT) {
++        return "PDF Text";
++    }
+     if (lang < 0 || lang >= CBM_LANG_COUNT) {
+         return "Unknown";
+     }
 diff --git a/src/main.c b/src/main.c
 index 202aa6a1..49709f41 100644
 --- a/src/main.c

@@ -33,7 +33,7 @@ index fb1d0132..4ea45fac 100644
  
  void tree_sitter_objectscript_udl_external_scanner_destroy(void *payload) {
 diff --git a/src/discover/discover.c b/src/discover/discover.c
-index 46e1acc5..54d735de 100644
+index 3b69d233..96f80a9e 100644
 --- a/src/discover/discover.c
 +++ b/src/discover/discover.c
 @@ -71,7 +71,7 @@ static const char *ALWAYS_IGNORED_SUFFIXES[] = {
@@ -67,18 +67,7 @@ index 46e1acc5..54d735de 100644
          return "ignored-suffix";
      }
      if (cbm_should_skip_filename(entry_name, mode)) {
-@@ -899,6 +904,10 @@ static CBMLanguage detect_file_language(const char *entry_name, const char *abs_
-         if (shebang != CBM_LANG_COUNT) {
-             return shebang;
-         }
-+        if (entry_name[0] == '.' || strcmp(entry_name, "commondir") == 0 ||
-+            strcmp(entry_name, "exclude") == 0) {
-+            return CBM_LANG_COUNT;
-+        }
-         return detect_text_fallback_language(abs_path);
-     }
-     /* Special: .m files need content-based disambiguation */
-@@ -1002,7 +1011,7 @@ static void walk_dir_process_file(const char *abs_path, const char *rel_path, co
+@@ -951,7 +956,7 @@ static void walk_dir_process_file(const char *abs_path, const char *rel_path, co
                                    const cbm_gitignore_t *global_gi,
                                    const cbm_gitignore_t *cbmignore, off_t size, file_list_t *out) {
      const char *skip_reason =
@@ -88,7 +77,7 @@ index 46e1acc5..54d735de 100644
          /* Deliberately not indexed (#963) — record so callers can surface it.
           * Unsupported-language files below are NOT recorded: "no grammar for
 diff --git a/src/discover/language.c b/src/discover/language.c
-index 0440622c..a36f4f90 100644
+index d0c1ee9e..f0572f22 100644
 --- a/src/discover/language.c
 +++ b/src/discover/language.c
 @@ -723,8 +723,6 @@ static const filename_entry_t FILENAME_TABLE[] = {
@@ -101,7 +90,7 @@ index 0440622c..a36f4f90 100644
  
  #define FILENAME_TABLE_SIZE (sizeof(FILENAME_TABLE) / sizeof(FILENAME_TABLE[0]))
 diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
-index f0d3189e..2a0df69c 100644
+index f0d3189e..b5d9957d 100644
 --- a/src/mcp/mcp.c
 +++ b/src/mcp/mcp.c
 @@ -30,6 +30,9 @@ enum {
@@ -134,7 +123,88 @@ index f0d3189e..2a0df69c 100644
      {"index_repository",
       "Index a repository. full/moderate add semantics; fast omits them; cross-repo-intelligence "
       "links services. Reports coverage gaps.",
-@@ -1358,6 +1374,7 @@ static char *cbm_mcp_initialize_response_for_profile(const char *params_json,
+@@ -921,10 +937,28 @@ bool cbm_mcp_tool_profile_allows_http(cbm_mcp_tool_profile_t profile) {
+     return profile == CBM_MCP_TOOL_PROFILE_ALL;
+ }
+ 
++/* ARW: read_file (TOOLS[0]) is part of the public registry -- tools/list,
++ * the tool count and names, and the help list -- only when the launcher
++ * configured an allowed root, so the stock registry keeps upstream's shape.
++ * Calls stay routed to the handler, which denies any request without a
++ * configured root. */
++static int mcp_public_tool_start(void) {
++    if (strcmp(TOOLS[0].name, "read_file") != 0) {
++        return 0;
++    }
++    const char *root_id = getenv("CBM_ALLOWED_ROOT_ID");
++    const char *root_path = getenv("CBM_ALLOWED_ROOT");
++    return root_id && *root_id && root_path && root_path[0] == '/' ? 0 : 1;
++}
++
++static bool mcp_tool_listed(cbm_mcp_tool_profile_t profile, int index) {
++    return index >= mcp_public_tool_start() && mcp_tool_allowed(profile, TOOLS[index].name);
++}
++
+ static int mcp_allowed_tool_count(cbm_mcp_tool_profile_t profile) {
+     int count = 0;
+     for (int i = 0; i < TOOL_COUNT; i++) {
+-        if (mcp_tool_allowed(profile, TOOLS[i].name)) {
++        if (mcp_tool_listed(profile, i)) {
+             count++;
+         }
+     }
+@@ -957,7 +991,7 @@ static char *cbm_mcp_tools_list_range(cbm_mcp_tool_profile_t profile, int offset
+ 
+     int visible = 0;
+     for (int i = 0; i < TOOL_COUNT && visible < end; i++) {
+-        if (!mcp_tool_allowed(profile, TOOLS[i].name)) {
++        if (!mcp_tool_listed(profile, i)) {
+             continue;
+         }
+         if (visible >= offset) {
+@@ -998,14 +1032,15 @@ const char *cbm_mcp_tool_input_schema(const char *tool_name) {
+ }
+ 
+ int cbm_mcp_tool_count(void) {
+-    return TOOL_COUNT;
++    return TOOL_COUNT - mcp_public_tool_start();
+ }
+ 
+ const char *cbm_mcp_tool_name(int index) {
+-    if (index < 0 || index >= TOOL_COUNT) {
++    int start = mcp_public_tool_start();
++    if (index < 0 || index >= TOOL_COUNT - start) {
+         return NULL;
+     }
+-    return TOOLS[index].name;
++    return TOOLS[index + start].name;
+ }
+ 
+ const char *cbm_mcp_tool_description(const char *tool_name) {
+@@ -1052,7 +1087,8 @@ static size_t help_append(char *out, size_t cap, size_t len, const char *fmt, ..
+ 
+ char *cbm_mcp_tools_help_list(void) {
+     size_t cap = SLEN("Tools:") + 2; /* trailing newline + NUL */
+-    for (int i = 0; i < TOOL_COUNT; i++) {
++    int start = mcp_public_tool_start();
++    for (int i = start; i < TOOL_COUNT; i++) {
+         cap += strlen(TOOLS[i].name) + SLEN(" ,\n "); /* per-tool worst case incl. a wrap */
+     }
+     char *out = malloc(cap);
+@@ -1061,10 +1097,10 @@ char *cbm_mcp_tools_help_list(void) {
+     }
+     size_t len = help_append(out, cap, 0, "Tools:");
+     size_t col = len;
+-    for (int i = 0; i < TOOL_COUNT; i++) {
++    for (int i = start; i < TOOL_COUNT; i++) {
+         const char *sep = (i + 1 < TOOL_COUNT) ? "," : "";
+         size_t item = SLEN(" ") + strlen(TOOLS[i].name) + strlen(sep);
+-        if (i > 0 && col + item > MCP_HELP_TOOLS_WRAP_COL) {
++        if (i > start && col + item > MCP_HELP_TOOLS_WRAP_COL) {
+             len += help_append(out, cap, len, "\n ");
+             col = 1;
+         }
+@@ -1358,6 +1394,7 @@ static char *cbm_mcp_initialize_response_for_profile(const char *params_json,
  
      yyjson_mut_val *impl = yyjson_mut_obj(doc);
      yyjson_mut_obj_add_str(doc, impl, "name", "file-base");
@@ -142,7 +212,7 @@ index f0d3189e..2a0df69c 100644
      yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
      yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
  
-@@ -17271,6 +17288,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
+@@ -17271,6 +17308,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
      return result;
  }
  
@@ -531,7 +601,7 @@ index f0d3189e..2a0df69c 100644
  /* ── Tool dispatch ────────────────────────────────────────────── */
  
  static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
-@@ -17284,6 +17683,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
+@@ -17284,6 +17703,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
          return cbm_mcp_text_result(message, true);
      }
  
