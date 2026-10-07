@@ -2443,11 +2443,11 @@
       "version": "1"
     },
     {
-      "bom-ref": "patch:9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808",
+      "bom-ref": "patch:663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808"
+          "content": "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5"
         }
       ],
       "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",

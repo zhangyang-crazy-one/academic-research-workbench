@@ -90,7 +90,7 @@ index d0c1ee9e..f0572f22 100644
  
  #define FILENAME_TABLE_SIZE (sizeof(FILENAME_TABLE) / sizeof(FILENAME_TABLE[0]))
 diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
-index f0d3189e..b5d9957d 100644
+index f0d3189e..fcbe31b7 100644
 --- a/src/mcp/mcp.c
 +++ b/src/mcp/mcp.c
 @@ -30,6 +30,9 @@ enum {
@@ -212,7 +212,20 @@ index f0d3189e..b5d9957d 100644
      yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
      yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
  
-@@ -17271,6 +17308,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
+@@ -2932,7 +2969,11 @@ static char *handle_list_projects(cbm_mcp_server_t *srv, const char *args) {
+         free(records);
+         return cbm_mcp_text_result("out of memory while listing projects", true);
+     }
+-    qsort(records, (size_t)record_count, sizeof(*records), project_record_compare);
++    /* ARW: records is NULL when no project exists; qsort forbids NULL even
++     * for zero elements (UBSan nonnull-attribute). */
++    if (record_count > 1) {
++        qsort(records, (size_t)record_count, sizeof(*records), project_record_compare);
++    }
+ 
+     int limit = cbm_mcp_get_int_arg(args, "limit", 50);
+     int offset = cbm_mcp_get_int_arg(args, "offset", 0);
+@@ -17271,6 +17312,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
      return result;
  }
  
@@ -601,7 +614,7 @@ index f0d3189e..b5d9957d 100644
  /* ── Tool dispatch ────────────────────────────────────────────── */
  
  static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
-@@ -17284,6 +17703,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
+@@ -17284,6 +17707,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
          return cbm_mcp_text_result(message, true);
      }
  
