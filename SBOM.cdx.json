@@ -6,7 +6,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "43b4a6f81c3d7888a94fe1e89caaf44c84e83ba02cd9d01c3af7b027b3f1efc7"
+          "content": "3253e3663267324ae0bb54a192968a97751d35c7853b4a6117399c17146b3de7"
         }
       ],
       "name": ".file-base/bin/file-base",
@@ -18,7 +18,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "92bba6fe4799bcf3bc1ef5bd0f0f1c7830b060d9f7409d367605c760b92a3e10"
+          "content": "1d0cef0b6eba2484b0eee81c270a61e7afdbe160af8dccbee45ad8c690b26d02"
         }
       ],
       "name": ".file-base/build-evidence.json",
@@ -30,7 +30,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "310be73a18e18947faf03b375e67eb47dbd478aa6d9bdd031fe4135d78d259af"
+          "content": "57df11de7391283832f4b0d1f015acddbd93bbd94ce1b49e8e05ab68fbad3e8c"
         }
       ],
       "name": "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
@@ -66,7 +66,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ea8d251e227f7c031aeb52b46134305ef3363620d8957714fb53c1056927ba6d"
+          "content": "03e115b9808164295260f34c3ae3a72d4609f2d43677501e3a21e11139848684"
         }
       ],
       "name": "schemas/v1/integration-lock.schema.json",
@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7035f7e5129fa77a50f83c13f0351cb5cec27ca9f32180d26a7cbe58d747a18f"
+          "content": "87880f5e24008911de79daeed231340b2160f7cbad00c44a2321871b63f24b51"
         }
       ],
       "name": "vendor/mcp-manifest.json",
@@ -191,19 +191,19 @@
       ],
       "name": "vendor/sources/file-base/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/graph-ui/package-lock.json",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "123eafae09498a3a807916963549011a21b561889f8108215c1083618951e19a"
+          "content": "adaa69c82d586d096f7b8b5a18d7b63dac0439b65917817933f0fc1be50b5837"
         }
       ],
       "name": "vendor/sources/file-base/graph-ui/package-lock.json",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/common/LICENSE",
@@ -215,7 +215,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/common/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/common/tree_sitter/LICENSE",
@@ -227,7 +227,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/common/tree_sitter/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ada/LICENSE",
@@ -239,7 +239,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ada/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/agda/LICENSE",
@@ -251,7 +251,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/agda/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/apex/LICENSE",
@@ -263,7 +263,19 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/apex/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/arkts/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/arkts/LICENSE",
+      "type": "file",
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/assembly/LICENSE",
@@ -275,7 +287,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/assembly/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/astro/LICENSE",
@@ -287,7 +299,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/astro/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/awk/LICENSE",
@@ -299,7 +311,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/awk/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bash/LICENSE",
@@ -311,7 +323,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bash/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/beancount/LICENSE",
@@ -323,7 +335,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/beancount/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bibtex/LICENSE",
@@ -335,7 +347,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bibtex/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bicep/LICENSE",
@@ -347,7 +359,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bicep/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/bitbake/LICENSE",
@@ -359,7 +371,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/bitbake/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/blade/LICENSE",
@@ -371,7 +383,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/blade/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/c/LICENSE",
@@ -383,7 +395,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/c/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/c_sharp/LICENSE",
@@ -395,7 +407,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/c_sharp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cairo/LICENSE",
@@ -407,7 +419,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cairo/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/capnp/LICENSE",
@@ -419,7 +431,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/capnp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cfml/LICENSE",
@@ -431,7 +443,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cfml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cfscript/LICENSE",
@@ -443,7 +455,19 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cfscript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/chialisp/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1f58f9911dc5e3bcb96de28bb28e7b6bb7eb323952d29569c5d7214a152146bb"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/chialisp/LICENSE",
+      "type": "file",
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/clojure/LICENSE",
@@ -455,7 +479,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/clojure/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cmake/LICENSE",
@@ -467,7 +491,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cmake/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cobol/LICENSE",
@@ -479,7 +503,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cobol/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/commonlisp/LICENSE",
@@ -491,7 +515,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/commonlisp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cpp/LICENSE",
@@ -503,7 +527,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cpp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/crystal/LICENSE",
@@ -515,7 +539,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/crystal/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/css/LICENSE",
@@ -527,7 +551,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/css/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/csv/LICENSE",
@@ -539,7 +563,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/csv/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/cuda/LICENSE",
@@ -551,7 +575,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/cuda/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/d/LICENSE",
@@ -563,7 +587,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/d/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dart/LICENSE",
@@ -575,7 +599,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dart/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/devicetree/LICENSE",
@@ -587,7 +611,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/devicetree/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/diff/LICENSE",
@@ -599,7 +623,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/diff/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dockerfile/LICENSE",
@@ -611,7 +635,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dockerfile/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/dotenv/LICENSE",
@@ -623,7 +647,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/dotenv/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elisp/LICENSE",
@@ -635,7 +659,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elisp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elixir/LICENSE",
@@ -647,7 +671,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elixir/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/elm/LICENSE",
@@ -659,7 +683,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/elm/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/erlang/LICENSE",
@@ -671,7 +695,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/erlang/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fennel/LICENSE",
@@ -683,7 +707,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fennel/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fish/LICENSE",
@@ -695,7 +719,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fish/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/form/LICENSE",
@@ -707,7 +731,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/form/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fortran/LICENSE",
@@ -719,7 +743,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fortran/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/fsharp/LICENSE",
@@ -731,7 +755,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/fsharp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/func/LICENSE",
@@ -743,7 +767,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/func/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gdscript/LICENSE",
@@ -755,7 +779,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gdscript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gitattributes/LICENSE",
@@ -767,7 +791,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gitattributes/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gitignore/LICENSE",
@@ -779,7 +803,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gitignore/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gleam/LICENSE",
@@ -791,7 +815,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gleam/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/glsl/LICENSE",
@@ -803,7 +827,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/glsl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gn/LICENSE",
@@ -815,7 +839,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gn/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/go/LICENSE",
@@ -827,7 +851,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/go/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gomod/LICENSE",
@@ -839,7 +863,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gomod/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/gotemplate/LICENSE",
@@ -851,7 +875,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/gotemplate/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/graphql/LICENSE",
@@ -863,7 +887,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/graphql/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/groovy/LICENSE",
@@ -875,7 +899,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/groovy/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hare/LICENSE",
@@ -887,7 +911,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hare/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/haskell/LICENSE",
@@ -899,7 +923,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/haskell/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hcl/LICENSE",
@@ -911,7 +935,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hcl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hlsl/LICENSE",
@@ -923,7 +947,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hlsl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/html/LICENSE",
@@ -935,7 +959,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/html/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/hyprlang/LICENSE",
@@ -947,7 +971,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/hyprlang/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ini/LICENSE",
@@ -959,7 +983,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ini/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ispc/LICENSE",
@@ -971,7 +995,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ispc/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/janet/LICENSE",
@@ -983,7 +1007,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/janet/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/java/LICENSE",
@@ -995,7 +1019,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/java/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/javascript/LICENSE",
@@ -1007,7 +1031,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/javascript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jinja2/LICENSE",
@@ -1019,7 +1043,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jinja2/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jsdoc/LICENSE",
@@ -1031,7 +1055,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jsdoc/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/json/LICENSE",
@@ -1043,7 +1067,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/json/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/json5/LICENSE",
@@ -1055,7 +1079,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/json5/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/jsonnet/LICENSE",
@@ -1067,7 +1091,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/jsonnet/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/julia/LICENSE",
@@ -1079,7 +1103,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/julia/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/just/LICENSE",
@@ -1091,7 +1115,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/just/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kconfig/LICENSE",
@@ -1103,7 +1127,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kconfig/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kdl/LICENSE",
@@ -1115,7 +1139,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kdl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/kotlin/LICENSE",
@@ -1127,7 +1151,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/kotlin/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/lean/LICENSE",
@@ -1139,7 +1163,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/lean/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/linkerscript/LICENSE",
@@ -1151,7 +1175,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/linkerscript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/liquid/LICENSE",
@@ -1163,7 +1187,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/liquid/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/llvm/LICENSE",
@@ -1175,7 +1199,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/llvm/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/lua/LICENSE",
@@ -1187,7 +1211,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/lua/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/luau/LICENSE",
@@ -1199,7 +1223,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/luau/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/magma/LICENSE",
@@ -1211,7 +1235,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/magma/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/make/LICENSE",
@@ -1223,7 +1247,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/make/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/markdown/LICENSE",
@@ -1235,7 +1259,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/markdown/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/matlab/LICENSE",
@@ -1247,7 +1271,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/matlab/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/mermaid/LICENSE",
@@ -1259,7 +1283,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/mermaid/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/meson/LICENSE",
@@ -1271,7 +1295,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/meson/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/mojo/LICENSE",
@@ -1283,7 +1307,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/mojo/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/move/LICENSE",
@@ -1295,7 +1319,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/move/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nasm/LICENSE",
@@ -1307,7 +1331,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nasm/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nickel/LICENSE",
@@ -1319,7 +1343,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nickel/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/nix/LICENSE",
@@ -1331,7 +1355,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/nix/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objc/LICENSE",
@@ -1343,7 +1367,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objc/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_routine/LICENSE",
@@ -1355,7 +1379,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_routine/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_udl/LICENSE",
@@ -1367,7 +1391,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/objectscript_udl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ocaml/LICENSE",
@@ -1379,7 +1403,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ocaml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/odin/LICENSE",
@@ -1391,7 +1415,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/odin/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pascal/LICENSE",
@@ -1403,7 +1427,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pascal/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/perl/LICENSE",
@@ -1415,7 +1439,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/perl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/php/LICENSE",
@@ -1427,7 +1451,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/php/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pine/LICENSE",
@@ -1439,7 +1463,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pine/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pkl/LICENSE",
@@ -1451,7 +1475,19 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pkl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
+    },
+    {
+      "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/plsql/LICENSE",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "02de05cd6828df53aff548f348f6e6f9d596ae4e01b382977094dc059be72620"
+        }
+      ],
+      "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/plsql/LICENSE",
+      "type": "file",
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/po/LICENSE",
@@ -1463,7 +1499,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/po/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/pony/LICENSE",
@@ -1475,7 +1511,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/pony/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/powershell/LICENSE",
@@ -1487,7 +1523,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/powershell/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/prisma/LICENSE",
@@ -1499,7 +1535,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/prisma/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/properties/LICENSE",
@@ -1511,7 +1547,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/properties/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/protobuf/LICENSE",
@@ -1523,7 +1559,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/protobuf/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/puppet/LICENSE",
@@ -1535,7 +1571,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/puppet/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/purescript/LICENSE",
@@ -1547,7 +1583,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/purescript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/python/LICENSE",
@@ -1559,7 +1595,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/python/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/qml/LICENSE",
@@ -1571,7 +1607,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/qml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/r/LICENSE",
@@ -1583,7 +1619,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/r/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/racket/LICENSE",
@@ -1595,7 +1631,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/racket/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/regex/LICENSE",
@@ -1607,7 +1643,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/regex/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/requirements/LICENSE",
@@ -1619,7 +1655,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/requirements/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rescript/LICENSE",
@@ -1631,7 +1667,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rescript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ron/LICENSE",
@@ -1643,7 +1679,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ron/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rst/LICENSE",
@@ -1655,7 +1691,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rst/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/ruby/LICENSE",
@@ -1667,7 +1703,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/ruby/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/rust/LICENSE",
@@ -1679,7 +1715,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/rust/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scala/LICENSE",
@@ -1691,7 +1727,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scala/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scheme/LICENSE",
@@ -1703,7 +1739,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scheme/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/scss/LICENSE",
@@ -1715,7 +1751,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/scss/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/slang/LICENSE",
@@ -1727,7 +1763,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/slang/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/smali/LICENSE",
@@ -1739,7 +1775,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/smali/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/smithy/LICENSE",
@@ -1751,7 +1787,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/smithy/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/solidity/LICENSE",
@@ -1763,7 +1799,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/solidity/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/soql/LICENSE",
@@ -1775,7 +1811,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/soql/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sosl/LICENSE",
@@ -1787,7 +1823,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sosl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sql/LICENSE",
@@ -1799,7 +1835,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sql/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/squirrel/LICENSE",
@@ -1811,7 +1847,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/squirrel/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sshconfig/LICENSE",
@@ -1823,7 +1859,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sshconfig/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/starlark/LICENSE",
@@ -1835,7 +1871,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/starlark/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/svelte/LICENSE",
@@ -1847,7 +1883,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/svelte/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/sway/LICENSE",
@@ -1859,7 +1895,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/sway/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/swift/LICENSE",
@@ -1871,7 +1907,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/swift/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/systemverilog/LICENSE",
@@ -1883,7 +1919,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/systemverilog/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tablegen/LICENSE",
@@ -1895,7 +1931,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tablegen/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tcl/LICENSE",
@@ -1907,7 +1943,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tcl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/teal/LICENSE",
@@ -1919,7 +1955,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/teal/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/templ/LICENSE",
@@ -1931,7 +1967,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/templ/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/thrift/LICENSE",
@@ -1943,7 +1979,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/thrift/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tlaplus/LICENSE",
@@ -1955,7 +1991,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tlaplus/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/toml/LICENSE",
@@ -1967,7 +2003,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/toml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/tsx/LICENSE",
@@ -1979,7 +2015,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/tsx/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/typescript/LICENSE",
@@ -1991,7 +2027,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/typescript/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/typst/LICENSE",
@@ -2003,7 +2039,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/typst/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/verilog/LICENSE",
@@ -2015,7 +2051,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/verilog/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vhdl/LICENSE",
@@ -2027,7 +2063,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vhdl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vim/LICENSE",
@@ -2039,7 +2075,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vim/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/vue/LICENSE",
@@ -2051,7 +2087,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/vue/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wgsl/LICENSE",
@@ -2063,7 +2099,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wgsl/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wit/LICENSE",
@@ -2075,7 +2111,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wit/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/wolfram/LICENSE",
@@ -2087,7 +2123,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/wolfram/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/xml/LICENSE",
@@ -2099,7 +2135,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/xml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/yaml/LICENSE",
@@ -2111,7 +2147,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/yaml/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/zig/LICENSE",
@@ -2123,7 +2159,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/zig/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/grammars/zsh/LICENSE",
@@ -2135,7 +2171,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/grammars/zsh/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/lz4/LICENSE",
@@ -2147,7 +2183,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/lz4/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/simplecpp/LICENSE",
@@ -2159,7 +2195,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/simplecpp/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/ts_runtime/LICENSE",
@@ -2171,7 +2207,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/ts_runtime/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/verstable/LICENSE",
@@ -2183,7 +2219,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/verstable/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/wyhash/LICENSE",
@@ -2195,7 +2231,7 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/wyhash/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/internal/cbm/vendored/zstd/LICENSE",
@@ -2207,19 +2243,19 @@
       ],
       "name": "vendor/sources/file-base/internal/cbm/vendored/zstd/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/gen-third-party-notices.sh",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "fba58ae1c2c4499c031a031759fa77d99d94e3b628b7dc30371e535c0a22d2f9"
+          "content": "41b7d3723628371e16b3757a6f458dcca4eeaa0145fc07766274c6a719024adf"
         }
       ],
       "name": "vendor/sources/file-base/scripts/gen-third-party-notices.sh",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate-check-npm.py",
@@ -2231,7 +2267,7 @@
       ],
       "name": "vendor/sources/file-base/scripts/license-gate-check-npm.py",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate-check.py",
@@ -2243,31 +2279,31 @@
       ],
       "name": "vendor/sources/file-base/scripts/license-gate-check.py",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-gate.sh",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "eac80b0cf31a2199a743ce59fab748b1a189c207acffa73fbd4b876549b9f67b"
+          "content": "b8ec7c9b3c6ad4aa922babf93cff35c788d922ae0233598051ea1c08aeb1f222"
         }
       ],
       "name": "vendor/sources/file-base/scripts/license-gate.sh",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/scripts/license-policy.json",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4c0f84f691e4b925d531979206a34c0b06387e193aa68bb9495f6c55b214d11a"
+          "content": "b3777d9facbe0058d18ffdf8c40afd0869b1c94d218c6d4828b8b6217b65a859"
         }
       ],
       "name": "vendor/sources/file-base/scripts/license-policy.json",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/mimalloc/LICENSE",
@@ -2279,7 +2315,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/mimalloc/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/nomic/LICENSE",
@@ -2291,7 +2327,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/nomic/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/nomic/NOTICE",
@@ -2303,7 +2339,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/nomic/NOTICE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/sqlite3/LICENSE.md",
@@ -2315,7 +2351,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/sqlite3/LICENSE.md",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/tre/LICENSE",
@@ -2327,7 +2363,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/tre/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/xxhash/LICENSE",
@@ -2339,7 +2375,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/xxhash/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "file-base-legal:vendor/sources/file-base/vendored/yyjson/LICENSE",
@@ -2351,7 +2387,7 @@
       ],
       "name": "vendor/sources/file-base/vendored/yyjson/LICENSE",
       "type": "file",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     },
     {
       "bom-ref": "first-party-wheel:academic_research_workbench-0.1.0-py3-none-any.whl",
@@ -2383,23 +2419,11 @@
       "version": "4"
     },
     {
-      "bom-ref": "patch:1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029",
+      "bom-ref": "patch:32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029"
-        }
-      ],
-      "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "type": "file",
-      "version": "2"
-    },
-    {
-      "bom-ref": "patch:12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc"
+          "content": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
         }
       ],
       "name": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
@@ -2407,16 +2431,28 @@
       "version": "3"
     },
     {
-      "bom-ref": "patch:dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a",
+      "bom-ref": "patch:d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a"
+          "content": "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
         }
       ],
       "name": "vendor/patches/file-base/0001-file-base-server-name.patch",
       "type": "file",
       "version": "1"
+    },
+    {
+      "bom-ref": "patch:663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5"
+        }
+      ],
+      "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",
+      "type": "file",
+      "version": "2"
     },
     {
       "bom-ref": "python:PyYAML@6.0.3",
@@ -2929,7 +2965,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4a1ffaa7468026293758327f143d0cfc9f7046e69bd7224efcbd63290fe059d3"
+          "content": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46"
         }
       ],
       "licenses": [
@@ -2941,7 +2977,7 @@
       ],
       "name": "file-base",
       "type": "library",
-      "version": "v0.9.0-2-gee68144"
+      "version": "v0.11.0"
     }
   ],
   "metadata": {

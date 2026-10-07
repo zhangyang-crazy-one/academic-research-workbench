@@ -3,7 +3,7 @@ The collective plugin has mixed licensing. Component identities remain separate.
 ## Source components
 - `academic-research-skills` `3.22.2` — `CC-BY-NC-4.0`; bundled adapter source `skills/academic-research-suite/ars/`.
 - `experiment-agent` `1.1.0` — `CC-BY-NC-4.0`; bundled and reshaped inside `skills/academic-research-suite/ars/`.
-- `codebase-memory-mcp` (ARW `file-base` adapter) `v0.9.0-2-gee68144` — `MIT`;
+- `codebase-memory-mcp` (ARW `file-base` adapter) `v0.11.0` — `MIT`;
   source `vendor/sources/file-base`; identity `vendor/mcp-manifest.json`.
 
 - `K-Dense-AI/scientific-agent-skills` database-lookup advisory — `MIT`; original archived outside the staged skill tree at `third_party/admissions/k-dense-database-lookup/`; modified advisory at `skills/academic-research-workbench/references/database-lookup-advisory.md`. Direct skill staging remains pending human admission.
@@ -33,9 +33,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ## Ordered local patches
-- `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `dd6022c69819804db015019058feaecebf0ee9c31e5cc55eb8bad6b47003da1a`.
-- `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `1197346f62d06f0bad62c1e58fd374082b2f88e3eb8301746103f8066ba5c029`.
-- `vendor/patches/file-base/0003-phase3-generation-builder.patch` — SHA-256 `12676a7b619981f4140c2f922bfc0fd90b1bdd0f75b0da04ed00e78840da9dfc`.
+- `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4`.
+- `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5`.
+- `vendor/patches/file-base/0003-phase3-generation-builder.patch` — SHA-256 `32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316`.
 - `vendor/patches/file-base/0004-phase5-research-graph.patch` — SHA-256 `11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c`.
 
 ## Python packages observed for this build
@@ -93,6 +93,17 @@ The tree-sitter C runtime is vendored in `internal/cbm/vendored/ts_runtime/`.
 - **License:** MIT
 - **Copyright:** (c) 2018–2024 Max Brunsfeld
 
+**Local modification** (`internal/cbm/vendored/ts_runtime/src/stack.c`, #913): a
+single CBM patch bounds the recursive ambiguity-merge in `stack_node_add_link`
+at `CBM_TS_STACK_MERGE_MAX_DEPTH` (512). Deeply nested grammar-ambiguous input
+(e.g. Perl `f(f(f(...)))`) otherwise recurses once per level on the native C
+stack and overflows it during parsing (SIGSEGV on the ~1 MB Windows thread
+stack, and even the 8 MB POSIX stack at extreme depth) before any extractor
+runs. Past the cap the ambiguity is left on the GLR stack instead of merged —
+still a valid parse, never a wrong one — mirroring the existing
+`MAX_LINK_COUNT` bail-out. The change is clearly marked `// CBM patch:` inline.
+**On re-vendor (e.g. ts_runtime → 0.26.x): re-apply this bound.**
+
 The shared scanner helpers in `internal/cbm/vendored/common/` (`scanner.h`,
 `tag.h`) originate from
 [tree-sitter-html](https://github.com/tree-sitter/tree-sitter-html) (MIT,
@@ -106,7 +117,7 @@ The core runtime headers in `internal/cbm/vendored/common/tree_sitter/`
 
 ## Tree-sitter Grammars
 
-159 pre-generated parsers are vendored in `internal/cbm/vendored/grammars/<lang>/`
+160 pre-generated parsers are vendored in `internal/cbm/vendored/grammars/<lang>/`
 (generated `parser.c` plus `scanner.c` where applicable, compiled statically).
 Each grammar is the work of its upstream authors and each grammar directory
 contains the upstream `LICENSE` file.
@@ -121,12 +132,47 @@ License summary:
 - `clojure` ([sogaiu/tree-sitter-clojure](https://github.com/sogaiu/tree-sitter-clojure)) is **CC0-1.0**;
   `fennel` is **CC0-1.0**; `jinja2` and `just` are **Apache-2.0**;
   `pine` is **ISC** (declared by its upstream).
-- The grammars authored in-house for this project (`cobol`, `form`, `janet`,
-  `magma`, `protobuf`, `wolfram`) are **MIT** under the project's own license,
-  (c) DeusData. Six further grammars (`assembly`, `cfml`, `cfscript`,
-  `dotenv`, `pine`, `qml`) are self-maintained forks that retain their
-  original upstream authors' licenses — see the manifest for per-grammar
-  provenance.
+- The grammars authored in-house for this project (`chialisp`, `cobol`, `form`,
+  `janet`, `magma`, `protobuf`, `wolfram`) are **MIT** under the project's own
+  license, (c) DeusData. Each ships the repository's own LICENSE, byte-identical
+  to the root copy; they carry no third-party copyright because there is no
+  third party. `chialisp` is a generic s-expression grammar for the Chia
+  smart-coin language, written for this project because no usable public
+  grammar exists; its source and corpus tests live in
+  `tools/tree-sitter-chialisp/`.
+- Seven further grammars (`arkts`, `assembly`, `cfml`,
+  `cfscript`, `dotenv`, `pine`, `qml`) are self-maintained forks that retain
+  their original upstream authors' licenses — see the manifest for per-grammar
+  provenance. `arkts` is a first-party derivative of
+  [tree-sitter/tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript)
+  (MIT, (c) 2017 Max Brunsfeld; on the
+  [tree-sitter-javascript](https://github.com/tree-sitter/tree-sitter-javascript)
+  base, MIT, (c) 2014 Max Brunsfeld) with (c) 2026 DeusData ArkTS additions;
+  its grammar source lives in `tools/tree-sitter-arkts/`.
+
+### tree-sitter-plsql
+
+- **Project:** [AndreasMaierDe/tree-sitter-plsql](https://github.com/AndreasMaierDe/tree-sitter-plsql)
+- **License:** MIT
+- **Copyright:** (c) 2022 AndreasMaierDe
+- **Vendored at:** `internal/cbm/vendored/grammars/plsql/`
+- **Pinned commit:** `28aebef209be`
+- **Notes:** Community-maintained grammar for Oracle PL/SQL; not in the
+  nvim-treesitter or Helix registries (`community-niche` in the manifest). No
+  external scanner. One local patch: `parser.c`'s
+  `#include <tree_sitter/parser.h>` is changed to the quoted form used by every
+  other vendored grammar, as documented in
+  `internal/cbm/vendored/grammars/MANIFEST.md`. PL/SQL support was originally
+  contributed in PR #1033 by Oğuz (@ouzsrcm).
+
+### tree-sitter-objectscript (UDL + routine)
+
+- **Project:** [intersystems/tree-sitter-objectscript](https://github.com/intersystems/tree-sitter-objectscript)
+- **License:** MIT
+- **Copyright:** (c) 2025 InterSystems Corporation
+- **Vendored at:** `internal/cbm/vendored/grammars/objectscript_udl/`, `internal/cbm/vendored/grammars/objectscript_routine/`
+- **Pinned commit:** `a7ffcdf`
+- **Notes:** InterSystems-maintained grammar for the ObjectScript language (InterSystems IRIS / Caché). Vendor-maintained; not in nvim-treesitter or Helix registries. Each `scanner.c`'s upstream `#include "../../common/scanner.h"` is repointed to a per-directory `objectscript_common.h` copied from upstream `common/scanner.h`; two loop counters in that copy are widened from `uint8_t` to `int` as documented in `internal/cbm/vendored/grammars/MANIFEST.md`.
 
 ## Vendored C/C++ Libraries
 
@@ -142,6 +188,12 @@ License summary:
 | simplecpp | `internal/cbm/vendored/simplecpp/` | 0BSD | [danmar/simplecpp](https://github.com/danmar/simplecpp) |
 | Verstable | `internal/cbm/vendored/verstable/` | MIT | [JacksonAllan/Verstable](https://github.com/JacksonAllan/Verstable) |
 | wyhash | `internal/cbm/vendored/wyhash/` | Unlicense (public domain) | [wangyi-fudan/wyhash](https://github.com/wangyi-fudan/wyhash) |
+
+Local modifications to these libraries are documented next to the
+vendored sources (currently only SQLite: `vendored/sqlite3/PATCHES.md`,
+raising the Unix VFS `MAX_PATHNAME` ceiling from 512 to 4096 to match
+CBM's 4 KiB path support). Patches must be reapplied on every upstream
+refresh and are covered by `scripts/vendored-checksums.txt`.
 
 The graph-UI HTTP server is a first-party implementation
 (`src/ui/httpd.c` + `src/ui/http_server.c`) — no third-party HTTP library
@@ -220,12 +272,32 @@ The grammars were originally vendored as bare `parser.c`+`scanner.c` with **no r
 
 ## Summary
 
-- Grammars: **159** — vendored-from-upstream: **142**, first-party/self-maintained: **12**, registry-disagreement: **5** (nim removed 2026-06-12; objectscript_udl + objectscript_routine added 2026-06-24; mojo added 2026-07-01 — see notes below)
-- ABI distribution: **7×** ABI-13 **85×** ABI-14 **64×** ABI-15 (runtime ceiling is ABI 15; never vendor ABI 16 without a runtime upgrade)
+- Grammars: **162** — vendored-from-upstream: **143**, first-party/self-maintained: **14**, registry-disagreement: **5** (nim removed 2026-06-12; objectscript_udl + objectscript_routine added 2026-06-24; mojo added 2026-07-01; arkts added 2026-08-26; plsql added 2026-08-27; chialisp added 2026-08-28 — see notes below)
+- ABI distribution: **9×** ABI-13 **79×** ABI-14 **74×** ABI-15 (runtime ceiling is ABI 15; never vendor ABI 16 without a runtime upgrade)
+  — recounted from the tree 2026-08-30 after the perl v1.2.1 refresh moved `perl` from ABI 14 to ABI 15 (was `9×/80×/73×`). Neither side of the rebase had this right: main's line was correct for main, and this branch still carried the pre-2026-08-28 `7×/84×/65×`. Regenerate, never increment.
+  — recounted from the tree 2026-08-28. This line had drifted: it read `7×/86×/65×`, which sums to 158 against 161 vendored grammars, so it was wrong before Chialisp was added and incrementing it would have carried the error forward. Regenerate with:
+  `grep -h '#define LANGUAGE_VERSION' internal/cbm/vendored/grammars/*/parser.c | sort | uniq -c`
 - Vendored copies missing LICENSE: **0** — all upstream LICENSE files restored 2026-06-11 (first-party grammars carry the project MIT license; `move` uses the Helix-listed upstream tzakian/tree-sitter-move MIT text, `zsh` uses georgeharker/tree-sitter-zsh MIT)
-- `verdict`: VERIFIED-BOTH = our source matches *both* registries; VERIFIED-NVIM/HELIX = matches one; registry-disagreement = registries name a different repo (listed separately); `vendor-maintained` = the language vendor's own grammar, not in nvim/Helix.
-- **objectscript_udl / objectscript_routine** (added 2026-06-24): vendored from [intersystems/tree-sitter-objectscript](https://github.com/intersystems/tree-sitter-objectscript) @ `a7ffcdf` — MIT, the InterSystems-official grammars (a niche vendor language, hence `vendor-maintained`, not in nvim-treesitter/Helix). **Re-vendor note:** each `scanner.c`'s upstream `#include "../../common/scanner.h"` is repointed to a per-directory `objectscript_common.h` (a verbatim copy of upstream `common/scanner.h`), because this repo's shared `vendored/common/scanner.h` belongs to the cfml/fsharp grammars and differs. The generated `parser.c`/`scanner.c` are otherwise byte-for-byte upstream — on re-vendor, re-apply only that single include rename.
+- `verdict`: VERIFIED-BOTH = our source matches *both* registries; VERIFIED-NVIM/HELIX = matches one; registry-disagreement = registries name a different repo (listed separately); `vendor-maintained` = the language vendor's own grammar, not in nvim/Helix; `community-niche` = an individual/community-maintained grammar for a niche language, not in nvim/Helix — provenance hand-verified against the upstream repository instead of a registry.
+- **perl** (refreshed 2026-08-27): byte-for-byte generated bundle from
+  [tree-sitter-perl/tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl)
+  tag `v1.2.1`, full commit `c3e17b31179bf8f658c9f37c7a3ea6a202212d5a` (ABI 15).
+  The upstream GitHub source asset SHA-256 is
+  `95c5fa0966dd431eb2f96b941c37b413ae7e9083729433f4d3d41fbc2a4f14a6`; the
+  screened ordered source-manifest SHA-256 is
+  `4e7bf02e8bd14b410309ce12bab80edb730826db79e1139434c1459a3117b900`.
+  The existing MIT `LICENSE` was preserved byte-for-byte at SHA-256
+  `68a9a526ae357ed5a2f8ca5dabb14131b283554b69639bb04816088d4b1f2fa0`.
+  Exact per-file SHA-256 values are pinned in `scripts/vendored-checksums.txt`.
+  The table uses `UPSTREAM-RELEASE` because this refresh verified the tagged
+  upstream release itself but did not independently verify a current registry
+  pin; it intentionally does not claim `VERIFIED-NVIM` or `VERIFIED-BOTH`.
+- **objectscript_udl / objectscript_routine** (added 2026-06-24): vendored from [intersystems/tree-sitter-objectscript](https://github.com/intersystems/tree-sitter-objectscript) @ `a7ffcdf` — MIT, the InterSystems-official grammars (a niche vendor language, hence `vendor-maintained`, not in nvim-treesitter/Helix). **Re-vendor note:** each `scanner.c`'s upstream `#include "../../common/scanner.h"` is repointed to a per-directory `objectscript_common.h` (a verbatim copy of upstream `common/scanner.h`), because this repo's shared `vendored/common/scanner.h` belongs to the cfml/fsharp grammars and differs. The generated `parser.c`/`scanner.c` are otherwise byte-for-byte upstream — on re-vendor, re-apply only that single include rename. **Local modification (2026-07-16):** in `objectscript_common.h`, two loop counters `uint8_t i` were widened to `int i` (the `reverse_marker` scan and the `html_marker_buffer` reversal) to clear CodeQL `cpp/comparison-with-wider-type` — a false positive in practice (both lengths are hard-bounded by `MARKER_BUFFER_MAX_LEN = 30`, so `uint8_t` could never wrap), fixed for cleanliness. On re-vendor, re-apply this widening too (or upstream it at intersystems/tree-sitter-objectscript).
 - **mojo** (added 2026-07-01): vendored from [lsh/tree-sitter-mojo](https://github.com/lsh/tree-sitter-mojo) @ `33193a99afe6` — MIT, ABI 15. Helix tracks `lsh/tree-sitter-mojo` as its Mojo grammar source, but the Helix-pinned commit (`3d7c53b8038f`) no longer resolves in the upstream repository after a force-push, so this vendor uses current upstream `main` rather than the stale registry SHA. Security review covered only the vendored C surface (`parser.c`, `scanner.c`, `tree_sitter/*.h`) plus upstream license/provenance metadata; no package manager hooks, workflow files, prompt/agent instruction files, or generated lockfiles were vendored.
+- **arkts** (added 2026-08-26): **first-party derivative** — a fork of [tree-sitter/tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript)'s `typescript` dialect pinned @ `75b3874edb2d` (v0.23.2, the same commit our vendored typescript/tsx come from), on the tree-sitter-javascript base @ `3a837b6f3658` (v0.23.1, the version upstream's own package-lock pins), extended with ArkTS/ArkUI syntax (`@Component struct` declarations, UI-DSL trailing-closure calls with post-block attribute chains, decorated function declarations, `import lazy`, `@Extend`/`@Styles` leading-dot attribute chains, anonymous `stateStyles` style blocks). Grammar source + corpus tests live in `tools/tree-sitter-arkts/`; regenerate with `npx tree-sitter-cli@0.25.10 generate` (ABI 15). **External scanner:** `scanner.c` is a symbol-rename trampoline; `_common_scanner.h` is byte-identical (same SHA-256) to the reviewed `typescript/_common_scanner.h` already shipped. **LICENSE:** tree-sitter-typescript's MIT text **verbatim and byte-identical** (© 2017 Max Brunsfeld) — which is what MIT requires of a derivative work, and what lets the provenance audit byte-verify it against upstream rather than take a note on trust. The fork is registered in the audit's `FORKS` map. Our own copyright for the ArkTS additions, and the tree-sitter-javascript attribution (© 2014 Max Brunsfeld), live with the SOURCE in `tools/tree-sitter-arkts/grammar.js` and in `THIRD_PARTY.md`, which is what ships in the release archives.
+- **plsql** (added 2026-08-27): vendored from [AndreasMaierDe/tree-sitter-plsql](https://github.com/AndreasMaierDe/tree-sitter-plsql) @ `28aebef209be` (full: `28aebef209be57169600e1aa41ca1431cc6c916f`, upstream tip; repo dormant since 2023-02) — MIT, ABI 14, **no external scanner** (`EXTERNAL_TOKEN_COUNT 0`). Not listed in nvim-treesitter/Helix (`community-niche`, an individual-maintained grammar); provenance verified directly against upstream (pin = `git ls-remote` HEAD; vendored `parser.c` byte-identical to the pinned clone apart from the include-quote local patch below; 0 non-ASCII bytes; 0 dangerous calls). Security review covered only the vendored C surface (`parser.c`, `tree_sitter/parser.h`) plus upstream license/provenance metadata; no package manager hooks, workflow files, prompt/agent instruction files, or generated lockfiles were vendored. Known upstream limitation: `CREATE TYPE ... AS OBJECT` currently yields ERROR nodes (pinned by `plsql_create_type_as_object_limitation` in `tests/test_extraction.c` + `tests/fixtures/plsql/create_type_as_object_limitation.tps`). Originally contributed as PR #1033 by Oğuz (@ouzsrcm); re-vendored from upstream per vendoring policy with the PR's language wiring distilled on top.
+
+- **chialisp** (added 2026-08-28): **first-party** — authored in this repository, not vendored from anywhere. Grammar source + corpus tests live in `tools/tree-sitter-chialisp/`; regenerate with `npx tree-sitter-cli@0.25.10 generate --abi 14` and copy `src/parser.c` + `src/tree_sitter/*.h` here. ABI 14, **no external scanner** (`EXTERNAL_TOKEN_COUNT 0`), 0 non-ASCII bytes. It is a deliberately GENERIC s-expression grammar (`source_file`/`list`/`symbol`/`string`/`number`/`hex`/`dot`/`comment`) modelling the clvm_tools reader rather than the Chialisp form vocabulary: `mod`/`defun`/`defconstant`/`include` are ordinary head symbols, and which lists are definitions is decided in `internal/cbm/extract_defs.c`, so a dialect that adds a form does not need a regenerated parser. Written because the only public grammar (`Quexington/tree-sitter-chialisp`) cannot parse the language: it required CRLF to terminate a comment (`/;.*\r\n/`) while real files are LF, rejected the `.` in `(include foo.clib)`, and accepted only a primitive after `(defconstant NAME …)` — each of which desynchronised the rest of the file. Acceptance gate: all five `chia-blockchain@main` reference files parse with **zero ERROR and zero MISSING nodes**. **LICENSE:** the project's own LICENSE, byte-identical to the repository root — no third-party copyright is carried, because there is no third party.
 
 > ⚠️ **Pinned commit = the revision nvim-treesitter/Helix vendor** (battle-tested, canonical source), not bleeding-edge HEAD. When re-vendoring, update the pinned commit here.
 
@@ -247,6 +319,7 @@ Guarded by the `contract_all_grammars_in_graph` graph-breadth test in
 |---|---|
 | ada      | `resolve_func_name`: `subprogram_body`/`subprogram_declaration` → `procedure_specification`/`function_specification` child's `name` field |
 | cairo    | `resolve_func_name`: `function_definition`/`function_signature` → `identifier` child |
+| chialisp | `extract_lisp_def`: `(mod/defun/defun-inline/defmacro/defmac/defconstant/defconst …)` head-symbol forms in `list`; `mod` named by filename; `defconstant` → `Constant`; CLVM operators, quoted data and dialect sigils filtered out of calls/imports |
 | clojure  | `extract_lisp_def`: `(defn …)` / `(def …)` head-symbol forms in `list_lit` |
 | d        | `resolve_func_name`: `function_declaration` → `identifier` child |
 | fortran  | `resolve_func_name`: `subroutine`/`function` → inner `*_statement`'s `name` field |
@@ -256,6 +329,7 @@ Guarded by the `contract_all_grammars_in_graph` graph-breadth test in
 | ispc     | added to the C-family declarator-name gate (extends tree-sitter-c) |
 | odin     | `resolve_func_name`: `procedure_declaration` → `identifier` child |
 | pascal   | `resolve_func_name`: `defProc` → `header` (`declProc`) child's `name` field |
+| plsql    | `resolve_func_name`: `fnc_name`/`prc_name` fields; `extract_class_def`: `package_name`/`type_name`/`trigger_name` fields; `extract_plsql_callee` (extract_calls.c): `ref_call` → `referenced_element`, package-qualified `ref_name_parent.ref_name`; usage vocabulary (extract_usages.c): `identifier`, with the upstream `parameter` kind (a ref_call ARGUMENT wrapper) carved out of the whole-binding rule |
 | racket   | `extract_lisp_def`: `(define …)` head-symbol forms in `list` |
 | rescript | `resolve_func_name`: `function` (arrow) → enclosing `let_binding`'s `pattern` field |
 | scheme   | `extract_lisp_def`: `(define …)` head-symbol forms in `list` |
@@ -264,15 +338,19 @@ Guarded by the `contract_all_grammars_in_graph` graph-breadth test in
 
 ## Local source patches (applied atop pinned upstream)
 
-The grammars below carry a small local patch to their vendored `scanner.c`, on
+The grammars below carry a small local patch to their vendored sources, on
 top of the pinned upstream commit recorded in the vendoring table below.
-Re-vendoring from upstream must re-apply these.
+Re-vendoring from upstream must re-apply these, unless the reason column
+names an upstream commit that already carries the change — then drop the
+row instead.
 
 | grammar | location | patch | reason |
 |---|---|---|---|
 | crystal    | `crystal/scanner.c`, serialize    | guard `memcpy(&buffer[offset], state->literals.contents, literal_content_size)` with `if (literal_content_size > 0)` | UBSan: zero-length `memcpy` with a NULL/0-size source on the empty-state serialize round-trip (formal UB, harmless) |
 | rescript   | `rescript/scanner.c`, deserialize | guard `memcpy(state, buffer, n_bytes)` with `if (n_bytes > 0)` | UBSan: zero-length `memcpy` with a NULL `buffer` / `n_bytes == 0` on empty-state deserialize (formal UB, harmless). The sibling serialize copies a fixed `sizeof(ScannerState)` (always > 0, non-NULL src) and needs no guard. |
 | purescript | `purescript/scanner.c`, serialize | guard `memcpy(buffer, indents->data, to_copy)` with `if (to_copy > 0)` | UBSan: zero-length `memcpy` with a NULL/0-size source when the indent vector is empty (formal UB, harmless) |
+| plsql      | `plsql/parser.c`, include         | `#include <tree_sitter/parser.h>` → `#include "tree_sitter/parser.h"` | The older ABI-14 generator emits angle brackets; every other vendored grammar uses the quoted form, which resolves the per-grammar `tree_sitter/` header from the including file's directory |
+| swift      | `swift/scanner.c`, `OP_SYMBOL_SUPPRESSOR` + `eat_operators` | `1UL <<` / `1 <<` → `1ULL <<` | UBSan: `1 << suppressor` shifts an `int` by up to `TOKEN_COUNT` bits, undefined once the index reaches 31, while the mask it feeds is `uint64_t`. `1UL << FAKE_TRY_BANG` is the same defect on Windows, where `unsigned long` is 32 bits and `FAKE_TRY_BANG` is 32; the CLANGARM64 leg runs UBSan in trap mode, so there it is an illegal instruction rather than a log line. Upstream already carries both changes: `fb63a7004f07` (2026-04-06, upstream #558) for `eat_operators`, `6ab8d1d74ebd` (2026-08-10) for the `OP_SYMBOL_SUPPRESSOR` entry. Our pin `8abb3e8b3325` (2026-03-20) predates both, so this is a backport rather than a local invention — a re-vendor past 2026-08-10 should delete this row, not re-apply it |
 
 ## Vendored from verified upstream
 
@@ -365,9 +443,10 @@ Re-vendoring from upstream must re-apply these.
 | ocaml | 14 | tree-sitter/tree-sitter-ocaml | `5a979b3ec7f1` | VERIFIED-BOTH | ✅ |
 | odin | 14 | tree-sitter-grammars/tree-sitter-odin | `d2ca8efb4487` | VERIFIED-BOTH | ✅ |
 | pascal | 14 | Isopod/tree-sitter-pascal | `042119eca2e1` | VERIFIED-BOTH | ✅ |
-| perl | 14 | tree-sitter-perl/tree-sitter-perl | `ea9667dc65a8` | VERIFIED-BOTH | ✅ |
+| perl | 15 | tree-sitter-perl/tree-sitter-perl | `c3e17b31179b` | UPSTREAM-RELEASE | ✅ |
 | php | 15 | tree-sitter/tree-sitter-php | `3f2465c217d0` | VERIFIED-BOTH | ✅ |
 | pkl | 15 | apple/tree-sitter-pkl | `f5beed1da8e5` | VERIFIED-BOTH | ✅ |
+| plsql | 14 | AndreasMaierDe/tree-sitter-plsql | `28aebef209be` | community-niche | ✅ |
 | po | 14 | tree-sitter-grammars/tree-sitter-po | `bd860a0f57f6` | VERIFIED-NVIM | ✅ |
 | pony | 14 | tree-sitter-grammars/tree-sitter-pony | `73ff874ae4c9` | VERIFIED-NVIM | ✅ |
 | powershell | 15 | airbus-cert/tree-sitter-powershell | `73800ecc8bdd` | VERIFIED-BOTH | ✅ |
@@ -440,11 +519,13 @@ upstream author (correctly retained). The table now records the true origin.
 | magma | 15 | ✅ project MIT |
 | protobuf | 13 | ✅ project MIT |
 | wolfram | 13 | ✅ project MIT |
+| chialisp | 14 | ✅ project MIT |
 
 ### Self-maintained forks (upstream license retained, byte-verified 2026-06-12)
 
 | grammar | cur ABI | original upstream | license |
 |---|:---:|---|---|
+| arkts | 15 | **self-maintained fork** of tree-sitter/tree-sitter-typescript @ `75b3874edb2d` (v0.23.2; javascript base @ `3a837b6f3658` v0.23.1); grammar source in `tools/tree-sitter-arkts/` | MIT, (c) 2017 Max Brunsfeld — byte-identical to upstream; ArkTS additions (c) 2026 DeusData, see grammar.js + THIRD_PARTY.md |
 | assembly | 14 | RubixDev/tree-sitter-assembly (**repo deleted from GitHub** — our retained MIT copy, (c) 2023 RubixDev, is the surviving grant) | MIT |
 | cfml | 15 | cfmleditor/tree-sitter-cfml | MIT, (c) 2014 Gareth Edwards & Gavin Baumanis — byte-identical |
 | cfscript | 15 | cfmleditor/tree-sitter-cfml | MIT, same — byte-identical |
@@ -608,6 +689,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+===============================================================
+  internal/cbm/vendored/grammars/arkts/LICENSE
+===============================================================
+
+The MIT License (MIT)
+
+Copyright (c) 2017 Max Brunsfeld
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ===============================================================
   internal/cbm/vendored/grammars/assembly/LICENSE
 ===============================================================
@@ -995,6 +1102,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+===============================================================
+  internal/cbm/vendored/grammars/chialisp/LICENSE
+===============================================================
+
+MIT License
+  
+  Copyright (c) 2025 DeusData
+  
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+  
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+  
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+  
 ===============================================================
   internal/cbm/vendored/grammars/clojure/LICENSE
 ===============================================================
@@ -4788,6 +4921,32 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
    limitations under the License.
 
 ===============================================================
+  internal/cbm/vendored/grammars/plsql/LICENSE
+===============================================================
+
+MIT License
+
+Copyright (c) 2022 AndreasMaierDe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===============================================================
   internal/cbm/vendored/grammars/po/LICENSE
 ===============================================================
 
@@ -7118,10 +7277,10 @@ SOFTWARE.
 
 ---
 
-## Embedded Graph UI — bundled npm packages
+## External Graph UI asset pack — bundled npm packages
 
-The `-ui` binaries embed a compiled frontend bundle. The packages
-below are its production dependency tree; their license texts are
+The `-ui` archives ship a compiled frontend asset pack beside the binary.
+The packages below are its production dependency tree; license texts are
 reproduced verbatim from the packages as installed at build time.
 
 ### @babel/runtime@7.29.2 — MIT
@@ -9463,11 +9622,11 @@ SOFTWARE.
 
 (no license file shipped in the package; declared license: Apache-2.0)
 
-### fflate@0.6.10 — MIT
+### fflate@0.6.11 — MIT
 
 MIT License
 
-Copyright (c) 2023 Arjun Barrett
+Copyright (c) 2026 Arjun Barrett
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -9487,11 +9646,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-### fflate@0.8.2 — MIT
+### fflate@0.8.3 — MIT
 
 MIT License
 
-Copyright (c) 2023 Arjun Barrett
+Copyright (c) 2026 Arjun Barrett
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -10894,3 +11053,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

@@ -232,7 +232,7 @@
           "type": "string"
         },
         "commit": {
-          "const": "ee68144af5453addda995a27cce8142999f318fb",
+          "const": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
           "title": "Commit",
           "type": "string"
         },

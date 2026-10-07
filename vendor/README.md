@@ -53,23 +53,36 @@ records the merge method and the ARW-owned overlays. The CC BY-NC permission,
 intended-use, distribution-class and accountable-approval blockers are
 unchanged by a source sync.
 
-file-base is currently `ee68144af5453addda995a27cce8142999f318fb`
-(`v0.9.0-2-gee68144`) with four local patches in `mcp-manifest.json`:
-server naming (`0001`), confined reads (`0002`), generation builder (`0003`),
-and research graph (`0004`). Upstream
+file-base was upgraded from `ee68144` (`v0.9.0-2-gee68144`) to
 [v0.11.0](https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.11.0)
-declares an index rebuild and changed tool output contract. The patch series
-touches MCP, discovery, and graph code, so a v0.9 to v0.11 upgrade needs an
-isolated rebase and contract/migration spike before admission. Specifically,
-test each patch against the new source; check whether upstream now provides
-equivalent allowed-root/bounded-read behavior before retaining `0002`; compare
-MCP output and index rebuild behavior; rerun the dependency license gate,
-confinement/security tests and C sanitizers; then regenerate source, patch,
-binary and notice/SBOM evidence. The current source license is MIT, but the
-v0.11 dependency inventory has not been reviewed here. No patch application,
-new-source build, index migration or security backport qualification was
-performed in this watcher change. Any candidate security fix needs separate
-triage and a qualified backport or explicit source upgrade.
+(`8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798`) on 2026-10-06 (issue #47). The
+four local patches in `mcp-manifest.json` were rebased onto the new source:
+server naming (`0001`), confined reads (`0002`), generation builder (`0003`),
+and research graph (`0004`). Upstream v0.11 has no native `read_file` MCP
+tool, so `0002` is retained. `0003` also registers `files-build` as a stateless
+command, because v0.11 otherwise runs every non-listed command as a client of
+the new mandatory daemon. The pre-vendor dependency license gate was rerun on
+the v0.11 inventory with the canonical producer toolchain, and it added three
+grammar licenses (ArkTS, Chialisp, PL/SQL). The source, patch, legal-input,
+binary, notice and SBOM digests and the normal, ASan+UBSan and TSan native
+qualification evidence were all regenerated. The MCP tool list grows from 8
+to 18 tools because v0.11 removed `tools/list` pagination; the capability
+profile and ARW's confinement contract are unchanged. Existing indexes must be
+rebuilt after the upgrade.
+
+v0.11's upstream suite is kept byte-identical and passes on all three native
+surfaces. To achieve that, the ARW patches changed how they extend upstream
+(`MODIFICATIONS.md` has the details):
+
+- The Text and PDF file kinds sit outside the language enum.
+- Text is indexed only through explicit extensions.
+- `read_file` is listed only when an allowed root is configured.
+
+The upstream suite is qualified by running `scripts/offline-exec` through
+sudo. Root creates the network and PID namespaces without a user namespace,
+the suite runs as the invoking user, and the strace network audit uses
+`--seccomp-bpf`. The three native evidence runs built a byte-identical binary,
+and a local `build-file-base` reproduces it.
 
 Local report replay uses `python scripts/vendor-drift-report --fixture <json>`.
 `scripts/vendor-drift-issue` defaults to no write; it requires `--write` and a
