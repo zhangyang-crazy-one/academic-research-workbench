@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from arw.cli import main
-from arw.files_opt_in import OptInError, enable, health
+from arw.files_opt_in import OptInError, diagnostic, enable, health
 
 
 def _layout(
@@ -53,9 +53,11 @@ def test_missing_native_binary_is_structured_and_leaves_target_absent(
     target = project / ".codex/config.toml"
     assert health(plugin)["state"] == "disabled"
     assert health(plugin)["native_binary"] == "missing"
+    assert "scripts/build-file-base" in health(plugin)["recommendation"]
     with pytest.raises(OptInError, match="native file-base binary") as error:
         _enable("codex", target, root, cache)
     assert error.value.code == "native_binary_missing"
+    assert "optional" in diagnostic(error.value)["recommendation"]
     assert not target.exists()
 
 
