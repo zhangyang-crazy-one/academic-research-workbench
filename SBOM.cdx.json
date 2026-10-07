@@ -2431,11 +2431,11 @@
       "version": "3"
     },
     {
-      "bom-ref": "patch:713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f",
+      "bom-ref": "patch:d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
+          "content": "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
         }
       ],
       "name": "vendor/patches/file-base/0001-file-base-server-name.patch",
@@ -2443,11 +2443,11 @@
       "version": "1"
     },
     {
-      "bom-ref": "patch:4a790bac7748724810382d5ca02547e5f7f46142773159d43f2537d2163b685a",
+      "bom-ref": "patch:9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4a790bac7748724810382d5ca02547e5f7f46142773159d43f2537d2163b685a"
+          "content": "9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808"
         }
       ],
       "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",

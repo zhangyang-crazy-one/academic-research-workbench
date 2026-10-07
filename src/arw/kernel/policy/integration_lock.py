@@ -82,12 +82,12 @@ EXPECTED_FILE_BASE_PATCHES = (
     (
         1,
         "vendor/patches/file-base/0001-file-base-server-name.patch",
-        "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f",
+        "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4",
     ),
     (
         2,
         "vendor/patches/file-base/0002-phase1-confined-read.patch",
-        "4a790bac7748724810382d5ca02547e5f7f46142773159d43f2537d2163b685a",
+        "9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808",
     ),
     (
         3,
@@ -101,7 +101,7 @@ EXPECTED_FILE_BASE_PATCHES = (
     ),
 )
 EXPECTED_FILE_BASE_POST_PATCH_TREE = (
-    "82ac2177e0b1ae30d6bf86a3549e7d448c78c7bfb84b20460a017e9df6ff58cf"
+    "1f2d1dbad925b8a73f22d3194c573511b576f1177b5c8fe54d3829cdda58b68e"
 )
 EXPECTED_FILE_BASE_TEST_TREE = (
     "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"

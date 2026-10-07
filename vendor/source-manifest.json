@@ -1041,32 +1041,32 @@
       "component": "file-base",
       "order": 1,
       "path": "vendor/patches/file-base/0001-file-base-server-name.patch",
-      "post_tree_sha256": "9905a98073320d5f48e09a1d9279d8d4869bbb018e459475e91cfe331351a8f8",
+      "post_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
       "pre_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
-      "sha256": "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
+      "sha256": "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
     },
     {
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "ad0191b06960e935da0c09c8686ee66e92042621289b504a4f16de8d88cc70b1",
-      "pre_tree_sha256": "9905a98073320d5f48e09a1d9279d8d4869bbb018e459475e91cfe331351a8f8",
-      "sha256": "4a790bac7748724810382d5ca02547e5f7f46142773159d43f2537d2163b685a"
+      "post_tree_sha256": "2a2ee9dd33b50ac3e7f33a324bb320f7c7b3d3b1205c207a6c9c8d2038d486c0",
+      "pre_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
+      "sha256": "9e11b02363f2b6f2ffada5046073bac44a1d26554d22449912f87b9832644808"
     },
     {
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "bc66749a69ea2cfd4907434d99b946fb847b661bdb26a52c16e91164de700194",
-      "pre_tree_sha256": "ad0191b06960e935da0c09c8686ee66e92042621289b504a4f16de8d88cc70b1",
+      "post_tree_sha256": "10b96b6d9de6e8d58608512927bea80e0935a409a8b14521f4b7bd12cc561bb6",
+      "pre_tree_sha256": "2a2ee9dd33b50ac3e7f33a324bb320f7c7b3d3b1205c207a6c9c8d2038d486c0",
       "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "82ac2177e0b1ae30d6bf86a3549e7d448c78c7bfb84b20460a017e9df6ff58cf",
-      "pre_tree_sha256": "bc66749a69ea2cfd4907434d99b946fb847b661bdb26a52c16e91164de700194",
+      "post_tree_sha256": "1f2d1dbad925b8a73f22d3194c573511b576f1177b5c8fe54d3829cdda58b68e",
+      "pre_tree_sha256": "10b96b6d9de6e8d58608512927bea80e0935a409a8b14521f4b7bd12cc561bb6",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],

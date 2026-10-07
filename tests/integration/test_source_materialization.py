@@ -12,7 +12,7 @@ import jsonschema
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-PATCH_SHA256 = "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
+PATCH_SHA256 = "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
 PHASE3_PATCH_SHA256 = "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
 EXPECTED_REVISIONS = {
     "academic-research-skills": "7de1c9dfb7af9c02a9b57750761323f35a743aa2",

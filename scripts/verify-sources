@@ -79,7 +79,7 @@ materialize = sys.argv[2] == "1"
 inputs_only = sys.argv[3] == "1"
 patch_source = Path(sys.argv[4]).resolve() if sys.argv[4] else None
 manifest_path = project_root / "vendor/source-manifest.json"
-expected_patch_sha256 = "713c9ef9584ebe2e995cd7c8e222d10a172d5b171783568955080bf25ccbdb8f"
+expected_patch_sha256 = "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
 expected_components = {
     "academic-research-skills": "7de1c9dfb7af9c02a9b57750761323f35a743aa2",
     "experiment-agent": "e291e7dc7ca268b2de7e1a9cf23bc2eef5dc0651",
