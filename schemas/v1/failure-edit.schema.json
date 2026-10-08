@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "RecordedEdit": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "before": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Before",
+          "type": "string"
+        },
+        "after": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "After",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "before",
+        "after"
+      ],
+      "title": "RecordedEdit",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.failure-edit.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "predecessor_attempt_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Predecessor Attempt Id"
+    },
+    "edits": {
+      "items": {
+        "$ref": "#/$defs/RecordedEdit"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Edits",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "edits"
+  ],
+  "title": "FailureEditRecord",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/failure-edit.schema.json"
+}

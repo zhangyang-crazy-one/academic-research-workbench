@@ -1,0 +1,23 @@
+{
+  "fixture_id": "unit",
+  "hidden_cause": "unit_mismatch",
+  "acceptance": {
+    "schema_version": "arw.failure-acceptance.v1",
+    "acceptance_id": "acceptance.unit",
+    "metric": "distance",
+    "cases": [
+      {"sample_id": "sample.one", "expected_value": "1", "unit": "m"},
+      {"sample_id": "sample.two", "expected_value": "2", "unit": "m"}
+    ]
+  },
+  "failures": [
+    {
+      "schema_version": "arw.failed-attempt.v1", "attempt_id": "attempt.unit-one", "status": "failed",
+      "cases": [
+        {"sample_id": "sample.one", "value": "100", "unit": "cm", "source_sample_id": "sample.one"},
+        {"sample_id": "sample.two", "value": "200", "unit": "cm", "source_sample_id": "sample.two"}
+      ]
+    }
+  ],
+  "edits": []
+}

@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "AcceptanceCase": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "expected_value": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Expected Value",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample_id",
+        "expected_value",
+        "unit"
+      ],
+      "title": "AcceptanceCase",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.failure-acceptance.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "acceptance_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Acceptance Id",
+      "type": "string"
+    },
+    "metric": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Metric",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/AcceptanceCase"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "acceptance_id",
+    "metric",
+    "cases"
+  ],
+  "title": "FrozenFailureAcceptance",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/failure-acceptance.schema.json"
+}

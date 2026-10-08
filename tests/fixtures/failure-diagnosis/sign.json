@@ -1,0 +1,33 @@
+{
+  "fixture_id": "sign",
+  "hidden_cause": "sign_inversion",
+  "acceptance": {
+    "schema_version": "arw.failure-acceptance.v1",
+    "acceptance_id": "acceptance.sign",
+    "metric": "signed_response",
+    "cases": [
+      {"sample_id": "sample.one", "expected_value": "2", "unit": "ratio"},
+      {"sample_id": "sample.two", "expected_value": "4", "unit": "ratio"}
+    ]
+  },
+  "failures": [
+    {
+      "schema_version": "arw.failed-attempt.v1", "attempt_id": "attempt.sign-one", "status": "failed",
+      "cases": [
+        {"sample_id": "sample.one", "value": "-2", "unit": "ratio", "source_sample_id": "sample.one"},
+        {"sample_id": "sample.two", "value": "-4", "unit": "ratio", "source_sample_id": "sample.two"}
+      ]
+    },
+    {
+      "schema_version": "arw.failed-attempt.v1", "attempt_id": "attempt.sign-two", "status": "failed",
+      "cases": [
+        {"sample_id": "sample.one", "value": "-2", "unit": "ratio", "source_sample_id": "sample.one"},
+        {"sample_id": "sample.two", "value": "-4", "unit": "ratio", "source_sample_id": "sample.two"}
+      ]
+    }
+  ],
+  "edits": [
+    {"schema_version": "arw.failure-edit.v1", "attempt_id": "attempt.sign-one", "edits": [{"field": "sign_rule", "before": "positive", "after": "negative"}]},
+    {"schema_version": "arw.failure-edit.v1", "attempt_id": "attempt.sign-two", "predecessor_attempt_id": "attempt.sign-one", "edits": [{"field": "sign_rule", "before": "negative", "after": "positive"}]}
+  ]
+}

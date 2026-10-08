@@ -1,5 +1,9 @@
 # Governed research learning
 
+Read-only failure mechanism analysis is documented in
+[failure-diagnosis.md](failure-diagnosis.md). It uses accepted evidence and
+existing memory handoffs without promoting a heuristic or changing policy.
+
 ## Venue evidence extension
 
 `arw learn observe-venue --project-root PROJECT --run-root RUN --artifact-id ID --request REQUEST.json`

@@ -1,0 +1,347 @@
+{
+  "$defs": {
+    "CanonicalSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "event_sha256",
+        "artifact_id",
+        "artifact_sha256"
+      ],
+      "title": "CanonicalSource",
+      "type": "object"
+    },
+    "DiscriminatingProbe": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Question",
+          "type": "string"
+        },
+        "expected_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ProbeOutcome"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Expected Outcomes",
+          "type": "array"
+        },
+        "actual_evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "question",
+        "expected_outcomes"
+      ],
+      "title": "DiscriminatingProbe",
+      "type": "object"
+    },
+    "MechanismHypothesis": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mechanism_id": {
+          "enum": [
+            "sign_inversion",
+            "unit_mismatch",
+            "sample_mapping"
+          ],
+          "title": "Mechanism Id",
+          "type": "string"
+        },
+        "statement": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "falsifier": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Falsifier",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "kept",
+            "ruled_out",
+            "unresolved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/CanonicalSource"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        },
+        "probe": {
+          "$ref": "#/$defs/DiscriminatingProbe"
+        },
+        "recommend_probe": {
+          "title": "Recommend Probe",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mechanism_id",
+        "statement",
+        "falsifier",
+        "status",
+        "rationale",
+        "sources",
+        "probe",
+        "recommend_probe"
+      ],
+      "title": "MechanismHypothesis",
+      "type": "object"
+    },
+    "PatternJudgment": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "recurrence",
+            "opposing_edits",
+            "expectation_mismatch"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "finding": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "title": "Finding",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/CanonicalSource"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "finding",
+        "rationale",
+        "sources"
+      ],
+      "title": "PatternJudgment",
+      "type": "object"
+    },
+    "ProbeOutcome": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mechanism_id": {
+          "enum": [
+            "sign_inversion",
+            "unit_mismatch",
+            "sample_mapping"
+          ],
+          "title": "Mechanism Id",
+          "type": "string"
+        },
+        "expected_result": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Expected Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mechanism_id",
+        "expected_result"
+      ],
+      "title": "ProbeOutcome",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.failure-diagnosis.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "diagnosis_chain_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Diagnosis Chain Id",
+      "type": "string"
+    },
+    "acceptance": {
+      "$ref": "#/$defs/CanonicalSource"
+    },
+    "failed_receipts": {
+      "items": {
+        "$ref": "#/$defs/CanonicalSource"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Failed Receipts",
+      "type": "array"
+    },
+    "change_records": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CanonicalSource"
+      },
+      "maxItems": 8,
+      "title": "Change Records",
+      "type": "array"
+    },
+    "prior_diagnosis": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CanonicalSource"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resumed_from_memory_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resumed From Memory Id"
+    },
+    "source_chain_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Chain Sha256",
+      "type": "string"
+    },
+    "symptom": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Symptom",
+      "type": "string"
+    },
+    "patterns": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/PatternJudgment"
+        },
+        {
+          "$ref": "#/$defs/PatternJudgment"
+        },
+        {
+          "$ref": "#/$defs/PatternJudgment"
+        }
+      ],
+      "title": "Patterns",
+      "type": "array"
+    },
+    "hypotheses": {
+      "items": {
+        "$ref": "#/$defs/MechanismHypothesis"
+      },
+      "maxItems": 3,
+      "minItems": 2,
+      "title": "Hypotheses",
+      "type": "array"
+    },
+    "causal_status": {
+      "const": "unknown",
+      "default": "unknown",
+      "title": "Causal Status",
+      "type": "string"
+    },
+    "execution_effect": {
+      "const": "read_only_advice",
+      "default": "read_only_advice",
+      "title": "Execution Effect",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "diagnosis_chain_id",
+    "acceptance",
+    "failed_receipts",
+    "source_chain_sha256",
+    "symptom",
+    "patterns",
+    "hypotheses"
+  ],
+  "title": "FailureDiagnosis",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/failure-diagnosis.schema.json"
+}

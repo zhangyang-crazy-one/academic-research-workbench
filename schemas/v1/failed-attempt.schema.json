@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "ObservedCase": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$",
+          "title": "Value",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "source_sample_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Sample Id"
+        }
+      },
+      "required": [
+        "sample_id",
+        "value",
+        "unit"
+      ],
+      "title": "ObservedCase",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.failed-attempt.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "acceptance_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Acceptance Sha256",
+      "type": "string"
+    },
+    "status": {
+      "const": "failed",
+      "title": "Status",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/ObservedCase"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "acceptance_sha256",
+    "status",
+    "cases"
+  ],
+  "title": "FailedAttemptReceipt",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/failed-attempt.schema.json"
+}
