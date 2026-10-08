@@ -104,8 +104,10 @@ def _locked(
         ) from error
 
 
-def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
+def _read(root: Path, *, at_sequence: int | None = None) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
     path = _history_path(root)
+    if (root / ".arw").is_symlink() or path.parent.is_symlink():
+        raise NarrativeError("unsafe_state", "narrative state path contains a symlink")
     if path.is_symlink() or not path.is_file():
         raise NarrativeError(
             "missing_selection", "paper project has no narrative history"
@@ -113,6 +115,13 @@ def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None
     if path.stat().st_size > MAX_HISTORY:
         raise NarrativeError("corrupt_history", "narrative history exceeds budget")
     raw = path.read_bytes()
+    if at_sequence is not None:
+        if type(at_sequence) is not int or at_sequence < 1:
+            raise NarrativeError("invalid_sequence", "historical sequence must be positive")
+        lines = raw.splitlines(keepends=True)
+        if len(lines) < at_sequence:
+            raise NarrativeError("invalid_sequence", "historical sequence exceeds history")
+        raw = b"".join(lines[:at_sequence])
     if not raw or not raw.endswith(b"\n"):
         raise NarrativeError("corrupt_history", "narrative history is incomplete")
     events: list[dict] = []
