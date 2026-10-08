@@ -11,7 +11,13 @@ from pathlib import Path
 
 from .method import canonical
 from .provenance import verify_proof
-from .sandbox import SandboxError, probe_namespace, probe_timeout, run_worker
+from .sandbox import (
+    SandboxError,
+    probe_namespace,
+    probe_timeout,
+    probe_worker_boundary,
+    run_worker,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 EXT = ROOT / "extensions" / "paper-method"
@@ -93,6 +99,7 @@ def build_capsule(commit: str) -> dict:
         },
         "qualification_cases": [
             "network_namespace",
+            "readonly_credential_boundary",
             "author_example_2",
             "deterministic_repeat",
             "invalid_type",
@@ -193,6 +200,7 @@ def run_cases(*, inject_failure: bool = False) -> list[dict]:
         return result
 
     record("network_namespace", lambda: bool(probe_namespace()))
+    record("readonly_credential_boundary", probe_worker_boundary)
     record("author_example_2", golden)
     record(
         "deterministic_repeat",

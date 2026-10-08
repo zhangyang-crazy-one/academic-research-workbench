@@ -385,6 +385,13 @@ def test_installed_relocatable_entrypoint_without_git_or_site_packages(tmp_path)
     assert b"source_commit_unverifiable" in hidden.stderr
 
 
+def test_worker_readonly_output_and_credentials_boundary(monkeypatch):
+    from arw_paper_method.sandbox import probe_worker_boundary
+
+    monkeypatch.setenv("ARW_PAPER_METHOD_SECRET_TEST", "must-not-reach-worker")
+    assert probe_worker_boundary() is True
+
+
 def test_output_contract_rejects_execution_claim_without_observation(tmp_path):
     schema = json.loads((EXT / "schemas/output.schema.json").read_text())
     with pytest.raises(jsonschema.ValidationError):

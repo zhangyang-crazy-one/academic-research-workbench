@@ -58,6 +58,8 @@ def _command(program: list[str]) -> list[str]:
         "--setenv",
         "PYTHONDONTWRITEBYTECODE",
         "1",
+        "--remount-ro",
+        "/",
         "--",
         *program,
     ]
@@ -128,3 +130,30 @@ def probe_timeout() -> None:
             return
         raise
     raise SandboxError("timeout_probe_failed")
+
+
+def probe_worker_boundary() -> bool:
+    """Verify source/root are read-only, only tmpfs is writable, no home/env leaks."""
+    program = """
+import errno, json, os
+denied = []
+for path in ('/app/method.py', '/app/output', '/output'):
+    try:
+        with open(path, 'ab') as stream:
+            stream.write(b'probe')
+    except OSError as error:
+        denied.append(error.errno == errno.EROFS)
+    else:
+        denied.append(False)
+with open('/tmp/output', 'wb') as stream:
+    stream.write(b'probe')
+os.unlink('/tmp/output')
+allowed_environment = {'PATH', 'HOME', 'PYTHONDONTWRITEBYTECODE', 'PWD', 'LC_CTYPE'}
+print(json.dumps(all(denied) and not os.path.exists('/home')
+    and os.environ.get('HOME') == '/nonexistent'
+    and set(os.environ) <= allowed_environment))
+"""
+    result = _run(_command(["/usr/bin/python3", "-I", "-S", "-c", program]), b"", 1000)
+    if result.strip() != b"true":
+        raise SandboxError("worker_boundary_violation")
+    return True
