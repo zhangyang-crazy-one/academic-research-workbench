@@ -1010,3 +1010,49 @@ def test_cli_freeze_accept_and_replay_use_parent_admission(tmp_path: Path, capsy
     assert accepted["result"]["timing_scope"] == "parent_acceptance_order_only"
     assert main(["experiment", "replay", "--run-root", str(root), "--result-sha256", accepted["result_sha256"]]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "replayed"
+
+
+def test_replay_loads_each_contract_once_and_skips_unrelated_manifests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Contract succession on replay must not rescan the whole journal."""
+    from arw.kernel.artifacts import experiment_acceptance as acceptance
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger import journal, manifests
+
+    root = _journal_run(tmp_path)
+    previous = None
+    for version in range(1, 6):
+        contract = seal_experiment_contract(_contract(
+            _comparison(threshold={"mode": "absolute", "value": f"0.0{version}"}),
+            contract_version=version,
+            supersedes_contract_sha256=None if previous is None else previous.contract_sha256,
+        ))
+        freeze_experiment_contract(
+            contract, root, RuntimeCommandService(root), _journal_request(version, 40 + version)
+        )
+        previous = contract
+
+    loads: list[str] = []
+    original_load = acceptance.load_experiment_contract
+    monkeypatch.setattr(
+        acceptance,
+        "load_experiment_contract",
+        lambda run_root, digest: loads.append(digest) or original_load(run_root, digest),
+    )
+    batch_sizes: list[int] = []
+    original_validate = journal.validate_accepted_event_manifests
+    monkeypatch.setattr(
+        journal,
+        "validate_accepted_event_manifests",
+        lambda run_root, events: batch_sizes.append(len(events)) or original_validate(run_root, events),
+    )
+    replayed = journal.replay_run(root)
+    contracts = [e for e in replayed.events if e.event_type == "experiment.contract.accepted"]
+    assert len(contracts) == 5
+    assert sorted(loads) == sorted(e.payload.contract_sha256 for e in contracts)
+    assert all(size == 1 for size in batch_sizes)
+    # The standalone validator keeps the same verdict with one load per contract.
+    loads.clear()
+    manifests.validate_accepted_event_manifests(root, replayed.events)
+    assert len(loads) == 5

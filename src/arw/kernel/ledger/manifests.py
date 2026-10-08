@@ -505,29 +505,51 @@ def write_passport_pointer(root: Path, pointer: PassportPointer) -> Path:
     return target
 
 
+def validate_experiment_contract_event(
+    root: Path,
+    event: CanonicalEvent,
+    prior_contract_events: tuple[CanonicalEvent, ...] | list[CanonicalEvent],
+    *,
+    cache: dict | None = None,
+) -> None:
+    """Validate one contract event against the contract events accepted before it.
+
+    Only contract events take part in succession, so replay passes those
+    alone instead of re-verifying every earlier accepted manifest.
+    """
+    from arw.kernel.artifacts.experiment_acceptance import (
+        ExperimentAcceptanceError,
+        load_experiment_contract,
+        validate_contract_succession,
+    )
+
+    cache = {} if cache is None else cache
+    try:
+        digest = event.payload.contract_sha256
+        contract = cache.get(digest) or load_experiment_contract(root, digest)
+        if (
+            contract.contract_version != event.payload.contract_version
+            or contract.supersedes_contract_sha256 != event.payload.supersedes_contract_sha256
+        ):
+            raise ExperimentAcceptanceError("contract_event_mismatch", "contract differs from accepted event")
+        validate_contract_succession(contract, root, prior_contract_events, loaded=cache)
+        cache[digest] = contract
+    except (ExperimentAcceptanceError, ValueError, OSError) as error:
+        raise ManifestError(f"accepted experiment contract is invalid: {error}") from error
+
+
 def validate_accepted_event_manifests(
     root: Path, events: tuple[CanonicalEvent, ...] | list[CanonicalEvent]
 ) -> None:
     """Verify every immutable manifest selected by an accepted event."""
 
     prior_contract_events: list[CanonicalEvent] = []
+    contract_cache: dict[str, object] = {}
     for event in events:
         if event.event_type == "experiment.contract.accepted":
-            from arw.kernel.artifacts.experiment_acceptance import (
-                ExperimentAcceptanceError,
-                load_experiment_contract,
-                validate_contract_succession,
+            validate_experiment_contract_event(
+                root, event, prior_contract_events, cache=contract_cache
             )
-            try:
-                contract = load_experiment_contract(root, event.payload.contract_sha256)
-                if (
-                    contract.contract_version != event.payload.contract_version
-                    or contract.supersedes_contract_sha256 != event.payload.supersedes_contract_sha256
-                ):
-                    raise ExperimentAcceptanceError("contract_event_mismatch", "contract differs from accepted event")
-                validate_contract_succession(contract, root, prior_contract_events)
-            except (ExperimentAcceptanceError, ValueError, OSError) as error:
-                raise ManifestError(f"accepted experiment contract is invalid: {error}") from error
             prior_contract_events.append(event)
         elif event.event_type == "experiment.provenance.accepted":
             from arw.kernel.artifacts.experiment_provenance import (

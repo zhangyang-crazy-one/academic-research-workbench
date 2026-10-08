@@ -427,17 +427,28 @@ def seal_experiment_contract(value: Mapping[str, Any] | ExperimentContract) -> E
 
 
 def validate_contract_succession(
-    contract: ExperimentContract, root: Path, events: Sequence[Any]
+    contract: ExperimentContract,
+    root: Path,
+    events: Sequence[Any],
+    *,
+    loaded: dict[str, ExperimentContract] | None = None,
 ) -> None:
-    """Require a single, accepted predecessor chain for one claim identity."""
+    """Require a single, accepted predecessor chain for one claim identity.
+
+    ``loaded`` caches contracts by digest so journal replay reads each
+    accepted contract once instead of once per later contract event.
+    """
 
     accepted = [event for event in events if event.event_type == "experiment.contract.accepted"]
     if any(event.payload.contract_sha256 == contract.contract_sha256 for event in accepted):
         raise ExperimentAcceptanceError("duplicate_contract", "contract was already accepted")
-    by_id = [
-        load_experiment_contract(root, event.payload.contract_sha256)
-        for event in accepted
-    ]
+    cache = {} if loaded is None else loaded
+    by_id = []
+    for event in accepted:
+        digest = event.payload.contract_sha256
+        if digest not in cache:
+            cache[digest] = load_experiment_contract(root, digest)
+        by_id.append(cache[digest])
     same_chain = [item for item in by_id if item.contract_id == contract.contract_id]
     if contract.contract_version == 1:
         if same_chain:
@@ -465,14 +476,13 @@ def timing_from_run(
     """Read acceptance order from a verified parent journal, never caller fields."""
 
     from arw.kernel.ledger.journal import replay_run
-    from arw.kernel.ledger.manifests import validate_accepted_event_manifests
 
     if not (root / "run-manifest.json").exists():
         if (root / "journal").exists() or (root / "events.jsonl").exists():
             raise ExperimentAcceptanceError("journal_missing", "run manifest is missing from a journaled run")
         return None
+    # replay_run validates every accepted event's manifest while replaying.
     replayed = replay_run(root)
-    validate_accepted_event_manifests(root, replayed.events)
     if replayed.recovery_health != "healthy":
         raise ExperimentAcceptanceError("journal_unhealthy", "run journal is not healthy")
     contract_event = next(
