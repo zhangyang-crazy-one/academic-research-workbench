@@ -28,12 +28,22 @@ from arw.kernel.policy.research_integrity import (
     research_integrity_contracts_schema_document,
     validate_research_integrity_contract_instance,
 )
+from arw.kernel.state.accepted_ref import (
+    ACCEPTED_REF_ADAPTER,
+    accepted_ref_schema_documents,
+)
 from arw.kernel.state.execution_schema import execution_provenance_schema_document
 from arw.kernel.state.failure_diagnosis import failure_diagnosis_schema_documents
 from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES
 from arw.kernel.state.narrative_fit import narrative_fit_schema_documents
 from arw.kernel.state.narrative_realization import (
     narrative_realization_schema_documents,
+)
+from arw.kernel.state.numeric_core import (
+    Derivation,
+    DerivationRequest,
+    NumericPresentation,
+    numeric_core_schema_documents,
 )
 from arw.kernel.state.orchestration_models import (
     PHASE4_SCHEMA_NAMES,
@@ -54,6 +64,8 @@ VENUE_LEARNING_SCHEMA_NAMES = tuple(venue_learning_schema_documents())
 NARRATIVE_FIT_SCHEMA_NAMES = tuple(narrative_fit_schema_documents())
 EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES = tuple(experiment_acceptance_schema_documents())
 FAILURE_DIAGNOSIS_SCHEMA_NAMES = tuple(failure_diagnosis_schema_documents())
+ACCEPTED_REF_SCHEMA_NAMES = tuple(accepted_ref_schema_documents())
+NUMERIC_CORE_SCHEMA_NAMES = tuple(numeric_core_schema_documents())
 
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
@@ -114,6 +126,8 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
     + NARRATIVE_REALIZATION_SCHEMA_NAMES
     + SUBMISSION_SCHEMA_NAMES
+    + ACCEPTED_REF_SCHEMA_NAMES
+    + NUMERIC_CORE_SCHEMA_NAMES
 )
 
 
@@ -308,6 +322,20 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in SUBMISSION_SCHEMA_NAMES and candidate != submission_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its submission model projection")
+    if (
+        name in ACCEPTED_REF_SCHEMA_NAMES
+        and candidate != accepted_ref_schema_documents()[name]
+    ):
+        raise SchemaRegistryError(
+            f"{name} differs from its accepted-ref model projection"
+        )
+    if (
+        name in NUMERIC_CORE_SCHEMA_NAMES
+        and candidate != numeric_core_schema_documents()[name]
+    ):
+        raise SchemaRegistryError(
+            f"{name} differs from its numeric-core model projection"
+        )
 
 
 def validate_checked_in_schemas() -> tuple[str, ...]:
@@ -361,6 +389,10 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = execution_provenance_schema_document()
         elif name in SUBMISSION_SCHEMA_NAMES:
             document = submission_documents[name]
+        elif name in ACCEPTED_REF_SCHEMA_NAMES:
+            document = accepted_ref_schema_documents()[name]
+        elif name in NUMERIC_CORE_SCHEMA_NAMES:
+            document = numeric_core_schema_documents()[name]
         else:
             document = _load_document(name)
         rendered = _canonical_schema_bytes(document)
@@ -399,6 +431,25 @@ def validate_instance(name: str, instance: object) -> None:
         validator.validate(instance)
         if name == RESEARCH_INTEGRITY_SCHEMA_NAME:
             validate_research_integrity_contract_instance(instance)
+        if name in ACCEPTED_REF_SCHEMA_NAMES or name in NUMERIC_CORE_SCHEMA_NAMES:
+            # Reduction, unique IDs and coherent outcomes exceed JSON Schema.
+            from arw.kernel.core.canonical import canonical_json_bytes
+
+            try:
+                raw = canonical_json_bytes(instance)
+                if name in ACCEPTED_REF_SCHEMA_NAMES:
+                    ACCEPTED_REF_ADAPTER.validate_json(raw)
+                else:
+                    model = {
+                        "numeric-request.schema.json": DerivationRequest,
+                        "numeric-derivation.schema.json": Derivation,
+                        "numeric-presentation.schema.json": NumericPresentation,
+                    }[name]
+                    model.model_validate_json(raw)
+            except (ValueError, TypeError) as error:
+                raise SchemaRegistryError(
+                    f"{name} semantic validation failed: {error}"
+                ) from error
     except (
         KeyError,
         jsonschema.ValidationError,
