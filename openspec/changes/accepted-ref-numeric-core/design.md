@@ -9,7 +9,7 @@ Non-goals: statistical roots/SD/SE, authority writes, legacy migrations, figure 
 
 ## Decisions
 
-State models use strict frozen discriminated unions. ResolutionContext supplies explicit roots and optional fixed-prefix hashes; original ledger and journal validators remain authoritative. SourceLocator delegates its full original validator, evidence spans delegate the research integrity chain, and capsules prove only retained structural bytes. Every adapter preserves the original object. Ambiguous runs never choose an arbitrary match.
+State models use strict frozen discriminated unions. ComparisonContext is extracted unchanged into state/experiment_context.py and re-exported from its legacy module, avoiding state-to-evaluator dependencies. The adapter delegates the original integrity policy lazily; the dependency ratchet records precisely this necessary ledger-to-policy edge. ResolutionContext supplies explicit roots and optional fixed-prefix hashes; original ledger and journal validators remain authoritative. SourceLocator delegates its full original validator, evidence spans delegate the research integrity chain, and capsules prove only retained structural bytes. Every adapter preserves the original object. Ambiguous runs never choose an arbitrary match.
 Numeric requests have a sealed v1 operation vocabulary. Exact decimals become reduced Fraction values with bounded numerator/denominator and row/argument budgets. CSV row IDs are globally unique and selection/group keys are explicit and stable. Context equality is required before comparisons. Derivation identity hashes expression, accepted references, context and evaluator version, excluding presentation. Derived references are re-evaluated against accepted inputs.
 
 ## Risks / Trade-offs
