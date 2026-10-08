@@ -1,8 +1,8 @@
-# Proposed live comparison — approval required before any model call
+# Proposed live comparison — native authenticated Codex execution plan
 
-This is a reviewable proposal for issue #77, not a record of a run. No model
-has been called, no token or dollar cost has been incurred, and
-`live_comparison.status` is `not_measured`.
+This is the execution plan for issue #77, not a record of a live run. No live
+model calls have been recorded under this plan; token usage and USD billing
+remain unmeasured, and `live_comparison.status` is `not_measured`.
 
 ## Frozen inputs and arms
 
@@ -28,20 +28,29 @@ has been called, no token or dollar cost has been incurred, and
 
 ## Proposed execution limits
 
-| Setting | Frozen value for approval |
+| Setting | Declared execution limit |
 | --- | --- |
-| Model and reasoning | `gpt-6-sol`, `high`, both arms |
+| Model and reasoning | Codex native authenticated `gpt-6.1-sol`, `high`, both arms |
 | Tasks and arms | 3 tasks × 2 arms |
-| Maximum paid calls | **6 total**, one per task/arm, no retry or model judge |
+| Maximum model calls | **6 total**, one per task/arm, no retry or model judge |
 | Model-visible observations | Exactly 8 rows per call, same per task in both arms |
 | Output | One selected config plus 16 finite response values; JSON only |
 | Output cap | 4,096 tokens per call if the selected host supports that cap |
 | Stop | Stop after the first submission, failure or budget overrun for each slot; retain the failed slot |
 
-Before execution, the operator must confirm the host supports those settings
-and set a maximum authorized spend. If a setting or spend cap cannot be
-enforced, stop and return for review. Do not inspect or load credentials until
-separate authorization covers the paid run.
+Use Codex's native model through its existing local authentication. Do not
+call a model API directly, introduce an API key, or inspect credential contents.
+Provide any other required configuration through the project's `.env` without
+including secrets in evidence or commits. Do not switch models without explicit
+user authorization.
+
+Before execution, confirm the host supports the declared settings and enforces
+the six-call limit. The run uses the user-authorized native authenticated
+Codex route. If the host cannot enforce a required setting, stop and return
+for review.
+Provider-reported token usage or USD billing may be unavailable for authenticated
+CLI calls; record `unavailable` for each missing field, never zero or a fabricated
+estimate, and do not claim an enforceable USD cap without host evidence.
 
 ## Evidence and cost collection
 
