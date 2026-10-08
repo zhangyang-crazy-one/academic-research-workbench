@@ -19,3 +19,9 @@
 - [x] 4.1 Add explicit accepted source bridges for cross-run and journal sources without weakening the existing lifecycle.
 - [x] 4.2 Expose read-only bridge and semantic caption target proposals and verify no digest self-reference.
 - [x] 4.3 Reject resource-exponent metadata before Fraction construction and preserve extremely close log domains.
+
+## 5. Axis and prefix validation
+
+- [x] 5.1 Support independent typed x selections with exact stable-row alignment and compatible experimental context.
+- [x] 5.2 Match paired positions by exact x/category and require complete caption occurrences.
+- [x] 5.3 Verify Figure receipts at real fixed disk prefixes independently of later ledger tails.

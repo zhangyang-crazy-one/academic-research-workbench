@@ -123,6 +123,7 @@ class PlotLayer(StrictModel):
     role: Literal["observation", "aggregate", "interval"]
     mark: Literal["point", "line", "bar", "strip", "rule"]
     source: CsvSelection | None = None
+    x_source: CsvSelection | None = None
     data: tuple[PlotDatum, ...] = Field(default=(), max_length=1000)
     encoding: PlotEncoding
     uncertainty: PlotUncertainty | None = None
@@ -132,6 +133,8 @@ class PlotLayer(StrictModel):
 
     @model_validator(mode="after")
     def grammar(self):
+        if self.role != "observation" and self.x_source is not None:
+            raise ValueError("x_source_requires_observation_role")
         if self.role == "observation":
             if self.source is None or self.data or self.uncertainty:
                 raise ValueError("observations_require_csv_source")
@@ -270,6 +273,10 @@ class ResultPlotIR(StrictModel):
         ):
             raise ValueError("raw_unavailable_cannot_have_observations")
         if self.scales.x.type == "band" and any(
+            l.x_source is not None for l in self.layers
+        ):
+            raise ValueError("band_x_cannot_have_x_source")
+        if self.scales.x.type == "band" and any(
             d.x is not None for l in self.layers for d in l.data
         ):
             raise ValueError("band_x_cannot_have_numeric_derivation")
@@ -298,6 +305,8 @@ class ResultPlotIR(StrictModel):
         for layer in self.layers:
             if layer.source:
                 refs.append(layer.source.ref)
+            if layer.x_source:
+                refs.append(layer.x_source.ref)
             for datum in layer.data:
                 for request in (datum.x, datum.y, datum.lower, datum.upper):
                     if request:
