@@ -112,7 +112,9 @@ class ResearchArtifactService:
             from .plot_policy import compile_plot
 
             context = self._plot_context(ir, run_root, resolution_context)
-            output = renderer.render(compile_plot(ir, context))
+            output = renderer.render(
+                compile_plot(ir, context, acceptance_root=run_root)
+            )
         else:
             output = renderer.render(ir)
         if len(output) > 2_097_152:
@@ -154,7 +156,7 @@ class ResearchArtifactService:
         from .plot_validation import PlotValidator
 
         context = self._plot_context(ir, run_root, resolution_context)
-        compiled = compile_plot(ir, context)
+        compiled = compile_plot(ir, context, acceptance_root=run_root)
         raw, output = self._render(ir, run_root=run_root, resolution_context=context)
         replayed = self._plot_replay(run_root, context)
         validation, reasons, reviewer, passed, checks = PlotValidator().validate(
@@ -219,7 +221,8 @@ class ResearchArtifactService:
             ):
                 from .plot_policy import PlotFault
 
-                raise PlotFault("cross_run_parent_acceptance_unsupported")
+                if not ir.acceptance_bindings:
+                    raise PlotFault("plot_source_bridge_required")
             return self._qualify_plot(
                 ir,
                 run_root=run_root,
@@ -283,6 +286,40 @@ class ResearchArtifactService:
 
         return commit_artifact_pipeline(
             run_root, request, prepare, boundary=self.boundary
+        )
+
+    def caption_targets(self, ir, *, run_root, resolution_context=None):
+        from .plot_policy import caption_target, compile_plot
+
+        context = self._plot_context(ir, run_root, resolution_context)
+        compiled = compile_plot(ir, context, acceptance_root=run_root)
+        targets = []
+        for binding in ir.caption_bindings:
+            digest = sha256_hex(canonical_json_bytes(caption_target(compiled, binding)))
+            targets.append(
+                {
+                    "binding_id": binding.binding_id,
+                    "target_sha256": digest,
+                    "scope": "caption:" + digest,
+                }
+            )
+        return {
+            "artifact_id": ir.artifact_id,
+            "revision": ir.revision,
+            "bindings": targets,
+        }
+
+    def source_bridge(self, ir, *, run_root, resolution_context=None):
+        from .plot_policy import build_source_bridge
+
+        context = self._plot_context(ir, run_root, resolution_context)
+        return build_source_bridge(ir, context).model_dump(mode="json")
+
+    def verify_plot_receipt(
+        self, run_root, events, artifact_id, *, resolution_context=None
+    ):
+        return verify_plot_receipt(
+            run_root, events, artifact_id, resolution_context=resolution_context
         )
 
     def _qualify_plot(self, ir, *, run_root, request, **options):
@@ -575,7 +612,7 @@ def verify_plot_receipt(run_root, events, artifact_id, *, resolution_context=Non
     ):
         raise PlotFault("plot_ir_digest_mismatch")
     context = service._plot_context(ir, run_root, resolution_context)
-    compiled = compile_plot(ir, context)
+    compiled = compile_plot(ir, context, acceptance_root=run_root)
     if (
         receipt.plot_values != compiled.plot_values
         or receipt.metadata != compiled.metadata

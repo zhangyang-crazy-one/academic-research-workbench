@@ -28,7 +28,7 @@ as an exact number. Every emitted `PlotValue` records `plot_value_id`,
 expression, unit, display scale/rounding and IR revision. Coordinate arithmetic
 uses normalized exact values. Operand normalization scales remain in the
 expression; presentation `scale` and suffix never change derivation identity
-or coordinates. Log layout uses fixed 60-digit Decimal transforms; emitted
+or coordinates. Log layout uses fixed 400-digit Decimal transforms; emitted
 layout coordinates are rounded to six decimal places only after calculation.
 
 Intervals require lower/upper endpoint derivations, sampling unit, accepted
@@ -68,10 +68,31 @@ returns `(ResultPlotReceipt, ir_bytes, svg_bytes)`. A receipt PASS describes the
 checks; it is not parent acceptance. A supplied `ResolutionContext` can include
 multiple runs, preserving fully scoped identities even for same-name artifacts.
 `qualify` uses the original parent-only immutable lifecycle for same-run inputs.
-Cross-run parent lifecycle acceptance currently returns explicit
-`cross_run_parent_acceptance_unsupported`; it does not weaken legacy source-event
-validation. `inspect` and `reproduce(..., resolution_context=...)` handle accepted
+Cross-run or journal-backed parent qualification requires an explicitly
+accepted source bridge; without it, `plot_source_bridge_required` fails closed.
+The bridge preserves the original lifecycle source-event rule and never replaces
+original source resolution. `inspect` and `reproduce(..., resolution_context=...)` handle accepted
 result plots, and source tampering prevents reproduction.
+
+`source_bridge(ir, run_root=..., resolution_context=...)` returns a read-only
+`arw.plot-source-bridge.v1` proposal. Save the proposed JSON under the target run,
+then explicitly accept it with the existing parent `accept-artifact` command,
+kind `plot-source-bridge` and media type `application/json`. Add its whole-object
+`ResearchBinding` (artifact, accepted event and content digests) to the IR's
+single `acceptance_bindings` slot. The capsule binds the complete canonically
+sorted source ref objects and their digest to the figure identity/revision.
+Compiler, qualification and reproduction verify the capsule's real target-run
+acceptance and every original accepted source. Unaccepted/wrong-kind capsules,
+wrong revisions, missing refs, digest changes and source tampering fail. The
+bridge event must be inside any supplied historical target prefix.
+
+`caption_targets(ir, run_root=..., resolution_context=...)` returns read-only
+binding IDs, target hashes and `caption:<sha256>` authority scopes. These are
+proposals, not signatures. The target freezes complete caption bytes, numeric
+occurrence, binding context, accepted derivation/exact value and source refs,
+excluding its own confirmation refs/declaration and bridge to avoid a digest
+self-reference. The trusted authority adapter verifies the semantic target and
+returns the current complete IR hash as a response integrity check.
 
 `verify_plot_receipt(run_root, events, artifact_id, resolution_context=...)`
 verifies acceptance at the supplied event prefix, retained receipt/output and
