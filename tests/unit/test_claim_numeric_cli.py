@@ -64,3 +64,12 @@ def test_plot_bridge_and_caption_target_cli_are_readonly(tmp_path, capsys):
     targets = json.loads(capsys.readouterr().out)
     assert targets["bindings"][0]["scope"].startswith("caption:")
     assert {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+
+
+def test_checkout_launcher_forwards_new_public_commands(tmp_path):
+    from tests.unit.test_agent_runtime import LAUNCHER, _agent_env, _run
+
+    for command, action in (("claims", "graph"), ("numeric", "derive")):
+        completed = _run([str(LAUNCHER), command, action, "--help"], env=_agent_env(tmp_path))
+        assert completed.returncode == 0, completed.stderr
+        assert f"{command} {action}" in completed.stdout

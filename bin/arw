@@ -61,7 +61,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|writing|narrative|selection-audit|semantic|experiment|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
+  health|route|version|files|writing|narrative|claims|numeric|selection-audit|semantic|experiment|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
