@@ -32,6 +32,7 @@ from arw.kernel.state.accepted_ref import (
     ACCEPTED_REF_ADAPTER,
     accepted_ref_schema_documents,
 )
+from arw.kernel.state.claim_graph import claim_graph_schema_documents
 from arw.kernel.state.execution_schema import execution_provenance_schema_document
 from arw.kernel.state.failure_diagnosis import failure_diagnosis_schema_documents
 from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES
@@ -51,10 +52,9 @@ from arw.kernel.state.orchestration_models import (
 )
 from arw.kernel.state.provenance import provenance_schema_documents
 from arw.kernel.state.research_artifact import research_artifact_schema_documents
-from arw.kernel.state.result_plot import result_plot_schema_documents
-from arw.kernel.state.claim_graph import claim_graph_schema_documents
 from arw.kernel.state.research_learning import learning_schema_documents
 from arw.kernel.state.research_memory import research_memory_schema_documents
+from arw.kernel.state.result_plot import result_plot_schema_documents
 from arw.kernel.state.submission import (
     SUBMISSION_SCHEMA_NAMES,
     submission_schema_documents,

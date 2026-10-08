@@ -26,3 +26,19 @@ def test_claims_cli_exposes_structured_missing_project_failure(tmp_path, capsys)
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "error"
     assert isinstance(result["code"], str)
+
+
+def test_result_plot_cli_dispatches_real_service_and_preserves_numeric_identity(tmp_path, capsys):
+    from tests.integration.test_result_plots import aggregate, plot
+
+    root, _, ref, _ = accepted_fixture(tmp_path, b'{"A":0.831}\n')
+    ir = plot((aggregate(ref),))
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    assert main(["artifact", "render", "--run-root", str(root), "--input", str(source)]) == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["status"] == "candidate"
+    svg = (root / rendered["path"]).read_bytes()
+    assert svg.startswith(b'<svg')
+    assert main(["artifact", "render", "--run-root", str(root), "--input", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out) == rendered
