@@ -9,12 +9,12 @@
     {
       "path": "vendor/source-manifest.json",
       "purpose": "technical-provenance-only",
-      "sha256": "36d8bca9826628f1e479889f1f79ed0782db86b64b785ddaa2a015515a72e2c2"
+      "sha256": "9e73fb541d9ad2c69229bf1230f5f5ad274620b9c954b6011f155e301d4ad22e"
     },
     {
       "path": "SBOM.cdx.json",
       "purpose": "technical-provenance-only",
-      "sha256": "9dadd6aba5c32694609a692828e5cc4887b2d540dda5a9a98af122fb29690aa8"
+      "sha256": "bb598fd92ec3245b253086ed5f9a8e804c0cc83cbe2761338293bf17e8c52557"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",

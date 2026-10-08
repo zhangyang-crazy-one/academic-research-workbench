@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d8040c892df353daeb870875d5a65e8ab41203e43c0c823e31bfeb0db9edd4d0"
+          "content": "74990d20dbf5e740c847b22bb029c9a1186f08cd6a37691a4eca8a4ce66d8cb7"
         }
       ],
       "name": "vendor/mcp-manifest.json",

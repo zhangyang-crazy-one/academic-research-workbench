@@ -1049,7 +1049,7 @@
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "dde4252bb549e82be011c5f108ea741cc45ca2f462b4c28d686bf4f1a95cc23e",
+      "post_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "pre_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
       "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
@@ -1057,16 +1057,16 @@
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "2465a16a0f096f632364945aa779f1b242b788111a8fb1c73979a63660325edf",
-      "pre_tree_sha256": "dde4252bb549e82be011c5f108ea741cc45ca2f462b4c28d686bf4f1a95cc23e",
+      "post_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
+      "pre_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "46ded8f6d907640c1e48a7ac95bb279ee002466eeae102ab47d91a2126a85175",
-      "pre_tree_sha256": "2465a16a0f096f632364945aa779f1b242b788111a8fb1c73979a63660325edf",
+      "post_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
+      "pre_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
