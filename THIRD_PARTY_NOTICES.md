@@ -34,7 +34,7 @@ SOFTWARE.
 
 ## Ordered local patches
 - `vendor/patches/file-base/0001-file-base-server-name.patch` — SHA-256 `d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4`.
-- `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5`.
+- `vendor/patches/file-base/0002-phase1-confined-read.patch` — SHA-256 `147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329`.
 - `vendor/patches/file-base/0003-phase3-generation-builder.patch` — SHA-256 `32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316`.
 - `vendor/patches/file-base/0004-phase5-research-graph.patch` — SHA-256 `11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c`.
 

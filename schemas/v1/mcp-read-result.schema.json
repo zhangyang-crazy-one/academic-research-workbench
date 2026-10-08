@@ -31,6 +31,7 @@
             "not_regular_file",
             "path_traversal",
             "root_denied",
+            "root_session_mismatch",
             "sensitive_path",
             "symlink_escape",
             "unsupported_platform"

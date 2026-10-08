@@ -5,13 +5,13 @@
     "--run-upstream-tests"
   ],
   "cwd": "/home/runner/work/academic-research-workbench/academic-research-workbench",
-  "ended_at": "2026-10-07T15:02:49Z",
+  "ended_at": "2026-10-08T06:37:07Z",
   "environment": {
     "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
     "ARW_OFFLINE_EVIDENCE_ROOT": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/evidence/phase-01/native/upstream",
     "ARW_OFFLINE_EXEC_ACTIVE": "1"
   },
   "network_denial_mechanism": "bwrap-unshare-net",
-  "started_at": "2026-10-07T14:46:30Z",
+  "started_at": "2026-10-08T06:14:34Z",
   "strace": "/usr/bin/strace"
 }

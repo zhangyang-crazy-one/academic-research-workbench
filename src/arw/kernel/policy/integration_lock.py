@@ -87,7 +87,7 @@ EXPECTED_FILE_BASE_PATCHES = (
     (
         2,
         "vendor/patches/file-base/0002-phase1-confined-read.patch",
-        "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5",
+        "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329",
     ),
     (
         3,
@@ -101,7 +101,7 @@ EXPECTED_FILE_BASE_PATCHES = (
     ),
 )
 EXPECTED_FILE_BASE_POST_PATCH_TREE = (
-    "32fcdc58e82b195cb7013b50b8dc73202698ee61c777cd4c60f6b376410a0288"
+    "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac"
 )
 EXPECTED_FILE_BASE_TEST_TREE = (
     "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
@@ -2614,14 +2614,14 @@ _NATIVE_STATUS_ZERO_BYTES: bytes = b"0\n"
 
 
 _NATIVE_VERDICT_SHA256_BY_SURFACE = {
-    "upstream": "23af4cf61d5d2725baca9296ba14dd4a1c6af84f03cceab840c58d2320af4eed",
-    "asan_ubsan": "904db8310adb56c9ba628801bba504a29b0da1eb00500b3ea21b1c0b818001c7",
-    "tsan": "fc896bb5ab4ff968c1468fc657e84dcfaffc0ea75d508e2fda0021c308914b9a",
+    "upstream": "4c0ddb34e0e78a5325e15ca8530b028a59fc401e9fb4491f2c3a7a279d0e45f2",
+    "asan_ubsan": "f9ae2aa36cc701aeb3e42f8eed5763b8a8b078c7552c8d9edd475c281f7e88f8",
+    "tsan": "23af4cf61d5d2725baca9296ba14dd4a1c6af84f03cceab840c58d2320af4eed",
 }
 _NATIVE_COMMAND_SHA256_BY_SURFACE = {
-    "upstream": "e8eebbf52e0ed74ae451984acd0bb79ccc51cd3a00cb8cf60606caab8aee1873",
-    "asan_ubsan": "dd03770a6be248fa478e34ad743ae16c2da838a1fd658d9b320790a52f4b9be8",
-    "tsan": "d96348ed2c1ef94dba0ae3783321ec7be6b1a2a2bb9387ea6c1bb419550d9528",
+    "upstream": "1483a60ba2b923cec582a0e4abb92caac5d8b87b627534da7c04ed5b5ccd8a55",
+    "asan_ubsan": "c3bedd8d327bc3a72f80972bf72667a7a1568ada6b11e3b16e3e38edc5fd587f",
+    "tsan": "d12d783a9f9cb5e2d4095802b43cbd03842e1ec0d11321b2e5d25867719fb47f",
 }
 
 

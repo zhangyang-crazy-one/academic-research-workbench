@@ -6,12 +6,12 @@
   "upstream_commit": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
   "upstream_git_tree": "e5a5586de0bd58ddf59b73cbf1baa70ea0427fe8",
   "upstream_source_tree_sha256": "871ee3cdd215f275865d5b7360c3dd7e9337661252d822956d20e3b500c1ff46",
-  "patched_source_tree_sha256": "32fcdc58e82b195cb7013b50b8dc73202698ee61c777cd4c60f6b376410a0288",
+  "patched_source_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
   "source_materialization": "vendor/sources/file-base",
   "binary": {
     "path": ".file-base/bin/file-base",
     "staged_path": "libexec/file-base-mcp",
-    "sha256": "3253e3663267324ae0bb54a192968a97751d35c7853b4a6117399c17146b3de7"
+    "sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
   },
   "patches": [
     {
@@ -22,7 +22,7 @@
     {
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "sha256": "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5"
+      "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
     {
       "order": 3,

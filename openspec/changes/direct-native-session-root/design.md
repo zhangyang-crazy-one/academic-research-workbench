@@ -1,0 +1,7 @@
+# Design
+
+The v0.11 daemon installs `srv->allowed_root` and marks `allowed_root_policy_set` before accepting MCP requests. The patch compares that canonical session root with the canonical process `CBM_ALLOWED_ROOT`, then opens the session root for `read_file`. The request's `allowed_root` ID must equal `CBM_ALLOWED_ROOT_ID`. Any mismatch denies before path resolution or file content is read. `tools/list` uses the same session compatibility predicate, hiding `read_file` when the current session cannot use it. Registry and help calls without a session retain their existing environment view.
+
+When no session policy exists, the native handler retains the single-process environment fallback. A daemon cannot reach this branch: its application request path requires `context_set`, which is set only after `cbm_mcp_server_set_session_context`. A dedicated regression starts a daemon without a root, then connects a configured client and asserts denial rather than an environment fallback.
+
+The implementation changes only the ordered `0002` source patch. Source and MCP manifests bind its new bytes and every downstream post-patch tree. The upstream native test tree stays unchanged. The synthetic regression runs the production binary with `CBM_RUNTIME_DIR` set to a short private directory, so every case uses a real shared daemon without touching the account's normal rendezvous endpoint. Normal, ASan+UBSan, and TSan qualification evidence must be regenerated before the release gate is considered complete.

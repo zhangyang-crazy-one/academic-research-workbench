@@ -995,13 +995,13 @@
       "class": "binary",
       "path": ".file-base/bin/file-base",
       "required_before_staging": true,
-      "sha256": "3253e3663267324ae0bb54a192968a97751d35c7853b4a6117399c17146b3de7"
+      "sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
     },
     {
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "1d0cef0b6eba2484b0eee81c270a61e7afdbe160af8dccbee45ad8c690b26d02"
+      "sha256": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e"
     },
     {
       "class": "build-evidence",
@@ -1019,7 +1019,7 @@
       "class": "schema",
       "path": "schemas/v1/mcp-read-result.schema.json",
       "required_before_staging": true,
-      "sha256": "9b55e654272d3c5ff8f45aac2e30c4fb25f8585af1c07b01c7a5f36fe63d0eb0"
+      "sha256": "51ea4dc411c32527dba55b7d7030e5841fcd347fcf5fc3579ae893641a07ce99"
     },
     {
       "class": "schema",
@@ -1049,24 +1049,24 @@
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "cc2e1eb5c7d36f22754397334cbbed6c12711d0994a70eddeae1a9a51048a258",
+      "post_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "pre_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
-      "sha256": "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5"
+      "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
     {
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "fdb601dada0ecfd2936aa7f7a6cd39e93ae20b461977fca107c2018847cd9cb8",
-      "pre_tree_sha256": "cc2e1eb5c7d36f22754397334cbbed6c12711d0994a70eddeae1a9a51048a258",
+      "post_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
+      "pre_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "32fcdc58e82b195cb7013b50b8dc73202698ee61c777cd4c60f6b376410a0288",
-      "pre_tree_sha256": "fdb601dada0ecfd2936aa7f7a6cd39e93ae20b461977fca107c2018847cd9cb8",
+      "post_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
+      "pre_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],

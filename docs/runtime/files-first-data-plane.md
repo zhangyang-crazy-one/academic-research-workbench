@@ -90,6 +90,19 @@ must not be a symlink. One process cannot add another root after startup. The
 launcher resolves the hash-locked installed Python runtime and does not import
 the source checkout or user site packages.
 
+The explicit direct-native provider instead receives `CBM_ALLOWED_ROOT` and
+`CBM_ALLOWED_ROOT_ID`. Its shared daemon authorizes `read_file` against the
+current session's canonical root, which must equal the daemon's process root
+capability. The requested root ID must also equal the process capability ID.
+Another root ID, or a daemon without a capability, keeps the public
+`root_denied` result; the same ID with another session root returns
+`root_session_mismatch`. Both are returned before opening a file; an
+incompatible session does not advertise `read_file`. Separate cache directories
+do not isolate the upstream daemon endpoint. An existing daemon without a root
+capability cannot grant access to a newly configured client. The Python
+store-backed launch contract above continues to use its registered root and
+selected generation.
+
 ## Freshness and Reads
 
 `list_files` and `read_file` inspect live files through component-wise,
