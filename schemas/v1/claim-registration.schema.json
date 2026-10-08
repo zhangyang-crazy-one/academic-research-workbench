@@ -145,6 +145,52 @@
       "title": "EvidenceBinding",
       "type": "object"
     },
+    "NumericPresentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "decimals": {
+          "maximum": 18,
+          "minimum": 0,
+          "title": "Decimals",
+          "type": "integer"
+        },
+        "rounding_mode": {
+          "enum": [
+            "ROUND_HALF_EVEN",
+            "ROUND_HALF_UP",
+            "ROUND_DOWN"
+          ],
+          "title": "Rounding Mode",
+          "type": "string"
+        },
+        "unit_suffix": {
+          "default": "",
+          "maxLength": 64,
+          "title": "Unit Suffix",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      },
+      "required": [
+        "derivation_id",
+        "decimals",
+        "rounding_mode"
+      ],
+      "title": "NumericPresentation",
+      "type": "object"
+    },
     "Occurrence": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -230,6 +276,30 @@
           "default": null,
           "title": "Derivation Id"
         },
+        "presentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NumericPresentation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "figure_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Figure Ref"
+        },
         "plot_value_id": {
           "anyOf": [
             {
@@ -266,6 +336,30 @@
         "selected_sha256"
       ],
       "title": "Occurrence",
+      "type": "object"
+    },
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
       "type": "object"
     },
     "SemanticClaim": {

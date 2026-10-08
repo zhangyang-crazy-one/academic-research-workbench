@@ -81,6 +81,7 @@ def handle(args):
             expected_head=args.expected_head,
             hard_check=args.hard_check,
             evaluation_time=args.at_time,
+            figure_verifier=_figure_verifier(),
         )
     if not args.author_confirmed:
         raise ClaimGraphError(
@@ -140,3 +141,26 @@ def handle(args):
         expected_head=args.expected_head,
         evidence_update=args.claims_command == "evidence",
     )
+
+
+def _figure_verifier():
+    """Optional renderer wiring stays at the composition boundary."""
+    import os
+    from arw.composition import default_router
+    from arw.kernel.capabilities import CapabilityUnavailable
+
+    value = os.environ.get("ARW_PLUGIN_MANIFEST")
+    if value:
+        manifest = Path(value)
+    elif os.environ.get("ARW_PLUGIN_ROOT"):
+        raise ValueError("plugin_manifest_missing")
+    else:
+        candidate = Path(__file__).resolve().parents[2] / ".codex-plugin/plugin.json"
+        manifest = candidate if candidate.is_file() else None
+    try:
+        provider = default_router(plugin_manifest=manifest).resolve(
+            "research.artifact.inspect"
+        )
+    except CapabilityUnavailable:
+        return None
+    return getattr(provider, "verify_plot_receipt", None)

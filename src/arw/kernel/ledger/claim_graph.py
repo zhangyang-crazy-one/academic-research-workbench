@@ -123,6 +123,7 @@ class Inputs:
     runs: dict  # run_id -> (root, manifest, validated replay)
     cache: dict = field(default_factory=dict, compare=False)
     held_lock_roots: tuple[Path, ...] = ()
+    figure_verifier: object = None
 
 
 def _roots(root: Path, run_roots) -> tuple[Path, ...]:
@@ -148,6 +149,7 @@ def _read_inputs(
     fixed: SnapshotManifest | None = None,
     *,
     held_lock_roots: tuple[Path, ...] = (),
+    figure_verifier=None,
 ) -> Inputs:
     root = narrative._root(root)
     identity = narrative._identity(root)
@@ -225,7 +227,14 @@ def _read_inputs(
             raise ClaimGraphError(
                 "mixed_snapshot", "fixed vector does not match validated log prefixes"
             )
-        return Inputs(root, vector, events, runs, held_lock_roots=held_lock_roots)
+        return Inputs(
+            root,
+            vector,
+            events,
+            runs,
+            held_lock_roots=held_lock_roots,
+            figure_verifier=figure_verifier,
+        )
     except ClaimGraphError:
         raise
     except (ValueError, RuntimeError, OSError, KeyError) as error:
@@ -268,7 +277,14 @@ def _closure(inputs: Inputs) -> None:
     all_events = [e for item in inputs.runs.values() for e in item[2].events]
     journal_events = {e["sequence"]: e for e in inputs.journal}
 
-    def walk(value, referring_sequence):
+    visited = [0]
+
+    def walk(value, referring_sequence, depth=0):
+        visited[0] += 1
+        if depth > 32 or visited[0] > 262144:
+            raise ClaimGraphError(
+                "limit_exceeded", "cross-log dependency traversal exceeds budget"
+            )
         if isinstance(value, dict):
             scope = value.get("scope")
             if scope == "parent-artifact":
@@ -348,15 +364,33 @@ def _closure(inputs: Inputs) -> None:
                             "confirmation run snapshot is outside included prefixes",
                         )
             for child in value.values():
-                walk(child, referring_sequence)
+                walk(child, referring_sequence, depth + 1)
         elif isinstance(value, (list, tuple)):
             for child in value:
-                walk(child, referring_sequence)
+                walk(child, referring_sequence, depth + 1)
 
     for event in inputs.journal:
         walk(event["payload"], event["sequence"])
     for item in inputs.runs.values():
         for event in item[2].events:
+            if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
+                manifest = load_artifact_manifest(
+                    item[0], event.payload.manifest_sha256
+                )
+                if manifest.media_type == "application/json":
+                    raw = read_retained_bytes(
+                        item[0], manifest.content_path, max_bytes=MAX_SOURCE_BYTES
+                    )
+                    if sha256_hex(raw) != event.payload.artifact_sha256:
+                        raise ClaimGraphError(
+                            "digest_mismatch",
+                            "accepted dependency container bytes differ",
+                        )
+                    try:
+                        value = strict_json_loads(raw)
+                    except ValueError:
+                        value = None
+                    walk(value, inputs.manifest.journal.sequence + 1)
             if event.event_type == "claim.attestation_anchored":
                 source = journal_events.get(event.payload.journal_sequence)
                 if source is None:
@@ -597,6 +631,7 @@ def _evaluate_registration(
     record: ClaimRegistration, inputs: Inputs
 ) -> tuple[list[dict], str]:
     evidence = []
+    dependency_evidence = []
     for binding in sorted(record.evidence, key=lambda e: e.evidence_id):
         result = _resolve(binding.original, inputs, binding.adapter)
         item = {
@@ -613,16 +648,26 @@ def _evaluate_registration(
         # from canonical accepted receipts via their existing validators.
         if result.status == "resolved" and result.raw_bytes is not None:
             item["checks"] = _receipt_checks(result.raw_bytes)
+        dependency_item = {**item, "checks": list(item["checks"])}
         if binding.node_kind == "Figure":
-            item["figure_adapter"] = {
+            # Preserve the existing v1 dependency formula and retained
+            # declarations when adding an optional read-side verifier.
+            dependency_item["figure_adapter"] = {
                 "status": "unsupported",
                 "reason": "result_plot_adapter_pending",
             }
+            item["figure_adapter"] = _figure_details(
+                inputs,
+                result.ref.model_dump(mode="json") if result.ref else binding.original,
+                result,
+            )
+            item["checks"] += item["figure_adapter"].get("checks", [])
         evidence.append(item)
+        dependency_evidence.append(dependency_item)
     dependency = sha256_hex(
         canonical_json_bytes(
             {
-                "evidence": [{k: v for k, v in item.items()} for item in evidence],
+                "evidence": dependency_evidence,
                 "relations": [r.model_dump(mode="json") for r in record.relations],
                 "assessments": [a.model_dump(mode="json") for a in record.assessments],
             }
@@ -708,6 +753,8 @@ def _attestations(
             inputs.root,
             tuple(inputs.runs[r.run_id][0] for r in att.snapshot_manifest.runs),
             att.snapshot_manifest,
+            figure_verifier=inputs.figure_verifier,
+            held_lock_roots=inputs.held_lock_roots,
         )
         _closure(historical)
         old = _registrations(historical.journal).get(att.claim_id)
@@ -797,10 +844,8 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     else [],
                 }
                 if kind == "Figure":
-                    node["figure_adapter"] = {
-                        "status": "unsupported",
-                        "reason": "result_plot_adapter_pending",
-                    }
+                    node["figure_adapter"] = _figure_details(inputs, ref, resolved)
+                    node["checks"] += node["figure_adapter"].get("checks", [])
                 if resolved.raw_bytes is not None:
                     try:
                         retained = strict_json_loads(resolved.raw_bytes)
@@ -912,6 +957,7 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
     if len(registrations) > MAX_CLAIMS:
         raise ClaimGraphError("limit_exceeded", "claim count exceeds projection budget")
     registered_occurrences = set()
+    occurrence_bindings = {}
     claims = []
     for claim_id, record in sorted(registrations.items()):
         evidence, dependency = _evaluate_registration(record, inputs)
@@ -920,6 +966,9 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
             _check_occurrence(occurrence, inputs)
             registered_occurrences.add(occurrence.occurrence_id)
             discovered[occurrence.occurrence_id] = occurrence
+            occurrence_bindings.setdefault(occurrence.occurrence_id, []).append(
+                (claim_id, record.claim.revision, occurrence)
+            )
             edges.append(
                 {
                     "relation": "expresses",
@@ -979,17 +1028,67 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     **relation.model_dump(mode="json"),
                 }
             )
+    numeric_sources = _numeric_sources(inputs, nodes)
+    for claim in claims:
+        record = registrations[claim["claim_id"]]
+        claim["numeric_checks"] = [
+            {
+                "occurrence_id": "occurrence:" + o.occurrence_id,
+                **_numeric_check(o, inputs, numeric_sources),
+            }
+            for o in record.occurrences
+            if o.kind == "numeric_token"
+        ]
     for key, occurrence in sorted(discovered.items()):
         nodes.append(
             {
                 "id": "occurrence:" + key,
                 "node_kind": "Occurrence",
                 **occurrence.model_dump(mode="json"),
+                **(
+                    {
+                        "numeric_verification": _numeric_check(
+                            occurrence, inputs, numeric_sources
+                        )
+                    }
+                    if occurrence.kind == "numeric_token"
+                    else {}
+                ),
                 "registration": "registered"
                 if key in registered_occurrences
                 else "unknown",
             }
         )
+    for node in nodes:
+        if node["node_kind"] == "Occurrence" and node["kind"] == "numeric_token":
+            bindings = occurrence_bindings.get(
+                node["id"].removeprefix("occurrence:"), []
+            )
+            node["claim_numeric_bindings"] = [
+                {
+                    "claim_id": c,
+                    "claim_revision": rev,
+                    "derivation_id": o.derivation_id,
+                    "numeric_class": o.numeric_class,
+                    "plot_value_id": o.plot_value_id,
+                    "plot_revision": o.plot_revision,
+                    "verification": _numeric_check(o, inputs, numeric_sources),
+                }
+                for c, rev, o in bindings
+            ]
+            if (
+                len(
+                    {
+                        canonical_json_bytes(o.model_dump(mode="json"))
+                        for _, _, o in bindings
+                    }
+                )
+                > 1
+            ):
+                node["numeric_verification"] = {
+                    "status": "not_checked",
+                    "reason": "multiple_claim_specific_bindings",
+                }
     nodes.sort(key=lambda node: node["id"])
     edges.sort(key=canonical_json_bytes)
     coverage = {
@@ -1046,7 +1145,11 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     "revision": claim["revision"],
                 }
             )
-        if not any(a["status"] == "declared" for a in claim["attestations"]):
+        if not any(
+            a["status"] == "declared"
+            or (a["historical_authorized"] and a["current_applicability"] == "current")
+            for a in claim["attestations"]
+        ):
             advisory.append(
                 {
                     "code": "claim_confirmation_missing_or_stale",
@@ -1084,10 +1187,13 @@ def graph(
     expected_head: str | None = None,
     hard_check: bool = False,
     evaluation_time: str | None = None,
+    figure_verifier=None,
 ) -> dict:
     """Rebuild a graph without writes; current views optimistically compare vectors."""
     fixed = SnapshotManifest.model_validate(as_of) if isinstance(as_of, dict) else as_of
-    before = _read_inputs(project_root, run_roots, fixed)
+    before = _read_inputs(
+        project_root, run_roots, fixed, figure_verifier=figure_verifier
+    )
     if expected_head is not None and expected_head != before.manifest.sha256:
         raise ClaimGraphError("stale", "expected snapshot manifest digest differs")
     result = (
@@ -1127,6 +1233,41 @@ def graph(
                 failures.append(
                     {"code": "specified_check_failed", "claim_id": claim["claim_id"]}
                 )
+        numeric = [
+            n
+            for n in result["nodes"]
+            if n["node_kind"] == "Occurrence" and n["kind"] == "numeric_token"
+        ]
+        for claim in claims:
+            for check in claim["numeric_checks"]:
+                if check["status"] != "passed":
+                    failures.append(
+                        {
+                            "code": "claim_numeric_binding_not_verified",
+                            "claim_id": claim["claim_id"],
+                            "occurrence_id": check["occurrence_id"],
+                            "status": check["status"],
+                        }
+                    )
+        for occurrence in numeric:
+            if (
+                occurrence["registration"] != "registered"
+                and occurrence["numeric_verification"]["status"] != "passed"
+            ):
+                failures.append(
+                    {
+                        "code": "numeric_occurrence_not_verified",
+                        "occurrence_id": occurrence["id"],
+                        "status": occurrence["numeric_verification"]["status"],
+                    }
+                )
+        if any(
+            check["status"] in {"unsupported", "not_checked"}
+            for claim in claims
+            for group in claim["checks"]
+            for check in group["results"]
+        ):
+            failures.append({"code": "specified_check_unavailable"})
         coverage = result["coverage"]
         if (
             coverage["unknown_occurrence_count"]
@@ -1138,7 +1279,14 @@ def graph(
         result["hard_checks"] = {
             "status": "failed" if failures else "passed",
             "scope": "registered_claims_and_observed_mvp_occurrences_only",
-            "out_of_scope": "not_evaluated",
+            "out_of_scope": "unknown_not_evaluated",
+            "policy_version": "arw.claim-hard-coverage.v1",
+            "denominator": {
+                "observed_occurrences": coverage["candidate_occurrence_count"],
+                "registered_occurrences": coverage["registered_occurrence_count"],
+                "registered_claims": coverage["registered_claim_count"],
+                "out_of_scope_sentences": coverage["out_of_scope_sentence_count"],
+            },
             "failures": failures,
         }
     if fixed is None:
@@ -1260,4 +1408,217 @@ def attest_declared(
         "graph_snapshot_sha256": snapshot.sha256,
         "sequence": event["sequence"],
         "event_sha256": event["event_sha256"],
+    }
+
+
+def _figure_details(inputs: Inputs, ref: dict, resolved) -> dict:
+    if resolved.status != "resolved" or resolved.raw_bytes is None:
+        return {"status": "unsupported", "reason": "unresolved_accepted_figure"}
+    try:
+        body = strict_json_loads(resolved.raw_bytes)
+    except ValueError:
+        body = None
+    if (
+        not isinstance(body, dict)
+        or body.get("receipt_version") != "arw.result-plot-receipt.v1"
+    ):
+        return {"status": "unsupported", "reason": "artifact_kind_not_result_plot"}
+    if inputs.figure_verifier is None:
+        return {
+            "status": "unsupported",
+            "reason": "result_plot_verifier_unavailable",
+            "checks": [
+                {
+                    "method": "result_plot_integrity",
+                    "version": "1",
+                    "status": "unsupported",
+                    "scope": "figure_source_integrity",
+                }
+            ],
+        }
+    key = ("verified_figure", sha256_hex(canonical_json_bytes(ref)))
+    if key not in inputs.cache:
+        root, _, replay = inputs.runs[ref["run_id"]]
+        try:
+            receipt = inputs.figure_verifier(
+                root,
+                replay.events,
+                ref["artifact_id"],
+                resolution_context=_context(inputs),
+            )
+        except (ValueError, RuntimeError, OSError) as error:
+            raise ClaimGraphError(
+                "figure_integrity_failed",
+                "original result plot verifier rejected accepted figure",
+            ) from error
+        inputs.cache[key] = receipt
+    receipt = inputs.cache[key]
+    if receipt is None:
+        return {"status": "unsupported", "reason": "result_plot_verifier_unavailable"}
+    statuses = {
+        "PASS": "passed",
+        "FAIL": "failed",
+        "unsupported": "unsupported",
+        "unknown": "not_checked",
+        "advisory": "not_checked",
+    }
+    return {
+        "status": "verified",
+        "scope": "figure_source_integrity_only",
+        "rendered_from": receipt.rendered_from.model_dump(mode="json"),
+        "plot_values": [v.model_dump(mode="json") for v in receipt.plot_values],
+        "checks": [
+            {
+                "method": c.category,
+                "version": "result_plot.v1",
+                "status": statuses.get(c.status, "not_checked"),
+                "scope": "figure_source_integrity"
+                if c.category == "integrity"
+                else c.category,
+                "code": c.code,
+            }
+            for c in receipt.checks
+        ],
+    }
+
+
+def _numeric_sources(inputs: Inputs, nodes: list[dict]) -> dict:
+    from arw.kernel.state.numeric_core import Derivation
+    from arw.kernel.policy.numeric_core import evaluate_derivation
+
+    records = {}
+    sources = {}
+    for node in nodes:
+        ref = node.get("source")
+        if not isinstance(ref, dict) or ref.get("scope") != "parent-artifact":
+            continue
+        result = _resolve(ref, inputs)
+        if result.status != "resolved" or result.raw_bytes is None:
+            continue
+        try:
+            body = strict_json_loads(result.raw_bytes)
+        except ValueError:
+            body = None
+        if (
+            isinstance(body, dict)
+            and body.get("schema_version") == "arw.numeric-derivation.v1"
+        ):
+            record = Derivation.model_validate_json(result.raw_bytes)
+            if (
+                record.derivation_id in records
+                and records[record.derivation_id] != record
+            ):
+                raise ClaimGraphError(
+                    "numeric_identity_conflict",
+                    "accepted derivation identity conflicts",
+                )
+            records[record.derivation_id] = record
+            sources[record.derivation_id] = {"source": ref, "record": record}
+        adapter = node.get("figure_adapter", {})
+        if adapter.get("status") == "verified":
+            for value in adapter["plot_values"]:
+                sources.setdefault(value["derivation_id"], {"source": ref}).setdefault(
+                    "plot_values", []
+                ).append(value)
+    for identity, record in records.items():
+        actual = evaluate_derivation(record.request, _context(inputs), records)
+        if actual != record:
+            sources[identity] = {
+                "status": "failed",
+                "reason": "sealed_derivation_replay_mismatch",
+                "source": sources[identity]["source"],
+            }
+        else:
+            sources[identity].update(status=actual.status, exact=actual.exact)
+    return sources
+
+
+def _numeric_check(occurrence: Occurrence, inputs: Inputs, sources: dict) -> dict:
+    from arw.kernel.state.numeric_core import RationalExact
+    from arw.kernel.policy.numeric_core import format_exact
+
+    kind = occurrence.numeric_class
+    if kind in {"identifier", "year", "figure_number", "confidence_level"}:
+        return {
+            "status": "passed",
+            "scope": "selected_byte_integrity_only",
+            "classification": kind,
+        }
+    if kind != "own_result":
+        return {
+            "status": "not_checked",
+            "classification": kind or "unknown",
+            "reason": "numeric_origin_unknown"
+            if kind in {None, "unknown"}
+            else "non_own_result_numeric_scope",
+        }
+    source = sources.get(occurrence.derivation_id)
+    if source is None:
+        return {
+            "status": "unsupported",
+            "reason": "derivation_not_accepted_or_verified",
+            "derivation_id": occurrence.derivation_id,
+        }
+    if source.get("status") == "failed":
+        return {
+            "status": "failed",
+            "reason": source["reason"],
+            "derivation_id": occurrence.derivation_id,
+        }
+    exact = source.get("exact")
+    values = source.get("plot_values", [])
+    if values:
+        if occurrence.figure_ref is None or occurrence.plot_value_id is None:
+            return {
+                "status": "not_checked",
+                "reason": "plot_value_context_binding_missing",
+                "derivation_id": occurrence.derivation_id,
+            }
+        matching = [
+            v
+            for v in values
+            if v["plot_value_id"] == occurrence.plot_value_id
+            and v["revision"] == occurrence.plot_revision
+        ]
+        figure = _resolve(occurrence.figure_ref, inputs)
+        details = _figure_details(inputs, occurrence.figure_ref, figure)
+        matching = [
+            v
+            for v in details.get("plot_values", [])
+            if v["plot_value_id"] == occurrence.plot_value_id
+            and v["revision"] == occurrence.plot_revision
+            and v["derivation_id"] == occurrence.derivation_id
+        ]
+        if len(matching) != 1:
+            return {
+                "status": "failed",
+                "reason": "plot_value_context_mismatch",
+                "derivation_id": occurrence.derivation_id,
+            }
+        exact = RationalExact.model_validate(matching[0]["exact"])
+    if exact is None:
+        return {
+            "status": "unsupported",
+            "reason": "derivation_not_scalar_exact",
+            "derivation_id": occurrence.derivation_id,
+        }
+    if occurrence.presentation is None:
+        return {
+            "status": "not_checked",
+            "reason": "numeric_presentation_missing",
+            "derivation_id": occurrence.derivation_id,
+        }
+    expected = format_exact(exact, occurrence.presentation)
+    raw, _, _ = _manuscript(occurrence.manuscript_ref, inputs)
+    observed = raw[occurrence.offset : occurrence.offset + occurrence.length].decode(
+        "utf-8"
+    )
+    return {
+        "status": "passed" if observed == expected else "failed",
+        "scope": "exact_derivation_and_explicit_display",
+        "derivation_id": occurrence.derivation_id,
+        "exact": exact.model_dump(mode="json"),
+        "expected_display": expected,
+        "observed_display": observed,
+        "source": source["source"],
     }
