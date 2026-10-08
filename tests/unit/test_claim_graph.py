@@ -590,3 +590,22 @@ def test_legacy_accepted_link_is_preserved_without_guessing_revision(tmp_path):
     assert imported["asserted_by"] == "parent.runtime"
     assert not any(e["relation"] == "contradicts" for e in result["edges"])
     assert (r / "link.json").read_bytes() == raw
+
+
+def test_human_scope_labels_are_not_mistaken_for_reference_envelopes(tmp_path):
+    p, r = setup(tmp_path)
+    record(p, r, registration(claim_graph.graph(p, run_roots=(r,))))
+    view = claim_graph.graph(p, run_roots=(r,))
+    claim_graph.attest_declared(
+        p,
+        run_roots=(r,),
+        expected_head=view["snapshot_sha256"],
+        claim_id="claim.relation",
+        author_id="author.owner",
+        statement="Declared scope review.",
+        scope="project-journal",
+        policy_version="policy.v1",
+    )
+    output = claim_graph.graph(p, run_roots=(r,))
+    assert current_claim(output)["attestations"][0]["status"] == "declared"
+    assert current_claim(output)["attestations"][0]["scope"] == "project-journal"

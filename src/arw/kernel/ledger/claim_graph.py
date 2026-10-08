@@ -287,7 +287,7 @@ def _closure(inputs: Inputs) -> None:
             )
         if isinstance(value, dict):
             scope = value.get("scope")
-            if scope == "parent-artifact":
+            if scope == "parent-artifact" and "project_id" in value:
                 prefix = next(
                     (
                         r
@@ -312,7 +312,7 @@ def _closure(inputs: Inputs) -> None:
                     raise ClaimGraphError(
                         "digest_mismatch", "cross-log parent identity or digest differs"
                     )
-            elif scope == "project-journal":
+            elif scope == "project-journal" and "project_id" in value:
                 seq = value.get("sequence")
                 event = journal_events.get(seq) if type(seq) is int else None
                 if event is None or seq >= referring_sequence:
