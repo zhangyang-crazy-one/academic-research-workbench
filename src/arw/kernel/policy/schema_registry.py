@@ -445,6 +445,23 @@ def validate_instance(name: str, instance: object) -> None:
         validator.validate(instance)
         if name == RESEARCH_INTEGRITY_SCHEMA_NAME:
             validate_research_integrity_contract_instance(instance)
+        if name in RESULT_PLOT_SCHEMA_NAMES:
+            from arw.kernel.core.canonical import canonical_json_bytes
+            from arw.kernel.state.result_plot import (
+                PlotSourceBridge,
+                ResultPlotIR,
+                ResultPlotReceipt,
+            )
+
+            model = {
+                "result-plot-ir.schema.json": ResultPlotIR,
+                "result-plot-receipt.schema.json": ResultPlotReceipt,
+                "plot-source-bridge.schema.json": PlotSourceBridge,
+            }[name]
+            try:
+                model.model_validate_json(canonical_json_bytes(instance))
+            except (ValueError, TypeError) as error:
+                raise SchemaRegistryError(f"{name} semantic validation failed: {error}") from error
         if name in ACCEPTED_REF_SCHEMA_NAMES or name in NUMERIC_CORE_SCHEMA_NAMES:
             # Reduction, unique IDs and coherent outcomes exceed JSON Schema.
             from arw.kernel.core.canonical import canonical_json_bytes

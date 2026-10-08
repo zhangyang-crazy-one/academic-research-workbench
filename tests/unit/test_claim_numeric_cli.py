@@ -42,3 +42,25 @@ def test_result_plot_cli_dispatches_real_service_and_preserves_numeric_identity(
     assert svg.startswith(b'<svg')
     assert main(["artifact", "render", "--run-root", str(root), "--input", str(source)]) == 0
     assert json.loads(capsys.readouterr().out) == rendered
+
+
+def test_plot_bridge_and_caption_target_cli_are_readonly(tmp_path, capsys):
+    from arw_research_artifact.plot_policy import compile_plot
+
+    from tests.integration.test_result_plots import aggregate, binding, plot
+
+    root, context, ref, _ = accepted_fixture(tmp_path, b'{"A":0.831}\n')
+    ir = plot((aggregate(ref),), caption="A 0.831")
+    value = compile_plot(ir, context).plot_values[0]
+    ir = ir.model_copy(update={"caption_bindings": (binding(value, 2, 7),)})
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    before = {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    common = ["--run-root", str(root), "--input", str(source)]
+    assert main(["artifact", "source-bridge", *common]) == 0
+    bridge = json.loads(capsys.readouterr().out)
+    assert bridge["schema_version"] == "arw.plot-source-bridge.v1"
+    assert main(["artifact", "caption-targets", *common]) == 0
+    targets = json.loads(capsys.readouterr().out)
+    assert targets["bindings"][0]["scope"].startswith("caption:")
+    assert {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
