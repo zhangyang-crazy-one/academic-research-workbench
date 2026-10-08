@@ -752,13 +752,22 @@ def test_execution_schema_branches_reject_drift():
     )
 
     root = Path(__file__).resolve().parents[2] / "schemas/v1"
-    from arw.kernel.state.event_versions import MIGRATIONS
+    from arw.kernel.state.event_versions import MIGRATIONS, event_schema_version
+    from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_TYPES
 
     migration = json.loads(
         (root.parent / "migrations/0004-execution-provenance-events.json").read_text()
     )
-    assert migration["event_schema_version"] == MIGRATIONS[0][1]
-    assert tuple(migration["event_types"]) == MIGRATIONS[0][2]
+    # Reader migrations are newest first; each historical event family retains
+    # its own version when another family is added.
+    registered = [entry for entry in MIGRATIONS if entry[0] == migration["migration"]]
+    assert len(registered) == 1
+    _, version, event_types = registered[0]
+    assert migration["event_schema_version"] == version == "1.4.0"
+    assert tuple(migration["event_types"]) == event_types
+    assert set(event_types) == EXECUTION_PROVENANCE_EVENT_TYPES
+    assert {event_schema_version(kind) for kind in event_types} == {version}
+    assert event_schema_version("experiment.contract.accepted") == "1.5.0"
     execution = json.loads((root / "execution-provenance.schema.json").read_text())
     validate_schema_document("execution-provenance.schema.json", execution)
     drift = copy.deepcopy(execution)
@@ -769,7 +778,13 @@ def test_execution_schema_branches_reject_drift():
         validate_schema_document("execution-provenance.schema.json", drift)
     event = json.loads((root / "event.schema.json").read_text())
     broken = copy.deepcopy(event)
-    broken["allOf"][0]["then"]["properties"]["actor_role"] = {"const": "worker"}
+    branches = [
+        branch for branch in broken["allOf"]
+        if branch.get("if", {}).get("properties", {}).get("event_type", {}).get("const")
+        == "execution_provenance.action_started"
+    ]
+    assert len(branches) == 1
+    branches[0]["then"]["properties"]["actor_role"] = {"const": "worker"}
     with pytest.raises(SchemaRegistryError, match="branch drifted"):
         validate_schema_document("event.schema.json", broken)
 

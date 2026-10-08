@@ -2,6 +2,12 @@
 
 The parent runtime records execution facts as version `1.4.0` hash-chained events. `RuntimeState` stays at `1.0.0`; `RuntimeCommandService.read_execution_provenance()` derives a separate deterministic `ExecutionProvenanceState` from validated journal events. Existing runs are not backfilled.
 
+Event versions belong to their event families, not to the latest reader migration.
+Migration 0004 and all five `execution_provenance.*` events remain at `1.4.0`
+after migration 0005 adds `experiment.contract.accepted` at `1.5.0`.
+The existing runtime command envelope and runtime state stay at `1.0.0`;
+adding an event family does not upgrade those contracts or rewrite historical bytes.
+
 Before the first dispatch, submit an `execution-context` request with the active workflow definition ID and digest, exact retained source bytes as canonical base64 plus SHA-256, source path and programming language, ordered steps, each step's tool, and the runtime/build identity actually known to the parent. `workflow_source.programming_language` is either `null` (unknown, incomplete coverage) or a complete owner-asserted object: `{"uri":"https://example.org/languages/example/1.0","name":"ExampleLang","url":"https://example.org/languages/example","version":"1.0"}`. These values are illustrative test data, not an inferred language for JSON. A bare label or partial object is rejected; the URI and URL must be absolute. Other unknown identity fields are explicit `null`. Context is immutable once accepted. Dataset `name`, `description`, ISO `date_published`, and `license` are supplied by the run owner through `execution-metadata`; they may be added after execution. Corrections append a new event with the current metadata event ID, digest, and a nonempty rationale. Neither current checkout files nor package labels fill missing facts.
 
 The installed launcher accepts `execution-context`, `execution-metadata`, and `execution-bind` with `--run-root`, `--request`, and `--payload` (canonical JSON). `execution-bind` is the explicit path for an output already accepted through `artifact.accepted`; proposal outputs are bound by dispatch. `execution-provenance --run-root` reads the projection and coverage gaps. The writes use the same parent-only `RuntimeCommandRequest` envelope, revision check, writer lock, and append transaction as other runtime commands. The payload file is bounded to 512 KiB. Dispatch remains subject to its existing host qualification gate.

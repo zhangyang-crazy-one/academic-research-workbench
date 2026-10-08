@@ -679,11 +679,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65
     if args.command == "experiment":
         from arw.cli_experiment import handle
+        from arw.kernel.ledger.journal import JournalError
         try:
             _write_json(handle(args))
             return 0
-        except (ValueError, OSError) as error:
-            _write_json({"status": "error", "code": getattr(error, "code", "experiment_invalid"), "message": str(error)[:512]})
+        except (ValueError, RuntimeError, OSError) as error:
+            code = "journal_invalid" if isinstance(error, JournalError) else getattr(error, "code", "experiment_invalid")
+            _write_json({"status": "error", "code": code, "message": str(error)[:512]})
             return 65
     if args.command == "semantic":
         from arw.cli_semantic import handle

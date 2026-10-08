@@ -1,6 +1,7 @@
 """Additive event-reader migrations; immutable historical bytes are never rewritten."""
 
 MIGRATIONS = (
+    (5, "1.5.0", ("experiment.contract.accepted",)),
     (4, "1.4.0", (
         "execution_provenance.context_accepted",
         "execution_provenance.dataset_metadata_accepted",

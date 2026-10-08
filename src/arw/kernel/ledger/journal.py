@@ -27,6 +27,7 @@ from arw.kernel.ledger.manifests import (
     validate_accepted_event_manifests,
     validate_event_manifest_semantics,
     validate_execution_binding_source,
+    validate_experiment_contract_event,
 )
 from arw.kernel.ledger.recovery import (
     RecoveryError,
@@ -380,6 +381,8 @@ def _replay_unlocked(root: Path) -> ReplayState:
     event_ids: set[str] = set()
     command_ids: set[str] = set()
     events: list[CanonicalEvent] = []
+    # Accepted contracts loaded once per replay, keyed by digest.
+    contract_cache: dict = {}
     segments: list[SegmentScan] = []
     manifest_hash = sha256_hex(manifest_bytes)
     recovery_health: RecoveryHealth = "healthy"
@@ -418,9 +421,17 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 raise JournalError("first journal event does not bind the manifest bytes")
         elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted"}:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted", "experiment.contract.accepted", "experiment.provenance.accepted"}:
             try:
-                validate_accepted_event_manifests(root, (event,))
+                if event.event_type == "experiment.contract.accepted":
+                    validate_experiment_contract_event(
+                        root,
+                        event,
+                        [e for e in events if e.event_type == "experiment.contract.accepted"],
+                        cache=contract_cache,
+                    )
+                else:
+                    validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:
                 raise JournalError(str(error)) from error
         if event.event_type == "execution_provenance.artifact_bound":

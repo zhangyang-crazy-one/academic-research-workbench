@@ -63,6 +63,7 @@ from arw.kernel.state.models import (
     ExecutionArtifactBoundPayload,
     ExecutionContextAcceptedPayload,
     ExperimentProvenanceAcceptedPayload,
+    ExperimentContractAcceptedPayload,
     HumanDecisionRequest,
     HumanDecisionRequestedPayload,
     HumanDecisionResolvedPayload,
@@ -513,6 +514,34 @@ class RuntimeCommandService:
             request,
             event_type="experiment.provenance.accepted",
             payload=payload,
+        )
+
+    def append_experiment_contract(self, request: RuntimeCommandRequest, *, contract) -> CommandOutcome:
+        """Accept an immutable contract after validating succession under the writer lock."""
+
+        from arw.kernel.artifacts.experiment_acceptance import (
+            ExperimentAcceptanceError,
+            validate_contract_succession,
+        )
+
+        payload = ExperimentContractAcceptedPayload(
+            contract_sha256=contract.contract_sha256,
+            contract_version=contract.contract_version,
+            supersedes_contract_sha256=contract.supersedes_contract_sha256,
+        )
+
+        def validate(_state, replayed):
+            try:
+                validate_contract_succession(contract, self.run_root, replayed.events)
+            except ExperimentAcceptanceError as error:
+                return error.code, str(error)
+            return None
+
+        return self.append_phase4_event(
+            request,
+            event_type="experiment.contract.accepted",
+            payload=payload,
+            prevalidate=validate,
         )
 
     def request_decision(self, request: HumanDecisionRequest) -> CommandOutcome:
