@@ -186,11 +186,27 @@ class ResearchMemoryService:
 
     def save(self, value: MemoryInput, *, request):
         if value.handoff is not None and self.run_root is not None:
-            from arw.kernel.ledger.narrative import NarrativeError, guard_run
-            with guard_run(self.run_root, expected_sha256=value.handoff.narrative_sha256) as snapshot:
+            from arw.kernel.ledger.narrative import (
+                NarrativeError,
+                bound_trail_summary,
+                guard_run,
+            )
+
+            with guard_run(
+                self.run_root, expected_sha256=value.handoff.narrative_sha256
+            ) as snapshot:
                 if snapshot is not None and value.handoff.narrative_sha256 is None:
-                    raise NarrativeError("missing_narrative_binding", "paper handoff must echo current narrative SHA-256")
-                return self._save_bound(value, request=request)
+                    raise NarrativeError(
+                        "missing_narrative_binding",
+                        "paper handoff must echo current narrative SHA-256",
+                    )
+                summary = (
+                    bound_trail_summary(self.run_root, snapshot) if snapshot else None
+                )
+                receipt = self._save_bound(value, request=request)
+                if summary is not None:
+                    receipt["narrative_trail"] = summary
+                return receipt
         return self._save_bound(value, request=request)
 
     def _save_bound(self, value: MemoryInput, *, request):
@@ -745,15 +761,28 @@ class ResearchMemoryService:
     def resume_handoff(self, memory_id, *, query):
         if self.run_root is None:
             raise MemoryAccessDenied("resume requires the current canonical run")
-        from arw.kernel.ledger.narrative import NarrativeError, guard_run
+        from arw.kernel.ledger.narrative import (
+            NarrativeError,
+            bound_trail_summary,
+            guard_run,
+        )
+
         with guard_run(self.run_root) as snapshot:
-            result = self._resume_handoff_bound(memory_id, query=query, snapshot=snapshot)
+            result = self._resume_handoff_bound(
+                memory_id, query=query, snapshot=snapshot
+            )
             if snapshot is not None:
                 if result.get("narrative_sha256") != snapshot.sha256:
-                    raise NarrativeError("stale_narrative", "handoff carries an obsolete or missing narrative version")
+                    raise NarrativeError(
+                        "stale_narrative",
+                        "handoff carries an obsolete or missing narrative version",
+                    )
                 result["narrative"] = snapshot.model_dump(mode="json")
+                result["narrative_trail"] = bound_trail_summary(self.run_root, snapshot)
                 if len(canonical_json_bytes(result)) > query.max_tokens:
-                    raise MemoryIntegrityError("narrative handoff exceeds continuation context budget")
+                    raise MemoryIntegrityError(
+                        "narrative handoff exceeds continuation context budget"
+                    )
             return result
 
     def _resume_handoff_bound(self, memory_id, *, query, snapshot):

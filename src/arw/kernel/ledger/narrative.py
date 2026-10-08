@@ -23,6 +23,9 @@ ZERO = "0" * 64
 RELATIVE = Path(".arw/narrative/events.jsonl")
 LOCK = Path(".arw/narrative/.lock")
 MAX_HISTORY = 1_048_576
+MAX_TRAIL_CHOICES = 128
+MAX_TRAIL_BYTES = 65_536
+MAX_RUN_RELATIONS = 128
 
 
 class NarrativeError(ValueError):
@@ -74,10 +77,12 @@ def _locked(root: Path, *, write: bool) -> Iterator[Path]:
             "not_applicable", "project has no paper narrative registration"
         )
     lock = root / LOCK
+    if not write and not lock.is_file():
+        raise NarrativeError("corrupt_history", "narrative lock is missing")
     try:
         with portalocker.Lock(
             lock,
-            mode="a+b",
+            mode="a+b" if write else "rb",
             flags=(portalocker.LOCK_EX if write else portalocker.LOCK_SH)
             | portalocker.LOCK_NB,
             timeout=2,
@@ -187,6 +192,21 @@ def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None
                     sha256=event["event_sha256"],
                     plan=NarrativePlan.model_validate(pending["payload"]["plan"]),
                 )
+                pending = None
+            elif (
+                kind == "withdrawn"
+                and snapshot is not None
+                and pending is not None
+                and version == snapshot.version
+                and set(payload) == {"proposal_sha256", "author_id", "reason"}
+                and payload["proposal_sha256"] == pending["event_sha256"]
+                and isinstance(payload["author_id"], str)
+                and payload["author_id"].strip()
+                and len(payload["author_id"].encode("utf-8")) <= 128
+                and isinstance(payload["reason"], str)
+                and payload["reason"].strip()
+                and len(payload["reason"].encode("utf-8")) <= 2048
+            ):
                 pending = None
             else:
                 raise ValueError("invalid narrative transition")
@@ -336,6 +356,44 @@ def approve(
         )
 
 
+def withdraw(
+    project_root: Path, *, proposal_sha256: str, author_id: str, reason: str
+) -> dict:
+    """Record an author's withdrawal of one exact pending branch."""
+    if not author_id.strip() or len(author_id.encode("utf-8")) > 128:
+        raise NarrativeError(
+            "author_confirmation_missing", "withdrawal requires an author identity"
+        )
+    if not reason.strip() or len(reason.encode("utf-8")) > 2048:
+        raise NarrativeError("change_reason_missing", "withdrawal requires a reason")
+    with _locked(project_root, write=True) as root:
+        events, snapshot, pending = _read(root)
+        if (
+            snapshot is None
+            or pending is None
+            or pending["event_sha256"] != proposal_sha256
+        ):
+            raise NarrativeError(
+                "stale_proposal", "withdrawal must name the current pending proposal"
+            )
+        event = _append(
+            root,
+            events,
+            "withdrawn",
+            snapshot.version,
+            {
+                "proposal_sha256": proposal_sha256,
+                "author_id": author_id,
+                "reason": reason,
+            },
+        )
+        return {
+            "status": "selected",
+            "current": snapshot.model_dump(mode="json"),
+            "withdrawal_sha256": event["event_sha256"],
+        }
+
+
 def _status(
     snapshot: NarrativeSnapshot | None, pending: dict | None, events: list[dict]
 ) -> dict:
@@ -363,6 +421,314 @@ def status(project_root: Path) -> dict:
     with _locked(root, write=False):
         events, snapshot, pending = _read(root)
         return _status(snapshot, pending, events)
+
+
+def _event_source(event: dict) -> dict:
+    return {
+        "sequence": event["sequence"],
+        "kind": event["kind"],
+        "event_sha256": event["event_sha256"],
+    }
+
+
+def _trail_view(events: list[dict], *, history_head_sha256: str) -> dict:
+    choices: list[dict] = []
+    active: dict | None = None
+    pending: dict | None = None
+    for event in events:
+        kind = event["kind"]
+        if kind in {"registered"}:
+            continue
+        if kind in {"selected", "proposed"}:
+            plan = event["payload"]["plan"]
+            choice = {
+                "choice_id": event["event_sha256"],
+                "version": event["version"] if kind == "selected" else None,
+                "route": plan["route"],
+                "disposition": "kept" if kind == "selected" else "unknown",
+                "plan": plan,
+                "plan_source": _event_source(event),
+                "rationale": {
+                    "text": plan["rationale"],
+                    "source": _event_source(event),
+                    "provenance": "recorded_plan_statement",
+                },
+                "change_reason": (
+                    {
+                        "text": event["payload"]["reason"],
+                        "source": _event_source(event),
+                        "provenance": "recorded_proposal_statement",
+                    }
+                    if kind == "proposed"
+                    else None
+                ),
+                "successor": None,
+                "supersession_reason": None,
+                "author_confirmation": None,
+            }
+            choices.append(choice)
+            if kind == "selected":
+                active = choice
+            else:
+                pending = choice
+            continue
+        if kind == "withdrawn":
+            assert pending is not None  # _read validated this transition
+            pending["disposition"] = "abandoned"
+            pending["withdrawal_reason"] = {
+                "text": event["payload"]["reason"],
+                "source": _event_source(event),
+                "provenance": "recorded_withdrawal_statement",
+            }
+            pending["author_confirmation"] = {
+                "author_id": event["payload"]["author_id"],
+                "source": _event_source(event),
+                "provenance": "operator_asserted_author_confirmation",
+            }
+            pending = None
+            continue
+        assert kind == "approved" and pending is not None and active is not None
+        proposal = pending
+        choices.remove(proposal)
+        successor = {
+            **proposal,
+            "choice_id": event["event_sha256"],
+            "version": event["version"],
+            "disposition": "kept",
+            "author_confirmation": {
+                "author_id": event["payload"]["author_id"],
+                "source": _event_source(event),
+                "provenance": "operator_asserted_author_confirmation",
+            },
+        }
+        active["disposition"] = "superseded"
+        active["successor"] = {
+            "choice_id": successor["choice_id"],
+            "version": successor["version"],
+            "source": _event_source(event),
+        }
+        active["supersession_reason"] = proposal["change_reason"]
+        choices.append(successor)
+        active = successor
+        pending = None
+    if len(choices) > MAX_TRAIL_CHOICES:
+        raise NarrativeError(
+            "trail_limit_exceeded", "narrative trail has too many choices"
+        )
+    result = {
+        "schema_version": "arw.narrative-trail.v1",
+        "status": (
+            "missing_selection"
+            if active is None
+            else "pending_change"
+            if pending
+            else "selected"
+        ),
+        "project_id": events[0]["project_id"],
+        "history_head_sha256": history_head_sha256,
+        "view_head_sha256": events[-1]["event_sha256"],
+        "view_sequence": events[-1]["sequence"],
+        "choices": choices,
+        "current_choice_ids": [active["choice_id"]] if active else [],
+        "abandoned_choice_ids": [
+            choice["choice_id"]
+            for choice in choices
+            if choice["disposition"] in {"superseded", "abandoned"}
+        ],
+        "unresolved_questions": (
+            [{"kind": "pending_author_decision", "source": pending["plan_source"]}]
+            if pending
+            else []
+        ),
+    }
+    if len(canonical_json_bytes(result)) > MAX_TRAIL_BYTES:
+        raise NarrativeError(
+            "trail_limit_exceeded", "narrative trail exceeds byte budget"
+        )
+    return result
+
+
+def _run_relations(root: Path, run_root: Path, events: list[dict]) -> dict:
+    """Include only explicit relations in one caller-named canonical paper run."""
+    from arw.kernel.ledger.journal import replay_run
+
+    run = Path(run_root).absolute()
+    if not run.is_relative_to(root):
+        raise NarrativeError("project_run_mismatch", "run is outside the project")
+    try:
+        manifest = RunManifest.model_validate(
+            strict_json_loads(
+                read_retained_bytes(run, "run-manifest.json", max_bytes=65536)
+            )
+        )
+    except (ValueError, OSError, RuntimeError) as error:
+        raise NarrativeError(
+            "invalid_run_binding", "run manifest is invalid"
+        ) from error
+    binding = manifest.narrative_binding
+    if (
+        manifest.task_kind != "paper"
+        or binding is None
+        or _binding_root(run, binding) != root
+        or not any(
+            event["event_sha256"] == binding.initial_sha256
+            and event["version"] == binding.initial_version
+            for event in events
+        )
+    ):
+        raise NarrativeError(
+            "invalid_run_binding", "run is not bound to this paper history"
+        )
+    try:
+        state = replay_run(run)
+    except (ValueError, OSError, RuntimeError) as error:
+        raise NarrativeError(
+            "corrupt_run_history", "run history cannot be replayed"
+        ) from error
+    if state.recovery_health != "healthy":
+        raise NarrativeError("corrupt_run_history", "run history needs recovery")
+    artifacts = []
+    artifact_successors = []
+    memory_successors = []
+    for event in state.events:
+        source = {
+            "event_id": event.event_id,
+            "event_sha256": event.event_sha256,
+            "sequence": event.sequence,
+        }
+        payload = event.payload
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
+            artifacts.append(
+                {
+                    "artifact_id": payload.artifact_id,
+                    "artifact_sha256": payload.artifact_sha256,
+                    "narrative_report_sha256": getattr(
+                        payload, "narrative_report_sha256", None
+                    ),
+                    "source_event_sha256": getattr(payload, "source_event_sha256", []),
+                    "source": source,
+                }
+            )
+        elif event.event_type == "research_artifact_superseded":
+            artifact_successors.append(
+                {
+                    "predecessor_artifact_id": payload.supersedes,
+                    "successor_artifact_id": payload.artifact_id,
+                    "source": source,
+                }
+            )
+        elif event.event_type == "research_memory_superseded":
+            memory_successors.append(
+                {
+                    "predecessor_memory_id": payload.memory_id,
+                    "successor_memory_id": payload.successor_memory_id,
+                    "source": source,
+                }
+            )
+    if (
+        len(artifacts) + len(artifact_successors) + len(memory_successors)
+        > MAX_RUN_RELATIONS
+    ):
+        raise NarrativeError(
+            "trail_limit_exceeded", "run has too many explicit relations"
+        )
+    return {
+        "run_id": state.run_id,
+        "initial_narrative_sha256": binding.initial_sha256,
+        "relation_scope": "explicit_run_journal_only",
+        "accepted_artifacts": artifacts,
+        "artifact_successors": artifact_successors,
+        "memory_successors": memory_successors,
+    }
+
+
+def trail(
+    project_root: Path,
+    *,
+    at_sequence: int | None = None,
+    expected_head_sha256: str | None = None,
+    run_root: Path | None = None,
+) -> dict:
+    """Read-only deterministic projection of the validated project history."""
+    root = _root(project_root)
+    if run_root is not None and at_sequence is not None:
+        raise NarrativeError(
+            "invalid_sequence",
+            "historical project views cannot include current run records",
+        )
+    directory = root / ".arw/narrative"
+    if not directory.exists() and not directory.is_symlink():
+        if at_sequence is not None or expected_head_sha256 is not None or run_root is not None:
+            raise NarrativeError(
+                "missing_selection", "project has no narrative history"
+            )
+        return {
+            "schema_version": "arw.narrative-trail.v1",
+            "status": "not_applicable",
+            "project_id": None,
+            "history_head_sha256": None,
+            "view_head_sha256": None,
+            "view_sequence": 0,
+            "choices": [],
+            "current_choice_ids": [],
+            "abandoned_choice_ids": [],
+            "unresolved_questions": [],
+        }
+    with _locked(root, write=False):
+        events, _, _ = _read(root)
+        head = events[-1]["event_sha256"]
+        if expected_head_sha256 is not None and expected_head_sha256 != head:
+            raise NarrativeError("stale_narrative", "narrative history head changed")
+        if at_sequence is not None:
+            if (
+                type(at_sequence) is not int
+                or at_sequence < 1
+                or at_sequence > len(events)
+            ):
+                raise NarrativeError(
+                    "invalid_sequence", "historical sequence is outside history"
+                )
+            events = events[:at_sequence]
+        view = _trail_view(events, history_head_sha256=head)
+        if run_root is not None:
+            view["run_relations"] = _run_relations(root, run_root, events)
+            if len(canonical_json_bytes(view)) > MAX_TRAIL_BYTES:
+                raise NarrativeError(
+                    "trail_limit_exceeded", "narrative trail exceeds byte budget"
+                )
+        return view
+
+
+def trail_summary(
+    project_root: Path, *, expected_head_sha256: str | None = None
+) -> dict:
+    view = trail(project_root, expected_head_sha256=expected_head_sha256)
+    choices = {choice["choice_id"]: choice for choice in view["choices"]}
+
+    def concise(choice_id: str) -> dict:
+        choice = choices[choice_id]
+        return {
+            "choice_id": choice_id,
+            "version": choice["version"],
+            "route": choice["route"],
+            "disposition": choice["disposition"],
+            "plan_source": choice["plan_source"],
+            "successor": choice["successor"],
+            "change_reason": choice["change_reason"],
+            "supersession_reason": choice["supersession_reason"],
+            "withdrawal_reason": choice.get("withdrawal_reason"),
+            "author_confirmation": choice["author_confirmation"],
+        }
+
+    return {
+        "schema_version": "arw.narrative-trail-summary.v1",
+        "status": view["status"],
+        "history_head_sha256": view["history_head_sha256"],
+        "current_choices": [concise(value) for value in view["current_choice_ids"]],
+        "abandoned_routes": [concise(value) for value in view["abandoned_choice_ids"]],
+        "unresolved_questions": view["unresolved_questions"],
+        "interpretation": "Decision history is provenance, not a scientific finding or a recommendation.",
+    }
 
 
 def current(project_root: Path) -> NarrativeSnapshot:
@@ -408,6 +774,36 @@ def _binding_root(run_root: Path, binding: NarrativeRunBinding) -> Path:
             "project_run_mismatch", "run narrative project identity differs"
         )
     return project
+
+
+def bound_trail_summary(run_root: Path, snapshot: NarrativeSnapshot) -> dict:
+    """Recheck a paper run's project binding before projecting continuation context."""
+    try:
+        manifest = RunManifest.model_validate(
+            strict_json_loads(
+                read_retained_bytes(
+                    Path(run_root), "run-manifest.json", max_bytes=65536
+                )
+            )
+        )
+    except (ValueError, OSError, RuntimeError) as error:
+        raise NarrativeError(
+            "invalid_run_binding", "run manifest is missing or unsafe"
+        ) from error
+    if manifest.task_kind != "paper" or manifest.narrative_binding is None:
+        raise NarrativeError(
+            "invalid_run_binding", "paper run has no narrative binding"
+        )
+    root = _binding_root(run_root, manifest.narrative_binding)
+    summary = trail_summary(root)
+    if (
+        not summary["current_choices"]
+        or summary["current_choices"][0]["choice_id"] != snapshot.sha256
+    ):
+        raise NarrativeError(
+            "stale_narrative", "trajectory differs from current narrative"
+        )
+    return summary
 
 
 @contextmanager

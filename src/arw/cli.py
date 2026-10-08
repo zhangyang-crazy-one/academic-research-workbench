@@ -1679,7 +1679,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _write_json({"status": "error", "code": getattr(error, "code", "memory_request_invalid")})
                     return 65
             if args.command == "resume":
-                from arw.kernel.ledger.narrative import guard_run
+                from arw.kernel.ledger.narrative import bound_trail_summary, guard_run
                 narrative_context = guard_run(args.run_root, expected_sha256=request.narrative_sha256)
             else:
                 narrative_context = nullcontext(None)
@@ -1688,11 +1688,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result = outcome.model_dump(mode="json")
                 if args.command == "resume" and outcome.accepted and snapshot is not None:
                     result["narrative"] = snapshot.model_dump(mode="json")
+                    result["narrative_trail"] = bound_trail_summary(args.run_root, snapshot)
                 if handoff is not None:
                     if not outcome.accepted:
                         handoff = {**handoff, "next_concrete_action": None, "requires_reconciliation": True, "resume_accepted": False}
                     if snapshot is not None:
                         handoff = {**handoff, "narrative": snapshot.model_dump(mode="json")}
+                        if "narrative_trail" in result:
+                            handoff = {**handoff, "narrative_trail": result["narrative_trail"]}
                     result["memory_handoff"] = handoff
                 _write_json(result)
                 return 0 if outcome.accepted else 65

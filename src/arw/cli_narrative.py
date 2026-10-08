@@ -9,7 +9,15 @@ def configure(subparsers):
         help="Select and inspect a project paper narrative before outlining.",
     )
     actions = parser.add_subparsers(dest="narrative_command", required=True)
-    for name in ("register", "select", "status", "propose", "approve"):
+    for name in (
+        "register",
+        "select",
+        "status",
+        "propose",
+        "approve",
+        "withdraw",
+        "trail",
+    ):
         action = actions.add_parser(name)
         action.add_argument("--project-root", required=True, type=Path)
         if name in {"select", "propose"}:
@@ -25,6 +33,20 @@ def configure(subparsers):
                 action="store_true",
                 help="Assert the named author explicitly confirmed this exact proposal.",
             )
+        if name == "withdraw":
+            action.add_argument("--proposal-sha256", required=True)
+            action.add_argument("--author-id", required=True)
+            action.add_argument("--reason", required=True)
+            action.add_argument(
+                "--author-confirmed",
+                action="store_true",
+                help="Assert the named author explicitly withdrew this exact proposal.",
+            )
+        if name == "trail":
+            action.add_argument("--json", action="store_true")
+            action.add_argument("--at-sequence", type=int)
+            action.add_argument("--expected-head-sha256")
+            action.add_argument("--run-root", type=Path)
 
 
 def handle(args):
@@ -37,6 +59,25 @@ def handle(args):
         return narrative.register(args.project_root)
     if command == "status":
         return narrative.status(args.project_root)
+    if command == "trail":
+        return narrative.trail(
+            args.project_root,
+            at_sequence=args.at_sequence,
+            expected_head_sha256=args.expected_head_sha256,
+            run_root=args.run_root,
+        )
+    if command == "withdraw":
+        if not args.author_confirmed:
+            raise narrative.NarrativeError(
+                "author_confirmation_missing",
+                "withdraw requires an explicit author confirmation assertion",
+            )
+        return narrative.withdraw(
+            args.project_root,
+            proposal_sha256=args.proposal_sha256,
+            author_id=args.author_id,
+            reason=args.reason,
+        )
     if command == "approve":
         if not args.author_confirmed:
             raise narrative.NarrativeError(
