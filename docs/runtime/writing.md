@@ -33,6 +33,18 @@ proposed sidecar must name those same bytes. Mechanical graph or span failures
 appear in the structural layer with a reason code. Changed accepted bytes,
 source digests, or frozen evidence are input-integrity errors.
 
+An accepted `writing-derived` draft can also be the manuscript artifact. Fit
+reads the original accepted receipt, verifies its human-approved candidate and
+nested draft realization, then binds the retained candidate text by path and
+SHA-256. Its `writing_candidate_receipt` snapshot binding freezes the receipt,
+run and artifact manifest bytes, accepted event identity, candidate path/digest,
+and canonical realization digest. It also freezes the accepted source and human
+review proofs. Capture and offline replay check these links with the same
+validator. An explicit `--realization` sidecar is accepted for this mode only
+when it matches the realization inside the accepted receipt. Historical
+standalone realization and manuscript-source snapshots keep their exact byte
+equality checks.
+
 The profile contract (`arw.venue-fit-profile.v1`) names a venue, version,
 `verified_on`, `review_due`, and provenance for each official or structural
 rule: source URL, exact source SHA-256, locator, and reviewer for typed

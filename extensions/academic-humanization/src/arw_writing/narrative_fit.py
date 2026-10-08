@@ -31,6 +31,7 @@ from arw.kernel.state.models import (
     ArtifactManifest,
     CanonicalEvent,
     RunManifest,
+    RuntimeCommandRequest,
 )
 from arw.kernel.state.narrative_fit import (
     FitEvidence,
@@ -41,8 +42,11 @@ from arw.kernel.state.narrative_fit import (
     FitSnapshot,
     PublicFitSnapshot,
     VenueFitProfile,
+    WritingCandidateReceiptBinding,
 )
 from arw.kernel.state.narrative_realization import NarrativeRealization
+
+from .preservation import validate_citation_bindings
 
 
 class NarrativeFitError(ValueError):
@@ -123,7 +127,7 @@ def _pdf_pages(raw: bytes) -> int:
         ) from error
     try:
         return len(PdfReader(io.BytesIO(raw)).pages)
-    except Exception as error:  # noqa: BLE001 - pypdf raises several unrelated parser errors.
+    except Exception as error:  # pypdf raises several unrelated parser errors.
         raise NarrativeFitError(
             "pdf_page_count_unavailable", "actual accepted PDF could not be counted"
         ) from error
@@ -151,6 +155,180 @@ def _accepted_payload(event: CanonicalEvent) -> ArtifactAcceptedPayload:
             "frozen_content_mismatch", "event is not an accepted artifact"
         )
     return event.payload
+
+
+def _validate_writing_candidate_receipt(
+    root: Path,
+    events,
+    receipt_raw: bytes,
+    manuscript: bytes,
+    realization_raw: bytes,
+    event: CanonicalEvent,
+    binding: WritingCandidateReceiptBinding,
+    narrative,
+    run_id: str,
+    artifact_id: str,
+) -> dict:
+    """Apply one exact receipt, candidate and provenance check at capture/replay."""
+    try:
+        run_raw = _decode(
+            binding.run_manifest_base64, binding.run_manifest_sha256, "run manifest"
+        )
+        run = RunManifest.model_validate(strict_json_loads(run_raw))
+        manifest_raw = _decode(
+            binding.accepted_manifest_base64,
+            binding.accepted_manifest_sha256,
+            "writing manifest",
+        )
+        manifest = ArtifactManifest.model_validate(strict_json_loads(manifest_raw))
+        payload = _accepted_payload(event)
+        if (
+            run.run_id != run_id
+            or run.task_kind != "paper"
+            or run.narrative_binding is None
+            or run.narrative_binding.project_id != narrative.project_id
+            or run.narrative_binding.initial_version > narrative.version
+            or (
+                run.narrative_binding.initial_version == narrative.version
+                and run.narrative_binding.initial_sha256 != narrative.sha256
+            )
+            or event.run_id != run_id
+            or _event_digest(event) != event.event_sha256
+            or event.event_id != binding.accepted_event_id
+            or event.event_sha256 != binding.accepted_event_sha256
+            or payload.artifact_id != artifact_id
+            or payload.manifest_sha256 != binding.accepted_manifest_sha256
+            or payload.artifact_sha256 != binding.receipt_sha256
+            or manifest.run_id != run_id
+            or manifest.artifact_id != artifact_id
+            or manifest.artifact_kind != "writing-derived"
+            or manifest.media_type != "application/json"
+            or manifest.content_sha256 != binding.receipt_sha256
+            or sha256_hex(receipt_raw) != binding.receipt_sha256
+        ):
+            raise ValueError("accepted writing provenance differs")
+        receipt = strict_json_loads(receipt_raw)
+        if not isinstance(receipt, dict) or (
+            receipt.get("schema_version") != "arw.writing-candidate.v1"
+            or receipt.get("accepted") is not True
+            or receipt.get("disposition") != "accepted_after_human_review"
+            or receipt.get("controls_effective") is not True
+            or not isinstance(receipt.get("candidate"), str)
+            or not isinstance(receipt.get("source"), str)
+            or not isinstance(receipt.get("verification"), dict)
+            or not isinstance(receipt.get("proposal"), dict)
+            or not isinstance(receipt.get("narrative_realization"), dict)
+        ):
+            raise ValueError("accepted writing receipt is incomplete")
+        candidate = receipt["candidate"].encode("utf-8")
+        source = receipt["source"].encode("utf-8")
+        if (
+            candidate != manuscript
+            or sha256_hex(candidate) != binding.candidate_sha256
+            or receipt.get("candidate_sha256") != binding.candidate_sha256
+            or receipt.get("candidate_path") != binding.candidate_path
+            or binding.candidate_path
+            != f"writing/candidate/{binding.candidate_sha256}.md"
+            or sha256_hex(source) != receipt.get("source_sha256")
+            or sha256_hex(canonical_json_bytes(receipt["verification"]))
+            != receipt.get("verification_sha256")
+            or sha256_hex(canonical_json_bytes(receipt["proposal"]))
+            != receipt.get("proposal_sha256")
+        ):
+            raise ValueError("writing text or verification digest differs")
+        realization = NarrativeRealization.model_validate(
+            receipt["narrative_realization"]
+        )
+        nested_raw = canonical_json_bytes(receipt["narrative_realization"])
+        request = RuntimeCommandRequest.model_validate(receipt["request_identity"])
+        if (
+            nested_raw != realization_raw
+            or sha256_hex(nested_raw) != binding.realization_sha256
+            or realization.stage != "draft"
+            or realization.source_path != binding.candidate_path
+            or realization.source_sha256 != binding.candidate_sha256
+            or realization.narrative_sha256 != narrative.sha256
+            or receipt.get("narrative_binding") != narrative.model_dump(mode="json")
+            or receipt["proposal"].get("narrative_sha256") != narrative.sha256
+            or request.run_id != run_id
+            or request.event_id != event.event_id
+            or request.command_id != event.command_id
+            or manifest.base_revision != request.expected_revision
+            or manifest.producer_id != request.actor_id
+        ):
+            raise ValueError("writing realization or run identity differs")
+        validate_citation_bindings(
+            receipt["verification"], receipt["source"], receipt["candidate"]
+        )
+        for name, expected_kind in (
+            ("source_binding", None),
+            ("review_binding", "writing-human-review"),
+        ):
+            reference = receipt.get(name)
+            if not isinstance(reference, dict) or not isinstance(
+                reference.get("artifact_id"), str
+            ):
+                raise TypeError(f"{name} is missing")
+            source_event, source_manifest, source_raw = _accepted(
+                root, events, reference["artifact_id"]
+            )
+            if (
+                source_event.run_id != run_id
+                or source_manifest.run_id != run_id
+                or reference.get("event_id") != source_event.event_id
+                or reference.get("event_sha256") != source_event.event_sha256
+                or reference.get("manifest_sha256")
+                != source_event.payload.manifest_sha256
+                or reference.get("artifact_kind") != source_manifest.artifact_kind
+                or (expected_kind is not None and source_manifest.artifact_kind != expected_kind)
+            ):
+                raise ValueError(f"{name} differs from accepted source")
+            if name == "source_binding":
+                source_digest = sha256_hex(source_raw)
+                if source_manifest.artifact_kind in {
+                    "narrative-draft", "paper-draft", "draft", "manuscript", "paper-manuscript"
+                }:
+                    prior = NarrativeRealization.model_validate(strict_json_loads(source_raw))
+                    source_digest = prior.source_sha256
+                elif source_manifest.artifact_kind == "writing-derived":
+                    prior = strict_json_loads(source_raw)
+                    if (
+                        not isinstance(prior, dict)
+                        or not isinstance(prior.get("source"), str)
+                        or not isinstance(prior.get("candidate"), str)
+                        or not isinstance(prior.get("verification"), dict)
+                        or sha256_hex(prior["candidate"].encode("utf-8"))
+                        != prior.get("candidate_sha256")
+                    ):
+                        raise ValueError("prior writing source is invalid")
+                    validate_citation_bindings(
+                        prior["verification"], prior["source"], prior["candidate"]
+                    )
+                    source_digest = sha256_hex(prior["candidate"].encode("utf-8"))
+                if reference.get("sha256") != source_digest or source_digest != receipt["source_sha256"]:
+                    raise ValueError("writing source digest differs")
+            if name == "review_binding":
+                if reference.get("sha256") != sha256_hex(source_raw):
+                    raise ValueError("writing review digest differs")
+                review = strict_json_loads(source_raw)
+                if not isinstance(review, dict) or any(
+                    review.get(key) != value
+                    for key, value in {
+                        "schema_version": "arw.writing-review.v1",
+                        "decision": "APPROVED",
+                        "source_sha256": receipt["source_sha256"],
+                        "candidate_sha256": binding.candidate_sha256,
+                        "proposal_sha256": receipt["proposal_sha256"],
+                        "verification_sha256": receipt["verification_sha256"],
+                        "reviewed_dimensions": receipt["verification"].get("unresolved_dimensions"),
+                    }.items()
+                ) or not isinstance(review.get("reviewer"), str) or not review["reviewer"].strip() or not isinstance(review.get("rationale"), str) or not review["rationale"].strip():
+                    raise ValueError("writing review is not bound to this candidate")
+        return receipt
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError) as error:
+        raise NarrativeFitError(
+            "writing_receipt_invalid", "accepted writing receipt binding is invalid"
+        ) from error
 
 
 def _proof(root: Path, events, artifact_id: str) -> FitEvidence:
@@ -233,7 +411,9 @@ def _bundled_profile(target: str) -> bytes:
     return canonical_json_bytes(payload)
 
 
-def _revalidate(snapshot: FitSnapshot, manuscript: bytes) -> None:
+def _revalidate(
+    snapshot: FitSnapshot, manuscript: bytes, accepted: bytes, realization: bytes
+) -> None:
     if _event_digest(snapshot.accepted_event) != snapshot.accepted_event_sha256:
         raise NarrativeFitError(
             "frozen_content_mismatch", "accepted event digest differs"
@@ -286,6 +466,20 @@ def _revalidate(snapshot: FitSnapshot, manuscript: bytes) -> None:
             manifest_path.write_bytes(manifest_raw)
             content_path.write_bytes(content)
             events.append(event)
+        if snapshot.accepted_binding_kind == "writing_candidate_receipt":
+            assert snapshot.writing_candidate_binding is not None
+            _validate_writing_candidate_receipt(
+                root,
+                tuple(events),
+                accepted,
+                manuscript,
+                realization,
+                snapshot.accepted_event,
+                snapshot.writing_candidate_binding,
+                snapshot.narrative,
+                snapshot.run_id,
+                snapshot.manuscript_artifact_id,
+            )
         observed = _validation(
             root, snapshot.realization, snapshot.narrative, tuple(events), manuscript
         )
@@ -379,7 +573,7 @@ def _check_snapshot(snapshot: FitSnapshot) -> bytes:
         raise NarrativeFitError(
             "invalid_frozen_snapshot", "manuscript is not UTF-8"
         ) from error
-    _revalidate(snapshot, manuscript)
+    _revalidate(snapshot, manuscript, accepted, realization)
     return manuscript
 
 
@@ -835,6 +1029,18 @@ def report(snapshot: FitSnapshot | PublicFitSnapshot) -> dict:
             "bounded_anonymity_search_is_not_comprehensive",
         ],
     }
+    if snapshot.writing_candidate_binding is not None:
+        binding = snapshot.writing_candidate_binding
+        result["input_binding"]["accepted_binding_kind"] = "writing_candidate_receipt"
+        result["input_binding"]["writing_candidate_receipt"] = {
+            "receipt_sha256": binding.receipt_sha256,
+            "candidate_path": binding.candidate_path,
+            "candidate_sha256": binding.candidate_sha256,
+            "realization_sha256": binding.realization_sha256,
+            "accepted_manifest_sha256": binding.accepted_manifest_sha256,
+            "accepted_event_sha256": binding.accepted_event_sha256,
+            "run_manifest_sha256": binding.run_manifest_sha256,
+        }
     return FitReport.model_validate(result).model_dump(mode="json")
 
 
@@ -907,7 +1113,41 @@ def freeze(
     event, accepted, accepted_raw = _accepted(
         run_root, state.events, manuscript_artifact_id
     )
-    if realization_path is None:
+    writing_receipt = None
+    writing_binding = None
+    if accepted.artifact_kind == "writing-derived":
+        try:
+            writing_receipt = strict_json_loads(accepted_raw)
+            if not isinstance(writing_receipt, dict) or not isinstance(
+                writing_receipt.get("narrative_realization"), dict
+            ):
+                raise TypeError("nested realization is missing")
+            realization_raw = canonical_json_bytes(
+                writing_receipt["narrative_realization"]
+            )
+        except (ValueError, TypeError) as error:
+            raise NarrativeFitError(
+                "writing_receipt_invalid", "accepted writing realization is malformed"
+            ) from error
+        if realization_path is not None:
+            if Path(realization_path).is_absolute():
+                raise NarrativeFitError(
+                    "realization_path_invalid",
+                    "realization path must be relative to run root",
+                )
+            sidecar_raw = read_retained_bytes(
+                run_root, Path(realization_path).as_posix(), max_bytes=1_048_576
+            )
+            try:
+                if canonical_json_bytes(strict_json_loads(sidecar_raw)) != realization_raw:
+                    raise ValueError("explicit realization differs from accepted receipt")
+            except (ValueError, TypeError) as error:
+                raise NarrativeFitError(
+                    "writing_receipt_invalid",
+                    "explicit realization differs from accepted writing receipt",
+                ) from error
+        binding_kind = "writing_candidate_receipt"
+    elif realization_path is None:
         if STAGE_KINDS.get(accepted.artifact_kind) != "draft":
             raise NarrativeFitError(
                 "draft_required", "accepted artifact is not a manuscript draft"
@@ -932,6 +1172,36 @@ def freeze(
     manuscript = read_retained_bytes(
         run_root, realization.source_path, max_bytes=8_388_608
     )
+    if writing_receipt is not None:
+        manifest_bytes = read_retained_bytes(
+            run_root,
+            f"manifests/artifacts/sha256/{event.payload.manifest_sha256}.json",
+            max_bytes=262144,
+        )
+        writing_binding = WritingCandidateReceiptBinding(
+            run_manifest_sha256=sha256_hex(manifest_raw),
+            run_manifest_base64=base64.b64encode(manifest_raw).decode("ascii"),
+            accepted_manifest_sha256=event.payload.manifest_sha256,
+            accepted_manifest_base64=base64.b64encode(manifest_bytes).decode("ascii"),
+            accepted_event_id=event.event_id,
+            accepted_event_sha256=event.event_sha256,
+            receipt_sha256=sha256_hex(accepted_raw),
+            candidate_path=writing_receipt.get("candidate_path", ""),
+            candidate_sha256=writing_receipt.get("candidate_sha256", ""),
+            realization_sha256=sha256_hex(realization_raw),
+        )
+        _validate_writing_candidate_receipt(
+            run_root,
+            state.events,
+            accepted_raw,
+            manuscript,
+            realization_raw,
+            event,
+            writing_binding,
+            narrative,
+            state.run_id,
+            manuscript_artifact_id,
+        )
     if binding_kind == "manuscript_source" and (
         accepted.content_sha256 != realization.source_sha256
         or accepted_raw != manuscript
@@ -1034,6 +1304,11 @@ def freeze(
         )
         if value is not None
     }
+    if writing_receipt is not None:
+        dependencies.update(
+            writing_receipt[name]["artifact_id"]
+            for name in ("source_binding", "review_binding")
+        )
     evidence_items = []
     evidence_bytes = (
         len(manuscript)
@@ -1058,6 +1333,7 @@ def freeze(
         accepted_content_sha256=accepted.content_sha256,
         accepted_content_base64=base64.b64encode(accepted_raw).decode("ascii"),
         accepted_binding_kind=binding_kind,
+        writing_candidate_binding=writing_binding,
         realization_base64=base64.b64encode(realization_raw).decode("ascii"),
         manuscript_source_sha256=realization.source_sha256,
         manuscript_source_base64=base64.b64encode(manuscript).decode("ascii"),

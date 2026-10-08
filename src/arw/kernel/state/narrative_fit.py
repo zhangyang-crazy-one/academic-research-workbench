@@ -112,6 +112,22 @@ class FitEvidence(StrictModel):
     content_base64: str = Field(max_length=11_184_812)
 
 
+class WritingCandidateReceiptBinding(StrictModel):
+    schema_version: Literal["arw.writing-candidate-receipt-binding.v1"] = (
+        "arw.writing-candidate-receipt-binding.v1"
+    )
+    run_manifest_sha256: Sha256
+    run_manifest_base64: str = Field(max_length=90_000)
+    accepted_manifest_sha256: Sha256
+    accepted_manifest_base64: str = Field(max_length=350_000)
+    accepted_event_id: StableRuntimeId
+    accepted_event_sha256: Sha256
+    receipt_sha256: Sha256
+    candidate_path: str = Field(min_length=1, max_length=512)
+    candidate_sha256: Sha256
+    realization_sha256: Sha256
+
+
 class FitSnapshot(StrictModel):
     schema_version: Literal["arw.narrative-fit-snapshot.v1"] = (
         "arw.narrative-fit-snapshot.v1"
@@ -122,8 +138,11 @@ class FitSnapshot(StrictModel):
     accepted_event: CanonicalEvent
     accepted_content_sha256: Sha256
     accepted_content_base64: str = Field(max_length=11_184_812)
-    accepted_binding_kind: Literal["realization_sidecar", "manuscript_source"] = (
-        "realization_sidecar"
+    accepted_binding_kind: Literal[
+        "realization_sidecar", "manuscript_source", "writing_candidate_receipt"
+    ] = "realization_sidecar"
+    writing_candidate_binding: WritingCandidateReceiptBinding | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     realization_base64: str = Field(max_length=1_400_000)
     manuscript_source_sha256: Sha256
@@ -152,6 +171,10 @@ class FitSnapshot(StrictModel):
     def consistent(self):
         if self.realization.source_sha256 != self.manuscript_source_sha256:
             raise ValueError("realization and source digest differ")
+        if (self.accepted_binding_kind == "writing_candidate_receipt") != (
+            self.writing_candidate_binding is not None
+        ):
+            raise ValueError("writing candidate binding must match its kind")
         if (self.pdf_artifact_id is None) != (self.pdf_sha256 is None):
             raise ValueError("PDF artifact and digest must occur together")
         if (self.pdf_artifact_id is None) != (self.pdf_base64 is None):
