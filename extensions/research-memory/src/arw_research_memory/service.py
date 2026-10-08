@@ -780,6 +780,16 @@ class ResearchMemoryService:
                 result["narrative"] = snapshot.model_dump(mode="json")
                 result["narrative_trail"] = bound_trail_summary(self.run_root, snapshot)
                 if len(canonical_json_bytes(result)) > query.max_tokens:
+                    # The decision trail is optional context: drop it before
+                    # refusing a handoff that fit the budget without it.
+                    result["narrative_trail"] = {
+                        "status": "omitted",
+                        "reason": "continuation_budget",
+                        "history_head_sha256": result["narrative_trail"][
+                            "history_head_sha256"
+                        ],
+                    }
+                if len(canonical_json_bytes(result)) > query.max_tokens:
                     raise MemoryIntegrityError(
                         "narrative handoff exceeds continuation context budget"
                     )

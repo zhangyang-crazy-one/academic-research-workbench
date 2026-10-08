@@ -39,3 +39,7 @@ Paper handoff and resume SHALL expose the same current route, abandoned routes, 
 #### Scenario: Two continuations from unchanged history
 - **WHEN** a paper handoff is read and resumed twice with no intervening history change
 - **THEN** both responses carry identical current and abandoned choices and the same history head.
+
+#### Scenario: Long history does not block continuation
+- **WHEN** the history exceeds the explicit export limits
+- **THEN** handoff and resume still succeed with the current route, the most recent abandoned routes and an omitted-route count, and a resume over its continuation budget replaces only the summary with an `omitted` marker.

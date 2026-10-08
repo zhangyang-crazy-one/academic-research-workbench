@@ -341,3 +341,128 @@ def test_cli_trail_and_withdrawal_contract(tmp_path: Path) -> None:
     )
     assert exported.returncode == 0, exported.stderr
     assert json.loads(exported.stdout)["choices"][-1]["disposition"] == "abandoned"
+
+
+def _long_history(root: Path, versions: int):
+    snapshot = select(root, plan("method_rq"))
+    routes = ("observation_mechanism", "method_rq")
+    for index in range(1, versions):
+        proposal = propose(
+            root,
+            plan(routes[index % 2]),
+            expected_sha256=snapshot.sha256,
+            reason=f"Recorded change number {index}",
+        )
+        snapshot = approve(
+            root, proposal_sha256=proposal["proposal_sha256"], author_id="author.owner"
+        )
+    return snapshot
+
+
+def test_long_history_keeps_explicit_export_limit_but_bounded_summary(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path)
+    register(root)
+    current = _long_history(root, 40)
+    with pytest.raises(NarrativeError) as limited:
+        trail(root)
+    assert limited.value.code == "trail_limit_exceeded"
+    summary = trail_summary(root)
+    assert summary["current_choices"][0]["choice_id"] == current.sha256
+    assert len(summary["abandoned_routes"]) == 8
+    assert summary["omitted_abandoned_route_count"] == 39 - 8
+    sequences = [row["plan_source"]["sequence"] for row in summary["abandoned_routes"]]
+    assert sequences == sorted(sequences)
+    assert len(canonical_json_bytes(summary)) <= 65_536
+    assert canonical_json_bytes(summary) == canonical_json_bytes(trail_summary(root))
+
+
+def test_long_history_does_not_block_paper_handoff_or_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from arw_research_memory.service import ResearchMemoryService
+
+    from arw.kernel.state.research_memory import MemoryQuery
+
+    root = project(tmp_path)
+    register(root)
+    first = select(root, plan())
+    run = root / "runs/one"
+    initialize_run(run, run_request(root, binding=binding_for_start(root, run)))
+    snapshot = first
+    for index in range(1, 40):
+        proposal = propose(
+            root,
+            plan(("observation_mechanism", "method_rq")[index % 2]),
+            expected_sha256=snapshot.sha256,
+            reason=f"Recorded change number {index}",
+        )
+        snapshot = approve(
+            root, proposal_sha256=proposal["proposal_sha256"], author_id="author.owner"
+        )
+    service = ResearchMemoryService(root, run_root=run)
+    monkeypatch.setattr(service, "_save_bound", lambda value, request: {"saved": True})
+    monkeypatch.setattr(
+        service,
+        "_resume_handoff_bound",
+        lambda memory_id, query, snapshot: {
+            "narrative_sha256": snapshot.sha256,
+            "memory_id": memory_id,
+        },
+    )
+    value = SimpleNamespace(handoff=SimpleNamespace(narrative_sha256=snapshot.sha256))
+    saved = service.save(value, request=None)
+    assert saved["narrative_trail"]["omitted_abandoned_route_count"] == 31
+    resumed = service.resume_handoff("memory.one", query=MemoryQuery(max_tokens=16384))
+    assert resumed["narrative_trail"] == saved["narrative_trail"]
+    # A tight continuation budget drops only the optional trail context.
+    narrative_only = len(
+        canonical_json_bytes(
+            {
+                "narrative_sha256": snapshot.sha256,
+                "memory_id": "memory.one",
+                "narrative": snapshot.model_dump(mode="json"),
+                "narrative_trail": {
+                    "status": "omitted",
+                    "reason": "continuation_budget",
+                    "history_head_sha256": saved["narrative_trail"]["history_head_sha256"],
+                },
+            }
+        )
+    )
+    tight = service.resume_handoff(
+        "memory.one", query=MemoryQuery(max_tokens=narrative_only)
+    )
+    assert tight["narrative_trail"]["status"] == "omitted"
+
+
+def test_operational_readers_restore_a_missing_lock(tmp_path: Path) -> None:
+    from arw.kernel.ledger.narrative import current, status
+
+    root = project(tmp_path)
+    register(root)
+    selected = select(root, plan())
+    lock = root / ".arw/narrative/.lock"
+    lock.unlink()
+    assert status(root)["current"]["sha256"] == selected.sha256
+    assert lock.is_file()
+    lock.unlink()
+    assert current(root).sha256 == selected.sha256
+    assert lock.is_file()
+    lock.unlink()
+    assert trail_summary(root)["current_choices"][0]["choice_id"] == selected.sha256
+    assert lock.is_file()
+
+
+def test_run_relations_reject_a_symlinked_run_path(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    register(root)
+    select(root, plan())
+    outside = tmp_path / "outside-run"
+    outside.mkdir()
+    (root / "runs").mkdir()
+    (root / "runs/link").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(NarrativeError) as escaped:
+        trail(root, run_root=root / "runs/link")
+    assert escaped.value.code == "project_run_mismatch"

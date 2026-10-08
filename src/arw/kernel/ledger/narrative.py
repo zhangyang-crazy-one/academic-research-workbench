@@ -26,6 +26,8 @@ MAX_HISTORY = 1_048_576
 MAX_TRAIL_CHOICES = 128
 MAX_TRAIL_BYTES = 65_536
 MAX_RUN_RELATIONS = 128
+# Handoff/resume context keeps only the most recent abandoned routes.
+MAX_SUMMARY_ABANDONED = 8
 
 
 class NarrativeError(ValueError):
@@ -61,7 +63,15 @@ def _history_path(root: Path) -> Path:
 
 
 @contextmanager
-def _locked(root: Path, *, write: bool) -> Iterator[Path]:
+def _locked(
+    root: Path, *, write: bool, create_lock: bool = True
+) -> Iterator[Path]:
+    """Hold the project narrative lock.
+
+    Operational readers recreate a missing lock file, as before the trail
+    export existed; a cloned project need not carry it. The trail export
+    passes ``create_lock=False`` so a read-only projection never writes.
+    """
     root = _root(root)
     directory = root / ".arw/narrative"
     if (
@@ -77,12 +87,12 @@ def _locked(root: Path, *, write: bool) -> Iterator[Path]:
             "not_applicable", "project has no paper narrative registration"
         )
     lock = root / LOCK
-    if not write and not lock.is_file():
+    if not create_lock and not lock.is_file():
         raise NarrativeError("corrupt_history", "narrative lock is missing")
     try:
         with portalocker.Lock(
             lock,
-            mode="a+b" if write else "rb",
+            mode="a+b" if write or create_lock else "rb",
             flags=(portalocker.LOCK_EX if write else portalocker.LOCK_SH)
             | portalocker.LOCK_NB,
             timeout=2,
@@ -431,7 +441,9 @@ def _event_source(event: dict) -> dict:
     }
 
 
-def _trail_view(events: list[dict], *, history_head_sha256: str) -> dict:
+def _trail_view(
+    events: list[dict], *, history_head_sha256: str, bounded: bool = True
+) -> dict:
     choices: list[dict] = []
     active: dict | None = None
     pending: dict | None = None
@@ -511,7 +523,7 @@ def _trail_view(events: list[dict], *, history_head_sha256: str) -> dict:
         choices.append(successor)
         active = successor
         pending = None
-    if len(choices) > MAX_TRAIL_CHOICES:
+    if bounded and len(choices) > MAX_TRAIL_CHOICES:
         raise NarrativeError(
             "trail_limit_exceeded", "narrative trail has too many choices"
         )
@@ -541,7 +553,7 @@ def _trail_view(events: list[dict], *, history_head_sha256: str) -> dict:
             else []
         ),
     }
-    if len(canonical_json_bytes(result)) > MAX_TRAIL_BYTES:
+    if bounded and len(canonical_json_bytes(result)) > MAX_TRAIL_BYTES:
         raise NarrativeError(
             "trail_limit_exceeded", "narrative trail exceeds byte budget"
         )
@@ -553,7 +565,8 @@ def _run_relations(root: Path, run_root: Path, events: list[dict]) -> dict:
     from arw.kernel.ledger.journal import replay_run
 
     run = Path(run_root).absolute()
-    if not run.is_relative_to(root):
+    # ``root`` is symlink-free; a symlinked run component could point outside.
+    if not run.is_relative_to(root) or run.resolve() != run:
         raise NarrativeError("project_run_mismatch", "run is outside the project")
     try:
         manifest = RunManifest.model_validate(
@@ -650,6 +663,23 @@ def trail(
     run_root: Path | None = None,
 ) -> dict:
     """Read-only deterministic projection of the validated project history."""
+    return _trail(
+        project_root,
+        at_sequence=at_sequence,
+        expected_head_sha256=expected_head_sha256,
+        run_root=run_root,
+        bounded=True,
+    )
+
+
+def _trail(
+    project_root: Path,
+    *,
+    at_sequence: int | None,
+    expected_head_sha256: str | None,
+    run_root: Path | None,
+    bounded: bool,
+) -> dict:
     root = _root(project_root)
     if run_root is not None and at_sequence is not None:
         raise NarrativeError(
@@ -674,7 +704,9 @@ def trail(
             "abandoned_choice_ids": [],
             "unresolved_questions": [],
         }
-    with _locked(root, write=False):
+    # The export is strictly read-only; operational summaries may restore a
+    # missing lock file like every other narrative reader.
+    with _locked(root, write=False, create_lock=not bounded):
         events, _, _ = _read(root)
         head = events[-1]["event_sha256"]
         if expected_head_sha256 is not None and expected_head_sha256 != head:
@@ -689,7 +721,7 @@ def trail(
                     "invalid_sequence", "historical sequence is outside history"
                 )
             events = events[:at_sequence]
-        view = _trail_view(events, history_head_sha256=head)
+        view = _trail_view(events, history_head_sha256=head, bounded=bounded)
         if run_root is not None:
             view["run_relations"] = _run_relations(root, run_root, events)
             if len(canonical_json_bytes(view)) > MAX_TRAIL_BYTES:
@@ -702,7 +734,19 @@ def trail(
 def trail_summary(
     project_root: Path, *, expected_head_sha256: str | None = None
 ) -> dict:
-    view = trail(project_root, expected_head_sha256=expected_head_sha256)
+    """Bounded continuation context; never fails because history grew long.
+
+    The full export keeps its explicit limits. Handoff and resume only carry
+    the current route and the most recent abandoned routes, with the number
+    omitted, so a long but valid history cannot block continuation.
+    """
+    view = _trail(
+        project_root,
+        at_sequence=None,
+        expected_head_sha256=expected_head_sha256,
+        run_root=None,
+        bounded=False,
+    )
     choices = {choice["choice_id"]: choice for choice in view["choices"]}
 
     def concise(choice_id: str) -> dict:
@@ -720,15 +764,34 @@ def trail_summary(
             "author_confirmation": choice["author_confirmation"],
         }
 
-    return {
-        "schema_version": "arw.narrative-trail-summary.v1",
-        "status": view["status"],
-        "history_head_sha256": view["history_head_sha256"],
-        "current_choices": [concise(value) for value in view["current_choice_ids"]],
-        "abandoned_routes": [concise(value) for value in view["abandoned_choice_ids"]],
-        "unresolved_questions": view["unresolved_questions"],
-        "interpretation": "Decision history is provenance, not a scientific finding or a recommendation.",
-    }
+    abandoned = sorted(
+        (concise(value) for value in view["abandoned_choice_ids"]),
+        key=lambda row: row["plan_source"]["sequence"],
+    )
+    total = len(abandoned)
+    kept = abandoned[-MAX_SUMMARY_ABANDONED:]
+
+    def assemble(rows: list[dict]) -> dict:
+        return {
+            "schema_version": "arw.narrative-trail-summary.v1",
+            "status": view["status"],
+            "history_head_sha256": view["history_head_sha256"],
+            "current_choices": [
+                concise(value) for value in view["current_choice_ids"]
+            ],
+            "abandoned_routes": rows,
+            "omitted_abandoned_route_count": total - len(rows),
+            "unresolved_questions": view["unresolved_questions"],
+            "interpretation": "Decision history is provenance, not a scientific finding or a recommendation.",
+        }
+
+    summary = assemble(kept)
+    # Recorded reasons are individually bounded, so this only trims the
+    # oldest retained rows in extreme cases; it never raises.
+    while kept and len(canonical_json_bytes(summary)) > MAX_TRAIL_BYTES:
+        kept = kept[1:]
+        summary = assemble(kept)
+    return summary
 
 
 def current(project_root: Path) -> NarrativeSnapshot:

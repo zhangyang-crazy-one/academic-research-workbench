@@ -221,9 +221,15 @@ infers an author's motive from a commit diff. Plan fields and transition
 anchors are declared argumentative objects; they do not establish accepted
 artifact provenance or scientific support. Run relations are identified as
 run-scoped and are not attributed to a route unless a canonical binding says
-so. History is capped at 1 MiB; the trail rejects more than 128 choices,
-128 run relations, or 64 KiB of output with
-`trail_limit_exceeded`. Invalid sequences, stale expected heads, and damaged
+so. History is capped at 1 MiB; the explicit trail export rejects more than
+128 choices, 128 run relations, or 64 KiB of output with
+`trail_limit_exceeded`. The handoff/resume summary never fails on history
+length: it keeps the current route and the eight most recent abandoned routes
+and reports `omitted_abandoned_route_count`. When a resume would exceed its
+continuation budget, the summary is replaced by
+`{"status": "omitted", "reason": "continuation_budget"}` before the handoff is
+refused. The export never creates files; other narrative readers recreate a
+missing `.arw/narrative/.lock`, so a cloned project need not carry it. Invalid sequences, stale expected heads, and damaged
 history fail explicitly rather than returning an empty trail. Synthetic tests
 exercise these states; a ten-entry public author-record pilot has not been
 measured and must not be inferred from those fixtures.
