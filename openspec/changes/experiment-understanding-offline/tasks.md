@@ -8,8 +8,12 @@
   oracle, correct-choice/wrong-effects, invalid/missing deliveries, budgets,
   fixture tampering and unchanged original offline evaluation tests.
 - [x] Document data, cost and interpretation boundaries and produce a concrete
-  six-call same-model LIVE-PLAN for separate approval.
+  six-call same-model LIVE-PLAN, subsequently executed through the user-authorized native Codex route.
 
-Deferred: paid same-model run, license review for external benchmark
+- [x] Retain six native `gpt-6.1-sol/high` submissions, fixed denominators,
+  replayed scores, exact prompts and unavailable cost fields; document actual
+  host constraints without claiming hard isolation or full-workflow superiority.
+
+Deferred: provider billing verification, license review for external benchmark
 redistribution, sampling-policy evaluation, #69 claim-type expansion and
 learning promotion.

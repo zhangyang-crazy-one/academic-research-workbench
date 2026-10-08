@@ -1,8 +1,11 @@
 # Proposed live comparison — native authenticated Codex execution plan
 
-This is the execution plan for issue #77, not a record of a live run. No live
-model calls have been recorded under this plan; token usage and USD billing
-remain unmeasured, and `live_comparison.status` is `not_measured`.
+Six native Codex submissions completed on 2026-10-08. See
+[evidence/20261008-native/README.md](evidence/20261008-native/README.md) for
+actual results, exact prompts and host limitations. Token usage and USD billing
+remain unavailable. The unchanged offline scorer does not attest live execution;
+its `live_comparison.status` remains `not_measured`, with actual native
+observations recorded separately by the parent.
 
 ## Frozen inputs and arms
 
@@ -13,7 +16,8 @@ remain unmeasured, and `live_comparison.status` is `not_measured`.
 - Generate each task's public JSON with `scripts/arw-experiment-eval prepare`.
   Send **only that JSON** to the model. Keep `hidden-reference.json`, its
   producer `v1_fixture.py`, the scorer, manifest, and repository filesystem
-  outside the model's accessible context and tools. The evaluator reads the
+  outside the supplied model context. Native tools cannot be removed by this
+  host, so a prompt prohibits their use; this is not filesystem isolation. The evaluator reads the
   hidden table only after all planned attempts are sealed.
 - Compare `baseline` and `arw-route` on exactly the same public JSON bytes for
   each task. Run each arm in a fresh context. Baseline instructions: predict
@@ -47,10 +51,11 @@ Provide any other required configuration through the project's `.env` without
 including secrets in evidence or commits. Do not switch models without explicit
 user authorization.
 
-Before execution, confirm the host supports the declared settings and enforces
-the six-call limit. The run uses the user-authorized native authenticated
-Codex route. If the host cannot enforce a required setting, stop and return
-for review.
+The parent submitted exactly six fresh native agent requests with explicit
+model/reasoning settings and no retries. The host provides no hard output-token
+cap or per-agent tool removal; those are instruction-level constraints, recorded
+as such in the actual evidence. Model settings are supported native requests,
+not independently provider-attested billing records.
 Provider-reported token usage or USD billing may be unavailable for authenticated
 CLI calls; record `unavailable` for each missing field, never zero or a fabricated
 estimate, and do not claim an enforceable USD cap without host evidence.
