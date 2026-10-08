@@ -126,3 +126,49 @@ does not call `evaluate`/`qualify`/`promote`, and cannot change a gate.
 Live same-model comparisons, model judges, public benchmark imports, hosted
 jobs, and online execution require a separate authorized change and, for
 external datasets, a specific license and redistribution review.
+
+## Independent four-factor CPU understanding fixture (issue #77)
+
+`evals/experiment_understanding/v1/` is a separate, original three-task suite.
+It does not change the 32 cases above. Each task has four binary factors,
+sixteen possible configurations, eight fixed observed rows, one frozen seed and
+a precomputed full reference table. The response is an arithmetic CPU-workload
+surrogate, **not** measured hardware throughput. The committed producer
+`v1_fixture.py` regenerates the hidden table; `manifest.json` binds the exact
+task, observation and reference bytes. No WhatWorkedBench data or code is
+redistributed. `prepare` reads only the public task and observation files; it
+never opens the hidden reference. Give a model only this public output, never
+the source tree, producer, manifest or hidden reference.
+
+```bash
+# One agent-facing task input: exactly eight approved observations, no answers.
+scripts/arw-experiment-eval prepare --task-id cpu-batch-v1 --output /tmp/cpu-batch-input.json
+# Local statistical baseline from those same eight rows (no model call).
+scripts/arw-experiment-eval ridge --output /tmp/ridge-attempts.json
+scripts/arw-experiment-eval score --attempts /tmp/ridge-attempts.json --receipt /tmp/ridge-receipt.json
+scripts/arw-experiment-eval verify --attempts /tmp/ridge-attempts.json --receipt /tmp/ridge-receipt.json
+```
+
+The JSON contracts are in `evals/experiment_understanding/v1.schema.json`. A
+scoring input predeclares one `plan` slot per task per route and retains every
+submitted `attempt`. A delivered attempt names its task/observation digests,
+the exact eight `observations_used` IDs, selected configuration, and all sixteen
+`{config,value}` rows. The scorer retains absent slots and extra/duplicate
+submissions in the all-attempt denominator. An invalid or missing table gets
+`delivery=0`, null raw errors, zero quality, and typed reason codes (including
+missing or duplicate configurations, unapproved/budget-overrun observations,
+nonfinite values and digest mismatch). No error is falsely recorded as zero.
+
+The four reported axes are selection regret (true best value minus selected
+configuration value), mean absolute conditional contrast error across all
+factor/context combinations, mean absolute pair-interaction contrast error,
+and full-table delivery rate. Lower raw error is better. Each error also has a
+predeclared 0–1 quality score; all-attempt quality uses zero for undelivered
+slots, while `delivered_only_error` and `delivered_only_quality` show the
+surviving slice. Missing cost fields remain `unavailable`; explicit zero stays
+zero. The receipt binds raw input byte digests, per-task digests, scores and a
+canonical receipt digest, and `verify` recomputes it from retained inputs.
+`live_comparison.status` remains `not_measured` until a separately authorized
+same-model run. This suite does not add #69 claim types, write to the learning
+ledger, or promote a heuristic. The proposed paid-run protocol is in
+`evals/experiment_understanding/LIVE-PLAN.md`.

@@ -1,0 +1,43 @@
+{
+  "schema_version": "arw.cpu-four-factor-taskset.v1",
+  "version": "original-cpu-surrogates-1",
+  "origin": "Original ARW deterministic arithmetic CPU-workload surrogates; no external benchmark data or measured runtime",
+  "factor_levels": [0, 1],
+  "metric": {
+    "name": "synthetic_throughput_points",
+    "direction": "maximize",
+    "selection_regret_scale": 40,
+    "conditional_effect_mae_scale": 40,
+    "pair_interaction_mae_scale": 40
+  },
+  "budget": {
+    "max_observations_per_task": 8,
+    "required_response_rows": 16,
+    "max_model_calls_per_task_route": 1
+  },
+  "stopping_rules": [
+    "Use exactly the eight frozen observation rows for each task; no adaptive data queries.",
+    "After one response-table submission or one missing-delivery outcome, stop that task and route.",
+    "A selected configuration and all sixteen response values are required for delivery."
+  ],
+  "tasks": [
+    {
+      "id": "cpu-batch-v1",
+      "title": "Synthetic batch-processing CPU response",
+      "question": "Predict the full response table and select the highest synthetic throughput configuration from the eight given observations.",
+      "factors": ["batch_size", "chunk_layout", "prefetch", "worker_count"]
+    },
+    {
+      "id": "cpu-graph-v1",
+      "title": "Synthetic graph-traversal CPU response",
+      "question": "Predict the full response table and select the highest synthetic throughput configuration from the eight given observations.",
+      "factors": ["frontier_width", "adjacency_layout", "cache_hint", "worker_count"]
+    },
+    {
+      "id": "cpu-buffer-v1",
+      "title": "Synthetic buffer-processing CPU response",
+      "question": "Predict the full response table and select the highest synthetic throughput configuration from the eight given observations.",
+      "factors": ["block_size", "buffer_layout", "prefetch", "merge_threads"]
+    }
+  ]
+}
