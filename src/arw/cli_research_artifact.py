@@ -28,6 +28,7 @@ def configure(commands):
         if name == "qualify":
             parser.add_argument("--request", type=Path, required=True)
             parser.add_argument("--visual-review-id")
+            parser.add_argument("--hard-caption-checks", action="store_true", help="Require exact graph-authorized caption targets; project root is required.")
         if name == "purge":
             parser.add_argument("--authorization-artifact-id", required=True)
             parser.add_argument("--authorize-purge", action="store_true")
@@ -107,6 +108,16 @@ def handle(args, provider):
         method = "source_bridge" if action == "source-bridge" else "caption_targets"
         return getattr(provider, method)(ir, run_root=args.run_root, **options)
     request = _load_request(args.request, RuntimeCommandRequest)
+    if args.hard_caption_checks:
+        if ir.artifact_kind != "result_plot":
+            raise ValueError("result_plot_required")
+        if args.project_root is None:
+            raise ValueError("caption_auth_project_root_required")
+        from arw_research_artifact.plot_authority import (
+            CanonicalCaptionAttestationVerifier,
+        )
+
+        options.update(hard_caption_checks=True, attestation_verifier=CanonicalCaptionAttestationVerifier())
     return provider.qualify(
         ir,
         run_root=args.run_root,

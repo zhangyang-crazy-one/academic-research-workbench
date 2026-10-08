@@ -73,3 +73,21 @@ def test_checkout_launcher_forwards_new_public_commands(tmp_path):
         completed = _run([str(LAUNCHER), command, action, "--help"], env=_agent_env(tmp_path))
         assert completed.returncode == 0, completed.stderr
         assert f"{command} {action}" in completed.stdout
+
+
+def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys):
+    from tests.integration.test_canonical_caption_authority import prepare
+    from tests.integration.test_research_artifacts import request as parent_request
+    from tests.integration.test_result_plots import attach_bridge
+
+    project, root, context, ir, _ = prepare(tmp_path)
+    ir = attach_bridge(ir, root, context, number=230)
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    request_path = root / "qualification-request.json"
+    request_path.write_text(parent_request(root, 240).model_dump_json())
+    argv = ["artifact", "qualify", "--run-root", str(root), "--project-root", str(project), "--input", str(source), "--request", str(request_path), "--hard-caption-checks"]
+    assert main(argv) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["accepted"] is True
+    assert any(c["code"] == "caption_binding_matches" and c["status"] == "PASS" for c in result["receipt"]["checks"])

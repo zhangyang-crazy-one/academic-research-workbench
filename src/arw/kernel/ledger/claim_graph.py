@@ -13,8 +13,8 @@ from arw.kernel.core.canonical import (
 )
 from arw.kernel.ledger import narrative
 from arw.kernel.ledger.journal import (
-    _replay_unlocked,
     _read_manifest,
+    _replay_unlocked,
     replay_run_prefix,
 )
 from arw.kernel.ledger.manifests import load_artifact_manifest
@@ -246,6 +246,8 @@ def _read_inputs(
 def _context(inputs: Inputs):
     from arw.kernel.ledger.accepted_refs import (
         ResolutionContext,
+    )
+    from arw.kernel.ledger.accepted_refs import (
         RunPrefix as AcceptedRunPrefix,
     )
 
@@ -503,8 +505,11 @@ def _manuscript(ref: dict, inputs: Inputs) -> tuple[bytes, dict | None, str]:
 
 
 def _extract(ref: dict, inputs: Inputs) -> tuple[list[Occurrence], dict]:
-    from arw.kernel.state.text_spans import sentence_spans
-    from arw.kernel.state.text_spans import CITATION_BINDINGS_VERSION, PATTERNS
+    from arw.kernel.state.text_spans import (
+        CITATION_BINDINGS_VERSION,
+        PATTERNS,
+        sentence_spans,
+    )
 
     raw, citation_table, provenance = _manuscript(ref, inputs)
     if len(raw) > 1_048_576:
@@ -1483,8 +1488,8 @@ def _figure_details(inputs: Inputs, ref: dict, resolved) -> dict:
 
 
 def _numeric_sources(inputs: Inputs, nodes: list[dict]) -> dict:
-    from arw.kernel.state.numeric_core import Derivation
     from arw.kernel.policy.numeric_core import evaluate_derivation
+    from arw.kernel.state.numeric_core import Derivation
 
     records = {}
     sources = {}
@@ -1503,7 +1508,23 @@ def _numeric_sources(inputs: Inputs, nodes: list[dict]) -> dict:
             isinstance(body, dict)
             and body.get("schema_version") == "arw.numeric-derivation.v1"
         ):
-            record = Derivation.model_validate_json(result.raw_bytes)
+            try:
+                record = Derivation.model_validate_json(result.raw_bytes)
+            except ValueError:
+                # Generic parent acceptance proves bytes, not that a numeric
+                # record's declared identity or exact result is coherent.
+                identity = body.get("derivation_id")
+                if isinstance(identity, str) and re.fullmatch(r"[0-9a-f]{64}", identity):
+                    sources[identity] = {
+                        "status": "failed",
+                        "reason": "sealed_derivation_replay_mismatch",
+                        "source": ref,
+                    }
+                node["numeric_derivation"] = {
+                    "status": "failed",
+                    "reason": "invalid_accepted_derivation_record",
+                }
+                continue
             if (
                 record.derivation_id in records
                 and records[record.derivation_id] != record
@@ -1534,8 +1555,8 @@ def _numeric_sources(inputs: Inputs, nodes: list[dict]) -> dict:
 
 
 def _numeric_check(occurrence: Occurrence, inputs: Inputs, sources: dict) -> dict:
-    from arw.kernel.state.numeric_core import RationalExact
     from arw.kernel.policy.numeric_core import format_exact
+    from arw.kernel.state.numeric_core import RationalExact
 
     kind = occurrence.numeric_class
     if kind in {"identifier", "year", "figure_number", "confidence_level"}:
