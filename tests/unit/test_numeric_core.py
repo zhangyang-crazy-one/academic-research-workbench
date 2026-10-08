@@ -412,3 +412,14 @@ def test_registered_numeric_schemas_enforce_semantic_rational_invariants(tmp_pat
     }
     with pytest.raises(SchemaRegistryError, match="semantic validation"):
         validate_instance("numeric-presentation.schema.json", presentation)
+
+
+def test_public_decimal_parser_rejects_resource_exponents_before_fraction():
+    from arw.kernel.policy.numeric_core import NumericDomainError, parse_exact_number
+
+    assert parse_exact_number("0.10000000000000000001").as_fraction() == Fraction(
+        10000000000000000001, 100000000000000000000
+    )
+    for text in ("1e999999999", "1e-999999999", "1/3", "NaN"):
+        with pytest.raises(NumericDomainError):
+            parse_exact_number(text)

@@ -100,6 +100,15 @@ def _exact(value: Fraction) -> RationalExact:
     return RationalExact.from_fraction(value)
 
 
+def parse_exact_number(value: object) -> RationalExact:
+    """Parse bounded decimal metadata before any large-integer construction.
+
+    The same lexical/rational domain applies to numeric operands and external
+    order/caption metadata. Invalid input raises NumericDomainError.
+    """
+    return _exact(_fraction(value))
+
+
 def _scaled(value: object, scale: RationalExact) -> RationalExact:
     return _exact(_fraction(value) * scale.as_fraction())
 
