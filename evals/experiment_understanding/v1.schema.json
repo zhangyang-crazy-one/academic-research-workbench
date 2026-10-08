@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/cpu-four-factor-eval.schema.json",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "config": {"type": "string", "pattern": "^[01]{4}$"},
+    "row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["config", "value"],
+      "properties": {"config": {"$ref": "#/$defs/config"}, "value": {"type": "number"}}
+    },
+    "task": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "question", "factors"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^cpu-[a-z]+-v1$"},
+        "title": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "minLength": 1},
+        "factors": {"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "taskset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "version", "origin", "factor_levels", "metric", "budget", "stopping_rules", "tasks"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-taskset.v1"},
+        "version": {"const": "original-cpu-surrogates-1"},
+        "origin": {"type": "string", "minLength": 1},
+        "factor_levels": {"const": [0, 1]},
+        "metric": {
+          "type": "object", "additionalProperties": false,
+          "required": ["name", "direction", "selection_regret_scale", "conditional_effect_mae_scale", "pair_interaction_mae_scale"],
+          "properties": {
+            "name": {"const": "synthetic_throughput_points"}, "direction": {"const": "maximize"},
+            "selection_regret_scale": {"type": "number", "exclusiveMinimum": 0},
+            "conditional_effect_mae_scale": {"type": "number", "exclusiveMinimum": 0},
+            "pair_interaction_mae_scale": {"type": "number", "exclusiveMinimum": 0}
+          }
+        },
+        "budget": {
+          "type": "object", "additionalProperties": false,
+          "required": ["max_observations_per_task", "required_response_rows", "max_model_calls_per_task_route"],
+          "properties": {
+            "max_observations_per_task": {"const": 8},
+            "required_response_rows": {"const": 16},
+            "max_model_calls_per_task_route": {"const": 1}
+          }
+        },
+        "stopping_rules": {"type": "array", "minItems": 3, "items": {"type": "string", "minLength": 1}},
+        "tasks": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/task"}}
+      }
+    },
+    "reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "taskset_sha256", "tasks"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-reference.v1"},
+        "taskset_sha256": {"$ref": "#/$defs/sha256"},
+        "tasks": {"type": "array", "minItems": 3, "maxItems": 3, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["task_id", "seed", "rows"],
+          "properties": {
+            "task_id": {"type": "string"}, "seed": {"type": "integer", "minimum": 0},
+            "rows": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/row"}}
+          }
+        }}
+      }
+    },
+    "observations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "taskset_sha256", "reference_sha256", "tasks"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-observations.v1"},
+        "taskset_sha256": {"$ref": "#/$defs/sha256"},
+        "reference_sha256": {"$ref": "#/$defs/sha256"},
+        "tasks": {"type": "array", "minItems": 3, "maxItems": 3, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["task_id", "rows"],
+          "properties": {"task_id": {"type": "string"}, "rows": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/row"}}}
+        }}
+      }
+    },
+    "attempt_file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "plan", "attempts"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-attempts.v1"},
+        "plan": {"type": "array", "minItems": 1, "maxItems": 96, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["attempt_id", "task_id", "route"],
+          "properties": {"attempt_id": {"type": "string", "minLength": 1}, "task_id": {"type": "string", "minLength": 1}, "route": {"type": "string", "minLength": 1}}
+        }},
+        "attempts": {"type": "array", "maxItems": 192, "items": {"type": "object"}}
+      }
+    },
+    "public_input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "taskset_version", "task_id", "task_sha256", "observation_sha256", "title", "question", "factors", "factor_levels", "metric", "budget", "stopping_rules", "observations"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-public-input.v1"},
+        "taskset_version": {"type": "string"}, "task_id": {"type": "string"},
+        "task_sha256": {"$ref": "#/$defs/sha256"}, "observation_sha256": {"$ref": "#/$defs/sha256"},
+        "title": {"type": "string"}, "question": {"type": "string"},
+        "factors": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string"}},
+        "factor_levels": {"const": [0, 1]}, "metric": {"type": "object"},
+        "budget": {"type": "object"}, "stopping_rules": {"type": "array", "items": {"type": "string"}},
+        "observations": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/row"}}
+      }
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "evaluator_version", "taskset_sha256", "reference_sha256", "observations_sha256", "attempts_sha256", "attempts", "summary", "live_comparison", "receipt_sha256"],
+      "properties": {
+        "schema_version": {"const": "arw.cpu-four-factor-receipt.v1"},
+        "evaluator_version": {"const": "1"},
+        "taskset_sha256": {"$ref": "#/$defs/sha256"},
+        "reference_sha256": {"$ref": "#/$defs/sha256"},
+        "observations_sha256": {"$ref": "#/$defs/sha256"},
+        "attempts_sha256": {"$ref": "#/$defs/sha256"},
+        "attempts": {"type": "array"}, "summary": {"type": "object"},
+        "live_comparison": {"type": "object", "required": ["status"], "properties": {"status": {"const": "not_measured"}}},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
