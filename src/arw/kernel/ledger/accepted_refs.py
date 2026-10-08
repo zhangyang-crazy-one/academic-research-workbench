@@ -14,18 +14,16 @@ from arw.kernel.core.canonical import (
     sha256_hex,
     strict_json_loads,
 )
-from arw.kernel.ledger.journal import replay_run, replay_run_prefix
+from arw.kernel.ledger.journal import (
+    replay_run,
+    replay_run_prefix,
+    replay_run_under_held_lock,
+)
 from arw.kernel.ledger.manifests import load_artifact_manifest
 from arw.kernel.ledger.source_locations import (
     located_bytes,
     read_retained_bytes,
     resolve_source_locator,
-)
-from arw.kernel.policy.research_integrity import (
-    ClaimEvidenceLink,
-    EvidenceSpan,
-    ResearchSourceManifest,
-    validate_research_integrity_chain,
 )
 from arw.kernel.state.accepted_ref import (
     ACCEPTED_REF_ADAPTER,
@@ -57,6 +55,9 @@ class ResolutionContext:
     run_prefixes: tuple[RunPrefix, ...] = ()
     journal_sequence: int | None = None
     journal_head_sha256: str | None = None
+    # Internal service-only boundary, never a JSON/schema/CLI capability.
+    # Each exact root is already held by the parent writer transaction.
+    held_lock_roots: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,9 @@ def _runs(context: ResolutionContext):
     if len(prefixes) != len(context.run_prefixes):
         raise ValueError("duplicate run prefixes")
     result = []
+    held_roots = {Path(root).absolute() for root in context.held_lock_roots}
+    if held_roots - {Path(root).absolute() for root in context.run_roots}:
+        raise ValueError("held lock root is outside resolution roots")
     for root in context.run_roots:
         raw = read_retained_bytes(root, "run-manifest.json")
         manifest = RunManifest.model_validate_json(raw)
@@ -108,16 +112,26 @@ def _runs(context: ResolutionContext):
         prefix = prefixes.get(manifest.run_id)
         if prefixes and prefix is None:
             raise ValueError("run missing fixed prefix")
-        replay = (
-            replay_run(root)
-            if prefix is None
-            else replay_run_prefix(
+        if Path(root).absolute() in held_roots:
+            replay = replay_run_under_held_lock(
                 root,
-                revision=prefix.revision,
-                expected_head_sha256=prefix.head_sha256,
-                expected_manifest_sha256=prefix.run_manifest_sha256,
+                revision=prefix.revision if prefix else None,
+                expected_head_sha256=prefix.head_sha256 if prefix else None,
+                expected_manifest_sha256=prefix.run_manifest_sha256 if prefix else None,
             )
-        )
+        else:
+            replay = (
+                replay_run(root)
+                if prefix is None
+                else replay_run_prefix(
+                    root,
+                    revision=prefix.revision,
+                    expected_head_sha256=prefix.head_sha256,
+                    expected_manifest_sha256=prefix.run_manifest_sha256,
+                )
+            )
+        if replay.recovery_health != "healthy":
+            raise ValueError("current run does not have a healthy canonical journal")
         result.append((root, manifest, sha256_hex(raw), replay))
     if len({item[1].run_id for item in result}) != len(result):
         raise ValueError("duplicate run identity")
@@ -221,6 +235,8 @@ def _resolve_parent(
         isinstance(value, dict)
         and value.get("schema_version") == "arw.research-source-manifest.v1"
     ):
+        from arw.kernel.policy.research_integrity import ResearchSourceManifest
+
         ResearchSourceManifest.model_validate_json(raw)
         scope = "metadata_only"
     return RefResolution(
@@ -295,22 +311,36 @@ def resolve_ref(ref: AcceptedRef, context: ResolutionContext) -> RefResolution:
 verify_ref = resolve_ref
 
 
-_DICT_MODELS = {
-    "SourceLocator": SourceLocator,
-    "EvidenceSpan": EvidenceSpan,
-    "ClaimEvidenceLink": ClaimEvidenceLink,
-    "ResearchBinding": ResearchBinding,
-    "SubmissionArtifactReference": SubmissionArtifactReference,
-    "MemoryLink": MemoryLink,
-    "VenueSourceCapsule": VenueSourceCapsule,
-}
-
-
 def to_accepted_ref(
     value: object, context: ResolutionContext, *, adapter_kind: str | None = None
 ) -> RefResolution:
+    # Original integrity contracts are imported lazily: this necessary
+    # ledger -> policy dependency must not create an import-time cycle.
+    from arw.kernel.policy.research_integrity import (
+        ClaimEvidenceLink,
+        EvidenceSpan,
+        ResearchSourceManifest,
+        validate_research_integrity_chain,
+    )
+
+    adapter_models = {
+        "SourceLocator": SourceLocator,
+        "EvidenceSpan": EvidenceSpan,
+        "ClaimEvidenceLink": ClaimEvidenceLink,
+        "ResearchBinding": ResearchBinding,
+        "SubmissionArtifactReference": SubmissionArtifactReference,
+        "MemoryLink": MemoryLink,
+        "VenueSourceCapsule": VenueSourceCapsule,
+    }
     original = value
     try:
+        original_bytes = (
+            canonical_json_bytes(value.model_dump(mode="json", exclude_unset=True))
+            if isinstance(value, VenueSourceCapsule)
+            else canonical_json_bytes(value)
+            if isinstance(value, dict)
+            else None
+        )
         if isinstance(value, dict):
             if "scope" in value:
                 value = ACCEPTED_REF_ADAPTER.validate_json(canonical_json_bytes(value))
@@ -322,11 +352,11 @@ def to_accepted_ref(
                     "arw.claim-evidence-link.v1": "ClaimEvidenceLink",
                     "arw.venue-source-capsule.v2": "VenueSourceCapsule",
                 }.get(value.get("schema_version"))
-                if kind not in _DICT_MODELS:
+                if kind not in adapter_models:
                     return RefResolution(
                         "unsupported", original, reason="unsupported_type"
                     )
-                value = _DICT_MODELS[kind].model_validate_json(
+                value = adapter_models[kind].model_validate_json(
                     canonical_json_bytes(value)
                 )
         elif isinstance(value, BaseModel):
@@ -377,11 +407,7 @@ def to_accepted_ref(
             digest = (
                 value.research_source_manifest_sha256
                 if isinstance(value, EvidenceSpan)
-                else sha256_hex(
-                    canonical_json_bytes(
-                        value.model_dump(mode="json", exclude_unset=True)
-                    )
-                )
+                else sha256_hex(original_bytes)
             )
             candidates = [
                 r for r in candidates if r[4].payload.artifact_sha256 == digest
@@ -428,6 +454,11 @@ def to_accepted_ref(
             return RefResolution("unresolved", original, reason="digest_mismatch")
         ref = _parent(root, manifest, digest, event, context, **selection)
         result = _resolve_parent(ref, context, runs)
+        if result.status == "resolved" and isinstance(value, ResearchBinding):
+            # The original research-binding validator requires a JSON
+            # document even for the empty pointer; binary/plain text must
+            # not become valid through the generic accepted-bytes path.
+            resolve_pointer(strict_json_loads(result.raw_bytes), value.json_pointer)
         if result.status == "resolved" and isinstance(value, EvidenceSpan):
             source = ResearchSourceManifest.model_validate_json(result.raw_bytes)
             validate_research_integrity_chain(

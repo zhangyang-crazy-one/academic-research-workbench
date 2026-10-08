@@ -784,6 +784,42 @@ def replay_run_prefix(
         raise JournalError("canonical writer lock is held") from error
 
 
+def replay_run_under_held_lock(
+    run_root: Path,
+    *,
+    revision: int | None = None,
+    expected_head_sha256: str | None = None,
+    expected_manifest_sha256: str | None = None,
+) -> ReplayState:
+    """Internal service read while its parent transaction owns the run lock.
+
+    This rereads real canonical bytes through the original full validators;
+    no event list, cached replay or caller-provided validation flag is accepted.
+    It avoids acquiring a second OS lock inside a sole-writer transaction.
+    The service must already hold the lock for this exact root.
+    """
+    if revision is not None and (type(revision) is not int or revision < 1):
+        raise JournalError("historical revision must be positive")
+    root = require_existing_run_root(run_root)
+    _, raw = _read_manifest(root)
+    if (
+        expected_manifest_sha256 is not None
+        and sha256_hex(raw) != expected_manifest_sha256
+    ):
+        raise JournalError("run manifest digest mismatch")
+    replayed = _replay_unlocked(root, stop_revision=revision)
+    if revision is not None and (
+        replayed.recovery_health != "healthy" or replayed.revision != revision
+    ):
+        raise JournalError("historical prefix is missing or corrupt")
+    if (
+        expected_head_sha256 is not None
+        and replayed.last_event_sha256 != expected_head_sha256
+    ):
+        raise JournalError("prefix head digest mismatch")
+    return replayed
+
+
 @contextmanager
 def locked_replay(
     run_root: Path, *, lock_timeout: float = 0.2, read_only: bool = False

@@ -72,13 +72,11 @@ def accepted_fixture(
     assert result.accepted, result.model_dump(mode="json")
     event = replay_run(run).events[-1]
     context = ResolutionContext("project-paper-tests", (run,), root)
-    binding = ResearchBinding(
-        binding_id="binding.data",
+    binding = SubmissionArtifactReference(
         artifact_id=artifact_id,
-        sha256=sha256_hex(raw),
-        ledger_event_id=event.event_id,
-        ledger_event_sha256=event.event_sha256,
-        json_pointer="",
+        manifest_sha256=event.payload.manifest_sha256,
+        content_sha256=sha256_hex(raw),
+        accepting_event_id=event.event_id,
     )
     resolution = to_accepted_ref(binding, context)
     assert resolution.status == "resolved", resolution
@@ -298,3 +296,143 @@ def test_reference_schemas_and_strict_boundaries():
         )
     with pytest.raises(ValueError):
         JournalEventRef(project_id="project.tests", sequence="1", event_sha256="a" * 64)
+
+
+def test_pdf_locator_adapter_reuses_retained_pdf_extraction_validator(tmp_path):
+    from arw.pdf_extraction import extract_grobid_tei, source_locator_from_pdf
+    from tests.unit.test_pdf_extraction import _pdf
+
+    pdf = _pdf()
+    tei = b'<TEI><text><body><pb n="1"/><head>Results</head><p>A sufficiently long paragraph for complete structural extraction and source validation.</p></body></text></TEI>'
+    extraction, text = extract_grobid_tei(pdf, tei, version="0.8.0")
+    assert extraction.quality_state == "complete"
+    run, context, ref, event = accepted_fixture(tmp_path, text)
+    manifest = canonical_json_bytes(extraction.model_dump(mode="json"))
+    (run / "paper.pdf").write_bytes(pdf)
+    (run / "extraction.json").write_bytes(manifest)
+    location = next(item for item in extraction.locators if item.kind == "paragraph")
+    locator = source_locator_from_pdf(
+        extraction,
+        text,
+        location,
+        pdf_source_path="paper.pdf",
+        extraction_manifest_path="extraction.json",
+        extraction_manifest_sha256=sha256_hex(manifest),
+        source_artifact_id=ref.artifact_id,
+        source_event_id=event.event_id,
+        source_event_sha256=event.event_sha256,
+        producing_activity_id="activity.extract",
+    )
+    assert to_accepted_ref(locator, context).status == "resolved"
+    (run / "extraction.json").write_bytes(manifest + b" ")
+    assert to_accepted_ref(locator, context).reason == "digest_mismatch"
+    (run / "extraction.json").write_bytes(manifest)
+    (run / "paper.pdf").unlink()
+    assert to_accepted_ref(locator, context).status == "unresolved"
+
+
+@pytest.mark.parametrize(
+    "modules",
+    [
+        [
+            "arw.kernel.state.numeric_core",
+            "arw.kernel.ledger.accepted_refs",
+            "arw.kernel.artifacts.experiment_acceptance",
+            "arw.kernel.policy.schema_registry",
+        ],
+        [
+            "arw.kernel.policy.schema_registry",
+            "arw.kernel.artifacts.experiment_acceptance",
+            "arw.kernel.ledger.accepted_refs",
+            "arw.kernel.state.numeric_core",
+        ],
+    ],
+)
+def test_shared_contracts_import_in_fresh_interpreter(modules):
+    import os
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import importlib; [importlib.import_module(name) for name in {modules!r}]",
+        ],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_journal_fixed_prefix_resolution_survives_later_torn_tail(tmp_path):
+    from arw.kernel.ledger.narrative import propose
+
+    root = project(tmp_path)
+    register(root)
+    snapshot = select(root, plan())
+    reference = JournalEventRef(
+        project_id="project-paper-tests",
+        sequence=2,
+        event_sha256=snapshot.sha256,
+        payload_selector="/plan/route",
+    )
+    context = ResolutionContext(
+        reference.project_id,
+        (),
+        root,
+        journal_sequence=2,
+        journal_head_sha256=snapshot.sha256,
+    )
+    before = resolve_ref(reference, context)
+    assert before.status == "resolved"
+    propose(root, plan("theory"), expected_sha256=snapshot.sha256, reason="New draft")
+    (root / ".arw/narrative/events.jsonl").open("ab").write(b"{broken tail")
+    after = resolve_ref(reference, context)
+    assert after == before
+    assert (
+        resolve_ref(
+            reference, replace(context, journal_sequence=None, journal_head_sha256=None)
+        ).status
+        == "unresolved"
+    )
+    assert (
+        resolve_ref(reference, replace(context, journal_head_sha256="f" * 64)).reason
+        == "stale"
+    )
+
+
+def test_resolution_inside_parent_writer_lock_rereads_real_bytes(tmp_path):
+    from arw.kernel.ledger.journal import locked_replay
+    from arw.kernel.policy.numeric_core import evaluate_derivation
+    from tests.unit.test_numeric_core import request, scalar
+
+    run, context, ref, _ = accepted_fixture(tmp_path, b'{"value":0.831}\n')
+    with locked_replay(run):
+        held = replace(context, held_lock_roots=(run,))
+        resolved = resolve_ref(ref, held)
+        assert resolved.status == "resolved"
+        result = evaluate_derivation(request("value", scalar(ref, "/value")), held)
+        assert result.status == "exact" and result.exact.numerator == 831
+        # The context is not a cached event authority: content tampering still fails.
+        (run / "data.json").write_bytes(b'{"value":0.832}\n')
+        assert resolve_ref(ref, held).reason == "digest_mismatch"
+
+
+def test_research_binding_does_not_weaken_original_json_requirement(tmp_path):
+    _, context, ref, event = accepted_fixture(tmp_path, b"plain non-JSON source\n")
+    binding = ResearchBinding(
+        binding_id="binding.data",
+        artifact_id=ref.artifact_id,
+        sha256=ref.content_sha256,
+        ledger_event_id=event.event_id,
+        ledger_event_sha256=event.event_sha256,
+        json_pointer="",
+    )
+    assert to_accepted_ref(binding, context).status == "unresolved"
+    assert resolve_ref(ref, context).status == "resolved"
