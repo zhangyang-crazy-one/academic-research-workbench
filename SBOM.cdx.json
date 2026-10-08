@@ -6,7 +6,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d"
+          "content": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
         }
       ],
       "name": ".file-base/bin/file-base",
@@ -18,7 +18,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f"
+          "content": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e"
         }
       ],
       "name": ".file-base/build-evidence.json",
@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "74990d20dbf5e740c847b22bb029c9a1186f08cd6a37691a4eca8a4ce66d8cb7"
+          "content": "e298ed0a6beb5a8dc0d5f7878952d6ad4dfffa0af942c6177c5805a43415078a"
         }
       ],
       "name": "vendor/mcp-manifest.json",

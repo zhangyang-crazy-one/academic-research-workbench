@@ -1,7 +1,7 @@
 {
   "binary": {
     "path": ".file-base/bin/file-base",
-    "sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d"
+    "sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
   },
   "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
   "component": {
@@ -26,7 +26,7 @@
     {
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "sha256": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
+      "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
     {
       "order": 3,
@@ -39,7 +39,7 @@
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
-  "post_patch_tree_sha256": "46ded8f6d907640c1e48a7ac95bb279ee002466eeae102ab47d91a2126a85175",
+  "post_patch_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
   "schema_version": "1.0.0",
   "source_date_epoch": 1783517828
 }

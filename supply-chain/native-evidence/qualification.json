@@ -3,7 +3,8 @@
   "limits": [
     "The CI artifacts retain the production binary digest and build evidence, but do not include the binary payload; no matching local full stage was tested.",
     "Incremental network-fixture setup is skipped under deliberate network denial on every surface.",
-    "ASan leak scanning is disabled because the mandatory strace audit uses ptrace; AddressSanitizer and UBSan findings remain fatal."
+    "ASan leak scanning is disabled because the mandatory strace audit uses ptrace; AddressSanitizer and UBSan findings remain fatal.",
+    "Retained receipt files were reconstructed byte-for-byte from the qualification run's job logs because the review environment could not download workflow artifacts; every retained file matches the sha256 printed in that run's log, and the declared source manifest reproduces the run's artifact_source_manifest_sha256."
   ],
   "native_test_suite": {
     "component": "file-base",
@@ -11,7 +12,7 @@
     "runner": "Makefile.cbm:test",
     "tree_sha256": "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
   },
-  "patched_source_tree_sha256": "46ded8f6d907640c1e48a7ac95bb279ee002466eeae102ab47d91a2126a85175",
+  "patched_source_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
   "patches": [
     {
       "component": "file-base",
@@ -25,45 +26,45 @@
       "component": "file-base",
       "order": 2,
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
-      "post_tree_sha256": "dde4252bb549e82be011c5f108ea741cc45ca2f462b4c28d686bf4f1a95cc23e",
+      "post_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "pre_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
-      "sha256": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
+      "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
     {
       "component": "file-base",
       "order": 3,
       "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
-      "post_tree_sha256": "2465a16a0f096f632364945aa779f1b242b788111a8fb1c73979a63660325edf",
-      "pre_tree_sha256": "dde4252bb549e82be011c5f108ea741cc45ca2f462b4c28d686bf4f1a95cc23e",
+      "post_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
+      "pre_tree_sha256": "297f453965ea2f0861e25d9e5c4acc6d42994ad7252f27233a2c24447a72138f",
       "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
     },
     {
       "component": "file-base",
       "order": 4,
       "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
-      "post_tree_sha256": "46ded8f6d907640c1e48a7ac95bb279ee002466eeae102ab47d91a2126a85175",
-      "pre_tree_sha256": "2465a16a0f096f632364945aa779f1b242b788111a8fb1c73979a63660325edf",
+      "post_tree_sha256": "e2aab2e760a9506a00fce11ecd33d2032cb3640da2676848347b7e1bd4aac7ac",
+      "pre_tree_sha256": "319f8d62db6363c05d6682c2aa26bab0ab19779622ddd0739b1d10dec146c569",
       "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
     }
   ],
   "production_shared_daemon_regression": {
     "passed": 7,
-    "report_sha256": "8bd54b83cf9d25f521a3cd7cb99b153fd41425c992533575d5bce0eb5fbe32cd"
+    "report_sha256": "ccc253dadd44e880a39816784eb9f399040171d3b58c695fbcc33c102a2dee60"
   },
   "qualification_run": {
-    "head_sha": "e8b75fc5e07dad413bd3427efedba2422f1f0b6f",
-    "id": 37720256160,
-    "url": "https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/37720256160"
+    "head_sha": "9a1ee6c2a4a3b56ee783b96d8970701b5d97f5fc",
+    "id": 37736448854,
+    "url": "https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/37736448854"
   },
   "schema_version": "arw.native-qualification-summary.v1",
   "source_component": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798",
   "surfaces": {
     "asan-ubsan": {
-      "artifact_source_manifest_sha256": "378613d726367fb9ef1fa32adedbf1bb811cebaf64f611c6abf9b98de47e2a99",
-      "binary_sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d",
-      "build_evidence_sha256": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-      "command_ended_at": "2026-10-08T03:51:00Z",
-      "command_started_at": "2026-10-08T02:56:35Z",
+      "artifact_source_manifest_sha256": "06cdf150cc7b9387d5be8491859b47f04664136bcbb7bda3af4aedabb8e4d162",
+      "binary_sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e",
+      "build_evidence_sha256": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+      "command_ended_at": "2026-10-08T07:08:12Z",
+      "command_started_at": "2026-10-08T06:14:35Z",
       "native_test_counts": {
         "passed": 7893,
         "skipped": 8
@@ -79,27 +80,27 @@
         "git_context_resolve_no_hang_under_live_ui_sockets      SKIP (platform: Windows-only: #798 UI listening-socket handle inheritance)"
       ],
       "raw_report_sha256": {
-        "stdout.log": "a0815c7095a0226e96a9f27ce0b2d05a967a44f4351b0dcfe7e6d11f31383032",
-        "test-stdout.log": "d1c0fc52e5873ec802821328b53e29dee0fd1b0a743181376ce6805b39395188"
+        "stdout.log": "2a11770a9a28e7872028fe3dc2f34394ea40c87367a8fc4f25c4c1e5306154f2",
+        "test-stdout.log": "1f3eca5bb4b85304982c3562cdf0c19d7b52987551f8ac76d9e8a438a68a8d12"
       },
       "retained_files": {
-        "binary.sha256": "9d1d99bf1a01fbb926db9ca0f25519810f30bd17fc28946d59db58bcdde6ba28",
-        "build-evidence.json": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-        "command.json": "5f78e609923bd4a25aec9e6549a90f63408cfe2f4f78cf6d4b1c3d54ff72ca2e",
+        "binary.sha256": "4a22588aa7a70a7fdbd00f2065d713434b9c638a519fb619c91589a140be7cd0",
+        "build-evidence.json": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+        "command.json": "c3bedd8d327bc3a72f80972bf72667a7a1568ada6b11e3b16e3e38edc5fd587f",
         "sanitizer-verdict.json": "0b1a1a3817be8597959fa9c924eab5af62d49db35499b980b695f4a1f713c449",
         "status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
         "test-suite.sha256": "cf3967560534b0d653ee2825fe6636142b25f62faf46790f28dff419c8382bca",
-        "verdict.json": "4c0ddb34e0e78a5325e15ca8530b028a59fc401e9fb4491f2c3a7a279d0e45f2"
+        "verdict.json": "f9ae2aa36cc701aeb3e42f8eed5763b8a8b078c7552c8d9edd475c281f7e88f8"
       },
       "technical_qualification": "PASS",
       "test_status": 0
     },
     "tsan": {
-      "artifact_source_manifest_sha256": "378613d726367fb9ef1fa32adedbf1bb811cebaf64f611c6abf9b98de47e2a99",
-      "binary_sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d",
-      "build_evidence_sha256": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-      "command_ended_at": "2026-10-08T04:05:26Z",
-      "command_started_at": "2026-10-08T02:56:42Z",
+      "artifact_source_manifest_sha256": "06cdf150cc7b9387d5be8491859b47f04664136bcbb7bda3af4aedabb8e4d162",
+      "binary_sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e",
+      "build_evidence_sha256": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+      "command_ended_at": "2026-10-08T07:25:23Z",
+      "command_started_at": "2026-10-08T06:14:34Z",
       "native_test_counts": {
         "passed": 7892,
         "skipped": 9
@@ -116,13 +117,13 @@
         "git_context_resolve_no_hang_under_live_ui_sockets      SKIP (platform: Windows-only: #798 UI listening-socket handle inheritance)"
       ],
       "raw_report_sha256": {
-        "stdout.log": "4b7cd4ad2ccde4382a7698070b3ab83e0ed4e09bd80da1697002fea3ed770da8",
-        "test-stdout.log": "787a7ed83bbdbd4963df51245e3f125b09f83b2def89aa32aa64a5c5e3bd2f65"
+        "stdout.log": "00c704c87e42924c152d96d3c8eef63450413214bc10cd01532307845d00802b",
+        "test-stdout.log": "c8e767cdf6199bc9117788cc4f76284f6913a1c7b4a38278afb6e87349e9a8a7"
       },
       "retained_files": {
-        "binary.sha256": "9d1d99bf1a01fbb926db9ca0f25519810f30bd17fc28946d59db58bcdde6ba28",
-        "build-evidence.json": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-        "command.json": "9ccdfc978d4046f6b826767ed2f27251ea3d2642f4313def7d1208f9e49a4725",
+        "binary.sha256": "4a22588aa7a70a7fdbd00f2065d713434b9c638a519fb619c91589a140be7cd0",
+        "build-evidence.json": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+        "command.json": "d12d783a9f9cb5e2d4095802b43cbd03842e1ec0d11321b2e5d25867719fb47f",
         "sanitizer-verdict.json": "1ce2aae9279acf26c8b020140c2ec1877e2c6648e81fcba3e8fd72ee6452cafe",
         "status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
         "test-suite.sha256": "cf3967560534b0d653ee2825fe6636142b25f62faf46790f28dff419c8382bca",
@@ -132,11 +133,11 @@
       "test_status": 0
     },
     "upstream": {
-      "artifact_source_manifest_sha256": "378613d726367fb9ef1fa32adedbf1bb811cebaf64f611c6abf9b98de47e2a99",
-      "binary_sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d",
-      "build_evidence_sha256": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-      "command_ended_at": "2026-10-08T03:18:30Z",
-      "command_started_at": "2026-10-08T02:56:36Z",
+      "artifact_source_manifest_sha256": "06cdf150cc7b9387d5be8491859b47f04664136bcbb7bda3af4aedabb8e4d162",
+      "binary_sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e",
+      "build_evidence_sha256": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+      "command_ended_at": "2026-10-08T06:37:07Z",
+      "command_started_at": "2026-10-08T06:14:34Z",
       "native_test_counts": {
         "passed": 7893,
         "skipped": 8
@@ -152,18 +153,18 @@
         "git_context_resolve_no_hang_under_live_ui_sockets      SKIP (platform: Windows-only: #798 UI listening-socket handle inheritance)"
       ],
       "raw_report_sha256": {
-        "native-session-test.log": "8bd54b83cf9d25f521a3cd7cb99b153fd41425c992533575d5bce0eb5fbe32cd",
-        "stdout.log": "e59d84e12e7f19dd4b3afe44232278371692107c8e9842b59ab6bbab4c66d76d",
-        "test-stdout.log": "076844d23691d6a9fd3ddbd0cc34b7f52f4e11505bb398d956991eee664511c3"
+        "native-session-test.log": "ccc253dadd44e880a39816784eb9f399040171d3b58c695fbcc33c102a2dee60",
+        "stdout.log": "f7fa9a29f46dc0e1920a6171f09de03be6cae2ad76ea003469c23113a7c5964a",
+        "test-stdout.log": "594823b5827ac0d33604902b23ed6748f572fd90dbfeb8351a1c26c3f775bc10"
       },
       "retained_files": {
-        "binary.sha256": "9d1d99bf1a01fbb926db9ca0f25519810f30bd17fc28946d59db58bcdde6ba28",
-        "build-evidence.json": "e1155c88e29d64d0b093cc7597d67ec9093bb01d69ac01128b68f2984f31381f",
-        "command.json": "1b9dc92e85cc6d0b1166f3676418dfcc2c6a6dfface96b29cd1f6164b5ba3a3c",
+        "binary.sha256": "4a22588aa7a70a7fdbd00f2065d713434b9c638a519fb619c91589a140be7cd0",
+        "build-evidence.json": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e",
+        "command.json": "1483a60ba2b923cec582a0e4abb92caac5d8b87b627534da7c04ed5b5ccd8a55",
         "sanitizer-verdict.json": "bb5bd7f66626ba7e36f6cd6692be982e686e35d7f2bee533534425eb5ff235a5",
         "status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
         "test-suite.sha256": "cf3967560534b0d653ee2825fe6636142b25f62faf46790f28dff419c8382bca",
-        "verdict.json": "f9ae2aa36cc701aeb3e42f8eed5763b8a8b078c7552c8d9edd475c281f7e88f8"
+        "verdict.json": "4c0ddb34e0e78a5325e15ca8530b028a59fc401e9fb4491f2c3a7a279d0e45f2"
       },
       "technical_qualification": "PASS",
       "test_status": 0

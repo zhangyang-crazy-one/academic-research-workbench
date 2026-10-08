@@ -11,7 +11,7 @@
   "binary": {
     "path": ".file-base/bin/file-base",
     "staged_path": "libexec/file-base-mcp",
-    "sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d"
+    "sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
   },
   "patches": [
     {
