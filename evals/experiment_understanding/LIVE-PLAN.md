@@ -17,11 +17,14 @@ remain unmeasured, and `live_comparison.status` is `not_measured`.
   hidden table only after all planned attempts are sealed.
 - Compare `baseline` and `arw-route` on exactly the same public JSON bytes for
   each task. Run each arm in a fresh context. Baseline instructions: predict
-  all sixteen response values and select the maximum from the eight observations;
+  all sixteen response values and select the predicted maximum from all sixteen
+  candidate configurations using the same eight observed rows;
   output only the attempt JSON. ARW-route instructions: before output, organize
   the observed main-factor contrasts, then the observable pair contrasts and
   uncertainty, and use that structured analysis to fill the same sixteen-row
-  JSON contract. Both arms have the same data, response schema and limits.
+  JSON contract and select the predicted maximum from those same sixteen
+  candidates. Both arms have the same eight-observation budget, candidate set,
+  response schema and limits.
 - Compute the deterministic pair-effect ridge on those exact observations as
   an additional offline baseline. Keep any future sampling-policy experiment
   separate; this plan tests response reconstruction, not sample acquisition.
