@@ -4527,6 +4527,83 @@
       ],
       "title": "WorkflowSource",
       "type": "object"
+    },
+    "WritingCandidateReceiptBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.writing-candidate-receipt-binding.v1",
+          "default": "arw.writing-candidate-receipt-binding.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "run_manifest_base64": {
+          "maxLength": 90000,
+          "title": "Run Manifest Base64",
+          "type": "string"
+        },
+        "accepted_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepted Manifest Sha256",
+          "type": "string"
+        },
+        "accepted_manifest_base64": {
+          "maxLength": 350000,
+          "title": "Accepted Manifest Base64",
+          "type": "string"
+        },
+        "accepted_event_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Accepted Event Id",
+          "type": "string"
+        },
+        "accepted_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepted Event Sha256",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "candidate_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Candidate Path",
+          "type": "string"
+        },
+        "candidate_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Sha256",
+          "type": "string"
+        },
+        "realization_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Realization Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_manifest_sha256",
+        "run_manifest_base64",
+        "accepted_manifest_sha256",
+        "accepted_manifest_base64",
+        "accepted_event_id",
+        "accepted_event_sha256",
+        "receipt_sha256",
+        "candidate_path",
+        "candidate_sha256",
+        "realization_sha256"
+      ],
+      "title": "WritingCandidateReceiptBinding",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4571,10 +4648,22 @@
       "default": "realization_sidecar",
       "enum": [
         "realization_sidecar",
-        "manuscript_source"
+        "manuscript_source",
+        "writing_candidate_receipt"
       ],
       "title": "Accepted Binding Kind",
       "type": "string"
+    },
+    "writing_candidate_binding": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WritingCandidateReceiptBinding"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "realization_base64": {
       "maxLength": 1400000,
