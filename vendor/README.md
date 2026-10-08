@@ -84,6 +84,12 @@ the suite runs as the invoking user, and the strace network audit uses
 `--seccomp-bpf`. The three native evidence runs built a byte-identical binary,
 and a local `build-file-base` reproduces it.
 
+To rerun the nightly ASan/UBSan qualification on a selected ref, dispatch the
+`CI` workflow with `nightly_native_sanitizers=true`. This selects the same native
+branch as the schedule trigger and retains its sanitizer and network audit
+evidence as a `ci-native-sanitized-*` workflow artifact. The source manifest
+hash check also runs in that branch.
+
 Local report replay uses `python scripts/vendor-drift-report --fixture <json>`.
 `scripts/vendor-drift-issue` defaults to no write; it requires `--write` and a
 token for a remote update. The workflow's manual dispatch defaults to dry-run,
