@@ -18,6 +18,7 @@ from arw.kernel.artifacts.experiment_acceptance import (
     publish_experiment_acceptance,
     publish_experiment_contract,
     replay_experiment_acceptance,
+    seal_experiment_acceptance,
     seal_experiment_contract,
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
@@ -234,6 +235,123 @@ def test_whitelisted_operators_recompute_exact_decimals(tmp_path: Path, operator
     result = evaluate_experiment_acceptance(_contract(_reproduction(operator=operator)), provenance, tmp_path)
     (check,) = result.checks
     assert (check.status, check.observed, check.sample_count) == ("passed", expected, 3)
+
+
+@pytest.mark.parametrize("scores", ["1e50\n1\n-1e50", "-1e50\n1e50\n1", "1\n-1e50\n1e50"])
+@pytest.mark.parametrize("reported,status", [(0, "failed"), (1, "passed")])
+def test_exact_sum_survives_cancellation_and_row_order(
+    tmp_path: Path, scores: str, reported: int, status: str
+) -> None:
+    csv = "sample,score\n" + "".join(f"s{i},{value}\n" for i, value in enumerate(scores.splitlines()))
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", reported, "ratio")], files={"artifact.scores": csv})
+    contract = _contract(_reproduction(operator="sum@1"))
+    result = evaluate_experiment_acceptance(contract, provenance, tmp_path)
+    assert result.evaluator_version == "1.1.0"
+    assert (result.checks[0].status, result.checks[0].observed) == (status, "1")
+    assert replay_experiment_acceptance(result, contract, provenance, tmp_path).result_sha256 == result.result_sha256
+
+
+def test_old_receipt_replays_with_old_arithmetic_and_digest(tmp_path: Path) -> None:
+    csv = "sample,score\ns1,1e50\ns2,1\ns3,-1e50\n"
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", 0, "ratio")], files={"artifact.scores": csv})
+    contract = _contract(_reproduction(operator="sum@1"))
+    fixture_bytes = (ROOT / "tests/fixtures/experiment_acceptance_1_0_0.json").read_bytes()
+    old = seal_experiment_acceptance(json.loads(fixture_bytes))
+    assert (old.evaluator_version, old.checks[0].status, old.checks[0].observed) == ("1.0.0", "passed", "0")
+    assert old.canonical_bytes() == fixture_bytes
+    digest = old.result_sha256
+    assert digest == "ddc7628cf747ccdc9a0bf86e0a20fb1bc7efa5ebd3955599064317605deed4cc"
+    publish_experiment_acceptance(tmp_path, old)
+    loaded = load_experiment_acceptance(tmp_path, digest)
+    assert replay_experiment_acceptance(loaded, contract, provenance, tmp_path).result_sha256 == digest
+    assert evaluate_experiment_acceptance(contract, provenance, tmp_path).result_sha256 != digest
+
+
+@pytest.mark.parametrize("score", ["1e-100", "1e100"])
+def test_scientific_values_produce_bounded_replayable_results(tmp_path: Path, score: str) -> None:
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", 0, "ratio")], files={"artifact.scores": f"sample,score\ns1,{score}\n"})
+    contract = _contract(_reproduction(operator="sum@1"))
+    result = evaluate_experiment_acceptance(contract, provenance, tmp_path)
+    assert result.checks[0].status == "failed"
+    assert result.checks[0].observed == score
+    assert len(result.checks[0].observed) <= 64
+    assert replay_experiment_acceptance(result, contract, provenance, tmp_path) == result
+
+
+@pytest.mark.parametrize("score", ["1e1000000", "1e1001", "1e-1001", "1." + "1" * 65])
+def test_unsupported_numeric_domain_blocks_with_typed_result(tmp_path: Path, score: str) -> None:
+    provenance = _provenance(tmp_path, files={"artifact.scores": f"sample,score\ns1,{score}\n"})
+    result = evaluate_experiment_acceptance(_contract(), provenance, tmp_path)
+    assert _single(result) == ("invalid_artifact", ("value_out_of_supported_range",))
+
+
+def test_unsupported_contract_numeric_domain_blocks_with_typed_result(tmp_path: Path) -> None:
+    contract = _contract(_reproduction(tolerance={"absolute": "1e1000000", "relative": "0"}))
+    result = evaluate_experiment_acceptance(contract, _provenance(tmp_path), tmp_path)
+    assert _single(result) == ("invalid_contract", ("value_out_of_supported_range",))
+
+
+def test_exact_sum_reports_scientifically_when_combined_value_is_long(tmp_path: Path) -> None:
+    csv = "sample,score\ns1,1e1000\ns2,1e-1000\n"
+    provenance = _provenance(tmp_path, files={"artifact.scores": csv})
+    result = evaluate_experiment_acceptance(_contract(_reproduction(operator="sum@1")), provenance, tmp_path)
+    assert result.checks[0].status == "failed"
+    assert result.checks[0].observed == "1e1000"
+
+
+def test_exact_range_boundary_is_inclusive(tmp_path: Path) -> None:
+    provenance = _provenance(tmp_path, files={"artifact.scores": "sample,score\ns1,1e-100\n"})
+    at_boundary = evaluate_experiment_acceptance(
+        _contract(_reproduction(valid_range={"minimum": "1e-100", "maximum": "1e-100"})),
+        provenance, tmp_path,
+    )
+    assert at_boundary.checks[0].status == "failed"  # range passes; reported 0.75 differs
+    assert at_boundary.checks[0].reasons == ("reproduction_outside_tolerance",)
+    below = evaluate_experiment_acceptance(
+        _contract(_reproduction(valid_range={"minimum": "1.000000000000000000000000000001e-100"})),
+        provenance, tmp_path,
+    )
+    assert _single(below) == ("invalid_artifact", ("value_out_of_range",))
+
+
+def test_exact_mean_and_tolerance_boundaries_after_cancellation(tmp_path: Path) -> None:
+    csv = "sample,score\ns1,1e50\ns2,1\ns3,-1e50\n"
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", 0, "ratio")], files={"artifact.scores": csv})
+    at_boundary = evaluate_experiment_acceptance(
+        _contract(_reproduction(operator="mean@1", tolerance={"absolute": "0." + "3" * 60, "relative": "0"})),
+        provenance, tmp_path,
+    )
+    assert at_boundary.checks[0].status == "failed"  # finite decimal is strictly below 1/3
+    inclusive = evaluate_experiment_acceptance(
+        _contract(_reproduction(operator="mean@1", tolerance={"absolute": "0.5", "relative": "0"})),
+        provenance, tmp_path,
+    )
+    assert inclusive.checks[0].status == "passed"
+
+
+def test_exact_baseline_threshold_does_not_round_cancellation(tmp_path: Path) -> None:
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", 10**50 - 1, "ratio"), _metric("baseline_accuracy", 0, "ratio")])
+    result = evaluate_experiment_acceptance(
+        _contract(_comparison(threshold={"mode": "absolute", "value": "1e50"})), provenance, tmp_path
+    )
+    assert _single(result) == ("failed", ("improvement_below_threshold",))
+
+
+def test_relative_threshold_does_not_round_repeating_ratio_into_pass(tmp_path: Path) -> None:
+    provenance = _provenance(tmp_path, metrics=[_metric("accuracy", 5, "ratio"), _metric("baseline_accuracy", 3, "ratio")])
+    threshold = "0." + "6" * 49 + "7"
+    contract = _contract(_comparison(threshold={"mode": "relative", "value": threshold}))
+    exact = evaluate_experiment_acceptance(contract, provenance, tmp_path)
+    legacy = evaluate_experiment_acceptance(contract, provenance, tmp_path, evaluator_version="1.0.0")
+    assert _single(exact) == ("failed", ("improvement_below_threshold",))
+    assert legacy.checks[0].status == "passed"
+
+
+def test_budget_limit_outside_supported_domain_is_typed(tmp_path: Path) -> None:
+    contract = _contract(budget={"usage_metric": "gpu_hours", "unit": "hour", "limit": "1e1000000"})
+    result = evaluate_experiment_acceptance(contract, _provenance(tmp_path), tmp_path)
+    assert result.overall_status == "passed"
+    assert result.budget_status == "invalid_contract"
 
 
 def test_reproduction_outside_tolerance_fails(tmp_path: Path) -> None:

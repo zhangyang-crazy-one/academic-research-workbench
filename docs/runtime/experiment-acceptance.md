@@ -21,8 +21,34 @@ Supported checks:
 | `baseline_comparison` | Compare two reported metrics whose metric definition, unit, dataset, split and evaluation condition are all identical. The direction is `higher_is_better` or `lower_is_better`. The threshold is absolute or relative to the absolute value of the baseline, and it is inclusive. |
 | `statistical_significance`, `conditional_effect`, `interaction_effect`, `causal_effect`, `leaderboard_rank` | Always `unsupported`. These never become a weaker pass. |
 
-All arithmetic uses exact decimals. Reported floats are read from their
-shortest round-trip text.
+Evaluator `1.1.0` reads reported floats from their shortest round-trip text and
+uses exact rational arithmetic for operators, ranges, tolerances, thresholds,
+and budget comparisons. A zero-tolerance check therefore retains small terms
+between large canceling values. `observed` and `expected` are deterministic
+display fields: up to 56 significant digits with half-even rounding, using scientific notation when
+fixed notation would exceed the 64-character result limit. A repeating
+fraction or a longer result can be rounded for display; the pass/fail decision
+always uses the full exact value.
+
+The supported `1.1.0` numeric input domain is at most 128 characters and 64
+coefficient digits per value, with a written base-10 exponent from `-1000` to
+`1000` (at most four exponent digits). This applies to CSV cells, reported
+metrics, and contract limits. Values outside the domain block with
+`value_out_of_supported_range`: `invalid_artifact` for CSV or reported values,
+`invalid_contract` for contract check values. An out-of-domain budget usage
+metric is `unverifiable`; an out-of-domain budget limit is `invalid_contract`.
+Data remains subject to the existing
+8 MiB and 200,000-row bounds. No numeric expansion occurs before the exponent
+and coefficient bounds are checked.
+
+For a nonzero accepted token, these bounds put its adjusted decimal exponent
+between `-1064` and `1063`: up to 64 coefficient digits combined with a
+written exponent of magnitude 1000. A sum of at most 200,000 rows has magnitude
+below `1e1070`; a baseline relative improvement and a tolerance product have
+magnitude below `1e2129`. The rational numerator and denominator therefore
+stay finite under the same input and row limits. Conversion for display uses a
+decimal context with exponent range `-10000` to `10000`; it chooses scientific
+notation directly when the adjusted exponent makes fixed notation long.
 
 ## Statuses
 
@@ -61,6 +87,9 @@ Contracts are immutable. A changed threshold, tolerance or analysis needs a
 new `contract_version` that names the contract it supersedes through
 `supersedes_contract_sha256`. Results are content-addressed and contain no
 timestamps, so an earlier failed result still replays byte-for-byte.
+New results record evaluator `1.1.0`. Offline replay dispatches by the stored
+`evaluator_version`; existing `1.0.0` receipts retain their original decimal
+arithmetic, output bytes, and digest.
 
 A contract's `declared_timing: predeclared` is only a claim. The result
 reports it as:
