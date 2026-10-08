@@ -98,6 +98,7 @@ bin/arw memory init-project --project-root PROJECT --project-id project.example
 bin/arw narrative register --project-root PROJECT
 bin/arw narrative select --project-root PROJECT --plan plan.json
 bin/arw narrative status --project-root PROJECT
+bin/arw narrative trail --project-root PROJECT --json
 bin/arw init --run-root PROJECT/RUN --request init-request.json --task-kind paper --project-root PROJECT
 ```
 
@@ -178,3 +179,57 @@ Concurrent selection, an old expected digest, or an old proposal fails rather
 than silently replacing a newer choice. Agents should show the author the
 proposed plan and reason before approval, then reload the new snapshot. A stale
 agent or plan cannot treat its earlier digest as current.
+
+If an author explicitly abandons a pending replacement without choosing a
+successor, record that decision against the exact proposal:
+
+```sh
+bin/arw narrative withdraw --project-root PROJECT \
+  --proposal-sha256 PROPOSAL_SHA256 --author-id AUTHOR_ID \
+  --reason "Why this proposal was withdrawn" --author-confirmed
+bin/arw narrative trail --project-root PROJECT --json
+```
+
+Withdrawal leaves the selected plan active and allows a later independent
+proposal. The flag is an operator assertion of author confirmation, not
+independent identity authentication. A proposal awaiting approval or
+withdrawal has `unknown` disposition; the trail does not guess the outcome.
+The complete current event chain is checked before exporting even an old view:
+
+```sh
+bin/arw narrative trail --project-root PROJECT --json \
+  --at-sequence 2 --expected-head-sha256 CURRENT_HISTORY_HEAD
+```
+
+For one explicitly named paper run, `--run-root PROJECT/RUN` adds accepted
+artifact event references and explicit artifact or memory successor links from
+that run's validated journal. It cannot be combined with `--at-sequence`,
+because current run records would misrepresent an old project view.
+
+The export includes the original plan, its recorded rationale, event sequence
+and digest, any explicit proposal or withdrawal reason, and successor links.
+`change_reason` records why a plan was adopted; `supersession_reason` records
+the later proposal that replaced it. The claimed author confirmation is a
+separate source. `current_choice_ids`, `abandoned_choice_ids`, and
+`unresolved_questions` are derived on read. Paper handoff and resume expose a
+smaller `narrative_trail` summary with the same current and abandoned routes;
+history alone never makes an abandoned route a suggested next action. A
+non-paper project with no narrative registration returns `not_applicable`.
+
+The journal remains the authority. The trail never writes a second ledger or
+infers an author's motive from a commit diff. Plan fields and transition
+anchors are declared argumentative objects; they do not establish accepted
+artifact provenance or scientific support. Run relations are identified as
+run-scoped and are not attributed to a route unless a canonical binding says
+so. History is capped at 1 MiB; the explicit trail export rejects more than
+128 choices, 128 run relations, or 64 KiB of output with
+`trail_limit_exceeded`. The handoff/resume summary never fails on history
+length: it keeps the current route and the eight most recent abandoned routes
+and reports `omitted_abandoned_route_count`. When a resume would exceed its
+continuation budget, the summary is replaced by
+`{"status": "omitted", "reason": "continuation_budget"}` before the handoff is
+refused. The export never creates files; other narrative readers recreate a
+missing `.arw/narrative/.lock`, so a cloned project need not carry it. Invalid sequences, stale expected heads, and damaged
+history fail explicitly rather than returning an empty trail. Synthetic tests
+exercise these states; a ten-entry public author-record pilot has not been
+measured and must not be inferred from those fixtures.

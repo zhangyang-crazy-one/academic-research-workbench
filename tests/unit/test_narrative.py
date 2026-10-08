@@ -555,12 +555,38 @@ def test_direct_memory_handoff_save_and_resume_validate_current_narrative(
         service.save(value, request=None)
     assert missing.value.code == "missing_narrative_binding"
     value.handoff.narrative_sha256 = first.sha256
-    assert service.save(value, request=None) == {"saved": True}
+    from arw.kernel.ledger.narrative import withdraw
+
+    withdrawn_branch = propose(
+        root,
+        plan("observation_mechanism"),
+        expected_sha256=first.sha256,
+        reason="The author considered a mechanism route",
+    )
+    withdraw(
+        root,
+        proposal_sha256=withdrawn_branch["proposal_sha256"],
+        author_id="author.owner",
+        reason="The author withdrew that branch",
+    )
+    saved = service.save(value, request=None)
+    assert saved["saved"] is True
+    assert saved["narrative_trail"]["current_choices"][0]["choice_id"] == first.sha256
     assert (
-        service.resume_handoff("memory.one", query=MemoryQuery(max_tokens=16384))[
-            "narrative"
-        ]["version"]
-        == 1
+        saved["narrative_trail"]["abandoned_routes"][0]["choice_id"]
+        == withdrawn_branch["proposal_sha256"]
+    )
+    resumed = service.resume_handoff("memory.one", query=MemoryQuery(max_tokens=16384))
+    saved_again = service.save(value, request=None)
+    resumed_again = service.resume_handoff(
+        "memory.one", query=MemoryQuery(max_tokens=16384)
+    )
+    assert resumed["narrative"]["version"] == 1
+    assert (
+        resumed["narrative_trail"]
+        == saved["narrative_trail"]
+        == saved_again["narrative_trail"]
+        == resumed_again["narrative_trail"]
     )
     change = propose(
         root,
@@ -578,7 +604,16 @@ def test_direct_memory_handoff_save_and_resume_validate_current_narrative(
         service.resume_handoff("memory.one", query=MemoryQuery(max_tokens=16384))
     assert stale_resume.value.code == "stale_narrative"
     value.handoff.narrative_sha256 = second.sha256
-    assert service.save(value, request=None) == {"saved": True}
+    saved_second = service.save(value, request=None)
+    assert saved_second["saved"] is True
+    assert (
+        saved_second["narrative_trail"]["current_choices"][0]["choice_id"]
+        == second.sha256
+    )
+    assert (
+        saved_second["narrative_trail"]["abandoned_routes"][0]["choice_id"]
+        == first.sha256
+    )
 
 
 @pytest.mark.parametrize(
