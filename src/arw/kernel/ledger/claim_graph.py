@@ -405,7 +405,7 @@ def _manuscript(ref: dict, inputs: Inputs) -> tuple[bytes, dict | None, str]:
         and isinstance(value.get("candidate"), str)
         and ref.get("selector", "") in {"", "/candidate"}
     ):
-        from arw_writing.preservation import validate_citation_bindings
+        from arw.kernel.state.text_spans import validate_citation_bindings
 
         validate_citation_bindings(
             value["verification"], value["source"], value["candidate"]
@@ -440,8 +440,11 @@ def _manuscript(ref: dict, inputs: Inputs) -> tuple[bytes, dict | None, str]:
 
 
 def _extract(ref: dict, inputs: Inputs) -> tuple[list[Occurrence], dict]:
-    from arw_writing.diagnostics import sentence_spans
-    from arw_writing.preservation import CITATION_BINDINGS_VERSION, PATTERNS
+    from arw.kernel.state.text_spans import (
+        CITATION_BINDINGS_VERSION,
+        PATTERNS,
+        sentence_spans,
+    )
 
     raw, citation_table, provenance = _manuscript(ref, inputs)
     if len(raw) > 1_048_576:
