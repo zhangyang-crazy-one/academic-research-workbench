@@ -304,6 +304,18 @@ text. Preservation findings reference the whole source and candidate by SHA-256
 CLI proposal JSON is bounded to 2 MiB. Sources must already be accepted and their
 current bytes must match their canonical manifest.
 
+New receipts use `arw.writing-citation-bindings.v2`: source and candidate each
+have an `assertions` table of UTF-8 byte offsets, lengths and SHA-256 sentence
+digests, plus small citation-to-assertion indexes. The assertion sentence is
+read from the retained text, so six citations in one sentence do not copy that
+sentence six times. Reading validates the exact scope and digest; older
+sentence-valued citation bindings remain readable with their original matching
+rules. An index or digest mismatch is invalid evidence, not a semantic verdict.
+Before `writing record` publishes a receipt or accepted paper candidate, it
+checks the complete canonical receipt against the 8 MiB retained-source limit.
+An oversized result returns recoverable `receipt_budget_exceeded` without
+writing a new candidate or receipt; revise the proposal or controls and retry.
+
 Exact observed drift in protected quantities, equations, citation IDs, quotes,
 qualifiers and named terms is rejected. Citation-to-assertion bindings and all
 contextual dimensions are retained for review. Absence of lexical differences is
