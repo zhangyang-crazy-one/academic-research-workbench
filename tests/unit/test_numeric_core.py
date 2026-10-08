@@ -11,6 +11,7 @@ import pytest
 
 from arw.kernel.artifacts.experiment_acceptance import ComparisonContext
 from arw.kernel.policy.numeric_core import (
+    csv_selection_from_data_selector,
     derivation_id,
     evaluate_derivation,
     format_exact,
@@ -19,6 +20,7 @@ from arw.kernel.policy.numeric_core import (
 from arw.kernel.state.numeric_core import (
     MAX_INTEGER,
     CsvSelection,
+    Derivation,
     DerivationRef,
     DerivationRequest,
     NumericExpression,
@@ -280,3 +282,133 @@ def test_numeric_schema_drift_and_rational_strictness():
     ):
         with pytest.raises(ValueError):
             RationalExact(numerator=numerator, denominator=denominator)
+
+
+def test_scalar_json_lexical_precision_and_invalid_source_domain(tmp_path):
+    _, context, ref, _ = accepted_fixture(
+        tmp_path, b'{"precise":0.10000000000000000001,"short":0.1,"fraction":"1/3"}\n'
+    )
+    precise = evaluate_derivation(request("value", scalar(ref, "/precise")), context)
+    short = evaluate_derivation(request("value", scalar(ref, "/short")), context)
+    assert fraction(precise) == Fraction(10000000000000000001, 100000000000000000000)
+    assert fraction(short) == Fraction(1, 10)
+    assert precise.exact != short.exact
+    assert (
+        evaluate_derivation(request("value", scalar(ref, "/fraction")), context).status
+        == "out_of_domain"
+    )
+    for index, raw in enumerate(
+        (b'{"number":1,"number":2}\n', b'{"number":NaN}\n', b'{"number":"1e-129"}\n'),
+        start=2,
+    ):
+        _, bad_context, bad_ref, _ = accepted_fixture(tmp_path, raw, run_index=index)
+        assert (
+            evaluate_derivation(
+                request("value", scalar(bad_ref, "/number")), bad_context
+            ).status
+            == "out_of_domain"
+        )
+
+
+def test_dag_memoization_and_bounded_resources(tmp_path, monkeypatch):
+    from arw.kernel.policy import numeric_core
+
+    _, context, ref, _ = accepted_fixture(tmp_path, b'{"number":1}\n')
+    initial = request("value", scalar(ref, "/number"))
+    identity = derivation_id(initial)
+    values = {
+        identity: Derivation(
+            derivation_id=identity,
+            request=initial,
+            status="exact",
+            exact=RationalExact(numerator=999, denominator=1),
+        )
+    }
+    for _ in range(8):
+        nested = request("mean", *(DerivationRef(derivation_id=identity),) * 32)
+        identity = derivation_id(nested)
+        values[identity] = Derivation(
+            derivation_id=identity,
+            request=nested,
+            status="exact",
+            exact=RationalExact(numerator=999, denominator=1),
+        )
+    original_resolver, calls = numeric_core.resolve_operand, []
+
+    def observed(*args):
+        calls.append(1)
+        return original_resolver(*args)
+
+    monkeypatch.setattr(numeric_core, "resolve_operand", observed)
+    assert fraction(evaluate_derivation(nested, context, values)) == 1
+    assert len(calls) == 1
+    monkeypatch.setattr(numeric_core, "MAX_DERIVATIONS", 2)
+    assert evaluate_derivation(nested, context, values).status == "out_of_domain"
+    _, csv_context, csv_ref, _ = accepted_fixture(
+        tmp_path, b"id,score\na,1\nb,2\nc,3\n", run_index=2
+    )
+    monkeypatch.setattr(numeric_core, "MAX_ROWS", 2)
+    assert resolve_operand(selection(csv_ref), csv_context).status == "out_of_domain"
+
+
+def test_lossless_old_data_selector_mapping_requires_explicit_row_identity(tmp_path):
+    from arw.kernel.artifacts.experiment_acceptance import DataSelector
+
+    _, context, ref, _ = accepted_fixture(tmp_path, b"id,score\na,0\nb,0\nc,1\n")
+    old = DataSelector(
+        artifact_id=ref.artifact_id,
+        format="csv",
+        column="score",
+        row_id_column="id",
+        missing_values="exclude",
+    )
+    new = csv_selection_from_data_selector(old, ref, CTX)
+    assert new.columns == ("score",) and new.missing_policy == "exclude"
+    assert fraction(evaluate_derivation(request("mean", new), context)) == Fraction(
+        1, 3
+    )
+    with pytest.raises(ValueError, match="stable row identity"):
+        csv_selection_from_data_selector(
+            old.model_copy(update={"row_id_column": None}), ref, CTX
+        )
+
+
+def test_comparison_context_old_alias_and_schemas_preserved():
+    from arw.kernel.artifacts.experiment_acceptance import (
+        ComparisonContext as LegacyContext,
+    )
+    from arw.kernel.artifacts.experiment_acceptance import (
+        experiment_acceptance_schema_documents,
+    )
+    from arw.kernel.state.experiment_context import ComparisonContext as SharedContext
+
+    assert LegacyContext is SharedContext
+    for name, schema in experiment_acceptance_schema_documents().items():
+        assert (
+            json.loads(
+                (Path(__file__).resolve().parents[2] / "schemas/v1" / name).read_bytes()
+            )
+            == schema
+        )
+
+
+def test_registered_numeric_schemas_enforce_semantic_rational_invariants(tmp_path):
+    from arw.kernel.policy.schema_registry import (
+        SCHEMA_NAMES,
+        SchemaRegistryError,
+        regenerate_schemas,
+        validate_instance,
+    )
+
+    names = {*numeric_core_schema_documents(), "accepted-ref.schema.json"}
+    assert names <= set(SCHEMA_NAMES)
+    generated = dict(regenerate_schemas(tmp_path / "schemas"))
+    assert all(f"schemas/v1/{name}" in generated for name in names)
+    presentation = {
+        "derivation_id": "a" * 64,
+        "decimals": 2,
+        "rounding_mode": "ROUND_HALF_EVEN",
+        "scale": {"numerator": 2, "denominator": 6},
+    }
+    with pytest.raises(SchemaRegistryError, match="semantic validation"):
+        validate_instance("numeric-presentation.schema.json", presentation)
