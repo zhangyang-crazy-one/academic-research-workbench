@@ -353,17 +353,20 @@ def _read_manifest(root: Path) -> tuple[RunManifest, bytes]:
     return manifest, manifest_bytes
 
 
-def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
+def _journal_storage(
+    root: Path, manifest: RunManifest, *, historical: bool = False
+) -> tuple[Path, bool]:
+    """Validate the actual storage ancestors shared by both read modes."""
     legacy_path = root / JOURNAL_NAME
     journal_root = root / "journal"
     if manifest.journal_layout is None:
-        if journal_root.exists() or journal_root.is_symlink():
+        if not historical and (journal_root.exists() or journal_root.is_symlink()):
             raise JournalError("legacy run contains an undeclared journal directory")
         if legacy_path.is_symlink() or not legacy_path.is_file():
             raise JournalError("legacy journal is missing or unsafe")
-        return (legacy_path,)
+        return legacy_path, False
 
-    if legacy_path.exists() or legacy_path.is_symlink():
+    if not historical and (legacy_path.exists() or legacy_path.is_symlink()):
         raise JournalError("segmented run contains an undeclared legacy journal")
     segments_root = root / SEGMENTS_RELATIVE
     if (
@@ -373,8 +376,15 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
         or not segments_root.is_dir()
     ):
         raise JournalError("segmented journal directories are missing or unsafe")
+    return segments_root, True
+
+
+def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
+    storage, segmented = _journal_storage(root, manifest)
+    if not segmented:
+        return (storage,)
     discovered: list[tuple[int, Path]] = []
-    for candidate in segments_root.iterdir():
+    for candidate in storage.iterdir():
         match = SEGMENT_PATTERN.fullmatch(candidate.name)
         if candidate.is_symlink() or not candidate.is_file() or match is None:
             raise JournalError(f"unexpected or unsafe segment entry: {candidate.name}")
@@ -388,6 +398,27 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
                 f"segment sequence is not contiguous: expected {expected:08d}, found {actual:08d}"
             )
     return tuple(path for _, path in discovered)
+
+
+def _prefix_segments(root: Path, manifest: RunManifest) -> Iterator[Path]:
+    """Validate only consecutive segments actually needed by a fixed prefix.
+
+    The consumer stops at its hash-bound revision. Future directory entries
+    are neither enumerated nor followed; current reads keep full discovery.
+    """
+    storage, segmented = _journal_storage(root, manifest, historical=True)
+    if not segmented:
+        yield storage
+        return
+    index = 1
+    while True:
+        candidate = storage / f"{index:08d}.jsonl"
+        if not os.path.lexists(candidate):
+            return
+        if candidate.is_symlink() or not candidate.is_file():
+            raise JournalError(f"unexpected or unsafe segment entry: {candidate.name}")
+        yield candidate
+        index += 1
 
 
 _REPLAY_VALIDATION_SESSION: ContextVar[dict | None] = ContextVar("arw_replay_validation_session", default=None)
@@ -408,7 +439,17 @@ def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayS
 
 def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> ReplayState:
     manifest, manifest_bytes = _read_manifest(root)
-    segment_paths = _discover_segments(root, manifest)
+    current_segments = _discover_segments(root, manifest) if stop_revision is None else None
+    segment_paths = current_segments if current_segments is not None else _prefix_segments(root, manifest)
+
+    def has_following_segment(index: int) -> bool:
+        if current_segments is not None:
+            return index < len(current_segments)
+        if manifest.journal_layout is None:
+            return False
+        # Called only if a damaged segment needs a later recovery boundary
+        # before the requested cutoff. lexists never follows its symlink.
+        return os.path.lexists(root / SEGMENTS_RELATIVE / f"{index + 1:08d}.jsonl")
     revision = 0
     previous_hash = ZERO_HASH
     event_ids: set[str] = set()
@@ -710,7 +751,7 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
             if not recoverable:
                 recovery_health = "blocked"
                 recovery_message = "malformed record is not the final segment suffix"
-            elif segment_index < len(segment_paths):
+            elif has_following_segment(segment_index):
                 pending_damaged = scan
             else:
                 recovery_health = "recoverable_tail"
@@ -731,7 +772,7 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
 
         if recovery_health == "blocked":
             break
-        if pending_damaged is not None and segment_index == len(segment_paths):
+        if pending_damaged is not None and not has_following_segment(segment_index):
             recovery_health = "recoverable_tail"
             recovery_message = "damaged terminal suffix requires explicit recovery"
 
