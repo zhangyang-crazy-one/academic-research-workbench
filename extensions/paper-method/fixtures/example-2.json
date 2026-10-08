@@ -1,0 +1,23 @@
+{
+  "source": {
+    "doi": "10.1080/00029890.1962.11989827",
+    "pdf_sha256": "3971ec3e3b048b6ace92248fcc8fa8f021808ca76cbc09d439275b8c0a07bb41",
+    "reference_location": "printed page 12, Example 2",
+    "method_location": "Theorem 1 proof, printed pages 12-13"
+  },
+  "input": {
+    "proposers": {
+      "alpha": ["A", "B", "C", "D"],
+      "beta": ["A", "D", "C", "B"],
+      "gamma": ["B", "A", "C", "D"],
+      "delta": ["D", "B", "C", "A"]
+    },
+    "receivers": {
+      "A": ["delta", "gamma", "alpha", "beta"],
+      "B": ["beta", "delta", "alpha", "gamma"],
+      "C": ["delta", "alpha", "beta", "gamma"],
+      "D": ["gamma", "beta", "alpha", "delta"]
+    }
+  },
+  "expected_matching": {"alpha": "C", "beta": "D", "gamma": "A", "delta": "B"}
+}

@@ -54,11 +54,14 @@ path = "build_hooks.py"
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "-ra"]
 testpaths = ["tests"]
+# Test-only import visibility for the opt-in adapter; never a wheel package.
+pythonpath = ["extensions/paper-method/src"]
 markers = [
   "codex_host: exercises an authenticated fresh Codex host against installed plugin bytes",
   "requires_native_file_base: needs the executable .file-base/bin/file-base",
   "requires_materialized_sources: needs pinned snapshots under vendor/sources",
   "requires_offline_network_isolation: needs Linux, usable strace, and a working bwrap or unshare network namespace",
+  "requires_paper_method_isolation: needs Linux, system Python >=3.13 and the adapter's actual bwrap namespace/read-only boundary",
   "requires_retained_evidence(*paths): needs retained evidence paths or env:VARIABLE inputs",
   "v2_compat: v2 compatibility baseline — pins v1 CLI/MCP/replay/projection contracts (tests/compat)",
 ]

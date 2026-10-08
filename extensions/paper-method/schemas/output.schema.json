@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/paper-method/stable-matching-output.v1.json",
+  "type": "object",
+  "required": ["schema_version", "status", "execution_observed", "input_sha256", "output_sha256", "source_capsule_sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "arw.paper-method-result.v1"},
+    "status": {"enum": ["planned", "executed", "failed"]},
+    "execution_observed": {"type": "boolean"},
+    "input_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "output_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "reason_code": {"type": "string"},
+    "matching": {"type": "object", "additionalProperties": {"type": "string"}},
+    "proposal_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+    "stable_verified": {"type": "boolean"},
+    "source_capsule_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "oneOf": [
+    {"properties": {"status": {"const": "planned"}, "execution_observed": {"const": false}, "output_sha256": {"type": "null"}}},
+    {"required": ["matching", "proposal_count", "stable_verified"], "properties": {"status": {"const": "executed"}, "execution_observed": {"const": true}, "output_sha256": {"type": "string"}, "stable_verified": {"const": true}}},
+    {"required": ["reason_code"], "properties": {"status": {"const": "failed"}}}
+  ]
+}
