@@ -90,10 +90,10 @@ index d0c1ee9e..f0572f22 100644
  
  #define FILENAME_TABLE_SIZE (sizeof(FILENAME_TABLE) / sizeof(FILENAME_TABLE[0]))
 diff --git a/src/mcp/mcp.c b/src/mcp/mcp.c
-index f0d3189e..fcbe31b7 100644
+index f0d3189e..56c5fc2d 100644
 --- a/src/mcp/mcp.c
 +++ b/src/mcp/mcp.c
-@@ -30,6 +30,9 @@ enum {
+@@ -30,6 +30,9 @@
      MCP_DEFAULT_IMPACT_LIMIT = 200, /* detect_changes per-symbol rows; rollup stays complete */
      MCP_SNIPPET_MAX_LINES = 500,    /* get_code_snippet line cap (whole-file Module guard) */
      MCP_N_DEFAULTS_2 = 2,
@@ -103,7 +103,7 @@ index f0d3189e..fcbe31b7 100644
      MCP_URI_PREFIX = 7,      /* strlen("file://") */
      MCP_CONTENT_PREFIX = 15, /* strlen("Content-Length:") */
      MCP_RETURN_2 = 2,
-@@ -463,6 +466,19 @@ typedef struct {
+@@ -463,6 +466,19 @@
  } tool_def_t;
  
  static const tool_def_t TOOLS[] = {
@@ -123,56 +123,95 @@ index f0d3189e..fcbe31b7 100644
      {"index_repository",
       "Index a repository. full/moderate add semantics; fast omits them; cross-repo-intelligence "
       "links services. Reports coverage gaps.",
-@@ -921,10 +937,28 @@ bool cbm_mcp_tool_profile_allows_http(cbm_mcp_tool_profile_t profile) {
+@@ -921,17 +937,47 @@
      return profile == CBM_MCP_TOOL_PROFILE_ALL;
  }
  
-+/* ARW: read_file (TOOLS[0]) is part of the public registry -- tools/list,
-+ * the tool count and names, and the help list -- only when the launcher
-+ * configured an allowed root, so the stock registry keeps upstream's shape.
-+ * Calls stay routed to the handler, which denies any request without a
-+ * configured root. */
-+static int mcp_public_tool_start(void) {
+-static int mcp_allowed_tool_count(cbm_mcp_tool_profile_t profile) {
++/* The daemon sets a session policy before accepting MCP requests. These
++ * helpers are defined below the server structure; standalone registry/help
++ * callers pass NULL and keep the single-process environment fallback. */
++static bool mcp_read_session_policy_set(const cbm_mcp_server_t *srv);
++static bool mcp_read_session_root_matches_process(const cbm_mcp_server_t *srv,
++                                                  const char *configured_path);
++
++/* ARW: read_file is advertised only for a usable session capability. */
++static int mcp_public_tool_start(const cbm_mcp_server_t *srv) {
 +    if (strcmp(TOOLS[0].name, "read_file") != 0) {
 +        return 0;
 +    }
 +    const char *root_id = getenv("CBM_ALLOWED_ROOT_ID");
 +    const char *root_path = getenv("CBM_ALLOWED_ROOT");
-+    return root_id && *root_id && root_path && root_path[0] == '/' ? 0 : 1;
++    if (!root_id || !*root_id || !root_path || root_path[0] != '/') {
++        return 1;
++    }
++    return mcp_read_session_policy_set(srv) &&
++                   !mcp_read_session_root_matches_process(srv, root_path)
++               ? 1
++               : 0;
 +}
 +
-+static bool mcp_tool_listed(cbm_mcp_tool_profile_t profile, int index) {
-+    return index >= mcp_public_tool_start() && mcp_tool_allowed(profile, TOOLS[index].name);
++static bool mcp_tool_listed(const cbm_mcp_server_t *srv, cbm_mcp_tool_profile_t profile,
++                            int index) {
++    return index >= mcp_public_tool_start(srv) && mcp_tool_allowed(profile, TOOLS[index].name);
 +}
 +
- static int mcp_allowed_tool_count(cbm_mcp_tool_profile_t profile) {
++static int mcp_allowed_tool_count(const cbm_mcp_server_t *srv,
++                                  cbm_mcp_tool_profile_t profile) {
      int count = 0;
      for (int i = 0; i < TOOL_COUNT; i++) {
 -        if (mcp_tool_allowed(profile, TOOLS[i].name)) {
-+        if (mcp_tool_listed(profile, i)) {
++        if (mcp_tool_listed(srv, profile, i)) {
              count++;
          }
      }
-@@ -957,7 +991,7 @@ static char *cbm_mcp_tools_list_range(cbm_mcp_tool_profile_t profile, int offset
+     return count;
+ }
+ 
+-static char *cbm_mcp_tools_list_range(cbm_mcp_tool_profile_t profile, int offset, int limit,
++static char *cbm_mcp_tools_list_range(const cbm_mcp_server_t *srv,
++                                      cbm_mcp_tool_profile_t profile, int offset, int limit,
+                                       bool include_next_cursor) {
+     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+     yyjson_mut_val *root = yyjson_mut_obj(doc);
+@@ -942,7 +988,7 @@
+     if (offset < 0) {
+         offset = 0;
+     }
+-    int allowed_count = mcp_allowed_tool_count(profile);
++    int allowed_count = mcp_allowed_tool_count(srv, profile);
+     if (offset > allowed_count) {
+         offset = allowed_count;
+     }
+@@ -957,7 +1003,7 @@
  
      int visible = 0;
      for (int i = 0; i < TOOL_COUNT && visible < end; i++) {
 -        if (!mcp_tool_allowed(profile, TOOLS[i].name)) {
-+        if (!mcp_tool_listed(profile, i)) {
++        if (!mcp_tool_listed(srv, profile, i)) {
              continue;
          }
          if (visible >= offset) {
-@@ -998,14 +1032,15 @@ const char *cbm_mcp_tool_input_schema(const char *tool_name) {
+@@ -979,7 +1025,7 @@
+ }
+ 
+ char *cbm_mcp_tools_list(void) {
+-    return cbm_mcp_tools_list_range(CBM_MCP_TOOL_PROFILE_ALL, 0, TOOL_COUNT, false);
++    return cbm_mcp_tools_list_range(NULL, CBM_MCP_TOOL_PROFILE_ALL, 0, TOOL_COUNT, false);
+ }
+ 
+ /* Return the JSON input_schema string for a tool by name, or NULL if unknown.
+@@ -998,14 +1044,15 @@
  }
  
  int cbm_mcp_tool_count(void) {
 -    return TOOL_COUNT;
-+    return TOOL_COUNT - mcp_public_tool_start();
++    return TOOL_COUNT - mcp_public_tool_start(NULL);
  }
  
  const char *cbm_mcp_tool_name(int index) {
 -    if (index < 0 || index >= TOOL_COUNT) {
-+    int start = mcp_public_tool_start();
++    int start = mcp_public_tool_start(NULL);
 +    if (index < 0 || index >= TOOL_COUNT - start) {
          return NULL;
      }
@@ -181,17 +220,17 @@ index f0d3189e..fcbe31b7 100644
  }
  
  const char *cbm_mcp_tool_description(const char *tool_name) {
-@@ -1052,7 +1087,8 @@ static size_t help_append(char *out, size_t cap, size_t len, const char *fmt, ..
+@@ -1052,7 +1099,8 @@
  
  char *cbm_mcp_tools_help_list(void) {
      size_t cap = SLEN("Tools:") + 2; /* trailing newline + NUL */
 -    for (int i = 0; i < TOOL_COUNT; i++) {
-+    int start = mcp_public_tool_start();
++    int start = mcp_public_tool_start(NULL);
 +    for (int i = start; i < TOOL_COUNT; i++) {
          cap += strlen(TOOLS[i].name) + SLEN(" ,\n "); /* per-tool worst case incl. a wrap */
      }
      char *out = malloc(cap);
-@@ -1061,10 +1097,10 @@ char *cbm_mcp_tools_help_list(void) {
+@@ -1061,10 +1109,10 @@
      }
      size_t len = help_append(out, cap, 0, "Tools:");
      size_t col = len;
@@ -204,7 +243,26 @@ index f0d3189e..fcbe31b7 100644
              len += help_append(out, cap, len, "\n ");
              col = 1;
          }
-@@ -1358,6 +1394,7 @@ static char *cbm_mcp_initialize_response_for_profile(const char *params_json,
+@@ -1115,13 +1163,14 @@
+     return offset;
+ }
+ 
+-static char *cbm_mcp_tools_list_page(cbm_mcp_tool_profile_t profile, const char *params_json) {
++static char *cbm_mcp_tools_list_page(const cbm_mcp_server_t *srv,
++                                     cbm_mcp_tool_profile_t profile, const char *params_json) {
+     bool has_cursor = false;
+     int offset = mcp_tools_cursor_offset(params_json, &has_cursor);
+     if (!has_cursor) {
+-        return cbm_mcp_tools_list_range(profile, 0, TOOL_COUNT, false);
+-    }
+-    return cbm_mcp_tools_list_range(profile, offset, MCP_TOOLS_PAGE_SIZE, true);
++        return cbm_mcp_tools_list_range(srv, profile, 0, TOOL_COUNT, false);
++    }
++    return cbm_mcp_tools_list_range(srv, profile, offset, MCP_TOOLS_PAGE_SIZE, true);
+ }
+ 
+ /* ── Prompt definitions ───────────────────────────────────────── */
+@@ -1358,6 +1407,7 @@
  
      yyjson_mut_val *impl = yyjson_mut_obj(doc);
      yyjson_mut_obj_add_str(doc, impl, "name", "file-base");
@@ -212,7 +270,29 @@ index f0d3189e..fcbe31b7 100644
      yyjson_mut_obj_add_str(doc, impl, "version", cbm_cli_get_version());
      yyjson_mut_obj_add_val(doc, root, "serverInfo", impl);
  
-@@ -2932,7 +2969,11 @@ static char *handle_list_projects(cbm_mcp_server_t *srv, const char *args) {
+@@ -1694,6 +1744,21 @@
+     cbm_mcp_tool_profile_t tool_profile;
+ };
+ 
++static bool mcp_read_session_policy_set(const cbm_mcp_server_t *srv) {
++    return srv && srv->allowed_root_policy_set;
++}
++
++static bool mcp_read_session_root_matches_process(const cbm_mcp_server_t *srv,
++                                                  const char *configured_path) {
++    if (!mcp_read_session_policy_set(srv) || !srv->allowed_root ||
++        !srv->allowed_root[0] || !configured_path || configured_path[0] != '/') {
++        return false;
++    }
++    char canonical[CBM_SZ_4K];
++    return cbm_canonical_path(configured_path, canonical, sizeof(canonical)) &&
++           strcmp(srv->allowed_root, canonical) == 0;
++}
++
+ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
+     cbm_mcp_server_t *srv = calloc(CBM_ALLOC_ONE, sizeof(*srv));
+     if (!srv) {
+@@ -2932,7 +2997,11 @@
          free(records);
          return cbm_mcp_text_result("out of memory while listing projects", true);
      }
@@ -225,7 +305,7 @@ index f0d3189e..fcbe31b7 100644
  
      int limit = cbm_mcp_get_int_arg(args, "limit", 50);
      int offset = cbm_mcp_get_int_arg(args, "offset", 0);
-@@ -17271,6 +17312,388 @@ static char *handle_ingest_traces(cbm_mcp_server_t *srv, const char *args) {
+@@ -17271,6 +17340,398 @@
      return result;
  }
  
@@ -389,7 +469,6 @@ index f0d3189e..fcbe31b7 100644
 +}
 +
 +static char *handle_read_file(cbm_mcp_server_t *srv, const char *args) {
-+    (void)srv;
 +    yyjson_doc *doc = args ? yyjson_read(args, strlen(args), 0) : NULL;
 +    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
 +    if (!root || !yyjson_is_obj(root)) {
@@ -430,6 +509,14 @@ index f0d3189e..fcbe31b7 100644
 +
 +    const char *configured_id = getenv("CBM_ALLOWED_ROOT_ID");
 +    const char *configured_path = getenv("CBM_ALLOWED_ROOT");
++    bool session_policy = mcp_read_session_policy_set(srv);
++    if (session_policy && (!configured_id || strcmp(allowed_root, configured_id) != 0 ||
++                           !mcp_read_session_root_matches_process(srv, configured_path))) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "root_session_mismatch",
++                                       "session allowed root does not match process capability");
++        yyjson_doc_free(doc);
++        return result;
++    }
 +    if (!configured_id || !*configured_id || !configured_path || configured_path[0] != '/' ||
 +        strcmp(allowed_root, configured_id) != 0) {
 +        char *result = mcp_read_denial(allowed_root, relative_path, "root_denied",
@@ -437,6 +524,9 @@ index f0d3189e..fcbe31b7 100644
 +        yyjson_doc_free(doc);
 +        return result;
 +    }
++    /* A daemon request always has a session policy. The environment fallback
++     * only serves a standalone server with no installed session context. */
++    const char *read_root = session_policy ? srv->allowed_root : configured_path;
 +
 +#if !defined(__linux__)
 +    char *unsupported = mcp_read_denial(allowed_root, relative_path, "unsupported_platform",
@@ -454,7 +544,7 @@ index f0d3189e..fcbe31b7 100644
 +
 +    char path_copy[MCP_READ_PATH_MAX + 1];
 +    memcpy(path_copy, relative_path, strlen(relative_path) + 1);
-+    int directory_fd = open(configured_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++    int directory_fd = open(read_root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 +    if (directory_fd < 0) {
 +        char *result = mcp_read_denial(allowed_root, relative_path, "root_denied",
 +                                       "configured allowed root cannot be opened safely");
@@ -614,7 +704,7 @@ index f0d3189e..fcbe31b7 100644
  /* ── Tool dispatch ────────────────────────────────────────────── */
  
  static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json) {
-@@ -17284,6 +17707,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
+@@ -17284,6 +17745,9 @@
          return cbm_mcp_text_result(message, true);
      }
  
@@ -624,6 +714,15 @@ index f0d3189e..fcbe31b7 100644
      if (strcmp(tool_name, "list_projects") == 0) {
          return handle_list_projects(srv, args_json);
      }
+@@ -17711,7 +18175,7 @@
+     } else if (strcmp(req.method, "prompts/get") == 0) {
+         result_json = cbm_mcp_prompt_get(req.params_raw, &request_error_json);
+     } else if (strcmp(req.method, "tools/list") == 0) {
+-        result_json = cbm_mcp_tools_list_page(srv->tool_profile, req.params_raw);
++        result_json = cbm_mcp_tools_list_page(srv, srv->tool_profile, req.params_raw);
+     } else if (strcmp(req.method, "tools/call") == 0) {
+         char *tool_name = req.params_raw ? cbm_mcp_get_tool_name(req.params_raw) : NULL;
+         char *tool_args =
 diff --git a/src/pipeline/pass_semantic_edges.c b/src/pipeline/pass_semantic_edges.c
 index b71c85a8..e33dce1f 100644
 --- a/src/pipeline/pass_semantic_edges.c

@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "87880f5e24008911de79daeed231340b2160f7cbad00c44a2321871b63f24b51"
+          "content": "151e5df262e5b8278f1af3bd3a3be7cc29118257a19dcafa4d57afb8b0ac6c6f"
         }
       ],
       "name": "vendor/mcp-manifest.json",
@@ -2443,11 +2443,11 @@
       "version": "1"
     },
     {
-      "bom-ref": "patch:663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5",
+      "bom-ref": "patch:6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "663cdb5ab1c71b3b3d962da8055b10f5b8dfa3a39e0fcb8f73d37dad70571bf5"
+          "content": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
         }
       ],
       "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",
