@@ -1,1 +1,1 @@
-{"edges":{"artifacts":["core","execution","ledger","state"],"execution":["artifacts","core","ledger","policy","state"],"ledger":["artifacts","core","state"],"policy":["artifacts","core","ledger","state"],"state":["core","ledger"]}}
+{"edges":{"artifacts":["core","execution","ledger","state"],"execution":["artifacts","core","ledger","policy","state"],"ledger":["artifacts","core","policy","state"],"policy":["artifacts","core","ledger","state"],"state":["core","ledger"]}}
