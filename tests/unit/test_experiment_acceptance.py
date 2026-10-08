@@ -4,6 +4,7 @@ import json
 import os
 import socket
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import jsonschema
@@ -12,6 +13,7 @@ import pytest
 from arw.kernel.artifacts.experiment_acceptance import (
     ExperimentAcceptanceError,
     evaluate_experiment_acceptance,
+    freeze_experiment_contract,
     experiment_acceptance_schema_documents,
     load_experiment_acceptance,
     load_experiment_contract,
@@ -246,7 +248,7 @@ def test_exact_sum_survives_cancellation_and_row_order(
     provenance = _provenance(tmp_path, metrics=[_metric("accuracy", reported, "ratio")], files={"artifact.scores": csv})
     contract = _contract(_reproduction(operator="sum@1"))
     result = evaluate_experiment_acceptance(contract, provenance, tmp_path)
-    assert result.evaluator_version == "1.1.0"
+    assert result.evaluator_version == "1.2.0"
     assert (result.checks[0].status, result.checks[0].observed) == (status, "1")
     assert replay_experiment_acceptance(result, contract, provenance, tmp_path).result_sha256 == result.result_sha256
 
@@ -265,6 +267,21 @@ def test_old_receipt_replays_with_old_arithmetic_and_digest(tmp_path: Path) -> N
     loaded = load_experiment_acceptance(tmp_path, digest)
     assert replay_experiment_acceptance(loaded, contract, provenance, tmp_path).result_sha256 == digest
     assert evaluate_experiment_acceptance(contract, provenance, tmp_path).result_sha256 != digest
+
+
+def test_historical_1_1_caller_timing_receipt_replays_as_unverified_assertion(tmp_path: Path) -> None:
+    provenance = _provenance(tmp_path)
+    contract = _contract()
+    raw = (ROOT / "tests/fixtures/experiment_acceptance_1_1_0_caller_timing.json").read_bytes()
+    recorded = seal_experiment_acceptance(json.loads(raw))
+    assert recorded.canonical_bytes() == raw
+    assert recorded.result_sha256 == "6d380d6287cdc86209403ba8c2529851f7bf61a0761aa8eb08cc8d0f16bc1a50"
+    assert recorded.timing_scope is None
+    assert recorded.predeclaration == "verified_predeclared"
+    assert replay_experiment_acceptance(
+        recorded, contract, provenance, tmp_path,
+        timing={"contract_sequence": 2, "provenance_sequence": 3},
+    ) == recorded
 
 
 @pytest.mark.parametrize("score", ["1e-100", "1e100"])
@@ -569,7 +586,7 @@ def test_symlinked_artifact_root_is_refused(tmp_path: Path) -> None:
 def test_changed_threshold_is_a_new_version_and_old_result_still_replays(tmp_path: Path) -> None:
     provenance = _provenance(tmp_path)
     original = seal_experiment_contract(_contract(_comparison(threshold={"mode": "absolute", "value": "0.1"})))
-    failed = evaluate_experiment_acceptance(original, provenance, tmp_path, timing={"contract_sequence": 3, "provenance_sequence": 9})
+    failed = evaluate_experiment_acceptance(original, provenance, tmp_path, timing={"contract_sequence": 3, "provenance_sequence": 9}, evaluator_version="1.0.0")
     assert (failed.overall_status, failed.predeclaration) == ("failed", "verified_predeclared")
 
     revised = seal_experiment_contract(
@@ -581,7 +598,7 @@ def test_changed_threshold_is_a_new_version_and_old_result_still_replays(tmp_pat
     )
     # The revision was recorded after the results existed, so it cannot be
     # treated as fixed in advance even though it still says "predeclared".
-    passed = evaluate_experiment_acceptance(revised, provenance, tmp_path, timing={"contract_sequence": 12, "provenance_sequence": 9})
+    passed = evaluate_experiment_acceptance(revised, provenance, tmp_path, timing={"contract_sequence": 12, "provenance_sequence": 9}, evaluator_version="1.0.0")
     assert revised.contract_sha256 != original.contract_sha256
     assert (passed.overall_status, passed.predeclaration) == ("passed", "predeclaration_contradicted")
     assert replay_experiment_acceptance(
@@ -734,3 +751,262 @@ def test_cli_rejects_an_invalid_contract(tmp_path: Path, capsys: pytest.CaptureF
         ]
     ) == 65
     assert json.loads(capsys.readouterr().out)["code"] == "invalid_contract"
+
+
+# --- Parent journal contract admission -------------------------------------------
+
+
+def _journal_run(tmp_path: Path) -> Path:
+    from arw.kernel.ledger.journal import initialize_run
+    from arw.kernel.ledger.workflows import CORE_WORKFLOW
+    from arw.kernel.state.models import InitRunRequest
+
+    root = tmp_path / "run"
+    source = root / "input/source.txt"
+    source.parent.mkdir(parents=True)
+    source.write_text("external experiment source\n", encoding="utf-8")
+    initialize_run(root, InitRunRequest.model_validate({
+        "schema_version": "1.0.0",
+        "run_id": "run-00000000-0000-4000-8000-000000000031",
+        "occurred_at": "2026-07-15T10:00:00Z",
+        "immutable_input": {"path": "input/source.txt", "sha256": sha256_hex(source.read_bytes())},
+        "workflow_family": "academic-pipeline",
+        "workflow_mode": "inline-role-prompts",
+        "workflow_definition_id": CORE_WORKFLOW.definition_id,
+        "workflow_definition_sha256": CORE_WORKFLOW.sha256,
+        "journal_layout": "segmented-v1",
+        "capabilities": ["canonical-journal"],
+        "event_id": "evt-00000000-0000-4000-8000-000000000031",
+        "command_id": "cmd-00000000-0000-4000-8000-000000000031",
+        "actor_id": "parent.runtime",
+    }))
+    return root
+
+
+def _journal_request(revision: int, identity: int, *, occurred_at: str = "2026-07-15T10:05:00Z"):
+    from arw.kernel.state.models import RuntimeCommandRequest
+
+    return RuntimeCommandRequest.model_validate({
+        "schema_version": "1.0.0",
+        "run_id": "run-00000000-0000-4000-8000-000000000031",
+        "event_id": f"evt-00000000-0000-4000-8000-{identity:012x}",
+        "command_id": f"cmd-00000000-0000-4000-8000-{identity:012x}",
+        "expected_revision": revision,
+        "occurred_at": occurred_at,
+        "actor_id": "parent.runtime",
+        "actor_role": "parent_control_plane",
+    })
+
+
+def _admit_provenance(root: Path, revision: int, identity: int):
+    from arw.kernel.artifacts.experiment_provenance import ProvenanceAuthorityEnvelope, ingest_experiment_provenance
+    from arw.kernel.execution.runtime import RuntimeCommandService
+
+    provenance = _provenance(root)
+    return ingest_experiment_provenance(
+        provenance, root, ProvenanceAuthorityEnvelope(
+            RuntimeCommandService(root), _journal_request(revision, identity, occurred_at="2020-01-01T00:00:00Z")
+        ),
+    ).provenance
+
+
+def test_parent_freeze_uses_journal_order_and_ignores_fake_timing(tmp_path: Path) -> None:
+    from arw.kernel.execution.runtime import RuntimeCommandService
+
+    root = _journal_run(tmp_path)
+    contract = seal_experiment_contract(_contract(_comparison()))
+    checked, path, outcome = freeze_experiment_contract(
+        contract, root, RuntimeCommandService(root), _journal_request(1, 32, occurred_at="2030-01-01T00:00:00Z")
+    )
+    assert (checked.contract_sha256, outcome.event.sequence, outcome.event.schema_version) == (
+        contract.contract_sha256, 2, "1.5.0"
+    )
+    assert path.is_file()
+    event_schema = json.loads((ROOT / "schemas/v1/event.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator(event_schema).validate(outcome.event.model_dump(mode="json"))
+    old_version = outcome.event.model_dump(mode="json")
+    old_version["schema_version"] = "1.0.0"
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(event_schema).validate(old_version)
+    provenance = _admit_provenance(root, 2, 33)
+    result = evaluate_experiment_acceptance(
+        contract, provenance, root, timing={"contract_sequence": 99, "provenance_sequence": 1}
+    )
+    assert result.predeclaration == "verified_predeclared"
+    assert result.timing_scope == "parent_acceptance_order_only"
+    assert replay_experiment_acceptance(result, contract, provenance, root) == result
+
+
+def test_reverse_and_missing_admission_remain_scoped(tmp_path: Path) -> None:
+    from arw.kernel.artifacts.experiment_provenance import publish_experiment_provenance, seal_experiment_provenance
+    from arw.kernel.execution.runtime import RuntimeCommandService
+
+    root = _journal_run(tmp_path)
+    contract = seal_experiment_contract(_contract(_comparison()))
+    provenance = seal_experiment_provenance(_provenance(root))
+    publish_experiment_provenance(root, provenance)
+    assert evaluate_experiment_acceptance(contract, provenance, root, timing={"contract_sequence": 1, "provenance_sequence": 2}).predeclaration == "predeclaration_unverified"
+    _admit_provenance(root, 1, 32)
+    freeze_experiment_contract(contract, root, RuntimeCommandService(root), _journal_request(2, 33))
+    result = evaluate_experiment_acceptance(contract, provenance, root, timing={"contract_sequence": 1, "provenance_sequence": 2})
+    assert (result.predeclaration, result.timing_scope) == ("predeclaration_contradicted", "parent_acceptance_order_only")
+
+
+def test_successor_is_independent_and_prior_failed_receipt_replays(tmp_path: Path) -> None:
+    from arw.kernel.execution.runtime import RuntimeCommandService
+
+    root = _journal_run(tmp_path)
+    original = seal_experiment_contract(_contract(_comparison(threshold={"mode": "absolute", "value": "0.1"})))
+    freeze_experiment_contract(original, root, RuntimeCommandService(root), _journal_request(1, 32))
+    provenance = _admit_provenance(root, 2, 33)
+    failed = evaluate_experiment_acceptance(original, provenance, root)
+    revised = seal_experiment_contract(_contract(
+        _comparison(threshold={"mode": "absolute", "value": "0.05"}),
+        contract_version=2, supersedes_contract_sha256=original.contract_sha256,
+    ))
+    freeze_experiment_contract(revised, root, RuntimeCommandService(root), _journal_request(3, 34))
+    passed = evaluate_experiment_acceptance(revised, provenance, root)
+    assert (failed.overall_status, failed.predeclaration) == ("failed", "verified_predeclared")
+    assert (passed.overall_status, passed.predeclaration) == ("passed", "predeclaration_contradicted")
+    assert replay_experiment_acceptance(failed, original, provenance, root) == failed
+    assert replay_experiment_acceptance(passed, revised, provenance, root) == passed
+
+
+def test_unverified_result_stays_byte_replayable_after_later_admissions(tmp_path: Path) -> None:
+    from arw.kernel.execution.runtime import RuntimeCommandService
+
+    root = _journal_run(tmp_path)
+    contract = seal_experiment_contract(_contract(_comparison()))
+    provenance = _provenance(root)
+    earlier = evaluate_experiment_acceptance(contract, provenance, root)
+    assert earlier.predeclaration == "predeclaration_unverified"
+    assert earlier.timing_scope is None
+    freeze_experiment_contract(contract, root, RuntimeCommandService(root), _journal_request(1, 32))
+    _admit_provenance(root, 2, 33)
+    assert replay_experiment_acceptance(earlier, contract, provenance, root).result_sha256 == earlier.result_sha256
+    assert evaluate_experiment_acceptance(contract, provenance, root).predeclaration == "verified_predeclared"
+
+
+def test_freeze_rejects_duplicate_command_stale_revision_and_bad_successors(tmp_path: Path) -> None:
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.journal import replay_run
+
+    root = _journal_run(tmp_path)
+    runtime = RuntimeCommandService(root)
+    first = seal_experiment_contract(_contract(_comparison()))
+    freeze_experiment_contract(first, root, runtime, _journal_request(1, 32))
+    retry = _journal_request(1, 32).model_copy(update={
+        "event_id": "evt-00000000-0000-4000-8000-000000000039"
+    })
+    with pytest.raises(ExperimentAcceptanceError, match="duplicate-command-id"):
+        freeze_experiment_contract(first, root, runtime, retry)
+    with pytest.raises(ExperimentAcceptanceError, match="stale-revision"):
+        freeze_experiment_contract(first, root, runtime, _journal_request(1, 33))
+    missing = _contract(_comparison(), contract_version=2, supersedes_contract_sha256="f" * 64)
+    with pytest.raises(ExperimentAcceptanceError, match="predecessor_missing"):
+        freeze_experiment_contract(missing, root, runtime, _journal_request(2, 34))
+    unaccepted = seal_experiment_contract(_contract(_comparison(), contract_id="contract.imported"))
+    publish_experiment_contract(root, unaccepted)
+    imported_successor = _contract(
+        _comparison(), contract_id="contract.imported", contract_version=2,
+        supersedes_contract_sha256=unaccepted.contract_sha256,
+    )
+    with pytest.raises(ExperimentAcceptanceError, match="predecessor_missing"):
+        freeze_experiment_contract(imported_successor, root, runtime, _journal_request(2, 40))
+    wrong_claim = _contract(
+        _comparison(), contract_version=2, supersedes_contract_sha256=first.contract_sha256,
+        claim_sha256="d" * 64,
+    )
+    with pytest.raises(ExperimentAcceptanceError, match="predecessor_claim_mismatch"):
+        freeze_experiment_contract(wrong_claim, root, runtime, _journal_request(2, 35))
+    wrong_version = _contract(_comparison(), contract_version=3, supersedes_contract_sha256=first.contract_sha256)
+    with pytest.raises(ExperimentAcceptanceError, match="contract_version_gap"):
+        freeze_experiment_contract(wrong_version, root, runtime, _journal_request(2, 36))
+    second = seal_experiment_contract(_contract(
+        _comparison(threshold={"mode": "absolute", "value": "0.04"}),
+        contract_version=2, supersedes_contract_sha256=first.contract_sha256,
+    ))
+    freeze_experiment_contract(second, root, runtime, _journal_request(2, 37))
+    fork = _contract(
+        _comparison(threshold={"mode": "absolute", "value": "0.03"}),
+        contract_version=2, supersedes_contract_sha256=first.contract_sha256,
+    )
+    with pytest.raises(ExperimentAcceptanceError, match="contract_chain_fork"):
+        freeze_experiment_contract(fork, root, runtime, _journal_request(3, 38))
+    assert [event.event_type for event in replay_run(root).events].count("experiment.contract.accepted") == 2
+
+
+def test_concurrent_freeze_at_one_revision_accepts_once(tmp_path: Path) -> None:
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.journal import replay_run
+
+    root = _journal_run(tmp_path)
+    contract = seal_experiment_contract(_contract())
+
+    def attempt(identity: int) -> str:
+        try:
+            freeze_experiment_contract(contract, root, RuntimeCommandService(root, lock_timeout=2), _journal_request(1, identity))
+            return "accepted"
+        except ExperimentAcceptanceError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(attempt, (32, 33)))
+    assert sorted(outcomes) == ["accepted", "stale-revision"]
+    assert [event.event_type for event in replay_run(root).events].count("experiment.contract.accepted") == 1
+
+
+def test_tampered_journal_or_accepted_contract_fails_closed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from arw.cli import main
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.ledger.journal import JournalError
+    from arw.kernel.ledger.manifests import ManifestError
+
+    root = _journal_run(tmp_path)
+    contract = seal_experiment_contract(_contract())
+    freeze_experiment_contract(contract, root, RuntimeCommandService(root), _journal_request(1, 32))
+    provenance = _admit_provenance(root, 2, 33)
+    assert evaluate_experiment_acceptance(contract, provenance, root).timing_scope == "parent_acceptance_order_only"
+    contract_file = root / f"experiment/contracts/sha256/{contract.contract_sha256}.json"
+    original = contract_file.read_bytes()
+    contract_file.write_bytes(original.replace(b'"predeclared"', b'"exploratory"'))
+    with pytest.raises((ExperimentAcceptanceError, ManifestError, JournalError)):
+        evaluate_experiment_acceptance(contract, provenance, root)
+    contract_file.write_bytes(original)
+    segment = root / "journal/segments/00000001.jsonl"
+    data = segment.read_bytes()
+    segment.write_bytes(data.replace(b'"experiment.contract.accepted"', b'"experiment.contract.rejected"', 1))
+    with pytest.raises((JournalError, ExperimentAcceptanceError)):
+        evaluate_experiment_acceptance(contract, provenance, root)
+    contract_input = tmp_path / "contract.json"
+    contract_input.write_bytes(contract.canonical_bytes())
+    assert main([
+        "experiment", "accept", "--run-root", str(root), "--contract", str(contract_input),
+        "--provenance-sha256", provenance.provenance_sha256,
+    ]) == 65
+    assert json.loads(capsys.readouterr().out)["code"] in {"journal_invalid", "journal_unhealthy"}
+
+
+def test_cli_freeze_accept_and_replay_use_parent_admission(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from arw.cli import main
+
+    root = _journal_run(tmp_path)
+    contract_file = tmp_path / "contract.json"
+    contract_file.write_text(json.dumps(_contract(_comparison())), encoding="utf-8")
+    request_file = tmp_path / "request.json"
+    request_file.write_text(json.dumps(_journal_request(1, 32).model_dump(mode="json")), encoding="utf-8")
+    assert main(["experiment", "freeze", "--run-root", str(root), "--contract", str(contract_file), "--request", str(request_file)]) == 0
+    frozen = json.loads(capsys.readouterr().out)
+    assert (frozen["status"], frozen["accepted_revision"], frozen["sequence"]) == ("frozen", 2, 2)
+    provenance = _admit_provenance(root, 2, 33)
+    assert main([
+        "experiment", "accept", "--run-root", str(root), "--contract", str(contract_file),
+        "--provenance-sha256", provenance.provenance_sha256, "--publish",
+    ]) == 0
+    accepted = json.loads(capsys.readouterr().out)
+    assert (accepted["result"]["evaluator_version"], accepted["result"]["predeclaration"]) == (
+        "1.2.0", "verified_predeclared"
+    )
+    assert accepted["result"]["timing_scope"] == "parent_acceptance_order_only"
+    assert main(["experiment", "replay", "--run-root", str(root), "--result-sha256", accepted["result_sha256"]]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "replayed"

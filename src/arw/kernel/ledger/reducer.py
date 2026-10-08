@@ -33,6 +33,7 @@ from arw.kernel.state.models import (
     CanonicalEvent,
     ExecutionModeSelectedPayload,
     ExperimentProvenanceAcceptedPayload,
+    ExperimentContractAcceptedPayload,
     GateEvaluatedPayload,
     HookObservedPayload,
     HostIdentityAcceptedPayload,
@@ -717,6 +718,12 @@ def reduce_events(
             if payload.provenance_sha256 in accepted_evidence_sha256:
                 raise ReducerError("experiment provenance was already accepted")
             accepted_evidence_sha256.append(payload.provenance_sha256)
+        elif event.event_type == "experiment.contract.accepted":
+            assert isinstance(payload, ExperimentContractAcceptedPayload)
+            phase4_event_seen = True
+            if payload.contract_sha256 in accepted_evidence_sha256:
+                raise ReducerError("experiment contract was already accepted")
+            accepted_evidence_sha256.append(payload.contract_sha256)
         elif event.event_type == "panel.prepared":
             assert isinstance(payload, PanelPreparedPayload)
             phase4_event_seen = True

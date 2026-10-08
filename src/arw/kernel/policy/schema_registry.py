@@ -191,6 +191,27 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             raise SchemaRegistryError("execution provenance event types drifted")
         if "1.4.0" not in candidate["properties"]["schema_version"]["enum"]:
             raise SchemaRegistryError("execution provenance event version drifted")
+        if (
+            "experiment.contract.accepted" not in event_types
+            or "1.5.0" not in candidate["properties"]["schema_version"]["enum"]
+        ):
+            raise SchemaRegistryError("experiment contract event version drifted")
+        contract_variants = [
+            entry["then"]
+            for entry in candidate.get("allOf", [])
+            if entry.get("if", {}).get("properties", {}).get("event_type", {}).get("const")
+            == "experiment.contract.accepted"
+        ]
+        if (
+            len(contract_variants) != 1
+            or contract_variants[0].get("properties") != {
+                "schema_version": {"const": "1.5.0"},
+                "payload": {"$ref": "#/$defs/experiment_contract_accepted_payload"},
+                "actor_role": {"const": "parent_control_plane"},
+            }
+            or "actor_role" not in contract_variants[0].get("required", [])
+        ):
+            raise SchemaRegistryError("experiment contract event branch drifted")
         for (
             event_type,
             payload_model,

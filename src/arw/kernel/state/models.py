@@ -693,6 +693,14 @@ class ExperimentProvenanceAcceptedPayload(StrictModel):
     provenance_sha256: Sha256
 
 
+class ExperimentContractAcceptedPayload(StrictModel):
+    """Parent acceptance of one immutable experiment claim contract."""
+
+    contract_sha256: Sha256
+    contract_version: Annotated[int, Field(ge=1, le=10_000)]
+    supersedes_contract_sha256: Sha256 | None = None
+
+
 class ExecutionModeSelectedPayload(Phase4Payload):
     execution_mode: Phase4ExecutionMode
     execution_provenance: Phase4ExecutionProvenance
@@ -968,6 +976,7 @@ PHASE4_EVENT_TYPES = frozenset(
         "human_authority.accepted",
         "human_decision.recorded",
         "experiment.provenance.accepted",
+        "experiment.contract.accepted",
     }
 )
 
@@ -989,6 +998,7 @@ PHASE4_EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
     "human_authority.accepted": HumanAuthorityAcceptedPayload,
     "human_decision.recorded": HumanDecisionRecordedPayload,
     "experiment.provenance.accepted": ExperimentProvenanceAcceptedPayload,
+    "experiment.contract.accepted": ExperimentContractAcceptedPayload,
 }
 
 
@@ -1019,7 +1029,7 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
 class CanonicalEvent(StrictModel):
     """One hash-chained event accepted by the canonical writer."""
 
-    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]
+    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"]
     event_type: Literal[
         "execution_provenance.context_accepted",
         "execution_provenance.dataset_metadata_accepted",
@@ -1060,6 +1070,7 @@ class CanonicalEvent(StrictModel):
         "human_authority.accepted",
         "human_decision.recorded",
         "experiment.provenance.accepted",
+        "experiment.contract.accepted",
     ]
     event_id: EventId
     command_id: CommandId
@@ -1109,6 +1120,7 @@ class CanonicalEvent(StrictModel):
         | HumanAuthorityAcceptedPayload
         | HumanDecisionRecordedPayload
         | ExperimentProvenanceAcceptedPayload
+        | ExperimentContractAcceptedPayload
     )
     event_sha256: Sha256
 

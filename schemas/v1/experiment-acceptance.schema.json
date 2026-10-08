@@ -127,7 +127,8 @@
     "evaluator_version": {
       "enum": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ],
       "title": "Evaluator Version",
       "type": "string"
@@ -208,6 +209,32 @@
       ],
       "title": "Budget Status",
       "type": "string"
+    },
+    "timing_scope": {
+      "anyOf": [
+        {
+          "const": "parent_acceptance_order_only",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timing Scope"
+    },
+    "external_execution_timing": {
+      "anyOf": [
+        {
+          "const": "not_observed",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "External Execution Timing"
     }
   },
   "required": [

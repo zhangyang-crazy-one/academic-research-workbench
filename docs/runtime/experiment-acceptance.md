@@ -21,7 +21,7 @@ Supported checks:
 | `baseline_comparison` | Compare two reported metrics whose metric definition, unit, dataset, split and evaluation condition are all identical. The direction is `higher_is_better` or `lower_is_better`. The threshold is absolute or relative to the absolute value of the baseline, and it is inclusive. |
 | `statistical_significance`, `conditional_effect`, `interaction_effect`, `causal_effect`, `leaderboard_rank` | Always `unsupported`. These never become a weaker pass. |
 
-Evaluator `1.1.0` reads reported floats from their shortest round-trip text and
+Evaluators `1.1.0` and `1.2.0` read reported floats from their shortest round-trip text and
 uses exact rational arithmetic for operators, ranges, tolerances, thresholds,
 and budget comparisons. A zero-tolerance check therefore retains small terms
 between large canceling values. `observed` and `expected` are deterministic
@@ -30,7 +30,7 @@ fixed notation would exceed the 64-character result limit. A repeating
 fraction or a longer result can be rounded for display; the pass/fail decision
 always uses the full exact value.
 
-The supported `1.1.0` numeric input domain is at most 128 characters and 64
+Their supported numeric input domain is at most 128 characters and 64
 coefficient digits per value, with a written base-10 exponent from `-1000` to
 `1000` (at most four exponent digits). This applies to CSV cells, reported
 metrics, and contract limits. Values outside the domain block with
@@ -87,20 +87,35 @@ Contracts are immutable. A changed threshold, tolerance or analysis needs a
 new `contract_version` that names the contract it supersedes through
 `supersedes_contract_sha256`. Results are content-addressed and contain no
 timestamps, so an earlier failed result still replays byte-for-byte.
-New results record evaluator `1.1.0`. Offline replay dispatches by the stored
-`evaluator_version`; existing `1.0.0` receipts retain their original decimal
-arithmetic, output bytes, and digest.
+New results record evaluator `1.2.0`. Offline replay dispatches by the stored
+`evaluator_version`: `1.0.0` keeps its original decimal arithmetic, while
+`1.1.0` keeps exact arithmetic and its historical caller-supplied timing
+interface. Old canonical receipt bytes and digests are unchanged.
 
 A contract's `declared_timing: predeclared` is only a claim. The result
 reports it as:
 
-- `verified_predeclared` when parent-ledger `TimingEvidence` shows the
-  contract was accepted before the provenance.
-- `predeclaration_contradicted` when the ledger shows the opposite order.
-- `predeclaration_unverified` when there is no ledger order. This is always
-  the case from the CLI today.
+- `verified_predeclared` when the validated parent journal accepted this
+  contract before this provenance.
+- `predeclaration_contradicted` when the journal accepted the contract after
+  the provenance, including a post hoc successor whose predecessor was early.
+- `predeclaration_unverified` when one or both matching admission events are
+  absent. A published file without an accepted event grants no timing proof.
 
-Self-reported runner timestamps are never used.
+Evaluator `1.2.0` ignores caller-supplied `TimingEvidence` and runner
+timestamps. When both admission events are present, its result carries
+`timing_scope: parent_acceptance_order_only`; every new result carries
+`external_execution_timing: not_observed`. The ledger proves only that the
+parent accepted the contract before or after the parent accepted provenance.
+It does not prove that the contract preceded data collection, execution start,
+or the experimenter's first access to results. Historical `1.1.0` receipts
+whose timing was supplied by a caller remain replayable as historical
+assertions; their absent `timing_scope` is not parent journal proof.
+
+A successor must name the latest accepted predecessor in the same contract ID,
+claim ID, and claim digest chain, with the next version number. Each successor
+gets its own admission event and timing result. A relaxed v2 cannot inherit
+v1's earlier acceptance order; both immutable results remain replayable.
 
 ## Boundaries
 
@@ -117,19 +132,24 @@ Self-reported runner timestamps are never used.
 ## CLI
 
 ```bash
+arw experiment freeze --run-root RUN --contract contract.json \
+  --request parent-command.json
 arw experiment accept --run-root RUN --contract contract.json \
   --provenance-sha256 SHA [--publish]
 arw experiment replay --run-root RUN --result-sha256 SHA
 ```
 
-`--publish` writes the contract and the result write-once to
+`freeze` publishes the immutable contract and records its digest through the
+parent writer lock, revision check, and command ID. The request is a strict
+`RuntimeCommandRequest` JSON with `actor_role: parent_control_plane`; the
+parent derives sequence and hash-chain fields. A rejected freeze may leave a
+write-once contract file, but it has no admission authority. `--publish` writes the contract and the result write-once to
 `experiment/contracts/sha256/` and `experiment/acceptance/sha256/`.
 `replay` re-evaluates a published result and fails with `replay_mismatch`
 if any byte differs.
 
 ## Follow-up
 
-Verified pre-declaration needs a parent-ledger event that accepts a contract
-digest, so that `TimingEvidence` can be read from the journal rather than
-supplied by a caller. Paired per-sample comparisons, JSON Lines inputs and
-further operators are also outside this MVP.
+Three public, independently reproducible CPU pilot experiments remain a
+separate validation step. Paired per-sample comparisons, JSON Lines inputs,
+and further operators are also outside this MVP.

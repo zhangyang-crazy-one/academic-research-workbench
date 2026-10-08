@@ -36,7 +36,7 @@ EXPERIMENT_CONTRACT_SCHEMA_VERSION = "arw.experiment-contract.v1"
 EXPERIMENT_ACCEPTANCE_SCHEMA_VERSION = "arw.experiment-acceptance.v1"
 EXPERIMENT_CONTRACT_SCHEMA_NAME = "experiment-contract.schema.json"
 EXPERIMENT_ACCEPTANCE_SCHEMA_NAME = "experiment-acceptance.schema.json"
-ACCEPTANCE_EVALUATOR_VERSION = "1.1.0"
+ACCEPTANCE_EVALUATOR_VERSION = "1.2.0"
 MAX_CONTRACT_BYTES = 262_144
 MAX_DATA_BYTES = 8_388_608
 MAX_DATA_ROWS = 200_000
@@ -333,7 +333,7 @@ class ExperimentAcceptanceResult(StrictModel):
     """Deterministic, timestamp-free outcome; identical inputs replay byte-for-byte."""
 
     schema_version: Literal["arw.experiment-acceptance.v1"]
-    evaluator_version: Literal["1.0.0", "1.1.0"]
+    evaluator_version: Literal["1.0.0", "1.1.0", "1.2.0"]
     scope: Literal["contract_conformance_only"]
     contract_id: StableRuntimeId
     contract_version: Annotated[int, Field(ge=1)]
@@ -356,11 +356,20 @@ class ExperimentAcceptanceResult(StrictModel):
         "unverifiable",
         "invalid_contract",
     ]
+    timing_scope: Literal["parent_acceptance_order_only"] | None = None
+    external_execution_timing: Literal["not_observed"] | None = None
 
     @model_validator(mode="after")
     def overall_is_most_severe(self) -> "ExperimentAcceptanceResult":
         if self.overall_status != _overall(tuple(check.status for check in self.checks)):
             raise ValueError("overall_status must be the most severe check status")
+        if self.evaluator_version == "1.2.0":
+            if self.external_execution_timing != "not_observed":
+                raise ValueError("evaluator 1.2.0 must state that external execution timing is unobserved")
+            if self.predeclaration in {"verified_predeclared", "predeclaration_contradicted"} and self.timing_scope is None:
+                raise ValueError("journal timing conclusion requires a parent acceptance scope")
+        elif self.timing_scope is not None or self.external_execution_timing is not None:
+            raise ValueError("historical evaluator receipts cannot claim parent journal timing scope")
         return self
 
     def canonical_bytes(self) -> bytes:
@@ -415,6 +424,71 @@ def seal_experiment_contract(value: Mapping[str, Any] | ExperimentContract) -> E
     if len(contract.canonical_bytes()) > MAX_CONTRACT_BYTES:
         raise ExperimentAcceptanceError("invalid_contract", "experiment contract exceeds the bounded byte limit")
     return contract
+
+
+def validate_contract_succession(
+    contract: ExperimentContract, root: Path, events: Sequence[Any]
+) -> None:
+    """Require a single, accepted predecessor chain for one claim identity."""
+
+    accepted = [event for event in events if event.event_type == "experiment.contract.accepted"]
+    if any(event.payload.contract_sha256 == contract.contract_sha256 for event in accepted):
+        raise ExperimentAcceptanceError("duplicate_contract", "contract was already accepted")
+    by_id = [
+        load_experiment_contract(root, event.payload.contract_sha256)
+        for event in accepted
+    ]
+    same_chain = [item for item in by_id if item.contract_id == contract.contract_id]
+    if contract.contract_version == 1:
+        if same_chain:
+            raise ExperimentAcceptanceError("contract_chain_exists", "contract ID already has an accepted first version")
+        return
+    predecessor_digest = contract.supersedes_contract_sha256
+    predecessor = next((item for item in by_id if item.contract_sha256 == predecessor_digest), None)
+    if predecessor is None:
+        raise ExperimentAcceptanceError("predecessor_missing", "predecessor contract was not accepted")
+    if (
+        predecessor.contract_id != contract.contract_id
+        or predecessor.claim_id != contract.claim_id
+        or predecessor.claim_sha256 != contract.claim_sha256
+    ):
+        raise ExperimentAcceptanceError("predecessor_claim_mismatch", "predecessor belongs to another claim or chain")
+    if predecessor.contract_version + 1 != contract.contract_version:
+        raise ExperimentAcceptanceError("contract_version_gap", "successor must increment the accepted version once")
+    if same_chain[-1].contract_sha256 != predecessor_digest:
+        raise ExperimentAcceptanceError("contract_chain_fork", "successor does not follow the latest accepted version")
+
+
+def timing_from_run(
+    root: Path, contract_sha256: str, provenance_sha256: str
+) -> TimingEvidence | None:
+    """Read acceptance order from a verified parent journal, never caller fields."""
+
+    from arw.kernel.ledger.journal import replay_run
+    from arw.kernel.ledger.manifests import validate_accepted_event_manifests
+
+    if not (root / "run-manifest.json").exists():
+        if (root / "journal").exists() or (root / "events.jsonl").exists():
+            raise ExperimentAcceptanceError("journal_missing", "run manifest is missing from a journaled run")
+        return None
+    replayed = replay_run(root)
+    validate_accepted_event_manifests(root, replayed.events)
+    if replayed.recovery_health != "healthy":
+        raise ExperimentAcceptanceError("journal_unhealthy", "run journal is not healthy")
+    contract_event = next(
+        (event for event in replayed.events if event.event_type == "experiment.contract.accepted"
+         and event.payload.contract_sha256 == contract_sha256), None
+    )
+    provenance_event = next(
+        (event for event in replayed.events if event.event_type == "experiment.provenance.accepted"
+         and event.payload.provenance_sha256 == provenance_sha256), None
+    )
+    if contract_event is None or provenance_event is None:
+        return None
+    return TimingEvidence(
+        contract_sequence=contract_event.sequence,
+        provenance_sequence=provenance_event.sequence,
+    )
 
 
 def _metric_value(provenance: ExperimentProvenance, name: str, unit: str) -> Decimal:
@@ -707,7 +781,7 @@ def _exact_compare(check: BaselineComparisonCheck, provenance: ExperimentProvena
 def _evaluate_check(
     check: ContractCheck, provenance: ExperimentProvenance, root: Path, *, evaluator_version: str
 ) -> CheckResult:
-    exact = evaluator_version == "1.1.0"
+    exact = evaluator_version != "1.0.0"
     try:
         if isinstance(check, UnsupportedClaimCheck):
             outcome = _Outcome(status="unsupported", reasons=(f"{check.kind}_not_supported",))
@@ -748,7 +822,7 @@ def _budget_status(budget: BudgetDeclaration | None, provenance: ExperimentProve
     try:
         usage = (
             _exact_metric_value(provenance, budget.usage_metric, budget.unit)
-            if evaluator_version == "1.1.0"
+            if evaluator_version != "1.0.0"
             else _metric_value(provenance, budget.usage_metric, budget.unit)
         )
     except _Blocked as blocked:
@@ -756,7 +830,7 @@ def _budget_status(budget: BudgetDeclaration | None, provenance: ExperimentProve
             return "invalid_contract"
         return "unverifiable"
     try:
-        limit = _exact_number(budget.limit, contract=True) if evaluator_version == "1.1.0" else _decimal(budget.limit)
+        limit = _exact_number(budget.limit, contract=True) if evaluator_version != "1.0.0" else _decimal(budget.limit)
     except _Blocked:
         return "invalid_contract"
     return "within_budget" if usage <= limit else "exceeded"
@@ -778,16 +852,17 @@ def evaluate_experiment_acceptance(
     artifact_root: Path,
     *,
     timing: Mapping[str, Any] | TimingEvidence | None = None,
-    evaluator_version: Literal["1.0.0", "1.1.0"] = ACCEPTANCE_EVALUATOR_VERSION,
+    evaluator_version: Literal["1.0.0", "1.1.0", "1.2.0"] = ACCEPTANCE_EVALUATOR_VERSION,
+    derive_timing: bool = True,
 ) -> ExperimentAcceptanceResult:
     """Evaluate one contract version against sealed provenance and raw files."""
 
-    if evaluator_version not in {"1.0.0", "1.1.0"}:
+    if evaluator_version not in {"1.0.0", "1.1.0", "1.2.0"}:
         raise ExperimentAcceptanceError("unsupported_evaluator", "unsupported experiment evaluator version")
     checked_contract = seal_experiment_contract(contract)
     checked_provenance = seal_experiment_provenance(provenance)
     checked_timing = None
-    if timing is not None:
+    if evaluator_version in {"1.0.0", "1.1.0"} and timing is not None:
         try:
             checked_timing = (
                 timing if isinstance(timing, TimingEvidence) else TimingEvidence.model_validate(timing)
@@ -798,6 +873,12 @@ def evaluate_experiment_acceptance(
     if root.is_symlink() or not root.is_dir():
         raise ExperimentAcceptanceError("unsafe_artifact_root", "artifact root must be an existing real directory")
     root = root.resolve()
+    if evaluator_version == "1.2.0":
+        journal_timing = timing_from_run(
+            root, checked_contract.contract_sha256, checked_provenance.provenance_sha256
+        )
+        if derive_timing:
+            checked_timing = journal_timing
     checks = tuple(
         _evaluate_check(check, checked_provenance, root, evaluator_version=evaluator_version)
         for check in checked_contract.checks
@@ -816,6 +897,8 @@ def evaluate_experiment_acceptance(
         checks=checks,
         overall_status=_overall(tuple(item.status for item in checks)),  # type: ignore[arg-type]
         budget_status=_budget_status(checked_contract.budget, checked_provenance, evaluator_version=evaluator_version),  # type: ignore[arg-type]
+        timing_scope="parent_acceptance_order_only" if checked_timing is not None and evaluator_version == "1.2.0" else None,
+        external_execution_timing="not_observed" if evaluator_version == "1.2.0" else None,
     )
 
 
@@ -840,7 +923,8 @@ def replay_experiment_acceptance(
 
     recorded = seal_experiment_acceptance(result)
     replayed = evaluate_experiment_acceptance(
-        contract, provenance, artifact_root, timing=timing, evaluator_version=recorded.evaluator_version
+        contract, provenance, artifact_root, timing=timing, evaluator_version=recorded.evaluator_version,
+        derive_timing=recorded.timing_scope is not None,
     )
     if replayed.canonical_bytes() != recorded.canonical_bytes():
         raise ExperimentAcceptanceError("replay_mismatch", "experiment acceptance result does not replay")
@@ -863,6 +947,25 @@ def publish_experiment_contract(root: Path, contract: Mapping[str, Any] | Experi
         )
     except ManifestError as error:
         raise ExperimentAcceptanceError("unsafe_store", str(error)) from error
+
+
+def freeze_experiment_contract(contract, root: Path, runtime, request) -> tuple[ExperimentContract, Path, Any]:
+    """Publish contract bytes and ask the parent writer to accept their digest."""
+
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.state.models import RuntimeCommandRequest
+
+    if not isinstance(runtime, RuntimeCommandService) or not isinstance(request, RuntimeCommandRequest):
+        raise ExperimentAcceptanceError("invalid_authority", "freeze requires typed parent runtime objects")
+    if request.actor_role != "parent_control_plane" or runtime.run_root.resolve() != root.resolve():
+        raise ExperimentAcceptanceError("invalid_authority", "freeze requires the parent writer for this run")
+    checked = seal_experiment_contract(contract)
+    path = publish_experiment_contract(root, checked)
+    outcome = runtime.append_experiment_contract(request, contract=checked)
+    if not outcome.accepted:
+        code = outcome.rejection.code if outcome.rejection else "freeze_rejected"
+        raise ExperimentAcceptanceError(code, f"contract freeze rejected: {code}")
+    return checked, path, outcome
 
 
 def publish_experiment_acceptance(root: Path, result: Mapping[str, Any] | ExperimentAcceptanceResult) -> Path:
@@ -934,6 +1037,7 @@ __all__ = [
     "UnsupportedClaimCheck",
     "ValueRange",
     "evaluate_experiment_acceptance",
+    "freeze_experiment_contract",
     "experiment_acceptance_schema_documents",
     "load_experiment_acceptance",
     "load_experiment_contract",
@@ -942,4 +1046,6 @@ __all__ = [
     "replay_experiment_acceptance",
     "seal_experiment_acceptance",
     "seal_experiment_contract",
+    "timing_from_run",
+    "validate_contract_succession",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import uuid
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Literal, TypeVar
@@ -95,7 +96,9 @@ def _safe_directory(root: Path, parts: tuple[str, ...], *, create: bool) -> Path
                 raise ManifestError("manifest path contains a non-directory")
         elif create:
             try:
-                cursor.mkdir()
+                cursor.mkdir(exist_ok=True)
+                if cursor.is_symlink() or not cursor.is_dir():
+                    raise ManifestError("manifest path is unsafe")
                 _fsync_directory(cursor.parent)
             except OSError as error:
                 raise ManifestError(
@@ -120,7 +123,7 @@ def _write_once(path: Path, value: bytes) -> Path:
         if not path.is_file() or path.read_bytes() != value:
             raise ManifestError("immutable manifest replacement or content collision")
         return path
-    temporary = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    temporary = path.parent / f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
     try:
         descriptor = os.open(
             temporary,
@@ -507,7 +510,39 @@ def validate_accepted_event_manifests(
 ) -> None:
     """Verify every immutable manifest selected by an accepted event."""
 
+    prior_contract_events: list[CanonicalEvent] = []
     for event in events:
+        if event.event_type == "experiment.contract.accepted":
+            from arw.kernel.artifacts.experiment_acceptance import (
+                ExperimentAcceptanceError,
+                load_experiment_contract,
+                validate_contract_succession,
+            )
+            try:
+                contract = load_experiment_contract(root, event.payload.contract_sha256)
+                if (
+                    contract.contract_version != event.payload.contract_version
+                    or contract.supersedes_contract_sha256 != event.payload.supersedes_contract_sha256
+                ):
+                    raise ExperimentAcceptanceError("contract_event_mismatch", "contract differs from accepted event")
+                validate_contract_succession(contract, root, prior_contract_events)
+            except (ExperimentAcceptanceError, ValueError, OSError) as error:
+                raise ManifestError(f"accepted experiment contract is invalid: {error}") from error
+            prior_contract_events.append(event)
+        elif event.event_type == "experiment.provenance.accepted":
+            from arw.kernel.artifacts.experiment_provenance import (
+                ProvenanceError,
+                load_experiment_provenance,
+            )
+            try:
+                provenance = load_experiment_provenance(root, event.payload.provenance_sha256)
+                if (
+                    provenance.provenance_id != event.payload.provenance_id
+                    or provenance.experiment_id != event.payload.experiment_id
+                ):
+                    raise ManifestError("provenance differs from accepted event")
+            except (ProvenanceError, ValueError, OSError) as error:
+                raise ManifestError(f"accepted experiment provenance is invalid: {error}") from error
         if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
             assert isinstance(event.payload, ArtifactAcceptedPayload)
             manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
