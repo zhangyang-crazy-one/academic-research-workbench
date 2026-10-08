@@ -1,0 +1,17 @@
+# Claims and evidence projection
+
+`arw claims graph --project-root PROJECT --run-root RUN [--run-root RUN2] --json` rebuilds a bounded, read-only view. The explicitly included run set is part of the snapshot. Saving the returned `snapshot_manifest` (or full report) permits `--as-of FILE`; a single revision is not a multi-log snapshot. `--expected-head` compares the snapshot manifest digest.
+
+Current reads validate every journal and run prefix, then compare the full vector after projection. Historical reads stop the original validators at each saved prefix and validate cross-log dependency closure. Later unrelated events or a torn later tail do not change historical bytes. Mutations inside a saved prefix, changed immutable manifests and references outside included prefixes are rejected. The graph does not create lock files, caches, journal events or artifacts.
+
+The MVP observes accepted manuscripts within those prefixes: numeric tokens, figure/caption lines and cited sentences. Each occurrence binds its accepted manuscript container, manuscript digest, UTF-8 byte span and selected digest. Accepted writing receipts reuse their versioned citation byte spans. Legacy sentence-only receipts retain unknown locations rather than being resegmented. Surface sentence counts use the existing English/Chinese writing splitter; unsupported prose and table cells remain explicit. Imported manuscripts have unknown AI involvement.
+
+Semantic claims require explicit registration; repeated sentences and distinct propositions do not merge automatically. `arw claims register --project-root PROJECT --run-root RUN --expected-head DIGEST --registration FILE --author-confirmed` accepts an `arw.claim-registration.v1` JSON document. A semantic revision after one requires the immediately preceding claim digest in `supersedes`. `claims evidence` replaces evidence for an unchanged claim and unchanged occurrences. The author assertion records intent and does not authenticate identity.
+
+Evidence adapters preserve original references and their proof scope. Integrity, trusted receipt checks, operator check assertions, argument relations, directional AI assessments and confirmations are separate fields. DOI metadata verification never implies support; absent evidence is missing rather than contradicted. Existing accepted ClaimEvidenceLinks retain their claim digest and asserted relation; an unknown semantic revision remains explicitly unbound. Decision nodes describe direction decisions and do not confirm a particular inference.
+
+`arw claims attest ... --claim-id ID --author-id AUTHOR --statement TEXT --scope TEXT --policy-version VERSION --author-confirmed` appends declared confirmation through the project journal. The payload embeds the exact N-1 snapshot manifest and digest, semantic revision/digest and evidence dependency digest. Changing wording or evidence makes the old declaration stale; its historical record remains. No caller-supplied author string upgrades a declaration to authenticated authority.
+
+This Phase 1a/1b surface is advisory. `--hard-check` returns `hard_check_unavailable` until the authenticated authorization contract is implemented. Figure acceptance bytes are visible; result_plot Figure verification is explicitly unsupported until the #95 adapter is integrated. Metadata integrity does not substitute for scientific correctness.
+
+Contracts: `schemas/v1/claim-graph-snapshot.schema.json`, `claim-registration.schema.json`, `claim-attestation.schema.json`. Existing journal and writing receipt bytes require no migration.
