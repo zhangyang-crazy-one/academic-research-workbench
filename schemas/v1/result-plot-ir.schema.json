@@ -1109,6 +1109,17 @@
           ],
           "default": null
         },
+        "x_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CsvSelection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "data": {
           "default": [],
           "items": {

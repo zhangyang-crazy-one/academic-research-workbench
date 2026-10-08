@@ -13,9 +13,18 @@ must contain all exact values; clipping cannot silently hide data.
 
 Observation sources are accepted `CsvSelection` objects with globally unique
 stable row IDs, an explicit missing policy and `ComparisonContext`. The core
-retains full row fields for series/order/pair metadata. Lines require series
+retains full row fields for series/order/pair metadata. Continuous x/y axes can
+use a separate typed `x_source` selection (for example elapsed seconds versus
+accuracy ratio). Both selections must have identical row identity, row-set,
+grouping and missing-policy contracts and exactly the same selected row IDs
+and groups. Dataset, split and evaluation condition must match; axis metric
+and unit can differ. Missing, duplicate or mismatched rows fail rather than
+silently joining a subset. Band axes do not accept numeric x selections.
+Lines require series
 and order and are connected within each series, and within each pair when
-paired. Missing pair IDs, repeated pair positions, missing pair members and
+paired. Pair completeness is checked by actual exact x/category positions,
+while connections still use the explicit order; a paired line cannot span
+multiple series. Missing pair IDs, repeated pair positions, missing pair members and
 excluded paired numeric rows fail explicitly. Strip jitter is a hash of the
 stable row ID, confined to the x band display axis; y remains exact.
 
@@ -46,7 +55,8 @@ explicit, and cannot coexist with invented observation layers.
 Caption numeric bindings use UTF-8 byte occurrence spans. Result bindings name
 one plot value and its series/category, statistic/expression, unit/scale and
 revision. Sample size, confidence level and figure number use separately typed
-metadata slots. Metadata scaling can express a confidence level as percent.
+metadata slots. A binding must cover an entire numeric occurrence, so selecting
+the final `3` of `13` cannot satisfy a figure-number or sample-size check. Metadata scaling can express a confidence level as percent.
 Unbound text is unknown. Mismatched declared bindings are advisory, including
 A/B swaps and swapped same-rounded values. The `confirmation` field is a
 statement, never authorization.
@@ -95,7 +105,8 @@ self-reference. The trusted authority adapter verifies the semantic target and
 returns the current complete IR hash as a response integrity check.
 
 `verify_plot_receipt(run_root, events, artifact_id, resolution_context=...)`
-verifies acceptance at the supplied event prefix, retained receipt/output and
+replays the supplied event prefix through the original on-disk hash-chain
+validator, independently of later tails, then verifies acceptance, retained receipt/output and
 post-freeze binding hashes, source references, every exact plot value, metadata,
 `rendered_from` and reproduced SVG bytes. It returns the typed receipt. It
 proves integrity only; no Figure-to-claim support relationship is inferred.
