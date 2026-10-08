@@ -1,0 +1,90 @@
+"""Explicit claims registration and read-only advisory graph commands."""
+
+from pathlib import Path
+
+
+def configure(subparsers):
+    parser = subparsers.add_parser(
+        "claims", help="Project accepted claims and evidence at explicit log prefixes."
+    )
+    actions = parser.add_subparsers(dest="claims_command", required=True)
+    for name in ("graph", "register", "evidence", "attest"):
+        action = actions.add_parser(name)
+        action.add_argument("--project-root", required=True, type=Path)
+        action.add_argument("--run-root", action="append", type=Path, default=[])
+        action.add_argument("--expected-head", required=name != "graph")
+        if name == "graph":
+            action.add_argument(
+                "--as-of",
+                type=Path,
+                help="Saved snapshot manifest or graph JSON, never a single revision.",
+            )
+            action.add_argument("--hard-check", action="store_true")
+            action.add_argument("--json", action="store_true")
+        if name in ("register", "evidence"):
+            action.add_argument("--registration", required=True, type=Path)
+            action.add_argument("--author-confirmed", action="store_true")
+        if name == "attest":
+            action.add_argument("--claim-id", required=True)
+            action.add_argument("--author-id", required=True)
+            action.add_argument("--statement", required=True)
+            action.add_argument("--scope", required=True)
+            action.add_argument("--policy-version", required=True)
+            action.add_argument("--author-confirmed", action="store_true")
+
+
+def _read(path):
+    from arw.kernel.core.canonical import strict_json_loads
+    from arw.kernel.ledger.claim_graph import ClaimGraphError
+
+    with path.open("rb") as handle:
+        raw = handle.read(2_097_153)
+    if len(raw) > 2_097_152:
+        raise ClaimGraphError("limit_exceeded", "claims input exceeds byte budget")
+    return strict_json_loads(raw)
+
+
+def handle(args):
+    from arw.kernel.ledger.claim_graph import (
+        ClaimGraphError,
+        attest_declared,
+        graph,
+        register_claim,
+    )
+    from arw.kernel.state.claim_graph import ClaimRegistration, SnapshotManifest
+
+    roots = tuple(args.run_root)
+    if args.claims_command == "graph":
+        vector = _read(args.as_of) if args.as_of else None
+        if isinstance(vector, dict) and "snapshot_manifest" in vector:
+            vector = vector["snapshot_manifest"]
+        return graph(
+            args.project_root,
+            run_roots=roots,
+            as_of=SnapshotManifest.model_validate(vector) if vector else None,
+            expected_head=args.expected_head,
+            hard_check=args.hard_check,
+        )
+    if not args.author_confirmed:
+        raise ClaimGraphError(
+            "author_confirmation_missing",
+            "claim writes require an explicit author assertion",
+        )
+    if args.claims_command == "attest":
+        return attest_declared(
+            args.project_root,
+            run_roots=roots,
+            expected_head=args.expected_head,
+            claim_id=args.claim_id,
+            author_id=args.author_id,
+            statement=args.statement,
+            scope=args.scope,
+            policy_version=args.policy_version,
+        )
+    return register_claim(
+        args.project_root,
+        ClaimRegistration.model_validate(_read(args.registration)),
+        run_roots=roots,
+        expected_head=args.expected_head,
+        evidence_update=args.claims_command == "evidence",
+    )
