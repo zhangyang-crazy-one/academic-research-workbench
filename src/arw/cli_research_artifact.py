@@ -10,13 +10,13 @@ from arw.kernel.state.research_artifact import ResearchArtifactIR
 
 
 def configure(commands):
-    for name in ("ir", "render", "qualify", "reproduce", "doctor", "purge"):
+    for name in ("ir", "render", "qualify", "reproduce", "doctor", "purge", "source-bridge", "caption-targets"):
         parser = commands.add_parser(name)
         parser.add_argument("--run-root", type=Path, required=True)
-        if name in {"ir", "render", "qualify", "reproduce"}:
+        if name in {"ir", "render", "qualify", "reproduce", "source-bridge", "caption-targets"}:
             parser.add_argument("--source-run-root", type=Path, action="append", default=[])
             parser.add_argument("--project-root", type=Path)
-        if name in {"ir", "render", "qualify"}:
+        if name in {"ir", "render", "qualify", "source-bridge", "caption-targets"}:
             parser.add_argument(
                 "--input",
                 type=Path,
@@ -101,6 +101,11 @@ def handle(args, provider):
         options = {}
     if action == "render":
         return provider.render(ir, run_root=args.run_root, **options)
+    if action in {"source-bridge", "caption-targets"}:
+        if ir.artifact_kind != "result_plot":
+            raise ValueError("result_plot_required")
+        method = "source_bridge" if action == "source-bridge" else "caption_targets"
+        return getattr(provider, method)(ir, run_root=args.run_root, **options)
     request = _load_request(args.request, RuntimeCommandRequest)
     return provider.qualify(
         ir,
