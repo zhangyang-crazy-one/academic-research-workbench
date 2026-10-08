@@ -197,6 +197,32 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
         data = []
         if layer.source:
             source = layer.source
+            x_source = layer.x_source or source
+            if layer.x_source:
+                if (
+                    x_source.row_id_column,
+                    x_source.row_set,
+                    x_source.group_by,
+                    x_source.missing_policy,
+                ) != (
+                    source.row_id_column,
+                    source.row_set,
+                    source.group_by,
+                    source.missing_policy,
+                ):
+                    raise PlotFault("observation_x_selection_contract_mismatch")
+                if (
+                    x_source.context.dataset,
+                    x_source.context.split,
+                    x_source.context.evaluation_condition,
+                ) != (
+                    source.context.dataset,
+                    source.context.split,
+                    source.context.evaluation_condition,
+                ):
+                    raise PlotFault("observation_x_context_mismatch")
+                if x_source.columns != (layer.encoding.x,):
+                    raise PlotFault("observation_x_requires_single_encoded_column")
             result = resolve_operand(source, resolution_context)
             if result.status != "exact":
                 raise PlotFault(f"observation_{result.status}")
@@ -204,6 +230,20 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                 raise PlotFault("observation_row_budget_exceeded")
             if layer.paired and result.excluded_row_ids:
                 raise PlotFault("paired_missing_numeric_value")
+            x_rows = None
+            if layer.x_source:
+                x_result = resolve_operand(x_source, resolution_context)
+                if x_result.status != "exact":
+                    raise PlotFault("observation_x_invalid_source")
+                x_rows = {row.row_id: row for row in x_result.rows}
+                if set(x_rows) != {row.row_id for row in result.rows} or len(
+                    x_rows
+                ) != len(x_result.rows):
+                    raise PlotFault("observation_x_row_identity_mismatch")
+                if any(
+                    x_rows[row.row_id].group_key != row.group_key for row in result.rows
+                ):
+                    raise PlotFault("observation_x_group_mismatch")
             for row in result.rows:
                 fields = row.fields
                 try:
@@ -268,7 +308,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                     None
                     if ir.scales.x.type == "band"
                     else value(
-                        row_request(layer.encoding.x),
+                        row_request(layer.encoding.x, source=x_source),
                         layer,
                         row.row_id,
                         category,
@@ -398,7 +438,12 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
         if layer.paired:
             # Each pair must occur once at every category/order position.
             keys = [
-                (d.pair_id, d.category if ir.scales.x.type == "band" else d.order)
+                (
+                    d.pair_id,
+                    d.category
+                    if ir.scales.x.type == "band"
+                    else d.x.exact.as_fraction(),
+                )
                 for d in data
             ]
             if len(keys) != len(set(keys)):
@@ -411,6 +456,11 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
             if len(expected) < 2:
                 raise PlotFault("missing_pair_member")
             pairs = {d.pair_id for d in data}
+            if layer.mark == "line" and any(
+                len({d.series for d in data if d.pair_id == pair}) != 1
+                for pair in pairs
+            ):
+                raise PlotFault("paired_line_series_mismatch")
             if any({k[1] for k in keys if k[0] == pair} != expected for pair in pairs):
                 raise PlotFault("missing_pair_member")
         if layer.uncertainty:
@@ -617,6 +667,10 @@ def caption_checks(
     values = {v.plot_value_id: v for v in compiled.plot_values}
     checks = []
     raw = ir.caption.encode("utf-8")
+    numeric_occurrences = tuple(
+        re.finditer(rb"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", raw)
+    )
+    complete_spans = {match.span() for match in numeric_occurrences}
     covered = set()
     for b in ir.caption_bindings:
         status = "advisory"
@@ -652,8 +706,12 @@ def caption_checks(
         code = None
         try:
             token = raw[b.start_byte : b.end_byte].decode("utf-8")
-            if b.end_byte > len(raw) or not re.fullmatch(
-                r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", token
+            if (
+                (b.start_byte, b.end_byte) not in complete_spans
+                or b.end_byte > len(raw)
+                or not re.fullmatch(
+                    r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", token
+                )
             ):
                 raise ValueError("not a numeric occurrence")
             if b.revision != ir.revision:
@@ -720,9 +778,7 @@ def caption_checks(
                 binding_id=b.binding_id,
             )
         )
-    for match in re.finditer(
-        rb"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", raw
-    ):
+    for match in numeric_occurrences:
         if match.span() not in covered:
             checks.append(
                 _check(

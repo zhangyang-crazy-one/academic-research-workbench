@@ -1113,3 +1113,152 @@ def test_service_bridge_and_caption_target_proposals_are_readonly(tmp_path):
         == "caption:" + targets["bindings"][0]["target_sha256"]
     )
     assert capsule["schema_version"] == "arw.plot-source-bridge.v1"
+
+
+def test_numeric_paired_positions_use_exact_x_and_lines_still_use_order(tmp_path):
+    _, context, ref, _ = accepted_fixture(
+        tmp_path,
+        b"id,score,time,series,order,pair\na,0.1,0,S,1,p1\nb,0.2,1,S,2,p1\nc,0.3,0,S,3,p2\nd,0.4,1,S,4,p2\n",
+    )
+    source = selection(ref).model_copy(update={"columns": ("score", "time")})
+    layer = PlotLayer(
+        layer_id="layer.pair",
+        role="observation",
+        mark="line",
+        source=source,
+        paired=True,
+        encoding=PlotEncoding(
+            x="time", y="score", series="series", order="order", pair_id="pair"
+        ),
+    )
+    ir = plot((layer,))
+    ir = ir.model_copy(
+        update={
+            "scales": PlotScales(
+                x=PlotScale(type="linear", unit="ratio"), y=ir.scales.y
+            )
+        }
+    )
+    compiled = compile_plot(ir, context)
+    output = PlotRenderer().render(compiled)
+    assert len([e for e in ET.fromstring(output).iter() if e.tag.endswith("path")]) == 2
+
+
+def heterogeneous_x_fixture(tmp_path):
+    root, context, ref, _ = accepted_fixture(
+        tmp_path, b"id,score,time,series,order\nc,0.9,20,S,2\na,0.8,10,S,1\n"
+    )
+    x_context = CTX.model_copy(
+        update={"metric_definition": "elapsed time", "unit": "seconds"}
+    )
+    source = selection(ref)
+    x_source = source.model_copy(
+        update={"columns": ("time",), "unit": "seconds", "context": x_context}
+    )
+    layer = PlotLayer(
+        layer_id="layer.time",
+        role="observation",
+        mark="line",
+        source=source,
+        x_source=x_source,
+        encoding=PlotEncoding(x="time", y="score", series="series", order="order"),
+    )
+    ir = plot((layer.model_copy(update={"x_source": None}),))
+    ir = ir.model_copy(
+        update={
+            "layers": (layer,),
+            "scales": PlotScales(
+                x=PlotScale(type="linear", unit="seconds"), y=ir.scales.y
+            ),
+        }
+    )
+    return root, context, ir
+
+
+def test_continuous_time_accuracy_uses_independent_exact_axis_selection(tmp_path):
+    root, context, ir = heterogeneous_x_fixture(tmp_path)
+    compiled = compile_plot(ir, context)
+    x_values = [v for v in compiled.plot_values if v.channel == "x"]
+    y_values = [v for v in compiled.plot_values if v.channel == "y"]
+    assert [(v.exact.as_fraction(), v.unit) for v in x_values] == [
+        (Fraction(10), "seconds"),
+        (Fraction(20), "seconds"),
+    ]
+    assert [(v.exact.as_fraction(), v.unit) for v in y_values] == [
+        (Fraction(4, 5), "ratio"),
+        (Fraction(9, 10), "ratio"),
+    ]
+    result = ResearchArtifactService().qualify(
+        ir, run_root=root, request=parent_request(root), resolution_context=context
+    )
+    assert result["accepted"]
+    assert (
+        ResearchArtifactService().reproduce(ir.artifact_id, run_root=root)["status"]
+        == "reproduced"
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation,code",
+    [
+        ("context", "observation_x_context_mismatch"),
+        ("rowset", "observation_x_selection_contract_mismatch"),
+        ("rows", "observation_x_row_identity_mismatch"),
+    ],
+)
+def test_axis_selection_refuses_inconsistent_context_or_missing_rows(
+    tmp_path, mutation, code
+):
+    _, context, ir = heterogeneous_x_fixture(tmp_path)
+    layer = ir.layers[0]
+    x = layer.x_source
+    if mutation == "context":
+        x = x.model_copy(
+            update={"context": x.context.model_copy(update={"dataset": "another"})}
+        )
+    elif mutation == "rowset":
+        x = x.model_copy(update={"row_set": RowIds(ids=("a",))})
+    else:
+        # Separate real accepted CSV lacking one row; never silently join subset.
+        _, _, ref, _ = accepted_fixture(tmp_path, b"id,time\na,10\n", run_index=2)
+        context = replace(
+            context,
+            run_roots=(*context.run_roots, tmp_path / "fixture-2/project/runs/one"),
+        )
+        x = x.model_copy(update={"ref": ref})
+    ir = ir.model_copy(update={"layers": (layer.model_copy(update={"x_source": x}),)})
+    with pytest.raises(PlotFault, match=code):
+        compile_plot(ir, context)
+
+
+def test_caption_partial_number_span_never_matches_even_with_utf8_prefix(tmp_path):
+    _, context, ref, _ = result_fixture(tmp_path)
+    caption = "中文 Figure 13"
+    start = caption.encode().index(b"13") + 1
+    b = CaptionBinding(
+        binding_id="binding.partial",
+        start_byte=start,
+        end_byte=start + 1,
+        number_kind="figure_number",
+        metadata_key="figure_number",
+        revision=1,
+    )
+    ir = plot(
+        (aggregate(ref),), caption=caption, caption_bindings=(b,), figure_number=3
+    )
+    checks = caption_checks(compile_plot(ir, context))
+    assert checks[0].code == "invalid_caption_occurrence"
+    assert any(c.status == "unknown" for c in checks)
+
+
+def test_figure_verification_reads_fixed_real_prefix_despite_later_torn_tail(tmp_path):
+    root, _, ref, _ = result_fixture(tmp_path)
+    service = ResearchArtifactService()
+    ir = plot((aggregate(ref),))
+    assert service.qualify(ir, run_root=root, request=parent_request(root))["accepted"]
+    prefix = replay_run(root)
+    segment = root / prefix.segments[-1].relative_path
+    with segment.open("ab") as handle:
+        handle.write(b"{later broken tail")
+    receipt = service.verify_plot_receipt(root, prefix.events, ir.artifact_id)
+    assert receipt.artifact_id == ir.artifact_id

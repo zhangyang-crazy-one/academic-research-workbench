@@ -383,12 +383,12 @@ class ResearchArtifactService:
             run_root, request, prepare, boundary=self.boundary
         )
 
-    def inspect(self, artifact_id, *, run_root):
+    def inspect(self, artifact_id, *, run_root, _events=None):
         TypeAdapter(StableRuntimeId).validate_python(artifact_id)
-        replayed = replay_run(run_root)
+        events = replay_run(run_root).events if _events is None else _events
         matches = [
             e
-            for e in replayed.events
+            for e in events
             if e.event_type == "research_artifact_accepted"
             and e.payload.artifact_id == artifact_id
         ]
@@ -401,7 +401,7 @@ class ResearchArtifactService:
                 read_retained_bytes(run_root, f"{prefix}/tombstone.json")
             )
             authorization, auth_event, _ = accepted_content(
-                run_root, replayed.events, tombstone["authorization_artifact_id"]
+                run_root, events, tombstone["authorization_artifact_id"]
             )
             if (
                 authorization.get("action") != "purge_research_artifact"
@@ -585,20 +585,37 @@ def verify_plot_receipt(run_root, events, artifact_id, *, resolution_context=Non
     exact plot value are checked. This proves integrity only; caption advisory,
     unsupported statistical recomputation and visual states remain explicit.
     """
+    from arw.kernel.ledger.accepted_refs import RunPrefix
+    from arw.kernel.ledger.journal import replay_run_prefix, replay_run_under_held_lock
     from arw.kernel.state.result_plot import ResultPlotIR, ResultPlotReceipt
 
     from .plot_policy import PlotFault, compile_plot
 
+    if not events:
+        raise PlotFault("plot_not_accepted_at_prefix")
+    head = events[-1]
+    service = ResearchArtifactService()
+    prefix_args = {
+        "revision": head.resulting_revision,
+        "expected_head_sha256": head.event_sha256,
+    }
+    held = resolution_context is not None and Path(run_root).absolute() in {
+        Path(p).absolute() for p in resolution_context.held_lock_roots
+    }
+    verified = (
+        replay_run_under_held_lock(run_root, **prefix_args)
+        if held
+        else replay_run_prefix(run_root, **prefix_args)
+    )
     accepted = [
         e
-        for e in events
+        for e in verified.events
         if e.event_type == "research_artifact_accepted"
         and e.payload.artifact_id == artifact_id
     ]
     if len(accepted) != 1:
         raise PlotFault("plot_not_accepted_at_prefix")
-    service = ResearchArtifactService()
-    inspected = service.inspect(artifact_id, run_root=run_root)
+    inspected = service.inspect(artifact_id, run_root=run_root, _events=verified.events)
     if inspected["binding"]["event_sha256"] != accepted[0].event_sha256:
         raise PlotFault("plot_accepting_prefix_mismatch")
     receipt = ResultPlotReceipt.model_validate_json(json.dumps(inspected["receipt"]))
@@ -612,6 +629,32 @@ def verify_plot_receipt(run_root, events, artifact_id, *, resolution_context=Non
     ):
         raise PlotFault("plot_ir_digest_mismatch")
     context = service._plot_context(ir, run_root, resolution_context)
+    if context.run_prefixes:
+        target = next(
+            (p for p in context.run_prefixes if p.run_id == verified.run_id), None
+        )
+        if target is None or (target.revision, target.head_sha256) != (
+            verified.revision,
+            verified.last_event_sha256,
+        ):
+            raise PlotFault("plot_caller_snapshot_prefix_mismatch")
+    else:
+        prefixes = []
+        for root in context.run_roots:
+            replayed = (
+                verified
+                if Path(root).absolute() == Path(run_root).absolute()
+                else service._plot_replay(root, context)
+            )
+            prefixes.append(
+                RunPrefix(
+                    replayed.run_id,
+                    replayed.revision,
+                    replayed.last_event_sha256,
+                    sha256_hex(read_retained_bytes(root, "run-manifest.json")),
+                )
+            )
+        context = replace(context, run_prefixes=tuple(prefixes))
     compiled = compile_plot(ir, context, acceptance_root=run_root)
     if (
         receipt.plot_values != compiled.plot_values
