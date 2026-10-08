@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from .method import canonical
+from .provenance import verify_proof
 from .sandbox import SandboxError, probe_namespace, probe_timeout, run_worker
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -17,10 +18,18 @@ EXT = ROOT / "extensions" / "paper-method"
 CAPSULE = EXT / "source-capsule.json"
 FIXTURE = EXT / "fixtures" / "example-2.json"
 SOURCE_PATHS = (
+    "src/arw/__init__.py",
+    "src/arw/mcp_stdio.py",
+    "src/arw/kernel/__init__.py",
+    "src/arw/kernel/core/__init__.py",
+    "src/arw/kernel/core/canonical.py",
+    "extensions/paper-method/src/arw_paper_method/__init__.py",
     "extensions/paper-method/src/arw_paper_method/method.py",
     "extensions/paper-method/src/arw_paper_method/sandbox.py",
     "extensions/paper-method/src/arw_paper_method/qualification.py",
     "extensions/paper-method/src/arw_paper_method/server.py",
+    "extensions/paper-method/src/arw_paper_method/provenance.py",
+    "extensions/paper-method/src/arw_paper_method/installation.py",
     "extensions/paper-method/schemas/input.schema.json",
     "extensions/paper-method/schemas/output.schema.json",
     "extensions/paper-method/fixtures/example-2.json",
@@ -61,6 +70,7 @@ def build_capsule(commit: str) -> dict:
             "authors": ["D. Gale", "L. S. Shapley"],
             "year": 1962,
             "doi": PAPER_DOI,
+            "source_url": "https://iqua.ece.toronto.edu/baochun/ece1771f/papers/Gale-Shapley-1962.pdf",
             "pdf_sha256": PAPER_PDF_SHA256,
             "reference_location": "printed page 12, Example 2",
             "method_location": "Theorem 1 proof, printed pages 12-13",
@@ -108,6 +118,15 @@ def validate_capsule(path: Path = CAPSULE) -> tuple[bytes, dict]:
         raise QualificationError("source_file_unavailable") from error
     if capsule != expected:
         raise QualificationError("capsule_metadata_or_source_drift")
+    # Installed adapters carry Git commit/tree witnesses, not a Git checkout.
+    # Hashing each blob through the authenticated trees verifies the same pin.
+    if not (ROOT / ".git").exists():
+        try:
+            _, proof = _json(EXT / "source-proof.json")
+            verify_proof(ROOT, commit, SOURCE_PATHS, proof)
+        except (KeyError, TypeError, ValueError, OSError) as error:
+            raise QualificationError("source_commit_unverifiable") from error
+        return raw, capsule
     for relative in SOURCE_PATHS:
         try:
             historical = subprocess.run(

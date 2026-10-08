@@ -27,6 +27,12 @@ TOOL = "stable_matching_gale_shapley_1962"
 
 
 def _tool() -> dict[str, Any]:
+    schema_root = Path(__file__).resolve().parents[2] / "schemas"
+    input_schema = json.loads((schema_root / "input.schema.json").read_text())
+    input_schema["properties"].update(
+        mode={"enum": ["plan", "execute"], "default": "execute"},
+        timeout_ms={"type": "integer", "minimum": 1, "maximum": 2000},
+    )
     return {
         "name": TOOL,
         "description": (
@@ -34,26 +40,7 @@ def _tool() -> dict[str, Any]:
             "strict complete rankings (1–64 per side). No ties, quotas, "
             "roommates, or practical-market suitability claim. A plan is not execution."
         ),
-        "inputSchema": {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["proposers", "receivers"],
-            "properties": {
-                "proposers": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "maxProperties": 64,
-                },
-                "receivers": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "maxProperties": 64,
-                },
-                "mode": {"enum": ["plan", "execute"], "default": "execute"},
-                "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 2000},
-            },
-        },
+        "inputSchema": input_schema,
         "outputSchema": json.loads(
             (
                 Path(__file__).resolve().parents[2] / "schemas" / "output.schema.json"
@@ -123,6 +110,8 @@ class PaperMethodServer:
         }
 
     def invoke(self, args: dict) -> dict:
+        if not self._active():
+            raise ProtocolError(-32601, "paper method unqualified")
         try:
             raw_args = canonical(args)
         except (TypeError, ValueError):
@@ -212,13 +201,41 @@ class PaperMethodServer:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Opt-in qualified paper method")
-    parser.add_argument("command", choices=("qualify", "status", "serve"))
-    parser.add_argument("--receipt", required=True, type=Path)
+    parser.add_argument(
+        "command", choices=("package", "install", "qualify", "status", "serve")
+    )
+    parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--destination", type=Path)
     parser.add_argument("--capsule", type=Path, default=CAPSULE)
     parser.add_argument("--inject-test-failure", action="store_true")
     args = parser.parse_args(argv)
     if args.inject_test_failure and args.command != "qualify":
         parser.error("failure injection is only valid for qualify")
+    if args.command in ("package", "install"):
+        if args.destination is None or args.receipt is not None:
+            parser.error("install requires --destination and accepts no --receipt")
+        from .installation import install, package
+
+        try:
+            action = install if args.command == "install" else package
+            result = action(args.destination, capsule_path=args.capsule)
+        except (QualificationError, OSError, ValueError) as error:
+            print(
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "reason_code": getattr(error, "code", "installation_failed"),
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        print(json.dumps(result))
+        return 0
+    if args.receipt is None or args.destination is not None:
+        parser.error(
+            "qualification commands require --receipt and accept no --destination"
+        )
     if args.command == "qualify":
         try:
             result = qualify(

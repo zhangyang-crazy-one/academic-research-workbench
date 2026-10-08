@@ -177,11 +177,13 @@ def test_receipt_tamper_source_drift_and_environment_drift(tmp_path, monkeypatch
     new_server = PaperMethodServer(receipt, capsule)
     import arw_paper_method.server as server_module
 
-    monkeypatch.setattr(server_module, "environment", lambda: {"drift": True})
-    assert new_server.handle(_request("tools/list", 3))["result"]["tools"] == []
+    with monkeypatch.context() as patch:
+        patch.setattr(server_module, "environment", lambda: {"drift": True})
+        assert new_server.handle(_request("tools/list", 3))["result"]["tools"] == []
 
     from arw_paper_method import qualification
 
+    source_server = PaperMethodServer(receipt, capsule)
     different = tmp_path / "different-root"
     relative = qualification.SOURCE_PATHS[0]
     altered = different / relative
@@ -190,6 +192,30 @@ def test_receipt_tamper_source_drift_and_environment_drift(tmp_path, monkeypatch
     monkeypatch.setattr(qualification, "ROOT", different)
     with pytest.raises(QualificationError, match="source_file_unavailable"):
         qualification.validate_capsule(capsule)
+    assert source_server.handle(_request("tools/list", 4))["result"]["tools"] == []
+    assert (
+        source_server.handle(
+            _request("tools/call", 5, {"name": TOOL, "arguments": _fixture()["input"]})
+        )["error"]["code"]
+        == -32601
+    )
+
+
+def test_missing_isolation_is_typed_and_does_not_claim_execution(tmp_path, monkeypatch):
+    capsule, receipt = _qualified(tmp_path)
+    server = PaperMethodServer(receipt, capsule)
+    import arw_paper_method.server as server_module
+    from arw_paper_method.sandbox import SandboxError
+
+    def unavailable(*_args, **_kwargs):
+        raise SandboxError("isolation_prerequisite_missing")
+
+    monkeypatch.setattr(server_module, "run_worker", unavailable)
+    result = server.invoke(_fixture()["input"])
+    assert result["status"] == "failed"
+    assert result["reason_code"] == "isolation_prerequisite_missing"
+    assert result["execution_observed"] is False
+    assert result["output_sha256"] is None
 
 
 def test_declared_pass_without_reexecuted_cases_cannot_enable(tmp_path, monkeypatch):
@@ -289,3 +315,87 @@ def test_real_stdio_old_and_new_protocol_and_base_opt_in(tmp_path):
     assert responses[4]["result"]["tools"][0]["name"] == TOOL
     assert responses[5]["result"]["structuredContent"]["status"] == "planned"
     assert responses[5]["result"]["resultType"] == "complete"
+
+
+def test_installed_relocatable_entrypoint_without_git_or_site_packages(tmp_path):
+    from arw_paper_method.installation import install, package
+    from arw_paper_method.provenance import verify_proof
+    from arw_paper_method.qualification import SOURCE_PATHS
+
+    capsule = _committed_capsule(tmp_path)
+    stage = tmp_path / "opt-in-stage"
+    manifest = install(stage, capsule_path=capsule)
+    assert manifest["dependency_inventory"] == []
+    assert manifest["automatic_registration"] is False
+    assert not (stage / ".git").exists()
+    assert not (stage / ".mcp.json").exists()
+    assert not (stage / "extensions/ars").exists()
+    with pytest.raises(FileExistsError):
+        install(stage, capsule_path=capsule)
+    archive_path = tmp_path / "paper-method.zip"
+    assert package(archive_path, capsule_path=capsule)["status"] == "packaged"
+    from zipfile import ZipFile
+
+    with ZipFile(archive_path) as archive:
+        assert "bin/arw-paper-method" in archive.namelist()
+        assert "extensions/paper-method/source-proof.json" in archive.namelist()
+        assert "qualification.json" not in archive.namelist()
+    # Move the materialized package and run from outside the source checkout.
+    relocated = tmp_path / "relocated"
+    stage.rename(relocated)
+    launcher = relocated / "bin/arw-paper-method"
+    receipt = relocated / "qualification.json"
+    clean_env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path / "empty-home")}
+
+    def cli(*args, raw=None):
+        return subprocess.run(
+            [str(launcher), *args],
+            input=raw,
+            capture_output=True,
+            check=False,
+            env=clean_env,
+            cwd=tmp_path,
+            timeout=10,
+        )
+
+    missing = cli("status", "--receipt", str(receipt))
+    assert missing.returncode == 2
+    assert json.loads(missing.stdout)["status"] == "unqualified"
+    qualified = cli("qualify", "--receipt", str(receipt))
+    assert qualified.returncode == 0, qualified.stderr
+    assert cli("status", "--receipt", str(receipt)).returncode == 0
+    request = _request(
+        "tools/call", 1, {"name": TOOL, "arguments": _fixture()["input"]}
+    )
+    result = cli("serve", "--receipt", str(receipt), raw=canonical(request))
+    assert result.returncode == 0, result.stderr
+    assert (
+        json.loads(result.stdout)["result"]["structuredContent"]["matching"]
+        == _fixture()["expected_matching"]
+    )
+    proof_path = relocated / "extensions/paper-method/source-proof.json"
+    proof = json.loads(proof_path.read_bytes())
+    verify_proof(relocated, manifest["source_commit"], SOURCE_PATHS, proof)
+    proof["commit_object"] = "00"
+    proof_path.write_bytes(canonical(proof))
+    hidden = cli(
+        "serve", "--receipt", str(receipt), raw=canonical(_request("tools/list", 2))
+    )
+    assert json.loads(hidden.stdout)["result"]["tools"] == []
+    assert b"source_commit_unverifiable" in hidden.stderr
+
+
+def test_output_contract_rejects_execution_claim_without_observation(tmp_path):
+    schema = json.loads((EXT / "schemas/output.schema.json").read_text())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            {
+                "schema_version": "arw.paper-method-result.v1",
+                "status": "executed",
+                "execution_observed": False,
+                "input_sha256": "0" * 64,
+                "output_sha256": None,
+                "source_capsule_sha256": "0" * 64,
+            },
+            schema,
+        )
