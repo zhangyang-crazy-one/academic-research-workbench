@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      nightly_native_sanitizers:
+        description: Run the scheduled native ASan/UBSan qualification branch
+        type: boolean
+        default: false
   schedule:
     - cron: '12 3 * * *'
 
@@ -18,7 +23,9 @@ concurrency:
 jobs:
   codex-overlay:
     name: Codex overlay (Python ${{ matrix.python-version }})
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -44,7 +51,9 @@ jobs:
 
   python:
     name: Python
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
     runs-on: ubuntu-latest
     needs: package-boundary
     steps:
@@ -139,7 +148,9 @@ jobs:
 
   package-boundary:
     name: Wheel and source archive boundary
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -420,7 +431,9 @@ jobs:
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
       - name: Run nightly ASan and UBSan suite
-        if: github.event_name == 'schedule'
+        if: >-
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
         run: |
           mkdir -p build/sanitizer-runtime
           for library in libasan.so libubsan.so; do
@@ -428,20 +441,34 @@ jobs:
             test -f "$resolved"
             dest="build/sanitizer-runtime/$(basename "$resolved")"
             install -m 0644 "$resolved" "$dest"
-            ln -s "$(basename "$resolved")" "build/sanitizer-runtime/$library"
+            if [[ "$(basename "$resolved")" != "$library" ]]; then
+              ln -s "$(basename "$resolved")" "build/sanitizer-runtime/$library"
+            fi
           done
-          ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
+          sudo --preserve-env env "PATH=$PATH" "HOME=$HOME" \
+            "ARW_SANITIZER_RUNTIME_DIR=$PWD/build/sanitizer-runtime" \
             ./scripts/offline-exec \
             --evidence-root build/evidence/ci-native-sanitized \
             ./scripts/build-file-base --clean --ci-ephemeral \
               --run-upstream-tests --sanitizers asan,ubsan
       - name: Build native test binary under network denial
-        if: github.event_name != 'schedule'
+        if: >-
+          github.event_name != 'schedule' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
         run: >-
           ./scripts/offline-exec --evidence-root build/evidence/ci-native
           ./scripts/build-file-base --clean --ci-ephemeral
       - name: Verify native build left the source manifest unchanged
         run: sha256sum -c build/ci-native-manifest.sha256
+      - name: Retain nightly sanitizer and network audit evidence
+        if: >-
+          always() && (github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers))
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-native-sanitized-${{ github.run_id }}
+          path: build/evidence/ci-native-sanitized
+          if-no-files-found: warn
       - name: Enforce direct native confinement and admin regressions
         env:
           ARW_STRICT_PREREQS: '1'
@@ -458,7 +485,9 @@ jobs:
 
   macos-core:
     name: macOS Tier 2 core
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
     runs-on: macos-latest
     permissions:
       contents: read
