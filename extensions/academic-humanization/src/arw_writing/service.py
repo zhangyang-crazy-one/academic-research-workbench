@@ -22,8 +22,14 @@ from arw.kernel.state.models import (
     RuntimeCommandRequest,
 )
 
+from .preservation import validate_citation_bindings
 from .review_rules import validate_report
 from .transformer import MAX_TEXT_BYTES, SessionWritingTransformer
+
+
+class WritingReceiptBudgetError(ValueError):
+    code = "receipt_budget_exceeded"
+    recoverable = True
 
 
 class WritingAuditService:
@@ -68,8 +74,16 @@ class WritingService(SessionWritingTransformer):
                     raise ValueError("accepted manuscript source changed")
             elif manifest.artifact_kind == "writing-derived":
                 receipt = strict_json_loads(raw)
-                if not isinstance(receipt, dict) or not isinstance(receipt.get("candidate"), str):
+                if (
+                    not isinstance(receipt, dict)
+                    or not isinstance(receipt.get("source"), str)
+                    or not isinstance(receipt.get("candidate"), str)
+                    or not isinstance(receipt.get("verification"), dict)
+                ):
                     raise ValueError("accepted writing source is malformed")
+                validate_citation_bindings(
+                    receipt["verification"], receipt["source"], receipt["candidate"]
+                )
                 raw = receipt["candidate"].encode("utf-8")
                 if sha256_hex(raw) != receipt.get("candidate_sha256"):
                     raise ValueError("accepted writing candidate changed")
@@ -201,12 +215,14 @@ class WritingService(SessionWritingTransformer):
                 accepted=True,
                 review_binding=binding,
             )
-        if snapshot is not None and result["accepted"]:
-            if "narrative_realization" not in result:
-                raise ValueError("accepted paper writing requires content-bound realization")
-            publish_once(self.run_root, result["candidate_path"], result["candidate"].encode("utf-8"))
+        if snapshot is not None and result["accepted"] and "narrative_realization" not in result:
+            raise ValueError("accepted paper writing requires content-bound realization")
         result["request_identity"] = request.model_dump(mode="json")
         body = canonical_json_bytes(result)
+        if len(body) > MAX_SOURCE_BYTES:
+            raise WritingReceiptBudgetError(
+                f"canonical writing receipt exceeds {MAX_SOURCE_BYTES} bytes: {len(body)}"
+            )
         digest = sha256_hex(body)
         path = f"writing/{sha256_hex(request.command_id.encode())}.json"
         artifact_id = "writing." + sha256_hex(request.command_id.encode())[:32]
@@ -253,6 +269,12 @@ class WritingService(SessionWritingTransformer):
                             "rule_review_status": result["rule_review"]["status"],
                         }
                     raise ValueError("writing command identity conflict")
+        if snapshot is not None and result["accepted"]:
+            publish_once(
+                self.run_root,
+                result["candidate_path"],
+                result["candidate"].encode("utf-8"),
+            )
         publish_once(self.run_root, path, body)
         outcome = RuntimeCommandService(self.run_root).accept_artifact(
             canonical_request, _reviewed_writing_admission=result["accepted"]
