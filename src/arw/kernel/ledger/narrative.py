@@ -63,9 +63,7 @@ def _history_path(root: Path) -> Path:
 
 
 @contextmanager
-def _locked(
-    root: Path, *, write: bool, create_lock: bool = True
-) -> Iterator[Path]:
+def _locked(root: Path, *, write: bool, create_lock: bool = True) -> Iterator[Path]:
     """Hold the project narrative lock.
 
     Operational readers recreate a missing lock file, as before the trail
@@ -104,7 +102,9 @@ def _locked(
         ) from error
 
 
-def _read(root: Path, *, at_sequence: int | None = None) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
+def _read(
+    root: Path, *, at_sequence: int | None = None
+) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
     path = _history_path(root)
     if (root / ".arw").is_symlink() or path.parent.is_symlink():
         raise NarrativeError("unsafe_state", "narrative state path contains a symlink")
@@ -117,10 +117,14 @@ def _read(root: Path, *, at_sequence: int | None = None) -> tuple[list[dict], Na
     raw = path.read_bytes()
     if at_sequence is not None:
         if type(at_sequence) is not int or at_sequence < 1:
-            raise NarrativeError("invalid_sequence", "historical sequence must be positive")
+            raise NarrativeError(
+                "invalid_sequence", "historical sequence must be positive"
+            )
         lines = raw.splitlines(keepends=True)
         if len(lines) < at_sequence:
-            raise NarrativeError("invalid_sequence", "historical sequence exceeds history")
+            raise NarrativeError(
+                "invalid_sequence", "historical sequence exceeds history"
+            )
         raw = b"".join(lines[:at_sequence])
     if not raw or not raw.endswith(b"\n"):
         raise NarrativeError("corrupt_history", "narrative history is incomplete")
@@ -227,6 +231,18 @@ def _read(root: Path, *, at_sequence: int | None = None) -> tuple[list[dict], Na
                 and len(payload["reason"].encode("utf-8")) <= 2048
             ):
                 pending = None
+            elif kind in {
+                "claim.registered",
+                "claim.evidence.updated",
+                "claim.attested",
+            }:
+                from arw.kernel.ledger.claim_graph import validate_claim_journal_event
+
+                if snapshot is None or version != snapshot.version:
+                    raise ValueError(
+                        "claim event requires a selected narrative version"
+                    )
+                validate_claim_journal_event(event, events)
             else:
                 raise ValueError("invalid narrative transition")
             events.append(event)
@@ -458,7 +474,12 @@ def _trail_view(
     pending: dict | None = None
     for event in events:
         kind = event["kind"]
-        if kind in {"registered"}:
+        if kind in {
+            "registered",
+            "claim.registered",
+            "claim.evidence.updated",
+            "claim.attested",
+        }:
             continue
         if kind in {"selected", "proposed"}:
             plan = event["payload"]["plan"]
@@ -697,7 +718,11 @@ def _trail(
         )
     directory = root / ".arw/narrative"
     if not directory.exists() and not directory.is_symlink():
-        if at_sequence is not None or expected_head_sha256 is not None or run_root is not None:
+        if (
+            at_sequence is not None
+            or expected_head_sha256 is not None
+            or run_root is not None
+        ):
             raise NarrativeError(
                 "missing_selection", "project has no narrative history"
             )
@@ -785,9 +810,7 @@ def trail_summary(
             "schema_version": "arw.narrative-trail-summary.v1",
             "status": view["status"],
             "history_head_sha256": view["history_head_sha256"],
-            "current_choices": [
-                concise(value) for value in view["current_choice_ids"]
-            ],
+            "current_choices": [concise(value) for value in view["current_choice_ids"]],
             "abandoned_routes": rows,
             "omitted_abandoned_route_count": total - len(rows),
             "unresolved_questions": view["unresolved_questions"],

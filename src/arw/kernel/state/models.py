@@ -958,6 +958,34 @@ class HumanDecisionRecordedPayload(Phase4Payload):
         return self
 
 
+def _authenticated_claim_attestation(value: object) -> object:
+    from arw.kernel.state.claim_authentication import AuthenticatedAttestation
+    if isinstance(value, AuthenticatedAttestation):
+        value = value.model_dump(mode="json")
+    return AuthenticatedAttestation.model_validate(value)
+
+
+class ClaimAttestationAnchoredPayload(StrictModel):
+    project_id: StableRuntimeId
+    project_root_relative: Annotated[str, Field(min_length=1, max_length=512)]
+    journal_sequence: Annotated[int, Field(ge=1)]
+    journal_event_sha256: Sha256
+    run_locations: dict[StableRuntimeId, str]
+    attestation: Annotated[object, BeforeValidator(_authenticated_claim_attestation)]
+
+    @model_validator(mode="after")
+    def complete_claim_anchor(self) -> Self:
+        from arw.kernel.state.claim_authentication import validate_project_ancestor, validate_run_locations
+        validate_project_ancestor(self.project_root_relative)
+        validate_run_locations(self.run_locations)
+        att = self.attestation
+        if (self.project_id != att.snapshot_manifest.project_id
+            or self.journal_sequence != att.snapshot_manifest.journal.sequence + 1
+            or set(self.run_locations) != {r.run_id for r in att.snapshot_manifest.runs}):
+            raise ValueError("claim anchor must bind the exact N-1 vector and following journal event")
+        return self
+
+
 PHASE4_EVENT_TYPES = frozenset(
     {
         "execution.mode_selected",
@@ -975,6 +1003,7 @@ PHASE4_EVENT_TYPES = frozenset(
         "gate.evaluated",
         "human_authority.accepted",
         "human_decision.recorded",
+        "claim.attestation_anchored",
         "experiment.provenance.accepted",
         "experiment.contract.accepted",
     }
@@ -997,6 +1026,7 @@ PHASE4_EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
     "gate.evaluated": GateEvaluatedPayload,
     "human_authority.accepted": HumanAuthorityAcceptedPayload,
     "human_decision.recorded": HumanDecisionRecordedPayload,
+    "claim.attestation_anchored": ClaimAttestationAnchoredPayload,
     "experiment.provenance.accepted": ExperimentProvenanceAcceptedPayload,
     "experiment.contract.accepted": ExperimentContractAcceptedPayload,
 }
@@ -1029,7 +1059,7 @@ EVENT_PAYLOAD_TYPES: dict[str, type[StrictModel]] = {
 class CanonicalEvent(StrictModel):
     """One hash-chained event accepted by the canonical writer."""
 
-    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"]
+    schema_version: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"]
     event_type: Literal[
         "execution_provenance.context_accepted",
         "execution_provenance.dataset_metadata_accepted",
@@ -1069,6 +1099,7 @@ class CanonicalEvent(StrictModel):
         "gate.evaluated",
         "human_authority.accepted",
         "human_decision.recorded",
+        "claim.attestation_anchored",
         "experiment.provenance.accepted",
         "experiment.contract.accepted",
     ]
@@ -1119,6 +1150,7 @@ class CanonicalEvent(StrictModel):
         | GateEvaluatedPayload
         | HumanAuthorityAcceptedPayload
         | HumanDecisionRecordedPayload
+        | ClaimAttestationAnchoredPayload
         | ExperimentProvenanceAcceptedPayload
         | ExperimentContractAcceptedPayload
     )

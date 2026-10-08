@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "AuthenticatedAuthority": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "authenticated",
+          "default": "authenticated",
+          "title": "Kind",
+          "type": "string"
+        },
+        "authority_run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Authority Run Id",
+          "type": "string"
+        },
+        "authority_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Authority Event Id",
+          "type": "string"
+        },
+        "authority_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authority Event Sha256",
+          "type": "string"
+        },
+        "human_authority_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Human Authority Sha256",
+          "type": "string"
+        },
+        "accountable_actor_id": {
+          "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+          "title": "Accountable Actor Id",
+          "type": "string"
+        },
+        "accountable_role": {
+          "enum": [
+            "operator",
+            "review_authority",
+            "access_authority"
+          ],
+          "title": "Accountable Role",
+          "type": "string"
+        },
+        "gate_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Gate Id",
+          "type": "string"
+        },
+        "scope": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "authority_run_id",
+        "authority_event_id",
+        "authority_event_sha256",
+        "human_authority_sha256",
+        "accountable_actor_id",
+        "accountable_role",
+        "gate_id",
+        "scope"
+      ],
+      "title": "AuthenticatedAuthority",
+      "type": "object"
+    },
+    "JournalPrefix": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "head_sha256"
+      ],
+      "title": "JournalPrefix",
+      "type": "object"
+    },
+    "RunPrefix": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "run_manifest_sha256",
+        "revision",
+        "head_sha256"
+      ],
+      "title": "RunPrefix",
+      "type": "object"
+    },
+    "SnapshotManifest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.claim-graph-snapshot.v1",
+          "default": "arw.claim-graph-snapshot.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "journal": {
+          "$ref": "#/$defs/JournalPrefix"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/RunPrefix"
+          },
+          "maxItems": 32,
+          "title": "Runs",
+          "type": "array"
+        },
+        "projection_version": {
+          "const": "arw.claim-graph.v1",
+          "default": "arw.claim-graph.v1",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "adapter_matrix_version": {
+          "const": "arw.accepted-ref-adapters.v1",
+          "default": "arw.accepted-ref-adapters.v1",
+          "title": "Adapter Matrix Version",
+          "type": "string"
+        },
+        "canonicalization_version": {
+          "const": "arw.canonical-json.v1",
+          "default": "arw.canonical-json.v1",
+          "title": "Canonicalization Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "journal",
+        "runs"
+      ],
+      "title": "SnapshotManifest",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.claim-attestation.v2",
+      "default": "arw.claim-attestation.v2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "claim_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "claim_revision": {
+      "minimum": 1,
+      "title": "Claim Revision",
+      "type": "integer"
+    },
+    "claim_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Claim Sha256",
+      "type": "string"
+    },
+    "evidence_dependency_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Dependency Sha256",
+      "type": "string"
+    },
+    "statement": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Statement",
+      "type": "string"
+    },
+    "scope": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Scope",
+      "type": "string"
+    },
+    "policy_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "graph_snapshot_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Graph Snapshot Sha256",
+      "type": "string"
+    },
+    "snapshot_manifest": {
+      "$ref": "#/$defs/SnapshotManifest"
+    },
+    "authority": {
+      "$ref": "#/$defs/AuthenticatedAuthority"
+    }
+  },
+  "required": [
+    "claim_id",
+    "claim_revision",
+    "claim_sha256",
+    "evidence_dependency_sha256",
+    "statement",
+    "scope",
+    "policy_version",
+    "graph_snapshot_sha256",
+    "snapshot_manifest",
+    "authority"
+  ],
+  "title": "AuthenticatedAttestation",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/claim-authenticated-attestation.schema.json"
+}
