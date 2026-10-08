@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.failure-diagnosis-request.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "acceptance_artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Acceptance Artifact Id",
+      "type": "string"
+    },
+    "failure_artifact_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Failure Artifact Ids",
+      "type": "array"
+    },
+    "change_artifact_ids": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Change Artifact Ids",
+      "type": "array"
+    },
+    "prior_diagnosis_artifact_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prior Diagnosis Artifact Id"
+    },
+    "handoff_memory_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Handoff Memory Id"
+    },
+    "previous_handoff_memory_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previous Handoff Memory Id"
+    }
+  },
+  "required": [
+    "schema_version",
+    "acceptance_artifact_id",
+    "failure_artifact_ids"
+  ],
+  "title": "FailureDiagnosisRequest",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/failure-diagnosis-request.schema.json"
+}

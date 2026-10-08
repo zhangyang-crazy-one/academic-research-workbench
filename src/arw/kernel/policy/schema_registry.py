@@ -29,6 +29,7 @@ from arw.kernel.policy.research_integrity import (
     validate_research_integrity_contract_instance,
 )
 from arw.kernel.state.execution_schema import execution_provenance_schema_document
+from arw.kernel.state.failure_diagnosis import failure_diagnosis_schema_documents
 from arw.kernel.state.models import EXECUTION_PROVENANCE_EVENT_PAYLOAD_TYPES
 from arw.kernel.state.narrative_fit import narrative_fit_schema_documents
 from arw.kernel.state.narrative_realization import (
@@ -52,6 +53,7 @@ LEARNING_SCHEMA_NAMES = tuple(learning_schema_documents())
 VENUE_LEARNING_SCHEMA_NAMES = tuple(venue_learning_schema_documents())
 NARRATIVE_FIT_SCHEMA_NAMES = tuple(narrative_fit_schema_documents())
 EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES = tuple(experiment_acceptance_schema_documents())
+FAILURE_DIAGNOSIS_SCHEMA_NAMES = tuple(failure_diagnosis_schema_documents())
 
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
@@ -107,6 +109,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + VENUE_LEARNING_SCHEMA_NAMES
     + NARRATIVE_FIT_SCHEMA_NAMES
     + EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES
+    + FAILURE_DIAGNOSIS_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
     + NARRATIVE_REALIZATION_SCHEMA_NAMES
@@ -295,6 +298,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError("venue learning schema drift")
     if name in NARRATIVE_FIT_SCHEMA_NAMES and candidate != narrative_fit_schema_documents()[name]:
         raise SchemaRegistryError("narrative fit schema drift")
+    if name in FAILURE_DIAGNOSIS_SCHEMA_NAMES and candidate != failure_diagnosis_schema_documents()[name]:
+        raise SchemaRegistryError("failure diagnosis schema drift")
     if name in RESEARCH_MEMORY_SCHEMA_NAMES and candidate != research_memory_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESEARCH_ARTIFACT_SCHEMA_NAMES and candidate != research_artifact_schema_documents()[name]:
@@ -342,6 +347,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = narrative_fit_schema_documents()[name]
         elif name in EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES:
             document = experiment_acceptance_schema_documents()[name]
+        elif name in FAILURE_DIAGNOSIS_SCHEMA_NAMES:
+            document = failure_diagnosis_schema_documents()[name]
         elif name in RESEARCH_MEMORY_SCHEMA_NAMES:
             document = research_memory_schema_documents()[name]
         elif name in RESEARCH_ARTIFACT_SCHEMA_NAMES:

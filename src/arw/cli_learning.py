@@ -34,6 +34,7 @@ def configure(subparsers):
         "applicable",
         "use",
         "evolve",
+        "diagnose",
     ):
         p = actions.add_parser(name)
         p.add_argument("--project-root", type=Path, required=True)
@@ -61,7 +62,7 @@ def configure(subparsers):
             "evolve",
         }:
             p.add_argument("heuristic_id")
-        if name in {"extract", "import", "applicable", "legacy-style-drafts", "migrate-style-candidate", "phase2-advisories"}:
+        if name in {"extract", "import", "applicable", "legacy-style-drafts", "migrate-style-candidate", "phase2-advisories", "diagnose"}:
             p.add_argument("--input", type=Path, required=True)
         if name == "observe":
             p.add_argument("--event-id", required=True)
@@ -111,6 +112,32 @@ def handle(args):
         return legacy_style_drafts(
             read_retained_bytes(args.input.absolute().parent, args.input.name, max_bytes=65536)
         )
+    if action == "diagnose":
+        from arw.kernel.artifacts.failure_diagnosis import diagnose_failure
+        from arw.kernel.state.failure_diagnosis import FailureDiagnosisRequest
+
+        if args.run_root is None:
+            raise ValueError("diagnose_requires_run_root")
+        relative = args.input.absolute().relative_to(args.project_root.absolute())
+        request = FailureDiagnosisRequest.model_validate_json(
+            read_retained_bytes(args.project_root, relative.as_posix(), max_bytes=65_536)
+        )
+        memory_provider = None
+        if request.handoff_memory_id is not None:
+            manifest = os.environ.get("ARW_PLUGIN_MANIFEST")
+            if os.environ.get("ARW_PLUGIN_ROOT") and not manifest:
+                raise CapabilityUnavailable("research.memory.read")
+            memory_provider = default_router(
+                memory_project_root=args.project_root,
+                memory_run_root=args.run_root,
+                plugin_manifest=Path(manifest) if manifest else None,
+            ).resolve("research.memory.read")
+        diagnosis = diagnose_failure(args.run_root, request, memory_provider=memory_provider)
+        return {
+            "status": "diagnosed",
+            "diagnosis": diagnosis.model_dump(mode="json", exclude_none=True),
+            "diagnosis_sha256": diagnosis.diagnosis_sha256,
+        }
     operation = (
         "research.learning.observe"
         if action in {"observe", "observe-venue"}
