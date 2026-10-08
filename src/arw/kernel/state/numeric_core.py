@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.state.accepted_ref import (
     AcceptedRef,
     ParentArtifactRef,
@@ -162,6 +163,10 @@ class Derivation(StrictModel):
 
     @model_validator(mode="after")
     def outcome(self):
+        if self.derivation_id != sha256_hex(
+            canonical_json_bytes(self.request.model_dump(mode="json"))
+        ):
+            raise ValueError("derivation ID differs from its sealed request")
         if self.status == "exact":
             if self.exact is None and not self.groups and not self.values:
                 raise ValueError("exact outcome requires exact values")

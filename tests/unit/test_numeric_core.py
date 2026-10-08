@@ -412,3 +412,13 @@ def test_registered_numeric_schemas_enforce_semantic_rational_invariants(tmp_pat
     }
     with pytest.raises(SchemaRegistryError, match="semantic validation"):
         validate_instance("numeric-presentation.schema.json", presentation)
+
+
+def test_derivation_record_rejects_substituted_identity(tmp_path):
+    from arw.kernel.policy.schema_registry import SchemaRegistryError, validate_instance
+
+    _, context, ref, _ = accepted_fixture(tmp_path, b'{"number":1}\n')
+    result = evaluate_derivation(request("value", scalar(ref, "/number")), context)
+    substituted = {**result.model_dump(mode="json"), "derivation_id": "f" * 64}
+    with pytest.raises(SchemaRegistryError, match="derivation ID"):
+        validate_instance("numeric-derivation.schema.json", substituted)
