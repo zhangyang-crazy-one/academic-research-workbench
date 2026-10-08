@@ -1,0 +1,1901 @@
+{
+  "$defs": {
+    "AllRows": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "all",
+          "default": "all",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "AllRows",
+      "type": "object"
+    },
+    "ByteChunk": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "byte_chunk",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "ByteChunk",
+      "type": "object"
+    },
+    "CaptionBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "start_byte": {
+          "minimum": 0,
+          "title": "Start Byte",
+          "type": "integer"
+        },
+        "end_byte": {
+          "minimum": 1,
+          "title": "End Byte",
+          "type": "integer"
+        },
+        "number_kind": {
+          "enum": [
+            "result",
+            "sample_size",
+            "confidence_level",
+            "figure_number",
+            "non_result"
+          ],
+          "title": "Number Kind",
+          "type": "string"
+        },
+        "confirmation": {
+          "default": "unknown",
+          "enum": [
+            "unknown",
+            "declared",
+            "authenticated"
+          ],
+          "title": "Confirmation",
+          "type": "string"
+        },
+        "plot_value_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plot Value Id"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Series"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "statistic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Statistic"
+        },
+        "expr": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NumericExpression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalExact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "metadata_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metadata Key"
+        },
+        "confirmation_ref": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "parent-artifact": "#/$defs/ParentArtifactRef",
+                  "project-journal": "#/$defs/JournalEventRef"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParentArtifactRef"
+                },
+                {
+                  "$ref": "#/$defs/JournalEventRef"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmation Ref"
+        }
+      },
+      "required": [
+        "binding_id",
+        "start_byte",
+        "end_byte",
+        "number_kind",
+        "revision"
+      ],
+      "title": "CaptionBinding",
+      "type": "object"
+    },
+    "ComparisonContext": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Everything that must agree before two values may be compared.",
+      "properties": {
+        "metric_definition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Metric Definition",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "dataset": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Dataset",
+          "type": "string"
+        },
+        "split": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        },
+        "evaluation_condition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Evaluation Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_definition",
+        "unit",
+        "dataset",
+        "split",
+        "evaluation_condition"
+      ],
+      "title": "ComparisonContext",
+      "type": "object"
+    },
+    "CsvSelection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "csv_selection",
+          "default": "csv_selection",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/ParentArtifactRef"
+        },
+        "columns": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "row_id_column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Row Id Column",
+          "type": "string"
+        },
+        "row_set": {
+          "default": {
+            "kind": "all"
+          },
+          "discriminator": {
+            "mapping": {
+              "all": "#/$defs/AllRows",
+              "ids": "#/$defs/RowIds",
+              "predicate": "#/$defs/RowPredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AllRows"
+            },
+            {
+              "$ref": "#/$defs/RowIds"
+            },
+            {
+              "$ref": "#/$defs/RowPredicate"
+            }
+          ],
+          "title": "Row Set"
+        },
+        "group_by": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Group By",
+          "type": "array"
+        },
+        "missing_policy": {
+          "default": "reject",
+          "enum": [
+            "reject",
+            "exclude"
+          ],
+          "title": "Missing Policy",
+          "type": "string"
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      },
+      "required": [
+        "ref",
+        "columns",
+        "row_id_column",
+        "context",
+        "unit"
+      ],
+      "title": "CsvSelection",
+      "type": "object"
+    },
+    "DerivationRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "derivation_ref",
+          "default": "derivation_ref",
+          "title": "Kind",
+          "type": "string"
+        },
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "derivation_id"
+      ],
+      "title": "DerivationRef",
+      "type": "object"
+    },
+    "DerivationRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.numeric-request.v1",
+          "default": "arw.numeric-request.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "expr": {
+          "$ref": "#/$defs/NumericExpression"
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "evaluator_version": {
+          "default": "arw.rational.v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Evaluator Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "context"
+      ],
+      "title": "DerivationRequest",
+      "type": "object"
+    },
+    "JournalEventRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "const": "project-journal",
+          "default": "project-journal",
+          "title": "Scope",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "payload_selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Payload Selector",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "sequence",
+        "event_sha256"
+      ],
+      "title": "JournalEventRef",
+      "type": "object"
+    },
+    "LineRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "lines",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    },
+    "MarkdownSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "markdown_section",
+          "title": "Kind",
+          "type": "string"
+        },
+        "heading": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "occurrence": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Occurrence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "heading",
+        "occurrence"
+      ],
+      "title": "MarkdownSection",
+      "type": "object"
+    },
+    "NumericExpression": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.numeric-expression.v1",
+          "default": "arw.numeric-expression.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "value",
+            "diff",
+            "ratio",
+            "pct_point_diff",
+            "relative_change",
+            "count",
+            "sum",
+            "mean",
+            "median",
+            "min",
+            "max"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "csv_selection": "#/$defs/CsvSelection",
+                "derivation_ref": "#/$defs/DerivationRef",
+                "scalar_json": "#/$defs/ScalarJson"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ScalarJson"
+              },
+              {
+                "$ref": "#/$defs/CsvSelection"
+              },
+              {
+                "$ref": "#/$defs/DerivationRef"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op",
+        "args"
+      ],
+      "title": "NumericExpression",
+      "type": "object"
+    },
+    "ParentArtifactRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "const": "parent-artifact",
+          "default": "parent-artifact",
+          "title": "Scope",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        },
+        "accepting_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepting Event Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Selector",
+          "type": "string"
+        },
+        "selected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Sha256"
+        },
+        "producing_activity_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producing Activity Id"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id",
+        "run_id",
+        "run_manifest_sha256",
+        "artifact_id",
+        "accepting_event_id",
+        "accepting_event_sha256",
+        "content_sha256"
+      ],
+      "title": "ParentArtifactRef",
+      "type": "object"
+    },
+    "PdfLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.pdf-location.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pdf_page",
+            "pdf_paragraph",
+            "pdf_section",
+            "pdf_region",
+            "reference_entry"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "pdf_source_path": {
+          "minLength": 1,
+          "title": "Pdf Source Path",
+          "type": "string"
+        },
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "extraction_manifest_path": {
+          "minLength": 1,
+          "title": "Extraction Manifest Path",
+          "type": "string"
+        },
+        "extraction_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Manifest Sha256",
+          "type": "string"
+        },
+        "extractor_name": {
+          "enum": [
+            "pypdf",
+            "grobid",
+            "docling"
+          ],
+          "title": "Extractor Name",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "page",
+        "start",
+        "end",
+        "pdf_source_path",
+        "pdf_sha256",
+        "extraction_manifest_path",
+        "extraction_manifest_sha256",
+        "extractor_name",
+        "extractor_version"
+      ],
+      "title": "PdfLocation",
+      "type": "object"
+    },
+    "PlotDatum": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "datum_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Datum Id",
+          "type": "string"
+        },
+        "category": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Category",
+          "type": "string"
+        },
+        "series": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Series",
+          "type": "string"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalExact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pair_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pair Id"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DerivationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "y": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DerivationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lower": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DerivationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DerivationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "datum_id"
+      ],
+      "title": "PlotDatum",
+      "type": "object"
+    },
+    "PlotDisplay": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        },
+        "unit_suffix": {
+          "default": "",
+          "maxLength": 64,
+          "title": "Unit Suffix",
+          "type": "string"
+        },
+        "decimals": {
+          "default": 3,
+          "maximum": 18,
+          "minimum": 0,
+          "title": "Decimals",
+          "type": "integer"
+        },
+        "rounding_mode": {
+          "default": "ROUND_HALF_EVEN",
+          "enum": [
+            "ROUND_HALF_EVEN",
+            "ROUND_HALF_UP",
+            "ROUND_DOWN"
+          ],
+          "title": "Rounding Mode",
+          "type": "string"
+        }
+      },
+      "title": "PlotDisplay",
+      "type": "object"
+    },
+    "PlotEncoding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "X",
+          "type": "string"
+        },
+        "y": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Y",
+          "type": "string"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Series"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
+        },
+        "pair_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pair Id"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PlotEncoding",
+      "type": "object"
+    },
+    "PlotHeuristics": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "const": "arw.plot-heuristics.v1",
+          "default": "arw.plot-heuristics.v1",
+          "title": "Profile",
+          "type": "string"
+        },
+        "small_sample_threshold": {
+          "default": 20,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Small Sample Threshold",
+          "type": "integer"
+        },
+        "outcome_kind": {
+          "default": "continuous",
+          "enum": [
+            "continuous",
+            "category_count"
+          ],
+          "title": "Outcome Kind",
+          "type": "string"
+        },
+        "independent_units": {
+          "default": true,
+          "title": "Independent Units",
+          "type": "boolean"
+        },
+        "raw_data": {
+          "default": "available",
+          "enum": [
+            "available",
+            "raw_unavailable"
+          ],
+          "title": "Raw Data",
+          "type": "string"
+        },
+        "effective_n": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DerivationRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "exceptions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Exceptions",
+          "type": "array"
+        }
+      },
+      "title": "PlotHeuristics",
+      "type": "object"
+    },
+    "PlotLayer": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "layer_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Layer Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "observation",
+            "aggregate",
+            "interval"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "mark": {
+          "enum": [
+            "point",
+            "line",
+            "bar",
+            "strip",
+            "rule"
+          ],
+          "title": "Mark",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CsvSelection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "data": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlotDatum"
+          },
+          "maxItems": 1000,
+          "title": "Data",
+          "type": "array"
+        },
+        "encoding": {
+          "$ref": "#/$defs/PlotEncoding"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlotUncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "paired": {
+          "default": false,
+          "title": "Paired",
+          "type": "boolean"
+        },
+        "jitter_axis": {
+          "anyOf": [
+            {
+              "const": "x",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Jitter Axis"
+        },
+        "display": {
+          "$ref": "#/$defs/PlotDisplay",
+          "default": {
+            "scale": {
+              "denominator": 1,
+              "numerator": 1
+            },
+            "unit_suffix": "",
+            "decimals": 3,
+            "rounding_mode": "ROUND_HALF_EVEN"
+          }
+        }
+      },
+      "required": [
+        "layer_id",
+        "role",
+        "mark",
+        "encoding"
+      ],
+      "title": "PlotLayer",
+      "type": "object"
+    },
+    "PlotPresentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "palette": {
+          "default": "okabe_ito",
+          "enum": [
+            "okabe_ito",
+            "monochrome"
+          ],
+          "title": "Palette",
+          "type": "string"
+        },
+        "font_family": {
+          "const": "Noto Sans CJK SC, sans-serif",
+          "default": "Noto Sans CJK SC, sans-serif",
+          "title": "Font Family",
+          "type": "string"
+        },
+        "width": {
+          "default": 800,
+          "maximum": 1600,
+          "minimum": 480,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "default": 560,
+          "maximum": 1200,
+          "minimum": 360,
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "title": "PlotPresentation",
+      "type": "object"
+    },
+    "PlotScale": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "linear",
+            "log",
+            "band"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/RationalExact"
+                },
+                {
+                  "$ref": "#/$defs/RationalExact"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain"
+        },
+        "categories": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Categories",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "unit"
+      ],
+      "title": "PlotScale",
+      "type": "object"
+    },
+    "PlotScales": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/PlotScale"
+        },
+        "y": {
+          "$ref": "#/$defs/PlotScale"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PlotScales",
+      "type": "object"
+    },
+    "PlotUncertainty": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "precomputed_interval",
+          "enum": [
+            "precomputed_interval",
+            "recompute_sd",
+            "recompute_se"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "interval_type": {
+          "enum": [
+            "sd",
+            "se",
+            "ci",
+            "range",
+            "other"
+          ],
+          "title": "Interval Type",
+          "type": "string"
+        },
+        "sampling_unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Sampling Unit",
+          "type": "string"
+        },
+        "n_source": {
+          "$ref": "#/$defs/DerivationRequest"
+        },
+        "missing_policy": {
+          "enum": [
+            "reject",
+            "exclude"
+          ],
+          "title": "Missing Policy",
+          "type": "string"
+        },
+        "method": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "calculation_source": {
+          "discriminator": {
+            "mapping": {
+              "parent-artifact": "#/$defs/ParentArtifactRef",
+              "project-journal": "#/$defs/JournalEventRef"
+            },
+            "propertyName": "scope"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParentArtifactRef"
+            },
+            {
+              "$ref": "#/$defs/JournalEventRef"
+            }
+          ],
+          "title": "Calculation Source"
+        },
+        "confidence_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalExact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ddof": {
+          "anyOf": [
+            {
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ddof"
+        }
+      },
+      "required": [
+        "interval_type",
+        "sampling_unit",
+        "n_source",
+        "missing_policy",
+        "method",
+        "assumptions",
+        "calculation_source"
+      ],
+      "title": "PlotUncertainty",
+      "type": "object"
+    },
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "RowIds": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "ids",
+          "default": "ids",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10000,
+          "minItems": 1,
+          "title": "Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "title": "RowIds",
+      "type": "object"
+    },
+    "RowPredicate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "predicate",
+          "default": "predicate",
+          "title": "Kind",
+          "type": "string"
+        },
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "op",
+        "value"
+      ],
+      "title": "RowPredicate",
+      "type": "object"
+    },
+    "ScalarJson": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "scalar_json",
+          "default": "scalar_json",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "discriminator": {
+            "mapping": {
+              "parent-artifact": "#/$defs/ParentArtifactRef",
+              "project-journal": "#/$defs/JournalEventRef"
+            },
+            "propertyName": "scope"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParentArtifactRef"
+            },
+            {
+              "$ref": "#/$defs/JournalEventRef"
+            }
+          ],
+          "title": "Ref"
+        },
+        "json_pointer": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Json Pointer",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        }
+      },
+      "required": [
+        "ref",
+        "unit",
+        "context"
+      ],
+      "title": "ScalarJson",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "enum": [
+            "arw.source-locator.v1",
+            "arw.source-locator.v2"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Artifact Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Event Sha256",
+          "type": "string"
+        },
+        "producing_activity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Producing Activity Id",
+          "type": "string"
+        },
+        "location": {
+          "discriminator": {
+            "mapping": {
+              "byte_chunk": "#/$defs/ByteChunk",
+              "lines": "#/$defs/LineRange",
+              "markdown_section": "#/$defs/MarkdownSection",
+              "pdf_page": "#/$defs/PdfLocation",
+              "pdf_paragraph": "#/$defs/PdfLocation",
+              "pdf_region": "#/$defs/PdfLocation",
+              "pdf_section": "#/$defs/PdfLocation",
+              "reference_entry": "#/$defs/PdfLocation",
+              "text_page": "#/$defs/TextPage"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LineRange"
+            },
+            {
+              "$ref": "#/$defs/TextPage"
+            },
+            {
+              "$ref": "#/$defs/MarkdownSection"
+            },
+            {
+              "$ref": "#/$defs/ByteChunk"
+            },
+            {
+              "$ref": "#/$defs/PdfLocation"
+            }
+          ],
+          "title": "Location"
+        },
+        "quote_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Quote Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_artifact_id",
+        "source_sha256",
+        "source_event_id",
+        "source_event_sha256",
+        "producing_activity_id",
+        "location",
+        "quote_sha256"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "TextPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text_page",
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "page"
+      ],
+      "title": "TextPage",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.result-plot-ir.v1",
+      "default": "arw.result-plot-ir.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "const": "result_plot",
+      "default": "result_plot",
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "title": {
+      "maxLength": 180,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "author_target": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Author Target",
+      "type": "string"
+    },
+    "publication_critical": {
+      "default": false,
+      "title": "Publication Critical",
+      "type": "boolean"
+    },
+    "panel": {
+      "const": "single",
+      "default": "single",
+      "title": "Panel",
+      "type": "string"
+    },
+    "scales": {
+      "$ref": "#/$defs/PlotScales"
+    },
+    "layers": {
+      "items": {
+        "$ref": "#/$defs/PlotLayer"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Layers",
+      "type": "array"
+    },
+    "caption": {
+      "default": "",
+      "maxLength": 2400,
+      "title": "Caption",
+      "type": "string"
+    },
+    "manuscript_reference": {
+      "default": "",
+      "maxLength": 1200,
+      "title": "Manuscript Reference",
+      "type": "string"
+    },
+    "caption_bindings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CaptionBinding"
+      },
+      "maxItems": 100,
+      "title": "Caption Bindings",
+      "type": "array"
+    },
+    "figure_number": {
+      "anyOf": [
+        {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Figure Number"
+    },
+    "heuristics": {
+      "$ref": "#/$defs/PlotHeuristics",
+      "default": {
+        "profile": "arw.plot-heuristics.v1",
+        "small_sample_threshold": 20,
+        "outcome_kind": "continuous",
+        "independent_units": true,
+        "raw_data": "available",
+        "effective_n": null,
+        "exceptions": []
+      }
+    },
+    "presentation": {
+      "$ref": "#/$defs/PlotPresentation",
+      "default": {
+        "palette": "okabe_ito",
+        "font_family": "Noto Sans CJK SC, sans-serif",
+        "width": 800,
+        "height": 560
+      }
+    },
+    "renderer_hints": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision",
+    "title",
+    "author_target",
+    "scales",
+    "layers",
+    "renderer_hints",
+    "validation_policy"
+  ],
+  "title": "ResultPlotIR",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/result-plot-ir.schema.json"
+}
