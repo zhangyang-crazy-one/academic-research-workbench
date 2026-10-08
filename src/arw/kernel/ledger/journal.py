@@ -7,6 +7,7 @@ import re
 import signal
 from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -389,7 +390,23 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
     return tuple(path for _, path in discovered)
 
 
+_REPLAY_VALIDATION_SESSION: ContextVar[dict | None] = ContextVar("arw_replay_validation_session", default=None)
+
+
 def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayState:
+    # Recursive historical anchor validation shares work only within this
+    # actual top-level replay. Nothing survives to another query or writer.
+    session = _REPLAY_VALIDATION_SESSION.get()
+    if session is not None:
+        return _replay_unlocked_impl(root, stop_revision=stop_revision)
+    token = _REPLAY_VALIDATION_SESSION.set({"anchors": {}, "anchor_work": 0})
+    try:
+        return _replay_unlocked_impl(root, stop_revision=stop_revision)
+    finally:
+        _REPLAY_VALIDATION_SESSION.reset(token)
+
+
+def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> ReplayState:
     manifest, manifest_bytes = _read_manifest(root)
     segment_paths = _discover_segments(root, manifest)
     revision = 0
@@ -483,6 +500,12 @@ def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayS
                     validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:
                 raise JournalError(str(error)) from error
+        if event.event_type == "claim.attestation_anchored":
+            from arw.kernel.ledger.claim_authority import verify_anchor_journal
+            try:
+                verify_anchor_journal(root, event)
+            except (ValueError, RuntimeError, OSError) as error:
+                raise JournalError(f"claim attestation anchor is invalid: {error}") from error
         if event.event_type == "execution_provenance.artifact_bound":
             try:
                 validate_execution_binding_source(root, event, manifest)

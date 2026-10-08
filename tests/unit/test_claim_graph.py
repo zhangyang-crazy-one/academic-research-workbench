@@ -239,9 +239,8 @@ def test_declared_n_minus_one_revision_staleness_and_decision_separation(tmp_pat
     )
     assert narrative.trail(p)["choices"][0]["disposition"] == "kept"
     assert narrative.status(p)["status"] == "selected"
-    with pytest.raises(claim_graph.ClaimGraphError) as error:
-        claim_graph.graph(p, run_roots=(r,), hard_check=True)
-    assert error.value.code == "hard_check_unavailable"
+    checked = claim_graph.graph(p, run_roots=(r,), hard_check=True)
+    assert checked["hard_checks"]["status"] == "failed"
 
 
 def test_evidence_update_stales_without_semantic_revision(tmp_path):

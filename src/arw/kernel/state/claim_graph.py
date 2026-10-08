@@ -285,4 +285,6 @@ def claim_graph_schema_documents() -> dict[str, dict]:
     }
     for name, value in documents.items():
         value["$id"] = f"https://academic-research-workbench.local/schemas/v1/{name}"
+    from arw.kernel.state.claim_authentication import authentication_schema_documents
+    documents.update(authentication_schema_documents())
     return documents

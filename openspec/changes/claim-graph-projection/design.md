@@ -1,11 +1,11 @@
 ## Context
 
-Issue #94 v3 fixes graph authority to immutable parent ledgers and the existing append-only project narrative journal. Q5 selects parent-ledger anchors for future authenticated confirmations.
+Issue #94 v3 fixes graph authority to immutable parent ledgers and the existing append-only project narrative journal. Q5 selects parent-ledger anchors for authenticated confirmations.
 
 ## Goals / Non-Goals
 
 Goals: bounded deterministic snapshots, original-validator prefix replay, separate occurrence/semantic identities, multi-run evidence projection, explicit coverage and declared attestations.
-Non-goals: Phase 1c authenticated authority, hard coverage gates, automatic semantic merging, arbitrary prose/table classification. Figure adapter remains typed unsupported until result_plot verification is integrated.
+Non-goals: automatic semantic merging and arbitrary prose/table classification. Figure adapter remains typed unsupported until result_plot verification is integrated.
 
 ## Decisions
 
@@ -28,3 +28,11 @@ Historical mutated accepted bytes → original validators reject integrity rathe
 ## Migration Plan
 
 Add versioned contracts and new journal kinds only. Never alter retained event/receipt bytes; existing strategy and memory projections remain compatible.
+
+## Authenticated extension (Phase 1c)
+
+Authenticated-intent confirmations use a distinct v2 payload and remain unanchored until a `claim.attestation_anchored` parent event accepts the exact journal event hash. Its reducer verifies an authority accepted within N-1, the exact run prefix/manifest, actor/role/kind/gate/scope and parsed UTC time window. Original run replay also validates actual journal bytes, the full vector closure and semantic/evidence dependencies. Existing declared v1 bytes remain declared.
+
+Historical authorization always uses anchor event time. Current applicability compares semantic/evidence identity independently, with optional explicit evaluation time; otherwise expiry uses the latest parent event time in the fixed snapshot. Optional hard checks only cover registered claims and observed MVP occurrences, disclose the denominator, fail for unknown/unbound observations, absent evidence/check failures or missing current authentication, and leave out-of-scope science unknown.
+
+Anchor validation memoizes only validated anchor proofs within one original replay query, keyed by exact anchor event, preceding vector (including manifest/head digests) and actual validated journal event hash. Each new query discards the cache. A 128-anchor work budget prevents unbounded replay; a ten-anchor real ledger fixture proves linear verifier work and tamper detection on a later query.
