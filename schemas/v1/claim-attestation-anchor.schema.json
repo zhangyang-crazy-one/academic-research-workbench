@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "project_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_root_relative": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Project Root Relative",
+      "type": "string"
+    },
+    "journal_sequence": {
+      "minimum": 1,
+      "title": "Journal Sequence",
+      "type": "integer"
+    },
+    "journal_event_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Journal Event Sha256",
+      "type": "string"
+    },
+    "run_locations": {
+      "patternProperties": {
+        "^[a-z][a-z0-9._-]{2,95}$": {
+          "type": "string"
+        }
+      },
+      "title": "Run Locations",
+      "type": "object"
+    },
+    "attestation": {
+      "$ref": "https://academic-research-workbench.local/schemas/v1/claim-authenticated-attestation.schema.json"
+    }
+  },
+  "required": [
+    "project_id",
+    "project_root_relative",
+    "journal_sequence",
+    "journal_event_sha256",
+    "run_locations",
+    "attestation"
+  ],
+  "title": "ClaimAttestationAnchoredPayload",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/claim-attestation-anchor.schema.json"
+}

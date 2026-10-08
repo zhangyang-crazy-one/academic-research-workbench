@@ -96,7 +96,9 @@ def validate_claim_journal_event(event: dict, prior: list[dict]) -> None:
         ):
             raise ValueError("semantic claim predecessor or revision mismatch")
         return
-    attestation = DeclaredAttestation.model_validate(event["payload"])
+    from arw.kernel.state.claim_authentication import parse_attestation
+
+    attestation = parse_attestation(event["payload"])
     snapshot = attestation.snapshot_manifest
     claim = latest.get(attestation.claim_id)
     if (
@@ -120,6 +122,7 @@ class Inputs:
     journal: list[dict]
     runs: dict  # run_id -> (root, manifest, validated replay)
     cache: dict = field(default_factory=dict, compare=False)
+    held_lock_roots: tuple[Path, ...] = ()
 
 
 def _roots(root: Path, run_roots) -> tuple[Path, ...]:
@@ -140,7 +143,11 @@ def _roots(root: Path, run_roots) -> tuple[Path, ...]:
 
 
 def _read_inputs(
-    root: Path, run_roots, fixed: SnapshotManifest | None = None
+    root: Path,
+    run_roots,
+    fixed: SnapshotManifest | None = None,
+    *,
+    held_lock_roots: tuple[Path, ...] = (),
 ) -> Inputs:
     root = narrative._root(root)
     identity = narrative._identity(root)
@@ -165,7 +172,14 @@ def _read_inputs(
                     raise ClaimGraphError(
                         "mixed_snapshot", "run set differs from historical snapshot"
                     )
-                replay = replay_run_prefix(
+                from arw.kernel.ledger.journal import replay_run_under_held_lock
+
+                prefix_reader = (
+                    replay_run_under_held_lock
+                    if run in held_lock_roots
+                    else replay_run_prefix
+                )
+                replay = prefix_reader(
                     run,
                     revision=cut.revision,
                     expected_head_sha256=cut.head_sha256,
@@ -211,7 +225,7 @@ def _read_inputs(
             raise ClaimGraphError(
                 "mixed_snapshot", "fixed vector does not match validated log prefixes"
             )
-        return Inputs(root, vector, events, runs)
+        return Inputs(root, vector, events, runs, held_lock_roots=held_lock_roots)
     except ClaimGraphError:
         raise
     except (ValueError, RuntimeError, OSError, KeyError) as error:
@@ -241,6 +255,7 @@ def _context(inputs: Inputs):
         ),
         journal_sequence=inputs.manifest.journal.sequence,
         journal_head_sha256=inputs.manifest.journal.head_sha256,
+        held_lock_roots=inputs.held_lock_roots,
     )
 
 
@@ -340,6 +355,20 @@ def _closure(inputs: Inputs) -> None:
 
     for event in inputs.journal:
         walk(event["payload"], event["sequence"])
+    for item in inputs.runs.values():
+        for event in item[2].events:
+            if event.event_type == "claim.attestation_anchored":
+                source = journal_events.get(event.payload.journal_sequence)
+                if source is None:
+                    raise ClaimGraphError(
+                        "dependency_outside_prefix",
+                        "parent anchor journal confirmation is outside snapshot",
+                    )
+                if source["event_sha256"] != event.payload.journal_event_sha256:
+                    raise ClaimGraphError(
+                        "digest_mismatch",
+                        "parent anchor journal confirmation hash differs",
+                    )
 
 
 def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
@@ -440,11 +469,8 @@ def _manuscript(ref: dict, inputs: Inputs) -> tuple[bytes, dict | None, str]:
 
 
 def _extract(ref: dict, inputs: Inputs) -> tuple[list[Occurrence], dict]:
-    from arw.kernel.state.text_spans import (
-        CITATION_BINDINGS_VERSION,
-        PATTERNS,
-        sentence_spans,
-    )
+    from arw.kernel.state.text_spans import sentence_spans
+    from arw.kernel.state.text_spans import CITATION_BINDINGS_VERSION, PATTERNS
 
     raw, citation_table, provenance = _manuscript(ref, inputs)
     if len(raw) > 1_048_576:
@@ -661,7 +687,10 @@ def _receipt_checks(raw: bytes) -> list[dict]:
 
 
 def _attestations(
-    record: ClaimRegistration, dependency: str, inputs: Inputs
+    record: ClaimRegistration,
+    dependency: str,
+    inputs: Inputs,
+    evaluation_time: str | None = None,
 ) -> list[dict]:
     items = []
     for event in inputs.journal:
@@ -670,7 +699,9 @@ def _attestations(
             or event["payload"]["claim_id"] != record.claim.claim_id
         ):
             continue
-        att = DeclaredAttestation.model_validate(event["payload"])
+        from arw.kernel.state.claim_authentication import parse_attestation
+
+        att = parse_attestation(event["payload"])
         # Independently reconstruct the exact predecessor vector; declarations
         # do not assert permission and never acquire an authenticated label.
         historical = _read_inputs(
@@ -690,12 +721,26 @@ def _attestations(
             and att.evidence_dependency_sha256 == dependency
             else "stale"
         )
+        verified = {"historical_authorized": False, "current_applicability": status}
+        if att.authority.kind == "authenticated":
+            from arw.kernel.ledger.claim_authority import verify_authenticated_record
+
+            verified = verify_authenticated_record(
+                inputs,
+                historical,
+                event,
+                att,
+                claim_current=att.claim_sha256 == record.claim.sha256,
+                evidence_current=att.evidence_dependency_sha256 == dependency,
+                dependencies_valid=valid,
+                evaluation_time=evaluation_time,
+            )
+            status = verified.pop("status")
         items.append(
             {
                 "status": status,
                 "authority": att.authority.model_dump(mode="json"),
-                "historical_authorized": False,
-                "current_applicability": status,
+                **verified,
                 "claim_revision": att.claim_revision,
                 "claim_sha256": att.claim_sha256,
                 "statement": att.statement,
@@ -712,7 +757,7 @@ def _attestations(
     return items
 
 
-def _project(inputs: Inputs) -> dict:
+def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
     _closure(inputs)
     nodes = []
     edges = []
@@ -870,7 +915,7 @@ def _project(inputs: Inputs) -> dict:
     claims = []
     for claim_id, record in sorted(registrations.items()):
         evidence, dependency = _evaluate_registration(record, inputs)
-        attestations = _attestations(record, dependency, inputs)
+        attestations = _attestations(record, dependency, inputs, evaluation_time)
         for occurrence in record.occurrences:
             _check_occurrence(occurrence, inputs)
             registered_occurrences.add(occurrence.occurrence_id)
@@ -1021,7 +1066,7 @@ def _project(inputs: Inputs) -> dict:
         "advisory": advisory,
         "hard_checks": {
             "status": "unsupported",
-            "reason": "authenticated_confirmation_contract_pending",
+            "reason": "not_requested",
         },
     }
     if len(nodes) > MAX_NODES or len(canonical_json_bytes(result)) > MAX_BYTES:
@@ -1038,17 +1083,64 @@ def graph(
     as_of: SnapshotManifest | dict | None = None,
     expected_head: str | None = None,
     hard_check: bool = False,
+    evaluation_time: str | None = None,
 ) -> dict:
     """Rebuild a graph without writes; current views optimistically compare vectors."""
-    if hard_check:
-        raise ClaimGraphError(
-            "hard_check_unavailable", "hard checks require authenticated confirmations"
-        )
     fixed = SnapshotManifest.model_validate(as_of) if isinstance(as_of, dict) else as_of
     before = _read_inputs(project_root, run_roots, fixed)
     if expected_head is not None and expected_head != before.manifest.sha256:
         raise ClaimGraphError("stale", "expected snapshot manifest digest differs")
-    result = _project(before)
+    result = (
+        _project(before, evaluation_time=evaluation_time)
+        if evaluation_time is not None
+        else _project(before)
+    )
+    if hard_check:
+        failures = []
+        claims = [n for n in result["nodes"] if n["node_kind"] == "Claim"]
+        for claim in claims:
+            if not any(
+                a["historical_authorized"] and a["current_applicability"] == "current"
+                for a in claim["attestations"]
+            ):
+                failures.append(
+                    {
+                        "code": "authenticated_confirmation_missing_or_stale",
+                        "claim_id": claim["claim_id"],
+                        "revision": claim["revision"],
+                    }
+                )
+            if not claim["integrity"] or any(
+                i["integrity"] != "resolved" for i in claim["integrity"]
+            ):
+                failures.append(
+                    {
+                        "code": "evidence_integrity_unresolved",
+                        "claim_id": claim["claim_id"],
+                    }
+                )
+            if any(
+                check["status"] == "failed"
+                for group in claim["checks"]
+                for check in group["results"]
+            ):
+                failures.append(
+                    {"code": "specified_check_failed", "claim_id": claim["claim_id"]}
+                )
+        coverage = result["coverage"]
+        if (
+            coverage["unknown_occurrence_count"]
+            or coverage["unknown_citation_location_count"]
+        ):
+            failures.append({"code": "observed_occurrences_unbound"})
+        if not claims or not coverage["observed_manuscript_count"]:
+            failures.append({"code": "observation_scope_empty"})
+        result["hard_checks"] = {
+            "status": "failed" if failures else "passed",
+            "scope": "registered_claims_and_observed_mvp_occurrences_only",
+            "out_of_scope": "not_evaluated",
+            "failures": failures,
+        }
     if fixed is None:
         after = _read_inputs(project_root, run_roots)
         if after.manifest != before.manifest:

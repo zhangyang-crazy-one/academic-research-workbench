@@ -31,6 +31,7 @@ from arw.kernel.state.models import (
     AttemptPreparedPayload,
     AttemptStartedPayload,
     CanonicalEvent,
+    ClaimAttestationAnchoredPayload,
     ExecutionModeSelectedPayload,
     ExperimentProvenanceAcceptedPayload,
     ExperimentContractAcceptedPayload,
@@ -262,6 +263,60 @@ class RuntimeState(StrictModel):
 
 def _parse_utc(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+
+
+def validate_claim_authority_envelope(authority_state: HumanAuthorityState, attestation, occurred_at: str) -> None:
+    """Original reducer authority semantics, with the required lower bound.
+
+    The graph explicitly reuses this function, rather than trusting a caller
+    label or a projection of the human decision history.
+    """
+    authority = authority_state.authority
+    requested = attestation.authority
+    if authority_state.authority_sha256 != requested.human_authority_sha256:
+        raise ReducerError("claim authority digest mismatch")
+    if authority.authenticated_actor_id != requested.accountable_actor_id:
+        raise ReducerError("claim authority actor mismatch")
+    if authority.accountable_role != requested.accountable_role:
+        raise ReducerError("claim authority role mismatch")
+    if "claim_attest" not in authority.allowed_decision_kinds:
+        raise ReducerError("claim authority kind mismatch")
+    if requested.gate_id not in authority.allowed_gate_ids:
+        raise ReducerError("claim authority gate mismatch")
+    if attestation.scope != requested.scope or requested.scope not in authority.allowed_scopes:
+        raise ReducerError("claim authority scope mismatch")
+    # Parse UTC instants; lexical ordering is wrong for fractional seconds.
+    instant = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+    lower = datetime.fromisoformat(authority.authenticated_at.replace("Z", "+00:00"))
+    upper = datetime.fromisoformat(authority.expires_at.replace("Z", "+00:00"))
+    if instant < lower:
+        raise ReducerError("claim anchor precedes authentication")
+    if instant > upper:
+        raise ReducerError("claim authority expired at anchor time")
+
+
+def validate_claim_anchor_authority(prior_events, authority_states, event) -> None:
+    payload = event.payload
+    att = payload.attestation
+    requested = att.authority
+    prefix = next((r for r in att.snapshot_manifest.runs if r.run_id == requested.authority_run_id), None)
+    if prefix is None or requested.authority_run_id != event.run_id:
+        raise ReducerError("claim authority run is outside the N-1 snapshot")
+    cut = next((e for e in prior_events if e.resulting_revision == prefix.revision), None)
+    first = prior_events[0] if prior_events else None
+    if cut is None or cut.event_sha256 != prefix.head_sha256 or first.payload.manifest_sha256 != prefix.run_manifest_sha256:
+        raise ReducerError("claim N-1 run prefix digest mismatch")
+    source = next((e for e in prior_events if e.event_id == requested.authority_event_id), None)
+    if source is None or source.resulting_revision > prefix.revision:
+        raise ReducerError("claim authority accepted outside N-1 prefix")
+    if (source.event_type != "human_authority.accepted"
+        or source.event_sha256 != requested.authority_event_sha256
+        or source.payload.authority_sha256 != requested.human_authority_sha256):
+        raise ReducerError("claim authority event identity or digest mismatch")
+    state = next((a for a in authority_states if a.source_event_id == source.event_id), None)
+    if state is None:
+        raise ReducerError("claim authority is absent from reducer state")
+    validate_claim_authority_envelope(state, att, event.occurred_at)
 
 
 def _assignment_state(record: object, digest: str, *, status: str = "prepared") -> AssignmentState:
@@ -881,6 +936,12 @@ def reduce_events(
             authority_ids.add(authority.authority_id)  # type: ignore[attr-defined]
             authority_sha256s.add(payload.authority_sha256)
             accepted_evidence_sha256.append(payload.authority_sha256)
+        elif event.event_type == "claim.attestation_anchored":
+            assert isinstance(payload, ClaimAttestationAnchoredPayload)
+            phase4_event_seen = True
+            if any(e.event_type == "claim.attestation_anchored" and e.payload.journal_event_sha256 == payload.journal_event_sha256 for e in events[:event_index]):
+                raise ReducerError("claim attestation journal event is already anchored")
+            validate_claim_anchor_authority(events[:event_index], human_authorities, event)
         elif event.event_type == "human_decision.recorded":
             assert isinstance(payload, HumanDecisionRecordedPayload)
             phase4_event_seen = True

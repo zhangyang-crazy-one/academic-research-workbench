@@ -1,0 +1,8 @@
+{
+  "migration": 6,
+  "event_schema_version": "1.6.0",
+  "historical_action": "retain bytes; add reader variants",
+  "event_types": [
+    "claim.attestation_anchored"
+  ]
+}
