@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/usr/bin/python3",
+    "-m",
+    "arw_paper_method.server",
+    "qualify",
+    "--receipt",
+    "extensions/paper-method/local-qualification-receipt.json"
+  ],
+  "cwd": "/home/zhangyangrui/my_programes/arw-issue-workspaces/20261008/issue-80",
+  "ended_at": "2026-10-08T03:32:28Z",
+  "environment": {
+    "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
+    "ARW_OFFLINE_EVIDENCE_ROOT": "/home/zhangyangrui/my_programes/arw-issue-workspaces/20261008/issue-80/build/paper-method-offline-final",
+    "ARW_OFFLINE_EXEC_ACTIVE": "1"
+  },
+  "network_denial_mechanism": "bwrap-unshare-net",
+  "started_at": "2026-10-08T03:32:28Z",
+  "strace": "/home/zhangyangrui/my_programes/academic-research-workbench/build/tools/strace/root/usr/bin/strace"
+}

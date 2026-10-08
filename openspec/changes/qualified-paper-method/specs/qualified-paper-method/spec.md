@@ -36,3 +36,10 @@ parent ledger event, and the base installation SHALL NOT enable it.
   invokes the tool over old and modern MCP stdio frames
 - **THEN** the golden matching executes with digests, a plan has no execution
   observation, and an invalid ranking returns a typed failure.
+
+#### Scenario: Portable opt-in installation
+- **WHEN** an operator explicitly creates or extracts the extension package
+  and moves it away from the source checkout
+- **THEN** its separate launcher verifies the pinned source through commit/tree
+  witnesses, runs qualification and the golden call using only the standard
+  library, and leaves the base wheel and default MCP configuration untouched.
