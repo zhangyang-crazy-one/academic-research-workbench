@@ -373,7 +373,7 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
     return tuple(path for _, path in discovered)
 
 
-def _replay_unlocked(root: Path) -> ReplayState:
+def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayState:
     manifest, manifest_bytes = _read_manifest(root)
     segment_paths = _discover_segments(root, manifest)
     revision = 0
@@ -551,6 +551,23 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 accept_event(event, segment_events)
                 offset = line_end
                 accepted_byte_end = offset
+                if stop_revision is not None and revision == stop_revision:
+                    # Historical readers validate exactly this prefix using the
+                    # same reducer/manifests, without inspecting a later tail.
+                    segments.append(SegmentScan(
+                        index=segment_index, name=segment_path.name,
+                        relative_path=segment_path.relative_to(root).as_posix(),
+                        byte_count=offset, sha256=sha256_hex(segment_bytes[:offset]),
+                        accepted_byte_end=offset, events=tuple(segment_events),
+                    ))
+                    return ReplayState(
+                        run_id=manifest.run_id, revision=revision,
+                        last_event_sha256=previous_hash, event_count=len(events),
+                        event_ids=frozenset(event_ids), command_ids=frozenset(command_ids),
+                        workflow_definition_id=manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
+                        events=tuple(events), segments=tuple(segments),
+                        journal_layout=manifest.journal_layout, validated=True,
+                    )
                 continue
 
             if not events:
@@ -648,6 +665,34 @@ def replay_run(run_root: Path, *, lock_timeout: float = 0.2) -> ReplayState:
             # boundary; a lock fault must not be observable only on mutation.
             inject("phase7.lock-acquire")
             return _replay_unlocked(root)
+    except portalocker.exceptions.LockException as error:
+        raise JournalError("canonical writer lock is held") from error
+
+
+def replay_run_prefix(
+    run_root: Path, *, revision: int, expected_head_sha256: str,
+    expected_manifest_sha256: str | None = None, lock_timeout: float = 0.2,
+) -> ReplayState:
+    """Replay a fixed, hash-bound prefix through the original validators.
+
+    Later events and tails cannot change this view. The manifest remains
+    immutable and its initialization hash is checked by ordinary replay.
+    No read creates a directory, lock file or canonical record.
+    """
+    if type(revision) is not int or revision < 1:
+        raise JournalError("historical revision must be positive")
+    root = require_existing_run_root(run_root)
+    try:
+        with _read_lock(root, lock_timeout):
+            _, raw = _read_manifest(root)
+            if expected_manifest_sha256 is not None and sha256_hex(raw) != expected_manifest_sha256:
+                raise JournalError("historical run manifest digest mismatch")
+            replayed = _replay_unlocked(root, stop_revision=revision)
+            if replayed.recovery_health != "healthy" or replayed.revision != revision:
+                raise JournalError("historical prefix is missing or corrupt")
+            if replayed.last_event_sha256 != expected_head_sha256:
+                raise JournalError("historical prefix head digest mismatch")
+            return replayed
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
 
