@@ -464,7 +464,7 @@ jobs:
         if: >-
           always() && (github.event_name == 'schedule' ||
           (github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers))
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v7
         with:
           name: ci-native-sanitized-${{ github.run_id }}
           path: build/evidence/ci-native-sanitized
