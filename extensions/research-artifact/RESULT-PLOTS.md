@@ -119,6 +119,15 @@ Prose own-result references must use the same shared derivation IDs.
 
 ## Determinism, safety and actual review
 
+The public CLI accepts `artifact render` and `artifact qualify` with a
+`result_plot` input. Repeat `--source-run-root` for other explicitly included
+runs and supply `--project-root` for journal references. `artifact source-bridge`
+and `artifact caption-targets` produce read-only proposals from the same input;
+accepting a bridge still uses the existing explicit `artifact-accept` command.
+`artifact qualify --hard-caption-checks --project-root PROJECT` wires the
+canonical parent-anchor authority verifier. A caller's `authenticated` label
+cannot enable or satisfy that check.
+
 SVG uses only inert XML text and closed geometry, a fixed Okabe–Ito palette or
 monochrome, no images/scripts/event handlers/hrefs/style URLs/imports. XML and
 TeX metacharacters in labels remain text. The source IR budget is 1 MiB, each

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Literal, Self
+
 from pydantic import Field, model_validator
 
 from arw.kernel.state.claim_graph import DeclaredAttestation

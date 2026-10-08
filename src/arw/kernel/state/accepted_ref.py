@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import Field, TypeAdapter, field_validator
 
 from arw.kernel.state.models import EventId, RunId, Sha256, StableRuntimeId, StrictModel
+from arw.kernel.state.provenance import SourceLocator
 
 
 def validate_pointer(value: str) -> str:
@@ -47,7 +48,6 @@ class JournalEventRef(StrictModel):
     _pointer = field_validator("payload_selector")(validate_pointer)
 
 
-from arw.kernel.state.provenance import SourceLocator
 
 ParentArtifactRef.model_rebuild()
 AcceptedRef = Annotated[

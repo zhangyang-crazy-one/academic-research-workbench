@@ -91,3 +91,16 @@ def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["accepted"] is True
     assert any(c["code"] == "caption_binding_matches" and c["status"] == "PASS" for c in result["receipt"]["checks"])
+
+
+def test_public_claims_hard_failure_is_nonzero_while_advisory_remains_readonly(tmp_path, capsys):
+    from tests.unit.test_claim_graph import setup
+
+    project, run = setup(tmp_path)
+    args = ["claims", "graph", "--project-root", str(project), "--run-root", str(run), "--json"]
+    assert main(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "projected"
+    before = {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()}
+    assert main([*args, "--hard-check"]) == 65
+    assert json.loads(capsys.readouterr().out)["hard_checks"]["status"] == "failed"
+    assert {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()} == before

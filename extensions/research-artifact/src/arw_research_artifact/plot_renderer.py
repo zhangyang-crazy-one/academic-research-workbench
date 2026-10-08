@@ -89,7 +89,7 @@ class PlotRenderer:
                 for v in compiled.plot_values
                 if (v.channel == "x") == (channel == "x")
             ]
-            if channel == "y" and any(l.mark == "bar" for l in ir.layers):
+            if channel == "y" and any(layer.mark == "bar" for layer in ir.layers):
                 vals.append(Fraction(0))
             if not vals:
                 raise PlotFault("empty_numeric_domain")

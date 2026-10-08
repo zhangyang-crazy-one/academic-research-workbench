@@ -129,11 +129,11 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
         if acceptance_root is None:
             raise PlotFault("bridge_target_root_required")
         verify_source_bridge(ir, acceptance_root, resolution_context)
-    contexts = [l.source.context for l in ir.layers if l.source]
+    contexts = [layer.source.context for layer in ir.layers if layer.source]
     contexts += [
         r.context
-        for l in ir.layers
-        for d in l.data
+        for layer in ir.layers
+        for d in layer.data
         for r in (d.y, d.lower, d.upper)
         if r
     ]
@@ -513,7 +513,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
             and h.independent_units
             and h.raw_data == "available"
             and n.numerator <= h.small_sample_threshold
-            and not any(l.role == "observation" for l in ir.layers)
+            and not any(layer.role == "observation" for layer in ir.layers)
         ):
             checks.append(
                 _check(

@@ -4,28 +4,29 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from arw_research_artifact.plot_authority import CanonicalCaptionAttestationVerifier
+from arw_research_artifact.plot_policy import (
+    caption_checks,
+    caption_target,
+    compile_plot,
+)
+from arw_research_artifact.service import ResearchArtifactService
+
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.ledger import claim_graph, narrative
 from arw.kernel.ledger.claim_authority import attest_authenticated
 from arw.kernel.state.accepted_ref import JournalEventRef
 from arw.kernel.state.claim_graph import ClaimRegistration, Occurrence
 from arw.kernel.state.result_plot import PlotDisplay
-from arw_research_artifact.plot_authority import CanonicalCaptionAttestationVerifier
-from arw_research_artifact.plot_policy import (
-    caption_target,
-    compile_plot,
-    caption_checks,
-)
-from arw_research_artifact.service import ResearchArtifactService
 from tests.integration.test_claim_plot_bindings import accept_file
-from tests.integration.test_result_plots import (
-    result_fixture,
-    plot,
-    aggregate,
-    binding,
-    attach_bridge,
-)
 from tests.integration.test_research_artifacts import request as parent_request
+from tests.integration.test_result_plots import (
+    aggregate,
+    attach_bridge,
+    binding,
+    plot,
+    result_fixture,
+)
 from tests.unit.test_claim_authentication import authority, request
 from tests.unit.test_narrative import plan
 
@@ -103,7 +104,7 @@ def prepare(tmp_path):
 def test_real_parent_authenticated_caption_target_is_stable_without_self_reference(
     tmp_path,
 ):
-    project, run, context, ir, target_sha = prepare(tmp_path)
+    _project, run, context, ir, target_sha = prepare(tmp_path)
     compiled = compile_plot(ir, context)
     bind = ir.caption_bindings[0]
     assert (
@@ -159,7 +160,7 @@ def test_real_parent_authenticated_caption_target_is_stable_without_self_referen
 
 
 def test_caption_wrong_or_unanchored_confirmation_remains_auth_missing(tmp_path):
-    project, run, context, ir, target_sha = prepare(tmp_path)
+    project, run, context, ir, _target_sha = prepare(tmp_path)
     compiled = compile_plot(ir, context)
     binding = ir.caption_bindings[0]
     verifier = CanonicalCaptionAttestationVerifier()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from arw_research_artifact.service import ResearchArtifactService, verify_plot_receipt
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.execution.runtime import RuntimeCommandService
@@ -10,9 +11,8 @@ from arw.kernel.ledger.journal import replay_run
 from arw.kernel.state.claim_graph import ClaimRegistration, Occurrence
 from arw.kernel.state.models import ArtifactAcceptanceRequest
 from arw.kernel.state.numeric_core import NumericPresentation
-from arw_research_artifact.service import ResearchArtifactService, verify_plot_receipt
-from tests.integration.test_result_plots import result_fixture, plot, aggregate
 from tests.integration.test_research_artifacts import request as parent_request
+from tests.integration.test_result_plots import aggregate, plot, result_fixture
 from tests.unit.test_narrative import plan
 
 
@@ -304,9 +304,10 @@ def test_generic_parent_acceptance_cannot_make_a_forged_derivation_exact(tmp_pat
 
 def test_public_claims_handler_composes_the_real_figure_verifier(tmp_path):
     from argparse import ArgumentParser
+
     from arw.cli_claims import configure, handle
 
-    project, run, view, figure, values, number = scene(tmp_path)
+    project, run, _view, figure, _values, _number = scene(tmp_path)
     parser = ArgumentParser()
     configure(parser.add_subparsers(dest="command", required=True))
     args = parser.parse_args(

@@ -12,7 +12,8 @@ def configure(subparsers):
         action = actions.add_parser(name)
         action.add_argument("--project-root", required=True, type=Path)
         action.add_argument("--run-root", action="append", type=Path, default=[])
-        action.add_argument("--expected-head", required=name not in {"graph", "anchor"})
+        if name != "anchor":
+            action.add_argument("--expected-head", required=name != "graph")
         if name == "graph":
             action.add_argument(
                 "--as-of",
@@ -146,6 +147,7 @@ def handle(args):
 def _figure_verifier():
     """Optional renderer wiring stays at the composition boundary."""
     import os
+
     from arw.composition import default_router
     from arw.kernel.capabilities import CapabilityUnavailable
 

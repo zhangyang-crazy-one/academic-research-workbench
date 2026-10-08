@@ -261,7 +261,7 @@ def attest_authenticated(
 
 def applicability_time(inputs: Inputs, evaluation_time: str | None):
     if evaluation_time is not None:
-        value = datetime.fromisoformat(evaluation_time.replace("Z", "+00:00"))
+        value = datetime.fromisoformat(evaluation_time)
         if value.utcoffset() is None or value.utcoffset().total_seconds() != 0:
             raise ClaimGraphError(
                 "invalid_evaluation_time", "evaluation instant must be UTC"
@@ -271,7 +271,7 @@ def applicability_time(inputs: Inputs, evaluation_time: str | None):
     if not events:
         return None, "no_parent_events_in_snapshot"
     value = max(
-        datetime.fromisoformat(e.occurred_at.replace("Z", "+00:00")) for e in events
+        datetime.fromisoformat(e.occurred_at) for e in events
     )
     return value, "latest_parent_event_in_snapshot"
 
@@ -320,7 +320,7 @@ def verify_authenticated_record(
             "reason": "anchor_binding_mismatch",
         }
     instant, source = applicability_time(inputs, evaluation_time)
-    expiry = datetime.fromisoformat(state.authority.expires_at.replace("Z", "+00:00"))
+    expiry = datetime.fromisoformat(state.authority.expires_at)
     applicability = (
         "stale_revision"
         if not claim_current
@@ -370,8 +370,8 @@ def verify_caption_confirmation(context, ref, target_sha256: str) -> str | None:
     This is renderer-independent. The extension builds the closed semantic
     target; confirmation handles never become part of that target's identity.
     """
-    from arw.kernel.state.accepted_ref import JournalEventRef
     from arw.kernel.ledger.claim_graph import _attestations
+    from arw.kernel.state.accepted_ref import JournalEventRef
 
     if (
         not isinstance(ref, JournalEventRef)

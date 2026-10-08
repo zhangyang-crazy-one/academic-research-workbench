@@ -262,27 +262,27 @@ class ResultPlotIR(StrictModel):
 
     @model_validator(mode="after")
     def contract(self):
-        if len({l.layer_id for l in self.layers}) != len(self.layers):
+        if len({layer.layer_id for layer in self.layers}) != len(self.layers):
             raise ValueError("duplicate_layer_id")
         if self.supersedes and self.revision < 2:
             raise ValueError("supersession_requires_new_revision")
         if self.supersedes == self.artifact_id:
             raise ValueError("artifact_cannot_supersede_self")
         if self.heuristics.raw_data == "raw_unavailable" and any(
-            l.role == "observation" for l in self.layers
+            layer.role == "observation" for layer in self.layers
         ):
             raise ValueError("raw_unavailable_cannot_have_observations")
         if self.scales.x.type == "band" and any(
-            l.x_source is not None for l in self.layers
+            layer.x_source is not None for layer in self.layers
         ):
             raise ValueError("band_x_cannot_have_x_source")
         if self.scales.x.type == "band" and any(
-            d.x is not None for l in self.layers for d in l.data
+            d.x is not None for layer in self.layers for d in layer.data
         ):
             raise ValueError("band_x_cannot_have_numeric_derivation")
-        if any(l.mark == "strip" for l in self.layers) and self.scales.x.type != "band":
+        if any(layer.mark == "strip" for layer in self.layers) and self.scales.x.type != "band":
             raise ValueError("jitter_requires_band_display_axis")
-        if any(l.mark == "bar" for l in self.layers) and self.scales.y.type == "log":
+        if any(layer.mark == "bar" for layer in self.layers) and self.scales.y.type == "log":
             raise ValueError("log_bar_baseline_unsupported")
         if self.publication_critical and (
             not self.caption

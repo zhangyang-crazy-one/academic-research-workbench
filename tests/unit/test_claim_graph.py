@@ -12,8 +12,8 @@ from arw.kernel.ledger import claim_graph, narrative
 from arw.kernel.ledger.journal import initialize_run, replay_run
 from arw.kernel.state.claim_graph import ClaimRegistration, SnapshotManifest
 from arw.kernel.state.models import InitRunRequest
-from tests.unit.test_narrative import project, plan
-from tests.integration.test_precise_source_locators import SOURCE, seed, accept
+from tests.integration.test_precise_source_locators import SOURCE, accept, seed
+from tests.unit.test_narrative import plan, project
 
 TEXT = "研究 3.1% [@a] [@b]。研究 3.1% [@a] [@b]。 Novelty statement.\nFigure 1. Accuracy 92%."
 
@@ -422,7 +422,7 @@ def test_verified_metadata_and_contradiction_remain_independent(tmp_path):
 
 
 def test_retained_v2_spans_are_reused_and_legacy_locations_stay_unknown(tmp_path):
-    from arw_writing.preservation import verify, resolve_citation_bindings
+    from arw_writing.preservation import resolve_citation_bindings, verify
 
     p, r = setup(tmp_path)
     # A canonical accepted receipt container retains the exact #86 table. Its
@@ -504,8 +504,9 @@ def test_journal_tamper_and_new_torn_tail_are_separated(tmp_path):
 
 
 def test_registered_span_tampering_and_author_assertion_fail_before_write(tmp_path):
-    from arw.cli_claims import configure, handle
     from argparse import ArgumentParser
+
+    from arw.cli_claims import configure, handle
 
     p, r = setup(tmp_path)
     view = claim_graph.graph(p, run_roots=(r,))
@@ -548,9 +549,11 @@ def test_registered_span_tampering_and_author_assertion_fail_before_write(tmp_pa
 
 def test_schema_strictness_and_checked_in_contracts(tmp_path):
     import json
+
     import jsonschema
-    from arw.kernel.state.claim_graph import claim_graph_schema_documents
     from pydantic import ValidationError
+
+    from arw.kernel.state.claim_graph import claim_graph_schema_documents
 
     p, r = setup(tmp_path)
     view = claim_graph.graph(p, run_roots=(r,))

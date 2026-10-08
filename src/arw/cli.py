@@ -691,7 +691,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             result = handle(args)
             _write_json(result)
-            return 65 if result.get("status") in {"FAIL", "rejected", "undefined", "unsupported", "out_of_domain", "context_mismatch"} else 0
+            blocked = result.get("status") in {"FAIL", "rejected", "pending_anchor", "undefined", "unsupported", "out_of_domain", "context_mismatch"}
+            if getattr(args, "hard_check", False):
+                blocked = blocked or result.get("hard_checks", {}).get("status") != "passed"
+            return 65 if blocked else 0
         except (ValueError, TypeError, RuntimeError, OSError) as error:
             _write_json({"status": "error", "code": getattr(error, "code", "claims_invalid" if args.command == "claims" else "numeric_invalid"), "message": str(error)[:256]})
             return 65

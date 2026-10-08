@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-
 import pytest
 
 from arw.kernel.core.canonical import canonical_json_bytes
 from arw.kernel.execution.runtime import RuntimeCommandService
 from arw.kernel.ledger import claim_graph, narrative
-from arw.kernel.ledger.claim_authority import attest_authenticated, anchor_attestation
+from arw.kernel.ledger.claim_authority import anchor_attestation, attest_authenticated
 from arw.kernel.ledger.journal import replay_run
 from arw.kernel.ledger.reducer import ReducerError, validate_claim_authority_envelope
 from arw.kernel.state.claim_authentication import (
-    AuthenticatedAuthority,
     AuthenticatedAttestation,
+    AuthenticatedAuthority,
 )
 from arw.kernel.state.models import HumanAuthorityAcceptedPayload, RuntimeCommandRequest
 from arw.kernel.state.orchestration_models import HumanAuthority
-from tests.unit.test_claim_graph import setup, registration, record, current_claim
+from tests.unit.test_claim_graph import current_claim, record, registration, setup
 
 
 def request(run, number=202, at="2026-09-08T00:04:00Z"):
@@ -99,7 +98,7 @@ def confirm(project, run, ref, at="2026-09-08T00:04:00Z"):
 
 
 def test_real_parent_anchor_authenticates_and_preserves_historical_expiry(tmp_path):
-    project, run, value, ref = prepared(tmp_path)
+    project, run, _value, ref = prepared(tmp_path)
     before, out = confirm(project, run, ref)
     assert out["status"] == "authenticated"
     journal = narrative._read(project)[0][-1]
@@ -189,7 +188,7 @@ def test_auth_time_window_refuses_before_journal_write(tmp_path, at, reason):
 
 def test_declared_does_not_upgrade_and_authenticated_intent_requires_anchor(tmp_path):
     project, run, _, ref = prepared(tmp_path)
-    before, out = confirm(project, run, ref)
+    _before, out = confirm(project, run, ref)
     path = run / "journal/segments/00000001.jsonl"
     events = path.read_bytes().splitlines(keepends=True)
     path.write_bytes(b"".join(events[:-1]))
@@ -263,7 +262,7 @@ def test_fractional_time_comparison_uses_utc_instants(tmp_path):
     from arw.kernel.ledger.claim_authority import _authority_state
 
     project, run, _, ref = prepared(tmp_path)
-    before, out = confirm(project, run, ref)
+    _before, _out = confirm(project, run, ref)
     att = AuthenticatedAttestation.model_validate(
         narrative._read(project)[0][-1]["payload"]
     )

@@ -27,3 +27,9 @@ Own-result numeric occurrences carry an explicit shared `derivation_id` and `pre
 One byte occurrence can express multiple explicit claims. Numeric bindings and their verdicts are retained per claim revision so a later registration cannot overwrite a prior proposition's failed binding. Hard reports carry `arw.claim-hard-coverage.v1`, observation/registration denominators and an explicit unknown out-of-scope count. They do not certify all scientific statements in the manuscript.
 
 Caption authentication uses the renderer's frozen `caption_target` semantic payload and `scope = "caption:" + sha256(canonical target)`. It excludes confirmation handles and caller confirmation labels. The extension's `CanonicalCaptionAttestationVerifier` proves an exact journal v2 confirmation, its accepted parent anchor, unchanged claim/evidence and matching target digest. The current complete IR digest is independently verified and returned; it is not required inside a journal event whose hash would change that IR. Declared records and caller-supplied `authenticated` labels remain insufficient.
+
+Public commands exit with status 65 when a requested hard coverage check fails
+or an authenticated intent is still waiting for its parent anchor. The complete
+JSON report remains available; default advisory projection succeeds without
+changing canonical files. Disclosure generation and ReviewConcern remain the
+independent later phase specified by issue #94.
