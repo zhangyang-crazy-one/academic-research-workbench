@@ -2,7 +2,8 @@
 
 Rules:
 - R1: nothing under arw.kernel/ may import arw.cli (the CLI is the top layer).
-- R2: the kernel subpackage import graph must remain acyclic.
+- R2: kernel subpackage edges must match the explicitly reviewed ratchet,
+  including documented existing and accepted lazy dependency cycles.
 
 The test walks AST imports so it runs fast and needs no third-party tooling.
 """
@@ -121,8 +122,10 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
     v1's kernel has known cycles (state <-> ledger via status->reducer and
     journal->models; artifacts -> execution via experiment_provenance ->
     runtime). The accepted policy -> ledger edge lets citation checks publish
-    immutable receipts and read parent-accepted manifests. Ledger has no path
-    back to policy. The ratchet fails on ANY edge-set change, forcing review
+    immutable receipts and read parent-accepted manifests. Contract freezing
+    adds reviewed lazy execution -> artifacts and ledger -> artifacts edges
+    for locked succession and immutable-manifest replay checks; these expand
+    static cycles and are not a claim of acyclicity. The ratchet fails on ANY edge-set change, forcing review
     of new coupling and decoupling alike.
     """
     import json as _json
@@ -136,6 +139,36 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
     )
     # Keep the json import honest even if the golden read is refactored.
     assert _json.dumps(_kernel_edges(), sort_keys=True)
+
+
+@pytest.mark.parametrize("artifact_first", [False, True])
+def test_contract_freeze_modules_import_in_fresh_interpreter(artifact_first):
+    """Reviewed lazy edges must not cause an import-time cycle in either order."""
+    import os
+    import subprocess
+    import sys
+
+    modules = [
+        "arw.kernel.ledger.manifests",
+        "arw.kernel.execution.runtime",
+        "arw.kernel.artifacts.experiment_acceptance",
+        "arw.kernel.artifacts.experiment_provenance",
+    ]
+    if artifact_first:
+        modules.reverse()
+    root = KERNEL_ROOT.parents[2]
+    environment = {**os.environ, "PYTHONPATH": str(root / "src")}
+    result = subprocess.run(
+        [sys.executable, "-c", "import importlib; " +
+         f"[importlib.import_module(name) for name in {modules!r}]"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_kernel_and_cli_never_import_writing_engine():

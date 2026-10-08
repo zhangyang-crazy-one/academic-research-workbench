@@ -25,3 +25,20 @@ The parent runtime already appends `experiment.provenance.accepted` under a writ
 ## Migration Plan
 
 Add the new event type to the existing versioned reader without rewriting old journals. Existing contracts and receipts remain loadable; only newly accepted contracts have journal admission evidence.
+
+## Reviewed kernel dependency edges
+
+The contract-freeze implementation adds exactly two reviewed subpackage edges:
+`execution -> artifacts` for validating contract succession under the parent
+writer lock, and `ledger -> artifacts` for replay validation of accepted
+immutable contract and provenance manifests. Both imports occur inside the
+operation that needs them, after module initialization.
+
+These edges expand the existing static dependency cycles: artifacts already
+imports execution and ledger, so the new reverse edges are not an acyclic
+architecture. This change explicitly accepts that narrow coupling to retain
+one contract/provenance validation implementation and the existing evidence
+constraints. Fresh-interpreter import-order checks and freeze/replay regression
+tests cover import-time safety; they do not establish static acyclicity.
+Separating shared validators into a lower layer remains structural technical
+debt, outside this focused change. The ratchet updates only these two edges.

@@ -8,3 +8,15 @@
 - All imports used for schema generation resolved to the issue-74 worktree. The large public narrative-fit schema is stored as one minified JSON line, preserving its established format; its semantic delta only adds the new canonical event type and payload.
 
 Three public external CPU pilot studies remain deferred and unchecked. Synthetic local fixtures verify runtime mechanics but do not constitute scientific or public empirical validation.
+
+## Joint integration regression follow-up
+
+- Explicitly reviewed and accepted only the new lazy `execution -> artifacts`
+  and `ledger -> artifacts` edges; their expanded static cycles are described in
+  `design.md`, without claiming an acyclic graph.
+- Fresh-interpreter import orders, the dependency ratchet, numeric acceptance,
+  contract freeze/replay, and experiment provenance regressions:
+  `tests/compat/test_kernel_dependency_direction.py`,
+  `tests/unit/test_experiment_acceptance.py`,
+  `tests/unit/test_experiment_provenance.py`, and
+  `tests/integration/test_experiment_provenance.py`: **116 passed**.
