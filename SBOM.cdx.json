@@ -90,7 +90,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9b55e654272d3c5ff8f45aac2e30c4fb25f8585af1c07b01c7a5f36fe63d0eb0"
+          "content": "51ea4dc411c32527dba55b7d7030e5841fcd347fcf5fc3579ae893641a07ce99"
         }
       ],
       "name": "schemas/v1/mcp-read-result.schema.json",
@@ -174,7 +174,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "951533d185b8994b7d88d35181fd7edc161cbdb46423e64d0c2053ba92773330"
+          "content": "d8040c892df353daeb870875d5a65e8ab41203e43c0c823e31bfeb0db9edd4d0"
         }
       ],
       "name": "vendor/mcp-manifest.json",
@@ -2443,11 +2443,11 @@
       "version": "1"
     },
     {
-      "bom-ref": "patch:6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f",
+      "bom-ref": "patch:147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
+          "content": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
         }
       ],
       "name": "vendor/patches/file-base/0002-phase1-confined-read.patch",

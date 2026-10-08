@@ -138,7 +138,11 @@ def test_shared_daemon_rejects_other_root_in_both_start_orders(
         )
         assert "read_file" not in other_tools
         assert other_payload["status"] == "denied"
-        assert other_payload["reason"] == "root_session_mismatch"
+        # Another root ID keeps the public root_denied contract; the same ID
+        # naming a different installed root is the session mismatch.
+        assert other_payload["reason"] == (
+            "root_session_mismatch" if same_id else "root_denied"
+        )
         assert "synthetic-" not in json.dumps(other_payload)
     finally:
         stopped = subprocess.run(
@@ -190,7 +194,11 @@ def test_unconfigured_daemon_or_session_cannot_use_process_fallback(
         tools, _, payload = _probe(binary, tmp_path, client_environment, _request("B"))
         assert "read_file" not in tools
         assert payload["status"] == "denied"
-        assert payload["reason"] == "root_session_mismatch"
+        # A daemon without the capability denies the root itself; a session
+        # without an installed root mismatches the daemon's capability.
+        assert payload["reason"] == (
+            "root_session_mismatch" if daemon_has_root else "root_denied"
+        )
         assert "synthetic-B" not in json.dumps(payload)
     finally:
         stopped = subprocess.run(

@@ -1019,7 +1019,7 @@
       "class": "schema",
       "path": "schemas/v1/mcp-read-result.schema.json",
       "required_before_staging": true,
-      "sha256": "9b55e654272d3c5ff8f45aac2e30c4fb25f8585af1c07b01c7a5f36fe63d0eb0"
+      "sha256": "51ea4dc411c32527dba55b7d7030e5841fcd347fcf5fc3579ae893641a07ce99"
     },
     {
       "class": "schema",
@@ -1051,7 +1051,7 @@
       "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
       "post_tree_sha256": "dde4252bb549e82be011c5f108ea741cc45ca2f462b4c28d686bf4f1a95cc23e",
       "pre_tree_sha256": "a5b1a1c4c5893b8daa053cdf673ca1bf9c712372ffac3651e95fa6be096f9079",
-      "sha256": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
+      "sha256": "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329"
     },
     {
       "component": "file-base",

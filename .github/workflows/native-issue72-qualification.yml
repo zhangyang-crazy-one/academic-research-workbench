@@ -1,0 +1,150 @@
+name: Issue 72 native qualification (manual)
+
+# Temporary qualification for #72 session-root confinement. It runs the
+# unmodified native suite on all three surfaces and uploads actual evidence.
+# It may be removed after the retained evidence is reviewed and committed.
+
+on:
+  push:
+    branches:
+      - codex/issue-72-20261008
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-evidence:
+    name: Native evidence (${{ matrix.surface }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - surface: upstream
+            sanitizers: ''
+            runtimes: ''
+          - surface: asan-ubsan
+            sanitizers: asan,ubsan
+            runtimes: libasan.so libubsan.so
+          - surface: tsan
+            sanitizers: tsan
+            runtimes: libtsan.so
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      - name: Install native test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace build-essential
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          uv venv
+          .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Restore legal receipt and materialize pinned native source
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          assert sha == manifest['pre_vendor_receipt']['sha256']
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
+          PY
+          ./scripts/materialize-sources --clean
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          ./vendor/sources/file-base/scripts/gen-third-party-notices.sh \
+            "$g/THIRD_PARTY_NOTICES.md"
+          rm -rf vendor/sources/file-base/graph-ui/node_modules
+          python scripts/verify-pinned-notice
+          ./scripts/verify-sources --inputs-only
+      - name: Build and run the native suite under network denial
+        env:
+          SURFACE: ${{ matrix.surface }}
+          SANITIZERS: ${{ matrix.sanitizers }}
+          RUNTIMES: ${{ matrix.runtimes }}
+        run: |
+          root="build/evidence/phase-01/native/$SURFACE"
+          # Root creates the namespaces without a user namespace; offline-exec
+          # runs the build and suite as this runner user (SUDO_UID).
+          as_root=(sudo --preserve-env env "PATH=$PATH" "HOME=$HOME")
+          if [[ -z "$SANITIZERS" ]]; then
+            "${as_root[@]}" ./scripts/offline-exec --evidence-root "$root" \
+              ./scripts/build-file-base --clean --run-upstream-tests
+          else
+            mkdir -p build/sanitizer-runtime
+            for library in $RUNTIMES; do
+              resolved="$(readlink -f "$(cc -print-file-name="$library")")"
+              test -f "$resolved"
+              install -m 0644 "$resolved" "build/sanitizer-runtime/$(basename "$resolved")"
+              ln -sf "$(basename "$resolved")" "build/sanitizer-runtime/$library"
+            done
+            "${as_root[@]}" ARW_SANITIZER_RUNTIME_DIR="$PWD/build/sanitizer-runtime" \
+              ./scripts/offline-exec --evidence-root "$root" \
+              ./scripts/build-file-base --clean --sanitizers "$SANITIZERS" \
+                --run-upstream-tests
+          fi
+      - name: Exercise production shared-daemon session regression
+        if: matrix.surface == 'upstream'
+        run: |
+          ARW_FILE_BASE_NATIVE_BINARY="$PWD/.file-base/bin/file-base" \
+            .venv/bin/python -m pytest -q tests/integration/test_native_session_root.py \
+            | tee build/native-session-test.log
+      - name: Collect evidence
+        if: always()
+        env:
+          SURFACE: ${{ matrix.surface }}
+        run: |
+          out="native-evidence/$SURFACE"
+          mkdir -p "$out"
+          root="build/evidence/phase-01/native/$SURFACE"
+          for name in command.json verdict.json status.txt \
+                      sanitizer-verdict.json test-suite.sha256 test-status.txt; do
+            [[ -f "$root/$name" ]] && cp "$root/$name" "$out/$name"
+          done
+          [[ -f .file-base/build-evidence.json ]] && \
+            cp .file-base/build-evidence.json "$out/build-evidence.json"
+          [[ -f .file-base/bin/file-base ]] && \
+            sha256sum .file-base/bin/file-base > "$out/binary.sha256"
+          cp vendor/source-manifest.json "$out/source-manifest.json"
+          [[ -f build/native-session-test.log ]] && \
+            cp build/native-session-test.log "$out/native-session-test.log"
+          find "$root" -maxdepth 2 -name '*.log' -size -2M -exec cp {} "$out/" \; || true
+          ls -la "$out"
+          echo "=== BEGIN failure-summary"
+          grep -h -n -E ' FAIL |runtime error:|ERROR: [A-Za-z]+Sanitizer|WARNING: ThreadSanitizer|SUMMARY: |error:' \
+            "$root"/test-stdout.log "$root"/test-stderr.log 2>/dev/null | head -n 200 || true
+          echo "=== END failure-summary"
+          for f in "$out"/*; do
+            case "$f" in *source-manifest.json) continue ;; esac
+            echo "=== BEGIN $(basename "$f")"
+            case "$f" in
+              *.log) tail -c 6000 "$f" ;;
+              *) head -c 4000 "$f" ;;
+            esac
+            echo
+            echo "=== END $(basename "$f")"
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-evidence-${{ matrix.surface }}
+          path: native-evidence/${{ matrix.surface }}
+          if-no-files-found: warn

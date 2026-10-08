@@ -87,7 +87,7 @@ EXPECTED_FILE_BASE_PATCHES = (
     (
         2,
         "vendor/patches/file-base/0002-phase1-confined-read.patch",
-        "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f",
+        "147e8efe296588de0b63e5d07a6ad55ffb398560c09698ce2b95b578d30c4329",
     ),
     (
         3,

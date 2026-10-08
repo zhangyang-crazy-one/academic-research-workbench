@@ -305,7 +305,7 @@ index f0d3189e..56c5fc2d 100644
  
      int limit = cbm_mcp_get_int_arg(args, "limit", 50);
      int offset = cbm_mcp_get_int_arg(args, "offset", 0);
-@@ -17271,6 +17340,398 @@
+@@ -17271,6 +17340,400 @@
      return result;
  }
  
@@ -509,18 +509,20 @@ index f0d3189e..56c5fc2d 100644
 +
 +    const char *configured_id = getenv("CBM_ALLOWED_ROOT_ID");
 +    const char *configured_path = getenv("CBM_ALLOWED_ROOT");
-+    bool session_policy = mcp_read_session_policy_set(srv);
-+    if (session_policy && (!configured_id || strcmp(allowed_root, configured_id) != 0 ||
-+                           !mcp_read_session_root_matches_process(srv, configured_path))) {
-+        char *result = mcp_read_denial(allowed_root, relative_path, "root_session_mismatch",
-+                                       "session allowed root does not match process capability");
-+        yyjson_doc_free(doc);
-+        return result;
-+    }
++    /* An unconfigured capability or another root ID keeps the public
++     * root_denied contract; only a daemon session whose installed root differs
++     * from the process capability is a root_session_mismatch. */
 +    if (!configured_id || !*configured_id || !configured_path || configured_path[0] != '/' ||
 +        strcmp(allowed_root, configured_id) != 0) {
 +        char *result = mcp_read_denial(allowed_root, relative_path, "root_denied",
 +                                       "allowed-root capability is not configured");
++        yyjson_doc_free(doc);
++        return result;
++    }
++    bool session_policy = mcp_read_session_policy_set(srv);
++    if (session_policy && !mcp_read_session_root_matches_process(srv, configured_path)) {
++        char *result = mcp_read_denial(allowed_root, relative_path, "root_session_mismatch",
++                                       "session allowed root does not match process capability");
 +        yyjson_doc_free(doc);
 +        return result;
 +    }
