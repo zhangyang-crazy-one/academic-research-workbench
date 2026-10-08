@@ -17,7 +17,8 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Context, Decimal, InvalidOperation, ROUND_HALF_EVEN, localcontext
+from decimal import Context, Decimal, DecimalException, InvalidOperation, ROUND_HALF_EVEN, localcontext
+from fractions import Fraction
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal
 
@@ -35,7 +36,7 @@ EXPERIMENT_CONTRACT_SCHEMA_VERSION = "arw.experiment-contract.v1"
 EXPERIMENT_ACCEPTANCE_SCHEMA_VERSION = "arw.experiment-acceptance.v1"
 EXPERIMENT_CONTRACT_SCHEMA_NAME = "experiment-contract.schema.json"
 EXPERIMENT_ACCEPTANCE_SCHEMA_NAME = "experiment-acceptance.schema.json"
-ACCEPTANCE_EVALUATOR_VERSION = "1.0.0"
+ACCEPTANCE_EVALUATOR_VERSION = "1.1.0"
 MAX_CONTRACT_BYTES = 262_144
 MAX_DATA_BYTES = 8_388_608
 MAX_DATA_ROWS = 200_000
@@ -72,6 +73,10 @@ STATUS_SEVERITY: tuple[str, ...] = (
 _DECIMAL = re.compile(r"^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$")
 _NON_FINITE = re.compile(r"^[+-]?(?:nan|inf|infinity)$", re.IGNORECASE)
 _CONTEXT = Context(prec=50, rounding=ROUND_HALF_EVEN)
+_DISPLAY_CONTEXT = Context(prec=56, rounding=ROUND_HALF_EVEN, Emax=10_000, Emin=-10_000)
+MAX_NUMERIC_TEXT = 128
+MAX_NUMERIC_DIGITS = 64
+MAX_NUMERIC_EXPONENT = 1000
 _Array = BeforeValidator(lambda value: tuple(value) if isinstance(value, list) else value)
 
 DecimalText = Annotated[str, StringConstraints(min_length=1, max_length=64, pattern=_DECIMAL.pattern)]
@@ -94,6 +99,43 @@ def _text(value: Decimal) -> str:
         return "0"
     rendered = format(normalized, "f")
     return rendered
+
+
+def _exact_number(text: str, *, contract: bool = False) -> Fraction:
+    """Check size before Decimal/Fraction can expand an adversarial exponent."""
+
+    status = "invalid_contract" if contract else "invalid_artifact"
+    if len(text) > MAX_NUMERIC_TEXT or not _DECIMAL.fullmatch(text):
+        raise _Blocked(status, "value_out_of_supported_range")
+    mantissa, separator, exponent_text = text.lower().partition("e")
+    digits = mantissa.lstrip("+-").replace(".", "")
+    exponent_digits = exponent_text.lstrip("+-")
+    if (
+        len(digits) > MAX_NUMERIC_DIGITS
+        or (separator and len(exponent_digits) > 4)
+        or (separator and abs(int(exponent_text)) > MAX_NUMERIC_EXPONENT)
+    ):
+        raise _Blocked(status, "value_out_of_supported_range")
+    try:
+        return Fraction(Decimal(text))
+    except (DecimalException, ValueError, OverflowError) as error:
+        raise _Blocked(status, "value_out_of_supported_range") from error
+
+
+def _exact_text(value: Fraction) -> str:
+    with localcontext(_DISPLAY_CONTEXT):
+        decimal = Decimal(value.numerator) / Decimal(value.denominator)
+        normalized = decimal.normalize()
+    if normalized == 0:
+        return "0"
+    if abs(normalized.adjusted()) <= 64:
+        fixed = format(normalized, "f")
+        if len(fixed) <= 64:
+            return fixed
+    scientific = format(normalized, "E").replace("E+", "e").replace("E", "e")
+    if len(scientific) <= 64:
+        return scientific
+    raise _Blocked("invalid_artifact", "value_out_of_supported_range")
 
 
 def _non_negative(value: str, *, label: str) -> str:
@@ -291,7 +333,7 @@ class ExperimentAcceptanceResult(StrictModel):
     """Deterministic, timestamp-free outcome; identical inputs replay byte-for-byte."""
 
     schema_version: Literal["arw.experiment-acceptance.v1"]
-    evaluator_version: Literal["1.0.0"]
+    evaluator_version: Literal["1.0.0", "1.1.0"]
     scope: Literal["contract_conformance_only"]
     contract_id: StableRuntimeId
     contract_version: Annotated[int, Field(ge=1)]
@@ -348,8 +390,8 @@ def _overall(statuses: Sequence[str]) -> str:
 class _Outcome:
     status: str
     reasons: tuple[str, ...] = ()
-    observed: Decimal | None = None
-    expected: Decimal | None = None
+    observed: Decimal | Fraction | None = None
+    expected: Decimal | Fraction | None = None
     sample_count: int | None = None
     excluded_missing: int | None = None
     artifact_sha256: str | None = None
@@ -427,7 +469,9 @@ def _read_artifact(provenance: ExperimentProvenance, artifact_id: str, root: Pat
     return data, artifact.content_sha256
 
 
-def _column(data: bytes, selector: DataSelector, artifact_sha256: str) -> tuple[list[Decimal], int]:
+def _column(
+    data: bytes, selector: DataSelector, artifact_sha256: str, *, exact: bool = False
+) -> tuple[list[Decimal] | list[Fraction], int]:
     def blocked(*reasons: str) -> _Blocked:
         return _Blocked("invalid_artifact", *reasons, artifact_sha256=artifact_sha256)
 
@@ -456,7 +500,7 @@ def _column(data: bytes, selector: DataSelector, artifact_sha256: str) -> tuple[
     index = header.index(selector.column)
     id_index = None if selector.row_id_column is None else header.index(selector.row_id_column)
     seen: set[str] = set()
-    values: list[Decimal] = []
+    values: list[Decimal] | list[Fraction] = []
     excluded = 0
     for row in body:
         if len(row) != len(header):
@@ -479,7 +523,9 @@ def _column(data: bytes, selector: DataSelector, artifact_sha256: str) -> tuple[
         if not _DECIMAL.match(cell):
             raise blocked("non_numeric_value")
         try:
-            values.append(_decimal(cell))
+            values.append(_exact_number(cell) if exact else _decimal(cell))
+        except _Blocked as error:
+            raise blocked(*error.reasons) from error
         except InvalidOperation as error:
             raise blocked("non_numeric_value") from error
     if not values:
@@ -532,6 +578,69 @@ def _reproduce(check: NumericReproductionCheck, provenance: ExperimentProvenance
     )
 
 
+def _exact_metric_value(provenance: ExperimentProvenance, name: str, unit: str) -> Fraction:
+    for metric in provenance.metrics:
+        if metric.name == name:
+            if metric.unit != unit:
+                raise _Blocked("invalid_contract", "unit_mismatch")
+            value = metric.value
+            if isinstance(value, float) and not math.isfinite(value):
+                raise _Blocked("invalid_artifact", "non_finite_value")
+            return _exact_number(repr(value) if isinstance(value, float) else str(value))
+    raise _Blocked("evidence_missing", "reported_metric_missing")
+
+
+def _exact_range(value: Fraction, valid_range: ValueRange | None) -> None:
+    if valid_range is None:
+        return
+    if valid_range.minimum is not None and value < _exact_number(valid_range.minimum, contract=True):
+        raise _Blocked("invalid_artifact", "value_out_of_range")
+    if valid_range.maximum is not None and value > _exact_number(valid_range.maximum, contract=True):
+        raise _Blocked("invalid_artifact", "value_out_of_range")
+
+
+def _exact_apply(operator: str, values: Sequence[Fraction]) -> Fraction:
+    if operator == "count@1":
+        return Fraction(len(values))
+    if operator == "sum@1":
+        return sum(values, Fraction())
+    if operator == "mean@1":
+        return sum(values, Fraction()) / len(values)
+    if operator == "min@1":
+        return min(values)
+    if operator == "max@1":
+        return max(values)
+    if operator == "median@1":
+        ordered = sorted(values)
+        middle = len(ordered) // 2
+        return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+    raise _Blocked("invalid_contract", "unknown_operator")
+
+
+def _exact_reproduce(check: NumericReproductionCheck, provenance: ExperimentProvenance, root: Path) -> _Outcome:
+    reported = _exact_metric_value(provenance, check.reported_metric, check.unit)
+    absolute = _exact_number(check.tolerance.absolute, contract=True)
+    relative = _exact_number(check.tolerance.relative, contract=True)
+    data, digest = _read_artifact(provenance, check.data.artifact_id, root)
+    values, excluded = _column(data, check.data, digest, exact=True)
+    for value in values:
+        try:
+            _exact_range(value, check.valid_range)
+        except _Blocked as blocked:
+            raise _Blocked(blocked.status, *blocked.reasons, artifact_sha256=digest) from None
+    computed = _exact_apply(check.operator, values)
+    within = abs(computed - reported) <= absolute + relative * abs(reported)
+    return _Outcome(
+        status="passed" if within else "failed",
+        reasons=() if within else ("reproduction_outside_tolerance",),
+        observed=computed,
+        expected=reported,
+        sample_count=len(values),
+        excluded_missing=excluded,
+        artifact_sha256=digest,
+    )
+
+
 _CONTEXT_FIELDS = ("metric_definition", "unit", "dataset", "split", "evaluation_condition")
 
 
@@ -566,43 +675,91 @@ def _compare(check: BaselineComparisonCheck, provenance: ExperimentProvenance) -
     )
 
 
-def _evaluate_check(check: ContractCheck, provenance: ExperimentProvenance, root: Path) -> CheckResult:
+def _exact_compare(check: BaselineComparisonCheck, provenance: ExperimentProvenance) -> _Outcome:
+    mismatched = tuple(
+        f"context_{field}_mismatch"
+        for field in _CONTEXT_FIELDS
+        if getattr(check.candidate.context, field) != getattr(check.baseline.context, field)
+    )
+    if mismatched:
+        raise _Blocked("invalid_contract", "incomparable_context", *mismatched)
+    candidate = _exact_metric_value(provenance, check.candidate.reported_metric, check.candidate.context.unit)
+    baseline = _exact_metric_value(provenance, check.baseline.reported_metric, check.baseline.context.unit)
+    _exact_range(candidate, check.valid_range)
+    _exact_range(baseline, check.valid_range)
+    threshold = _exact_number(check.threshold.value, contract=True)
+    improvement = candidate - baseline if check.direction == "higher_is_better" else baseline - candidate
+    if check.threshold.mode == "relative":
+        if baseline == 0:
+            raise _Blocked("invalid_contract", "relative_threshold_zero_baseline")
+        observed = improvement / abs(baseline)
+    else:
+        observed = improvement
+    passed = observed >= threshold
+    return _Outcome(
+        status="passed" if passed else "failed",
+        reasons=() if passed else ("improvement_below_threshold",),
+        observed=observed,
+        expected=threshold,
+    )
+
+
+def _evaluate_check(
+    check: ContractCheck, provenance: ExperimentProvenance, root: Path, *, evaluator_version: str
+) -> CheckResult:
+    exact = evaluator_version == "1.1.0"
     try:
         if isinstance(check, UnsupportedClaimCheck):
             outcome = _Outcome(status="unsupported", reasons=(f"{check.kind}_not_supported",))
         elif isinstance(check, NumericReproductionCheck):
-            outcome = _reproduce(check, provenance, root)
+            outcome = _exact_reproduce(check, provenance, root) if exact else _reproduce(check, provenance, root)
         else:
-            outcome = _compare(check, provenance)
+            outcome = _exact_compare(check, provenance) if exact else _compare(check, provenance)
+        observed = None if outcome.observed is None else (_exact_text(outcome.observed) if exact else _text(outcome.observed))
+        expected = None if outcome.expected is None else (_exact_text(outcome.expected) if exact else _text(outcome.expected))
     except _Blocked as blocked:
         outcome = _Outcome(
             status=blocked.status,
             reasons=tuple(dict.fromkeys(blocked.reasons)),
             artifact_sha256=blocked.artifact_sha256,
         )
+        observed = expected = None
+    except (DecimalException, OverflowError, ValueError):
+        if not exact:
+            raise
+        outcome = _Outcome(status="invalid_artifact", reasons=("value_out_of_supported_range",))
+        observed = expected = None
     return CheckResult(
         check_id=check.check_id,
         kind=check.kind,
         status=outcome.status,  # type: ignore[arg-type]
         reasons=outcome.reasons,
-        observed=None if outcome.observed is None else _text(outcome.observed),
-        expected=None if outcome.expected is None else _text(outcome.expected),
+        observed=observed,
+        expected=expected,
         sample_count=outcome.sample_count,
         excluded_missing=outcome.excluded_missing,
         artifact_sha256=outcome.artifact_sha256,
     )
 
 
-def _budget_status(budget: BudgetDeclaration | None, provenance: ExperimentProvenance) -> str:
+def _budget_status(budget: BudgetDeclaration | None, provenance: ExperimentProvenance, *, evaluator_version: str) -> str:
     if budget is None:
         return "not_declared"
     try:
-        usage = _metric_value(provenance, budget.usage_metric, budget.unit)
+        usage = (
+            _exact_metric_value(provenance, budget.usage_metric, budget.unit)
+            if evaluator_version == "1.1.0"
+            else _metric_value(provenance, budget.usage_metric, budget.unit)
+        )
     except _Blocked as blocked:
         if blocked.status == "invalid_contract":
             return "invalid_contract"
         return "unverifiable"
-    return "within_budget" if usage <= _decimal(budget.limit) else "exceeded"
+    try:
+        limit = _exact_number(budget.limit, contract=True) if evaluator_version == "1.1.0" else _decimal(budget.limit)
+    except _Blocked:
+        return "invalid_contract"
+    return "within_budget" if usage <= limit else "exceeded"
 
 
 def _predeclaration(contract: ExperimentContract, timing: TimingEvidence | None) -> str:
@@ -621,9 +778,12 @@ def evaluate_experiment_acceptance(
     artifact_root: Path,
     *,
     timing: Mapping[str, Any] | TimingEvidence | None = None,
+    evaluator_version: Literal["1.0.0", "1.1.0"] = ACCEPTANCE_EVALUATOR_VERSION,
 ) -> ExperimentAcceptanceResult:
     """Evaluate one contract version against sealed provenance and raw files."""
 
+    if evaluator_version not in {"1.0.0", "1.1.0"}:
+        raise ExperimentAcceptanceError("unsupported_evaluator", "unsupported experiment evaluator version")
     checked_contract = seal_experiment_contract(contract)
     checked_provenance = seal_experiment_provenance(provenance)
     checked_timing = None
@@ -638,10 +798,13 @@ def evaluate_experiment_acceptance(
     if root.is_symlink() or not root.is_dir():
         raise ExperimentAcceptanceError("unsafe_artifact_root", "artifact root must be an existing real directory")
     root = root.resolve()
-    checks = tuple(_evaluate_check(check, checked_provenance, root) for check in checked_contract.checks)
+    checks = tuple(
+        _evaluate_check(check, checked_provenance, root, evaluator_version=evaluator_version)
+        for check in checked_contract.checks
+    )
     return ExperimentAcceptanceResult(
         schema_version="arw.experiment-acceptance.v1",
-        evaluator_version="1.0.0",
+        evaluator_version=evaluator_version,
         scope="contract_conformance_only",
         contract_id=checked_contract.contract_id,
         contract_version=checked_contract.contract_version,
@@ -652,7 +815,7 @@ def evaluate_experiment_acceptance(
         predeclaration=_predeclaration(checked_contract, checked_timing),  # type: ignore[arg-type]
         checks=checks,
         overall_status=_overall(tuple(item.status for item in checks)),  # type: ignore[arg-type]
-        budget_status=_budget_status(checked_contract.budget, checked_provenance),  # type: ignore[arg-type]
+        budget_status=_budget_status(checked_contract.budget, checked_provenance, evaluator_version=evaluator_version),  # type: ignore[arg-type]
     )
 
 
@@ -676,7 +839,9 @@ def replay_experiment_acceptance(
     """Re-run the evaluator and require byte-identical canonical output."""
 
     recorded = seal_experiment_acceptance(result)
-    replayed = evaluate_experiment_acceptance(contract, provenance, artifact_root, timing=timing)
+    replayed = evaluate_experiment_acceptance(
+        contract, provenance, artifact_root, timing=timing, evaluator_version=recorded.evaluator_version
+    )
     if replayed.canonical_bytes() != recorded.canonical_bytes():
         raise ExperimentAcceptanceError("replay_mismatch", "experiment acceptance result does not replay")
     return recorded
