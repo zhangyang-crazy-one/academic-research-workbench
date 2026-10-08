@@ -1,0 +1,1005 @@
+{
+  "$defs": {
+    "AllRows": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "all",
+          "default": "all",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "AllRows",
+      "type": "object"
+    },
+    "ByteChunk": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "byte_chunk",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "ByteChunk",
+      "type": "object"
+    },
+    "ComparisonContext": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Everything that must agree before two values may be compared.",
+      "properties": {
+        "dataset": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Dataset",
+          "type": "string"
+        },
+        "evaluation_condition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Evaluation Condition",
+          "type": "string"
+        },
+        "metric_definition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Metric Definition",
+          "type": "string"
+        },
+        "split": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_definition",
+        "unit",
+        "dataset",
+        "split",
+        "evaluation_condition"
+      ],
+      "title": "ComparisonContext",
+      "type": "object"
+    },
+    "CsvSelection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "group_by": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Group By",
+          "type": "array"
+        },
+        "kind": {
+          "const": "csv_selection",
+          "default": "csv_selection",
+          "title": "Kind",
+          "type": "string"
+        },
+        "missing_policy": {
+          "default": "reject",
+          "enum": [
+            "reject",
+            "exclude"
+          ],
+          "title": "Missing Policy",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/ParentArtifactRef"
+        },
+        "row_id_column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Row Id Column",
+          "type": "string"
+        },
+        "row_set": {
+          "default": {
+            "kind": "all"
+          },
+          "discriminator": {
+            "mapping": {
+              "all": "#/$defs/AllRows",
+              "ids": "#/$defs/RowIds",
+              "predicate": "#/$defs/RowPredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AllRows"
+            },
+            {
+              "$ref": "#/$defs/RowIds"
+            },
+            {
+              "$ref": "#/$defs/RowPredicate"
+            }
+          ],
+          "title": "Row Set"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "columns",
+        "row_id_column",
+        "context",
+        "unit"
+      ],
+      "title": "CsvSelection",
+      "type": "object"
+    },
+    "DerivationRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "derivation_ref",
+          "default": "derivation_ref",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "derivation_id"
+      ],
+      "title": "DerivationRef",
+      "type": "object"
+    },
+    "DerivationRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "evaluator_version": {
+          "default": "arw.rational.v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Evaluator Version",
+          "type": "string"
+        },
+        "expr": {
+          "$ref": "#/$defs/NumericExpression"
+        },
+        "schema_version": {
+          "const": "arw.numeric-request.v1",
+          "default": "arw.numeric-request.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "context"
+      ],
+      "title": "DerivationRequest",
+      "type": "object"
+    },
+    "JournalEventRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "payload_selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Payload Selector",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "scope": {
+          "const": "project-journal",
+          "default": "project-journal",
+          "title": "Scope",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "sequence",
+        "event_sha256"
+      ],
+      "title": "JournalEventRef",
+      "type": "object"
+    },
+    "LineRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "lines",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    },
+    "MarkdownSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "kind": {
+          "const": "markdown_section",
+          "title": "Kind",
+          "type": "string"
+        },
+        "occurrence": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Occurrence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "heading",
+        "occurrence"
+      ],
+      "title": "MarkdownSection",
+      "type": "object"
+    },
+    "NumericExpression": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "csv_selection": "#/$defs/CsvSelection",
+                "derivation_ref": "#/$defs/DerivationRef",
+                "scalar_json": "#/$defs/ScalarJson"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ScalarJson"
+              },
+              {
+                "$ref": "#/$defs/CsvSelection"
+              },
+              {
+                "$ref": "#/$defs/DerivationRef"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Args",
+          "type": "array"
+        },
+        "op": {
+          "enum": [
+            "value",
+            "diff",
+            "ratio",
+            "pct_point_diff",
+            "relative_change",
+            "count",
+            "sum",
+            "mean",
+            "median",
+            "min",
+            "max"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.numeric-expression.v1",
+          "default": "arw.numeric-expression.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "args"
+      ],
+      "title": "NumericExpression",
+      "type": "object"
+    },
+    "NumericGroup": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "exact": {
+          "$ref": "#/$defs/RationalExact"
+        },
+        "key": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key",
+          "type": "array"
+        },
+        "row_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Row Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "exact",
+        "row_ids"
+      ],
+      "title": "NumericGroup",
+      "type": "object"
+    },
+    "ParentArtifactRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        },
+        "accepting_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepting Event Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "producing_activity_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producing Activity Id"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "scope": {
+          "const": "parent-artifact",
+          "default": "parent-artifact",
+          "title": "Scope",
+          "type": "string"
+        },
+        "selected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Sha256"
+        },
+        "selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Selector",
+          "type": "string"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id",
+        "run_id",
+        "run_manifest_sha256",
+        "artifact_id",
+        "accepting_event_id",
+        "accepting_event_sha256",
+        "content_sha256"
+      ],
+      "title": "ParentArtifactRef",
+      "type": "object"
+    },
+    "PdfLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "extraction_manifest_path": {
+          "minLength": 1,
+          "title": "Extraction Manifest Path",
+          "type": "string"
+        },
+        "extraction_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Manifest Sha256",
+          "type": "string"
+        },
+        "extractor_name": {
+          "enum": [
+            "pypdf",
+            "grobid",
+            "docling"
+          ],
+          "title": "Extractor Name",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pdf_page",
+            "pdf_paragraph",
+            "pdf_section",
+            "pdf_region",
+            "reference_entry"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "pdf_source_path": {
+          "minLength": 1,
+          "title": "Pdf Source Path",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.pdf-location.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "page",
+        "start",
+        "end",
+        "pdf_source_path",
+        "pdf_sha256",
+        "extraction_manifest_path",
+        "extraction_manifest_sha256",
+        "extractor_name",
+        "extractor_version"
+      ],
+      "title": "PdfLocation",
+      "type": "object"
+    },
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
+      "type": "object"
+    },
+    "RowIds": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10000,
+          "minItems": 1,
+          "title": "Ids",
+          "type": "array"
+        },
+        "kind": {
+          "const": "ids",
+          "default": "ids",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "title": "RowIds",
+      "type": "object"
+    },
+    "RowPredicate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "kind": {
+          "const": "predicate",
+          "default": "predicate",
+          "title": "Kind",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "op",
+        "value"
+      ],
+      "title": "RowPredicate",
+      "type": "object"
+    },
+    "ScalarJson": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "json_pointer": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Json Pointer",
+          "type": "string"
+        },
+        "kind": {
+          "const": "scalar_json",
+          "default": "scalar_json",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "discriminator": {
+            "mapping": {
+              "parent-artifact": "#/$defs/ParentArtifactRef",
+              "project-journal": "#/$defs/JournalEventRef"
+            },
+            "propertyName": "scope"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParentArtifactRef"
+            },
+            {
+              "$ref": "#/$defs/JournalEventRef"
+            }
+          ],
+          "title": "Ref"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "unit",
+        "context"
+      ],
+      "title": "ScalarJson",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "discriminator": {
+            "mapping": {
+              "byte_chunk": "#/$defs/ByteChunk",
+              "lines": "#/$defs/LineRange",
+              "markdown_section": "#/$defs/MarkdownSection",
+              "pdf_page": "#/$defs/PdfLocation",
+              "pdf_paragraph": "#/$defs/PdfLocation",
+              "pdf_region": "#/$defs/PdfLocation",
+              "pdf_section": "#/$defs/PdfLocation",
+              "reference_entry": "#/$defs/PdfLocation",
+              "text_page": "#/$defs/TextPage"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LineRange"
+            },
+            {
+              "$ref": "#/$defs/TextPage"
+            },
+            {
+              "$ref": "#/$defs/MarkdownSection"
+            },
+            {
+              "$ref": "#/$defs/ByteChunk"
+            },
+            {
+              "$ref": "#/$defs/PdfLocation"
+            }
+          ],
+          "title": "Location"
+        },
+        "producing_activity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Producing Activity Id",
+          "type": "string"
+        },
+        "quote_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Quote Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            "arw.source-locator.v1",
+            "arw.source-locator.v2"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Artifact Id",
+          "type": "string"
+        },
+        "source_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Event Sha256",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_artifact_id",
+        "source_sha256",
+        "source_event_id",
+        "source_event_sha256",
+        "producing_activity_id",
+        "location",
+        "quote_sha256"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "TextPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text_page",
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "page"
+      ],
+      "title": "TextPage",
+      "type": "object"
+    }
+  },
+  "$id": "https://academic-research-workbench.local/schemas/v1/numeric-derivation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "derivation_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Derivation Id",
+      "type": "string"
+    },
+    "exact": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalExact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "groups": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NumericGroup"
+      },
+      "title": "Groups",
+      "type": "array"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "request": {
+      "$ref": "#/$defs/DerivationRequest"
+    },
+    "schema_version": {
+      "const": "arw.numeric-derivation.v1",
+      "default": "arw.numeric-derivation.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "exact",
+        "undefined",
+        "context_mismatch",
+        "out_of_domain",
+        "unsupported"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "values": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RationalExact"
+      },
+      "title": "Values",
+      "type": "array"
+    }
+  },
+  "required": [
+    "derivation_id",
+    "request",
+    "status"
+  ],
+  "title": "Derivation",
+  "type": "object"
+}
