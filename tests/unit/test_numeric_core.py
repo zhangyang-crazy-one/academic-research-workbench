@@ -422,3 +422,14 @@ def test_derivation_record_rejects_substituted_identity(tmp_path):
     substituted = {**result.model_dump(mode="json"), "derivation_id": "f" * 64}
     with pytest.raises(SchemaRegistryError, match="derivation ID"):
         validate_instance("numeric-derivation.schema.json", substituted)
+
+
+def test_public_decimal_parser_rejects_resource_exponents_before_fraction():
+    from arw.kernel.policy.numeric_core import NumericDomainError, parse_exact_number
+
+    assert parse_exact_number("0.10000000000000000001").as_fraction() == Fraction(
+        10000000000000000001, 100000000000000000000
+    )
+    for text in ("1e999999999", "1e-999999999", "1/3", "NaN"):
+        with pytest.raises(NumericDomainError):
+            parse_exact_number(text)
