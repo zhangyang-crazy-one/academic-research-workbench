@@ -8,12 +8,12 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from arw.kernel.artifacts.experiment_acceptance import ComparisonContext
 from arw.kernel.state.accepted_ref import (
     AcceptedRef,
     ParentArtifactRef,
     validate_pointer,
 )
+from arw.kernel.state.experiment_context import ComparisonContext
 from arw.kernel.state.models import Sha256, StrictModel
 
 MAX_INTEGER = 10**128 - 1
