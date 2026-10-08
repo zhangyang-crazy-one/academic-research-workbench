@@ -7,7 +7,7 @@
     "--run-upstream-tests"
   ],
   "cwd": "/home/runner/work/academic-research-workbench/academic-research-workbench",
-  "ended_at": "2026-10-07T15:28:48Z",
+  "ended_at": "2026-10-08T04:05:26Z",
   "environment": {
     "ARW_NETWORK_DENIAL_MECHANISM": "bwrap-unshare-net",
     "ARW_OFFLINE_EVIDENCE_ROOT": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/evidence/phase-01/native/tsan",
@@ -15,6 +15,6 @@
     "ARW_SANITIZER_RUNTIME_DIR": "/home/runner/work/academic-research-workbench/academic-research-workbench/build/sanitizer-runtime"
   },
   "network_denial_mechanism": "bwrap-unshare-net",
-  "started_at": "2026-10-07T14:46:32Z",
+  "started_at": "2026-10-08T02:56:42Z",
   "strace": "/usr/bin/strace"
 }

@@ -1,6 +1,6 @@
 # Direct-native session-root confinement
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Read from the current session capability
 
@@ -25,3 +25,7 @@ The daemon's `tools/list` SHALL advertise `read_file` only when its current sess
 ### Requirement: Preserve confined read behavior
 
 For a compatible session, the existing symlink, traversal, absolute-path, sensitive-path, byte, line, regular-file, and UTF-8 limits SHALL remain enforced.
+
+#### Scenario: Compatible session requests a denied path or exceeds a read limit
+- **WHEN** a compatible session requests a symlink or traversal path, or exceeds the byte or line ceiling
+- **THEN** the existing confined-read denial is returned without content beyond the authorized root or requested limits.

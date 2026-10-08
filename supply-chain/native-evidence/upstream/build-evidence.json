@@ -1,0 +1,45 @@
+{
+  "binary": {
+    "path": ".file-base/bin/file-base",
+    "sha256": "27b0202053a53b52da15fb712586d3450986985f9f06c54c3dbfcfb46ba9117d"
+  },
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "component": {
+    "id": "file-base",
+    "revision": "8972ea69c6ad94b1ef1d4ffbf0a92d78d2db1798"
+  },
+  "file_contract_sha256": "3cdc203ec0c762744995eb9f5b7d4652ca92eabfe7f824f32a98dbe0d091e7b1",
+  "make": "GNU Make 4.3",
+  "native_test_suite": {
+    "component": "file-base",
+    "path": "vendor/sources/file-base/tests",
+    "runner": "Makefile.cbm:test",
+    "tree_sha256": "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
+  },
+  "network_denial_mechanism": "bwrap-unshare-net",
+  "patches": [
+    {
+      "order": 1,
+      "path": "vendor/patches/file-base/0001-file-base-server-name.patch",
+      "sha256": "d474b36a85ad16c30100155bd95e8023ef07e63fb50e42767f7b228ca87107c4"
+    },
+    {
+      "order": 2,
+      "path": "vendor/patches/file-base/0002-phase1-confined-read.patch",
+      "sha256": "6aca3ad1012451a291361675e5cf429843e6ecce88c793a48801a28e167fe40f"
+    },
+    {
+      "order": 3,
+      "path": "vendor/patches/file-base/0003-phase3-generation-builder.patch",
+      "sha256": "32a46d319ee2bf756fefd910d9252ec8aa12ab6c5a19f422c1b61313bf9a4316"
+    },
+    {
+      "order": 4,
+      "path": "vendor/patches/file-base/0004-phase5-research-graph.patch",
+      "sha256": "11244e68243651611fe1f8b3d4d386e2d3680ec66226b02c4dbd58bad19f519c"
+    }
+  ],
+  "post_patch_tree_sha256": "46ded8f6d907640c1e48a7ac95bb279ee002466eeae102ab47d91a2126a85175",
+  "schema_version": "1.0.0",
+  "source_date_epoch": 1783517828
+}
