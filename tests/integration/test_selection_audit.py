@@ -160,6 +160,30 @@ def test_public_synthetic_pool_paired_ordering_and_srs(tmp_path, capsys):
     assert fixture_path.read_bytes() == before
 
 
+def test_public_launcher_replays_same_fixture_without_writes():
+    import os
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    path = FIXTURES / "self-authored-pool.json"
+    before = path.read_bytes()
+    expected = replay_fixture(PoolFixture.model_validate_json(before))
+    environment = {**os.environ, "ARW_RUNTIME": "agent", "ARW_PYTHON": sys.executable}
+    result = subprocess.run(
+        [str(root / "bin/arw"), "selection-audit", "replay", "--fixture", str(path)],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["receipt_sha256"] == expected["receipt_sha256"]
+    assert path.read_bytes() == before
+
+
 def test_bundled_ars_stage_resolution_and_optional_absence(tmp_path, monkeypatch):
     import shutil
     import sys

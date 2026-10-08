@@ -6,14 +6,6 @@ from arw.kernel.core.canonical import (
     sha256_hex,
     strict_json_loads,
 )
-from arw.selection_audit import (
-    MAX_INPUT,
-    PoolFixture,
-    SelectionAuditError,
-    SelectionReceipt,
-    export,
-    replay_fixture,
-)
 
 
 def configure(subparsers):
@@ -33,6 +25,8 @@ def configure(subparsers):
 
 
 def _read(path: Path) -> dict:
+    from arw.selection_audit import MAX_INPUT, SelectionAuditError
+
     if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_INPUT:
         raise SelectionAuditError("input is missing, unsafe, or over budget")
     raw = path.read_bytes()
@@ -45,6 +39,14 @@ def _read(path: Path) -> dict:
 
 
 def handle(args):
+    from arw.selection_audit import (
+        PoolFixture,
+        SelectionAuditError,
+        SelectionReceipt,
+        export,
+        replay_fixture,
+    )
+
     if args.selection_audit_command == "export":
         return export(args.run_root, expected_head=args.expected_head,
                       plan_id=args.plan_artifact, retrieval_id=args.retrieval_artifact,
