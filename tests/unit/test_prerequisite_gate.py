@@ -145,6 +145,83 @@ def test_qualification_entrypoints_force_strict_prerequisites() -> None:
         assert "ARW_STRICT_PREREQS" in script
 
 
+def test_paper_method_prerequisite_rejects_other_platforms(monkeypatch):
+    monkeypatch.setattr(prerequisite_gate.sys, "platform", "darwin")
+    assert "Linux" in prerequisite_gate._paper_method_isolation_missing()[0]
+
+
+@pytest.mark.parametrize("worker_version_supported", [False, True])
+def test_paper_method_prerequisite_checks_system_python_and_namespace(
+    monkeypatch,
+    worker_version_supported,
+):
+    from arw_paper_method import sandbox
+
+    monkeypatch.setattr(prerequisite_gate.sys, "platform", "linux")
+    monkeypatch.setattr(prerequisite_gate.sys, "version_info", (3, 13))
+    monkeypatch.setattr(prerequisite_gate.Path, "is_file", lambda _: True)
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0 if worker_version_supported else 1)
+
+    monkeypatch.setattr(prerequisite_gate.subprocess, "run", run)
+
+    def unavailable():
+        raise sandbox.SandboxError("isolation_execution_failed")
+
+    monkeypatch.setattr(sandbox, "probe_namespace", unavailable)
+    missing = prerequisite_gate._paper_method_isolation_missing()
+    assert commands[0][0] == "/usr/bin/python3"
+    if worker_version_supported:
+        assert "isolation_execution_failed" in missing[0]
+    else:
+        assert "python3 >=3.13" in missing[0]
+
+
+def test_paper_method_prerequisite_skip_and_strict_error(tmp_path):
+    checkout_tests = tmp_path / "checkout/tests"
+    checkout_tests.mkdir(parents=True)
+    hook = (ROOT / "tests/conftest.py").read_text()
+    hook += "\ndef _paper_method_isolation_missing():\n    return ['simulated unavailable paper-method isolation']\n"
+    (checkout_tests / "conftest.py").write_text(hook)
+    (checkout_tests / "test_probe.py").write_text(
+        "import pytest\n\n"
+        "@pytest.mark.requires_paper_method_isolation\n"
+        "def test_worker():\n    assert False\n\n"
+        "def test_pure_contract():\n    assert True\n"
+    )
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-rs",
+        "-c",
+        str(ROOT / "pyproject.toml"),
+        str(checkout_tests),
+    ]
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment.pop("ARW_STRICT_PREREQS", None)
+    local = subprocess.run(
+        command, env=environment, capture_output=True, text=True, check=False
+    )
+    assert local.returncode == 0, local.stdout + local.stderr
+    assert "1 passed, 1 skipped" in local.stdout
+    strict = subprocess.run(
+        command,
+        env={**environment, "ARW_STRICT_PREREQS": "1"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert strict.returncode != 0
+    assert "1 passed, 1 error" in strict.stdout
+    assert "simulated unavailable paper-method isolation" in strict.stdout
+
+
 def test_issue27_stage_acceptance_does_not_skip_in_strict_mode() -> None:
     command = [
         sys.executable,

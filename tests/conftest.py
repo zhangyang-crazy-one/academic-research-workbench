@@ -50,6 +50,48 @@ def _offline_network_missing() -> list[str]:
     return ["offline network isolation requires a working bwrap or unshare network namespace; enable user/network namespaces and verify scripts/offline-exec"]
 
 
+def _paper_method_isolation_missing() -> list[str]:
+    """Probe the optional adapter's actual worker; it does not require strace."""
+    if sys.platform != "linux":
+        return ["paper-method isolation requires Linux network namespaces"]
+    if not Path("/usr/bin/bwrap").is_file() or not Path("/usr/bin/python3").is_file():
+        return [
+            "paper-method isolation requires /usr/bin/bwrap and /usr/bin/python3 >=3.13"
+        ]
+    try:
+        version = subprocess.run(
+            [
+                "/usr/bin/python3",
+                "-I",
+                "-S",
+                "-c",
+                "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ["paper-method isolation requires a usable /usr/bin/python3 >=3.13"]
+    if version.returncode != 0:
+        return ["paper-method isolation requires /usr/bin/python3 >=3.13"]
+    from arw_paper_method.sandbox import (
+        SandboxError,
+        probe_namespace,
+        probe_worker_boundary,
+    )
+
+    try:
+        probe_namespace()
+        probe_worker_boundary()
+    except (SandboxError, OSError, ValueError) as error:
+        return [
+            f"paper-method isolation unavailable: {getattr(error, 'code', 'worker_probe_failed')}; verify bwrap namespaces and read-only mounts"
+        ]
+    return []
+
+
 def missing_prerequisites(item: pytest.Item) -> list[str]:
     """Describe only external inputs declared by this selected test."""
     missing = []
@@ -63,6 +105,8 @@ def missing_prerequisites(item: pytest.Item) -> list[str]:
             missing.append(f"materialized sources: {', '.join(absent)}; run scripts/materialize-sources")
     if item.get_closest_marker("requires_offline_network_isolation"):
         missing.extend(_offline_network_missing())
+    if item.get_closest_marker("requires_paper_method_isolation"):
+        missing.extend(_paper_method_isolation_missing())
     for marker in item.iter_markers("requires_retained_evidence"):
         for value in marker.args:
             if not isinstance(value, str) or not value:

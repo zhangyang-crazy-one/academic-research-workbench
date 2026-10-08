@@ -65,6 +65,87 @@ def _request(method, identifier, params=None):
     }
 
 
+def test_pure_author_reference_and_domain_contract_without_worker():
+    import tomllib
+
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert (
+        "extensions/paper-method/src"
+        in config["tool"]["pytest"]["ini_options"]["pythonpath"]
+    )
+    assert (
+        "extensions/paper-method/src/arw_paper_method"
+        not in config["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
+    )
+    assert TOOL not in (ROOT / ".mcp.json").read_text()
+    result = solve(_fixture()["input"])
+    assert result["matching"] == _fixture()["expected_matching"]
+    assert result["stable_verified"] is True
+    assert canonical(result) == canonical(solve(_fixture()["input"]))
+    for invalid, code in (
+        ({"proposers": [], "receivers": {}}, "invalid_type"),
+        ({"proposers": {}, "receivers": {}}, "participant_range"),
+        ({"proposers": {"x": ["A"]}, "receivers": {"A": ["y"]}}, "invalid_ranking"),
+    ):
+        with pytest.raises(MethodError, match=code):
+            solve(invalid)
+
+
+def test_unavailable_worker_creates_failed_receipt_and_never_publishes(
+    tmp_path, monkeypatch
+):
+    from arw_paper_method import qualification, sandbox
+
+    # Synthetic environment metadata makes this unit gate test host-independent;
+    # actual worker calls fail through their normal SandboxError path.
+    monkeypatch.setattr(qualification, "environment", lambda: {"unit_test": True})
+
+    def unavailable(*_args, **_kwargs):
+        raise sandbox.SandboxError("isolation_prerequisite_missing")
+
+    monkeypatch.setattr(sandbox, "_command", unavailable)
+    capsule = _committed_capsule(tmp_path)
+    receipt = tmp_path / "failed-isolation.json"
+    result = qualify(receipt, capsule_path=capsule)
+    assert result["qualification"] == "FAIL"
+    assert all(case["status"] == "FAIL" for case in result["cases"])
+    server = PaperMethodServer(receipt, capsule)
+    assert server.reason_code == "qualification_not_passed"
+    assert server.handle(_request("tools/list", 1))["result"]["tools"] == []
+    assert (
+        server.handle(
+            _request(
+                "tools/call",
+                2,
+                {
+                    "name": TOOL,
+                    "arguments": _fixture()["input"],
+                },
+            )
+        )["error"]["code"]
+        == -32601
+    )
+
+
+def test_missing_worker_prerequisite_never_creates_qualified_receipt(
+    tmp_path, monkeypatch
+):
+    from arw_paper_method import qualification
+
+    def unavailable():
+        raise QualificationError("isolation_prerequisite_missing")
+
+    monkeypatch.setattr(qualification, "environment", unavailable)
+    capsule = _committed_capsule(tmp_path)
+    receipt = tmp_path / "absent.json"
+    with pytest.raises(QualificationError, match="isolation_prerequisite_missing"):
+        qualify(receipt, capsule_path=capsule)
+    assert not receipt.exists()
+    server = PaperMethodServer(receipt, capsule)
+    assert server.handle(_request("tools/list", 1))["result"]["tools"] == []
+
+
+@pytest.mark.requires_paper_method_isolation
 def test_author_example_exact_matching_and_independent_stability():
     fixture = _fixture()
     result = solve(fixture["input"])
@@ -94,6 +175,7 @@ def test_author_example_exact_matching_and_independent_stability():
         ),
     ],
 )
+@pytest.mark.requires_paper_method_isolation
 def test_typed_domain_rejections(value, code):
     with pytest.raises(MethodError, match=code):
         solve(value)
@@ -112,6 +194,7 @@ def test_duplicate_json_key_nonfinite_and_input_bound():
         parse(b" " * (MAX_INPUT_BYTES + 1))
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_maximum_participants_bounded_and_namespace_real():
     names = [f"p{i}" for i in range(64)]
     receivers = [f"r{i}" for i in range(64)]
@@ -127,6 +210,7 @@ def test_maximum_participants_bounded_and_namespace_real():
     assert namespaces["host_network_namespace"] != namespaces["child_network_namespace"]
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_qualification_cases_and_injected_failure(tmp_path):
     assert all(case["status"] == "PASS" for case in run_cases())
     capsule = _committed_capsule(tmp_path)
@@ -143,6 +227,7 @@ def test_qualification_cases_and_injected_failure(tmp_path):
     )
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_missing_receipt_and_metadata_tamper_hide_tool(tmp_path):
     capsule = _committed_capsule(tmp_path)
     missing = PaperMethodServer(tmp_path / "missing.json", capsule)
@@ -163,6 +248,7 @@ def test_missing_receipt_and_metadata_tamper_hide_tool(tmp_path):
     assert hidden.handle(_request("tools/list", 3))["result"]["tools"] == []
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_receipt_tamper_source_drift_and_environment_drift(tmp_path, monkeypatch):
     capsule, receipt = _qualified(tmp_path)
     server = PaperMethodServer(receipt, capsule)
@@ -201,6 +287,7 @@ def test_receipt_tamper_source_drift_and_environment_drift(tmp_path, monkeypatch
     )
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_missing_isolation_is_typed_and_does_not_claim_execution(tmp_path, monkeypatch):
     capsule, receipt = _qualified(tmp_path)
     server = PaperMethodServer(receipt, capsule)
@@ -218,6 +305,7 @@ def test_missing_isolation_is_typed_and_does_not_claim_execution(tmp_path, monke
     assert result["output_sha256"] is None
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_declared_pass_without_reexecuted_cases_cannot_enable(tmp_path, monkeypatch):
     capsule, receipt = _qualified(tmp_path)
     from arw_paper_method import qualification
@@ -239,6 +327,7 @@ def test_declared_pass_without_reexecuted_cases_cannot_enable(tmp_path, monkeypa
     assert server.handle(_request("tools/list", 1))["result"]["tools"] == []
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_qualified_plan_execute_failed_and_output_schema(tmp_path):
     capsule, receipt = _qualified(tmp_path)
     server = PaperMethodServer(receipt, capsule)
@@ -263,6 +352,7 @@ def test_qualified_plan_execute_failed_and_output_schema(tmp_path):
     assert failed["reason_code"] == "invalid_ranking"
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_real_stdio_old_and_new_protocol_and_base_opt_in(tmp_path):
     capsule, receipt = _qualified(tmp_path)
     assert (
@@ -317,6 +407,7 @@ def test_real_stdio_old_and_new_protocol_and_base_opt_in(tmp_path):
     assert responses[5]["result"]["resultType"] == "complete"
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_installed_relocatable_entrypoint_without_git_or_site_packages(tmp_path):
     from arw_paper_method.installation import install, package
     from arw_paper_method.provenance import verify_proof
@@ -385,6 +476,7 @@ def test_installed_relocatable_entrypoint_without_git_or_site_packages(tmp_path)
     assert b"source_commit_unverifiable" in hidden.stderr
 
 
+@pytest.mark.requires_paper_method_isolation
 def test_worker_readonly_output_and_credentials_boundary(monkeypatch):
     from arw_paper_method.sandbox import probe_worker_boundary
 
