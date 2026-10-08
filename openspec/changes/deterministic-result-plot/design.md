@@ -15,3 +15,6 @@ Host fonts can differ → receipt only promises source byte determinism; publica
 
 ## Migration Plan
 Additive schemas and dispatch; existing research-artifact models and SvgRenderer are unchanged. Rollback can omit the new extension paths while legacy artifacts remain replayable.
+
+## Integration follow-up
+Cross-run and journal refs use a strictly typed arw.plot-source-bridge.v1 capsule explicitly accepted by the existing parent generic artifact acceptance command. The IR binds exactly one accepted bridge through acceptance_bindings; the original lifecycle source_event_sha256 remains local, while compilation and reproduction independently replay every original scoped source. Caption target hashes omit attestation refs and declarations and freeze full caption/occurrence/value context to prevent self-reference. Internal held-lock resolution uses actual disk replay validators; metadata parsing reuses numeric_core's pre-Fraction bounded parser. Log transforms use fixed 400-digit Decimal precision for the bounded rational domain.

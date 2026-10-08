@@ -1459,6 +1459,53 @@
       "title": "RendererIdentity",
       "type": "object"
     },
+    "ResearchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ledger_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Ledger Event Id",
+          "type": "string"
+        },
+        "ledger_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Event Sha256",
+          "type": "string"
+        },
+        "json_pointer": {
+          "maxLength": 512,
+          "pattern": "^(|/.*)$",
+          "title": "Json Pointer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "artifact_id",
+        "sha256",
+        "ledger_event_id",
+        "ledger_event_sha256",
+        "json_pointer"
+      ],
+      "title": "ResearchBinding",
+      "type": "object"
+    },
     "RowIds": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -1820,6 +1867,15 @@
       "maxLength": 1200,
       "title": "Manuscript Reference",
       "type": "string"
+    },
+    "acceptance_bindings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ResearchBinding"
+      },
+      "maxItems": 1,
+      "title": "Acceptance Bindings",
+      "type": "array"
     },
     "caption_bindings": {
       "default": [],

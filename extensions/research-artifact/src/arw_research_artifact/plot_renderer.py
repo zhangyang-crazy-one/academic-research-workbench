@@ -40,7 +40,7 @@ def _log(value):
     if value <= 0:
         raise PlotFault("log_value_out_of_domain")
     with localcontext() as ctx:
-        ctx.prec = 60
+        ctx.prec = 400
         return Fraction((Decimal(value.numerator) / Decimal(value.denominator)).ln())
 
 
@@ -60,7 +60,7 @@ class PlotRenderer:
                 + b"\0"
                 + Path(__file__).with_name("renderer.py").read_bytes()
             ),
-            normalization_policy="utf8-lf-exact-fraction-decimal60-log-layout6.v1",
+            normalization_policy="utf8-lf-exact-fraction-decimal400-log-layout6.v1",
         )
 
     def render(self, compiled):
@@ -118,6 +118,8 @@ class PlotRenderer:
             lo, hi = limits
             if scale.type == "log":
                 lo, hi, value = _log(lo), _log(hi), _log(value)
+            if hi == lo:
+                raise PlotFault("log_layout_precision_unsupported")
             return start + (value - lo) * (end - start) / (hi - lo)
 
         def xy(d, layer, endpoint=None):
@@ -163,7 +165,7 @@ class PlotRenderer:
         for i in range(5):
             if ir.scales.y.type == "log":
                 with localcontext() as ctx:
-                    ctx.prec = 60
+                    ctx.prec = 400
                     lo, hi = (_log(v) for v in y_domain)
                     tick = Fraction(
                         (
@@ -191,7 +193,7 @@ class PlotRenderer:
                 lo, hi = x_domain
                 if ir.scales.x.type == "log":
                     with localcontext() as ctx:
-                        ctx.prec = 60
+                        ctx.prec = 400
                         log_tick = _log(lo) + (_log(hi) - _log(lo)) * Fraction(i, 4)
                         tick = Fraction(
                             (

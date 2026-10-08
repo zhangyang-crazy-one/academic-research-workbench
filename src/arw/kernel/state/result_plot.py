@@ -248,6 +248,7 @@ class ResultPlotIR(StrictModel):
     layers: tuple[PlotLayer, ...] = Field(min_length=1, max_length=20)
     caption: str = Field(default="", max_length=2400)
     manuscript_reference: str = Field(default="", max_length=1200)
+    acceptance_bindings: tuple[ResearchBinding, ...] = Field(default=(), max_length=1)
     caption_bindings: tuple[CaptionBinding, ...] = Field(default=(), max_length=100)
     figure_number: int | None = Field(default=None, ge=1, le=10000)
     heuristics: PlotHeuristics = PlotHeuristics()
@@ -290,7 +291,7 @@ class ResultPlotIR(StrictModel):
         return self
 
     @property
-    def source_refs(self):
+    def data_source_refs(self):
         from arw.kernel.core.canonical import canonical_json_bytes
 
         refs = []
@@ -306,9 +307,16 @@ class ResultPlotIR(StrictModel):
                 refs.extend(request_refs(layer.uncertainty.n_source))
         if self.heuristics.effective_n:
             refs.extend(request_refs(self.heuristics.effective_n))
-        for binding in self.caption_bindings:
-            if binding.confirmation_ref:
-                refs.append(binding.confirmation_ref)
+        unique = {canonical_json_bytes(r.model_dump(mode="json")): r for r in refs}
+        return tuple(unique[k] for k in sorted(unique))
+
+    @property
+    def source_refs(self):
+        from arw.kernel.core.canonical import canonical_json_bytes
+
+        refs = self.data_source_refs + tuple(
+            b.confirmation_ref for b in self.caption_bindings if b.confirmation_ref
+        )
         unique = {canonical_json_bytes(r.model_dump(mode="json")): r for r in refs}
         return tuple(unique[k] for k in sorted(unique))
 
@@ -316,6 +324,8 @@ class ResultPlotIR(StrictModel):
     def research_bindings(self):
         # The canonical refs remain in the receipt. This compatibility view is
         # used only by the existing parent-ledger lifecycle stage envelope.
+        if self.acceptance_bindings:
+            return self.acceptance_bindings
         return tuple(
             ResearchBinding(
                 binding_id=f"plot.source.{i}",
@@ -328,6 +338,29 @@ class ResultPlotIR(StrictModel):
             for i, r in enumerate(self.source_refs)
             if isinstance(r, ParentArtifactRef)
         )
+
+
+class PlotSourceBridge(StrictModel):
+    schema_version: Literal["arw.plot-source-bridge.v1"] = "arw.plot-source-bridge.v1"
+    artifact_id: StableRuntimeId
+    revision: int = Field(ge=1)
+    source_refs: tuple[AcceptedRef, ...] = Field(min_length=1, max_length=5000)
+    source_refs_sha256: Sha256
+
+    @model_validator(mode="after")
+    def canonical_refs(self):
+        from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+
+        keys = tuple(
+            canonical_json_bytes(r.model_dump(mode="json")) for r in self.source_refs
+        )
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("bridge_refs_must_be_unique_canonical_sorted")
+        if self.source_refs_sha256 != sha256_hex(
+            canonical_json_bytes([r.model_dump(mode="json") for r in self.source_refs])
+        ):
+            raise ValueError("bridge_source_refs_digest_mismatch")
+        return self
 
 
 class PlotValue(StrictModel):
@@ -393,6 +426,7 @@ def result_plot_schema_documents():
     for name, model in [
         ("result-plot-ir.schema.json", ResultPlotIR),
         ("result-plot-receipt.schema.json", ResultPlotReceipt),
+        ("plot-source-bridge.schema.json", PlotSourceBridge),
     ]:
         value = model.model_json_schema()
         value["$schema"] = "https://json-schema.org/draft/2020-12/schema"

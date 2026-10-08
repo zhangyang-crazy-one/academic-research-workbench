@@ -543,7 +543,7 @@ def test_cross_run_readonly_receipt_preserves_same_name_identity(tmp_path):
         Fraction(9, 10),
     ]
     assert len({r.run_id for r in receipt.inputs}) == 2 and validate_svg_safety(output)
-    with pytest.raises(PlotFault, match="cross_run_parent_acceptance_unsupported"):
+    with pytest.raises(PlotFault, match="plot_source_bridge_required"):
         ResearchArtifactService().qualify(
             ir,
             run_root=first,
@@ -839,3 +839,277 @@ def accept_extra(root, artifact_id, path, number, kind):
     return RuntimeCommandService(root).accept_artifact(
         ArtifactAcceptanceRequest.model_validate_json(json.dumps(base))
     )
+
+
+def test_extremely_close_log_values_do_not_collapse_transform_domain(tmp_path):
+    _, context, ref, _ = result_fixture(
+        tmp_path, ('{"A":1,"B":1.' + "0" * 99 + "1}\n").encode()
+    )
+    first = aggregate(ref)
+    second = aggregate(ref, category="B", pointer="/B", layer_id="layer.b")
+    ir = plot((first, second))
+    ir = ir.model_copy(
+        update={
+            "scales": PlotScales(
+                x=ir.scales.x, y=ir.scales.y.model_copy(update={"type": "log"})
+            )
+        }
+    )
+    compiled = compile_plot(ir, context)
+    output = PlotRenderer().render(compiled)
+    coordinates = [
+        e.attrib["cy"] for e in ET.fromstring(output).iter() if e.tag.endswith("circle")
+    ]
+    assert len(set(coordinates)) == 2
+    assert "decimal400-log" in PlotRenderer().identity.normalization_policy
+
+
+def attach_bridge(ir, root, context, *, number=70):
+    from arw_research_artifact.plot_policy import build_source_bridge
+
+    from arw.kernel.core.canonical import canonical_json_bytes
+    from arw.kernel.state.research_artifact import ResearchBinding
+
+    capsule = build_source_bridge(ir, context)
+    (root / "bridge.json").write_bytes(
+        canonical_json_bytes(capsule.model_dump(mode="json"))
+    )
+    assert accept_extra(
+        root, "artifact.bridge", "bridge.json", number, "plot-source-bridge"
+    ).accepted
+    event = replay_run(root).events[-1]
+    bridge = ResearchBinding(
+        binding_id="binding.bridge",
+        artifact_id=event.payload.artifact_id,
+        sha256=event.payload.artifact_sha256,
+        ledger_event_id=event.event_id,
+        ledger_event_sha256=event.event_sha256,
+        json_pointer="",
+    )
+    return ir.model_copy(update={"acceptance_bindings": (bridge,)})
+
+
+def test_cross_run_bridge_parent_acceptance_preserves_original_proofs(tmp_path):
+    first, context, ref1, _ = accepted_fixture(tmp_path, b'{"A":0.1}\n')
+    second, _, ref2, _ = accepted_fixture(tmp_path, b'{"A":0.9}\n', run_index=2)
+    context = replace(context, run_roots=(first, second))
+    ir = plot(
+        (
+            aggregate(ref1),
+            aggregate(ref2, category="B", pointer="/A", layer_id="layer.b"),
+        )
+    )
+    ir = attach_bridge(ir, first, context)
+    service = ResearchArtifactService()
+    result = service.qualify(
+        ir, run_root=first, request=parent_request(first), resolution_context=context
+    )
+    assert result["accepted"]
+    assert len(result["receipt"]["inputs"]) == 2
+    receipt = service.verify_plot_receipt(
+        first, replay_run(first).events, ir.artifact_id, resolution_context=context
+    )
+    assert [v.exact.as_fraction() for v in receipt.plot_values] == [
+        Fraction(1, 10),
+        Fraction(9, 10),
+    ]
+    assert (
+        service.reproduce(ir.artifact_id, run_root=first, resolution_context=context)[
+            "status"
+        ]
+        == "reproduced"
+    )
+    # The local bridge never replaces the original external source checks.
+    (second / "data.json").write_bytes(b'{"A":0.8}\n')
+    with pytest.raises(PlotFault, match="unresolved_plot_source"):
+        service.reproduce(ir.artifact_id, run_root=first, resolution_context=context)
+
+
+def test_bridge_digest_context_and_unaccepted_capsule_fail(tmp_path):
+    from arw.kernel.state.research_artifact import ResearchBinding
+
+    first, context, ref1, _ = accepted_fixture(tmp_path, b'{"A":0.1}\n')
+    second, _, ref2, _ = accepted_fixture(tmp_path, b'{"A":0.9}\n', run_index=2)
+    context = replace(context, run_roots=(first, second))
+    ir = plot(
+        (
+            aggregate(ref1),
+            aggregate(ref2, category="B", pointer="/A", layer_id="layer.b"),
+        )
+    )
+    fake = ResearchBinding(
+        binding_id="binding.fake",
+        artifact_id="artifact.fake",
+        sha256="a" * 64,
+        ledger_event_id=ref1.accepting_event_id,
+        ledger_event_sha256=ref1.accepting_event_sha256,
+        json_pointer="",
+    )
+    with pytest.raises(PlotFault, match="invalid_plot_source_bridge"):
+        ResearchArtifactService().qualify(
+            ir.model_copy(update={"acceptance_bindings": (fake,)}),
+            run_root=first,
+            request=parent_request(first),
+            resolution_context=context,
+        )
+    bridged = attach_bridge(ir, first, context)
+    swapped = bridged.model_copy(
+        update={
+            "layers": (
+                aggregate(ref2),
+                aggregate(ref1, category="B", pointer="/A", layer_id="layer.b"),
+            )
+        }
+    )
+    # Ref sets alone intentionally bind source provenance, not arbitrary labeling.
+    # The full IR is separately frozen in the original lifecycle.
+    assert swapped.source_refs == bridged.source_refs
+    revision = bridged.model_copy(update={"revision": 2})
+    with pytest.raises(PlotFault, match="invalid_plot_source_bridge"):
+        ResearchArtifactService().qualify(
+            revision,
+            run_root=first,
+            request=parent_request(first),
+            resolution_context=context,
+        )
+    (first / "bridge.json").write_bytes(
+        b'{"schema_version":"arw.plot-source-bridge.v1"}\n'
+    )
+    with pytest.raises((PlotFault, ValueError)):
+        ResearchArtifactService().capture_result_plot(
+            bridged, run_root=first, resolution_context=context
+        )
+
+
+def test_caption_semantic_target_excludes_attestation_self_reference(tmp_path):
+    from arw_research_artifact.plot_policy import caption_target
+
+    from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+
+    _root, context, ref, _ = result_fixture(tmp_path)
+    ir = plot((aggregate(ref),), caption="A=0.831")
+    compiled = compile_plot(ir, context)
+    b = binding(compiled.plot_values[0], 2, 7)
+    first = caption_target(compiled, b)
+    asserted = b.model_copy(
+        update={"confirmation": "authenticated", "confirmation_ref": ref}
+    )
+    ir2 = ir.model_copy(update={"caption_bindings": (asserted,)})
+    second = caption_target(compile_plot(ir2, context), asserted)
+    assert canonical_json_bytes(first) == canonical_json_bytes(second)
+    changed = b.model_copy(update={"category": "B"})
+    assert sha256_hex(
+        canonical_json_bytes(caption_target(compiled, changed))
+    ) != sha256_hex(canonical_json_bytes(first))
+
+
+def test_extreme_exponent_metadata_rejected_before_fraction_expansion(tmp_path):
+    _, context, ref, _ = accepted_fixture(
+        tmp_path, b"id,score,category,series,order\na,0.1,A,S,1e999999999\n"
+    )
+    layer = PlotLayer(
+        layer_id="layer.order",
+        role="observation",
+        mark="line",
+        source=selection(ref),
+        encoding=PlotEncoding(x="category", y="score", series="series", order="order"),
+    )
+    with pytest.raises(PlotFault, match="missing_or_invalid_encoding"):
+        compile_plot(plot((layer,)), context)
+
+
+def test_extreme_caption_metadata_exponent_is_advisory_invalid_occurrence(tmp_path):
+    _, context, ref, _ = result_fixture(tmp_path)
+    caption = "Figure 1e999999999"
+    b = CaptionBinding(
+        binding_id="binding.figure",
+        start_byte=7,
+        end_byte=len(caption),
+        number_kind="figure_number",
+        metadata_key="figure_number",
+        revision=1,
+    )
+    ir = plot(
+        (aggregate(ref),), caption=caption, caption_bindings=(b,), figure_number=1
+    )
+    checks = caption_checks(compile_plot(ir, context))
+    assert (
+        checks[0].code == "invalid_caption_occurrence"
+        and checks[0].status == "advisory"
+    )
+
+
+def test_journal_confirmation_source_requires_and_uses_explicit_bridge(tmp_path):
+    from arw.kernel.ledger.narrative import register, select
+    from arw.kernel.state.accepted_ref import JournalEventRef
+    from tests.unit.test_narrative import plan
+
+    root, context, ref, _ = result_fixture(tmp_path)
+    register(context.project_root)
+    selected = select(context.project_root, plan())
+    journal_ref = JournalEventRef(
+        project_id=context.project_id,
+        sequence=2,
+        event_sha256=selected.sha256,
+        payload_selector="/plan/route",
+    )
+    ir = plot((aggregate(ref),), caption="A=0.831")
+    p = compile_plot(ir, context).plot_values[0]
+    b = binding(p, 2, 7).model_copy(update={"confirmation_ref": journal_ref})
+    ir = ir.model_copy(update={"caption_bindings": (b,)})
+    service = ResearchArtifactService()
+    with pytest.raises(PlotFault, match="plot_source_bridge_required"):
+        service.qualify(
+            ir, run_root=root, request=parent_request(root), resolution_context=context
+        )
+    ir = attach_bridge(ir, root, context)
+    result = service.qualify(
+        ir, run_root=root, request=parent_request(root), resolution_context=context
+    )
+    assert result["accepted"]
+    assert {r["scope"] for r in result["receipt"]["inputs"]} == {
+        "parent-artifact",
+        "project-journal",
+    }
+    assert result["receipt"]["checks"][-1]["status"] == "advisory"
+
+
+def test_bridge_not_visible_before_acceptance_snapshot_prefix(tmp_path):
+    from arw.kernel.ledger.accepted_refs import RunPrefix
+
+    root, context, ref, _ = result_fixture(tmp_path)
+    before = replay_run(root)
+    ir = plot((aggregate(ref),))
+    ir = attach_bridge(ir, root, context)
+    historical = replace(
+        context,
+        run_prefixes=(
+            RunPrefix(before.run_id, before.revision, before.last_event_sha256),
+        ),
+    )
+    with pytest.raises(PlotFault, match="invalid_plot_source_bridge"):
+        ResearchArtifactService().capture_result_plot(
+            ir, run_root=root, resolution_context=historical
+        )
+
+
+def test_service_bridge_and_caption_target_proposals_are_readonly(tmp_path):
+    root, context, ref, _ = result_fixture(tmp_path)
+    ir = plot((aggregate(ref),), caption="A=0.831")
+    p = compile_plot(ir, context).plot_values[0]
+    ir = ir.model_copy(update={"caption_bindings": (binding(p, 2, 7),)})
+    before = {
+        p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()
+    }
+    service = ResearchArtifactService()
+    targets = service.caption_targets(ir, run_root=root, resolution_context=context)
+    capsule = service.source_bridge(ir, run_root=root, resolution_context=context)
+    after = {
+        p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()
+    }
+    assert before == after
+    assert (
+        targets["bindings"][0]["scope"]
+        == "caption:" + targets["bindings"][0]["target_sha256"]
+    )
+    assert capsule["schema_version"] == "arw.plot-source-bridge.v1"
