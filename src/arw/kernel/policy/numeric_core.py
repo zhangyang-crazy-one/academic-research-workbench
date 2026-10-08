@@ -38,6 +38,8 @@ from arw.kernel.state.numeric_core import (
 
 MAX_ROWS = 10000
 MAX_DEPTH = 32
+MAX_DERIVATIONS = 128
+MAX_RESOLVED_VALUES = 320000
 MAX_NUMERIC_TEXT = 256
 
 
@@ -298,17 +300,23 @@ def evaluate_derivation(
     derivations: Mapping[str, Derivation] | None = None,
     *,
     _seen: frozenset[str] = frozenset(),
+    _memo: dict[str, Derivation] | None = None,
+    _budget: list[int] | None = None,
 ) -> Derivation:
     identity = derivation_id(request)
+    memo = {} if _memo is None else _memo
+    budget = [0, 0] if _budget is None else _budget
 
     def outcome(status, reason=None, **values):
-        return Derivation(
+        result = Derivation(
             derivation_id=identity,
             request=request,
             status=status,
             reason=reason,
             **values,
         )
+        memo[identity] = result
+        return result
 
     try:
         request = DerivationRequest.model_validate_json(
@@ -318,6 +326,11 @@ def evaluate_derivation(
             return outcome("unsupported", "unsupported_evaluator_version")
         if identity in _seen or len(_seen) >= MAX_DEPTH:
             return outcome("out_of_domain", "cyclic or over-depth derivation")
+        if identity in memo:
+            return memo[identity]
+        budget[0] += 1
+        if budget[0] > MAX_DERIVATIONS:
+            return outcome("out_of_domain", "derivation graph exceeds node budget")
         operands = []
         for arg in request.expr.args:
             if isinstance(arg, DerivationRef):
@@ -332,7 +345,12 @@ def evaluate_derivation(
                     )
                 # Stored exact/results are never authority: re-evaluate request.
                 derived = evaluate_derivation(
-                    candidate.request, context, derivations, _seen=_seen | {identity}
+                    candidate.request,
+                    context,
+                    derivations,
+                    _seen=_seen | {identity},
+                    _memo=memo,
+                    _budget=budget,
                 )
                 if derived.status != "exact":
                     return outcome(derived.status, derived.reason)
@@ -353,6 +371,11 @@ def evaluate_derivation(
                 return outcome(resolved.status, resolved.reason)
             if resolved.context != request.context:
                 return outcome("context_mismatch", "comparison contexts differ")
+            budget[1] += len(resolved.values)
+            if budget[1] > MAX_RESOLVED_VALUES:
+                return outcome(
+                    "out_of_domain", "resolved values exceed expression budget"
+                )
             operands.append(resolved)
         op = request.expr.op
         if op in {"diff", "ratio", "pct_point_diff", "relative_change"}:
@@ -447,3 +470,28 @@ def format_exact(exact: RationalExact, presentation: NumericPresentation) -> str
             rounding=presentation.rounding_mode,
         )
         return f"{rounded:.{presentation.decimals}f}{presentation.unit_suffix}"
+
+
+def csv_selection_from_data_selector(selector, ref, context) -> CsvSelection:
+    """Losslessly map an old DataSelector only when stable IDs were declared.
+
+    Existing selectors without row identity retain their original evaluator;
+    this adapter does not fabricate row IDs from physical line numbers.
+    """
+    from arw.kernel.artifacts.experiment_acceptance import DataSelector
+
+    selector = DataSelector.model_validate_json(
+        canonical_json_bytes(selector.model_dump(mode="json"))
+    )
+    if selector.row_id_column is None or selector.artifact_id != ref.artifact_id:
+        raise ValueError(
+            "DataSelector lacks stable row identity or differs from accepted artifact"
+        )
+    return CsvSelection(
+        ref=ref,
+        columns=(selector.column,),
+        row_id_column=selector.row_id_column,
+        missing_policy=selector.missing_values,
+        context=context,
+        unit=context.unit,
+    )
