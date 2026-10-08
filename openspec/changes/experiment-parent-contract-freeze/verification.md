@@ -20,3 +20,21 @@ Three public external CPU pilot studies remain deferred and unchecked. Synthetic
   `tests/unit/test_experiment_acceptance.py`,
   `tests/unit/test_experiment_provenance.py`, and
   `tests/integration/test_experiment_provenance.py`: **116 passed**.
+
+## CI execution-family version follow-up
+
+Run `37723689404` exposed a test-only positional assumption: checked execution
+migration 0004 was compared with the newest `MIGRATIONS[0]` entry after the
+contract-only 0005 entry was prepended. The reader already selects versions by
+event family. The fix matches migration ID, verifies its complete execution
+family and per-type versions, and locates the drift branch by event type.
+Production models, schemas, migration 0004 metadata and historical fixtures
+remain unchanged; execution events retain 1.4.0 and runtime envelopes 1.0.0.
+
+`tests/integration/test_execution_provenance.py`,
+`tests/schema/test_schema_drift.py`, `tests/schema/test_phase4_contracts.py`,
+`tests/compat/test_replay_golden.py`, research artifact/memory/learning event
+compatibility tests, and `tests/unit/test_experiment_acceptance.py` passed:
+**140 passed in 63.52s**. This includes the exact formerly failing test and
+byte-stable evaluator 1.0.0/1.1.0 receipt replay. Ruff and `git diff --check`
+passed. No full ARS suite or native/model calls were repeated.
