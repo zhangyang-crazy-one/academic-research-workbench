@@ -1,0 +1,76 @@
+{
+  "schema_version": "arw.selection-pool-fixture.v1",
+  "origin": "self_authored_synthetic",
+  "claim": "Synthetic prompt: reminders improve completeness; labels are fixture assertions, not scientific findings.",
+  "families": [
+    {
+      "work_family_id": "family-support-a",
+      "raw_hit_ids": [
+        "raw-support-a-journal",
+        "raw-support-a-preprint"
+      ],
+      "label": "support",
+      "label_basis": "synthetic_fixture"
+    },
+    {
+      "work_family_id": "family-support-b",
+      "raw_hit_ids": [
+        "raw-support-b"
+      ],
+      "label": "support",
+      "label_basis": "synthetic_fixture"
+    },
+    {
+      "work_family_id": "family-oppose-a",
+      "raw_hit_ids": [
+        "raw-oppose-a"
+      ],
+      "label": "oppose",
+      "label_basis": "synthetic_fixture"
+    },
+    {
+      "work_family_id": "family-oppose-b",
+      "raw_hit_ids": [
+        "raw-oppose-b"
+      ],
+      "label": "oppose",
+      "label_basis": "synthetic_fixture"
+    },
+    {
+      "work_family_id": "family-neutral",
+      "raw_hit_ids": [
+        "raw-neutral"
+      ],
+      "label": "neutral",
+      "label_basis": "synthetic_fixture"
+    },
+    {
+      "work_family_id": "family-unread",
+      "raw_hit_ids": [
+        "raw-unread"
+      ],
+      "label": "unknown",
+      "label_basis": "synthetic_fixture"
+    }
+  ],
+  "original_order": [
+    "family-support-a",
+    "family-neutral",
+    "family-oppose-a",
+    "family-support-b",
+    "family-oppose-b",
+    "family-unread"
+  ],
+  "budget": 2,
+  "original_stop_reason": "synthetic early stop after two reads",
+  "original_citations": [
+    {
+      "work_family_id": "family-support-a",
+      "raw_hit_id": "raw-support-a-journal",
+      "source_text": "Synthetic supportive abstract says reminder helped.",
+      "byte_start": 35,
+      "byte_end": 50,
+      "quote_sha256": "837c8b28af98ad671d5287bc7ffa71c1a151fa02539f39e19c777cb5afffd9ff"
+    }
+  ]
+}

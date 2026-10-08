@@ -160,6 +160,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_learning(subparsers)
     from arw.cli_submission import configure as configure_submission
     configure_submission(subparsers)
+    from arw.cli_selection_audit import configure as configure_selection_audit
+    configure_selection_audit(subparsers)
     route = subparsers.add_parser(
         "route",
         help="Emit the installed read-only ARS workflow route.",
@@ -666,6 +668,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65 if result.get("status") == "rejected" else 0
         except (ValueError, TypeError, RuntimeError, OSError) as error:
             _write_json({"status": "error", "code": "CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "writing_invalid"), "message": str(error)[:256]})
+            return 65
+    if args.command == "selection-audit":
+        from arw.cli_selection_audit import handle
+        from arw.kernel.capabilities import CapabilityUnavailable
+        from arw.selection_audit import SelectionAuditError
+        try:
+            _write_json(handle(args))
+            return 0
+        except (SelectionAuditError, CapabilityUnavailable, ValueError, OSError) as error:
+            _write_json({"status": "error", "code": getattr(error, "code", "selection_audit_invalid"), "message": str(error)[:256]})
             return 65
     if args.command == "narrative":
         from arw.cli_narrative import handle
