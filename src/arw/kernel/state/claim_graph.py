@@ -12,6 +12,7 @@ from pydantic import BeforeValidator, Field, field_validator, model_validator
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
 from arw.kernel.state.models import Sha256, StableRuntimeId, StrictModel
+from arw.kernel.state.numeric_core import NumericPresentation
 
 
 def _array(value: object) -> tuple:
@@ -112,6 +113,8 @@ class Occurrence(StrictModel):
         | None
     ) = None
     derivation_id: Sha256 | None = None
+    presentation: NumericPresentation | None = None
+    figure_ref: dict | None = None
     plot_value_id: StableRuntimeId | None = None
     plot_revision: Annotated[int, Field(ge=1)] | None = None
 
@@ -126,6 +129,17 @@ class Occurrence(StrictModel):
     def classified_number(self) -> Self:
         if self.kind != "numeric_token" and self.numeric_class is not None:
             raise ValueError("numeric classification applies only to numeric tokens")
+        if (
+            self.presentation is not None
+            and self.presentation.derivation_id != self.derivation_id
+        ):
+            raise ValueError(
+                "numeric presentation must bind the exact derivation identity"
+            )
+        if self.figure_ref is not None:
+            from arw.kernel.state.accepted_ref import ParentArtifactRef
+
+            ParentArtifactRef.model_validate(self.figure_ref)
         if (self.plot_value_id is None) != (self.plot_revision is None):
             raise ValueError("plot value binding requires identity and revision")
         if self.manuscript_ref.get("scope") != "parent-artifact":
@@ -286,5 +300,6 @@ def claim_graph_schema_documents() -> dict[str, dict]:
     for name, value in documents.items():
         value["$id"] = f"https://academic-research-workbench.local/schemas/v1/{name}"
     from arw.kernel.state.claim_authentication import authentication_schema_documents
+
     documents.update(authentication_schema_documents())
     return documents

@@ -20,3 +20,9 @@
 - [x] 4.1 Add distinct authenticated-intent schema, parent 1.6.0 anchor reader migration and complete reducer authority semantics.
 - [x] 4.2 Verify actual journal bytes/N-1 closure, separate historical authorization/current applicability and expose explicit hard MVP checks.
 - [x] 4.3 Verify identity/time/prefix/tamper/resume cases and ten-anchor bounded original replay.
+
+## 5. Figure, numeric and caption composition
+
+- [x] 5.1 Compose the original fixed-prefix result_plot verifier through the public CLI with an optional kernel callback and explicit unsupported default.
+- [x] 5.2 Recompute accepted sealed numeric derivations and verify Figure-backed own-result numeric identity/display, retaining per-claim binding verdicts.
+- [x] 5.3 Add a true parent-anchor caption verifier over independent frozen targets, including real hard-caption writer acceptance and declared/wrong-target/prefix-negative tests.

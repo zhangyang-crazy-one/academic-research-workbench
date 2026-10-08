@@ -362,3 +362,102 @@ def _prevalidate_anchor(root, replay, payload, request):
     except (ValueError, RuntimeError, OSError) as error:
         return "claim-anchor-invalid", str(error)
     return None
+
+
+def verify_caption_confirmation(context, ref, target_sha256: str) -> str | None:
+    """Verify an exact caption target through original journal/parent contracts.
+
+    This is renderer-independent. The extension builds the closed semantic
+    target; confirmation handles never become part of that target's identity.
+    """
+    from arw.kernel.state.accepted_ref import JournalEventRef
+    from arw.kernel.ledger.claim_graph import _attestations
+
+    if (
+        not isinstance(ref, JournalEventRef)
+        or ref.payload_selector
+        or context.project_root is None
+        or ref.project_id != context.project_id
+    ):
+        return None
+    fixed = None
+    if (
+        context.run_prefixes
+        and context.journal_sequence is not None
+        and context.journal_head_sha256 is not None
+    ):
+        from arw.kernel.state.claim_graph import JournalPrefix, RunPrefix
+
+        if any(p.run_manifest_sha256 is None for p in context.run_prefixes):
+            return None
+        fixed = SnapshotManifest(
+            project_id=context.project_id,
+            journal=JournalPrefix(
+                sequence=context.journal_sequence,
+                head_sha256=context.journal_head_sha256,
+            ),
+            runs=tuple(
+                sorted(
+                    (
+                        RunPrefix(
+                            run_id=p.run_id,
+                            run_manifest_sha256=p.run_manifest_sha256,
+                            revision=p.revision,
+                            head_sha256=p.head_sha256,
+                        )
+                        for p in context.run_prefixes
+                    ),
+                    key=lambda p: p.run_id,
+                )
+            ),
+        )
+    inputs = _read_inputs(
+        context.project_root,
+        context.run_roots,
+        fixed,
+        held_lock_roots=context.held_lock_roots,
+    )
+    _closure(inputs)
+    event = next((e for e in inputs.journal if e["sequence"] == ref.sequence), None)
+    if (
+        event is None
+        or event["event_sha256"] != ref.event_sha256
+        or event["kind"] != "claim.attested"
+    ):
+        return None
+    if event["payload"].get("schema_version") != "arw.claim-attestation.v2":
+        return None
+    att = AuthenticatedAttestation.model_validate(event["payload"])
+    if att.scope != "caption:" + target_sha256:
+        return None
+    record = _registrations(inputs.journal).get(att.claim_id)
+    if record is None:
+        return None
+    dependency = _evaluate_registration(record, inputs)[1]
+    proof = next(
+        (
+            a
+            for a in _attestations(record, dependency, inputs)
+            if a["source"]["event_sha256"] == ref.event_sha256
+        ),
+        None,
+    )
+    if (
+        proof is None
+        or not proof["historical_authorized"]
+        or proof["current_applicability"] != "current"
+    ):
+        return None
+    if (
+        fixed is None
+        and _read_inputs(
+            context.project_root,
+            context.run_roots,
+            held_lock_roots=context.held_lock_roots,
+        ).manifest
+        != inputs.manifest
+    ):
+        raise ClaimGraphError(
+            "stale", "caption confirmation snapshot advanced during verification"
+        )
+    return proof["anchor_event_sha256"]

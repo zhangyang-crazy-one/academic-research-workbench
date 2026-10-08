@@ -35,3 +35,21 @@ Declared confirmations SHALL append through the project journal, reference only 
 #### Scenario: No self reference
 - **WHEN** confirmation N is appended
 - **THEN** its embedded snapshot journal prefix ends at N-1 and does not hash itself
+
+### Requirement: Exact numeric and Figure proof composition
+The public graph SHALL consume the original result_plot verifier at fixed real prefixes through a composition callback. Without it the kernel SHALL report typed unsupported. Own-result numbers SHALL resolve their accepted sealed request or verified plot value and explicit display; unknown IDs, incorrect plot context and unsupported calculations SHALL not become exact or passed. Numeric verdicts SHALL stay bound to individual claim revisions.
+
+#### Scenario: Equal display with different exact context
+- **WHEN** A and B both display 0.83 but have different exact values and derivation identities
+- **THEN** an A occurrence referring to B's derivation fails even if the display text is equal
+
+### Requirement: Caption target confirmation without digest cycles
+Caption authentication SHALL bind a frozen semantic target excluding confirmation handles. Only a real canonical journal confirmation and accepted parent anchor with unchanged scope/claim/evidence SHALL yield authentication. The complete current IR hash SHALL be checked independently.
+
+#### Scenario: A real authenticated target
+- **WHEN** confirmation references are added after confirming the independently frozen target
+- **THEN** target identity remains unchanged and the original writer can accept the exact hard-caption binding
+
+#### Scenario: A caller label
+- **WHEN** a declared record or unanchored handle is labeled authenticated in an IR
+- **THEN** the true verifier reports auth_missing
