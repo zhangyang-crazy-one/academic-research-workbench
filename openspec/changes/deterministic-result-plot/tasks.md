@@ -13,3 +13,9 @@
 
 - [x] 3.1 Verify all eight joint fixture groups and legacy receipt compatibility.
 - [x] 3.2 Document actual capability boundaries and validate the OpenSpec change.
+
+## 4. Cross-run and authority integration
+
+- [x] 4.1 Add explicit accepted source bridges for cross-run and journal sources without weakening the existing lifecycle.
+- [x] 4.2 Expose read-only bridge and semantic caption target proposals and verify no digest self-reference.
+- [x] 4.3 Reject resource-exponent metadata before Fraction construction and preserve extremely close log domains.

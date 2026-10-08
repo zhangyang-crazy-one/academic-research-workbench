@@ -9,7 +9,7 @@ from fractions import Fraction
 from typing import Protocol
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
-from arw.kernel.state.accepted_ref import ParentArtifactRef
+from arw.kernel.state.accepted_ref import JournalEventRef, ParentArtifactRef
 from arw.kernel.state.numeric_core import (
     CsvSelection,
     DerivationRequest,
@@ -66,11 +66,12 @@ class VerifiedCaptionAttestation:
     ir_sha256: str
     status: str  # verified | unsupported | auth_missing
     evidence_sha256: str | None = None
+    target_sha256: str | None = None
 
 
 class CaptionAttestationVerifier(Protocol):
     def verify(
-        self, ir, binding, *, resolution_context
+        self, compiled, binding, *, resolution_context
     ) -> VerifiedCaptionAttestation: ...
 
 
@@ -91,7 +92,7 @@ def _exact(request, context):
     return result
 
 
-def compile_plot(ir, resolution_context):
+def compile_plot(ir, resolution_context, *, acceptance_root=None):
     """Read-only compilation. All emitted values are replayed accepted derivations."""
     from arw.kernel.state.result_plot import ResultPlotIR
 
@@ -101,7 +102,7 @@ def compile_plot(ir, resolution_context):
     ir = ResultPlotIR.model_validate_json(raw_ir)
     from arw.kernel.ledger.accepted_refs import resolve_ref
     from arw.kernel.ledger.source_locations import read_retained_bytes
-    from arw.kernel.policy.numeric_core import resolve_operand
+    from arw.kernel.policy.numeric_core import parse_exact_number, resolve_operand
     from arw.kernel.state.models import RunManifest
 
     run_ids = {
@@ -114,16 +115,20 @@ def compile_plot(ir, resolution_context):
     if not refs:
         raise PlotFault("plot_requires_accepted_sources")
     for ref in refs:
-        if not isinstance(ref, ParentArtifactRef):
-            raise PlotFault("plot_journal_source_unsupported")
-        if ref.run_id not in run_ids:
+        if isinstance(ref, ParentArtifactRef) and ref.run_id not in run_ids:
             raise PlotFault("plot_cross_run_source_unsupported")
         resolved = resolve_ref(ref, resolution_context)
-        if resolved.status != "resolved" or resolved.proven_scope not in {
-            "bytes",
-            "selected_bytes",
-        }:
+        allowed_scopes = (
+            {"metadata_only"}
+            if isinstance(ref, JournalEventRef)
+            else {"bytes", "selected_bytes"}
+        )
+        if resolved.status != "resolved" or resolved.proven_scope not in allowed_scopes:
             raise PlotFault("unresolved_plot_source")
+    if ir.acceptance_bindings:
+        if acceptance_root is None:
+            raise PlotFault("bridge_target_root_required")
+        verify_source_bridge(ir, acceptance_root, resolution_context)
     contexts = [l.source.context for l in ir.layers if l.source]
     contexts += [
         r.context
@@ -209,7 +214,7 @@ def compile_plot(ir, resolution_context):
                         fields[layer.encoding.series] if layer.encoding.series else ""
                     )
                     order = (
-                        Fraction(fields[layer.encoding.order])
+                        parse_exact_number(fields[layer.encoding.order]).as_fraction()
                         if layer.encoding.order
                         else None
                     )
@@ -473,6 +478,132 @@ def compile_plot(ir, resolution_context):
     return CompiledPlot(ir, tuple(layers), tuple(values), tuple(checks), metadata)
 
 
+def build_source_bridge(ir, resolution_context):
+    """Read-only proposal, requiring explicit ordinary parent acceptance later."""
+    from arw.kernel.state.result_plot import PlotSourceBridge
+
+    compile_plot(ir.model_copy(update={"acceptance_bindings": ()}), resolution_context)
+    refs = ir.source_refs
+    capsule = PlotSourceBridge(
+        artifact_id=ir.artifact_id,
+        revision=ir.revision,
+        source_refs=refs,
+        source_refs_sha256=sha256_hex(
+            canonical_json_bytes([r.model_dump(mode="json") for r in refs])
+        ),
+    )
+    if len(canonical_json_bytes(capsule.model_dump(mode="json"))) > 1_048_576:
+        raise PlotFault("plot_bridge_budget_exceeded")
+    return capsule
+
+
+def verify_source_bridge(ir, run_root, resolution_context):
+    from pathlib import Path
+
+    from arw.kernel.ledger.journal import (
+        replay_run,
+        replay_run_prefix,
+        replay_run_under_held_lock,
+    )
+    from arw.kernel.ledger.manifests import load_artifact_manifest
+    from arw.kernel.ledger.source_locations import read_retained_bytes
+    from arw.kernel.state.models import RunManifest
+    from arw.kernel.state.result_plot import PlotSourceBridge
+
+    from .validation import accepted_content
+
+    if len(ir.acceptance_bindings) != 1:
+        raise PlotFault("plot_source_bridge_required")
+    binding = ir.acceptance_bindings[0]
+    if binding.json_pointer:
+        raise PlotFault("bridge_requires_whole_capsule")
+    held = Path(run_root).absolute() in {
+        Path(p).absolute() for p in resolution_context.held_lock_roots
+    }
+    manifest_run = RunManifest.model_validate_json(
+        read_retained_bytes(run_root, "run-manifest.json")
+    )
+    prefix = next(
+        (p for p in resolution_context.run_prefixes if p.run_id == manifest_run.run_id),
+        None,
+    )
+    if resolution_context.run_prefixes and prefix is None:
+        raise PlotFault("bridge_target_missing_snapshot_prefix")
+    arguments = (
+        {}
+        if prefix is None
+        else {
+            "revision": prefix.revision,
+            "expected_head_sha256": prefix.head_sha256,
+            "expected_manifest_sha256": prefix.run_manifest_sha256,
+        }
+    )
+    replayed = (
+        replay_run_under_held_lock(run_root, **arguments)
+        if held
+        else (
+            replay_run_prefix(run_root, **arguments) if prefix else replay_run(run_root)
+        )
+    )
+    try:
+        _, event, raw = accepted_content(
+            run_root,
+            replayed.events,
+            binding.artifact_id,
+            binding.ledger_event_id,
+            binding.sha256,
+        )
+        manifest = load_artifact_manifest(run_root, event.payload.manifest_sha256)
+        if (
+            event.event_type != "artifact.accepted"
+            or event.event_sha256 != binding.ledger_event_sha256
+            or manifest.artifact_kind != "plot-source-bridge"
+            or manifest.media_type != "application/json"
+        ):
+            raise ValueError("bridge_acceptance_identity_mismatch")
+        capsule = PlotSourceBridge.model_validate_json(raw)
+        if (
+            capsule.artifact_id != ir.artifact_id
+            or capsule.revision != ir.revision
+            or capsule.source_refs != ir.source_refs
+        ):
+            raise ValueError("bridge_source_refs_mismatch")
+    except (ValueError, RuntimeError, OSError, KeyError) as error:
+        raise PlotFault("invalid_plot_source_bridge") from error
+    return capsule
+
+
+def caption_target(compiled, binding):
+    """Frozen semantic target without attestation/bridge self references."""
+    ir = compiled.ir
+    raw = ir.caption.encode("utf-8")
+    value = next(
+        (v for v in compiled.plot_values if v.plot_value_id == binding.plot_value_id),
+        None,
+    )
+    metadata = (
+        compiled.metadata.get(binding.metadata_key) if binding.metadata_key else None
+    )
+    return {
+        "schema_version": "arw.caption-numeric-target.v1",
+        "artifact_id": ir.artifact_id,
+        "revision": ir.revision,
+        "caption": ir.caption,
+        "caption_sha256": sha256_hex(raw),
+        "numeric_text": raw[binding.start_byte : binding.end_byte].decode(
+            "utf-8", errors="strict"
+        ),
+        "binding": binding.model_dump(
+            mode="json", exclude={"confirmation", "confirmation_ref"}
+        ),
+        "plot_value": None if value is None else value.model_dump(mode="json"),
+        "metadata_value": None
+        if metadata is None
+        else metadata.model_dump(mode="json"),
+        "source_refs": [r.model_dump(mode="json") for r in ir.data_source_refs],
+    }
+
+
 def caption_checks(
     compiled,
     *,
@@ -480,7 +611,7 @@ def caption_checks(
     hard_caption_checks=False,
     attestation_verifier=None,
 ):
-    from arw.kernel.policy.numeric_core import format_exact
+    from arw.kernel.policy.numeric_core import format_exact, parse_exact_number
 
     ir = compiled.ir
     values = {v.plot_value_id: v for v in compiled.plot_values}
@@ -494,7 +625,7 @@ def caption_checks(
                 None
                 if attestation_verifier is None
                 else attestation_verifier.verify(
-                    ir, b, resolution_context=resolution_context
+                    compiled, b, resolution_context=resolution_context
                 )
             )
             if (
@@ -505,6 +636,8 @@ def caption_checks(
                 or attestation.ir_sha256
                 != sha256_hex(canonical_json_bytes(ir.model_dump(mode="json")))
                 or not attestation.evidence_sha256
+                or attestation.target_sha256
+                != sha256_hex(canonical_json_bytes(caption_target(compiled, b)))
             ):
                 checks.append(
                     _check(
@@ -572,7 +705,7 @@ def caption_checks(
                 if (
                     exact is None
                     or not correct_slot
-                    or Fraction(token)
+                    or parse_exact_number(token).as_fraction()
                     != exact.as_fraction() * (b.scale.as_fraction() if b.scale else 1)
                 ):
                     code = "caption_metadata_mismatch"
