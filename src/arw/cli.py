@@ -160,6 +160,10 @@ def build_parser() -> argparse.ArgumentParser:
     configure_learning(subparsers)
     from arw.cli_submission import configure as configure_submission
     configure_submission(subparsers)
+    from arw.cli_claims import configure as configure_claims
+    configure_claims(subparsers)
+    from arw.cli_numeric import configure as configure_numeric
+    configure_numeric(subparsers)
     from arw.cli_selection_audit import configure as configure_selection_audit
     configure_selection_audit(subparsers)
     route = subparsers.add_parser(
@@ -678,6 +682,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         except (SelectionAuditError, CapabilityUnavailable, ValueError, OSError) as error:
             _write_json({"status": "error", "code": getattr(error, "code", "selection_audit_invalid"), "message": str(error)[:256]})
+            return 65
+    if args.command in {"claims", "numeric"}:
+        if args.command == "claims":
+            from arw.cli_claims import handle
+        else:
+            from arw.cli_numeric import handle
+        try:
+            result = handle(args)
+            _write_json(result)
+            return 65 if result.get("status") in {"FAIL", "rejected", "undefined", "unsupported", "out_of_domain", "context_mismatch"} else 0
+        except (ValueError, TypeError, RuntimeError, OSError) as error:
+            _write_json({"status": "error", "code": getattr(error, "code", "claims_invalid" if args.command == "claims" else "numeric_invalid"), "message": str(error)[:256]})
             return 65
     if args.command == "narrative":
         from arw.cli_narrative import handle

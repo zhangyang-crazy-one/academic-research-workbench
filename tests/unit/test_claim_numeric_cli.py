@@ -1,0 +1,28 @@
+"""Public commands use real accepted artifacts and return typed failures."""
+
+import json
+
+from arw.cli import main
+from tests.unit.test_accepted_refs import accepted_fixture
+from tests.unit.test_numeric_core import request, selection
+
+
+def test_numeric_cli_returns_exact_third_and_rejects_oversized_request(tmp_path, capsys):
+    root, context, ref, _ = accepted_fixture(tmp_path, b"id,score\na,0\nb,0\nc,1\n")
+    source = tmp_path / "request.json"
+    source.write_text(request("mean", selection(ref)).model_dump_json())
+    argv = ["numeric", "derive", "--request", str(source), "--project-id", context.project_id, "--run-root", str(root)]
+    assert main(argv) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "exact"
+    assert result["exact"] == {"numerator": 1, "denominator": 3}
+    source.write_bytes(b" " * 2_097_153)
+    assert main(argv) == 65
+    assert json.loads(capsys.readouterr().out)["code"] == "numeric_invalid"
+
+
+def test_claims_cli_exposes_structured_missing_project_failure(tmp_path, capsys):
+    assert main(["claims", "graph", "--project-root", str(tmp_path), "--json"]) == 65
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "error"
+    assert isinstance(result["code"], str)

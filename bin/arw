@@ -12,6 +12,8 @@ Commands:
   files          Administer registered roots and immutable file generations.
   writing        Prepare and record source-bound manuscript revisions.
   narrative      Register and select a fixed project paper argument strategy.
+  claims         Project and explicitly attest revision-bound manuscript claims.
+  numeric        Evaluate exact source-bound numeric derivations.
   selection-audit Export or replay retained candidate selection evidence.
   semantic       Query an explicitly built, optional semantic projection.
   experiment     Accept numeric experiment claims against a versioned contract.
@@ -725,7 +727,7 @@ PY
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli _graph-mcp "$@"
     ;;
-  writing|semantic|learn|memory|artifact|submission)
+  writing|semantic|learn|memory|artifact|submission|claims|numeric)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
