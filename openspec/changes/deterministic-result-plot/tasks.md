@@ -25,3 +25,8 @@
 - [x] 5.1 Support independent typed x selections with exact stable-row alignment and compatible experimental context.
 - [x] 5.2 Match paired positions by exact x/category and require complete caption occurrences.
 - [x] 5.3 Verify Figure receipts at real fixed disk prefixes independently of later ledger tails.
+
+## PR #96 review
+
+- [x] Verify dense grouped bar slot widths and an explicit linear-y requirement.
+- [x] Verify real hard-caption authority at qualification request time, including no-head-advance expiry and before-anchor refusal.

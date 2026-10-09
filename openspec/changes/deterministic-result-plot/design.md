@@ -18,3 +18,6 @@ Additive schemas and dispatch; existing research-artifact models and SvgRenderer
 
 ## Integration follow-up
 Cross-run and journal refs use a strictly typed arw.plot-source-bridge.v1 capsule explicitly accepted by the existing parent generic artifact acceptance command. The IR binds exactly one accepted bridge through acceptance_bindings; the original lifecycle source_event_sha256 remains local, while compilation and reproduction independently replay every original scoped source. Caption target hashes omit attestation refs and declarations and freeze full caption/occurrence/value context to prevent self-reference. Internal held-lock resolution uses actual disk replay validators; metadata parsing reuses numeric_core's pre-Fraction bounded parser. Log transforms use fixed 400-digit Decimal precision for the bounded rational domain.
+
+## PR #96 review corrections
+Grouped bar width derives from band width and series spacing, preserving a visible gap for dense groups. Bars require a linear y scale with an explicit error for log requests. Canonical hard-caption validation requires an explicit UTC instant for read-only capture and uses the original parent request occurred_at for qualification, preserving historical authorization separately from current expiry.

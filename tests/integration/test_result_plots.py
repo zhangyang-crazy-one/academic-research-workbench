@@ -6,6 +6,7 @@ import json
 import xml.etree.ElementTree as ET
 from dataclasses import replace
 from fractions import Fraction
+from itertools import pairwise
 
 import jsonschema
 import pytest
@@ -1262,3 +1263,52 @@ def test_figure_verification_reads_fixed_real_prefix_despite_later_torn_tail(tmp
         handle.write(b"{later broken tail")
     receipt = service.verify_plot_receipt(root, prefix.events, ir.artifact_id)
     assert receipt.artifact_id == ir.artifact_id
+
+
+def test_dense_grouped_bars_fit_their_slots_without_overlap(tmp_path):
+    _, context, ref, _ = result_fixture(tmp_path)
+    categories = tuple(f"C{i}" for i in range(20))
+    layers = []
+    for series in range(8):
+        layers.append(
+            PlotLayer(
+                layer_id=f"layer.series{series}",
+                role="aggregate",
+                mark="bar",
+                encoding=PlotEncoding(x="category", y="score"),
+                data=tuple(
+                    PlotDatum(
+                        datum_id=f"datum.c{category}s{series}",
+                        category=name,
+                        series=f"S{series}",
+                        y=request("value", scalar(ref, "/A")),
+                    )
+                    for category, name in enumerate(categories)
+                ),
+            )
+        )
+    ir = plot(layers).model_copy(
+        update={
+            "scales": PlotScales(
+                x=PlotScale(type="band", unit="category", categories=categories),
+                y=PlotScale(type="linear", unit="ratio"),
+            )
+        }
+    )
+    compiled = compile_plot(ir, context)
+    tree = ET.fromstring(PlotRenderer().render(compiled))
+    bars = sorted(
+        (Fraction(e.attrib["x"]), Fraction(e.attrib["width"]))
+        for e in tree.iter()
+        if e.tag.endswith("rect") and e.attrib.get("id")
+    )
+    assert len(bars) == 160
+    assert all(width < 20 for _, width in bars)
+    assert all(x + width < next_x for (x, width), (next_x, _) in pairwise(bars))
+    log_ir = ir.model_copy(
+        update={
+            "scales": PlotScales(x=ir.scales.x, y=PlotScale(type="log", unit="ratio"))
+        }
+    )
+    with pytest.raises(ValidationError, match="bar_requires_linear_y"):
+        compile_plot(log_ir, context)

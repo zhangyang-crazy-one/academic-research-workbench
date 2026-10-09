@@ -283,7 +283,7 @@ class ResultPlotIR(StrictModel):
         if any(layer.mark == "strip" for layer in self.layers) and self.scales.x.type != "band":
             raise ValueError("jitter_requires_band_display_axis")
         if any(layer.mark == "bar" for layer in self.layers) and self.scales.y.type == "log":
-            raise ValueError("log_bar_baseline_unsupported")
+            raise ValueError("bar_requires_linear_y")
         if self.publication_critical and (
             not self.caption
             or not self.manuscript_reference

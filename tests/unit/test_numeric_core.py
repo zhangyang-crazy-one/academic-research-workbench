@@ -433,3 +433,42 @@ def test_public_decimal_parser_rejects_resource_exponents_before_fraction():
     for text in ("1e999999999", "1e-999999999", "1/3", "NaN"):
         with pytest.raises(NumericDomainError):
             parse_exact_number(text)
+
+
+@pytest.mark.parametrize(
+    ("unit", "current", "baseline", "status", "exact"),
+    [
+        ("ms", 120, 100, "exact", Fraction(1, 5)),
+        ("requests/s", 80, 100, "exact", Fraction(-1, 5)),
+        ("ms", 0, 100, "exact", Fraction(-1)),
+        ("ms", 100, 0, "undefined", None),
+        ("ms", -1, 100, "out_of_domain", None),
+        ("ms", 100, -1, "out_of_domain", None),
+    ],
+)
+def test_relative_change_supports_same_context_nonnegative_quantities(
+    tmp_path, unit, current, baseline, status, exact
+):
+    _, context, ref, _ = accepted_fixture(
+        tmp_path, json.dumps({"current": current, "baseline": baseline}).encode()
+    )
+    comparison = CTX.model_copy(
+        update={
+            "metric_definition": "latency" if unit == "ms" else "throughput",
+            "unit": unit,
+        }
+    )
+    args = (
+        scalar(ref, "/current", comparison=comparison),
+        scalar(ref, "/baseline", comparison=comparison),
+    )
+    result = evaluate_derivation(
+        request("relative_change", *args, context=comparison), context
+    )
+    assert result.status == status
+    if exact is not None:
+        assert fraction(result) == exact
+    point = evaluate_derivation(
+        request("pct_point_diff", *args, context=comparison), context
+    )
+    assert point.status == "out_of_domain"

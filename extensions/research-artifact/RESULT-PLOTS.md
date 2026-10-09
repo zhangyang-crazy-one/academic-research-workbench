@@ -8,7 +8,7 @@ The grammar supports observation `point`, `line`, `strip`; aggregate `point`,
 `line`, `bar`; and interval `rule`. All layers share one panel and scales.
 The y scale is linear or log; x is linear, log or band. Facets, box marks,
 TeX/PGFPlots, arbitrary plotting code and SD/SE recomputation are unsupported.
-Log bars have no defined zero baseline and are rejected. Explicit domains
+Log bars have no defined zero baseline and are rejected as `bar_requires_linear_y`. Grouped bar widths fit their category/series spacing rather than remaining fixed when groups become dense. Explicit domains
 must contain all exact values; clipping cannot silently hide data.
 
 Observation sources are accepted `CsvSelection` objects with globally unique
@@ -68,6 +68,14 @@ time, role, gate, scope, exact IR hash and revision, and return a
 `VerifiedCaptionAttestation`. Without that adapter, hard checks fail closed
 with `caption_auth_missing`/unsupported. The hard path is explicitly opted in;
 this module does not invent or sign authority evidence.
+
+The canonical adapter requires an explicit UTC instant for read-only hard
+capture: `CanonicalCaptionAttestationVerifier(evaluation_time="...Z")`.
+Omitting it produces `auth_missing`. Parent `qualify` binds this adapter to the
+qualification request's `occurred_at`, overriding any earlier supplied instant.
+No new parent event is needed to detect expiry. Requests before the anchor or
+after authority expiry cannot authenticate; historical graph snapshot-time
+applicability remains separate from this explicit hard-check instant.
 
 ## Service API and Figure contract
 

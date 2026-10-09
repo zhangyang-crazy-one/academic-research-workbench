@@ -21,3 +21,6 @@ Numeric requests have a sealed v1 operation vocabulary. Exact decimals become re
 ## Migration Plan
 
 Additive modules and schemas; existing receipts/events remain byte-identical.
+
+## PR #96 domain correction
+Percentage-point difference remains ratio/proportion-only in [0,1]. Relative change supports same-context nonnegative quantities in the unreleased v1 evaluator, with zero baseline undefined and negative inputs out of domain.

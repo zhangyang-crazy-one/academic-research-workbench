@@ -72,6 +72,10 @@ class PlotRenderer:
             Fraction(80),
             Fraction(height - 180),
         )
+        if ir.scales.y.type == "log" and any(
+            layer.mark == "bar" for layer in ir.layers
+        ):
+            raise PlotFault("bar_requires_linear_y")
         all_data = [d for _, rows in compiled.layers for d in rows]
         categories = ir.scales.x.categories or tuple(
             sorted({d.category for d in all_data})
@@ -251,8 +255,13 @@ class PlotRenderer:
                     zero = numeric_position(
                         Fraction(0), ir.scales.y, y_domain, bottom, top
                     )
+                    band_width = (right - left) / len(categories)
+                    group_width = min(
+                        Fraction(24), band_width / (len(named_series) + 2)
+                    )
+                    bar_width = min(Fraction(20), group_width * Fraction(4, 5))
                     parts.append(
-                        f'<rect id="{d.y.plot_value_id}" x="{_number(x - 10)}" y="{_number(min(y, zero))}" width="20" height="{_number(abs(y - zero))}" fill="{color}"/>'
+                        f'<rect id="{d.y.plot_value_id}" x="{_number(x - bar_width / 2)}" y="{_number(min(y, zero))}" width="{_number(bar_width)}" height="{_number(abs(y - zero))}" fill="{color}"/>'
                     )
                 else:
                     parts.append(

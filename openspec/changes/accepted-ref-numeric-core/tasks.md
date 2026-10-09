@@ -15,3 +15,7 @@
 ## 4. Compatibility
 
 - [x] 4.1 Verify schema drift and unchanged legacy replay/receipt suites; document API and actual scope.
+
+## PR #96 review
+
+- [x] Verify same-context nonnegative latency/throughput relative changes, zero denominator and negative-domain cases; retain ratio-only percentage-point differences.

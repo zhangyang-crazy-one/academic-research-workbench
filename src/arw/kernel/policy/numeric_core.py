@@ -394,13 +394,17 @@ def evaluate_derivation(
                     "binary comparisons require exactly two scalar operands",
                 )
             a, b = (o.values[0].as_fraction() for o in operands)
-            if op in {"pct_point_diff", "relative_change"} and (
+            if op == "pct_point_diff" and (
                 request.context.unit not in {"ratio", "proportion"}
                 or not (0 <= a <= 1 and 0 <= b <= 1)
             ):
                 return outcome(
                     "out_of_domain",
                     "percentage comparisons require normalized proportions",
+                )
+            if op == "relative_change" and (a < 0 or b < 0):
+                return outcome(
+                    "out_of_domain", "relative change requires nonnegative quantities"
                 )
             result = (
                 a - b
