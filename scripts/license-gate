@@ -732,7 +732,7 @@ def generate_sbom(
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
         "version": 1,
-        "metadata": {"timestamp": receipt["created_at"], "tools": [{"name": "ARW license-gate", "version": "0.1.0"}]},
+        "metadata": {"timestamp": receipt["created_at"], "tools": [{"name": "ARW license-gate", "version": "0.2.0"}]},
         "components": [],
     }
     components: dict[str, dict[str, Any]] = {}

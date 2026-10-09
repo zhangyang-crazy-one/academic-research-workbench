@@ -608,7 +608,7 @@ import json
 import platform
 import sys
 
-if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+if importlib.metadata.version("academic-research-workbench") != "0.2.0":
     raise SystemExit("installed package version mismatch")
 
 json.dump(
@@ -639,7 +639,7 @@ from arw.files_opt_in import health
 from arw.platform_support import platform_support
 
 
-if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+if importlib.metadata.version("academic-research-workbench") != "0.2.0":
     raise SystemExit("installed package version mismatch")
 
 json.dump(

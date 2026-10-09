@@ -17,6 +17,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+CURRENT_VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+DISTRIBUTION_STEM = f"academic_research_workbench-{CURRENT_VERSION}"
 GATE = runpy.run_path(str(ROOT / "scripts/license-gate"))
 BUILDER = runpy.run_path(str(ROOT / "scripts/build-candidate"))
 
@@ -94,7 +96,7 @@ def write_wheel(path: Path, *, metadata_name: str = "academic-research-workbench
                 altered_source: bool = False, missing_source: bool = False) -> None:
     configuration = tomllib.loads((ROOT / "pyproject.toml").read_text())
     project = configuration["project"]
-    prefix = "academic_research_workbench-0.1.0.dist-info/"
+    prefix = f"{DISTRIBUTION_STEM}.dist-info/"
     requirements = [f"Requires-Dist: {item}" for item in project["dependencies"]]
     for extra, items in project["optional-dependencies"].items():
         requirements.append(f"Provides-Extra: {extra}")
@@ -138,9 +140,9 @@ def write_wheel(path: Path, *, metadata_name: str = "academic-research-workbench
 
 
 def candidate(tmp_path: Path, **wheel_options: object) -> tuple[Path, Path]:
-    wheel = tmp_path / "dist/academic_research_workbench-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / f"dist/{DISTRIBUTION_STEM}-py3-none-any.whl"
     write_wheel(wheel, **wheel_options)
-    sdist = tmp_path / "dist/academic_research_workbench-0.1.0.tar.gz"
+    sdist = tmp_path / f"dist/{DISTRIBUTION_STEM}.tar.gz"
     configuration = tomllib.loads((ROOT / "pyproject.toml").read_text())
     roots = configuration["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
     sources = ["pyproject.toml", "build_hooks.py", "LICENSE",
@@ -149,7 +151,7 @@ def candidate(tmp_path: Path, **wheel_options: object) -> tuple[Path, Path]:
                *GATE["wheel_source_map"](roots).values()]
     with tarfile.open(sdist, "w:gz") as archive:
         for relative in sources:
-            archive.add(ROOT / relative, arcname=f"academic_research_workbench-0.1.0/{relative}")
+            archive.add(ROOT / relative, arcname=f"{DISTRIBUTION_STEM}/{relative}")
         project = configuration["project"]
         requirements = [f"Requires-Dist: {item}" for item in project["dependencies"]]
         for extra, items in project["optional-dependencies"].items():
@@ -158,7 +160,7 @@ def candidate(tmp_path: Path, **wheel_options: object) -> tuple[Path, Path]:
         metadata = (f"Metadata-Version: 2.5\nName: {project['name']}\nVersion: {project['version']}\n"
                     f"Summary: {project['description']}\nLicense-File: LICENSE\n"
                     f"Requires-Python: {project['requires-python']}\n" + "\n".join(requirements) + "\n").encode()
-        info = tarfile.TarInfo("academic_research_workbench-0.1.0/PKG-INFO")
+        info = tarfile.TarInfo(f"{DISTRIBUTION_STEM}/PKG-INFO")
         info.size = len(metadata)
         archive.addfile(info, io.BytesIO(metadata))
     evidence = {
@@ -281,8 +283,8 @@ def test_candidate_wheel_metadata_and_record_are_validated(tmp_path: Path) -> No
 
 @pytest.mark.parametrize("filename", (
     "unrelated-0.1.0-py3-none-any.whl",
-    "academic_research_workbench-0.2.0-py3-none-any.whl",
-    "academic_research_workbench-0.1.0-cp313-cp313-manylinux_2_17_x86_64.whl",
+    "academic_research_workbench-0.1.0-py3-none-any.whl",
+    f"{DISTRIBUTION_STEM}-cp313-cp313-manylinux_2_17_x86_64.whl",
 ))
 def test_candidate_rejects_wheel_filename_identity_or_tag(tmp_path: Path, filename: str) -> None:
     wheel, path = candidate(tmp_path)
@@ -303,7 +305,7 @@ def test_candidate_rejects_generator_version_drift(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("option", (
     {"extra_member": "surprise/data.txt"},
-    {"extra_member": "academic_research_workbench-0.1.0.other-info/UNEXPECTED"},
+    {"extra_member": f"{DISTRIBUTION_STEM}.other-info/UNEXPECTED"},
     {"altered_source": True},
     {"missing_source": True},
 ))
@@ -330,7 +332,7 @@ def test_candidate_rejects_unbound_sdist(tmp_path: Path, mutation: str) -> None:
     elif mutation == "foreign-path":
         mutate_sdist(path, rename="other_project-0.1.0/build_hooks.py")
     elif mutation == "traversal":
-        mutate_sdist(path, rename="academic_research_workbench-0.1.0/../build_hooks.py")
+        mutate_sdist(path, rename=f"{DISTRIBUTION_STEM}/../build_hooks.py")
     elif mutation == "missing-package-source":
         mutate_sdist(path, member_name="src/arw/__init__.py", omit=True)
     else:

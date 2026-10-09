@@ -1,6 +1,6 @@
 {
   "name": "academic-research-workbench",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless, reproducible, and auditable academic research workflows for Claude Code.",
   "author": {
     "name": "Academic Research Workbench contributors"
