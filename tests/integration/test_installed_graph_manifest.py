@@ -339,14 +339,21 @@ def test_cli_graph_mcp_source_development_allows_missing_manifest(
 
 
 @pytest.mark.parametrize(
-    "case_label",
+    "command",
     [
         "_graph-mcp",
         "_files-store-mcp",
-        "writing|semantic|learn|memory|artifact|submission",
+        "writing",
+        "semantic",
+        "learn",
+        "memory",
+        "artifact",
+        "submission",
+        "claims",
+        "numeric",
     ],
 )
-def test_launcher_binds_plugin_manifest_env(case_label: str) -> None:
+def test_launcher_binds_plugin_manifest_env(command: str) -> None:
     """The installed launcher must export ``ARW_PLUGIN_ROOT`` and
     ``ARW_PLUGIN_MANIFEST`` before exec'ing any installed-mode CLI or MCP
     command; otherwise wheel-mode discovery misses and capability gating
@@ -354,7 +361,14 @@ def test_launcher_binds_plugin_manifest_env(case_label: str) -> None:
 
     script = LAUNCHER_PATH.read_text(encoding="utf-8")
 
-    # Locate the case block and check the env-binding lines up to `;;`.
+    # Match each actual command within the dispatch case. Adding another
+    # command to a shared arm must not invalidate unrelated launcher coverage.
+    dispatch = script[script.rfind('case "$COMMAND" in') :]
+    case_label = next(
+        line.strip()[:-1]
+        for line in dispatch.splitlines()
+        if line.strip().endswith(")") and command in line.strip()[:-1].split("|")
+    )
     needle = f"{case_label})\n"
     case_start = script.index(needle) + len(needle)
     case_end = script.index("\n    ;;\n", case_start)
