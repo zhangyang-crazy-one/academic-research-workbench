@@ -23,6 +23,7 @@ from arw.kernel.artifacts.integrity import (
     generate_phase6_schema_documents,
 )
 from arw.kernel.policy.integration_lock import integration_lock_schema_document
+from arw.kernel.policy.release_authority import release_authority_schema_document
 from arw.kernel.policy.research_integrity import (
     ResearchIntegrityError,
     research_integrity_contracts_schema_document,
@@ -88,7 +89,9 @@ PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
     "version-report.schema.json",
 )
 CORE_ROUTE_SCHEMA_NAMES: tuple[str, ...] = ("core-route.schema.json",)
-QUALIFICATION_SCHEMA_NAMES: tuple[str, ...] = ("integration-lock.schema.json",)
+QUALIFICATION_SCHEMA_NAMES: tuple[str, ...] = (
+    "integration-lock.schema.json", "release-authority.schema.json",
+)
 RESEARCH_INTEGRITY_SCHEMA_NAME = "research-integrity-contracts.schema.json"
 RESEARCH_INTEGRITY_SCHEMA_NAMES: tuple[str, ...] = (RESEARCH_INTEGRITY_SCHEMA_NAME,)
 AUDIT_SCHEMA_NAMES: tuple[str, ...] = (AUDIT_DOSSIER_SCHEMA_NAME,)
@@ -304,6 +307,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             raise SchemaRegistryError(
                 "integration-lock.schema.json differs from its model projection"
             )
+    if name == "release-authority.schema.json" and candidate != release_authority_schema_document():
+        raise SchemaRegistryError("release-authority.schema.json differs from its model projection")
     if name == RESEARCH_INTEGRITY_SCHEMA_NAME:
         generated = research_integrity_contracts_schema_document()
         if candidate != generated:
@@ -375,6 +380,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = phase6_documents[name]
         elif name == "integration-lock.schema.json":
             document = integration_lock_schema_document()
+        elif name == "release-authority.schema.json":
+            document = release_authority_schema_document()
         elif name == RESEARCH_INTEGRITY_SCHEMA_NAME:
             document = research_integrity_contracts_schema_document()
         elif name in LEARNING_SCHEMA_NAMES:

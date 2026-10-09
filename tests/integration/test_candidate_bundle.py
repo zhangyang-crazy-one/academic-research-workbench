@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from arw import __version__
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/candidate-bundle"
 RELEASE_CHECK = SCRIPT.with_name("check-release-candidate")
 
@@ -24,11 +26,11 @@ def write(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-def candidate(tmp_path: Path) -> tuple[Path, Path, Path]:
+def candidate(tmp_path: Path, *, version: str = __version__) -> tuple[Path, Path, Path]:
     build = tmp_path / "build"
     evidence = tmp_path / "evidence"
-    wheel = build / "dist/academic_research_workbench-0.1.0-py3-none-any.whl"
-    source = build / "dist/academic_research_workbench-0.1.0.tar.gz"
+    wheel = build / f"dist/academic_research_workbench-{version}-py3-none-any.whl"
+    source = build / f"dist/academic_research_workbench-{version}.tar.gz"
     wheel.parent.mkdir(parents=True)
     wheel.write_bytes(b"candidate-wheel")
     source.write_bytes(b"candidate-source")
@@ -105,7 +107,7 @@ def test_bundle_transfer_rechecks_digests_and_selects_explicit_files(tmp_path: P
     assert verified.returncode == 0, verified.stderr
     published = [Path(row) for row in selected.read_text().splitlines()]
     assert published == [downloaded / "dist" / wheel.name,
-                         downloaded / "dist/academic_research_workbench-0.1.0.tar.gz"]
+                         downloaded / f"dist/academic_research_workbench-{__version__}.tar.gz"]
     assert unrelated not in published
     published[0].write_bytes(b"substituted after download")
     rejected = run("verify", "--bundle-root", str(downloaded))
@@ -377,7 +379,9 @@ def test_explicit_canary_evidence_survives_archive_and_strict_validation(tmp_pat
     paths = unit["integration_fixture"].__wrapped__(host_root)
     lock_model = unit["_build"](paths)
     stage = paths["stage"]
-    build, evidence, wheel = candidate(tmp_path / "candidate")
+    build, evidence, wheel = candidate(
+        tmp_path / "candidate", version=lock_model.arw_runtime.version
+    )
     staged_wheel = stage / "share/arw/wheels" / wheel.name
     wheel.write_bytes(staged_wheel.read_bytes())
     build_payload = json.loads(build.read_text())

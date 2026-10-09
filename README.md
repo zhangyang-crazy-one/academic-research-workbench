@@ -326,10 +326,10 @@ wheel and source artifacts with their digests. `scripts/candidate-bundle archive
 packs the verified manifest files into a tar archive, preserving hidden stage
 files and executable modes; `scripts/candidate-bundle extract` rejects unsafe
 members and rechecks every digest after download. The release workflow selects
-only the verified wheel and sdist for publication. The current approval and
-permission fields have no independently verifiable authority contract, so
-`check-release-candidate` keeps release qualification blocked even if
-transferred records self-report `PASS`.
+only the verified wheel and sdist for publication. `check-release-candidate`
+requires actual candidate-bound Phase 7 receipts and an independently verified
+owner declaration from `release-authority.yml`. Self-reported `PASS` values
+and historical approval fields cannot authorize publication.
 
 To prepare a transfer:
 
@@ -348,7 +348,12 @@ then copies only the canary's path-bound evidence files from its evidence root.
 The equivalent `--qualification-root` form must contain
 `phase-7-verification.json`, `stage/`, `integration-lock.json`,
 `host-canary.json`, and the canary's referenced evidence files with the same
-relative paths and hashes.
+relative paths and hashes. These forms establish transport integrity only.
+Formal release additionally requires the complete `phase7-evidence/` command
+receipts and pinned `prior/` graph exported by `scripts/phase7-release-evidence`.
+Combine that export with the unchanged stage/lock/canary graph before creating
+the final bundle with `--qualification-root`; the five-input example below
+alone cannot authorize a release.
 
 ```bash
 ./scripts/candidate-bundle create \
@@ -367,17 +372,20 @@ relative paths and hashes.
   --output build/candidate-bundles/qualified-local-001.tar.gz
 ```
 
-`verify-phase-7` currently records `release_qualification: BLOCKED` while
-legal and accountable approval evidence is unresolved; packaging its technical
-result does not change that status. The release
+`verify-phase-7` records historical `release_qualification: BLOCKED`; packaging
+its technical result does not change that status. A separate authenticated
+owner declaration binds the actual intended use, distribution class, pinned
+permission inventory and exact candidate identities. The release
 workflow takes the exact Actions run ID and artifact name, downloads and
 rehashes the bundle, checks its source commit and release gates, transfers it
 between jobs, then rehashes it again before publishing only the listed wheel
 and sdist. Missing qualification evidence blocks publication; it cannot be
 replaced by CI's technical bundle. Manual release dispatch supplies
-`candidate_run_id`, `candidate_artifact_name`, and `release_tag`; tag-triggered
-runs require `ARW_CANDIDATE_RUN_ID` and `ARW_CANDIDATE_ARTIFACT_NAME` repository
-variables for the exact qualified transfer.
+`candidate_run_id`, `candidate_artifact_name`, and `release_tag`. Publication
+uses an explicit dispatch on `main` after an owner dispatch of
+`release-authority.yml` has signed the exact qualified draft asset. See
+[the v0.2.0 release procedure](docs/verification/release-v0.2.0.md) for
+candidate transfer and declaration inputs.
 
 Only after that command succeeds, create and install the qualified marketplace
 copy:
@@ -392,9 +400,10 @@ codex plugin add academic-research-workbench@arw-local --json
 marketplace manifest. Do not install an unlocked bootstrap stage.
 
 The helper never fabricates a canary or silently upgrades a missing lock. A
-qualified stage still reports `release_qualification: BLOCKED` until the
-retained CC BY-NC intended-use, distribution, accountable-approval, and
-permission evidence is resolved. If host canary evidence is not supplied,
+qualified stage preserves its historical `release_qualification: BLOCKED`.
+Formal publication requires the independent exact-candidate declaration and
+permission validation; it never rewrites the stage's old receipts. If host
+canary evidence is not supplied,
 `bin/arw route --json` remains blocked with
 `integration_inputs_incomplete` by design; supplying the exact retained
 `ARW_HOST_CANARY_EVIDENCE` makes the verifier recompute the lock and can return
@@ -403,8 +412,9 @@ permission evidence is resolved. If host canary evidence is not supplied,
 ## Release boundary
 
 CI builds and tests every change, but CD is fail-closed: a release job stops
-unless the retained license verdict is `PASS`, accountable intended-use and
-distribution evidence is present, and the P04-09 human gate is complete.
+unless the retained technical license verdict and actual Phase 7 evidence
+pass, and a cryptographically verified owner declaration supplies the actual
+intended use, distribution and supported permission basis for this candidate.
 On a successful push to `main`, CI creates SLSA provenance for the candidate
 wheel, sdist, and retained CycloneDX SBOM file after Python validation. It also
 attests that CycloneDX SBOM as the predicate for the wheel and sdist. Release

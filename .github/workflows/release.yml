@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       candidate_run_id:
@@ -29,6 +27,7 @@ concurrency:
 jobs:
   qualify:
     name: Verify candidate and release authority
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -36,6 +35,8 @@ jobs:
       contents: read
     outputs:
       release_tag: ${{ steps.select.outputs.release_tag }}
+      candidate_run_id: ${{ steps.select.outputs.candidate_run_id }}
+      candidate_artifact_name: ${{ steps.select.outputs.candidate_artifact_name }}
       bundle_manifest_sha256: >-
         ${{ steps.identity.outputs.bundle_manifest_sha256 }}
     steps:
@@ -43,6 +44,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
@@ -95,20 +97,36 @@ jobs:
           name: ${{ steps.select.outputs.candidate_artifact_name }}
           run-id: ${{ steps.select.outputs.candidate_run_id }}
           github-token: ${{ github.token }}
-          path: candidate-transfer
+          path: build/release/candidate-transfer
       - name: Extract candidate with hidden files and executable modes
         run: |
           .venv/bin/python scripts/candidate-bundle extract \
-            --archive candidate-transfer/candidate-bundle.tar.gz \
-            --output-root candidate-bundle
+            --archive build/release/candidate-transfer/candidate-bundle.tar.gz \
+            --output-root build/release/ci-candidate-bundle
       - name: Verify downloaded candidate bytes
         run: |
           .venv/bin/python scripts/candidate-bundle verify \
-            --bundle-root candidate-bundle
+            --bundle-root build/release/ci-candidate-bundle
+      - name: Fetch and verify qualified draft asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
+        run: |
+          source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          git merge-base --is-ancestor "$source_commit" refs/remotes/origin/main
+          .venv/bin/python scripts/release-authority fetch \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --source-commit "$source_commit" \
+            --qualification-archive build/release/qualified-candidate.tar.gz
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive build/release/qualified-candidate.tar.gz --output-root build/release/candidate-bundle
+          .venv/bin/python scripts/candidate-bundle verify \
+            --bundle-root build/release/candidate-bundle
       - name: Verify artifact attestations for exact candidate subjects
         env:
           RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
+          CI_BUNDLE_ROOT: build/release/ci-candidate-bundle
         run: |
           python - <<'PY'
           import hashlib
@@ -117,7 +135,7 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          root = Path('candidate-bundle')
+          root = Path(os.environ.get('CI_BUNDLE_ROOT', 'candidate-bundle'))
           tag = os.environ['RELEASE_TAG']
           ref = f"refs/tags/{tag}^{{commit}}"
           source_commit = subprocess.check_output(
@@ -183,25 +201,33 @@ jobs:
           PY
       - name: Verify candidate release authority
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.select.outputs.release_tag }}
+          CANDIDATE_RUN_ID: ${{ steps.select.outputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ steps.select.outputs.candidate_artifact_name }}
         run: |
           source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
           .venv/bin/python scripts/check-release-candidate \
-            --bundle-root candidate-bundle --source-commit "$source_commit"
+            --bundle-root build/release/candidate-bundle --source-commit "$source_commit" \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-name "$CANDIDATE_ARTIFACT_NAME" \
+            --ci-bundle-root build/release/ci-candidate-bundle \
+            --qualification-archive build/release/qualified-candidate.tar.gz
       - name: Bind verified bundle transfer
         id: identity
         run: |
-          raw_manifest="candidate-bundle/bundle-manifest.json"
+          raw_manifest="build/release/candidate-bundle/bundle-manifest.json"
           digest="$(sha256sum "$raw_manifest" | cut -d' ' -f1)"
           echo "bundle_manifest_sha256=$digest" >> "$GITHUB_OUTPUT"
       - name: Archive exact verified candidate files with executable modes
         run: |
           .venv/bin/python scripts/candidate-bundle archive \
-            --bundle-root candidate-bundle --output candidate-bundle.tar.gz
+            --bundle-root build/release/candidate-bundle --output build/release/verified-candidate.tar.gz
       - uses: actions/upload-artifact@v7
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
-          path: candidate-bundle.tar.gz
+          path: build/release/verified-candidate.tar.gz
           if-no-files-found: error
 
   publish:
@@ -209,12 +235,15 @@ jobs:
     needs: qualify
     runs-on: ubuntu-latest
     permissions:
+      actions: read
+      attestations: read
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.qualify.outputs.release_tag }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
@@ -226,19 +255,28 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
-          path: verified-candidate-transfer
+          path: build/release/verified-candidate-transfer
       - name: Extract exact verified candidate files
         run: |
           .venv/bin/python scripts/candidate-bundle extract \
-            --archive verified-candidate-transfer/candidate-bundle.tar.gz \
-            --output-root candidate-bundle
+            --archive build/release/verified-candidate-transfer/verified-candidate.tar.gz \
+            --output-root build/release/candidate-bundle
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.qualify.outputs.candidate_artifact_name }}
+          run-id: ${{ needs.qualify.outputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: build/release/ci-transfer
       - name: Recheck downloaded bytes and produce explicit publication list
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
+          CANDIDATE_RUN_ID: ${{ needs.qualify.outputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ needs.qualify.outputs.candidate_artifact_name }}
           EXPECTED_BUNDLE_SHA256: >-
             ${{ needs.qualify.outputs.bundle_manifest_sha256 }}
         run: |
-          raw_manifest="candidate-bundle/bundle-manifest.json"
+          raw_manifest="build/release/candidate-bundle/bundle-manifest.json"
           actual="$(sha256sum "$raw_manifest" | cut -d' ' -f1)"
           test "$actual" = "$EXPECTED_BUNDLE_SHA256" || {
             echo 'release blocked: bundle manifest changed' >&2
@@ -246,18 +284,32 @@ jobs:
           }
           source_commit="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
           .venv/bin/python scripts/candidate-bundle verify \
-            --bundle-root candidate-bundle --files-output publish-files.txt
+            --bundle-root build/release/candidate-bundle --files-output build/release/publish-files.txt
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive build/release/ci-transfer/candidate-bundle.tar.gz --output-root build/release/ci-candidate-bundle
+          .venv/bin/python scripts/candidate-bundle verify --bundle-root build/release/ci-candidate-bundle
+          .venv/bin/python scripts/release-authority fetch \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --source-commit "$source_commit" --qualification-archive build/release/qualified-candidate.tar.gz
           .venv/bin/python scripts/check-release-candidate \
-            --bundle-root candidate-bundle --source-commit "$source_commit"
+            --bundle-root build/release/candidate-bundle --source-commit "$source_commit" \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-name "$CANDIDATE_ARTIFACT_NAME" \
+            --ci-bundle-root build/release/ci-candidate-bundle \
+            --qualification-archive build/release/qualified-candidate.tar.gz
       - name: Publish only the verified candidate artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.qualify.outputs.release_tag }}
         run: |
-          mapfile -t files < publish-files.txt
+          mapfile -t files < build/release/publish-files.txt
           test "${#files[@]}" -gt 0 || {
             echo 'release blocked: no verified artifacts selected' >&2
             exit 1
           }
-          gh release create "$RELEASE_TAG" --verify-tag \
-            --generate-notes "${files[@]}"
+          .venv/bin/python scripts/publish-verified-draft \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --source-commit "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" \
+            --qualification-archive build/release/qualified-candidate.tar.gz \
+            --files-list build/release/publish-files.txt

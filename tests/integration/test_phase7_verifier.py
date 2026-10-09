@@ -26,6 +26,36 @@ def _verifier_module():
     return module
 
 
+def test_phase7_forwards_qualification_paths_without_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    verifier = _verifier_module()
+    captured = {}
+    input_paths = {
+        "ARW_CANDIDATE_WHEEL": str(tmp_path / "candidate.whl"),
+        "ARW_BUILD_EVIDENCE": str(tmp_path / "build-evidence.json"),
+        "ARW_CANDIDATE_EVIDENCE_ROOT": str(tmp_path / "candidate-evidence"),
+        "ARW_ISSUE27_CODEX_STAGE": str(tmp_path / "codex-stage"),
+        "ARW_ISSUE27_CLAUDE_STAGE": str(tmp_path / "claude-stage"),
+    }
+    for name, value in input_paths.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("OPENAI_API_KEY", "do-not-forward")
+    monkeypatch.setenv("GH_TOKEN", "do-not-forward")
+    monkeypatch.setattr(verifier, "PROJECT_ROOT", tmp_path)
+
+    def capture(argv, **kwargs):
+        captured.update(kwargs["env"])
+        return verifier.subprocess.CompletedProcess(argv, 0, b"ok", b"")
+
+    monkeypatch.setattr(verifier.subprocess, "run", capture)
+    verifier.run_command(tmp_path / "evidence", "probe", ["probe"])
+    assert {key: captured[key] for key in input_paths} == input_paths
+    assert captured["ARW_STRICT_PREREQS"] == "1"
+    assert "OPENAI_API_KEY" not in captured
+    assert "GH_TOKEN" not in captured
+
+
 @pytest.mark.requires_retained_evidence("build/evidence/phase-05/verdict.json", "build/evidence/phase-04.1-verifier-final-20260715f/commands/P04-05-T01/exit.json")
 def test_prior_phase_graph_and_independence_receipts_are_exact() -> None:
     verifier = _verifier_module()

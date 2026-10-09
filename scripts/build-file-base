@@ -149,9 +149,14 @@ for patch in patches:
 PY
 )
 [[ "${#PATCH_PATHS[@]}" -gt 0 ]] || fail "ordered patch set is empty" 65
+apply_native_patch() {
+  # A repository-local TMPDIR must not let Git discover the enclosing ARW
+  # checkout and silently filter every path in this disposable source tree.
+  GIT_CEILING_DIRECTORIES="$WORK_ROOT" git -C "$BUILD_SOURCE" apply "$@"
+}
 for patch in "${PATCH_PATHS[@]}"; do
-  git -C "$BUILD_SOURCE" apply --check "$patch"
-  git -C "$BUILD_SOURCE" apply "$patch"
+  apply_native_patch --check "$patch"
+  apply_native_patch "$patch"
 done
 
 mapfile -t TEST_SOURCES < <(
