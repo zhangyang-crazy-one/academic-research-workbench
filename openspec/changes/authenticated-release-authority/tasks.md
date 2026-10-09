@@ -11,6 +11,7 @@
 - [x] 2.3 Verify identity substitution, forged approval, absent declaration, reruns, draft transfer and publication retry regressions.
 - [ ] 2.4 Validate workflow syntax, schemas, installed 0.2.0 behavior and local regression suite.
 - [x] 2.5 Requalify missing raw license evidence through a real audit and retain explicit historical reader support.
+- [ ] 2.6 Execute complete upstream, ASan/UBSan and TSan qualification through the explicit CI profile and retain all raw records.
 
 ## 3. Actual formal release
 

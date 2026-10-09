@@ -27,6 +27,12 @@ ReviewConcern integration remain follow-up work.
    Codex canary, generate the integration lock, and run `verify-phase-7`.
    The six native Codex dispatches explicitly select `gpt-6.1-sol/high` and use
    existing platform authentication. They have no automatic retries.
+   Native safety records must match the current upstream test tree and retain
+   the complete original runtime/flags/inventory/network trace, not only a
+   collected PASS summary. When local privileged namespaces are unavailable,
+   use the explicit `ci.yml` input `release_native_qualification=true` on the
+   exact reviewed source ref. Admit only successful upstream, ASan/UBSan and
+   TSan artifacts whose live GitHub source/run IDs and raw digests match.
 4. Create a qualified candidate bundle containing the original CI build
    evidence and subjects plus the actual Phase 7 stage/lock/canary evidence.
    Use `scripts/phase7-release-evidence export` to retain the full actual

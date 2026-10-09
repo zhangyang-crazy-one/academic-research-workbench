@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      release_native_qualification:
+        description: Run complete upstream, ASan/UBSan and TSan release qualification
+        type: boolean
+        default: false
       nightly_native_sanitizers:
         description: Run the scheduled native ASan/UBSan qualification branch
         type: boolean
@@ -17,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.release_native_qualification && 'release-native' || 'regular' }}
   cancel-in-progress: true
 
 jobs:
@@ -25,7 +29,8 @@ jobs:
     name: Codex overlay (Python ${{ matrix.python-version }})
     if: >-
       github.event_name != 'schedule' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
+      !(github.event_name == 'workflow_dispatch' &&
+      (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -53,7 +58,8 @@ jobs:
     name: Python
     if: >-
       github.event_name != 'schedule' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
+      !(github.event_name == 'workflow_dispatch' &&
+      (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
     runs-on: ubuntu-latest
     needs: package-boundary
     steps:
@@ -150,7 +156,8 @@ jobs:
     name: Wheel and source archive boundary
     if: >-
       github.event_name != 'schedule' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
+      !(github.event_name == 'workflow_dispatch' &&
+      (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -375,6 +382,8 @@ jobs:
 
   native-security:
     name: Linux native confinement
+    if: >-
+      !(github.event_name == 'workflow_dispatch' && inputs.release_native_qualification)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -454,7 +463,8 @@ jobs:
       - name: Build native test binary under network denial
         if: >-
           github.event_name != 'schedule' &&
-          !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
+          !(github.event_name == 'workflow_dispatch' &&
+          (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
         run: >-
           ./scripts/offline-exec --evidence-root build/evidence/ci-native
           ./scripts/build-file-base --clean --ci-ephemeral
@@ -483,11 +493,196 @@ jobs:
             tests/integration/test_files_admin.py \
             -k "$k1 or $k2 or $k3"
 
+  native-release-qualification:
+    name: Release native qualification (${{ matrix.suite }})
+    if: github.event_name == 'workflow_dispatch' && inputs.release_native_qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: upstream
+            sanitizers: none
+          - suite: asan-ubsan
+            sanitizers: asan,ubsan
+          - suite: tsan
+            sanitizers: tsan
+    env:
+      ARW_NATIVE_SUITE: ${{ matrix.suite }}
+      ARW_NATIVE_SANITIZERS: ${{ matrix.sanitizers }}
+      MAKEFLAGS: -j2
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      - name: Install native test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap strace build-essential
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          uv venv
+          .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Restore legal receipt and materialize pinned native source
+        run: |
+          mkdir -p build
+          manifest=vendor/source-manifest.json
+          sha256sum "$manifest" > build/ci-native-manifest.sha256
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          assert sha == manifest['pre_vendor_receipt']['sha256']
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
+          PY
+          ./scripts/materialize-sources --clean
+          sha256sum -c build/ci-native-manifest.sha256
+          (
+            cd vendor/sources/file-base/graph-ui &&
+            npm ci --ignore-scripts --silent
+          )
+          g="build/evidence/phase-01/pre-vendor-license/generated"
+          notice="$g/THIRD_PARTY_NOTICES.md"
+          script=./vendor/sources/file-base/scripts/gen-third-party-notices.sh
+          "$script" "$notice"
+          python - <<'PY'
+          import shutil
+          shutil.rmtree('vendor/sources/file-base/graph-ui/node_modules')
+          PY
+          python scripts/verify-pinned-notice
+          ./scripts/verify-sources --inputs-only
+      - name: Run complete native suite under privileged network denial
+        run: |
+          args=(--clean --ci-ephemeral --run-upstream-tests)
+          runtime=()
+          case "$ARW_NATIVE_SANITIZERS" in
+            none) libraries=() ;;
+            asan,ubsan) libraries=(libasan.so libubsan.so) ;;
+            tsan) libraries=(libtsan.so) ;;
+            *) exit 64 ;;
+          esac
+          if [[ ${#libraries[@]} -gt 0 ]]; then
+            mkdir -p build/sanitizer-runtime
+            for library in "${libraries[@]}"; do
+              resolved="$(readlink -f "$(cc -print-file-name="$library")")"
+              test -f "$resolved"
+              [[ "$(basename "$resolved")" == "$library".* ]]
+              dest="build/sanitizer-runtime/$(basename "$resolved")"
+              install -m 0644 "$resolved" "$dest"
+              cmp -- "$resolved" "$dest"
+              ln -s "$(basename "$resolved")" "build/sanitizer-runtime/$library"
+            done
+            runtime=("ARW_SANITIZER_RUNTIME_DIR=$PWD/build/sanitizer-runtime")
+            args+=(--sanitizers "$ARW_NATIVE_SANITIZERS")
+          fi
+          sudo --preserve-env env "PATH=$PATH" "HOME=$HOME" "MAKEFLAGS=-j2" \
+            "${runtime[@]}" ./scripts/offline-exec \
+            --evidence-root "build/evidence/release-native/$ARW_NATIVE_SUITE" \
+            ./scripts/build-file-base "${args[@]}"
+      - name: Verify qualification source identity remains exact
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sha256sum -c build/ci-native-manifest.sha256
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Collect complete native evidence without rewriting results
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          def digest(path):
+              hasher = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b''):
+                      hasher.update(block)
+              return hasher.hexdigest()
+
+          suite = os.environ['ARW_NATIVE_SUITE']
+          output = Path('build/release-native-transfer') / suite
+          output.mkdir(parents=True, exist_ok=False)
+          evidence = Path('build/evidence/release-native') / suite
+          inventory = []
+          if evidence.is_dir():
+              for path in sorted(evidence.rglob('*')):
+                  if path.is_symlink() or not (path.is_file() or path.is_dir()):
+                      raise SystemExit(f'nonregular evidence member: {path}')
+                  if path.is_file():
+                      inventory.append({'path': path.relative_to(evidence).as_posix(),
+                                        'sha256': digest(path), 'size_bytes': path.stat().st_size})
+              shutil.copytree(evidence, output / 'evidence')
+          (output / 'raw-evidence-inventory.json').write_text(
+              json.dumps(inventory, indent=2, sort_keys=True) + '\n')
+          manifest = Path('vendor/source-manifest.json')
+          shutil.copyfile(manifest, output / 'source-manifest.json')
+          original_manifest = Path('build/ci-native-manifest.sha256')
+          if original_manifest.is_file():
+              shutil.copyfile(original_manifest, output / 'source-manifest.sha256')
+          build = Path('.file-base/build-evidence.json')
+          binary = Path('.file-base/bin/file-base')
+          if build.is_file():
+              shutil.copyfile(build, output / 'build-evidence.json')
+          if binary.is_file():
+              (output / 'binary.sha256').write_text(digest(binary) + '\n')
+          identity = {
+              'schema_version': '1.0.0',
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'event': os.environ['GITHUB_EVENT_NAME'],
+              'ref': os.environ['GITHUB_REF'],
+              'workflow_ref': os.environ['GITHUB_WORKFLOW_REF'],
+              'workflow_sha': os.environ['GITHUB_WORKFLOW_SHA'],
+              'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'source_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'expected_source_commit': os.environ['GITHUB_SHA'],
+              'source_status': subprocess.check_output(
+                  ['git', 'status', '--porcelain', '--untracked-files=all'], text=True),
+              'source_manifest_sha256': digest(manifest),
+              'suite': suite,
+              'sanitizers': os.environ['ARW_NATIVE_SANITIZERS'],
+              'raw_evidence_inventory_sha256': digest(output / 'raw-evidence-inventory.json'),
+              'native_build_evidence_sha256': digest(build) if build.is_file() else None,
+              'native_binary_sha256': digest(binary) if binary.is_file() else None,
+          }
+          (output / 'qualification-source.json').write_text(
+              json.dumps(identity, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Retain complete native qualification including failed results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-native-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/release-native-transfer/${{ matrix.suite }}
+          include-hidden-files: true
+          if-no-files-found: error
+
   macos-core:
     name: macOS Tier 2 core
     if: >-
       github.event_name != 'schedule' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.nightly_native_sanitizers)
+      !(github.event_name == 'workflow_dispatch' &&
+      (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
     runs-on: macos-latest
     permissions:
       contents: read
