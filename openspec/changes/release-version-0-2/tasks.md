@@ -6,4 +6,4 @@
 ## 2. Validation and release preparation
 
 - [x] 2.1 Exercise coherent metadata, legacy/current integration, schema and real 0.2.0-installed launcher probes.
-- [ ] 2.2 Record release notes and validate clean candidate wheel/sdist metadata before merge.
+- [x] 2.2 Record release notes and validate clean candidate wheel/sdist metadata before merge.

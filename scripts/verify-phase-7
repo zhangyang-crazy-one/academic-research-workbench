@@ -974,7 +974,7 @@ def main(argv: list[str] | None = None) -> int:
                 root,
                 "phase7-nonhost",
                 [str(PYTHON), "-m", "pytest", "-q", "-m", "not codex_host"],
-                timeout=1800,
+                timeout=3600,
             )
         )
         # The exact host canary is retained from the prior serial qualification;

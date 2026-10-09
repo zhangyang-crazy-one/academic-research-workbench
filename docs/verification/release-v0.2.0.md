@@ -25,6 +25,8 @@ ReviewConcern integration remain follow-up work.
    SBOM. Download its candidate bundle and preserve those bytes unchanged.
 3. Using that wheel, build the native plugin stage, capture the three-fresh-HOME
    Codex canary, generate the integration lock, and run `verify-phase-7`.
+   The complete non-host regression has a one-hour execution budget, including
+   the actual installed CLI regressions; every test and strict gate still runs.
    The six native Codex dispatches explicitly select `gpt-6.1-sol/high` and use
    existing platform authentication. They have no automatic retries.
    Native safety records must match the current upstream test tree and retain
@@ -52,7 +54,8 @@ ReviewConcern integration remain follow-up work.
    or a historical `PASS` does not establish permission.
 7. Dispatch `release.yml` using the same exact candidate identity. It verifies
    the independent signature and live GitHub actor/run/artifact/draft IDs,
-   probes clean installation, uploads only verified publication subjects,
+   validates the actual Phase 7 installation qualification evidence,
+   uploads only verified publication subjects,
    removes only the bound intermediate asset, and publishes the draft.
 8. Confirm the published tag commit and final wheel/sdist/SBOM digests.
 

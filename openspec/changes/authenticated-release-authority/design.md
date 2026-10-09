@@ -17,6 +17,7 @@ Non-goals: infer intended use, qualify missing commercial grants, rewrite histor
 - Historical legal BLOCKED records remain unchanged. Current release authority is a separate signed record.
 - If a raw qualification graph cannot be recovered completely, run a real fresh audit and bind its exact new receipt. Preserve old receipt bytes explicitly for supported historical readers; new stage production requires the current receipt. v0.2.0 uses a fresh audit with all 17 raw files verified and the existing exact tool contract.
 - Strict Phase 7 subprocesses receive only enumerated candidate and stage path inputs in addition to the existing positive environment. Credentials remain excluded. Fresh-home native Codex exec calls explicitly use gpt-6.1-sol/high with existing authentication and no retries.
+- Installed MCP preparation resolves the real wheel runtime before the network-denied probe. The probe binds its own mode-0700 temporary directory over its namespace's `/tmp`; native daemon guards remain strict. Cold installation and the bounded RPC request are separate checks. Current inventory assertions consume the explicitly selected candidate SBOM, keeping historical root inventories intact. Complete non-host qualification retains all tests with a bounded one-hour runtime budget.
 
 ## Risks / Trade-offs
 
