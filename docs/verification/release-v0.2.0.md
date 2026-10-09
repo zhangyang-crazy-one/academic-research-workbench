@@ -54,3 +54,9 @@ Preserved historical qualification/legal receipts remain unchanged. A new
 signed authority supplies the accountable declaration for this exact release;
 it does not retroactively clear old blocked receipts. Commercial permission
 without independently supported grants remains blocked.
+
+Preparation replaced incomplete local raw license evidence with a real fresh
+native audit. All 17 raw files matched their new receipt, and all three native
+commands passed. The old receipt remains byte-identical in
+`supply-chain/historical/pre-vendor/`; readers preserve explicit old/new
+compatibility while new stage production requires the fresh receipt.

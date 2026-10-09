@@ -936,13 +936,13 @@ from arw.kernel.policy.schema_registry import (  # noqa: E402
 from arw.kernel.policy.integration_lock import (  # noqa: E402
     _verify_native_surface_bundle,
     IntegrationLockError,
-    EXPECTED_PRE_VENDOR_RECEIPT_SHA256,
     NATIVE_EVIDENCE_KINDS,
     NATIVE_SURFACES,
     NATIVE_VERDICT_KIND,
     native_evidence_path,
     parse_file_contract_contract_sha256_from_bytes,
     verify_evidence_contract,
+    verify_pre_vendor_receipt_digest,
 )
 from arw.file_contracts import (  # noqa: E402
     FileContractError,
@@ -1004,15 +1004,11 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
             f"shared verifier contract: {error}"
         )
     staged_digest = digest(staged_path)
-    if (
-        surface == "pre_vendor"
-        and staged_digest != EXPECTED_PRE_VENDOR_RECEIPT_SHA256
-    ):
-        raise SystemExit(
-            "staged pre-vendor receipt raw bytes drift from canonical reviewed "
-            f"evidence: observed={staged_digest} "
-            f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
-        )
+    if surface == "pre_vendor":
+        try:
+            verify_pre_vendor_receipt_digest(staged_digest, require_current=True)
+        except IntegrationLockError as error:
+            raise SystemExit(str(error)) from error
     return {"path": staged_relative, "sha256": staged_digest}
 
 

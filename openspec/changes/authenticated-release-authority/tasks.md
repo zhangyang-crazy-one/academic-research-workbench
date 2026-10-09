@@ -10,6 +10,7 @@
 - [x] 2.2 Forward explicit candidate/stage paths in strict tests while excluding credentials.
 - [x] 2.3 Verify identity substitution, forged approval, absent declaration, reruns, draft transfer and publication retry regressions.
 - [ ] 2.4 Validate workflow syntax, schemas, installed 0.2.0 behavior and local regression suite.
+- [x] 2.5 Requalify missing raw license evidence through a real audit and retain explicit historical reader support.
 
 ## 3. Actual formal release
 

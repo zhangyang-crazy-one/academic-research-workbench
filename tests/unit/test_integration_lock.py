@@ -3849,6 +3849,62 @@ def test_pre_vendor_native_gate_inventory_is_canonical(
         _build(integration_fixture)
 
 
+@pytest.mark.parametrize(
+    ("relative", "expected_sha256"),
+    (
+        (
+            "supply-chain/pre-vendor-receipt.json",
+            "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0",
+        ),
+        (
+            "supply-chain/historical/pre-vendor/"
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523.json",
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523",
+        ),
+    ),
+)
+def test_pre_vendor_reader_accepts_exact_current_and_historical_receipts(
+    integration_fixture: dict[str, Path], relative: str, expected_sha256: str
+) -> None:
+    source = REPOSITORY_ROOT / relative
+    assert _digest(source) == expected_sha256
+    target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    target.write_bytes(source.read_bytes())
+    payload = integration_lock_module._verify_evidence_pass(
+        integration_fixture["stage"], "share/arw/evidence/pre_vendor.json",
+        label="pre_vendor",
+    )
+    assert payload["technical_qualification"] == "PASS"
+    # Trailing whitespace preserves parsed semantics, but cannot replace
+    # either explicitly qualified receipt's immutable raw bytes.
+    target.write_bytes(target.read_bytes() + b"\n")
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module._verify_evidence_pass(
+            integration_fixture["stage"], "share/arw/evidence/pre_vendor.json",
+            label="pre_vendor",
+        )
+
+
+def test_pre_vendor_producer_requires_current_audit_receipt() -> None:
+    integration_lock_module.verify_pre_vendor_receipt_digest(
+        "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0",
+        require_current=True,
+    )
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module.verify_pre_vendor_receipt_digest(
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523",
+            require_current=True,
+        )
+
+
+@pytest.mark.parametrize("require_current", (False, True))
+def test_pre_vendor_unknown_receipt_digest_fails_closed(require_current: bool) -> None:
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module.verify_pre_vendor_receipt_digest(
+            "0" * 64, require_current=require_current
+        )
+
+
 def test_pre_vendor_raw_evidence_requires_canonical_receipt_bytes(
     integration_fixture: dict[str, Path],
 ) -> None:

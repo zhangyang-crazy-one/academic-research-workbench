@@ -108,7 +108,13 @@ EXPECTED_FILE_BASE_TEST_TREE = (
     "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
 )
 EXPECTED_PRE_VENDOR_RECEIPT_SHA256 = (
+    "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0"
+)
+LEGACY_PRE_VENDOR_RECEIPT_SHA256 = (
     "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523"
+)
+_QUALIFIED_PRE_VENDOR_RECEIPT_DIGESTS = frozenset(
+    {EXPECTED_PRE_VENDOR_RECEIPT_SHA256, LEGACY_PRE_VENDOR_RECEIPT_SHA256}
 )
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
@@ -3468,6 +3474,23 @@ def verify_evidence_contract(
     return validated
 
 
+def verify_pre_vendor_receipt_digest(
+    observed_sha256: str, *, require_current: bool = False, label: str = "staged"
+) -> None:
+    """Read qualified historical bytes; produce stages only from current evidence."""
+    accepted = (
+        frozenset({EXPECTED_PRE_VENDOR_RECEIPT_SHA256})
+        if require_current
+        else _QUALIFIED_PRE_VENDOR_RECEIPT_DIGESTS
+    )
+    if observed_sha256 not in accepted:
+        raise IntegrationLockError(
+            f"{label} pre-vendor receipt raw bytes drift from canonical reviewed "
+            f"evidence: observed={observed_sha256} "
+            f"expected={','.join(sorted(accepted))}"
+        )
+
+
 def _verify_evidence_pass(
     stage_root: Path, path: str, *, label: str
 ) -> dict[str, object]:
@@ -3498,13 +3521,7 @@ def _verify_evidence_pass(
     surface = _evidence_surface_for(path)
     verify_evidence_contract(stage_root, payload, surface=surface)
     if surface == "pre_vendor":
-        observed_sha256 = _digest(file_path)
-        if observed_sha256 != EXPECTED_PRE_VENDOR_RECEIPT_SHA256:
-            raise IntegrationLockError(
-                f"{label} pre-vendor receipt raw bytes drift from canonical "
-                f"reviewed evidence: observed={observed_sha256} "
-                f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
-            )
+        verify_pre_vendor_receipt_digest(_digest(file_path), label=label)
     return payload
 
 
@@ -4837,5 +4854,6 @@ __all__ = (
     "parse_file_contract_contract_sha256",
     "validate_live_audit_manifests",
     "verify_integration_lock",
+    "verify_pre_vendor_receipt_digest",
     "write_integration_lock",
 )
