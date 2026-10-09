@@ -87,6 +87,10 @@ CC_MACROS="$(cc -dM -E - </dev/null 2>/dev/null || true)"
 if [[ "$SUITE_KIND" == "upstream" && "$CC_MACROS" == *__GNUC__* \
   && "$CC_MACROS" != *__clang__* ]]; then
   TEST_CC="cc -Wno-error=free-nonheap-object"
+elif [[ "$SUITE_KIND" == "tsan" ]]; then
+  # Preserve full DWARF and TSan instrumentation while reducing the bytes
+  # copied/hashed by the unchanged installation and host-lifetime tests.
+  TEST_CC="cc -gz=zlib"
 fi
 [[ "$SANITIZERS" == "none" || "$RUN_UPSTREAM_TESTS" -eq 1 ]] \
   || fail "sanitizer builds require --run-upstream-tests" 64
@@ -359,6 +363,77 @@ if sanitizer_runtime is not None:
     )
 PY
 
+record_test_build_image() {
+  python3 - "$BUILD_SOURCE/build/c/test-runner" "$EVIDENCE_ROOT/test-build-image.json" \
+    "$SUITE_KIND" "$TEST_CC" "$TEST_STATUS" <<'PY'
+import hashlib
+import json
+import struct
+import sys
+from pathlib import Path
+
+
+def capture():
+    image, destination = map(Path, sys.argv[1:3])
+    suite, compiler, status = sys.argv[3:]
+    record = dict(schema_version="arw.native-test-build-image.v1", suite=suite,
+                  test_compiler=compiler, test_status=int(status), image=None,
+                  debug_sections=[], elf_error=None)
+    if image.is_file():
+        hasher = hashlib.sha256()
+        with image.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                hasher.update(block)
+        record["image"] = dict(path="build/c/test-runner", sha256=hasher.hexdigest(),
+                               size_bytes=image.stat().st_size)
+        try:
+            with image.open("rb") as stream:
+                ident = stream.read(16)
+                if ident[:4] != b"\x7fELF" or ident[4] not in (1, 2) or ident[5] not in (1, 2):
+                    raise ValueError("unsupported ELF identity")
+                wide = ident[4] == 2
+                endian = "<" if ident[5] == 1 else ">"
+                header = struct.Struct(endian + ("HHIQQQIHHHHHH" if wide else "HHIIIIIHHHHHH"))
+                values = header.unpack(stream.read(header.size))
+                section_offset, section_size, section_count, names_index = (
+                    values[5], values[10], values[11], values[12])
+                section = struct.Struct(endian + ("IIQQQQIIQQ" if wide else "IIIIIIIIII"))
+                if section_size != section.size or not 0 < names_index < section_count:
+                    raise ValueError("unsupported ELF section table")
+                sections = []
+                for index in range(section_count):
+                    stream.seek(section_offset + index * section_size)
+                    sections.append(section.unpack(stream.read(section.size)))
+                names = sections[names_index]
+                stream.seek(names[4])
+                strings = stream.read(names[5])
+                for entry in sections:
+                    name = strings[entry[0]:].split(b"\0", 1)[0].decode("ascii")
+                    if not name.startswith(".debug_"):
+                        continue
+                    observed = dict(name=name, size_bytes=entry[5], shf_compressed=bool(entry[2] & 0x800),
+                                    compression=None, uncompressed_size_bytes=None)
+                    if observed["shf_compressed"]:
+                        compression = struct.Struct(endian + ("IIQQ" if wide else "III"))
+                        stream.seek(entry[4])
+                        compressed = compression.unpack(stream.read(compression.size))
+                        observed["compression"] = {1: "zlib", 2: "zstd"}.get(compressed[0], "unknown")
+                        observed["uncompressed_size_bytes"] = compressed[2 if wide else 1]
+                    record["debug_sections"].append(observed)
+        except (OSError, ValueError, struct.error) as error:
+            record["elf_error"] = str(error)
+    compressed_info = any(item["name"] == ".debug_info" and item["shf_compressed"]
+                          and item["compression"] == "zlib" for item in record["debug_sections"])
+    record["debug_compression_matches_profile"] = suite != "tsan" or compressed_info
+    destination.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if record["image"] is not None and (record["elf_error"] or not record["debug_compression_matches_profile"]):
+        raise SystemExit("native test image does not establish the requested ELF debug profile")
+
+
+capture()
+PY
+}
+
 if [[ "$RUN_UPSTREAM_TESTS" -eq 1 ]]; then
   TEST_HOME="$WORK_ROOT/test-home"
   TEST_BIN="$WORK_ROOT/test-bin"
@@ -430,6 +505,7 @@ PY
   wait
   set -e
   printf '%s\n' "$TEST_STATUS" > "$EVIDENCE_ROOT/test-status.txt"
+  record_test_build_image
   [[ "$TEST_STATUS" -eq 0 ]] || fail "$SUITE_KIND upstream suite failed" 70
   if grep -E -q \
     'ERROR: AddressSanitizer|SUMMARY: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: LeakSanitizer|runtime error:|WARNING: ThreadSanitizer|SUMMARY: ThreadSanitizer|FATAL: ThreadSanitizer' \

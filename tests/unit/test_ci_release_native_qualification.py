@@ -31,7 +31,10 @@ def _step(name: str) -> dict:
     )
 
 
-def _condition(value: str, event: str, release: bool, nightly: bool = False) -> bool:
+def _condition(
+    value: str, event: str, release: bool, nightly: bool = False,
+    tsan_only: bool = False,
+) -> bool:
     expression = value.replace("&&", " and ").replace("||", " or ")
     expression = re.sub(r"(?<![=!])!(?!=)", " not ", expression)
     return bool(
@@ -42,10 +45,33 @@ def _condition(value: str, event: str, release: bool, nightly: bool = False) -> 
                 "github": SimpleNamespace(event_name=event),
                 "inputs": SimpleNamespace(
                     release_native_qualification=release,
+                    release_native_tsan_only=tsan_only,
                     nightly_native_sanitizers=nightly,
                 ),
             },
         )
+    )
+
+
+def _matrix_rows(tsan_only: bool | None = None) -> list[dict[str, str]]:
+    """Evaluate the checked-in GitHub expression with controlled boolean inputs."""
+    workflow = _workflow()
+    if tsan_only is None:
+        tsan_only = workflow["on"]["workflow_dispatch"]["inputs"][
+            "release_native_tsan_only"
+        ]["default"] == "true"
+    value = workflow["jobs"]["native-release-qualification"]["strategy"]["matrix"][
+        "include"
+    ]
+    assert value.startswith("${{") and value.endswith("}}")
+    expression = value[3:-2].strip().replace("&&", " and ").replace("||", " or ")
+    return eval(
+        expression,
+        {"__builtins__": {}},
+        {
+            "fromJSON": json.loads,
+            "inputs": SimpleNamespace(release_native_tsan_only=tsan_only),
+        },
     )
 
 
@@ -54,8 +80,9 @@ def _condition(value: str, event: str, release: bool, nightly: bool = False) -> 
 )
 @pytest.mark.parametrize("release", [False, True])
 @pytest.mark.parametrize("nightly", [False, True])
+@pytest.mark.parametrize("tsan_only", [False, True])
 def test_manual_release_profile_is_exclusive(
-    event: str, release: bool, nightly: bool
+    event: str, release: bool, nightly: bool, tsan_only: bool
 ) -> None:
     workflow = _workflow()
     trigger = workflow["on"]["workflow_dispatch"]["inputs"][
@@ -66,21 +93,28 @@ def test_manual_release_profile_is_exclusive(
         "type": "boolean",
         "default": "false",
     }
+    assert workflow["on"]["workflow_dispatch"]["inputs"]["release_native_tsan_only"] == {
+        "description": "Run only TSan within release native qualification",
+        "type": "boolean",
+        "default": "false",
+    }
     jobs = workflow["jobs"]
     manual_release = event == "workflow_dispatch" and release
     assert (
-        _condition(jobs["native-release-qualification"]["if"], event, release, nightly)
+        _condition(
+            jobs["native-release-qualification"]["if"], event, release, nightly, tsan_only
+        )
         is manual_release
     )
     assert (
-        _condition(jobs["native-security"]["if"], event, release, nightly)
+        _condition(jobs["native-security"]["if"], event, release, nightly, tsan_only)
         is not manual_release
     )
     for name in ("codex-overlay", "python", "package-boundary", "macos-core"):
         expected = event != "schedule" and not (
             event == "workflow_dispatch" and (release or nightly)
         )
-        assert _condition(jobs[name]["if"], event, release, nightly) is expected
+        assert _condition(jobs[name]["if"], event, release, nightly, tsan_only) is expected
     assert "'release-native' || 'regular'" in workflow["concurrency"]["group"]
 
 
@@ -90,7 +124,7 @@ def test_native_matrix_uses_the_reviewed_materialization_recipe_and_full_upload(
     jobs = _workflow()["jobs"]
     job = jobs["native-release-qualification"]
     assert job["strategy"]["fail-fast"] == "false"
-    assert job["strategy"]["matrix"]["include"] == [
+    assert _matrix_rows() == [
         {"suite": "upstream", "sanitizers": "none"},
         {"suite": "asan-ubsan", "sanitizers": "asan,ubsan"},
         {"suite": "tsan", "sanitizers": "tsan"},
@@ -120,6 +154,18 @@ def test_native_matrix_uses_the_reviewed_materialization_recipe_and_full_upload(
     assert collector["if"] == "always()"
     assert "technical_qualification" not in collector["run"]
     assert "shutil.copytree(evidence, output / 'evidence')" in collector["run"]
+
+
+@pytest.mark.parametrize("tsan_only", [None, False, True])
+def test_native_matrix_selects_only_actual_requested_suite_jobs(
+    tsan_only: bool | None,
+) -> None:
+    all_rows = [
+        {"suite": "upstream", "sanitizers": "none"},
+        {"suite": "asan-ubsan", "sanitizers": "asan,ubsan"},
+        {"suite": "tsan", "sanitizers": "tsan"},
+    ]
+    assert _matrix_rows(tsan_only) == (all_rows[-1:] if tsan_only else all_rows)
 
 
 @pytest.mark.parametrize(

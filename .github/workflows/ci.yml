@@ -10,6 +10,10 @@ on:
         description: Run complete upstream, ASan/UBSan and TSan release qualification
         type: boolean
         default: false
+      release_native_tsan_only:
+        description: Run only TSan within release native qualification
+        type: boolean
+        default: false
       nightly_native_sanitizers:
         description: Run the scheduled native ASan/UBSan qualification branch
         type: boolean
@@ -503,13 +507,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - suite: upstream
-            sanitizers: none
-          - suite: asan-ubsan
-            sanitizers: asan,ubsan
-          - suite: tsan
-            sanitizers: tsan
+        include: >-
+          ${{ fromJSON(inputs.release_native_tsan_only &&
+          '[{"suite":"tsan","sanitizers":"tsan"}]' ||
+          '[{"suite":"upstream","sanitizers":"none"},{"suite":"asan-ubsan","sanitizers":"asan,ubsan"},{"suite":"tsan","sanitizers":"tsan"}]') }}
     env:
       ARW_NATIVE_SUITE: ${{ matrix.suite }}
       ARW_NATIVE_SANITIZERS: ${{ matrix.sanitizers }}

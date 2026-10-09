@@ -14,6 +14,8 @@
 - [ ] 2.6 Execute complete upstream, ASan/UBSan and TSan qualification through the explicit CI profile and retain all raw records.
 - [x] 2.7 Prewarm the real installed runtime before offline MCP probes, provide a private namespace temporary directory, and verify current candidate SBOM bytes while preserving historical inventories.
 
+- [x] 2.8 Preserve full TSan instrumentation and DWARF with ELF debug compression, retain actual test-image evidence, and add a TSan-only dispatch with meaningful real-compiler and matrix tests. Full native qualification remains pending under 2.6.
+
 ## 3. Actual formal release
 
 - [ ] 3.1 Merge verified changes after CI and obtain exact successful main CI subjects.
