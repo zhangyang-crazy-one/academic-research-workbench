@@ -65,12 +65,14 @@ def _authority_state(inputs: Inputs, attestation: AuthenticatedAttestation):
     return state
 
 
-def verify_anchor_journal(run_root: Path, event):
-    """Original run replay verifies the actual journal bytes and full N-1 vector.
+def verify_anchor_journal(
+    run_root: Path, event, *, held_lock_roots: tuple[Path, ...] = ()
+):
+    """Pre-admission cross-log validation under the parent writer lock.
 
-    The exact parent root is already locked during replay. Every historical
-    parent prefix is still freshly replayed through the original validator;
-    arbitrary cached events can never become authority.
+    Canonical replay checks the immutable local anchor and authority envelope
+    in the reducer. External evidence is verified here before admission and
+    independently by projections; its availability cannot block local replay.
     """
     payload = event.payload
     att = payload.attestation
@@ -92,30 +94,11 @@ def verify_anchor_journal(run_root: Path, event):
         raise ClaimGraphError(
             "digest_mismatch", "anchor does not bind the real journal confirmation"
         )
-    from arw.kernel.ledger.journal import _REPLAY_VALIDATION_SESSION
-
-    session = _REPLAY_VALIDATION_SESSION.get()
-    cache_key = (
-        str(run_root),
-        event.event_sha256,
-        att.snapshot_manifest.sha256,
-        confirmation["event_sha256"],
-    )
-    if session is not None:
-        cached = session["anchors"].get(cache_key)
-        if cached is not None:
-            return cached
-        session["anchor_work"] += 1
-        if session["anchor_work"] > 128:
-            raise ClaimGraphError(
-                "anchor_work_budget_exceeded",
-                "anchor replay exceeds per-query work budget",
-            )
     roots = tuple(
         project / payload.run_locations[r.run_id] for r in att.snapshot_manifest.runs
     )
     inputs = _read_inputs(
-        project, roots, att.snapshot_manifest, held_lock_roots=(run_root,)
+        project, roots, att.snapshot_manifest, held_lock_roots=held_lock_roots
     )
     _closure(inputs)
     old = _registrations(inputs.journal).get(att.claim_id)
@@ -127,8 +110,6 @@ def verify_anchor_journal(run_root: Path, event):
         )
     state = _authority_state(inputs, att)
     validate_claim_authority_envelope(state, att, event.occurred_at)
-    if session is not None:
-        session["anchors"][cache_key] = state
     return state
 
 
@@ -270,9 +251,7 @@ def applicability_time(inputs: Inputs, evaluation_time: str | None):
     events = [e for item in inputs.runs.values() for e in item[2].events]
     if not events:
         return None, "no_parent_events_in_snapshot"
-    value = max(
-        datetime.fromisoformat(e.occurred_at) for e in events
-    )
+    value = max(datetime.fromisoformat(e.occurred_at) for e in events)
     return value, "latest_parent_event_in_snapshot"
 
 
@@ -300,13 +279,30 @@ def verify_authenticated_record(
         None,
     )
     if anchor is None:
+        altered = any(
+            e.event_type == "claim.attestation_anchored"
+            and e.payload.project_id == inputs.manifest.project_id
+            and e.payload.journal_sequence == journal_event["sequence"]
+            for e in replay.events
+        )
+        if altered:
+            return {
+                "status": "unverifiable",
+                "historical_authorized": False,
+                "current_applicability": "unverifiable",
+                "reason": "anchor_binding_mismatch",
+            }
         return {
             "status": "pending_anchor",
             "historical_authorized": False,
             "current_applicability": "unanchored",
             "reason": "parent_anchor_missing",
         }
-    state = _authority_state(historical, att)
+    state = verify_anchor_journal(
+        inputs.runs[att.authority.authority_run_id][0],
+        anchor,
+        held_lock_roots=inputs.held_lock_roots,
+    )
     validate_claim_authority_envelope(state, att, anchor.occurred_at)
     if (
         anchor.payload.attestation.model_dump(mode="json")
@@ -322,7 +318,9 @@ def verify_authenticated_record(
     instant, source = applicability_time(inputs, evaluation_time)
     expiry = datetime.fromisoformat(state.authority.expires_at)
     applicability = (
-        "stale_revision"
+        "not_yet_anchored"
+        if instant is not None and instant < datetime.fromisoformat(anchor.occurred_at)
+        else "stale_revision"
         if not claim_current
         else "stale_evidence"
         if not evidence_current
@@ -358,13 +356,15 @@ def _prevalidate_anchor(root, replay, payload, request):
         payload=payload,
     )
     try:
-        verify_anchor_journal(root, candidate)
+        verify_anchor_journal(root, candidate, held_lock_roots=(root,))
     except (ValueError, RuntimeError, OSError) as error:
         return "claim-anchor-invalid", str(error)
     return None
 
 
-def verify_caption_confirmation(context, ref, target_sha256: str) -> str | None:
+def verify_caption_confirmation(
+    context, ref, target_sha256: str, *, evaluation_time: str | None = None
+) -> str | None:
     """Verify an exact caption target through original journal/parent contracts.
 
     This is renderer-independent. The extension builds the closed semantic
@@ -374,7 +374,8 @@ def verify_caption_confirmation(context, ref, target_sha256: str) -> str | None:
     from arw.kernel.state.accepted_ref import JournalEventRef
 
     if (
-        not isinstance(ref, JournalEventRef)
+        evaluation_time is None
+        or not isinstance(ref, JournalEventRef)
         or ref.payload_selector
         or context.project_root is None
         or ref.project_id != context.project_id
@@ -437,7 +438,7 @@ def verify_caption_confirmation(context, ref, target_sha256: str) -> str | None:
     proof = next(
         (
             a
-            for a in _attestations(record, dependency, inputs)
+            for a in _attestations(record, dependency, inputs, evaluation_time)
             if a["source"]["event_sha256"] == ref.event_sha256
         ),
         None,

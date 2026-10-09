@@ -7,7 +7,6 @@ import re
 import signal
 from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
-from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -249,9 +248,7 @@ def initialize_run(
         narrative_binding=request.narrative_binding,
         task_kind=request.task_kind,
     )
-    manifest_bytes = canonical_json_bytes(
-        manifest.model_dump(mode="json", exclude_none=True)
-    )
+    manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True))
     unsigned: dict[str, object] = {
         "schema_version": request.schema_version,
         "event_type": "run.initialized",
@@ -264,9 +261,9 @@ def initialize_run(
         "resulting_revision": 1,
         "actor_id": request.actor_id,
         "prev_event_sha256": ZERO_HASH,
-        "payload": RunInitializedPayload(
-            manifest_sha256=sha256_hex(manifest_bytes)
-        ).model_dump(mode="json"),
+        "payload": RunInitializedPayload(manifest_sha256=sha256_hex(manifest_bytes)).model_dump(
+            mode="json"
+        ),
     }
     if request.journal_layout is not None:
         unsigned["actor_role"] = "parent_control_plane"
@@ -274,21 +271,12 @@ def initialize_run(
     event_bytes = canonical_json_bytes(_event_wire_mapping(initial))
     manifest_path = root / MANIFEST_NAME
     segmented = request.journal_layout == "segmented-v1"
-    journal_path = (
-        root / SEGMENTS_RELATIVE / "00000001.jsonl"
-        if segmented
-        else root / JOURNAL_NAME
-    )
+    journal_path = root / SEGMENTS_RELATIVE / "00000001.jsonl" if segmented else root / JOURNAL_NAME
     journal_root = root / "journal"
     segments_root = root / SEGMENTS_RELATIVE
     try:
         from arw.kernel.ledger.narrative import guard_start
-
-        narrative_guard = (
-            guard_start(root, request.narrative_binding)
-            if request.narrative_binding
-            else nullcontext()
-        )
+        narrative_guard = guard_start(root, request.narrative_binding) if request.narrative_binding else nullcontext()
         with narrative_guard, _lock(root, lock_timeout):
             if (
                 manifest_path.exists()
@@ -336,10 +324,7 @@ def _read_manifest(root: Path) -> tuple[RunManifest, bytes]:
     except (OSError, UnicodeError, ValueError) as error:
         raise JournalError(f"manifest is missing or malformed: {error}") from error
     manifest: RunManifest = _strict_model(RunManifest, manifest_payload, "manifest")
-    if (
-        canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True))
-        != manifest_bytes
-    ):
+    if canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True)) != manifest_bytes:
         raise JournalError("manifest bytes are not canonical")
     if manifest.workflow_definition_id is not None:
         try:
@@ -347,9 +332,7 @@ def _read_manifest(root: Path) -> tuple[RunManifest, bytes]:
         except WorkflowDefinitionError as error:
             raise JournalError(str(error)) from error
         if definition.sha256 != manifest.workflow_definition_sha256:
-            raise JournalError(
-                "manifest workflow definition digest does not match the registry"
-            )
+            raise JournalError("manifest workflow definition digest does not match the registry")
     return manifest, manifest_bytes
 
 
@@ -421,23 +404,7 @@ def _prefix_segments(root: Path, manifest: RunManifest) -> Iterator[Path]:
         index += 1
 
 
-_REPLAY_VALIDATION_SESSION: ContextVar[dict | None] = ContextVar("arw_replay_validation_session", default=None)
-
-
 def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayState:
-    # Recursive historical anchor validation shares work only within this
-    # actual top-level replay. Nothing survives to another query or writer.
-    session = _REPLAY_VALIDATION_SESSION.get()
-    if session is not None:
-        return _replay_unlocked_impl(root, stop_revision=stop_revision)
-    token = _REPLAY_VALIDATION_SESSION.set({"anchors": {}, "anchor_work": 0})
-    try:
-        return _replay_unlocked_impl(root, stop_revision=stop_revision)
-    finally:
-        _REPLAY_VALIDATION_SESSION.reset(token)
-
-
-def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> ReplayState:
     manifest, manifest_bytes = _read_manifest(root)
     current_segments = _discover_segments(root, manifest) if stop_revision is None else None
     segment_paths = current_segments if current_segments is not None else _prefix_segments(root, manifest)
@@ -465,9 +432,7 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
     reduced_state = None
     candidate_reduced_state = None
 
-    def validate_event(
-        payload: object, line: bytes, event_number: int
-    ) -> CanonicalEvent:
+    def validate_event(payload: object, line: bytes, event_number: int) -> CanonicalEvent:
         nonlocal candidate_reduced_state, revision, previous_hash
         event: CanonicalEvent = _strict_model(
             CanonicalEvent, payload, f"event {event_number}"
@@ -477,76 +442,39 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
             raise JournalError(f"journal event {event_number} bytes are not canonical")
         actual_hash = sha256_hex(canonical_event_bytes(wire_event))
         if event.event_sha256 != actual_hash:
-            raise JournalError(
-                f"journal event {event_number} hash does not cover its bytes"
-            )
+            raise JournalError(f"journal event {event_number} hash does not cover its bytes")
         if event.run_id != manifest.run_id:
-            raise JournalError(
-                f"journal event {event_number} run identity differs from manifest"
-            )
+            raise JournalError(f"journal event {event_number} run identity differs from manifest")
         if event.sequence != event_number:
-            raise JournalError(
-                f"journal event {event_number} sequence is not contiguous"
-            )
-        if (
-            event.expected_revision != revision
-            or event.resulting_revision != revision + 1
-        ):
-            raise JournalError(
-                f"journal event {event_number} revision is not contiguous"
-            )
+            raise JournalError(f"journal event {event_number} sequence is not contiguous")
+        if event.expected_revision != revision or event.resulting_revision != revision + 1:
+            raise JournalError(f"journal event {event_number} revision is not contiguous")
         if event.prev_event_sha256 != previous_hash:
-            raise JournalError(
-                f"journal event {event_number} previous hash does not match"
-            )
+            raise JournalError(f"journal event {event_number} previous hash does not match")
         if event.event_id in event_ids or event.command_id in command_ids:
-            raise JournalError(
-                f"journal event {event_number} repeats an accepted identity"
-            )
+            raise JournalError(f"journal event {event_number} repeats an accepted identity")
         if event_number == 1:
             if event.event_type != "run.initialized":
                 raise JournalError("first journal event must initialize the run")
             if not isinstance(event.payload, RunInitializedPayload):
                 raise JournalError("first journal event has the wrong payload")
             if event.payload.manifest_sha256 != manifest_hash:
-                raise JournalError(
-                    "first journal event does not bind the manifest bytes"
-                )
-        elif (
-            manifest.journal_layout is None
-            and event.event_type != "baseline.probe_recorded"
-        ):
+                raise JournalError("first journal event does not bind the manifest bytes")
+        elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {
-            "artifact.accepted",
-            "research_artifact_accepted",
-            "passport.accepted",
-            "proposal.accepted",
-            "experiment.contract.accepted",
-            "experiment.provenance.accepted",
-        }:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted", "experiment.contract.accepted", "experiment.provenance.accepted"}:
             try:
                 if event.event_type == "experiment.contract.accepted":
                     validate_experiment_contract_event(
                         root,
                         event,
-                        [
-                            e
-                            for e in events
-                            if e.event_type == "experiment.contract.accepted"
-                        ],
+                        [e for e in events if e.event_type == "experiment.contract.accepted"],
                         cache=contract_cache,
                     )
                 else:
                     validate_accepted_event_manifests(root, (event,))
             except ManifestError as error:
                 raise JournalError(str(error)) from error
-        if event.event_type == "claim.attestation_anchored":
-            from arw.kernel.ledger.claim_authority import verify_anchor_journal
-            try:
-                verify_anchor_journal(root, event)
-            except (ValueError, RuntimeError, OSError) as error:
-                raise JournalError(f"claim attestation anchor is invalid: {error}") from error
         if event.event_type == "execution_provenance.artifact_bound":
             try:
                 validate_execution_binding_source(root, event, manifest)
@@ -559,23 +487,15 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
                 manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
                 (*events, event),
             )
-            if event.event_type in {
-                "artifact.accepted",
-                "research_artifact_accepted",
-                "passport.accepted",
-            }:
+            if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
                 if reduced_state is None:
                     raise ManifestError("accepted manifest has no prior runtime state")
                 validate_event_manifest_semantics(root, event, reduced_state)
         except (ManifestError, ReducerError, WorkflowDefinitionError) as error:
-            raise JournalError(
-                f"runtime event {event_number} is invalid: {error}"
-            ) from error
+            raise JournalError(f"runtime event {event_number} is invalid: {error}") from error
         return event
 
-    def accept_event(
-        event: CanonicalEvent, segment_events: list[CanonicalEvent]
-    ) -> None:
+    def accept_event(event: CanonicalEvent, segment_events: list[CanonicalEvent]) -> None:
         nonlocal candidate_reduced_state, reduced_state, revision, previous_hash
         revision = event.resulting_revision
         previous_hash = event.event_sha256
@@ -590,17 +510,13 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
         try:
             segment_bytes = segment_path.read_bytes()
         except OSError as error:
-            raise JournalError(
-                f"segment {segment_path.name} is unreadable: {error}"
-            ) from error
+            raise JournalError(f"segment {segment_path.name} is unreadable: {error}") from error
         segment_events: list[CanonicalEvent] = []
         accepted_byte_end = 0
         offset = 0
         if not segment_bytes:
             if not events:
-                raise JournalError(
-                    "journal has no trustworthy prefix: first segment is empty"
-                )
+                raise JournalError("journal has no trustworthy prefix: first segment is empty")
             segments.append(
                 SegmentScan(
                     index=segment_index,
@@ -778,9 +694,7 @@ def _replay_unlocked_impl(root: Path, *, stop_revision: int | None = None) -> Re
 
     if pending_damaged is not None and recovery_health == "healthy":
         recovery_health = "blocked"
-        recovery_message = (
-            "damaged segment is not followed by a valid recovery boundary"
-        )
+        recovery_message = "damaged segment is not followed by a valid recovery boundary"
 
     return ReplayState(
         run_id=manifest.run_id,
@@ -919,7 +833,9 @@ def build_runtime_event(
     from arw.kernel.state.event_versions import event_schema_version
 
     payload_value = (
-        payload.model_dump(mode="json") if hasattr(payload, "model_dump") else payload
+        payload.model_dump(mode="json")
+        if hasattr(payload, "model_dump")
+        else payload
     )
     return _event_from_unsigned(
         {
@@ -975,8 +891,9 @@ def append_runtime_event_unlocked(
         raise JournalError("journal changed during locked replay")
     with segment_path.open("ab") as handle:
         torn = active_fault("phase7.torn-final-write")
-        if os.environ.get(FAILPOINT_ENV) == PARTIAL_RUNTIME_APPEND_SIGKILL or (
-            torn is not None and torn.action == "torn-write"
+        if (
+            os.environ.get(FAILPOINT_ENV) == PARTIAL_RUNTIME_APPEND_SIGKILL
+            or (torn is not None and torn.action == "torn-write")
         ):
             handle.write(event_bytes[: max(1, len(event_bytes) // 2)])
             handle.flush()

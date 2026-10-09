@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from arw.cli import main
 from tests.unit.test_accepted_refs import accepted_fixture
 from tests.unit.test_numeric_core import request, selection
@@ -75,7 +77,11 @@ def test_checkout_launcher_forwards_new_public_commands(tmp_path):
         assert f"{command} {action}" in completed.stdout
 
 
-def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys):
+@pytest.mark.parametrize(
+    ("evaluation_time", "exit_code"),
+    [("2026-09-08T00:05:00Z", 0), ("2026-09-08T00:02:00Z", 65), ("2026-09-08T00:10:01Z", 65)],
+)
+def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys, evaluation_time, exit_code):
     from tests.integration.test_canonical_caption_authority import prepare
     from tests.integration.test_research_artifacts import request as parent_request
     from tests.integration.test_result_plots import attach_bridge
@@ -85,12 +91,16 @@ def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys):
     source = root / "plot-ir.json"
     source.write_text(ir.model_dump_json())
     request_path = root / "qualification-request.json"
-    request_path.write_text(parent_request(root, 240).model_dump_json())
+    qualification = parent_request(root, 240).model_copy(update={"occurred_at": evaluation_time})
+    request_path.write_text(qualification.model_dump_json())
     argv = ["artifact", "qualify", "--run-root", str(root), "--project-root", str(project), "--input", str(source), "--request", str(request_path), "--hard-caption-checks"]
-    assert main(argv) == 0
+    assert main(argv) == exit_code
     result = json.loads(capsys.readouterr().out)
-    assert result["accepted"] is True
-    assert any(c["code"] == "caption_binding_matches" and c["status"] == "PASS" for c in result["receipt"]["checks"])
+    assert result["accepted"] is (exit_code == 0)
+    if exit_code == 0:
+        assert any(c["code"] == "caption_binding_matches" and c["status"] == "PASS" for c in result["receipt"]["checks"])
+    else:
+        assert "caption_auth_missing" in result["receipt"]["reason_codes"]
 
 
 def test_public_claims_hard_failure_is_nonzero_while_advisory_remains_readonly(tmp_path, capsys):

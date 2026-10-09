@@ -273,10 +273,11 @@ def test_fractional_time_comparison_uses_utc_instants(tmp_path):
         validate_claim_authority_envelope(state, att, "2026-09-08T00:10:00.0001Z")
 
 
-def test_anchor_journal_hash_tampering_blocks_parent_replay(tmp_path):
+def test_anchor_journal_hash_tampering_is_unverifiable_without_blocking_parent(
+    tmp_path,
+):
     project, run, _, ref = prepared(tmp_path)
     confirm(project, run, ref)
-    # A hash-consistent journal rewrite still breaks the accepted parent anchor.
     from arw.kernel.core.canonical import sha256_hex
 
     path = project / narrative.RELATIVE
@@ -285,51 +286,10 @@ def test_anchor_journal_hash_tampering_blocks_parent_replay(tmp_path):
     unsigned = {k: v for k, v in events[-1].items() if k != "event_sha256"}
     events[-1]["event_sha256"] = sha256_hex(canonical_json_bytes(unsigned))
     path.write_bytes(b"".join(canonical_json_bytes(e) for e in events))
-    assert (
-        narrative._read(project)[0][-1]["payload"]["statement"]
-        == "Altered confirmation statement."
-    )
-    assert replay_run(run).recovery_health == "blocked"
-    with pytest.raises(claim_graph.ClaimGraphError):
-        claim_graph.graph(project, run_roots=(run,))
-
-
-def test_many_independent_anchors_replay_with_query_local_bounded_work(
-    tmp_path, monkeypatch
-):
-    from arw.kernel.ledger import claim_authority
-
-    project, run, _, ref = prepared(tmp_path)
-    for index in range(10):
-        before = claim_graph.graph(project, run_roots=(run,))
-        out = attest_authenticated(
-            project,
-            run_roots=(run,),
-            expected_head=before["snapshot_sha256"],
-            claim_id="claim.relation",
-            authority=ref,
-            statement=f"Review inference {index}",
-            scope=ref.scope,
-            policy_version="policy.v1",
-            request=request(run, 220 + index),
-        )
-        assert out["status"] == "authenticated"
-    calls = []
-    original = claim_authority._read_inputs
-
-    def count(*args, **kwargs):
-        calls.append(1)
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(claim_authority, "_read_inputs", count)
     assert replay_run(run).recovery_health == "healthy"
-    assert len(calls) == 10
-    calls.clear()
-    assert replay_run(run).recovery_health == "healthy"
-    assert len(calls) == 10  # Cache is discarded between actual queries.
-    # A later query cannot reuse prior proof after the journal changes.
-    path = project / narrative.RELATIVE
-    path.write_bytes(
-        path.read_bytes().replace(b"Review inference 0", b"Altered inference0")
-    )
-    assert replay_run(run).recovery_health == "blocked"
+    view = claim_graph.graph(project, run_roots=(run,), hard_check=True)
+    attestation = current_claim(view)["attestations"][0]
+    assert attestation["status"] == "unverifiable"
+    assert attestation["historical_authorized"] is False
+    assert attestation["reason"] == "anchor_binding_mismatch"
+    assert view["hard_checks"]["status"] == "failed"

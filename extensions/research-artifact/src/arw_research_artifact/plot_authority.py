@@ -9,13 +9,23 @@ from .plot_policy import VerifiedCaptionAttestation, caption_target
 class CanonicalCaptionAttestationVerifier:
     """Never trusts confirmation labels, author strings or an arbitrary digest."""
 
+    def __init__(self, *, evaluation_time: str | None = None):
+        self.evaluation_time = evaluation_time
+
+    def at_time(self, evaluation_time: str):
+        """Bind a hard check to the parent qualification request instant."""
+        return type(self)(evaluation_time=evaluation_time)
+
     def verify(self, compiled, binding, *, resolution_context):
         ir_sha = sha256_hex(canonical_json_bytes(compiled.ir.model_dump(mode="json")))
         target_sha = sha256_hex(canonical_json_bytes(caption_target(compiled, binding)))
         evidence = None
         if resolution_context is not None and binding.confirmation_ref is not None:
             evidence = verify_caption_confirmation(
-                resolution_context, binding.confirmation_ref, target_sha
+                resolution_context,
+                binding.confirmation_ref,
+                target_sha,
+                evaluation_time=self.evaluation_time,
             )
         return VerifiedCaptionAttestation(
             binding_id=binding.binding_id,

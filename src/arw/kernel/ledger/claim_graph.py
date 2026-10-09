@@ -67,10 +67,15 @@ def _registrations(events: list[dict]) -> dict[str, ClaimRegistration]:
     return current
 
 
-def validate_claim_journal_event(event: dict, prior: list[dict]) -> None:
+def validate_claim_journal_event(
+    event: dict,
+    prior: list[dict],
+    *,
+    registrations: dict[str, ClaimRegistration] | None = None,
+) -> None:
     """Validate new kinds without re-encoding or migrating historical events."""
     kind = event["kind"]
-    latest = _registrations(prior)
+    latest = _registrations(prior) if registrations is None else registrations
     if kind in {"claim.registered", "claim.evidence.updated"}:
         record = ClaimRegistration.model_validate(event["payload"])
         old = latest.get(record.claim.claim_id)
@@ -95,6 +100,8 @@ def validate_claim_journal_event(event: dict, prior: list[dict]) -> None:
             or record.claim.supersedes != old.claim.sha256
         ):
             raise ValueError("semantic claim predecessor or revision mismatch")
+        if registrations is not None:
+            registrations[record.claim.claim_id] = record
         return
     from arw.kernel.state.claim_authentication import parse_attestation
 
@@ -400,11 +407,10 @@ def _closure(inputs: Inputs) -> None:
                         "dependency_outside_prefix",
                         "parent anchor journal confirmation is outside snapshot",
                     )
-                if source["event_sha256"] != event.payload.journal_event_sha256:
-                    raise ClaimGraphError(
-                        "digest_mismatch",
-                        "parent anchor journal confirmation hash differs",
-                    )
+                # A changed but valid journal confirmation makes this anchor
+                # unverifiable in _attestations. Its immutable local acceptance
+                # remains replayable; it cannot authenticate the changed record.
+
 
 
 def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
@@ -754,40 +760,57 @@ def _attestations(
         att = parse_attestation(event["payload"])
         # Independently reconstruct the exact predecessor vector; declarations
         # do not assert permission and never acquire an authenticated label.
-        historical = _read_inputs(
-            inputs.root,
-            tuple(inputs.runs[r.run_id][0] for r in att.snapshot_manifest.runs),
-            att.snapshot_manifest,
-            figure_verifier=inputs.figure_verifier,
-            held_lock_roots=inputs.held_lock_roots,
-        )
-        _closure(historical)
-        old = _registrations(historical.journal).get(att.claim_id)
-        valid = old is not None and old.claim.sha256 == att.claim_sha256
-        old_dependency = _evaluate_registration(old, historical)[1] if old else None
-        valid = valid and old_dependency == att.evidence_dependency_sha256
-        status = (
-            "declared"
-            if valid
-            and att.claim_sha256 == record.claim.sha256
-            and att.evidence_dependency_sha256 == dependency
-            else "stale"
-        )
-        verified = {"historical_authorized": False, "current_applicability": status}
-        if att.authority.kind == "authenticated":
-            from arw.kernel.ledger.claim_authority import verify_authenticated_record
-
-            verified = verify_authenticated_record(
-                inputs,
-                historical,
-                event,
-                att,
-                claim_current=att.claim_sha256 == record.claim.sha256,
-                evidence_current=att.evidence_dependency_sha256 == dependency,
-                dependencies_valid=valid,
-                evaluation_time=evaluation_time,
+        try:
+            historical = _read_inputs(
+                inputs.root,
+                tuple(inputs.runs[r.run_id][0] for r in att.snapshot_manifest.runs),
+                att.snapshot_manifest,
+                figure_verifier=inputs.figure_verifier,
+                held_lock_roots=inputs.held_lock_roots,
             )
-            status = verified.pop("status")
+            _closure(historical)
+            old = _registrations(historical.journal).get(att.claim_id)
+            valid = old is not None and old.claim.sha256 == att.claim_sha256
+            old_dependency = _evaluate_registration(old, historical)[1] if old else None
+            valid = valid and old_dependency == att.evidence_dependency_sha256
+            status = (
+                "declared"
+                if valid
+                and att.claim_sha256 == record.claim.sha256
+                and att.evidence_dependency_sha256 == dependency
+                else "stale"
+            )
+            verified = {"historical_authorized": False, "current_applicability": status}
+            if att.authority.kind == "authenticated":
+                from arw.kernel.ledger.claim_authority import (
+                    verify_authenticated_record,
+                )
+
+                verified = verify_authenticated_record(
+                    inputs,
+                    historical,
+                    event,
+                    att,
+                    claim_current=att.claim_sha256 == record.claim.sha256,
+                    evidence_current=att.evidence_dependency_sha256 == dependency,
+                    dependencies_valid=valid,
+                    evaluation_time=evaluation_time,
+                )
+                status = verified.pop("status")
+        except (ValueError, RuntimeError, OSError, KeyError) as error:
+            if att.authority.kind != "authenticated":
+                raise
+            if (
+                isinstance(error, ClaimGraphError)
+                and error.code == "invalid_evaluation_time"
+            ):
+                raise
+            status = "unverifiable"
+            verified = {
+                "historical_authorized": False,
+                "current_applicability": "unverifiable",
+                "reason": getattr(error, "code", "external_proof_invalid"),
+            }
         items.append(
             {
                 "status": status,
@@ -1514,7 +1537,9 @@ def _numeric_sources(inputs: Inputs, nodes: list[dict]) -> dict:
                 # Generic parent acceptance proves bytes, not that a numeric
                 # record's declared identity or exact result is coherent.
                 identity = body.get("derivation_id")
-                if isinstance(identity, str) and re.fullmatch(r"[0-9a-f]{64}", identity):
+                if isinstance(identity, str) and re.fullmatch(
+                    r"[0-9a-f]{64}", identity
+                ):
                     sources[identity] = {
                         "status": "failed",
                         "reason": "sealed_derivation_replay_mismatch",

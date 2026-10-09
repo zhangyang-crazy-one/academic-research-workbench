@@ -53,3 +53,21 @@ Caption authentication SHALL bind a frozen semantic target excluding confirmatio
 #### Scenario: A caller label
 - **WHEN** a declared record or unanchored handle is labeled authenticated in an IR
 - **THEN** the true verifier reports auth_missing
+
+### Requirement: Canonical anchor availability and admission
+Parent admission SHALL validate actual journal bytes, N-1 closure and exact evidence/authority bindings. Canonical parent replay SHALL validate run-local anchor invariants without depending on the project journal or sibling writer locks. Cross-log proof failures SHALL remain unverifiable in projections and SHALL never acquire authentication or scientific failure labels.
+
+#### Scenario: Archival or concurrent sibling writer
+- **WHEN** a parent run is archived alone or an included sibling run is being written
+- **THEN** its local canonical replay stays healthy and unavailable cross-log proof cannot authenticate
+
+#### Scenario: More than 128 accepted anchors
+- **WHEN** a run has 129 independently admitted anchors within its retained byte budget
+- **THEN** its accepted events remain replayable without a query-only count rejection
+
+### Requirement: Core narrative capacity and caption time
+Claim writes SHALL reserve core journal capacity. Readers SHALL freshly validate each registration once within each project-journal read. Hard caption checks SHALL use an explicit evaluation instant, with parent qualification binding it to request occurred_at.
+
+#### Scenario: No new parent events after expiry
+- **WHEN** a hard qualification request occurs after authority expiry while the parent head has not advanced
+- **THEN** the caption cannot authenticate despite historical authorization at anchor time

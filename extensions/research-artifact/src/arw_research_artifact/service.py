@@ -323,6 +323,15 @@ class ResearchArtifactService:
         )
 
     def _qualify_plot(self, ir, *, run_root, request, **options):
+        verifier = options.get("attestation_verifier")
+        if options.get("hard_caption_checks") and callable(
+            getattr(verifier, "at_time", None)
+        ):
+            options = {
+                **options,
+                "attestation_verifier": verifier.at_time(request.occurred_at),
+            }
+
         def prepare(events):
             # Only this internal callback owns the actual parent writer lock.
             context = self._plot_context(

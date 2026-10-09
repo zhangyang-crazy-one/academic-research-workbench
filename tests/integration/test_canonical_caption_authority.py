@@ -110,7 +110,9 @@ def test_real_parent_authenticated_caption_target_is_stable_without_self_referen
     assert (
         sha256_hex(canonical_json_bytes(caption_target(compiled, bind))) == target_sha
     )
-    verifier = CanonicalCaptionAttestationVerifier()
+    verifier = CanonicalCaptionAttestationVerifier(
+        evaluation_time="2026-09-08T00:05:00Z"
+    )
     proof = verifier.verify(compiled, bind, resolution_context=context)
     assert proof.status == "verified" and proof.target_sha256 == target_sha
     assert proof.evidence_sha256
@@ -150,7 +152,9 @@ def test_real_parent_authenticated_caption_target_is_stable_without_self_referen
     accepted = ResearchArtifactService().qualify(
         bridged,
         run_root=run,
-        request=parent_request(run, 240),
+        request=parent_request(run, 240).model_copy(
+            update={"occurred_at": "2026-09-08T00:05:00Z"}
+        ),
         resolution_context=context,
         hard_caption_checks=True,
         attestation_verifier=verifier,
@@ -163,7 +167,9 @@ def test_caption_wrong_or_unanchored_confirmation_remains_auth_missing(tmp_path)
     project, run, context, ir, _target_sha = prepare(tmp_path)
     compiled = compile_plot(ir, context)
     binding = ir.caption_bindings[0]
-    verifier = CanonicalCaptionAttestationVerifier()
+    verifier = CanonicalCaptionAttestationVerifier(
+        evaluation_time="2026-09-08T00:05:00Z"
+    )
     wrong_ref = binding.confirmation_ref.model_copy(update={"event_sha256": "f" * 64})
     assert (
         verifier.verify(
@@ -230,3 +236,42 @@ def test_declared_caption_scope_cannot_become_authenticated_by_ir_labels(tmp_pat
         compiled, binding, resolution_context=context
     )
     assert proof.status == "auth_missing" and proof.evidence_sha256 is None
+
+
+def test_hard_caption_requires_time_and_rechecks_expiry_without_new_events(tmp_path):
+    _project, run, context, ir, _target_sha = prepare(tmp_path)
+    compiled = compile_plot(ir, context)
+    bind = ir.caption_bindings[0]
+    assert (
+        CanonicalCaptionAttestationVerifier()
+        .verify(compiled, bind, resolution_context=context)
+        .status
+        == "auth_missing"
+    )
+    for instant in ("2026-09-08T00:02:00Z", "2026-09-08T00:10:01Z"):
+        proof = CanonicalCaptionAttestationVerifier(evaluation_time=instant).verify(
+            compiled, bind, resolution_context=context
+        )
+        assert proof.status == "auth_missing"
+    assert (
+        CanonicalCaptionAttestationVerifier(evaluation_time="2026-09-08T00:05:00Z")
+        .verify(compiled, bind, resolution_context=context)
+        .status
+        == "verified"
+    )
+    bridged = attach_bridge(ir, run, context, number=230)
+    # A stale verifier instant cannot override the current qualification request.
+    accepted = ResearchArtifactService().qualify(
+        bridged,
+        run_root=run,
+        request=parent_request(run, 240).model_copy(
+            update={"occurred_at": "2026-09-08T00:10:01Z"}
+        ),
+        resolution_context=context,
+        hard_caption_checks=True,
+        attestation_verifier=CanonicalCaptionAttestationVerifier(
+            evaluation_time="2026-09-08T00:05:00Z"
+        ),
+    )
+    assert not accepted["accepted"]
+    assert "caption_auth_missing" in accepted["receipt"]["reason_codes"]
