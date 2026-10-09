@@ -41,8 +41,8 @@ def test_preflight_keeps_accepted_stage_untouched(
     evidence = tmp_path / evidence_suffix
     env = os.environ.copy()
     env["ARW_BUILD_PYTHON"] = sys.executable
-    env.pop("TMPDIR", None)
-    env.pop("ARW_STAGE_TMP_ROOT", None)
+    env["TMPDIR"] = str(tmp_path / "build-scratch")
+    env["ARW_STAGE_TMP_ROOT"] = str(tmp_path / "stage-scratch")
     if variable is not None:
         assert temporary_suffix is not None
         env[variable] = str(tmp_path / temporary_suffix)
@@ -77,8 +77,8 @@ def test_preflight_rejects_unsafe_temporary_root_before_stage_work(
     evidence = tmp_path / "evidence"
     env = os.environ.copy()
     env["ARW_BUILD_PYTHON"] = sys.executable
-    env.pop("TMPDIR", None)
-    env.pop("ARW_STAGE_TMP_ROOT", None)
+    env["TMPDIR"] = str(tmp_path / "build-scratch")
+    env["ARW_STAGE_TMP_ROOT"] = str(tmp_path / "stage-scratch")
     env[variable] = str(unsafe_root)
 
     result = subprocess.run(
