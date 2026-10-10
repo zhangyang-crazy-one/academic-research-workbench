@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -71,6 +72,74 @@ class RefResolution:
     reason: str | None = None
     raw_bytes: bytes | None = None
     selected_value: object = None
+
+
+class ResolutionCache:
+    """Single-operation memo for accepted-source resolution (#98).
+
+    One cache is created per compile/capture operation and dropped when the
+    operation ends; nothing is persisted or trusted across operations.  Keys
+    bind the canonical ref bytes and the full resolution-context identity
+    (roots, prefixes, journal pins, held locks), so a changed prefix, manifest
+    or content digest can never be shadowed by an earlier hit.
+    """
+
+    def __init__(self) -> None:
+        self._runs: dict[str, list] = {}
+        self._refs: dict[tuple[str, str], RefResolution] = {}
+        self._csv_rows: dict[tuple[str, str], tuple] = {}
+
+    def csv_rows(self, ref: AcceptedRef, row_id_column: str, scan: Callable[[], tuple]) -> tuple:
+        """Return the globally validated full-table row scan for one CSV source."""
+        key = (
+            sha256_hex(canonical_json_bytes(ref.model_dump(mode="json"))),
+            row_id_column,
+        )
+        if key not in self._csv_rows:
+            self._csv_rows[key] = scan()
+        return self._csv_rows[key]
+
+
+def _context_key(context: ResolutionContext) -> str:
+    return sha256_hex(
+        canonical_json_bytes(
+            {
+                "project_id": context.project_id,
+                "run_roots": [str(Path(root).resolve()) for root in context.run_roots],
+                "run_prefixes": [
+                    {
+                        "run_id": prefix.run_id,
+                        "revision": prefix.revision,
+                        "head_sha256": prefix.head_sha256,
+                        "run_manifest_sha256": prefix.run_manifest_sha256,
+                    }
+                    for prefix in context.run_prefixes
+                ],
+                "journal_sequence": context.journal_sequence,
+                "journal_head_sha256": context.journal_head_sha256,
+                "held_lock_roots": sorted(
+                    str(Path(root).resolve()) for root in context.held_lock_roots
+                ),
+            }
+        )
+    )
+
+
+def _cached_runs(context: ResolutionContext, cache: ResolutionCache) -> list:
+    key = _context_key(context)
+    if key not in cache._runs:
+        cache._runs[key] = _runs(context)
+    return cache._runs[key]
+
+
+def _resolve(
+    ref: AcceptedRef, context: ResolutionContext, cache: ResolutionCache | None = None
+) -> RefResolution:
+    if isinstance(ref, JournalEventRef):
+        return _resolve_journal(ref, context)
+    return _resolve_parent(
+        ref, context, _runs(context) if cache is None else _cached_runs(context, cache)
+    )
 
 
 def resolve_pointer(value: object, pointer: str) -> object:
@@ -279,7 +348,9 @@ def _resolve_journal(ref: JournalEventRef, context: ResolutionContext) -> RefRes
         )
 
 
-def resolve_ref(ref: AcceptedRef, context: ResolutionContext) -> RefResolution:
+def resolve_ref(
+    ref: AcceptedRef, context: ResolutionContext, cache: ResolutionCache | None = None
+) -> RefResolution:
     try:
         # Frozen models may still be forged with model_construct/model_copy.
         ref = ACCEPTED_REF_ADAPTER.validate_json(
@@ -287,11 +358,15 @@ def resolve_ref(ref: AcceptedRef, context: ResolutionContext) -> RefResolution:
         )
         if ref.project_id != context.project_id:
             return RefResolution("unresolved", ref, reason="project_mismatch")
-        return (
-            _resolve_journal(ref, context)
-            if isinstance(ref, JournalEventRef)
-            else _resolve_parent(ref, context, _runs(context))
+        if cache is None:
+            return _resolve(ref, context)
+        key = (
+            _context_key(context),
+            sha256_hex(canonical_json_bytes(ref.model_dump(mode="json"))),
         )
+        if key not in cache._refs:
+            cache._refs[key] = _resolve(ref, context, cache)
+        return cache._refs[key]
     except (
         ValueError,
         RuntimeError,

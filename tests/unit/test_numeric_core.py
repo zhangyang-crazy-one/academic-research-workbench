@@ -16,6 +16,7 @@ from arw.kernel.policy.numeric_core import (
     evaluate_derivation,
     format_exact,
     resolve_operand,
+    result_unit,
 )
 from arw.kernel.state.numeric_core import (
     MAX_INTEGER,
@@ -335,9 +336,9 @@ def test_dag_memoization_and_bounded_resources(tmp_path, monkeypatch):
         )
     original_resolver, calls = numeric_core.resolve_operand, []
 
-    def observed(*args):
+    def observed(*args, **kwargs):
         calls.append(1)
-        return original_resolver(*args)
+        return original_resolver(*args, **kwargs)
 
     monkeypatch.setattr(numeric_core, "resolve_operand", observed)
     assert fraction(evaluate_derivation(nested, context, values)) == 1
@@ -472,3 +473,22 @@ def test_relative_change_supports_same_context_nonnegative_quantities(
         request("pct_point_diff", *args, context=comparison), context
     )
     assert point.status == "out_of_domain"
+
+
+def test_result_unit_contract_covers_every_operator():
+    """#97: the output dimension is a per-operator contract, never an
+    inherited operand unit."""
+    ref = DerivationRef(derivation_id="a" * 64)
+    ms = CTX.model_copy(update={"metric_definition": "latency", "unit": "ms"})
+
+    def unit(op, context=CTX):
+        return result_unit(
+            DerivationRequest(expr=NumericExpression(op=op, args=(ref,)), context=context)
+        )
+
+    assert unit("ratio") == "ratio"
+    assert unit("relative_change") == "ratio"
+    assert unit("count") == "count"
+    for op in ("value", "diff", "pct_point_diff", "sum", "mean", "median", "min", "max"):
+        assert unit(op) == "ratio"
+        assert unit(op, ms) == "ms"

@@ -79,10 +79,10 @@ def _check(code, category="integrity", status="PASS", **kwargs):
     return PlotCheck(code=code, category=category, status=status, **kwargs)
 
 
-def _exact(request, context):
+def _exact(request, context, cache=None):
     from arw.kernel.policy.numeric_core import evaluate_derivation
 
-    result = evaluate_derivation(request, context)
+    result = evaluate_derivation(request, context, cache=cache)
     if result.status != "exact" or result.exact is None:
         raise PlotFault(
             f"numeric_{result.status}"
@@ -100,9 +100,13 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
     if len(raw_ir) > 1_048_576:
         raise PlotFault("plot_ir_budget_exceeded")
     ir = ResultPlotIR.model_validate_json(raw_ir)
-    from arw.kernel.ledger.accepted_refs import resolve_ref
+    from arw.kernel.ledger.accepted_refs import ResolutionCache, resolve_ref
     from arw.kernel.ledger.source_locations import read_retained_bytes
-    from arw.kernel.policy.numeric_core import parse_exact_number, resolve_operand
+    from arw.kernel.policy.numeric_core import (
+        parse_exact_number,
+        resolve_operand,
+        result_unit,
+    )
     from arw.kernel.state.models import RunManifest
 
     run_ids = {
@@ -111,13 +115,16 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
         ).run_id
         for root in resolution_context.run_roots
     }
+    # Single-operation source memo (#98): run replays, ref resolutions and
+    # full-table CSV scans are shared within this compilation only.
+    cache = ResolutionCache()
     refs = ir.source_refs
     if not refs:
         raise PlotFault("plot_requires_accepted_sources")
     for ref in refs:
         if isinstance(ref, ParentArtifactRef) and ref.run_id not in run_ids:
             raise PlotFault("plot_cross_run_source_unsupported")
-        resolved = resolve_ref(ref, resolution_context)
+        resolved = resolve_ref(ref, resolution_context, cache=cache)
         allowed_scopes = (
             {"metadata_only"}
             if isinstance(ref, JournalEventRef)
@@ -147,7 +154,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
     )
 
     def value(request, layer, datum_id, category, series, channel, row_id=None):
-        result = _exact(request, resolution_context)
+        result = _exact(request, resolution_context, cache)
         digest = sha256_hex(
             canonical_json_bytes(
                 {
@@ -159,10 +166,10 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                 }
             )
         )
-        operand_units = {a.unit for a in request.expr.args if hasattr(a, "unit")}
-        if len(operand_units) != 1:
-            raise PlotFault("plot_unit_ambiguous")
-        unit = next(iter(operand_units))
+        # The output dimension comes from the operator contract in the shared
+        # numeric core (#97): ratio/relative_change are dimensionless
+        # proportions and count is a cardinality, regardless of operand units.
+        unit = result_unit(request)
         expected_unit = ir.scales.x.unit if channel == "x" else ir.scales.y.unit
         if unit != expected_unit:
             raise PlotFault("plot_scale_unit_mismatch")
@@ -223,7 +230,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                     raise PlotFault("observation_x_context_mismatch")
                 if x_source.columns != (layer.encoding.x,):
                     raise PlotFault("observation_x_requires_single_encoded_column")
-            result = resolve_operand(source, resolution_context)
+            result = resolve_operand(source, resolution_context, cache=cache)
             if result.status != "exact":
                 raise PlotFault(f"observation_{result.status}")
             if len(result.rows) > 1000:
@@ -232,7 +239,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                 raise PlotFault("paired_missing_numeric_value")
             x_rows = None
             if layer.x_source:
-                x_result = resolve_operand(x_source, resolution_context)
+                x_result = resolve_operand(x_source, resolution_context, cache=cache)
                 if x_result.status != "exact":
                     raise PlotFault("observation_x_invalid_source")
                 x_rows = {row.row_id: row for row in x_result.rows}
@@ -393,7 +400,9 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                     if request:
                         for operand in request.expr.args:
                             if isinstance(operand, CsvSelection):
-                                rows = resolve_operand(operand, resolution_context).rows
+                                rows = resolve_operand(
+                                    operand, resolution_context, cache=cache
+                                ).rows
                                 for field, expected in (
                                     (layer.encoding.series, datum.series),
                                     (
@@ -475,7 +484,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                         raise PlotFault("interval_missing_policy_mismatch")
             if u.mode != "precomputed_interval":
                 raise PlotFault("unsupported_sd_se_recomputation")
-            n = _exact(u.n_source, resolution_context).exact
+            n = _exact(u.n_source, resolution_context, cache).exact
             if n.denominator != 1 or n.numerator < 1:
                 raise PlotFault("invalid_effective_n")
             if u.interval_type == "sd" and n.numerator <= u.ddof:
@@ -503,7 +512,7 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
             numerator=ir.figure_number, denominator=1
         )
     if ir.heuristics.effective_n:
-        n = _exact(ir.heuristics.effective_n, resolution_context).exact
+        n = _exact(ir.heuristics.effective_n, resolution_context, cache).exact
         if n.denominator != 1 or n.numerator < 1:
             raise PlotFault("invalid_effective_n")
         metadata["effective_n"] = n
