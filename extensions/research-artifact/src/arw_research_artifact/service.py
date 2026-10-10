@@ -102,7 +102,7 @@ class ResearchArtifactService:
             return replay_run_prefix(run_root, **arguments)
         return replay_run(run_root)
 
-    def _render(self, ir, *, run_root=None, resolution_context=None):
+    def _render(self, ir, *, run_root=None, resolution_context=None, compiled=None):
         renderer = self._renderer_for(ir)
         if ir.renderer_hints != renderer.identity:
             raise IRValidationFault("pinned_renderer_unavailable")
@@ -112,9 +112,9 @@ class ResearchArtifactService:
             from .plot_policy import compile_plot
 
             context = self._plot_context(ir, run_root, resolution_context)
-            output = renderer.render(
-                compile_plot(ir, context, acceptance_root=run_root)
-            )
+            if compiled is None:
+                compiled = compile_plot(ir, context, acceptance_root=run_root)
+            output = renderer.render(compiled)
         else:
             output = renderer.render(ir)
         if len(output) > 2_097_152:
@@ -157,7 +157,11 @@ class ResearchArtifactService:
 
         context = self._plot_context(ir, run_root, resolution_context)
         compiled = compile_plot(ir, context, acceptance_root=run_root)
-        raw, output = self._render(ir, run_root=run_root, resolution_context=context)
+        # Render the exact compilation just validated; a second compile of the
+        # same fixed input would rescan every accepted source (#98).
+        raw, output = self._render(
+            ir, run_root=run_root, resolution_context=context, compiled=compiled
+        )
         replayed = self._plot_replay(run_root, context)
         validation, reasons, reviewer, passed, checks = PlotValidator().validate(
             compiled,

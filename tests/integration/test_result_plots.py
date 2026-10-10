@@ -1312,3 +1312,156 @@ def test_dense_grouped_bars_fit_their_slots_without_overlap(tmp_path):
     )
     with pytest.raises(ValidationError, match="bar_requires_linear_y"):
         compile_plot(log_ir, context)
+
+
+def _compile_single_datum_y(context, req, unit):
+    layer = PlotLayer(
+        layer_id="layer.change",
+        role="aggregate",
+        mark="point",
+        encoding=PlotEncoding(x="category", y="score"),
+        data=(PlotDatum(datum_id="datum.change", category="A", y=req),),
+    )
+    base = plot((layer,))
+    ir = base.model_copy(
+        update={
+            "scales": PlotScales(
+                x=base.scales.x, y=PlotScale(type="linear", unit=unit)
+            )
+        }
+    )
+    compiled = compile_plot(ir, context)
+    (value,) = [v for v in compiled.plot_values if v.channel == "y"]
+    return value
+
+
+def test_ratio_and_relative_change_are_dimensionless_regardless_of_operand_units(tmp_path):
+    """Issue #97: 120 ms over 100 ms is the dimensionless proportion 1/5; the
+    plot value, axis check and receipt unit must not inherit the ms operand."""
+    ms = CTX.model_copy(update={"metric_definition": "latency", "unit": "ms"})
+    _, context, ref, _ = accepted_fixture(tmp_path, b'{"baseline":100,"current":120}\n')
+    baseline = scalar(ref, "/baseline", comparison=ms)
+    current = scalar(ref, "/current", comparison=ms)
+    for op, expected in (("relative_change", Fraction(1, 5)), ("ratio", Fraction(6, 5))):
+        value = _compile_single_datum_y(context, request(op, current, baseline, context=ms), "ratio")
+        assert value.exact.as_fraction() == expected
+        assert value.unit == "ratio"
+        with pytest.raises(PlotFault, match="plot_scale_unit_mismatch"):
+            _compile_single_datum_y(context, request(op, current, baseline, context=ms), "ms")
+
+
+def test_count_and_unit_preserving_operators_follow_output_dimension_contract(tmp_path):
+    """Issue #97 controls: count is a cardinality while mean keeps the operand
+    unit; each axis unit is accepted or rejected accordingly."""
+    ms = CTX.model_copy(update={"metric_definition": "latency", "unit": "ms"})
+    _, context, csv_ref, _ = accepted_fixture(
+        tmp_path, b"id,time,category\na,100,A\nb,120,A\n"
+    )
+    source = selection(csv_ref).model_copy(
+        update={"columns": ("time",), "unit": "ms", "context": ms}
+    )
+    counted = _compile_single_datum_y(context, request("count", source, context=ms), "count")
+    assert counted.exact.as_fraction() == 2
+    assert counted.unit == "count"
+    with pytest.raises(PlotFault, match="plot_scale_unit_mismatch"):
+        _compile_single_datum_y(context, request("count", source, context=ms), "ms")
+    averaged = _compile_single_datum_y(context, request("mean", source, context=ms), "ms")
+    assert averaged.exact.as_fraction() == 110
+    assert averaged.unit == "ms"
+    with pytest.raises(PlotFault, match="plot_scale_unit_mismatch"):
+        _compile_single_datum_y(context, request("mean", source, context=ms), "ratio")
+
+
+def test_observation_plot_resolves_sources_once_per_compilation(tmp_path, monkeypatch):
+    """#98: run replays and full CSV scans track unique sources, not points;
+    every compilation still revalidates against the retained bytes."""
+    raw = b"id,score,category\n" + b"".join(
+        f"r{i},0.{i % 10},A\n".encode() for i in range(50)
+    )
+    _, context, ref, _ = accepted_fixture(tmp_path, raw)
+    layer = PlotLayer(
+        layer_id="layer.points",
+        role="observation",
+        mark="point",
+        source=selection(ref),
+        encoding=PlotEncoding(x="category", y="score"),
+    )
+    ir = plot((layer,))
+
+    from arw.kernel.ledger import accepted_refs
+    from arw.kernel.policy import numeric_core
+
+    replays = 0
+    real_replay = accepted_refs.replay_run
+
+    def counting_replay(*args, **kwargs):
+        nonlocal replays
+        replays += 1
+        return real_replay(*args, **kwargs)
+
+    monkeypatch.setattr(accepted_refs, "replay_run", counting_replay)
+    scans = 0
+    real_scan = numeric_core._scan_csv_rows
+
+    def counting_scan(*args, **kwargs):
+        nonlocal scans
+        scans += 1
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(numeric_core, "_scan_csv_rows", counting_scan)
+
+    first = compile_plot(ir, context)
+    assert replays == 1  # one accepted run, replayed once for 50 points
+    assert scans == 1  # one accepted CSV, fully scanned once for 50 points
+    assert len(first.plot_values) == 50
+    assert len({v.derivation_id for v in first.plot_values}) == 50
+
+    # A new compilation owns a fresh operation cache: no cross-call trust.
+    second = compile_plot(ir, context)
+    assert replays == 2 and scans == 2
+    assert first == second
+    assert PlotRenderer().render(first) == PlotRenderer().render(second)
+
+
+def test_uncached_resolve_operand_rescans_every_call(tmp_path, monkeypatch):
+    """#98: the operation cache is opt-in; the default path is unchanged."""
+    _, context, csv_ref, _ = accepted_fixture(tmp_path, b"id,score\na,1\nb,2\n")
+    from arw.kernel.policy import numeric_core
+
+    scans = 0
+    real_scan = numeric_core._scan_csv_rows
+
+    def counting_scan(*args, **kwargs):
+        nonlocal scans
+        scans += 1
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(numeric_core, "_scan_csv_rows", counting_scan)
+    from arw.kernel.policy.numeric_core import resolve_operand
+
+    resolve_operand(selection(csv_ref), context)
+    resolve_operand(selection(csv_ref), context)
+    assert scans == 2
+
+
+def test_capture_renders_the_validated_compilation_once(tmp_path, monkeypatch):
+    """#98: capture compiles the fixed IR once and renders that same result."""
+    root, _, ref, _ = result_fixture(tmp_path)
+    ir = plot((aggregate(ref),), caption="A=0.831")
+    from arw_research_artifact import plot_policy
+
+    calls = 0
+    real_compile = plot_policy.compile_plot
+
+    def counting_compile(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_compile(*args, **kwargs)
+
+    monkeypatch.setattr(plot_policy, "compile_plot", counting_compile)
+    receipt, _, output = ResearchArtifactService().capture_result_plot(
+        ir, run_root=root
+    )
+    assert calls == 1
+    assert receipt.qualification == "PASS"
+    assert output
