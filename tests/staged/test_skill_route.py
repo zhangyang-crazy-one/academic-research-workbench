@@ -9,6 +9,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+from arw import __version__
 from tests.candidate_inputs import candidate_stage_args
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -228,4 +229,4 @@ def test_fresh_installed_skill_returns_schema_valid_route(
     identity = json.loads((evidence / "plugin/installed-identity.json").read_text())
     assert identity["stage_sha256"] == identity["installed_sha256"]
     assert len(identity["stage_sha256"]) == 64
-    assert identity["installed_manifest_version"] == "0.1.0"
+    assert identity["installed_manifest_version"] == __version__

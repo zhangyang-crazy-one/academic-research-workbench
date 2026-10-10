@@ -10,6 +10,7 @@ import jsonschema
 import pytest
 from referencing import Registry, Resource
 
+from arw import __version__
 from arw.kernel.policy.schema_registry import SCHEMA_NAMES
 from tests.candidate_inputs import candidate_stage_args, configured_package_environment
 
@@ -102,6 +103,7 @@ def test_installed_version_reports_only_packaged_build_identity(tmp_path: Path) 
     )
 
     assert report["command"] == "version"
+    assert identity["plugin"]["version"] == __version__
     assert report["identity"] == identity
     assert report["build_identity_sha256"] == hashlib.sha256(identity_bytes).hexdigest()
     assert report["identity"]["platform_claim"] == "linux"

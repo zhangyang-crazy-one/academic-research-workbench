@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Export and offline-verify the actual Phase 7 command and prior receipt graph."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import runpy
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path, PurePosixPath
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+PRIOR_TREES = (
+    "build/evidence/phase-05", "build/evidence/phase-04.1-verifier-final-20260715f",
+    "build/stage/phase-05",
+)
+PRIOR_SCHEMAS = ("schemas/v1/phase4-evaluation-verdict.schema.json",
+                 "schemas/v1/host-qualification.schema.json")
+COMMAND_FIELDS = frozenset({"name", "argv", "cwd", "returncode", "stdout_sha256",
+                           "stderr_sha256", "stdout_truncated", "stderr_truncated"})
+
+
+def canonical(value: object) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True,
+                       separators=(",", ":"), allow_nan=False) + "\n").encode()
+
+
+def load_verifier(source: Path) -> dict:
+    # Run only reviewed source code, never scripts supplied in exported evidence.
+    code = runpy.run_path(str(PROJECT_ROOT / "scripts/verify-phase-7"))
+    namespace = code["aggregate_verdict"].__globals__
+    namespace["PROJECT_ROOT"] = source
+    return namespace
+
+
+def direct_files(root: Path) -> list[Path]:
+    if any(parent.is_symlink() for parent in (root, *root.parents)):
+        raise ValueError(f"symlink evidence ancestor rejected: {root}")
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError(f"missing or symlink evidence directory: {root}")
+    result = []
+    for path in sorted(root.rglob("*")):
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"symlink evidence rejected: {path}")
+        if stat.S_ISREG(mode):
+            result.append(path)
+        elif not stat.S_ISDIR(mode):
+            raise ValueError(f"non-regular evidence rejected: {path}")
+    return result
+
+
+def digest(path: Path) -> str:
+    if any(parent.is_symlink() for parent in (path, *path.parents)) or not path.is_file():
+        raise ValueError(f"missing or unsafe receipt: {path}")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_record(verifier: dict, path: Path) -> dict:
+    value = verifier["read_json"](path)
+    if path.read_bytes() != canonical(value):
+        raise ValueError(f"noncanonical retained receipt: {path}")
+    return value
+
+
+def relative_ref(value: object, prefix: str) -> Path:
+    if (not isinstance(value, str) or not value.startswith(prefix + "/")
+            or PurePosixPath(value).is_absolute() or ".." in PurePosixPath(value).parts
+            or PurePosixPath(value).as_posix() != value):
+        raise ValueError("unsafe original Phase 7 input reference")
+    return Path(value)
+
+
+def validate_source(verifier: dict, aggregate: dict, source: Path, commit: str) -> None:
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=source, text=True).strip()
+    status = subprocess.check_output(["git", "status", "--porcelain=v1", "--untracked-files=all",
+                                      "--", ".", ":(exclude)build"], cwd=source, text=True)
+    if (status or head != commit or aggregate.get("git_head") != head
+            or aggregate.get("git_tree") != tree
+            or aggregate.get("git_worktree_sha256") != verifier["worktree_digest"]()):
+        raise ValueError("Phase 7 source commit, tree or clean worktree receipt differs")
+
+
+def validate_prior(prior: Path, source: Path, verifier: dict | None = None):
+    verifier = verifier or load_verifier(source)
+    for relative in PRIOR_TREES:
+        direct_files(prior / relative)
+    for relative in PRIOR_SCHEMAS:
+        if digest(prior / relative) != digest(source / relative):
+            raise ValueError("exported prior validation schema differs from checked-in source")
+    verifier["PROJECT_ROOT"] = prior
+    summary = verifier["validate_receipts"](
+        project_root=prior, phase5_root=prior / PRIOR_TREES[0], phase41_root=prior / PRIOR_TREES[1])
+    return summary
+
+
+def validate_commands(evidence: Path, aggregate: dict, verifier: dict) -> tuple[list, Path]:
+    direct_files(evidence)
+    rows = aggregate.get("commands")
+    names = verifier["REQUIRED_COMMAND_NAMES"]
+    if not isinstance(rows, list) or tuple(row.get("name") for row in rows if isinstance(row, dict)) != names:
+        raise ValueError("Phase 7 requires exactly the four original command receipts")
+    argv = rows[0].get("argv")
+    if not isinstance(argv, list) or not argv:
+        raise ValueError("original Phase 7 command argv is missing")
+    python = argv[0]
+    suffix = "/.venv/bin/python"
+    if not isinstance(python, str) or not python.endswith(suffix) or not Path(python).is_absolute():
+        raise ValueError("original Phase 7 Python invocation is invalid")
+    original_root = Path(python[:-len(suffix)])
+    if ".." in original_root.parts or str(original_root / ".venv/bin/python") != python:
+        raise ValueError("original Phase 7 project prefix is unsafe")
+    verifier["PYTHON"] = Path(python)
+    expected_files = {f"commands/{name}/{file}" for name in names
+                      for file in ("result.json", "stdout.log", "stderr.log")}
+    actual_files = {path.relative_to(evidence).as_posix() for path in direct_files(evidence / "commands")}
+    if actual_files != expected_files:
+        raise ValueError("Phase 7 command receipt/log set differs")
+    commands = []
+    stage = aggregate["stage"]
+    stage_ref = relative_ref(stage["stage_relative_path"], "build/stage")
+    lock_ref = relative_ref(stage["lock_relative_path"], "build/evidence")
+    relative_ref(stage["canary_relative_path"], "build/evidence")
+    for row, name in zip(rows, names, strict=True):
+        result_path = evidence / "commands" / name / "result.json"
+        retained = canonical_record(verifier, result_path)
+        if (set(row) != COMMAND_FIELDS or retained != row or row.get("cwd") != "<project>"
+                or type(row.get("returncode")) is not int or row["returncode"] != 0
+                or type(row.get("stdout_truncated")) is not bool
+                or type(row.get("stderr_truncated")) is not bool):
+            raise ValueError("Phase 7 command result is forged, failed or malformed")
+        expected = verifier["_expected_command_argv"](name)
+        if name == "stage-validate":
+            expected[2], expected[5] = str(original_root / stage_ref), str(original_root / lock_ref)
+        if row["argv"] != expected:
+            raise ValueError("Phase 7 command argv or original project prefix differs")
+        for stream in ("stdout", "stderr"):
+            path = result_path.parent / f"{stream}.log"
+            if path.stat().st_size > verifier["MAX_CAPTURE"] or digest(path) != row[f"{stream}_sha256"]:
+                raise ValueError("Phase 7 command output digest or bound differs")
+        commands.append(verifier["ValidatedCommandReceipt"](
+            retained, result_path, _token=verifier["_COMMAND_TOKEN"]))
+    return commands, original_root
+
+
+def verified_evidence_base(evidence: Path) -> Path:
+    """Normalize an already-validated evidence root for the aggregate verifier.
+
+    ``direct_files`` must run on the caller's original path first so symlink
+    components are rejected lexically before any resolution happens here.  The
+    aggregate verifier compares ``Path.resolve()`` receipt paths against the
+    configured ``EVIDENCE_BASE``, so a relative ``--qualification-root`` would
+    otherwise unbind valid receipts (#99).
+    """
+    return evidence.resolve()
+
+
+def verify_retained(evidence: Path, prior: Path, stage: Path, lock: Path, canary: Path,
+                    source: Path, commit: str) -> dict:
+    verifier = load_verifier(source)
+    direct_files(evidence)
+    marker = evidence / verifier["MARKER"]
+    digest(marker)
+    if marker.read_bytes() != b"phase-7 evidence\n":
+        raise ValueError("Phase 7 verifier-owned evidence marker differs")
+    aggregate = canonical_record(verifier, evidence / "phase-7-verification.json")
+    validate_source(verifier, aggregate, source, commit)
+    license_summary = verifier["_license_verdict"]()
+    original_receipts = verifier["validate_receipts"]
+    prior_summary = validate_prior(prior, source, verifier)
+    commands, original_root = validate_commands(evidence, aggregate, verifier)
+    summary = aggregate["stage"]
+    expected_stage = {
+        "stage_sha256": hashlib.sha256(canonical(sorted(
+            (path.relative_to(stage).as_posix(), digest(path)) for path in direct_files(stage)))).hexdigest(),
+        "integration_lock_sha256": digest(lock), "host_canary_sha256": digest(canary),
+        "stage_relative_path": summary["stage_relative_path"],
+        "lock_relative_path": summary["lock_relative_path"],
+        "canary_relative_path": summary["canary_relative_path"],
+    }
+    if summary != expected_stage:
+        raise ValueError("Phase 7 stage, integration lock or host canary binding differs")
+    stage_summary = verifier["ValidatedStageSummary"](**expected_stage, _token=verifier["_VALIDATION_TOKEN"])
+    verifier["validate_receipts"] = lambda: original_receipts(
+        project_root=prior, phase5_root=prior / PRIOR_TREES[0], phase41_root=prior / PRIOR_TREES[1])
+    verifier["validate_stage_and_inputs"] = lambda *args: stage_summary
+    verifier["STAGE_ROOT"], verifier["PHASE7_LOCK"], verifier["PHASE7_CANARY"] = stage, lock, canary
+    # direct_files() has already rejected symlink components; configure the
+    # aggregate validator with the normalized absolute base so relative CLI
+    # paths and resolved receipt paths compare equal.
+    verifier["EVIDENCE_BASE"] = verified_evidence_base(evidence)
+    def expected_argv(name, argv, observed_stage):
+        expected = verifier["_expected_command_argv"](name)
+        if name == "stage-validate":
+            expected[2] = str(original_root / summary["stage_relative_path"])
+            expected[5] = str(original_root / summary["lock_relative_path"])
+        return argv == expected
+    verifier["_command_argv_matches"] = expected_argv
+    rebuilt = verifier["aggregate_verdict"](
+        receipt_summary=prior_summary, stage_summary=stage_summary, test_commands=commands,
+        license_summary=license_summary, git_head=aggregate["git_head"],
+        git_tree=aggregate["git_tree"], git_worktree=aggregate["git_worktree_sha256"])
+    if rebuilt.get("technical_qualification") != "PASS" or rebuilt != aggregate:
+        raise ValueError("original full Phase 7 aggregate differs from independently revalidated evidence")
+    for name, value in (("verdict.json", aggregate), ("requirements.json", rebuilt["requirements"]),
+                        ("prior-phase-receipts.json", prior_summary.to_dict()), ("stage-inputs.json", expected_stage)):
+        if canonical_record(verifier, evidence / name) != value:
+            raise ValueError(f"Phase 7 {name} differs from aggregate")
+    expected_summary = {"phase": "07", "technical_qualification": "PASS",
+        "release_qualification": "BLOCKED", "release_blockers": list(verifier["LEGAL_BLOCKERS"]),
+        "technical_blockers": [], "evidence_sha256": digest(evidence / "phase-7-verification.json")}
+    if canonical_record(verifier, evidence / "summary.json") != expected_summary:
+        raise ValueError("Phase 7 summary does not bind original aggregate")
+    preflight = canonical_record(verifier, evidence / "preflight.json")
+    if (set(preflight) != {"schema_version", "phase", "started_at", "git_head", "git_worktree_sha256"}
+            or preflight["schema_version"] != "arw.phase7-preflight.v1" or preflight["phase"] != "07"
+            or not isinstance(preflight["started_at"], str) or not preflight["started_at"].endswith("Z")
+            or preflight["git_head"] != commit or preflight["git_worktree_sha256"] != aggregate["git_worktree_sha256"]):
+        raise ValueError("Phase 7 preflight source changed during verification")
+    datetime.fromisoformat(preflight["started_at"])
+    return aggregate
+
+
+def verify_qualification(qualification: Path, source: Path, commit: str) -> dict:
+    aggregate = verify_retained(qualification / "phase7-evidence", qualification / "prior",
+        qualification / "stage", qualification / "integration-lock.json", qualification / "host-canary.json",
+        source, commit)
+    if (qualification / "phase-7-verification.json").read_bytes() != (qualification / "phase7-evidence/phase-7-verification.json").read_bytes():
+        raise ValueError("exported Phase 7 aggregate differs from original verifier receipt")
+    return aggregate
+
+
+def copy_direct(source: Path, destination: Path) -> None:
+    for path in direct_files(source):
+        target = destination / path.relative_to(source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target, follow_symlinks=False)
+
+
+def export(evidence: Path, output: Path, source: Path) -> None:
+    verifier = load_verifier(source)
+    aggregate = canonical_record(verifier, evidence / "phase-7-verification.json")
+    stage = source / relative_ref(aggregate["stage"]["stage_relative_path"], "build/stage")
+    lock = source / relative_ref(aggregate["stage"]["lock_relative_path"], "build/evidence")
+    canary = source / relative_ref(aggregate["stage"]["canary_relative_path"], "build/evidence")
+    verify_retained(evidence, source, stage, lock, canary, source, aggregate["git_head"])
+    if output.exists() or output.is_symlink():
+        raise ValueError("choose a fresh Phase 7 qualification export root")
+    if output.is_relative_to(evidence) or evidence.is_relative_to(output):
+        raise ValueError("export destination must be disjoint from verifier evidence")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".phase7-export-", dir=output.parent) as temporary:
+        pending = Path(temporary) / "qualification"
+        pending.mkdir()
+        copy_direct(evidence, pending / "phase7-evidence")
+        for relative in PRIOR_TREES:
+            copy_direct(source / relative, pending / "prior" / relative)
+        for relative in PRIOR_SCHEMAS:
+            target = pending / "prior" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source / relative, target, follow_symlinks=False)
+        shutil.copy2(evidence / "phase-7-verification.json", pending / "phase-7-verification.json")
+        # Revalidate copied receipts after transfer; use the original live stage.
+        verify_retained(pending / "phase7-evidence", pending / "prior", stage, lock, canary,
+                        source, aggregate["git_head"])
+        pending.rename(output)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("operation", choices=("export", "verify"))
+    parser.add_argument("--source-root", type=Path, default=PROJECT_ROOT)
+    parser.add_argument("--phase7-evidence-root", type=Path)
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--qualification-root", type=Path)
+    parser.add_argument("--source-commit")
+    args = parser.parse_args()
+    if args.operation == "export" and args.phase7_evidence_root and args.output_root:
+        export(args.phase7_evidence_root, args.output_root, args.source_root)
+    elif args.operation == "verify" and args.qualification_root and args.source_commit:
+        verify_qualification(args.qualification_root, args.source_root, args.source_commit)
+    else:
+        raise ValueError("provide required export or verification inputs")
+    print("phase7-release-evidence: actual command streams and pinned prior graph verified")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        raise SystemExit(f"phase7-release-evidence: release blocked: {error}") from error

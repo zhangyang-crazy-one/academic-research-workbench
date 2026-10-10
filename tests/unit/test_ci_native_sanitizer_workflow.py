@@ -22,7 +22,7 @@ def _workflow() -> dict:
     )
 
 
-def _condition(value: str, event: str, nightly: bool) -> bool:
+def _condition(value: str, event: str, nightly: bool, release: bool = False) -> bool:
     """Evaluate the small Actions expression subset used by the native branch."""
     expression = value.replace("&&", " and ").replace("||", " or ")
     expression = re.sub(r"(?<![=!])!(?!=)", " not ", expression)
@@ -32,7 +32,10 @@ def _condition(value: str, event: str, nightly: bool) -> bool:
             {"__builtins__": {}},
             {
                 "github": SimpleNamespace(event_name=event),
-                "inputs": SimpleNamespace(nightly_native_sanitizers=nightly),
+                "inputs": SimpleNamespace(
+                    nightly_native_sanitizers=nightly,
+                    release_native_qualification=release,
+                ),
                 "always": lambda: True,
             },
         )

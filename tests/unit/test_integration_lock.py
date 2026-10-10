@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import Literal, cast
 
+import jsonschema
 import pytest
 
 import arw.cli as cli_module
@@ -180,17 +181,105 @@ def _component(
     }
 
 
-def _make_wheel(path: Path) -> None:
+def _make_wheel(
+    path: Path, *, version: str = "0.1.0", metadata_version: str | None = None,
+    metadata_suffix: str = "",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     metadata = (
-        "Metadata-Version: 2.4\nName: academic-research-workbench\nVersion: 0.1.0\n\n"
+        "Metadata-Version: 2.4\nName: academic-research-workbench\n"
+        f"Version: {metadata_version or version}\n{metadata_suffix}\n"
     )
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
-        archive.writestr("arw/__init__.py", "__version__ = '0.1.0'\n")
+        archive.writestr("arw/__init__.py", f"__version__ = '{version}'\n")
         archive.writestr("arw/kernel/policy/integration_lock.py", "# packaged verifier\n")
         archive.writestr(
-            "academic_research_workbench-0.1.0.dist-info/METADATA", metadata
+            f"academic_research_workbench-{version}.dist-info/METADATA", metadata
         )
+
+
+def _runtime_stage(
+    root: Path, *, package: str, plugin: str, wheel: str,
+    metadata_version: str | None = None, metadata_suffix: str = "",
+) -> Path:
+    _write(
+        root / "pyproject.toml",
+        f'[project]\nname = "academic-research-workbench"\nversion = "{package}"\n',
+    )
+    _json(
+        root / ".codex-plugin/plugin.json",
+        {"name": "academic-research-workbench", "version": plugin},
+    )
+    _write(root / "bin/arw", "#!/bin/sh\nexit 0\n", executable=True)
+    _make_wheel(
+        root / f"share/arw/wheels/academic_research_workbench-{wheel}-py3-none-any.whl",
+        version=wheel,
+        metadata_version=metadata_version,
+        metadata_suffix=metadata_suffix,
+    )
+    return root
+
+
+@pytest.mark.parametrize("version", ("0.1.0", "0.2.0"))
+@pytest.mark.parametrize("suffix", ("", "+codex.codex-0-160-1-92f3ea5-20261008"))
+def test_arw_runtime_preserves_legacy_and_current_version_bindings(
+    tmp_path: Path, version: str, suffix: str
+) -> None:
+    stage = _runtime_stage(
+        tmp_path, package=version, plugin=version + suffix, wheel=version
+    )
+    binding = integration_lock_module._validate_arw_runtime(stage)
+    assert binding.version == version
+    assert integration_lock_module.ARWRuntimeBinding.model_validate_json(
+        binding.model_dump_json()
+    ) == binding
+    schema = json.loads(
+        (REPOSITORY_ROOT / "schemas/v1/integration-lock.schema.json").read_text()
+    )
+    jsonschema.Draft202012Validator(
+        {"$ref": "#/$defs/ARWRuntimeBinding", "$defs": schema["$defs"]}
+    ).validate(binding.model_dump(mode="json"))
+
+
+@pytest.mark.parametrize(
+    ("package", "plugin", "wheel", "message"),
+    (
+        ("0.1.0", "0.2.0", "0.1.0", "plugin version"),
+        ("0.2.0", "0.1.0+codex.build", "0.2.0", "plugin version"),
+        ("0.2.0", "0.2.0", "0.1.0", "wheel filename"),
+        ("0.1.0", "0.1.0", "0.2.0", "wheel filename"),
+        ("0.3.0", "0.3.0", "0.3.0", "package version"),
+        ("0.2.0", "0.2.0+falsified", "0.2.0", "plugin version"),
+        ("0.2.0", "0.2.0+codex.", "0.2.0", "plugin version"),
+    ),
+)
+def test_arw_runtime_rejects_mismatched_or_unsupported_versions(
+    tmp_path: Path, package: str, plugin: str, wheel: str, message: str
+) -> None:
+    stage = _runtime_stage(tmp_path, package=package, plugin=plugin, wheel=wheel)
+    with pytest.raises(IntegrationLockError, match=message):
+        integration_lock_module._validate_arw_runtime(stage)
+
+
+@pytest.mark.parametrize("metadata_version", ("0.1.0", "0.2.0"))
+def test_arw_runtime_rejects_ambiguous_wheel_metadata(
+    tmp_path: Path, metadata_version: str
+) -> None:
+    stage = _runtime_stage(
+        tmp_path, package="0.2.0", plugin="0.2.0", wheel="0.2.0",
+        metadata_suffix=f"Version: {metadata_version}\n",
+    )
+    with pytest.raises(IntegrationLockError, match="wheel metadata"):
+        integration_lock_module._validate_arw_runtime(stage)
+
+
+def test_arw_runtime_rejects_wheel_metadata_version_mismatch(tmp_path: Path) -> None:
+    stage = _runtime_stage(
+        tmp_path, package="0.2.0", plugin="0.2.0", wheel="0.2.0",
+        metadata_version="0.1.0",
+    )
+    with pytest.raises(IntegrationLockError, match="wheel metadata"):
+        integration_lock_module._validate_arw_runtime(stage)
 
 
 def _install_audit_manifests(stage: Path) -> None:
@@ -235,9 +324,7 @@ def _install_audit_manifests(stage: Path) -> None:
     def collect(relative: str) -> str:
         return _digest(stage / relative)
 
-    wheel_path = (
-        "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
-    )
+    wheel_path = next((stage / "share/arw/wheels").glob("*.whl")).relative_to(stage).as_posix()
 
     # Stage the real phase-01 evidence files under ``share/arw/evidence``
     # so the live recompute of the build-identity evidence block verifies
@@ -392,7 +479,7 @@ def _install_audit_manifests(stage: Path) -> None:
     identity = {
         "schema_version": "1.0.0",
         "platform_claim": "linux",
-        "plugin": {"name": "academic-research-workbench", "version": "0.1.0"},
+        "plugin": json.loads((stage / ".codex-plugin/plugin.json").read_text()),
         "runtime": {
             "python_requires": ">=3.13",
             "build_interpreter": staged_python_version,
@@ -539,7 +626,7 @@ def _fixture_inventory_source(relative: str) -> str:
 
 
 @pytest.fixture
-def integration_fixture(tmp_path: Path) -> dict[str, Path]:
+def integration_fixture(tmp_path: Path, *, version: str = "0.1.0") -> dict[str, Path]:
     stage = tmp_path / "stage"
     external = stage / "skills/academic-research-suite"
     stage.mkdir()
@@ -547,16 +634,17 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
 
     _write(
         stage / "pyproject.toml",
-        '[project]\nname = "academic-research-workbench"\nversion = "0.1.0"\n',
+        f'[project]\nname = "academic-research-workbench"\nversion = "{version}"\n',
     )
     _json(
         stage / ".codex-plugin/plugin.json",
-        {"name": "academic-research-workbench", "version": "0.1.0"},
+        {"name": "academic-research-workbench", "version": version},
     )
     _write(stage / "bin/arw", "#!/bin/sh\nexit 0\n", executable=True)
     _make_wheel(
         stage
-        / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
+        / f"share/arw/wheels/academic_research_workbench-{version}-py3-none-any.whl",
+        version=version,
     )
     _write(stage / "hooks/hooks.json", '{"hooks": {}}\n')
     _write(stage / "hooks/arw_hook.py", "#!/usr/bin/env python3\n", executable=True)
@@ -763,7 +851,7 @@ def integration_fixture(tmp_path: Path) -> dict[str, Path]:
     canary.parent.mkdir(parents=True)
     arw_runtime_sha256 = _digest(
         stage
-        / "share/arw/wheels/academic_research_workbench-0.1.0-py3-none-any.whl"
+        / f"share/arw/wheels/academic_research_workbench-{version}-py3-none-any.whl"
     )
     stage_sha256 = observe_stage_identity(stage)
     credential_policy_sha256 = EXPECTED_CODEX_CREDENTIAL_POLICY_SHA256
@@ -1054,6 +1142,22 @@ def _refresh_canary_stage_identity(paths: dict[str, Path]) -> None:
         "sha256": _digest(bundle_path),
     }
     paths["canary"].write_bytes(canonical_json_bytes(canary))
+
+
+@pytest.mark.parametrize("version", ("0.1.0", "0.2.0"))
+def test_legacy_and_current_complete_integration_locks_round_trip(
+    tmp_path: Path, version: str
+) -> None:
+    paths = integration_fixture.__wrapped__(tmp_path, version=version)
+    lock = _build(paths)
+    assert lock.arw_runtime.version == version
+    write_integration_lock(paths["lock"], lock)
+    verification = load_and_verify_integration_lock(
+        paths["lock"], stage_root=paths["stage"],
+        codex_launcher=paths["launcher"], codex_native_binary=paths["native"],
+        host_canary_evidence=paths["canary"],
+    )
+    assert verification.technical_qualification == "PASS"
 
 
 def test_exact_external_integration_lock_round_trips_and_retains_legal_block(
@@ -3743,6 +3847,62 @@ def test_pre_vendor_native_gate_inventory_is_canonical(
         IntegrationLockError, match="generated_notices|five-tool producer inventory"
     ):
         _build(integration_fixture)
+
+
+@pytest.mark.parametrize(
+    ("relative", "expected_sha256"),
+    (
+        (
+            "supply-chain/pre-vendor-receipt.json",
+            "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0",
+        ),
+        (
+            "supply-chain/historical/pre-vendor/"
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523.json",
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523",
+        ),
+    ),
+)
+def test_pre_vendor_reader_accepts_exact_current_and_historical_receipts(
+    integration_fixture: dict[str, Path], relative: str, expected_sha256: str
+) -> None:
+    source = REPOSITORY_ROOT / relative
+    assert _digest(source) == expected_sha256
+    target = integration_fixture["stage"] / "share/arw/evidence/pre_vendor.json"
+    target.write_bytes(source.read_bytes())
+    payload = integration_lock_module._verify_evidence_pass(
+        integration_fixture["stage"], "share/arw/evidence/pre_vendor.json",
+        label="pre_vendor",
+    )
+    assert payload["technical_qualification"] == "PASS"
+    # Trailing whitespace preserves parsed semantics, but cannot replace
+    # either explicitly qualified receipt's immutable raw bytes.
+    target.write_bytes(target.read_bytes() + b"\n")
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module._verify_evidence_pass(
+            integration_fixture["stage"], "share/arw/evidence/pre_vendor.json",
+            label="pre_vendor",
+        )
+
+
+def test_pre_vendor_producer_requires_current_audit_receipt() -> None:
+    integration_lock_module.verify_pre_vendor_receipt_digest(
+        "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0",
+        require_current=True,
+    )
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module.verify_pre_vendor_receipt_digest(
+            "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523",
+            require_current=True,
+        )
+
+
+@pytest.mark.parametrize("require_current", (False, True))
+def test_pre_vendor_unknown_receipt_digest_fails_closed(require_current: bool) -> None:
+    with pytest.raises(IntegrationLockError, match="raw bytes drift"):
+        integration_lock_module.verify_pre_vendor_receipt_digest(
+            "0" * 64, require_current=require_current
+        )
 
 
 def test_pre_vendor_raw_evidence_requires_canonical_receipt_bytes(

@@ -12,6 +12,8 @@ Commands:
   files          Administer registered roots and immutable file generations.
   writing        Prepare and record source-bound manuscript revisions.
   narrative      Register and select a fixed project paper argument strategy.
+  claims         Project and explicitly attest revision-bound manuscript claims.
+  numeric        Evaluate exact source-bound numeric derivations.
   selection-audit Export or replay retained candidate selection evidence.
   semantic       Query an explicitly built, optional semantic projection.
   experiment     Accept numeric experiment claims against a versioned contract.
@@ -59,7 +61,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|writing|narrative|selection-audit|semantic|experiment|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
+  health|route|version|files|writing|narrative|claims|numeric|selection-audit|semantic|experiment|learn|memory|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -606,7 +608,7 @@ import json
 import platform
 import sys
 
-if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+if importlib.metadata.version("academic-research-workbench") != "0.2.0":
     raise SystemExit("installed package version mismatch")
 
 json.dump(
@@ -637,7 +639,7 @@ from arw.files_opt_in import health
 from arw.platform_support import platform_support
 
 
-if importlib.metadata.version("academic-research-workbench") != "0.1.0":
+if importlib.metadata.version("academic-research-workbench") != "0.2.0":
     raise SystemExit("installed package version mismatch")
 
 json.dump(
@@ -725,7 +727,7 @@ PY
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli _graph-mcp "$@"
     ;;
-  writing|semantic|learn|memory|artifact|submission)
+  writing|semantic|learn|memory|artifact|submission|claims|numeric)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"

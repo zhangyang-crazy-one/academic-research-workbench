@@ -708,6 +708,7 @@ copy_file "schemas/v1/gate-decision.schema.json"
 copy_file "schemas/v1/hook-observation.schema.json"
 copy_file "schemas/v1/host-qualification.schema.json"
 copy_file "schemas/v1/integration-lock.schema.json"
+copy_file "schemas/v1/release-authority.schema.json"
 copy_file "schemas/v1/research-integrity-contracts.schema.json"
 copy_file "schemas/v1/phase4-evaluation-verdict.schema.json"
 copy_file "schemas/v1/review-finding-matrix.schema.json"
@@ -935,13 +936,13 @@ from arw.kernel.policy.schema_registry import (  # noqa: E402
 from arw.kernel.policy.integration_lock import (  # noqa: E402
     _verify_native_surface_bundle,
     IntegrationLockError,
-    EXPECTED_PRE_VENDOR_RECEIPT_SHA256,
     NATIVE_EVIDENCE_KINDS,
     NATIVE_SURFACES,
     NATIVE_VERDICT_KIND,
     native_evidence_path,
     parse_file_contract_contract_sha256_from_bytes,
     verify_evidence_contract,
+    verify_pre_vendor_receipt_digest,
 )
 from arw.file_contracts import (  # noqa: E402
     FileContractError,
@@ -1003,15 +1004,11 @@ def staged_evidence(staged_relative: str, *, label: str) -> dict[str, str]:
             f"shared verifier contract: {error}"
         )
     staged_digest = digest(staged_path)
-    if (
-        surface == "pre_vendor"
-        and staged_digest != EXPECTED_PRE_VENDOR_RECEIPT_SHA256
-    ):
-        raise SystemExit(
-            "staged pre-vendor receipt raw bytes drift from canonical reviewed "
-            f"evidence: observed={staged_digest} "
-            f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
-        )
+    if surface == "pre_vendor":
+        try:
+            verify_pre_vendor_receipt_digest(staged_digest, require_current=True)
+        except IntegrationLockError as error:
+            raise SystemExit(str(error)) from error
     return {"path": staged_relative, "sha256": staged_digest}
 
 
@@ -1271,6 +1268,9 @@ project_root = Path(sys.argv[1]).resolve()
 stage_root = Path(sys.argv[2]).resolve()
 first_party_name = sys.argv[3]
 
+sys.path.insert(0, str(project_root / "src"))
+from arw.kernel.policy.schema_registry import SCHEMA_NAMES  # noqa: E402
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -1414,6 +1414,7 @@ static_files = {
     "schemas/v1/hook-observation.schema.json",
     "schemas/v1/host-qualification.schema.json",
     "schemas/v1/integration-lock.schema.json",
+    "schemas/v1/release-authority.schema.json",
     "schemas/v1/research-integrity-contracts.schema.json",
     "schemas/v1/phase4-evaluation-verdict.schema.json",
     "schemas/v1/review-finding-matrix.schema.json",
@@ -1453,50 +1454,6 @@ static_files = {
     "share/arw/evidence/tsan_sanitizer_verdict.json",
     "share/arw/evidence/tsan_test_suite_sha256.txt",
     "share/arw/evidence/tsan_status.txt",
-    "share/arw/schemas/artifact-manifest.schema.json",
-    "share/arw/schemas/artifact-request.schema.json",
-    "share/arw/schemas/build-identity.schema.json",
-    "share/arw/schemas/checkpoint-request.schema.json",
-    "share/arw/schemas/command-outcome.schema.json",
-    "share/arw/schemas/decision-request.schema.json",
-    "share/arw/schemas/attempt-request.schema.json",
-    "share/arw/schemas/event.schema.json",
-    "share/arw/schemas/execution-provenance.schema.json",
-    "share/arw/schemas/mcp-read-request.schema.json",
-    "share/arw/schemas/mcp-read-result.schema.json",
-    "share/arw/schemas/material-passport.schema.json",
-    "share/arw/schemas/passport-pointer.schema.json",
-    "share/arw/schemas/route-result.schema.json",
-    "share/arw/schemas/core-route.schema.json",
-    "share/arw/schemas/run-manifest.schema.json",
-    "share/arw/schemas/rejection.schema.json",
-    "share/arw/schemas/recovery-receipt.schema.json",
-    "share/arw/schemas/recovery-request.schema.json",
-    "share/arw/schemas/resume-request.schema.json",
-    "share/arw/schemas/source-manifest.schema.json",
-    "share/arw/schemas/audit-dossier.schema.json",
-    "share/arw/schemas/status.schema.json",
-    "share/arw/schemas/transition-request.schema.json",
-    "share/arw/schemas/version-report.schema.json",
-    "share/arw/schemas/provenance-record.schema.json",
-    # Phase 4 contracts are regenerated into the exact staged schema tree.
-    "share/arw/schemas/assignment.schema.json",
-    "share/arw/schemas/gate-decision.schema.json",
-    "share/arw/schemas/hook-observation.schema.json",
-    "share/arw/schemas/host-qualification.schema.json",
-    "share/arw/schemas/integration-lock.schema.json",
-    "share/arw/schemas/research-integrity-contracts.schema.json",
-    "share/arw/schemas/phase4-evaluation-verdict.schema.json",
-    "share/arw/schemas/review-finding-matrix.schema.json",
-    "share/arw/schemas/panel-manifest.schema.json",
-    "share/arw/schemas/role-catalog.schema.json",
-    "share/arw/schemas/worker-proposal.schema.json",
-    "share/arw/schemas/host-identity-receipt.schema.json",
-    "share/arw/schemas/human-authority.schema.json",
-    "share/arw/schemas/integrity-receipt.schema.json",
-    "share/arw/schemas/experiment-provenance.schema.json",
-    "share/arw/schemas/evidence-access-decision.schema.json",
-    "share/arw/schemas/lifecycle-evidence.schema.json",
     "skills/academic-research-workbench/SKILL.md",
     "skills/submission/SKILL.md",
     "supply-chain/license-verdict.json",
@@ -1510,76 +1467,8 @@ static_files = {
     "vendor/patches/file-base/0003-phase3-generation-builder.patch",
     "vendor/patches/file-base/0004-phase5-research-graph.patch",
 }
-phase3_schema_names = {
-    "extraction-registration.schema.json",
-    "file-admin-receipt.schema.json",
-    "file-generation-manifest.schema.json",
-    "file-identity-manifest.schema.json",
-    "file-root.schema.json",
-    "files-context-request.schema.json",
-    "files-context-result.schema.json",
-    "files-list-request.schema.json",
-    "files-list-result.schema.json",
-    "files-outline-request.schema.json",
-    "files-outline-result.schema.json",
-    "files-read-request.schema.json",
-    "files-read-result.schema.json",
-    "files-search-request.schema.json",
-    "files-search-result.schema.json",
-}
-static_files.update(
-    f"share/arw/schemas/{name}" for name in phase3_schema_names
-)
-phase5_schema_names = {
-    "graph-edge.schema.json",
-    "graph-node.schema.json",
-    "graph-oracle.schema.json",
-    "graph-projection-manifest.schema.json",
-    "graph-projection-receipt.schema.json",
-    "graph-query-request.schema.json",
-    "graph-query-result.schema.json",
-}
-static_files.update(f"share/arw/schemas/{name}" for name in phase5_schema_names)
-extension_schema_names = {
-    "experiment-acceptance.schema.json",
-    "experiment-contract.schema.json",
-    "fit-judgment.schema.json",
-    "hypothesis-history.schema.json",
-    "narrative-fit-public-snapshot.schema.json",
-    "narrative-fit-report.schema.json",
-    "narrative-fit-snapshot.schema.json",
-    "narrative-realization.schema.json",
-    "source-locator.schema.json",
-    "provenance-record-v2.schema.json",
-    "research-artifact-ir.schema.json",
-    "research-artifact-receipt.schema.json",
-    "research-memory.schema.json",
-    "research-memory-input.schema.json",
-    "research-memory-query.schema.json",
-    "research-learning-observation.schema.json",
-    "research-heuristic.schema.json",
-    "research-heuristic-input.schema.json",
-    "research-learning-policy.schema.json",
-    "research-learning-sample.schema.json",
-    "venue-evidence-policy.schema.json",
-    "venue-evidence-sample.schema.json",
-    "venue-exemplar.schema.json",
-    "venue-exemplar-v2.schema.json",
-    "venue-fit-profile.schema.json",
-    "venue-outcome.schema.json",
-    "venue-source-capsule-v2.schema.json",
-    "venue-source-review.schema.json",
-    "venue-source-review-v2.schema.json",
-    "journal-requirements.schema.json",
-    "submission-check-report.schema.json",
-    "submission-packet.schema.json",
-    "submission-readiness.schema.json",
-    "submission-response.schema.json",
-    "submission-result-observation.schema.json",
-    "submission-review-round.schema.json",
-    "submission-verifier-observation.schema.json",
-}
-static_files.update(f"share/arw/schemas/{name}" for name in extension_schema_names)
+# Shared schemas come only from the same trusted registry used to generate them.
+static_files.update(f"share/arw/schemas/{name}" for name in SCHEMA_NAMES)
 arw_references = project_root / "skills/academic-research-workbench/references"
 if not arw_references.is_dir() or arw_references.is_symlink():
     raise SystemExit("ARW skill references are missing or unsafe")

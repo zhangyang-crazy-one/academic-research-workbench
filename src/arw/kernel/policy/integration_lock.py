@@ -24,6 +24,7 @@ import tomllib
 import zipfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from email.parser import Parser
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, Self, TypeVar, cast
 
@@ -107,7 +108,13 @@ EXPECTED_FILE_BASE_TEST_TREE = (
     "80a06c2dad0824c6e27fb6661b581adbdb40416bb8b7eb5cde43df14ae66f7d0"
 )
 EXPECTED_PRE_VENDOR_RECEIPT_SHA256 = (
+    "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0"
+)
+LEGACY_PRE_VENDOR_RECEIPT_SHA256 = (
     "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523"
+)
+_QUALIFIED_PRE_VENDOR_RECEIPT_DIGESTS = frozenset(
+    {EXPECTED_PRE_VENDOR_RECEIPT_SHA256, LEGACY_PRE_VENDOR_RECEIPT_SHA256}
 )
 STAGE_IDENTITY_EXCLUDED_PATHS = frozenset(
     {
@@ -352,7 +359,7 @@ class ARSBinding(LockModel):
 
 class ARWRuntimeBinding(LockModel):
     package: Literal["academic-research-workbench"]
-    version: Literal["0.1.0"]
+    version: Literal["0.1.0", "0.2.0"]
     pyproject: FileBinding
     plugin_manifest: FileBinding
     cli_launcher: FileBinding
@@ -1491,7 +1498,8 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         raise IntegrationLockError(f"staged pyproject is invalid: {error}") from error
     if project.get("project", {}).get("name") != "academic-research-workbench":
         raise IntegrationLockError("staged ARW package name is invalid")
-    if project.get("project", {}).get("version") != "0.1.0":
+    package_version = project.get("project", {}).get("version")
+    if package_version not in ("0.1.0", "0.2.0"):
         raise IntegrationLockError("staged ARW package version is not qualified")
     plugin = _read_object(
         _bound_file(stage_root, plugin_manifest), label="staged plugin manifest"
@@ -1501,7 +1509,9 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         plugin_version, str
     ):
         raise IntegrationLockError("staged plugin identity is invalid")
-    if not re.fullmatch(r"0\.1\.0(?:\+codex\.[a-z0-9-]+)?", plugin_version):
+    if not re.fullmatch(
+        re.escape(package_version) + r"(?:\+codex\.[a-z0-9-]+)?", plugin_version
+    ):
         raise IntegrationLockError("staged plugin version is not qualified")
     wheels = tuple(
         sorted(
@@ -1512,6 +1522,8 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     )
     if len(wheels) != 1 or wheels[0].is_symlink():
         raise IntegrationLockError("stage must contain exactly one direct ARW wheel")
+    if wheels[0].name != f"academic_research_workbench-{package_version}-py3-none-any.whl":
+        raise IntegrationLockError("ARW wheel filename does not match the staged runtime")
     wheel_relative = wheels[0].relative_to(stage_root).as_posix()
     wheel = FileBinding.from_path(stage_root, wheel_relative)
     wheel_tree, members = _zip_tree_sha256(wheels[0])
@@ -1526,16 +1538,19 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         raise IntegrationLockError("ARW wheel distribution metadata is ambiguous")
     with zipfile.ZipFile(wheels[0]) as archive:
         metadata = archive.read(metadata_names[0]).decode("utf-8")
+    parsed_metadata = Parser().parsestr(metadata)
     if (
-        "\nName: academic-research-workbench\n" not in f"\n{metadata}"
-        or "\nVersion: 0.1.0\n" not in f"\n{metadata}"
+        metadata_names[0]
+        != f"academic_research_workbench-{package_version}.dist-info/METADATA"
+        or parsed_metadata.get_all("Name") != ["academic-research-workbench"]
+        or parsed_metadata.get_all("Version") != [package_version]
     ):
         raise IntegrationLockError(
             "ARW wheel metadata does not match the staged runtime"
         )
     return ARWRuntimeBinding(
         package="academic-research-workbench",
-        version="0.1.0",
+        version=cast(Literal["0.1.0", "0.2.0"], package_version),
         pyproject=pyproject,
         plugin_manifest=plugin_manifest,
         cli_launcher=cli_launcher,
@@ -3459,6 +3474,23 @@ def verify_evidence_contract(
     return validated
 
 
+def verify_pre_vendor_receipt_digest(
+    observed_sha256: str, *, require_current: bool = False, label: str = "staged"
+) -> None:
+    """Read qualified historical bytes; produce stages only from current evidence."""
+    accepted = (
+        frozenset({EXPECTED_PRE_VENDOR_RECEIPT_SHA256})
+        if require_current
+        else _QUALIFIED_PRE_VENDOR_RECEIPT_DIGESTS
+    )
+    if observed_sha256 not in accepted:
+        raise IntegrationLockError(
+            f"{label} pre-vendor receipt raw bytes drift from canonical reviewed "
+            f"evidence: observed={observed_sha256} "
+            f"expected={','.join(sorted(accepted))}"
+        )
+
+
 def _verify_evidence_pass(
     stage_root: Path, path: str, *, label: str
 ) -> dict[str, object]:
@@ -3489,13 +3521,7 @@ def _verify_evidence_pass(
     surface = _evidence_surface_for(path)
     verify_evidence_contract(stage_root, payload, surface=surface)
     if surface == "pre_vendor":
-        observed_sha256 = _digest(file_path)
-        if observed_sha256 != EXPECTED_PRE_VENDOR_RECEIPT_SHA256:
-            raise IntegrationLockError(
-                f"{label} pre-vendor receipt raw bytes drift from canonical "
-                f"reviewed evidence: observed={observed_sha256} "
-                f"expected={EXPECTED_PRE_VENDOR_RECEIPT_SHA256}"
-            )
+        verify_pre_vendor_receipt_digest(_digest(file_path), label=label)
     return payload
 
 
@@ -3808,7 +3834,7 @@ def _load_build_identity_binding(
         raise IntegrationLockError(
             "build identity plugin.version drifts from staged plugin manifest"
         )
-    if not re.fullmatch(r"0\.1\.0(?:\+[a-z0-9.-]+)?", str(declared_version)):
+    if not re.fullmatch(r"0\.[12]\.0(?:\+codex\.[a-z0-9-]+)?", str(declared_version)):
         raise IntegrationLockError(
             f"build identity plugin.version is not qualified: {declared_version}"
         )
@@ -4828,5 +4854,6 @@ __all__ = (
     "parse_file_contract_contract_sha256",
     "validate_live_audit_manifests",
     "verify_integration_lock",
+    "verify_pre_vendor_receipt_digest",
     "write_integration_lock",
 )

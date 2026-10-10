@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Publish an existing exact-source draft after exact-byte qualification."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import runpy
+import subprocess
+from pathlib import Path
+from urllib.parse import quote
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--release-tag", required=True)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--qualification-archive", type=Path, required=True)
+    parser.add_argument("--files-list", type=Path, required=True)
+    args = parser.parse_args()
+    authority = runpy.run_path(str(Path(__file__).with_name("release-authority")))
+    release, qualification = authority["draft_asset"](args)
+    digest = authority["digest"]
+    if qualification.get("digest") != f"sha256:{digest(args.qualification_archive)}":
+        raise ValueError("draft qualification asset changed after verification")
+    paths = [Path(line) for line in args.files_list.read_text(encoding="utf-8").splitlines()]
+    if not paths or len({path.name for path in paths}) != len(paths):
+        raise ValueError("publication file list is empty or ambiguous")
+    allowed_names = {path.name for path in paths}
+    existing = {asset["name"]: asset for asset in release["assets"]}
+    if len(existing) != len(release["assets"]) or set(existing) - allowed_names - {qualification["name"]}:
+        raise ValueError("draft contains unverified or ambiguous publication assets")
+    for path in paths:
+        expected = f"sha256:{digest(path)}"
+        previous = existing.get(path.name)
+        if previous:
+            if previous.get("digest") != expected or previous.get("state") != "uploaded":
+                raise ValueError(f"existing draft asset differs: {path.name}")
+            continue
+        url = (f"https://uploads.github.com/repos/{args.repository}/releases/{release['id']}/assets"
+               f"?name={quote(path.name, safe='')}")
+        row = json.loads(subprocess.run(
+            ["gh", "api", "--method", "POST", "-H", "Content-Type: application/octet-stream",
+             url, "--input", str(path)], check=True, capture_output=True, text=True,
+        ).stdout)
+        if row.get("name") != path.name or row.get("digest") != expected or row.get("state") != "uploaded":
+            raise ValueError(f"uploaded publication asset differs: {path.name}")
+    observed, live_qualification = authority["draft_asset"](args)
+    if (observed["id"] != release["id"]
+            or any(live_qualification.get(key) != qualification.get(key)
+                   for key in ("id", "name", "digest", "state"))):
+        raise ValueError("draft qualification identity changed during publication")
+    observed_assets = {asset["name"]: asset for asset in observed["assets"]}
+    if set(observed_assets) != allowed_names | {qualification["name"]}:
+        raise ValueError("draft publication asset set differs")
+    for path in paths:
+        if observed_assets[path.name].get("digest") != f"sha256:{digest(path)}":
+            raise ValueError("draft publication bytes differ")
+    # Delete only the independently bound intermediate asset. No clobbering or
+    # cleanup of unrelated draft assets is permitted.
+    subprocess.run(["gh", "api", "--method", "DELETE",
+                    f"repos/{args.repository}/releases/assets/{qualification['id']}"], check=True)
+    result = json.loads(subprocess.run(
+        ["gh", "api", "--method", "PATCH", f"repos/{args.repository}/releases/{release['id']}",
+         "-F", "draft=false"], check=True, capture_output=True, text=True,
+    ).stdout)
+    if result.get("id") != release["id"] or result.get("draft") is not False:
+        raise ValueError("GitHub did not publish the exact verified draft")
+    print(f"Published {args.release_tag}: {result['html_url']}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f"publish-verified-draft: release blocked: {error}") from error

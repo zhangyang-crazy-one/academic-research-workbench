@@ -37,6 +37,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-root", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--technical-only", action="store_true",
+                        help="validate technical evidence before signing; does not authorize release")
+    parser.add_argument("--repository")
+    parser.add_argument("--release-tag")
+    parser.add_argument("--candidate-run-id")
+    parser.add_argument("--candidate-artifact-name")
+    parser.add_argument("--ci-bundle-root", type=Path)
+    parser.add_argument("--qualification-archive", type=Path)
     args = parser.parse_args()
     root = args.bundle_root
     subprocess.run([sys.executable, str(Path(__file__).with_name("candidate-bundle")),
@@ -59,7 +67,9 @@ def main() -> None:
         validate_candidate(wheel, root / "build-evidence.json", project_root / "vendor/source-manifest.json")
     except (OSError, ValueError, SystemExit, zipfile.BadZipFile) as error:
         fail(f"candidate wheel or builder evidence failed source validation: {error}")
-    use = read(root / "evidence/supply-chain/use-distribution.json")
+    # Historical missing/unknown source declarations remain unmodified. Only
+    # a separate verified owner authorization can close formal release authority.
+    read(root / "evidence/supply-chain/use-distribution.json")
     verdict = read(root / "evidence/supply-chain/license-verdict.json")
     qualified = root / "qualification"
     manifest = read(root / "bundle-manifest.json")
@@ -107,15 +117,24 @@ def main() -> None:
         fail(f"qualified stage, canary or integration lock failed validation: {error}")
     if verdict.get("technical_qualification") != "PASS":
         fail("candidate legal technical qualification is not PASS")
-    for field, expected in (("intended_use", "declared"), ("distribution_class", "declared"),
-                            ("accountable_approval", "approved")):
-        if use.get(field, {}).get("status") != expected:
-            fail(f"{field} is not {expected}")
-    # Current license and Phase 7 records contain no independent signature or
-    # approver identity contract. Their PASS strings and permission references
-    # are self assertions, even when all file hashes match. Fail closed until
-    # that separate authority contract is specified and independently checked.
-    fail("approval and permission references lack independently verifiable authority evidence")
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("phase7-release-evidence")), "verify",
+         "--qualification-root", str(qualified), "--source-commit", args.source_commit],
+        cwd=project_root, check=True,
+    )
+    if args.technical_only:
+        print("check-release-candidate: technical checks passed; release authority remains unverified")
+        return
+    identity = ("repository", "release_tag", "candidate_run_id", "candidate_artifact_name")
+    if any(not getattr(args, field) for field in (*identity, "ci_bundle_root", "qualification_archive")):
+        fail("independent authority requires repository, release tag and candidate run/artifact identity")
+    command = [sys.executable, str(Path(__file__).with_name("release-authority")), "verify",
+               "--bundle-root", str(root), "--source-commit", args.source_commit]
+    for field in identity:
+        command.extend(["--" + field.replace("_", "-"), getattr(args, field)])
+    command.extend(["--ci-bundle-root", str(args.ci_bundle_root),
+                    "--qualification-archive", str(args.qualification_archive)])
+    subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from arw_research_memory.store import (
     cycle_ids,
 )
 
+from arw import __version__
 from arw.kernel.ledger.journal import replay_run
 from arw.kernel.ledger.research_records import BodyUnavailable
 from arw.kernel.state.research_memory import MemoryInput, MemoryQuery
@@ -114,6 +115,8 @@ def test_tampering_doctor_readonly(tmp_path):
 def test_mcp_narrow_process_bound_surface(tmp_path):
     root, service = prepared(tmp_path)
     server = MemoryMcpServer(root, run_root=root, harness="claude")
+    initialized = server.handle({"jsonrpc": "2.0", "id": 0, "method": "initialize"})
+    assert initialized["result"]["serverInfo"]["version"] == __version__
     assert (
         tuple(
             t["name"]

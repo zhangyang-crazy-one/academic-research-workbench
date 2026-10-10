@@ -24,7 +24,45 @@ def test_release_permissions_limit_write_access_to_publish() -> None:
     qualify = release["jobs"]["qualify"]
     publish = release["jobs"]["publish"]
     assert qualify.get("permissions", release["permissions"]).get("contents") == "read"
-    assert publish["permissions"] == {"contents": "write"}
+    assert publish["permissions"] == {
+        "actions": "read", "attestations": "read", "contents": "write",
+    }
+
+
+def test_independent_authority_is_owner_dispatch_main_and_signs_after_all_gates() -> None:
+    authority = _workflow("release-authority.yml")
+    release = _workflow("release.yml")
+    assert set(release["on"]) == {"workflow_dispatch"}
+    assert "github.ref == 'refs/heads/main'" in release["jobs"]["qualify"]["if"]
+    assert set(authority["on"]) == {"workflow_dispatch"}
+    job = authority["jobs"]["authorize"]
+    assert "github.ref == 'refs/heads/main'" in job["if"]
+    assert job["permissions"] == {
+        "actions": "read", "artifact-metadata": "write", "attestations": "write",
+        "contents": "read", "id-token": "write",
+    }
+    steps = job["steps"]
+    names = {step.get("name"): index for index, step in enumerate(steps)}
+    sequence = ["Verify artifact attestations for exact candidate subjects",
+                "Verify real Phase 7 technical gates before signing",
+                "Prepare exact authenticated owner declaration",
+                "Sign independent exact-candidate release authority"]
+    assert [names[name] for name in sequence] == sorted(names[name] for name in sequence)
+    signing = steps[names[sequence[-1]]]
+    assert signing["uses"] == "actions/attest@v4"
+    assert signing["with"]["subject-path"] == "build/release/candidate-bundle/bundle-manifest.json"
+    assert signing["with"]["predicate-path"] == "build/release/release-authority-predicate.json"
+    assert "--technical-only" in steps[names[sequence[1]]]["run"]
+    for job in release["jobs"].values():
+        for step in job["steps"]:
+            if "scripts/check-release-candidate" in step.get("run", ""):
+                assert "--technical-only" not in step["run"]
+                for flag in ("--repository", "--release-tag", "--candidate-run-id",
+                             "--candidate-artifact-name", "--ci-bundle-root", "--qualification-archive"):
+                    assert flag in step["run"]
+    publish = release["jobs"]["publish"]["steps"][-1]["run"]
+    assert "scripts/publish-verified-draft" in publish
+    assert "gh release create" not in publish
 
 
 def test_ci_candidate_archive_name_matches_both_downloaders() -> None:
@@ -42,10 +80,10 @@ def test_ci_candidate_archive_name_matches_both_downloaders() -> None:
     assert any("--archive build/candidate-from-ci-transfer/candidate-bundle.tar.gz"
                in step.get("run", "") for step in python_steps)
     qualify_steps = release["jobs"]["qualify"]["steps"]
-    assert any("--archive candidate-transfer/candidate-bundle.tar.gz"
+    assert any("--archive build/release/candidate-transfer/candidate-bundle.tar.gz"
                in step.get("run", "") for step in qualify_steps)
     publish_steps = release["jobs"]["publish"]["steps"]
-    assert any("--archive verified-candidate-transfer/candidate-bundle.tar.gz"
+    assert any("--archive build/release/verified-candidate-transfer/verified-candidate.tar.gz"
                in step.get("run", "") for step in publish_steps)
 
 
@@ -102,3 +140,37 @@ def test_publish_clean_install_command_supplies_verifier_dependency(tmp_path: Pa
     assert args[:3] == ["pip", "install", "--python"]
     assert "--dry-run" in args
     assert any(requirement.startswith("packaging>=") for requirement in args)
+
+
+def test_authority_jobs_materialize_pinned_sources_before_license_gates() -> None:
+    """#99: clean runners lack the ignored vendor/sources tree, so every job
+    whose authority checks read pinned source licenses must materialize the
+    pinned snapshots first."""
+    for workflow_name, job_names in (("release-authority.yml", ("authorize",)),
+                                     ("release.yml", ("qualify", "publish"))):
+        workflow = _workflow(workflow_name)
+        for job_name in job_names:
+            steps = workflow["jobs"][job_name]["steps"]
+            materialized = [index for index, step in enumerate(steps)
+                            if "scripts/materialize-sources" in step.get("run", "")]
+            assert materialized, f"{workflow_name}:{job_name} does not materialize pinned sources"
+            first = materialized[0]
+            gated = [index for index, step in enumerate(steps)
+                     if any(tool in step.get("run", "") for tool in
+                            ("scripts/check-release-candidate", "scripts/release-authority prepare",
+                             "scripts/release-authority verify"))]
+            assert gated, f"{workflow_name}:{job_name} has no release gate steps"
+            assert all(first < index for index in gated), \
+                f"{workflow_name}:{job_name} runs release gates before source materialization"
+
+
+def test_release_gates_keep_repository_relative_candidate_bundle_root() -> None:
+    """#99: the workflows deliberately pass the repository-relative candidate
+    bundle root; the Phase 7 evidence verifier must support that convention."""
+    for workflow_name in ("release-authority.yml", "release.yml"):
+        workflow = _workflow(workflow_name)
+        for job in workflow["jobs"].values():
+            for step in job["steps"]:
+                run = step.get("run", "")
+                if "scripts/check-release-candidate" in run:
+                    assert "--bundle-root build/release/candidate-bundle" in run
