@@ -140,3 +140,37 @@ def test_publish_clean_install_command_supplies_verifier_dependency(tmp_path: Pa
     assert args[:3] == ["pip", "install", "--python"]
     assert "--dry-run" in args
     assert any(requirement.startswith("packaging>=") for requirement in args)
+
+
+def test_authority_jobs_materialize_pinned_sources_before_license_gates() -> None:
+    """#99: clean runners lack the ignored vendor/sources tree, so every job
+    whose authority checks read pinned source licenses must materialize the
+    pinned snapshots first."""
+    for workflow_name, job_names in (("release-authority.yml", ("authorize",)),
+                                     ("release.yml", ("qualify", "publish"))):
+        workflow = _workflow(workflow_name)
+        for job_name in job_names:
+            steps = workflow["jobs"][job_name]["steps"]
+            materialized = [index for index, step in enumerate(steps)
+                            if "scripts/materialize-sources" in step.get("run", "")]
+            assert materialized, f"{workflow_name}:{job_name} does not materialize pinned sources"
+            first = materialized[0]
+            gated = [index for index, step in enumerate(steps)
+                     if any(tool in step.get("run", "") for tool in
+                            ("scripts/check-release-candidate", "scripts/release-authority prepare",
+                             "scripts/release-authority verify"))]
+            assert gated, f"{workflow_name}:{job_name} has no release gate steps"
+            assert all(first < index for index in gated), \
+                f"{workflow_name}:{job_name} runs release gates before source materialization"
+
+
+def test_release_gates_keep_repository_relative_candidate_bundle_root() -> None:
+    """#99: the workflows deliberately pass the repository-relative candidate
+    bundle root; the Phase 7 evidence verifier must support that convention."""
+    for workflow_name in ("release-authority.yml", "release.yml"):
+        workflow = _workflow(workflow_name)
+        for job in workflow["jobs"].values():
+            for step in job["steps"]:
+                run = step.get("run", "")
+                if "scripts/check-release-candidate" in run:
+                    assert "--bundle-root build/release/candidate-bundle" in run

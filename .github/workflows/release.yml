@@ -53,6 +53,8 @@ jobs:
           enable-cache: false
       - name: Install declared runtime validator dependencies
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Materialize pinned upstream source licenses
+        run: ./scripts/materialize-sources
       - name: Select explicit candidate transfer
         id: select
         env:
@@ -252,6 +254,8 @@ jobs:
           enable-cache: false
       - name: Install declared runtime validator dependencies
         run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Materialize pinned upstream source licenses
+        run: ./scripts/materialize-sources
       - uses: actions/download-artifact@v8
         with:
           name: academic-research-workbench-verified-${{ github.run_id }}
