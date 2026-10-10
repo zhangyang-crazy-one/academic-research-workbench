@@ -7,6 +7,7 @@ import copy
 import hashlib
 import json
 import runpy
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -340,3 +341,42 @@ def test_publish_existing_draft_uses_verified_bytes_and_exact_ids(transfer: tupl
         assert api["release"]["draft"] is False
         assert {row["name"] for row in api["release"]["assets"]} == {path.name for path in paths}
         assert len([command for command in calls if "POST" in command]) == (1 if mutation == "identical-retry" else 2)
+
+
+def test_permission_basis_clean_runner_materialization_boundary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#99: clean hosted runners lack the ignored vendor/sources tree; the
+    permission basis must fail closed before materialization and accept the
+    exact pinned license bytes afterwards."""
+    root = Path(__file__).resolve().parents[2]
+    module = runpy.run_path(str(root / "scripts/release-authority"))
+    namespace = module["validate_permission_basis"].__globals__
+    manifest = json.loads((root / "vendor/source-manifest.json").read_text())
+    bundle = tmp_path / "bundle"
+    evidence = bundle / "evidence"
+    (evidence / "supply-chain").mkdir(parents=True)
+    (evidence / "LICENSES").mkdir()
+    rows = []
+    for component in manifest["components"]:
+        license = component["licenses"][0]
+        relative = f"LICENSES/{component['id']}.txt"
+        (evidence / relative).write_bytes((root / license["path"]).read_bytes())
+        rows.append({"component_id": component["id"], "license": license["spdx"],
+            "source_path": license["path"], "source_sha256": license["sha256"],
+            "staged_path": relative, "staged_sha256": license["sha256"]})
+    (evidence / "supply-chain/license-verdict.json").write_text(json.dumps({"components": rows}))
+    # A clean checkout carries only tracked files: the source manifest is
+    # present while the ignored vendor/sources tree is absent.
+    clean = tmp_path / "clean"
+    (clean / "vendor").mkdir(parents=True)
+    shutil.copy2(root / "vendor/source-manifest.json", clean / "vendor/source-manifest.json")
+    monkeypatch.setitem(namespace, "PROJECT_ROOT", clean)
+    with pytest.raises(ReleaseAuthorityError, match="missing or unsafe authority subject"):
+        module["validate_permission_basis"](bundle)
+    # Materializing the pinned source snapshots (as the release workflows now
+    # do) lets the unchanged check pass; no digest or identity was relaxed.
+    for component in manifest["components"]:
+        license = component["licenses"][0]
+        target = clean / license["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((root / license["path"]).read_bytes())
+    module["validate_permission_basis"](bundle)

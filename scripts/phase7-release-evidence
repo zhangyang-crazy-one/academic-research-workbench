@@ -151,6 +151,18 @@ def validate_commands(evidence: Path, aggregate: dict, verifier: dict) -> tuple[
     return commands, original_root
 
 
+def verified_evidence_base(evidence: Path) -> Path:
+    """Normalize an already-validated evidence root for the aggregate verifier.
+
+    ``direct_files`` must run on the caller's original path first so symlink
+    components are rejected lexically before any resolution happens here.  The
+    aggregate verifier compares ``Path.resolve()`` receipt paths against the
+    configured ``EVIDENCE_BASE``, so a relative ``--qualification-root`` would
+    otherwise unbind valid receipts (#99).
+    """
+    return evidence.resolve()
+
+
 def verify_retained(evidence: Path, prior: Path, stage: Path, lock: Path, canary: Path,
                     source: Path, commit: str) -> dict:
     verifier = load_verifier(source)
@@ -181,7 +193,10 @@ def verify_retained(evidence: Path, prior: Path, stage: Path, lock: Path, canary
         project_root=prior, phase5_root=prior / PRIOR_TREES[0], phase41_root=prior / PRIOR_TREES[1])
     verifier["validate_stage_and_inputs"] = lambda *args: stage_summary
     verifier["STAGE_ROOT"], verifier["PHASE7_LOCK"], verifier["PHASE7_CANARY"] = stage, lock, canary
-    verifier["EVIDENCE_BASE"] = evidence
+    # direct_files() has already rejected symlink components; configure the
+    # aggregate validator with the normalized absolute base so relative CLI
+    # paths and resolved receipt paths compare equal.
+    verifier["EVIDENCE_BASE"] = verified_evidence_base(evidence)
     def expected_argv(name, argv, observed_stage):
         expected = verifier["_expected_command_argv"](name)
         if name == "stage-validate":

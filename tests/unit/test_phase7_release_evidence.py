@@ -167,3 +167,163 @@ def test_altered_export_schema_fails_before_prior_can_claim_pass(tmp_path: Path)
     target.write_text('{}')
     with pytest.raises(ValueError, match="schema differs"):
         code["validate_prior"](prior, ROOT)
+
+
+def test_verified_evidence_base_normalizes_relative_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#99: the aggregate verifier base is absolute even for relative CLI roots."""
+    code = module()
+    evidence = tmp_path / "qualification" / "phase7-evidence"
+    evidence.mkdir(parents=True)
+    (evidence / "receipt.json").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    base = code["verified_evidence_base"](Path("qualification/phase7-evidence"))
+    assert base == evidence.resolve()
+    assert base.is_absolute()
+
+
+def _configure_retained_aggregate(verifier: dict, aggregate: dict, original_root: Path,
+                                  evidence_base: Path) -> None:
+    """Mirror verify_retained's dynamic-validator configuration for the aggregate."""
+    stage = aggregate["stage"]
+    stage_summary = verifier["ValidatedStageSummary"](
+        stage_sha256="0" * 64, integration_lock_sha256="1" * 64, host_canary_sha256="2" * 64,
+        stage_relative_path=stage["stage_relative_path"], lock_relative_path=stage["lock_relative_path"],
+        canary_relative_path=stage["canary_relative_path"], _token=verifier["_VALIDATION_TOKEN"])
+    receipt_summary = verifier["ValidatedReceiptSummary"](
+        {"technical_qualification": "PASS"}, {"technical_qualification": "PASS"},
+        _token=verifier["_VALIDATION_TOKEN"])
+    verifier["validate_receipts"] = lambda: receipt_summary
+    verifier["validate_stage_and_inputs"] = lambda *args: stage_summary
+    verifier["EVIDENCE_BASE"] = evidence_base
+
+    def expected_argv(name, argv, observed_stage):
+        expected = verifier["_expected_command_argv"](name)
+        if name == "stage-validate":
+            expected[2] = str(original_root / stage["stage_relative_path"])
+            expected[5] = str(original_root / stage["lock_relative_path"])
+        return argv == expected
+    verifier["_command_argv_matches"] = expected_argv
+
+
+def _rebuild_aggregate(verifier: dict, rows: list) -> dict:
+    return verifier["aggregate_verdict"](
+        receipt_summary=verifier["validate_receipts"](),
+        stage_summary=verifier["validate_stage_and_inputs"](),
+        test_commands=rows,
+        license_summary={"technical_qualification": "PASS", "release_qualification": "BLOCKED"},
+        git_head="a" * 40, git_tree="b" * 40, git_worktree="c" * 64)
+
+
+def test_relative_evidence_root_keeps_aggregate_binding(commands: tuple, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#99: a relative qualification root must not unbind valid command receipts."""
+    code, evidence, aggregate = commands
+    monkeypatch.chdir(evidence.parent)
+    relative = Path(evidence.name)
+    verifier = code["load_verifier"](ROOT)
+    rows, original_root = code["validate_commands"](relative, aggregate, verifier)
+    _configure_retained_aggregate(verifier, aggregate, original_root,
+                                  code["verified_evidence_base"](relative))
+    rebuilt = _rebuild_aggregate(verifier, rows)
+    assert rebuilt["technical_qualification"] == "PASS"
+    assert rebuilt["evidence_bound"] is True
+
+
+def test_unnormalized_evidence_base_unbinds_valid_receipts(commands: tuple, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Documents the #99 failure mode that verified_evidence_base prevents."""
+    code, evidence, aggregate = commands
+    monkeypatch.chdir(evidence.parent)
+    relative = Path(evidence.name)
+    verifier = code["load_verifier"](ROOT)
+    rows, original_root = code["validate_commands"](relative, aggregate, verifier)
+    _configure_retained_aggregate(verifier, aggregate, original_root, relative)
+    rebuilt = _rebuild_aggregate(verifier, rows)
+    assert rebuilt["technical_qualification"] == "BLOCKED"
+    assert rebuilt["technical_blockers"] == ["command-0-receipt-unbound"]
+
+
+@pytest.mark.parametrize("form", ["relative", "absolute"])
+def test_cli_verify_normalizes_qualification_root(
+        commands: tuple, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, form: str) -> None:
+    """#99: the real verify CLI must accept the workflow's repository-relative
+    --qualification-root and configure the aggregate verifier with the same
+    normalized evidence base as for an absolute path.  The sentinel aborts the
+    run right after the dynamic validator is fully configured."""
+    code, fixture_evidence, aggregate = commands
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(source)], check=True)
+    for relative in code["PRIOR_SCHEMAS"]:
+        target = source / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, target)
+    subprocess.run(["git", "add", "."], cwd=source, check=True)
+    subprocess.run(["git", "-c", "user.name=Evidence Test", "-c", "user.email=evidence@example.invalid",
+                    "commit", "--quiet", "-m", "fixture"], cwd=source, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=source, text=True).strip()
+    worktree = code["load_verifier"](source)["worktree_digest"]()
+
+    # Mirror the workflow's candidate bundle layout exactly.
+    qualification = tmp_path / "build/release/candidate-bundle/qualification"
+    evidence = qualification / "phase7-evidence"
+    evidence.mkdir(parents=True)
+    shutil.copytree(fixture_evidence / "commands", evidence / "commands")
+    prior = qualification / "prior"
+    for relative in code["PRIOR_TREES"]:
+        (prior / relative).mkdir(parents=True)
+    for relative in code["PRIOR_SCHEMAS"]:
+        target = prior / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, target)
+    stage = qualification / "stage"
+    stage.mkdir()
+    (stage / "staged.txt").write_text("staged payload\n")
+    lock = qualification / "integration-lock.json"
+    lock.write_text("{}")
+    canary = qualification / "host-canary.json"
+    canary.write_text("{}")
+    stage_summary = aggregate["stage"]
+    stage_summary["stage_sha256"] = hashlib.sha256(code["canonical"](sorted(
+        (path.relative_to(stage).as_posix(), code["digest"](path))
+        for path in code["direct_files"](stage)))).hexdigest()
+    stage_summary["integration_lock_sha256"] = code["digest"](lock)
+    stage_summary["host_canary_sha256"] = code["digest"](canary)
+
+    (evidence / ".arw-phase7-evidence").write_bytes(b"phase-7 evidence\n")
+    aggregate["git_head"] = head
+    aggregate["git_tree"] = tree
+    aggregate["git_worktree_sha256"] = worktree
+    (evidence / "phase-7-verification.json").write_bytes(code["canonical"](aggregate))
+    (qualification / "phase-7-verification.json").write_bytes(code["canonical"](aggregate))
+
+    captured = {}
+    real_load = code["load_verifier"]
+
+    def patched_load(source_root: Path) -> dict:
+        namespace = real_load(source_root)
+        namespace["_license_verdict"] = lambda: {
+            "technical_qualification": "PASS", "release_qualification": "BLOCKED"}
+        receipt_summary = namespace["ValidatedReceiptSummary"](
+            {"technical_qualification": "PASS"}, {"technical_qualification": "PASS"},
+            _token=namespace["_VALIDATION_TOKEN"])
+        namespace["validate_receipts"] = lambda **kwargs: receipt_summary
+
+        def capturing_aggregate(**kwargs: object) -> dict:
+            captured["evidence_base"] = namespace["EVIDENCE_BASE"]
+            raise ValueError("capture-sentinel")
+        namespace["aggregate_verdict"] = capturing_aggregate
+        return namespace
+
+    # runpy.run_path returns a copy of the module namespace; patch the real
+    # globals dict that the CLI-resolved functions close over.
+    monkeypatch.setitem(code["main"].__globals__, "load_verifier", patched_load)
+    monkeypatch.chdir(tmp_path)
+    root_arg = ("build/release/candidate-bundle/qualification"
+                if form == "relative" else str(qualification))
+    monkeypatch.setattr("sys.argv", ["phase7-release-evidence", "verify",
+        "--qualification-root", root_arg, "--source-commit", head,
+        "--source-root", str(source)])
+    with pytest.raises(ValueError, match="capture-sentinel"):
+        code["main"]()
+    assert captured["evidence_base"] == evidence.resolve()
+    assert captured["evidence_base"].is_absolute()
