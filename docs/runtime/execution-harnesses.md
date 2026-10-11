@@ -81,6 +81,8 @@ The command runs with a positive environment allowlist and receives one bounded
 reconstructed digest-verified preparation context, exact UTF-8 input bytes, and
 the nonce/identity-bound `proposal_template`. Binary inputs require an explicit
 text extraction upstream. Missing or ambiguous canonical sources block requests.
+Command `parameters` are delivered as `harness_parameters` for the user-owned
+driver to interpret, including platform-specific model options.
 
 The driver writes one JSON envelope to stdout:
 

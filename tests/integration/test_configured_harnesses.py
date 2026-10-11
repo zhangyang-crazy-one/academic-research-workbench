@@ -261,6 +261,7 @@ assert not os.path.exists(sys.argv[1])
 assert os.environ["HOME"] == "/work/home"
 assert "TEST_MODEL_KEY" not in os.environ
 assert r["inputs"][0]["text"] == "phase four input\\n"
+assert r["harness_parameters"] == {"platform_model": "platform-authenticated-model"}
 p = r["proposal_template"]
 a = "driver result\\n"
 p.update(status="completed", requested_next_action="accept", summary="driver result",
@@ -272,6 +273,7 @@ print(json.dumps(dict(schema_version="arw.harness-output.v1", proposal=p, artifa
         kind="command",
         command=("/usr/bin/python3", str(driver), str(tmp_path / "run")),
         runtime_roots=(str(driver),),
+        parameters={"platform_model": "platform-authenticated-model"},
     )
     root, adapter, service, prepared, request = _prepared(tmp_path, entry)
     report = asyncio.run(service.dispatch(request, prepared))

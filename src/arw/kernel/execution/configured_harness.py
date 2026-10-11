@@ -421,6 +421,8 @@ class ConfiguredHarnessAdapter:
             )[:32]
         )
         assignment, request = _request(spec, host_id)
+        if self.entry.kind == "command":
+            request["harness_parameters"] = self.entry.parameters
         if self.entry.kind == "api":
             request["api"] = {
                 **{

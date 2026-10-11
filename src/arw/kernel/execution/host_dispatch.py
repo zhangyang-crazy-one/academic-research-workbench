@@ -393,6 +393,7 @@ def build_configured_dispatch_adapter(args: Any, assignments: tuple[Any, ...], *
     from arw.kernel.execution.configured_harness import ConfiguredHarnessAdapter
     from arw.kernel.execution.execution import DispatchSpec
     from arw.kernel.execution.harness_config import HarnessRegistry, load_harness_configuration
+    from arw.kernel.state.orchestration_models import locked_role_catalog
 
     config = load_harness_configuration(args.harness_config)
     expected = getattr(args, "harness_config_sha256", None)
@@ -400,6 +401,8 @@ def build_configured_dispatch_adapter(args: Any, assignments: tuple[Any, ...], *
         raise CLIInputError("harness configuration digest mismatch")
     if set(config.assignments) - {a.assignment_id for a in assignments}:
         raise CLIInputError("harness selector names an unprepared assignment")
+    if set(config.roles) - {role.role_id for role in locked_role_catalog().roles}:
+        raise CLIInputError("harness selector names an unknown role")
     if registry is None:
         registry = HarnessRegistry()
         for kind in ("api", "command"):

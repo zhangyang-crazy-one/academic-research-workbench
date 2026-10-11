@@ -205,3 +205,33 @@ def test_configured_registry_cannot_downgrade_production_identity_guard(tmp_path
                 )
             )
         )
+
+
+@pytest.mark.parametrize("invalid", ["role", "assignment", "digest"])
+def test_routing_errors_fail_before_adapter_construction(tmp_path, invalid):
+    from types import SimpleNamespace
+
+    from arw.cli_support import CLIInputError
+    from arw.kernel.execution.host_dispatch import build_configured_dispatch_adapter
+
+    config = _configuration()
+    if invalid == "role":
+        config["roles"]["unknown_role"] = "other-provider"
+    elif invalid == "assignment":
+        config["assignments"]["assignment.missing"] = "other-provider"
+    path = tmp_path / "harnesses.json"
+    path.write_text(json.dumps(config))
+    args = SimpleNamespace(
+        harness_config=path,
+        run_root=tmp_path / "run",
+        harness_config_sha256="a" * 64 if invalid == "digest" else None,
+    )
+    assignment = SimpleNamespace(
+        assignment_id="assignment.special", role_id="domain_reviewer"
+    )
+    constructed = []
+    registry = HarnessRegistry()
+    registry.register("api", lambda *args, **kwargs: constructed.append(args))
+    with pytest.raises(CLIInputError):
+        build_configured_dispatch_adapter(args, (assignment,), registry=registry)
+    assert not constructed
