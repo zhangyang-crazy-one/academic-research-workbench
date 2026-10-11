@@ -572,3 +572,59 @@ def test_v2_identity_rejects_forged_observation_binding(tmp_path, model_server):
     assert (
         not outcome.accepted and outcome.rejection.code == "host-observation-mismatch"
     )
+
+
+@pytest.mark.parametrize("target", ["two.py", "absent", "entry.py", "../outside.py"])
+def test_live_driver_link_retarget_is_stale_before_parent_admission(tmp_path, target):
+    driver = tmp_path / "driver"
+    driver.mkdir()
+    (driver / "one.py").write_text("""import json,sys,time,hashlib
+from pathlib import Path
+r=json.load(sys.stdin)
+Path('/work/started').write_text('ready')
+while not Path('/work/release').exists(): time.sleep(0.01)
+p=r['proposal_template']; a='unchanged original driver result\\n'
+p.update(status='completed',requested_next_action='accept',summary='original driver',
+ artifacts=[dict(relative_path='report.txt',sha256=hashlib.sha256(a.encode()).hexdigest(),
+ byte_count=len(a.encode()),schema_id='arw.test-report.v1',media_type='text/plain')])
+print(json.dumps(dict(schema_version='arw.harness-output.v1',proposal=p,artifacts={'report.txt':a})))
+""")
+    (driver / "two.py").write_text("raise SystemExit('different entry')\n")
+    (tmp_path / "outside.py").write_text("outside\n")
+    link = driver / "entry.py"
+    link.symlink_to("one.py")
+    entry = HarnessEntry(
+        kind="command",
+        command=("/usr/bin/python3", str(link)),
+        runtime_roots=(str(driver),),
+    )
+    root, adapter, service, prepared, request = _prepared(tmp_path, entry)
+    original_argv = adapter._argv
+    original_communicate = adapter._communicate
+    task_root = None
+
+    def observe_task(task, run_root, probe=False):
+        nonlocal task_root
+        task_root = task
+        return original_argv(task, run_root, probe)
+
+    async def retarget_while_running(process, raw):
+        communication = asyncio.create_task(original_communicate(process, raw))
+        for _ in range(200):
+            if (task_root / "started").exists():
+                break
+            await asyncio.sleep(0.01)
+        assert (task_root / "started").exists()
+        assert process.returncode is None
+        link.unlink()
+        link.symlink_to(target)
+        (task_root / "release").write_text("release")
+        return await communication
+
+    adapter._argv = observe_task
+    adapter._communicate = retarget_while_running
+    report = asyncio.run(service.dispatch(request, prepared))
+    assert report.outcomes[0].attempts[0].failure_reason == "stale_inputs"
+    assert not report.state.accepted_proposals
+    assert not adapter._processes
+    assert not list(root.glob("attempts/*/scratch/harness-*"))

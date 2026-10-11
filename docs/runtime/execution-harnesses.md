@@ -126,6 +126,10 @@ request/response digests, logical worker mapping and actual task namespace.
 The parent retains public configuration, input/output envelopes and exact API wire
 bodies without authentication headers; v2 replay rechecks those retained hashes.
 Selected command runtime inventories are bounded to 16,384 entries and 1 GiB.
+Their fingerprints include directory topology and internal symlink paths, raw
+targets and resolved targets. Dangling, cyclic and escaping links are rejected.
+A differing or unavailable runtime at the post-dispatch check makes its result
+stale before admission; these checks do not continuously attest the live filesystem.
 The logical host identity is stable for the configured worker; namespace instances
 remain distinct. `HostIdentityReceiptV2` is platform-neutral and has no fabricated
 Codex version. To accept it, the parent requires an exact retained observation
