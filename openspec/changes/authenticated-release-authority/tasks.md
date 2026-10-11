@@ -18,6 +18,8 @@
 
 - [x] 2.9 Use verifier-owned sibling staging temporary roots for disk-backed pytest output; preserve accepted-root separation and caller override rejection, with real candidate Phase 1 verification.
 
+- [x] 2.10 Expose only the observed Codex installation through read-only namespace mounts, preserving launcher symlinks and hiding host credentials; verify real namespace rejection, installed CLI version and exact plugin installation without model calls.
+
 ## 3. Actual formal release
 
 - [ ] 3.1 Merge verified changes after CI and obtain exact successful main CI subjects.
