@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from pathlib import Path
 
-from packaging.requirements import Requirement
 import yaml
+from packaging.requirements import Requirement
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
 ARTIFACT_SUBJECTS = {"dist/*.whl", "dist/*.tar.gz"}
@@ -115,7 +116,9 @@ def test_release_qualification_verifies_every_subject_before_transfer() -> None:
         "contents": "read",
     }
     assert release["jobs"]["publish"]["needs"] == "qualify"
-    assert release["jobs"]["publish"]["permissions"] == {"contents": "write"}
+    assert release["jobs"]["publish"]["permissions"] == {
+        "actions": "read", "attestations": "read", "contents": "write",
+    }
     steps = qualify["steps"]
     verify = _step(steps, "Verify artifact attestations for exact candidate subjects")
     script = verify["run"]

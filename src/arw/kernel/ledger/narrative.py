@@ -23,6 +23,7 @@ ZERO = "0" * 64
 RELATIVE = Path(".arw/narrative/events.jsonl")
 LOCK = Path(".arw/narrative/.lock")
 MAX_HISTORY = 1_048_576
+CORE_HISTORY_RESERVE = 262_144
 MAX_TRAIL_CHOICES = 128
 MAX_TRAIL_BYTES = 65_536
 MAX_RUN_RELATIONS = 128
@@ -104,8 +105,12 @@ def _locked(
         ) from error
 
 
-def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
+def _read(
+    root: Path, *, at_sequence: int | None = None
+) -> tuple[list[dict], NarrativeSnapshot | None, dict | None]:
     path = _history_path(root)
+    if (root / ".arw").is_symlink() or path.parent.is_symlink():
+        raise NarrativeError("unsafe_state", "narrative state path contains a symlink")
     if path.is_symlink() or not path.is_file():
         raise NarrativeError(
             "missing_selection", "paper project has no narrative history"
@@ -113,9 +118,21 @@ def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None
     if path.stat().st_size > MAX_HISTORY:
         raise NarrativeError("corrupt_history", "narrative history exceeds budget")
     raw = path.read_bytes()
+    if at_sequence is not None:
+        if type(at_sequence) is not int or at_sequence < 1:
+            raise NarrativeError(
+                "invalid_sequence", "historical sequence must be positive"
+            )
+        lines = raw.splitlines(keepends=True)
+        if len(lines) < at_sequence:
+            raise NarrativeError(
+                "invalid_sequence", "historical sequence exceeds history"
+            )
+        raw = b"".join(lines[:at_sequence])
     if not raw or not raw.endswith(b"\n"):
         raise NarrativeError("corrupt_history", "narrative history is incomplete")
     events: list[dict] = []
+    registrations = {}
     snapshot = None
     pending = None
     previous = ZERO
@@ -218,6 +235,18 @@ def _read(root: Path) -> tuple[list[dict], NarrativeSnapshot | None, dict | None
                 and len(payload["reason"].encode("utf-8")) <= 2048
             ):
                 pending = None
+            elif kind in {
+                "claim.registered",
+                "claim.evidence.updated",
+                "claim.attested",
+            }:
+                from arw.kernel.ledger.claim_graph import validate_claim_journal_event
+
+                if snapshot is None or version != snapshot.version:
+                    raise ValueError(
+                        "claim event requires a selected narrative version"
+                    )
+                validate_claim_journal_event(event, events, registrations=registrations)
             else:
                 raise ValueError("invalid narrative transition")
             events.append(event)
@@ -244,10 +273,14 @@ def _append(
     event = {**unsigned, "event_sha256": sha256_hex(canonical_json_bytes(unsigned))}
     path = _history_path(root)
     encoded = canonical_json_bytes(event)
-    if (
-        sum(len(canonical_json_bytes(existing)) for existing in events) + len(encoded)
-        > MAX_HISTORY
-    ):
+    size = sum(len(canonical_json_bytes(existing)) for existing in events) + len(
+        encoded
+    )
+    if kind.startswith("claim.") and size > MAX_HISTORY - CORE_HISTORY_RESERVE:
+        raise NarrativeError(
+            "claim_history_full", "claim events must preserve core narrative capacity"
+        )
+    if size > MAX_HISTORY:
         raise NarrativeError(
             "history_full", "narrative history has reached its byte budget"
         )
@@ -449,7 +482,12 @@ def _trail_view(
     pending: dict | None = None
     for event in events:
         kind = event["kind"]
-        if kind in {"registered"}:
+        if kind in {
+            "registered",
+            "claim.registered",
+            "claim.evidence.updated",
+            "claim.attested",
+        }:
             continue
         if kind in {"selected", "proposed"}:
             plan = event["payload"]["plan"]

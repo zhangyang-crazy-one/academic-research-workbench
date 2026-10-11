@@ -1,0 +1,116 @@
+"""Public commands use real accepted artifacts and return typed failures."""
+
+import json
+
+import pytest
+
+from arw.cli import main
+from tests.unit.test_accepted_refs import accepted_fixture
+from tests.unit.test_numeric_core import request, selection
+
+
+def test_numeric_cli_returns_exact_third_and_rejects_oversized_request(tmp_path, capsys):
+    root, context, ref, _ = accepted_fixture(tmp_path, b"id,score\na,0\nb,0\nc,1\n")
+    source = tmp_path / "request.json"
+    source.write_text(request("mean", selection(ref)).model_dump_json())
+    argv = ["numeric", "derive", "--request", str(source), "--project-id", context.project_id, "--run-root", str(root)]
+    assert main(argv) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "exact"
+    assert result["exact"] == {"numerator": 1, "denominator": 3}
+    source.write_bytes(b" " * 2_097_153)
+    assert main(argv) == 65
+    assert json.loads(capsys.readouterr().out)["code"] == "numeric_invalid"
+
+
+def test_claims_cli_exposes_structured_missing_project_failure(tmp_path, capsys):
+    assert main(["claims", "graph", "--project-root", str(tmp_path), "--json"]) == 65
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "error"
+    assert isinstance(result["code"], str)
+
+
+def test_result_plot_cli_dispatches_real_service_and_preserves_numeric_identity(tmp_path, capsys):
+    from tests.integration.test_result_plots import aggregate, plot
+
+    root, _, ref, _ = accepted_fixture(tmp_path, b'{"A":0.831}\n')
+    ir = plot((aggregate(ref),))
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    assert main(["artifact", "render", "--run-root", str(root), "--input", str(source)]) == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["status"] == "candidate"
+    svg = (root / rendered["path"]).read_bytes()
+    assert svg.startswith(b'<svg')
+    assert main(["artifact", "render", "--run-root", str(root), "--input", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out) == rendered
+
+
+def test_plot_bridge_and_caption_target_cli_are_readonly(tmp_path, capsys):
+    from arw_research_artifact.plot_policy import compile_plot
+
+    from tests.integration.test_result_plots import aggregate, binding, plot
+
+    root, context, ref, _ = accepted_fixture(tmp_path, b'{"A":0.831}\n')
+    ir = plot((aggregate(ref),), caption="A 0.831")
+    value = compile_plot(ir, context).plot_values[0]
+    ir = ir.model_copy(update={"caption_bindings": (binding(value, 2, 7),)})
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    before = {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    common = ["--run-root", str(root), "--input", str(source)]
+    assert main(["artifact", "source-bridge", *common]) == 0
+    bridge = json.loads(capsys.readouterr().out)
+    assert bridge["schema_version"] == "arw.plot-source-bridge.v1"
+    assert main(["artifact", "caption-targets", *common]) == 0
+    targets = json.loads(capsys.readouterr().out)
+    assert targets["bindings"][0]["scope"].startswith("caption:")
+    assert {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+
+
+def test_checkout_launcher_forwards_new_public_commands(tmp_path):
+    from tests.unit.test_agent_runtime import LAUNCHER, _agent_env, _run
+
+    for command, action in (("claims", "graph"), ("numeric", "derive")):
+        completed = _run([str(LAUNCHER), command, action, "--help"], env=_agent_env(tmp_path))
+        assert completed.returncode == 0, completed.stderr
+        assert f"{command} {action}" in completed.stdout
+
+
+@pytest.mark.parametrize(
+    ("evaluation_time", "exit_code"),
+    [("2026-09-08T00:05:00Z", 0), ("2026-09-08T00:02:00Z", 65), ("2026-09-08T00:10:01Z", 65)],
+)
+def test_public_hard_caption_check_uses_real_parent_authority(tmp_path, capsys, evaluation_time, exit_code):
+    from tests.integration.test_canonical_caption_authority import prepare
+    from tests.integration.test_research_artifacts import request as parent_request
+    from tests.integration.test_result_plots import attach_bridge
+
+    project, root, context, ir, _ = prepare(tmp_path)
+    ir = attach_bridge(ir, root, context, number=230)
+    source = root / "plot-ir.json"
+    source.write_text(ir.model_dump_json())
+    request_path = root / "qualification-request.json"
+    qualification = parent_request(root, 240).model_copy(update={"occurred_at": evaluation_time})
+    request_path.write_text(qualification.model_dump_json())
+    argv = ["artifact", "qualify", "--run-root", str(root), "--project-root", str(project), "--input", str(source), "--request", str(request_path), "--hard-caption-checks"]
+    assert main(argv) == exit_code
+    result = json.loads(capsys.readouterr().out)
+    assert result["accepted"] is (exit_code == 0)
+    if exit_code == 0:
+        assert any(c["code"] == "caption_binding_matches" and c["status"] == "PASS" for c in result["receipt"]["checks"])
+    else:
+        assert "caption_auth_missing" in result["receipt"]["reason_codes"]
+
+
+def test_public_claims_hard_failure_is_nonzero_while_advisory_remains_readonly(tmp_path, capsys):
+    from tests.unit.test_claim_graph import setup
+
+    project, run = setup(tmp_path)
+    args = ["claims", "graph", "--project-root", str(project), "--run-root", str(run), "--json"]
+    assert main(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "projected"
+    before = {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()}
+    assert main([*args, "--hard-check"]) == 65
+    assert json.loads(capsys.readouterr().out)["hard_checks"]["status"] == "failed"
+    assert {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()} == before

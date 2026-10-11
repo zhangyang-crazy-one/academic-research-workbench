@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""Prepare or independently verify exact owner-dispatched GitHub release authority."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tomllib
+from pathlib import Path, PurePosixPath
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from arw.kernel.policy.release_authority import (
+    ReleaseAuthority,
+    ReleaseAuthorityError,
+    validate_candidate_run,
+    validate_dispatch,
+    validate_verified_authority,
+    verify_signature,
+)
+
+
+def read(path: Path) -> dict:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ReleaseAuthorityError(f"expected JSON object: {path}")
+    return value
+
+
+def digest(path: Path) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise ReleaseAuthorityError(f"missing or unsafe authority subject: {path}")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def bounded_path(root: Path, relative: str) -> Path:
+    value = PurePosixPath(relative)
+    if value.is_absolute() or ".." in value.parts:
+        raise ReleaseAuthorityError("authority file path escapes root")
+    result = root / relative
+    if not result.resolve().is_relative_to(root.resolve()):
+        raise ReleaseAuthorityError("authority file symlink escapes root")
+    return result
+
+
+def api(endpoint: str, *, pages: bool = False) -> object:
+    command = ["gh", "api", endpoint]
+    if pages:
+        command.extend(["--paginate", "--slurp"])
+    return json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
+
+
+def draft_asset(args: argparse.Namespace) -> tuple[dict, dict]:
+    release = api(f"repos/{args.repository}/releases/tags/{args.release_tag}")
+    if (not isinstance(release, dict) or release.get("draft") is not True
+            or release.get("tag_name") != args.release_tag
+            or release.get("target_commitish") != args.source_commit):
+        raise ReleaseAuthorityError("qualification requires an existing exact-source draft release")
+    name = f"arw-qualified-candidate-{args.release_tag}.tar.gz"
+    assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+    if len(assets) != 1 or assets[0].get("state") != "uploaded":
+        raise ReleaseAuthorityError("draft qualification asset missing or ambiguous")
+    return release, assets[0]
+
+
+def candidate_identity(args: argparse.Namespace) -> dict:
+    # Schema validates untrusted names before any GitHub endpoint interpolation.
+    if not args.repository or len(args.repository.split("/")) != 2:
+        raise ReleaseAuthorityError("repository must be owner/repo")
+    for name in args.repository.split("/"):
+        if not name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" for c in name):
+            raise ReleaseAuthorityError("invalid repository")
+    run = api(f"repos/{args.repository}/actions/runs/{args.candidate_run_id}")
+    if not isinstance(run, dict):
+        raise ReleaseAuthorityError("invalid GitHub candidate run")
+    validate_candidate_run(run, args.repository, args.source_commit, args.candidate_run_id)
+    pages = api(f"repos/{args.repository}/actions/runs/{args.candidate_run_id}/artifacts?per_page=100", pages=True)
+    matches = [item for page in pages for item in page["artifacts"]
+               if item.get("name") == args.candidate_artifact_name]
+    if len(matches) != 1 or matches[0].get("expired") is not False:
+        raise ReleaseAuthorityError("candidate artifact missing, expired or ambiguous")
+    artifact = matches[0]
+    artifact_run = artifact.get("workflow_run", {})
+    if (artifact_run.get("id") != args.candidate_run_id
+            or artifact_run.get("head_sha") != args.source_commit
+            or artifact_run.get("head_branch") != "main"):
+        raise ReleaseAuthorityError("candidate artifact provenance mismatch")
+    build = read(args.bundle_root / "build-evidence.json")
+    if (build.get("source_identity", {}).get("git_commit") != args.source_commit
+            or build.get("source_identity", {}).get("git_status") != ""):
+        raise ReleaseAuthorityError("candidate source mismatch")
+    project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())["project"]
+    if args.release_tag != f"v{project['version']}":
+        raise ReleaseAuthorityError("release tag differs from source package version")
+    artifacts = build["artifacts"]
+    if len(artifacts) != 2 or sorted(item["kind"] for item in artifacts) != ["sdist", "wheel"]:
+        raise ReleaseAuthorityError("candidate wheel and sdist must be unambiguous")
+    expected = {
+        "schema_version": "1.0.0", "repository": args.repository,
+        "source_commit": args.source_commit, "source_ref": "refs/heads/main",
+        "release_tag": args.release_tag, "release_version": project["version"],
+        "candidate_run_id": args.candidate_run_id,
+        "candidate_artifact_id": artifact["id"], "candidate_artifact_name": artifact["name"],
+        "candidate_artifact_digest": artifact.get("digest"),
+        "bundle_manifest_sha256": digest(args.bundle_root / "bundle-manifest.json"),
+        "sbom_sha256": digest(args.bundle_root / "evidence/SBOM.cdx.json"),
+        "source_manifest_sha256": digest(PROJECT_ROOT / "vendor/source-manifest.json"),
+    }
+    release, qualified = draft_asset(args)
+    if qualified.get("digest") != f"sha256:{digest(args.qualification_archive)}":
+        raise ReleaseAuthorityError("live qualification asset digest differs from downloaded archive")
+    expected.update({
+        "qualification_release_id": release["id"], "qualification_asset_id": qualified["id"],
+        "qualification_asset_name": qualified["name"], "qualification_asset_digest": qualified["digest"],
+    })
+    for item in artifacts:
+        observed = digest(bounded_path(args.bundle_root, item["path"]))
+        if item.get("sha256") != observed:
+            raise ReleaseAuthorityError("candidate artifact byte digest differs")
+        expected[f"{item['kind']}_sha256"] = observed
+    # Qualification evidence can add files, but cannot rebuild/rewrite CI subjects.
+    ci_build = read(args.ci_bundle_root / "build-evidence.json")
+    if digest(args.ci_bundle_root / "build-evidence.json") != digest(args.bundle_root / "build-evidence.json"):
+        raise ReleaseAuthorityError("qualification rewrites original CI build evidence")
+    for item in ci_build["artifacts"]:
+        if digest(bounded_path(args.ci_bundle_root, item["path"])) != expected[f"{item['kind']}_sha256"]:
+            raise ReleaseAuthorityError("qualification substitutes original CI artifact bytes")
+    if digest(args.ci_bundle_root / "evidence/SBOM.cdx.json") != expected["sbom_sha256"]:
+        raise ReleaseAuthorityError("qualification substitutes original CI SBOM")
+    validate_permission_basis(args.bundle_root)
+    return expected
+
+
+def validate_permission_basis(bundle: Path) -> None:
+    """Verify existing pinned licenses and preserved candidate notices, not grants."""
+    manifest = read(PROJECT_ROOT / "vendor/source-manifest.json")
+    components = manifest["components"]
+    licenses = {"academic-research-skills": "CC-BY-NC-4.0",
+                "experiment-agent": "CC-BY-NC-4.0", "file-base": "MIT"}
+    if len(components) != 3 or {row["id"] for row in components} != set(licenses):
+        raise ReleaseAuthorityError("unqualified upstream permission inventory")
+    verdict = read(bundle / "evidence/supply-chain/license-verdict.json")
+    rows = verdict.get("components", [])
+    if len(rows) != 3 or {row.get("component_id") for row in rows} != set(licenses):
+        raise ReleaseAuthorityError("candidate permission inventory differs")
+    for component in components:
+        declared = component["licenses"]
+        if len(declared) != 1 or declared[0]["spdx"] != licenses[component["id"]]:
+            raise ReleaseAuthorityError("unsupported upstream permission basis")
+        license = declared[0]
+        source = bounded_path(PROJECT_ROOT, license["path"])
+        if digest(source) != license["sha256"]:
+            raise ReleaseAuthorityError("pinned upstream license bytes differ")
+        candidate = next(row for row in rows if row["component_id"] == component["id"])
+        if (candidate["license"] != license["spdx"]
+                or candidate["source_path"] != license["path"]
+                or candidate["source_sha256"] != license["sha256"]
+                or candidate["staged_sha256"] != license["sha256"]
+                or digest(bounded_path(bundle / "evidence", candidate["staged_path"])) != license["sha256"]):
+            raise ReleaseAuthorityError("candidate upstream license preservation differs")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("operation", choices=("fetch", "prepare", "verify"))
+    parser.add_argument("--bundle-root", type=Path)
+    parser.add_argument("--ci-bundle-root", type=Path)
+    parser.add_argument("--qualification-archive", type=Path, required=True)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--release-tag", required=True)
+    parser.add_argument("--candidate-run-id", type=int)
+    parser.add_argument("--candidate-artifact-name")
+    parser.add_argument("--intended-use")
+    parser.add_argument("--distribution-class")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    if args.operation == "fetch":
+        _, asset = draft_asset(args)
+        content = subprocess.run(["gh", "api", "-H", "Accept: application/octet-stream",
+                                  f"repos/{args.repository}/releases/assets/{asset['id']}"],
+                                 check=True, capture_output=True).stdout
+        args.qualification_archive.write_bytes(content)
+        if asset.get("digest") != f"sha256:{digest(args.qualification_archive)}":
+            raise ReleaseAuthorityError("downloaded draft asset digest differs")
+        return
+    if not all((args.bundle_root, args.ci_bundle_root, args.candidate_run_id, args.candidate_artifact_name)):
+        raise ReleaseAuthorityError("CI and qualified bundle roots, run and artifact are required")
+    expected = candidate_identity(args)
+    if args.operation == "prepare":
+        if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+                or os.environ.get("GITHUB_REF") != "refs/heads/main"
+                or os.environ.get("GITHUB_SHA") != args.source_commit
+                or os.environ.get("GITHUB_REPOSITORY") != args.repository):
+            raise ReleaseAuthorityError("signing requires actual GitHub main workflow_dispatch context")
+        authority_run = api(f"repos/{args.repository}/actions/runs/{int(os.environ['GITHUB_RUN_ID'])}")
+        validate_dispatch(authority_run, args.repository, args.source_commit)
+        actor = authority_run["actor"]
+        if (os.environ.get("GITHUB_ACTOR") != actor["login"]
+                or os.environ.get("GITHUB_ACTOR_ID") != str(actor["id"])):
+            raise ReleaseAuthorityError("GitHub dispatch actor identity differs")
+        value = ReleaseAuthority.model_validate({**expected,
+            "intended_use": args.intended_use, "distribution_class": args.distribution_class,
+            "permission_basis": "pinned-existing-component-licenses",
+            "actor": actor["login"], "actor_id": actor["id"],
+            "authority_run_id": authority_run["id"], "authority_run_attempt": authority_run["run_attempt"],
+        })
+        if not args.output:
+            raise ReleaseAuthorityError("predicate output is required")
+        args.output.write_text(value.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    else:
+        rows = verify_signature(args.bundle_root / "bundle-manifest.json", args.repository, args.source_commit)
+        for row in rows:
+            try:
+                predicate = ReleaseAuthority.model_validate(row["verificationResult"]["statement"]["predicate"])
+                authority_run = api(f"repos/{args.repository}/actions/runs/{predicate.authority_run_id}")
+                validate_verified_authority([row], expected, authority_run)
+                print(f"release-authority: verified owner {predicate.actor} run {predicate.authority_run_id}")
+                return
+            except (KeyError, ValueError, TypeError):
+                continue
+        raise ReleaseAuthorityError("no verified owner authorization matches release candidate")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f"release-authority: release blocked: {error}") from error

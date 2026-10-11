@@ -57,7 +57,7 @@
       "version": "v0.11.0"
     }
   ],
-  "created_at": "2026-10-06T10:09:42Z",
+  "created_at": "2026-10-09T03:16:27Z",
   "legal_inputs": [
     {
       "component": "academic-research-skills",
@@ -1189,9 +1189,9 @@
           "./scripts/license-gate.sh",
           "--selftest"
         ],
-        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
-        "ended_at": "2026-10-06T10:05:49Z",
-        "started_at": "2026-10-06T10:05:45Z",
+        "cwd": "/tmp/arw-pre-vendor.S3gqkD/sources/file-base",
+        "ended_at": "2026-10-09T03:14:52Z",
+        "started_at": "2026-10-09T03:14:51Z",
         "status": 0,
         "stderr_path": "commands/001-native-gate-selftest/stderr.log",
         "stdout_path": "commands/001-native-gate-selftest/stdout.log"
@@ -1200,9 +1200,9 @@
         "argv": [
           "./scripts/license-gate.sh"
         ],
-        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
-        "ended_at": "2026-10-06T10:09:27Z",
-        "started_at": "2026-10-06T10:05:49Z",
+        "cwd": "/tmp/arw-pre-vendor.S3gqkD/sources/file-base",
+        "ended_at": "2026-10-09T03:16:24Z",
+        "started_at": "2026-10-09T03:14:52Z",
         "status": 0,
         "stderr_path": "commands/002-native-gate/stderr.log",
         "stdout_path": "commands/002-native-gate/stdout.log"
@@ -1210,11 +1210,11 @@
       {
         "argv": [
           "./scripts/gen-third-party-notices.sh",
-          "/home/user/academic-research-workbench/build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md"
+          "/home/zhangyangrui/orca/workspaces/academic-research-workbench/issues-94-95-integration/build/release020-prevendor-audit-9c44159/evidence/generated/THIRD_PARTY_NOTICES.md"
         ],
-        "cwd": "/tmp/arw-pre-vendor.AMj5Go/sources/file-base",
-        "ended_at": "2026-10-06T10:09:28Z",
-        "started_at": "2026-10-06T10:09:27Z",
+        "cwd": "/tmp/arw-pre-vendor.S3gqkD/sources/file-base",
+        "ended_at": "2026-10-09T03:16:25Z",
+        "started_at": "2026-10-09T03:16:24Z",
         "status": 0,
         "stderr_path": "commands/003-notice-generator/stderr.log",
         "stdout_path": "commands/003-notice-generator/stdout.log"
@@ -1254,7 +1254,7 @@
   "raw_evidence": [
     {
       "path": "commands/001-native-gate-selftest/command.json",
-      "sha256": "7026b04bb25a0b208f46850f90bddf5dee2555be14e0e77858890ae510394494"
+      "sha256": "d8fd4d43217a2e22581ca4a5105e96c5d73db3fdadffa323222906a374d82e6e"
     },
     {
       "path": "commands/001-native-gate-selftest/status.txt",
@@ -1270,7 +1270,7 @@
     },
     {
       "path": "commands/002-native-gate/command.json",
-      "sha256": "b8d54d44a10b9b6666f99d948df8c46691f6cd9a2d4b8718d5a14fe9c883538b"
+      "sha256": "9e24dfead3f4df95ec953514b0a428131969f04d6ecea887ab39fc5009a65941"
     },
     {
       "path": "commands/002-native-gate/status.txt",
@@ -1286,7 +1286,7 @@
     },
     {
       "path": "commands/003-notice-generator/command.json",
-      "sha256": "cba5fc46c779275168b4f450a490a0e36850265b8c99660dabe3dedb66061aa3"
+      "sha256": "74c5f36580f73fa3bc4331667011d9d7dc7f99ac3365e2f1bf4b2c6389b07aa4"
     },
     {
       "path": "commands/003-notice-generator/status.txt",
@@ -1298,11 +1298,11 @@
     },
     {
       "path": "commands/003-notice-generator/stdout.log",
-      "sha256": "203ef25194d32a149c4e6a4bb50353f3e7a1efaf5ce7864729c2854400f3793f"
+      "sha256": "2809c22a22aa4118748dff0229954879b2b86b1add3948495869732608333300"
     },
     {
       "path": "commands/native-invocations.log",
-      "sha256": "5415dea5c6ae6623d73c688e8d2f681b0fb521c1f670995c677b71e8f215f7e6"
+      "sha256": "c502bcf0711bc778cb3ad7ef0ce2801a561cd503dfff66de7cd67dbff9394947"
     },
     {
       "path": "generated/THIRD_PARTY_NOTICES.md",

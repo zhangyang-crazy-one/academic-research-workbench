@@ -211,7 +211,7 @@ def _locally_bound_test_lock(tmp_path: Path, label: str) -> bytes:
 def test_sbom_covers_observed_python_packages_patches_native_and_source_components() -> (
     None
 ):
-    sbom = _load(REPOSITORY_ROOT / "SBOM.cdx.json")
+    sbom = _load(Path(os.environ["ARW_CANDIDATE_EVIDENCE_ROOT"]) / "SBOM.cdx.json")
     source_manifest = _load(REPOSITORY_ROOT / "vendor/source-manifest.json")
 
     assert sbom["bomFormat"] == "CycloneDX"

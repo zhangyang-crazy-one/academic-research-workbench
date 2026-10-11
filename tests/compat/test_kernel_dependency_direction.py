@@ -125,7 +125,11 @@ def test_kernel_subpackage_edges_match_pinned_baseline() -> None:
     immutable receipts and read parent-accepted manifests. Contract freezing
     adds reviewed lazy execution -> artifacts and ledger -> artifacts edges
     for locked succession and immutable-manifest replay checks; these expand
-    static cycles and are not a claim of acyclicity. The ratchet fails on ANY edge-set change, forcing review
+    static cycles and are not a claim of acyclicity. Authenticated claim anchors
+    add one reviewed lazy ledger -> execution edge: the explicit parent command
+    reuses RuntimeCommandService's locked writer and rejection protocol instead
+    of duplicating it. Read-only graph projection never invokes that writer.
+    The ratchet fails on ANY edge-set change, forcing review
     of new coupling and decoupling alike.
     """
     import json as _json
@@ -182,3 +186,30 @@ def test_kernel_and_cli_never_import_writing_engine():
         )
     ]
     assert not violations
+
+
+@pytest.mark.parametrize("authority_first", [False, True])
+def test_claim_authority_modules_import_in_fresh_interpreter(authority_first):
+    import os
+    import subprocess
+    import sys
+
+    modules = [
+        "arw.kernel.execution.runtime",
+        "arw.kernel.state.claim_authentication",
+        "arw.kernel.ledger.claim_authority",
+        "arw.kernel.ledger.claim_graph",
+    ]
+    if authority_first:
+        modules.reverse()
+    root = KERNEL_ROOT.parents[2]
+    completed = subprocess.run(
+        [sys.executable, "-c", "import importlib; " + f"[importlib.import_module(name) for name in {modules!r}]"],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr

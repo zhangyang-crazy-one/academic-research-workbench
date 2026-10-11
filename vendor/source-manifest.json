@@ -995,13 +995,13 @@
       "class": "binary",
       "path": ".file-base/bin/file-base",
       "required_before_staging": true,
-      "sha256": "cf4e657240b1670ab480db3b0eef8422f240fffa132c7e33935d8936c830296e"
+      "sha256": "7ad26cb3b1f4f2ba658dccee5f50373ac7a1ab4e73eefb505b3a9fa08137e2d0"
     },
     {
       "class": "build-evidence",
       "path": ".file-base/build-evidence.json",
       "required_before_staging": true,
-      "sha256": "dc44748d666e723eedd81fb72143929d51e0b1b59aebc8de19bc1cb8d7304f7e"
+      "sha256": "42b57df3eaa4225372bb2faa9969cf80cf1d925392284227f0056d7e6f9a0fa9"
     },
     {
       "class": "build-evidence",
@@ -1072,7 +1072,7 @@
   ],
   "pre_vendor_receipt": {
     "path": "build/evidence/phase-01/pre-vendor-license/receipt.json",
-    "sha256": "5260b8d8d99c1b2c3c4c6020468d3f7cb9fb45f36360681ff6e766edc4785523"
+    "sha256": "065860629027f811c04bd64743d705aa2631dbddf690c00e34d9ff9bc57666e0"
   },
   "schema_version": "1.0.0"
 }

@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from arw import __version__
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPOSITORY_ROOT / "bin" / "arw"
 AGENT_LAUNCHER = REPOSITORY_ROOT / "bin" / "arw-agent"
@@ -197,7 +199,7 @@ def test_agent_mode_route_and_version_and_phase2_help_without_codex(
     assert version_payload["command"] == "version"
     assert version_payload["runtime_mode"] == "agent"
     assert version_payload["identity_source"] == "editable-checkout"
-    assert version_payload["package_version"] == "0.1.0"
+    assert version_payload["package_version"] == __version__
     assert version_payload["status"] == "ok"
 
     route = _run([str(LAUNCHER), "route", "--json"], env=env)

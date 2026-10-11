@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from arw import __version__
 from arw.graph_mcp import GraphMcpServer
 from arw.graph_projection import project_canonical_records
 from arw.graph_store import GraphStore
@@ -14,6 +15,7 @@ def test_mcp_lifecycle_lists_only_allowlisted_graph_tools(tmp_path) -> None:
     server = GraphMcpServer(store)
     initialize = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
     assert initialize["result"]["protocolVersion"] == "2025-11-25"
+    assert initialize["result"]["serverInfo"]["version"] == __version__
     tools = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     names = [tool["name"] for tool in tools["result"]["tools"]]
     assert names == ["trace_claim", "trace_source", "trace_experiment", "trace_review", "trace_gate_evidence", "graph_health"]
@@ -46,4 +48,3 @@ def test_mcp_call_rejects_raw_query_and_returns_structured_result(tmp_path) -> N
     payload = json.loads(accepted["result"]["content"][0]["text"])
     assert payload["operation"] == "trace_claim"
     assert payload["status"] == "ok"
-

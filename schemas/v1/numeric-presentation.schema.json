@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
+      "type": "object"
+    }
+  },
+  "$id": "https://academic-research-workbench.local/schemas/v1/numeric-presentation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decimals": {
+      "maximum": 18,
+      "minimum": 0,
+      "title": "Decimals",
+      "type": "integer"
+    },
+    "derivation_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Derivation Id",
+      "type": "string"
+    },
+    "rounding_mode": {
+      "enum": [
+        "ROUND_HALF_EVEN",
+        "ROUND_HALF_UP",
+        "ROUND_DOWN"
+      ],
+      "title": "Rounding Mode",
+      "type": "string"
+    },
+    "scale": {
+      "$ref": "#/$defs/RationalExact",
+      "default": {
+        "denominator": 1,
+        "numerator": 1
+      }
+    },
+    "unit_suffix": {
+      "default": "",
+      "maxLength": 64,
+      "title": "Unit Suffix",
+      "type": "string"
+    }
+  },
+  "required": [
+    "derivation_id",
+    "decimals",
+    "rounding_mode"
+  ],
+  "title": "NumericPresentation",
+  "type": "object"
+}

@@ -176,7 +176,20 @@ def test_staged_launcher_starts_installed_one_root_files_profile(tmp_path: Path)
     )
     assert staged.returncode == 0, _redact_package_environment(staged.stderr)
 
-    environment = _configured_package_environment(tmp_path / "installed-isolation")
+    installed_isolation = tmp_path / "installed-isolation"
+    prewarmed = subprocess.run(
+        [str(stage_root / "bin/arw"), "health", "--json"],
+        cwd=tmp_path,
+        env=_configured_package_environment(installed_isolation),
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+    assert prewarmed.returncode == 0, _redact_package_environment(prewarmed.stderr)
+    assert json.loads(prewarmed.stdout)["status"] == "ok"
+
+    environment = _isolated_environment(installed_isolation)
     environment.update(
         {
             "ARW_FILES_CONTROL_ROOT": str(control),

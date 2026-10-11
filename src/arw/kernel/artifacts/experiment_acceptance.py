@@ -30,6 +30,7 @@ from arw.kernel.artifacts.experiment_provenance import (
 )
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex, strict_json_loads
 from arw.kernel.ledger.manifests import ManifestError, _safe_directory, _write_once
+from arw.kernel.state.experiment_context import ComparisonContext
 from arw.kernel.state.models import Sha256, StableRuntimeId, StrictModel
 
 EXPERIMENT_CONTRACT_SCHEMA_VERSION = "arw.experiment-contract.v1"
@@ -179,16 +180,6 @@ class DataSelector(StrictModel):
     column: ShortLabel
     row_id_column: ShortLabel | None = None
     missing_values: Literal["reject", "exclude"] = "reject"
-
-
-class ComparisonContext(StrictModel):
-    """Everything that must agree before two values may be compared."""
-
-    metric_definition: Label
-    unit: Unit
-    dataset: Label
-    split: ShortLabel
-    evaluation_condition: Label
 
 
 class NumericReproductionCheck(StrictModel):

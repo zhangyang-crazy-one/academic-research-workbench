@@ -336,17 +336,20 @@ def _read_manifest(root: Path) -> tuple[RunManifest, bytes]:
     return manifest, manifest_bytes
 
 
-def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
+def _journal_storage(
+    root: Path, manifest: RunManifest, *, historical: bool = False
+) -> tuple[Path, bool]:
+    """Validate the actual storage ancestors shared by both read modes."""
     legacy_path = root / JOURNAL_NAME
     journal_root = root / "journal"
     if manifest.journal_layout is None:
-        if journal_root.exists() or journal_root.is_symlink():
+        if not historical and (journal_root.exists() or journal_root.is_symlink()):
             raise JournalError("legacy run contains an undeclared journal directory")
         if legacy_path.is_symlink() or not legacy_path.is_file():
             raise JournalError("legacy journal is missing or unsafe")
-        return (legacy_path,)
+        return legacy_path, False
 
-    if legacy_path.exists() or legacy_path.is_symlink():
+    if not historical and (legacy_path.exists() or legacy_path.is_symlink()):
         raise JournalError("segmented run contains an undeclared legacy journal")
     segments_root = root / SEGMENTS_RELATIVE
     if (
@@ -356,8 +359,15 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
         or not segments_root.is_dir()
     ):
         raise JournalError("segmented journal directories are missing or unsafe")
+    return segments_root, True
+
+
+def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
+    storage, segmented = _journal_storage(root, manifest)
+    if not segmented:
+        return (storage,)
     discovered: list[tuple[int, Path]] = []
-    for candidate in segments_root.iterdir():
+    for candidate in storage.iterdir():
         match = SEGMENT_PATTERN.fullmatch(candidate.name)
         if candidate.is_symlink() or not candidate.is_file() or match is None:
             raise JournalError(f"unexpected or unsafe segment entry: {candidate.name}")
@@ -373,9 +383,40 @@ def _discover_segments(root: Path, manifest: RunManifest) -> tuple[Path, ...]:
     return tuple(path for _, path in discovered)
 
 
-def _replay_unlocked(root: Path) -> ReplayState:
+def _prefix_segments(root: Path, manifest: RunManifest) -> Iterator[Path]:
+    """Validate only consecutive segments actually needed by a fixed prefix.
+
+    The consumer stops at its hash-bound revision. Future directory entries
+    are neither enumerated nor followed; current reads keep full discovery.
+    """
+    storage, segmented = _journal_storage(root, manifest, historical=True)
+    if not segmented:
+        yield storage
+        return
+    index = 1
+    while True:
+        candidate = storage / f"{index:08d}.jsonl"
+        if not os.path.lexists(candidate):
+            return
+        if candidate.is_symlink() or not candidate.is_file():
+            raise JournalError(f"unexpected or unsafe segment entry: {candidate.name}")
+        yield candidate
+        index += 1
+
+
+def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayState:
     manifest, manifest_bytes = _read_manifest(root)
-    segment_paths = _discover_segments(root, manifest)
+    current_segments = _discover_segments(root, manifest) if stop_revision is None else None
+    segment_paths = current_segments if current_segments is not None else _prefix_segments(root, manifest)
+
+    def has_following_segment(index: int) -> bool:
+        if current_segments is not None:
+            return index < len(current_segments)
+        if manifest.journal_layout is None:
+            return False
+        # Called only if a damaged segment needs a later recovery boundary
+        # before the requested cutoff. lexists never follows its symlink.
+        return os.path.lexists(root / SEGMENTS_RELATIVE / f"{index + 1:08d}.jsonl")
     revision = 0
     previous_hash = ZERO_HASH
     event_ids: set[str] = set()
@@ -503,10 +544,14 @@ def _replay_unlocked(root: Path) -> ReplayState:
             try:
                 payload = strict_json_loads(line)
             except UnicodeError as error:
-                fault_class = "truncated-utf8" if not has_newline else "malformed-record"
+                fault_class = (
+                    "truncated-utf8" if not has_newline else "malformed-record"
+                )
                 fault_message = str(error)
             except ValueError as error:
-                fault_class = "incomplete-record" if not has_newline else "malformed-record"
+                fault_class = (
+                    "incomplete-record" if not has_newline else "malformed-record"
+                )
                 fault_message = str(error)
             else:
                 try:
@@ -551,6 +596,34 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 accept_event(event, segment_events)
                 offset = line_end
                 accepted_byte_end = offset
+                if stop_revision is not None and revision == stop_revision:
+                    # Historical readers validate exactly this prefix using the
+                    # same reducer/manifests, without inspecting a later tail.
+                    segments.append(
+                        SegmentScan(
+                            index=segment_index,
+                            name=segment_path.name,
+                            relative_path=segment_path.relative_to(root).as_posix(),
+                            byte_count=offset,
+                            sha256=sha256_hex(segment_bytes[:offset]),
+                            accepted_byte_end=offset,
+                            events=tuple(segment_events),
+                        )
+                    )
+                    return ReplayState(
+                        run_id=manifest.run_id,
+                        revision=revision,
+                        last_event_sha256=previous_hash,
+                        event_count=len(events),
+                        event_ids=frozenset(event_ids),
+                        command_ids=frozenset(command_ids),
+                        workflow_definition_id=manifest.workflow_definition_id
+                        or LEGACY_WORKFLOW_ID,
+                        events=tuple(events),
+                        segments=tuple(segments),
+                        journal_layout=manifest.journal_layout,
+                        validated=True,
+                    )
                 continue
 
             if not events:
@@ -575,7 +648,9 @@ def _replay_unlocked(root: Path) -> ReplayState:
                 recovery_health = "blocked"
                 recovery_message = "recovery boundary first record is malformed"
                 break
-            recoverable = is_terminal_record and manifest.journal_layout == "segmented-v1"
+            recoverable = (
+                is_terminal_record and manifest.journal_layout == "segmented-v1"
+            )
             scan = SegmentScan(
                 index=segment_index,
                 name=segment_path.name,
@@ -592,7 +667,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
             if not recoverable:
                 recovery_health = "blocked"
                 recovery_message = "malformed record is not the final segment suffix"
-            elif segment_index < len(segment_paths):
+            elif has_following_segment(segment_index):
                 pending_damaged = scan
             else:
                 recovery_health = "recoverable_tail"
@@ -613,7 +688,7 @@ def _replay_unlocked(root: Path) -> ReplayState:
 
         if recovery_health == "blocked":
             break
-        if pending_damaged is not None and segment_index == len(segment_paths):
+        if pending_damaged is not None and not has_following_segment(segment_index):
             recovery_health = "recoverable_tail"
             recovery_message = "damaged terminal suffix requires explicit recovery"
 
@@ -650,6 +725,77 @@ def replay_run(run_root: Path, *, lock_timeout: float = 0.2) -> ReplayState:
             return _replay_unlocked(root)
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
+
+
+def replay_run_prefix(
+    run_root: Path,
+    *,
+    revision: int,
+    expected_head_sha256: str,
+    expected_manifest_sha256: str | None = None,
+    lock_timeout: float = 0.2,
+) -> ReplayState:
+    """Replay a fixed, hash-bound prefix through the original validators.
+
+    Later events and tails cannot change this view. The manifest remains
+    immutable and its initialization hash is checked by ordinary replay.
+    No read creates a directory, lock file or canonical record.
+    """
+    if type(revision) is not int or revision < 1:
+        raise JournalError("historical revision must be positive")
+    root = require_existing_run_root(run_root)
+    try:
+        with _read_lock(root, lock_timeout):
+            _, raw = _read_manifest(root)
+            if (
+                expected_manifest_sha256 is not None
+                and sha256_hex(raw) != expected_manifest_sha256
+            ):
+                raise JournalError("historical run manifest digest mismatch")
+            replayed = _replay_unlocked(root, stop_revision=revision)
+            if replayed.recovery_health != "healthy" or replayed.revision != revision:
+                raise JournalError("historical prefix is missing or corrupt")
+            if replayed.last_event_sha256 != expected_head_sha256:
+                raise JournalError("historical prefix head digest mismatch")
+            return replayed
+    except portalocker.exceptions.LockException as error:
+        raise JournalError("canonical writer lock is held") from error
+
+
+def replay_run_under_held_lock(
+    run_root: Path,
+    *,
+    revision: int | None = None,
+    expected_head_sha256: str | None = None,
+    expected_manifest_sha256: str | None = None,
+) -> ReplayState:
+    """Internal service read while its parent transaction owns the run lock.
+
+    This rereads real canonical bytes through the original full validators;
+    no event list, cached replay or caller-provided validation flag is accepted.
+    It avoids acquiring a second OS lock inside a sole-writer transaction.
+    The service must already hold the lock for this exact root.
+    """
+    if revision is not None and (type(revision) is not int or revision < 1):
+        raise JournalError("historical revision must be positive")
+    root = require_existing_run_root(run_root)
+    _, raw = _read_manifest(root)
+    if (
+        expected_manifest_sha256 is not None
+        and sha256_hex(raw) != expected_manifest_sha256
+    ):
+        raise JournalError("run manifest digest mismatch")
+    replayed = _replay_unlocked(root, stop_revision=revision)
+    if revision is not None and (
+        replayed.recovery_health != "healthy" or replayed.revision != revision
+    ):
+        raise JournalError("historical prefix is missing or corrupt")
+    if (
+        expected_head_sha256 is not None
+        and replayed.last_event_sha256 != expected_head_sha256
+    ):
+        raise JournalError("prefix head digest mismatch")
+    return replayed
 
 
 @contextmanager

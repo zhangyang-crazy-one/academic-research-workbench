@@ -1,0 +1,194 @@
+name: Release authority
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: 'Successful main push CI run containing original candidate'
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: 'Exact original CI candidate artifact name'
+        required: true
+        type: string
+      release_tag:
+        description: 'Existing exact-source draft release tag'
+        required: true
+        type: string
+      intended_use:
+        description: 'Accountable intended-use declaration; commercial grants are not qualified'
+        required: true
+        type: choice
+        options: ['noncommercial-academic-research']
+      distribution_class:
+        description: 'Actual distribution class; privacy alone does not establish noncommercial use'
+        required: true
+        type: choice
+        options: ['public', 'private']
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-authority-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      - name: Install declared runtime validator dependencies
+        run: uv venv && .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Materialize pinned upstream source licenses
+        run: ./scripts/materialize-sources
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.candidate_artifact_name }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: build/release/candidate-transfer
+      - name: Extract and verify original CI candidate bytes
+        run: |
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive build/release/candidate-transfer/candidate-bundle.tar.gz --output-root build/release/ci-candidate-bundle
+          .venv/bin/python scripts/candidate-bundle verify --bundle-root build/release/ci-candidate-bundle
+      - name: Fetch and verify qualified draft asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
+          .venv/bin/python scripts/release-authority fetch \
+            --repository "$GITHUB_REPOSITORY" --release-tag "$RELEASE_TAG" \
+            --source-commit "$GITHUB_SHA" --qualification-archive build/release/qualified-candidate.tar.gz
+          .venv/bin/python scripts/candidate-bundle extract \
+            --archive build/release/qualified-candidate.tar.gz --output-root build/release/candidate-bundle
+          .venv/bin/python scripts/candidate-bundle verify --bundle-root build/release/candidate-bundle
+      - name: Verify artifact attestations for exact candidate subjects
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          CI_BUNDLE_ROOT: build/release/ci-candidate-bundle
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ.get('CI_BUNDLE_ROOT', 'candidate-bundle'))
+          tag = os.environ['RELEASE_TAG']
+          ref = f"refs/tags/{tag}^{{commit}}"
+          source_commit = subprocess.check_output(
+              ['git', 'rev-parse', ref],
+              text=True,
+          ).strip()
+          repository = os.environ['GITHUB_REPOSITORY']
+          build = json.loads((root / 'build-evidence.json').read_text())
+          artifacts = build['artifacts']
+          kinds = sorted(item['kind'] for item in artifacts)
+          if (len(artifacts) != 2 or
+                  kinds != ['sdist', 'wheel'] or
+                  build['source_identity']['git_commit'] != source_commit):
+              msg = 'release blocked: candidate subjects or commit differ'
+              raise SystemExit(msg)
+          sbom_path = root / 'evidence/SBOM.cdx.json'
+          sbom = json.loads(sbom_path.read_text())
+          slsa = 'https://slsa.dev/provenance/v1'
+          cyclonedx = 'https://cyclonedx.org/bom'
+
+          def matches(row, digest, predicate_type):
+              try:
+                  statement = row['verificationResult']['statement']
+                  if statement['predicateType'] != predicate_type:
+                      return False
+                  if (predicate_type == cyclonedx and
+                          statement['predicate'] != sbom):
+                      return False
+                  return any(
+                      entry['digest']['sha256'] == digest
+                      for entry in statement['subject']
+                  )
+              except (KeyError, TypeError, AttributeError):
+                  return False
+
+          subjects = [root / item['path'] for item in artifacts]
+          for subject in [*subjects, sbom_path]:
+              digest = hashlib.sha256(subject.read_bytes()).hexdigest()
+              predicate_types = (
+                  (slsa,) if subject == sbom_path else (slsa, cyclonedx)
+              )
+              for predicate_type in predicate_types:
+                  result = subprocess.run(
+                      ['gh', 'attestation', 'verify', str(subject),
+                       '--repo', repository,
+                       '--signer-workflow',
+                       f'{repository}/.github/workflows/ci.yml',
+                       '--source-ref', 'refs/heads/main',
+                       '--source-digest', source_commit,
+                       '--predicate-type', predicate_type,
+                       '--format', 'json'],
+                      check=True, capture_output=True, text=True,
+                  )
+                  verified = json.loads(result.stdout)
+                  if not isinstance(verified, list) or not any(
+                      matches(row, digest, predicate_type) for row in verified
+                  ):
+                      msg = (
+                          f'release blocked: missing {predicate_type} for '
+                          f'{subject}'
+                      )
+                      raise SystemExit(msg)
+          PY
+      - name: Verify real Phase 7 technical gates before signing
+        run: |
+          .venv/bin/python scripts/check-release-candidate \
+            --bundle-root build/release/candidate-bundle --source-commit "$GITHUB_SHA" --technical-only
+      - name: Prepare exact authenticated owner declaration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          INTENDED_USE: ${{ inputs.intended_use }}
+          DISTRIBUTION_CLASS: ${{ inputs.distribution_class }}
+        run: |
+          .venv/bin/python scripts/release-authority prepare \
+            --bundle-root build/release/candidate-bundle --ci-bundle-root build/release/ci-candidate-bundle \
+            --qualification-archive build/release/qualified-candidate.tar.gz \
+            --repository "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" \
+            --release-tag "$RELEASE_TAG" --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-name "$CANDIDATE_ARTIFACT_NAME" \
+            --intended-use "$INTENDED_USE" --distribution-class "$DISTRIBUTION_CLASS" \
+            --output build/release/release-authority-predicate.json
+      - name: Sign independent exact-candidate release authority
+        uses: actions/attest@v4
+        with:
+          subject-path: build/release/candidate-bundle/bundle-manifest.json
+          predicate-type: https://academic-research-workbench.dev/attestation/release-authority/v1
+          predicate-path: build/release/release-authority-predicate.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: arw-release-authority-${{ github.run_id }}
+          path: build/release/release-authority-predicate.json
+          if-no-files-found: error

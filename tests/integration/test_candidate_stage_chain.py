@@ -56,7 +56,7 @@ def test_real_candidate_stage_install_and_transfer(tmp_path: Path) -> None:
          "--evidence-root", str(smoke), str(stage))
     installed = json.loads((smoke / "plugin/runtime-bootstrap/installation-inventory.json").read_text())
     assert installed["source_wheel_sha256"] == digest
-    assert installed["installed_package"] == {"name": "academic-research-workbench", "version": "0.1.0"}
+    assert installed["installed_package"] == {"name": "academic-research-workbench", "version": wheel.name.split("-")[1]}
 
     upload = tmp_path / "upload"
     _run(str(ROOT / "scripts/candidate-bundle"), "create", "--wheel", str(wheel),

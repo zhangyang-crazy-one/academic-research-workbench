@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from arw import __version__
 from arw.composition import default_router
 from arw.kernel.capabilities import CapabilityUnavailable
 from arw.kernel.ledger.journal import replay_run
@@ -74,7 +75,7 @@ class MemoryMcpServer:
     def handle(self, message):
         return StdioProtocol(
             name="arw-memory",
-            version="0.1.0",
+            version=__version__,
             tools=self.tools,
             call_tool=self._call_tool,
         ).handle(message)

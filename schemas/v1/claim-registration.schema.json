@@ -1,0 +1,524 @@
+{
+  "$defs": {
+    "AdvisoryAssessment": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "contextualizes",
+            "unknown"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "provenance": {
+          "additionalProperties": true,
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "direction",
+        "source",
+        "confidence",
+        "provenance"
+      ],
+      "title": "AdvisoryAssessment",
+      "type": "object"
+    },
+    "ArgumentRelation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "contextualizes"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "asserted_by": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Asserted By",
+          "type": "string"
+        },
+        "basis": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "relation",
+        "asserted_by",
+        "basis"
+      ],
+      "title": "ArgumentRelation",
+      "type": "object"
+    },
+    "EvidenceBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "node_kind": {
+          "enum": [
+            "LiteratureEvidence",
+            "ReferenceCheck",
+            "ExperimentResult",
+            "Figure",
+            "Decision",
+            "SelectionContext",
+            "Evidence"
+          ],
+          "title": "Node Kind",
+          "type": "string"
+        },
+        "adapter": {
+          "default": "accepted_ref",
+          "enum": [
+            "accepted_ref",
+            "source_locator",
+            "evidence_span",
+            "research_binding",
+            "submission_reference",
+            "memory_link",
+            "venue_capsule"
+          ],
+          "title": "Adapter",
+          "type": "string"
+        },
+        "original": {
+          "additionalProperties": true,
+          "title": "Original",
+          "type": "object"
+        },
+        "checks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SpecifiedCheck"
+          },
+          "maxItems": 32,
+          "title": "Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "node_kind",
+        "original"
+      ],
+      "title": "EvidenceBinding",
+      "type": "object"
+    },
+    "NumericPresentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "decimals": {
+          "maximum": 18,
+          "minimum": 0,
+          "title": "Decimals",
+          "type": "integer"
+        },
+        "rounding_mode": {
+          "enum": [
+            "ROUND_HALF_EVEN",
+            "ROUND_HALF_UP",
+            "ROUND_DOWN"
+          ],
+          "title": "Rounding Mode",
+          "type": "string"
+        },
+        "unit_suffix": {
+          "default": "",
+          "maxLength": 64,
+          "title": "Unit Suffix",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      },
+      "required": [
+        "derivation_id",
+        "decimals",
+        "rounding_mode"
+      ],
+      "title": "NumericPresentation",
+      "type": "object"
+    },
+    "Occurrence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "numeric_token",
+            "figure_caption",
+            "citation_sentence"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "manuscript_ref": {
+          "additionalProperties": true,
+          "title": "Manuscript Ref",
+          "type": "object"
+        },
+        "manuscript_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manuscript Sha256",
+          "type": "string"
+        },
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "length": {
+          "exclusiveMinimum": 0,
+          "maximum": 1048576,
+          "title": "Length",
+          "type": "integer"
+        },
+        "selected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Selected Sha256",
+          "type": "string"
+        },
+        "locator_version": {
+          "default": "arw.utf8-byte-span.v1",
+          "enum": [
+            "arw.utf8-byte-span.v1",
+            "arw.writing-citation-bindings.v2"
+          ],
+          "title": "Locator Version",
+          "type": "string"
+        },
+        "numeric_class": {
+          "anyOf": [
+            {
+              "enum": [
+                "own_result",
+                "literature_reported",
+                "method_parameter",
+                "count",
+                "sample_size",
+                "identifier",
+                "year",
+                "figure_number",
+                "confidence_level",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numeric Class"
+        },
+        "derivation_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Derivation Id"
+        },
+        "presentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NumericPresentation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "figure_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Figure Ref"
+        },
+        "plot_value_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plot Value Id"
+        },
+        "plot_revision": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plot Revision"
+        }
+      },
+      "required": [
+        "kind",
+        "manuscript_ref",
+        "manuscript_sha256",
+        "offset",
+        "length",
+        "selected_sha256"
+      ],
+      "title": "Occurrence",
+      "type": "object"
+    },
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
+      "type": "object"
+    },
+    "SemanticClaim": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "statement": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "claim_kind": {
+          "enum": [
+            "result",
+            "literature",
+            "method",
+            "interpretation",
+            "novelty",
+            "other"
+          ],
+          "title": "Claim Kind",
+          "type": "string"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supersedes"
+        }
+      },
+      "required": [
+        "claim_id",
+        "revision",
+        "statement",
+        "claim_kind"
+      ],
+      "title": "SemanticClaim",
+      "type": "object"
+    },
+    "SpecifiedCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Method",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "unsupported",
+            "not_checked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "basis": {
+          "additionalProperties": true,
+          "title": "Basis",
+          "type": "object"
+        }
+      },
+      "required": [
+        "method",
+        "version",
+        "status",
+        "basis"
+      ],
+      "title": "SpecifiedCheck",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.claim-registration.v1",
+      "default": "arw.claim-registration.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "claim": {
+      "$ref": "#/$defs/SemanticClaim"
+    },
+    "occurrences": {
+      "items": {
+        "$ref": "#/$defs/Occurrence"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "title": "Occurrences",
+      "type": "array"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidenceBinding"
+      },
+      "maxItems": 128,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "relations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ArgumentRelation"
+      },
+      "maxItems": 128,
+      "title": "Relations",
+      "type": "array"
+    },
+    "assessments": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AdvisoryAssessment"
+      },
+      "maxItems": 128,
+      "title": "Assessments",
+      "type": "array"
+    },
+    "author_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Author Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "claim",
+    "occurrences",
+    "author_id"
+  ],
+  "title": "ClaimRegistration",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/claim-registration.schema.json"
+}

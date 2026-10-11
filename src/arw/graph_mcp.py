@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from arw import __version__
 from arw.graph_models import GraphQueryRequest, GraphQueryResult
 from arw.graph_store import GraphStore
 from arw.kernel.core.canonical import canonical_json_bytes
@@ -32,7 +33,7 @@ class GraphMcpServer:
         self.store = store
         self.protocol = StdioProtocol(
             name="academic-research-workbench-graph",
-            version="0.1.0",
+            version=__version__,
             tools=self._tools,
             call_tool=self._call_tool,
             capabilities={"tools": {"listChanged": False}},

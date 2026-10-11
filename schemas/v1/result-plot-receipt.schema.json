@@ -1,0 +1,1507 @@
+{
+  "$defs": {
+    "AllRows": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "all",
+          "default": "all",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "AllRows",
+      "type": "object"
+    },
+    "ByteChunk": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "byte_chunk",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "ByteChunk",
+      "type": "object"
+    },
+    "ComparisonContext": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Everything that must agree before two values may be compared.",
+      "properties": {
+        "metric_definition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Metric Definition",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "dataset": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Dataset",
+          "type": "string"
+        },
+        "split": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        },
+        "evaluation_condition": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Evaluation Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_definition",
+        "unit",
+        "dataset",
+        "split",
+        "evaluation_condition"
+      ],
+      "title": "ComparisonContext",
+      "type": "object"
+    },
+    "CsvSelection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "csv_selection",
+          "default": "csv_selection",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/ParentArtifactRef"
+        },
+        "columns": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "row_id_column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Row Id Column",
+          "type": "string"
+        },
+        "row_set": {
+          "default": {
+            "kind": "all"
+          },
+          "discriminator": {
+            "mapping": {
+              "all": "#/$defs/AllRows",
+              "ids": "#/$defs/RowIds",
+              "predicate": "#/$defs/RowPredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AllRows"
+            },
+            {
+              "$ref": "#/$defs/RowIds"
+            },
+            {
+              "$ref": "#/$defs/RowPredicate"
+            }
+          ],
+          "title": "Row Set"
+        },
+        "group_by": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Group By",
+          "type": "array"
+        },
+        "missing_policy": {
+          "default": "reject",
+          "enum": [
+            "reject",
+            "exclude"
+          ],
+          "title": "Missing Policy",
+          "type": "string"
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      },
+      "required": [
+        "ref",
+        "columns",
+        "row_id_column",
+        "context",
+        "unit"
+      ],
+      "title": "CsvSelection",
+      "type": "object"
+    },
+    "DerivationRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "derivation_ref",
+          "default": "derivation_ref",
+          "title": "Kind",
+          "type": "string"
+        },
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "derivation_id"
+      ],
+      "title": "DerivationRef",
+      "type": "object"
+    },
+    "FigureRenderedFrom": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "source_refs": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "parent-artifact": "#/$defs/ParentArtifactRef",
+                "project-journal": "#/$defs/JournalEventRef"
+              },
+              "propertyName": "scope"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ParentArtifactRef"
+              },
+              {
+                "$ref": "#/$defs/JournalEventRef"
+              }
+            ]
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "ir_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ir Sha256",
+          "type": "string"
+        },
+        "renderer": {
+          "$ref": "#/$defs/RendererIdentity"
+        }
+      },
+      "required": [
+        "source_refs",
+        "ir_sha256",
+        "renderer"
+      ],
+      "title": "FigureRenderedFrom",
+      "type": "object"
+    },
+    "JournalEventRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "const": "project-journal",
+          "default": "project-journal",
+          "title": "Scope",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "payload_selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Payload Selector",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "sequence",
+        "event_sha256"
+      ],
+      "title": "JournalEventRef",
+      "type": "object"
+    },
+    "LineRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "lines",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    },
+    "MarkdownSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "markdown_section",
+          "title": "Kind",
+          "type": "string"
+        },
+        "heading": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "occurrence": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Occurrence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "heading",
+        "occurrence"
+      ],
+      "title": "MarkdownSection",
+      "type": "object"
+    },
+    "NumericExpression": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.numeric-expression.v1",
+          "default": "arw.numeric-expression.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "value",
+            "diff",
+            "ratio",
+            "pct_point_diff",
+            "relative_change",
+            "count",
+            "sum",
+            "mean",
+            "median",
+            "min",
+            "max"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "csv_selection": "#/$defs/CsvSelection",
+                "derivation_ref": "#/$defs/DerivationRef",
+                "scalar_json": "#/$defs/ScalarJson"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ScalarJson"
+              },
+              {
+                "$ref": "#/$defs/CsvSelection"
+              },
+              {
+                "$ref": "#/$defs/DerivationRef"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op",
+        "args"
+      ],
+      "title": "NumericExpression",
+      "type": "object"
+    },
+    "NumericPresentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "decimals": {
+          "maximum": 18,
+          "minimum": 0,
+          "title": "Decimals",
+          "type": "integer"
+        },
+        "rounding_mode": {
+          "enum": [
+            "ROUND_HALF_EVEN",
+            "ROUND_HALF_UP",
+            "ROUND_DOWN"
+          ],
+          "title": "Rounding Mode",
+          "type": "string"
+        },
+        "unit_suffix": {
+          "default": "",
+          "maxLength": 64,
+          "title": "Unit Suffix",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      },
+      "required": [
+        "derivation_id",
+        "decimals",
+        "rounding_mode"
+      ],
+      "title": "NumericPresentation",
+      "type": "object"
+    },
+    "OutputDigest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "OutputDigest",
+      "type": "object"
+    },
+    "ParentArtifactRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "const": "parent-artifact",
+          "default": "parent-artifact",
+          "title": "Scope",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        },
+        "accepting_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepting Event Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Selector",
+          "type": "string"
+        },
+        "selected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Sha256"
+        },
+        "producing_activity_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producing Activity Id"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id",
+        "run_id",
+        "run_manifest_sha256",
+        "artifact_id",
+        "accepting_event_id",
+        "accepting_event_sha256",
+        "content_sha256"
+      ],
+      "title": "ParentArtifactRef",
+      "type": "object"
+    },
+    "PdfLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "arw.pdf-location.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pdf_page",
+            "pdf_paragraph",
+            "pdf_section",
+            "pdf_region",
+            "reference_entry"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "pdf_source_path": {
+          "minLength": 1,
+          "title": "Pdf Source Path",
+          "type": "string"
+        },
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "extraction_manifest_path": {
+          "minLength": 1,
+          "title": "Extraction Manifest Path",
+          "type": "string"
+        },
+        "extraction_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Manifest Sha256",
+          "type": "string"
+        },
+        "extractor_name": {
+          "enum": [
+            "pypdf",
+            "grobid",
+            "docling"
+          ],
+          "title": "Extractor Name",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "page",
+        "start",
+        "end",
+        "pdf_source_path",
+        "pdf_sha256",
+        "extraction_manifest_path",
+        "extraction_manifest_sha256",
+        "extractor_name",
+        "extractor_version"
+      ],
+      "title": "PdfLocation",
+      "type": "object"
+    },
+    "PlotCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "integrity",
+            "caption",
+            "heuristic",
+            "statistics"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "advisory",
+            "unknown",
+            "unsupported",
+            "resolved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "binding_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binding Id"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "category",
+        "status"
+      ],
+      "title": "PlotCheck",
+      "type": "object"
+    },
+    "PlotValue": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "plot_value_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Plot Value Id",
+          "type": "string"
+        },
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "exact": {
+          "$ref": "#/$defs/RationalExact"
+        },
+        "layer": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Layer",
+          "type": "string"
+        },
+        "datum_id": {
+          "title": "Datum Id",
+          "type": "string"
+        },
+        "series": {
+          "title": "Series",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "x",
+            "y",
+            "lower",
+            "upper"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "statistic": {
+          "title": "Statistic",
+          "type": "string"
+        },
+        "expr": {
+          "$ref": "#/$defs/NumericExpression"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        },
+        "display": {
+          "$ref": "#/$defs/NumericPresentation"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "stable_row_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stable Row Id"
+        }
+      },
+      "required": [
+        "plot_value_id",
+        "derivation_id",
+        "exact",
+        "layer",
+        "datum_id",
+        "series",
+        "category",
+        "channel",
+        "statistic",
+        "expr",
+        "unit",
+        "display",
+        "revision"
+      ],
+      "title": "PlotValue",
+      "type": "object"
+    },
+    "RationalExact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": 1,
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalExact",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "RowIds": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "ids",
+          "default": "ids",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10000,
+          "minItems": 1,
+          "title": "Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "title": "RowIds",
+      "type": "object"
+    },
+    "RowPredicate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "predicate",
+          "default": "predicate",
+          "title": "Kind",
+          "type": "string"
+        },
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "op",
+        "value"
+      ],
+      "title": "RowPredicate",
+      "type": "object"
+    },
+    "ScalarJson": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "scalar_json",
+          "default": "scalar_json",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "discriminator": {
+            "mapping": {
+              "parent-artifact": "#/$defs/ParentArtifactRef",
+              "project-journal": "#/$defs/JournalEventRef"
+            },
+            "propertyName": "scope"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParentArtifactRef"
+            },
+            {
+              "$ref": "#/$defs/JournalEventRef"
+            }
+          ],
+          "title": "Ref"
+        },
+        "json_pointer": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Json Pointer",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        },
+        "context": {
+          "$ref": "#/$defs/ComparisonContext"
+        }
+      },
+      "required": [
+        "ref",
+        "unit",
+        "context"
+      ],
+      "title": "ScalarJson",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "enum": [
+            "arw.source-locator.v1",
+            "arw.source-locator.v2"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Artifact Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Event Sha256",
+          "type": "string"
+        },
+        "producing_activity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Producing Activity Id",
+          "type": "string"
+        },
+        "location": {
+          "discriminator": {
+            "mapping": {
+              "byte_chunk": "#/$defs/ByteChunk",
+              "lines": "#/$defs/LineRange",
+              "markdown_section": "#/$defs/MarkdownSection",
+              "pdf_page": "#/$defs/PdfLocation",
+              "pdf_paragraph": "#/$defs/PdfLocation",
+              "pdf_region": "#/$defs/PdfLocation",
+              "pdf_section": "#/$defs/PdfLocation",
+              "reference_entry": "#/$defs/PdfLocation",
+              "text_page": "#/$defs/TextPage"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LineRange"
+            },
+            {
+              "$ref": "#/$defs/TextPage"
+            },
+            {
+              "$ref": "#/$defs/MarkdownSection"
+            },
+            {
+              "$ref": "#/$defs/ByteChunk"
+            },
+            {
+              "$ref": "#/$defs/PdfLocation"
+            }
+          ],
+          "title": "Location"
+        },
+        "quote_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Quote Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_artifact_id",
+        "source_sha256",
+        "source_event_id",
+        "source_event_sha256",
+        "producing_activity_id",
+        "location",
+        "quote_sha256"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "TextPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text_page",
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "page"
+      ],
+      "title": "TextPage",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    },
+    "ValidationResults": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "OPTIONAL_SKIPPED"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationResults",
+      "type": "object"
+    },
+    "VisualReviewer": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "evidence_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Evidence Artifact Id",
+          "type": "string"
+        },
+        "evidence_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Evidence Event Id",
+          "type": "string"
+        },
+        "evidence_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Event Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_id",
+        "version",
+        "identity_digest",
+        "evidence_artifact_id",
+        "evidence_event_id",
+        "evidence_event_sha256"
+      ],
+      "title": "VisualReviewer",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "receipt_version": {
+      "const": "arw.result-plot-receipt.v1",
+      "default": "arw.result-plot-receipt.v1",
+      "title": "Receipt Version",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "const": "result_plot",
+      "default": "result_plot",
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "ir_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ir Sha256",
+      "type": "string"
+    },
+    "renderer": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "inputs": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "parent-artifact": "#/$defs/ParentArtifactRef",
+            "project-journal": "#/$defs/JournalEventRef"
+          },
+          "propertyName": "scope"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ParentArtifactRef"
+          },
+          {
+            "$ref": "#/$defs/JournalEventRef"
+          }
+        ]
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "rendered_from": {
+      "$ref": "#/$defs/FigureRenderedFrom"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/OutputDigest"
+      },
+      "title": "Outputs",
+      "type": "array"
+    },
+    "plot_values": {
+      "items": {
+        "$ref": "#/$defs/PlotValue"
+      },
+      "title": "Plot Values",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/PlotCheck"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RationalExact"
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "validation": {
+      "$ref": "#/$defs/ValidationResults"
+    },
+    "qualification": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ],
+      "title": "Qualification",
+      "type": "string"
+    },
+    "purpose": {
+      "enum": [
+        "publication-critical",
+        "exploratory"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "visual_reviewer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualReviewer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "source_determinism": {
+      "const": "byte_deterministic",
+      "default": "byte_deterministic",
+      "title": "Source Determinism",
+      "type": "string"
+    },
+    "fixed_environment_render": {
+      "const": "not_verified",
+      "default": "not_verified",
+      "title": "Fixed Environment Render",
+      "type": "string"
+    },
+    "publication_quality": {
+      "default": "not_verified",
+      "enum": [
+        "reviewed",
+        "not_verified"
+      ],
+      "title": "Publication Quality",
+      "type": "string"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision",
+    "ir_sha256",
+    "renderer",
+    "inputs",
+    "rendered_from",
+    "outputs",
+    "plot_values",
+    "checks",
+    "metadata",
+    "validation_policy",
+    "validation",
+    "qualification",
+    "purpose",
+    "visual_reviewer",
+    "reason_codes"
+  ],
+  "title": "ResultPlotReceipt",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/result-plot-receipt.schema.json"
+}

@@ -1,0 +1,171 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "repository": {
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "title": "Repository",
+      "type": "string"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "source_ref": {
+      "const": "refs/heads/main",
+      "title": "Source Ref",
+      "type": "string"
+    },
+    "release_tag": {
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Release Tag",
+      "type": "string"
+    },
+    "release_version": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Release Version",
+      "type": "string"
+    },
+    "candidate_run_id": {
+      "exclusiveMinimum": 0,
+      "title": "Candidate Run Id",
+      "type": "integer"
+    },
+    "candidate_artifact_id": {
+      "exclusiveMinimum": 0,
+      "title": "Candidate Artifact Id",
+      "type": "integer"
+    },
+    "candidate_artifact_name": {
+      "pattern": "^[A-Za-z0-9._-]+$",
+      "title": "Candidate Artifact Name",
+      "type": "string"
+    },
+    "candidate_artifact_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidate Artifact Digest",
+      "type": "string"
+    },
+    "qualification_release_id": {
+      "exclusiveMinimum": 0,
+      "title": "Qualification Release Id",
+      "type": "integer"
+    },
+    "qualification_asset_id": {
+      "exclusiveMinimum": 0,
+      "title": "Qualification Asset Id",
+      "type": "integer"
+    },
+    "qualification_asset_name": {
+      "pattern": "^arw-qualified-candidate-v[0-9]+\\.[0-9]+\\.[0-9]+\\.tar\\.gz$",
+      "title": "Qualification Asset Name",
+      "type": "string"
+    },
+    "qualification_asset_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Qualification Asset Digest",
+      "type": "string"
+    },
+    "bundle_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Bundle Manifest Sha256",
+      "type": "string"
+    },
+    "wheel_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Wheel Sha256",
+      "type": "string"
+    },
+    "sdist_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sdist Sha256",
+      "type": "string"
+    },
+    "sbom_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sbom Sha256",
+      "type": "string"
+    },
+    "source_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Manifest Sha256",
+      "type": "string"
+    },
+    "intended_use": {
+      "const": "noncommercial-academic-research",
+      "title": "Intended Use",
+      "type": "string"
+    },
+    "distribution_class": {
+      "enum": [
+        "public",
+        "private"
+      ],
+      "title": "Distribution Class",
+      "type": "string"
+    },
+    "permission_basis": {
+      "const": "pinned-existing-component-licenses",
+      "title": "Permission Basis",
+      "type": "string"
+    },
+    "actor": {
+      "pattern": "^[A-Za-z0-9-]+$",
+      "title": "Actor",
+      "type": "string"
+    },
+    "actor_id": {
+      "exclusiveMinimum": 0,
+      "title": "Actor Id",
+      "type": "integer"
+    },
+    "authority_run_id": {
+      "exclusiveMinimum": 0,
+      "title": "Authority Run Id",
+      "type": "integer"
+    },
+    "authority_run_attempt": {
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Authority Run Attempt",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "repository",
+    "source_commit",
+    "source_ref",
+    "release_tag",
+    "release_version",
+    "candidate_run_id",
+    "candidate_artifact_id",
+    "candidate_artifact_name",
+    "candidate_artifact_digest",
+    "qualification_release_id",
+    "qualification_asset_id",
+    "qualification_asset_name",
+    "qualification_asset_digest",
+    "bundle_manifest_sha256",
+    "wheel_sha256",
+    "sdist_sha256",
+    "sbom_sha256",
+    "source_manifest_sha256",
+    "intended_use",
+    "distribution_class",
+    "permission_basis",
+    "actor",
+    "actor_id",
+    "authority_run_id",
+    "authority_run_attempt"
+  ],
+  "title": "ARW Independent Release Authority",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/release-authority.schema.json"
+}

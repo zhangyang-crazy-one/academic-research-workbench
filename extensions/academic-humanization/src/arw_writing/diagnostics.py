@@ -4,32 +4,16 @@ import re
 from collections import Counter
 from statistics import pvariance
 
+# Keep the established module-level imports as direct re-exports.
+from arw.kernel.state.text_spans import (  # noqa: F401
+    SENTENCE_SEPARATOR,
+    sentence_spans,
+    sentences,
+)
+
 VERSION = "arw.writing-surface.en-zh.v1"
 TOKEN = r"[A-Za-z]+(?:'[A-Za-z]+)?|[\u3400-\u9fff]|\d+(?:\.\d+)?"
 CONNECTORS = r"\b(?:however|therefore|moreover|furthermore|additionally|thus|nevertheless)\b|然而|因此|此外|而且|但是|所以"
-SENTENCE_SEPARATOR = r"(?<!\d)[.!?]+\s*|[。！？]+\s*|\n\s*\n"
-
-
-def sentence_spans(text):
-    """Return trimmed character spans using the existing surface segmentation."""
-    # Decimal dots are retained. This is a surface segmentation, not a parser.
-    start = 0
-    for boundary in re.finditer(SENTENCE_SEPARATOR, text):
-        raw = text[start : boundary.start()]
-        left = len(raw) - len(raw.lstrip())
-        right = len(raw.rstrip())
-        if left < right:
-            yield start + left, start + right
-        start = boundary.end()
-    raw = text[start:]
-    left = len(raw) - len(raw.lstrip())
-    right = len(raw.rstrip())
-    if left < right:
-        yield start + left, start + right
-
-
-def sentences(text):
-    return [text[start:end] for start, end in sentence_spans(text)]
 
 
 def tokens(text):

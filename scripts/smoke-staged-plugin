@@ -940,6 +940,7 @@ def run_mcp(args: argparse.Namespace) -> int:
         fresh_root,
         evidence_root,
         copy_auth=False,
+        prewarm_runtime=True,
     )
     installed_root: Path = installed["installed_root"]
     config_path = installed_root / ".mcp.json"
@@ -999,6 +1000,18 @@ def run_mcp(args: argparse.Namespace) -> int:
     ]
     mcp_dir = evidence_root / "plugin/mcp"
     write_json(mcp_dir / "request.json", read_request)
+    runtime_tmp = fresh_root / "mcp-runtime-tmp"
+    runtime_tmp.mkdir(mode=0o700)
+    runtime_tmp.chmod(0o700)
+    write_json(
+        mcp_dir / "runtime-temp.json",
+        {
+            "relative_path": runtime_tmp.relative_to(fresh_root).as_posix(),
+            "path_sha256": hashlib.sha256(str(runtime_tmp).encode("utf-8")).hexdigest(),
+            "mode": format(runtime_tmp.stat().st_mode & 0o777, "04o"),
+            "namespace_tmp_mount": "/tmp",
+        },
+    )
     write_command(
         mcp_dir / "command.json",
         ["<installed-plugin>/scripts/file-base-mcp"],
@@ -1011,6 +1024,11 @@ def run_mcp(args: argparse.Namespace) -> int:
             offline=True,
             isolation_evidence=mcp_dir / "network-isolation.json",
         ),
+        # Native daemon coordination uses /tmp independently of TMPDIR.
+        # Its private-parent guard stays strict inside this probe namespace.
+        "--bind",
+        str(runtime_tmp),
+        "/tmp",
         "--clearenv",
         "--setenv",
         "PATH",
@@ -1023,7 +1041,7 @@ def run_mcp(args: argparse.Namespace) -> int:
         str(installed["codex_home"]),
         "--setenv",
         "TMPDIR",
-        "/tmp",
+        str(runtime_tmp),
         "--setenv",
         "CBM_ALLOWED_ROOT",
         str(fixture_root),

@@ -19,7 +19,6 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +58,9 @@ from arw.kernel.policy.integration_lock import (  # noqa: E402
 PLUGIN_NAME = "academic-research-workbench"
 MARKETPLACE_NAME = "arw-qualified"
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
+# Fresh homes intentionally have no user configuration. Both qualification
+# dispatches must preserve the project's explicit model and reasoning policy.
+MODEL_ARGUMENTS = ("--model", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"')
 SAFE_ENVIRONMENT_KEYS = (
     "ALL_PROXY",
     "HTTPS_PROXY",
@@ -386,6 +388,7 @@ def _run_one_home(
             [
                 str(codex_launcher),
                 "exec",
+                *MODEL_ARGUMENTS,
                 "--ephemeral",
                 "--ignore-rules",
                 "--skip-git-repo-check",
@@ -421,6 +424,7 @@ def _run_one_home(
             [
                 str(codex_launcher),
                 "exec",
+                *MODEL_ARGUMENTS,
                 "--dangerously-bypass-hook-trust",
                 "--strict-config",
                 "--ephemeral",

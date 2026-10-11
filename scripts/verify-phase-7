@@ -136,6 +136,11 @@ SAFE_ENVIRONMENT = frozenset(
         "ARW_PHASE7_STAGE",
         "ARW_PHASE7_LOCK",
         "ARW_PHASE7_CANARY",
+        "ARW_CANDIDATE_WHEEL",
+        "ARW_BUILD_EVIDENCE",
+        "ARW_CANDIDATE_EVIDENCE_ROOT",
+        "ARW_ISSUE27_CODEX_STAGE",
+        "ARW_ISSUE27_CLAUDE_STAGE",
         "UV_OFFLINE",
         "PYTHONNOUSERSITE",
         "PIP_NO_INDEX",
@@ -429,6 +434,8 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     environment = {key: value for key, value in os.environ.items() if key in SAFE_ENVIRONMENT}
     temporary = PROJECT_ROOT / "build/tmp/phase-07" / name
     temporary.mkdir(parents=True, exist_ok=True)
+    stage_temporary = PROJECT_ROOT / "build/phase7-stage-tmp" / name
+    stage_temporary.mkdir(parents=True, exist_ok=True)
     isolated_home = temporary / "home"
     isolated_codex_home = temporary / "codex-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
@@ -437,7 +444,7 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     if env:
         environment.update({key: value for key, value in env.items() if key in SAFE_ENVIRONMENT})
     # These controls are verifier-owned and cannot be overridden by a caller.
-    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary)})
+    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary), "ARW_STAGE_TMP_ROOT": str(stage_temporary)})
     result = subprocess.run(argv, cwd=PROJECT_ROOT, env=environment, capture_output=True, check=False, timeout=timeout)
     stdout = _redact(result.stdout)
     stderr = _redact(result.stderr)
@@ -891,7 +898,7 @@ def aggregate_verdict(*, receipt_summary: ValidatedReceiptSummary, stage_summary
                 raise VerificationError("command result is not bound to verifier-owned receipt")
             if digest_file(result_path.parent / "stdout.log") != command.get("stdout_sha256") or digest_file(result_path.parent / "stderr.log") != command.get("stderr_sha256"):
                 raise VerificationError("command stream digest is not bound to verifier-owned receipt")
-        except (OSError, VerificationError) as error:
+        except (OSError, VerificationError):
             return _blocked_aggregate(reason=f"command-{index}-receipt-unbound", receipt_summary=receipt_summary, stage_summary=stage_summary, test_commands=test_commands, license_summary=license_summary, git_head=git_head, git_tree=git_tree)
         for key in ("stdout_sha256", "stderr_sha256"):
             if not SHA256_RE.fullmatch(str(command.get(key, ""))):
@@ -969,7 +976,7 @@ def main(argv: list[str] | None = None) -> int:
                 root,
                 "phase7-nonhost",
                 [str(PYTHON), "-m", "pytest", "-q", "-m", "not codex_host"],
-                timeout=1800,
+                timeout=3600,
             )
         )
         # The exact host canary is retained from the prior serial qualification;

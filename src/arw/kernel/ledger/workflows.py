@@ -257,6 +257,7 @@ def event_category(event_type: str) -> EventCategory:
         "gate.evaluated",
         "human_authority.accepted",
         "human_decision.recorded",
+        "claim.attestation_anchored",
         "experiment.provenance.accepted",
         "experiment.contract.accepted",
     }:
