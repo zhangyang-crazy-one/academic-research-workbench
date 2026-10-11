@@ -28,6 +28,7 @@ from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
 from arw.kernel.execution.host_dispatch import (
     _blocked_execution_adapter,
     _blocked_orchestration_result,
+    _configured_dispatch_adapter,
     _dispatch_report_json,
     _installed_route_diagnostics_from_environment,
     _installed_route_from_environment,
@@ -37,6 +38,11 @@ from arw.kernel.execution.host_dispatch import (
 
 RequestModel = TypeVar("RequestModel", bound=BaseModel)
 PROVENANCE_ARTIFACT_KIND = "provenance-record"
+
+
+def _drive_dispatch(service, request, prepared):
+    """The shared native/configured process-level asyncio boundary."""
+    return asyncio.run(service.dispatch(request, prepared))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -331,10 +337,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     orchestration_dispatch = subparsers.add_parser(
         "orchestration-dispatch",
-        help="Dispatch a frozen Phase 4 run only through exact Codex exec evidence.",
+        help="Dispatch a frozen run through qualified native or explicitly configured harnesses.",
     )
     _add_run_request_arguments(orchestration_dispatch)
     _add_integration_arguments(orchestration_dispatch)
+    orchestration_dispatch.add_argument(
+        "--harness-config", type=Path,
+        help="Explicit named native/command/API configuration; no automatic backend fallback.",
+    )
+    orchestration_dispatch.add_argument(
+        "--harness-config-sha256",
+        help="Parent-expected canonical harness configuration digest.",
+    )
     orchestration_dispatch.add_argument(
         "--host-evidence",
         type=Path,
@@ -1478,6 +1492,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "orchestration-dispatch":
             request = _load_request(args.request, RuntimeCommandRequest)
+            if args.harness_config:
+                from arw.kernel.execution.harness_config import HarnessConfigError
+                from arw.kernel.execution.execution import PermissionDenied
+
+                service = OrchestrationService(args.run_root,
+                    adapter=_blocked_execution_adapter(), lock_timeout=args.lock_timeout)
+                prepared = _rehydrate_prepared_run(service)
+                try:
+                    adapter, config_sha256 = _configured_dispatch_adapter(args, prepared.assignments)
+                except (HarnessConfigError, CLIInputError, PermissionDenied) as error:
+                    _blocked_orchestration_result(args.command, "configured_harness_preflight_failed", str(error))
+                    return 65
+                except OSError:
+                    _blocked_orchestration_result(args.command, "configured_harness_preflight_failed")
+                    return 65
+                service = OrchestrationService(args.run_root, adapter=adapter,
+                                               lock_timeout=args.lock_timeout)
+                report = _drive_dispatch(service, request, prepared)
+                output = _dispatch_report_json(report, "")
+                output.pop("integration_lock_sha256")
+                output["harness_config_sha256"] = config_sha256
+                _write_json(output)
+                return 0 if all(item.status == "completed" for item in report.outcomes) else 65
+            if args.harness_config_sha256:
+                _blocked_orchestration_result(args.command, "harness_config_missing")
+                return 65
             adapter, verification, reasons = _verified_dispatch_adapter(args)
             if adapter is None or verification is None:
                 _blocked_orchestration_result(args.command, *reasons)
@@ -1541,7 +1581,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 65
             # Library and app callers await OrchestrationService.dispatch;
             # asyncio.run is confined to this process-level CLI boundary.
-            report = asyncio.run(service.dispatch(request, prepared))
+            report = _drive_dispatch(service, request, prepared)
             _write_json(
                 _dispatch_report_json(
                     report,

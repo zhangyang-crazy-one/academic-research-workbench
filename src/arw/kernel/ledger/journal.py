@@ -462,7 +462,7 @@ def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayS
                 raise JournalError("first journal event does not bind the manifest bytes")
         elif manifest.journal_layout is None and event.event_type != "baseline.probe_recorded":
             raise JournalError("Phase 1 journal contains an unsupported later event")
-        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted", "experiment.contract.accepted", "experiment.provenance.accepted"}:
+        if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "proposal.accepted", "experiment.contract.accepted", "experiment.provenance.accepted", "host_identity.accepted"}:
             try:
                 if event.event_type == "experiment.contract.accepted":
                     validate_experiment_contract_event(
@@ -487,7 +487,7 @@ def _replay_unlocked(root: Path, *, stop_revision: int | None = None) -> ReplayS
                 manifest.workflow_definition_id or LEGACY_WORKFLOW_ID,
                 (*events, event),
             )
-            if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted"}:
+            if event.event_type in {"artifact.accepted", "research_artifact_accepted", "passport.accepted", "host_identity.accepted"}:
                 if reduced_state is None:
                     raise ManifestError("accepted manifest has no prior runtime state")
                 validate_event_manifest_semantics(root, event, reduced_state)

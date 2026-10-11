@@ -13,6 +13,7 @@ import jsonschema
 from referencing import Registry, Resource
 
 from arw.file_contracts import FILE_SCHEMA_NAMES
+from arw.kernel.state.harness_schema import harness_schema_documents
 from arw.graph_models import PHASE5_SCHEMA_NAMES, generate_phase5_schema_documents
 from arw.kernel.artifacts.audit_dossier import AUDIT_DOSSIER_SCHEMA_NAME
 from arw.kernel.artifacts.experiment_acceptance import (
@@ -69,6 +70,7 @@ EXPERIMENT_ACCEPTANCE_SCHEMA_NAMES = tuple(experiment_acceptance_schema_document
 FAILURE_DIAGNOSIS_SCHEMA_NAMES = tuple(failure_diagnosis_schema_documents())
 ACCEPTED_REF_SCHEMA_NAMES = tuple(accepted_ref_schema_documents())
 NUMERIC_CORE_SCHEMA_NAMES = tuple(numeric_core_schema_documents())
+HARNESS_SCHEMA_NAMES = tuple(harness_schema_documents())
 
 RESEARCH_MEMORY_SCHEMA_NAMES = tuple(research_memory_schema_documents())
 
@@ -137,6 +139,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + SUBMISSION_SCHEMA_NAMES
     + ACCEPTED_REF_SCHEMA_NAMES
     + NUMERIC_CORE_SCHEMA_NAMES
+    + HARNESS_SCHEMA_NAMES
 )
 
 
@@ -283,6 +286,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
             raise SchemaRegistryError(
                 f"{name} differs from its Phase 4 model projection"
             )
+    if name in HARNESS_SCHEMA_NAMES and candidate != harness_schema_documents()[name]:
+        raise SchemaRegistryError("harness schema drift")
     if name in PHASE5_SCHEMA_NAMES:
         generated = generate_phase5_schema_documents()[name]
         if candidate != generated:
@@ -414,6 +419,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = accepted_ref_schema_documents()[name]
         elif name in NUMERIC_CORE_SCHEMA_NAMES:
             document = numeric_core_schema_documents()[name]
+        elif name in HARNESS_SCHEMA_NAMES:
+            document = harness_schema_documents()[name]
         else:
             document = _load_document(name)
         rendered = _canonical_schema_bytes(document)

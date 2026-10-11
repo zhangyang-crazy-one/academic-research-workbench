@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/host-identity-receipt-v2.schema.json",
+  "additionalProperties": false,
+  "description": "Platform-neutral, parent-attested task boundary; not provider identity.",
+  "properties": {
+    "schema_version": {
+      "const": "arw.host-identity-receipt.v2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "receipt_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "assignment_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Assignment Id",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "role_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Role Id",
+      "type": "string"
+    },
+    "worker_identity_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Worker Identity Id",
+      "type": "string"
+    },
+    "host_agent_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Host Agent Id",
+      "type": "string"
+    },
+    "transport": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Transport",
+      "type": "string"
+    },
+    "harness_kind": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Harness Kind",
+      "type": "string"
+    },
+    "harness_config_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Harness Config Sha256",
+      "type": "string"
+    },
+    "runtime_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Runtime Sha256",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    },
+    "observation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Observation Sha256",
+      "type": "string"
+    },
+    "assignment_mapping_proven": {
+      "title": "Assignment Mapping Proven",
+      "type": "boolean"
+    },
+    "isolation_proven": {
+      "title": "Isolation Proven",
+      "type": "boolean"
+    },
+    "peer_isolation_proven": {
+      "title": "Peer Isolation Proven",
+      "type": "boolean"
+    },
+    "credential_isolation_proven": {
+      "title": "Credential Isolation Proven",
+      "type": "boolean"
+    },
+    "observed_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Evidence Sha256",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "assignment_id",
+    "attempt_id",
+    "role_id",
+    "worker_identity_id",
+    "host_agent_id",
+    "transport",
+    "harness_kind",
+    "harness_config_sha256",
+    "runtime_sha256",
+    "request_sha256",
+    "observation_sha256",
+    "assignment_mapping_proven",
+    "isolation_proven",
+    "peer_isolation_proven",
+    "credential_isolation_proven",
+    "observed_at",
+    "evidence_sha256"
+  ],
+  "title": "HostIdentityReceiptV2",
+  "type": "object"
+}

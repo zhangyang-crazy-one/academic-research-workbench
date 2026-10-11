@@ -6,6 +6,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -92,6 +94,29 @@ def _paper_method_isolation_missing() -> list[str]:
     return []
 
 
+@lru_cache(maxsize=1)
+def _harness_isolation_missing() -> list[str]:
+    if sys.platform != "linux" or not shutil.which("bwrap"):
+        return ["configured harness isolation requires Linux bubblewrap"]
+    from arw.kernel.execution.configured_harness import ConfiguredHarnessAdapter
+    from arw.kernel.execution.harness_config import HarnessEntry
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="arw-harness-probe-") as temporary:
+            task = Path(temporary)
+            (task / "home").mkdir()
+            adapter = ConfiguredHarnessAdapter(HarnessEntry(kind="command", command=("/bin/true",)),
+                config_sha256="a" * 64, config_base=task, environment={})
+            result = subprocess.run(adapter._argv(task, REPOSITORY_ROOT, probe=True),
+                env={"PATH": "/usr/bin:/bin"}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=5, check=False)
+        if result.returncode == 0:
+            return []
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
+        pass
+    return ["configured harness task namespace probe failed; enable bubblewrap user namespaces"]
+
+
 def missing_prerequisites(item: pytest.Item) -> list[str]:
     """Describe only external inputs declared by this selected test."""
     missing = []
@@ -107,6 +132,8 @@ def missing_prerequisites(item: pytest.Item) -> list[str]:
         missing.extend(_offline_network_missing())
     if item.get_closest_marker("requires_paper_method_isolation"):
         missing.extend(_paper_method_isolation_missing())
+    if item.get_closest_marker("requires_harness_isolation"):
+        missing.extend(_harness_isolation_missing())
     for marker in item.iter_markers("requires_retained_evidence"):
         for value in marker.args:
             if not isinstance(value, str) or not value:
