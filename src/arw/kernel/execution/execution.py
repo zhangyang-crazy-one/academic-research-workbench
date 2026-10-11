@@ -208,12 +208,14 @@ class HostResult:
     returncode: int | None = None
     observation_path: Path | None = None
     observation: NativeHostObservation | None = None
-    transport: CodexExecTransport | None = None
+    transport: str | None = None
     worker_identity_id: str | None = None
     qualification_receipt_sha256: str | None = None
     codex_version: str | None = None
     codex_binary_sha256: str | None = None
     profile_digest: str | None = None
+    runtime_version: str | None = None
+    runtime_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.attempt_id or not self.host_agent_id:

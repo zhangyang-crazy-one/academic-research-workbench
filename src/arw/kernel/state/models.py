@@ -629,6 +629,11 @@ def _phase4_record(value: object, model_name: str) -> object:
 
     from arw.kernel.state import orchestration_models
 
+    if model_name == "HostIdentityReceipt":
+        version = (value.get("schema_version") if isinstance(value, dict)
+                   else getattr(value, "schema_version", None))
+        if version == "arw.host-identity-receipt.v2":
+            model_name = "HostIdentityReceiptV2"
     model = getattr(orchestration_models, model_name)
     if isinstance(value, model):
         # ``model_copy`` deliberately skips validation.  Canonical event

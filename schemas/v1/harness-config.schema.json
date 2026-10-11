@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-research-workbench.local/schemas/v1/harness-config.schema.json",
+  "$defs": {
+    "HarnessEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "runtime_roots": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Runtime Roots",
+          "type": "array"
+        },
+        "credential_env": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Credential Env",
+          "type": "array"
+        },
+        "env_file": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Env File"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "protocol": {
+          "default": "responses",
+          "enum": [
+            "responses",
+            "chat_completions"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "api_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key Env"
+        },
+        "max_output_tokens": {
+          "default": 4096,
+          "maximum": 32768,
+          "minimum": 16,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "allow_http": {
+          "default": false,
+          "title": "Allow Http",
+          "type": "boolean"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "HarnessEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.harness-config.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "default": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Default"
+    },
+    "harnesses": {
+      "additionalProperties": {
+        "$ref": "#/$defs/HarnessEntry"
+      },
+      "maxProperties": 64,
+      "minProperties": 1,
+      "title": "Harnesses",
+      "type": "object"
+    },
+    "assignments": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Assignments",
+      "type": "object"
+    },
+    "roles": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Roles",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "default",
+    "harnesses"
+  ],
+  "title": "HarnessConfiguration",
+  "type": "object"
+}

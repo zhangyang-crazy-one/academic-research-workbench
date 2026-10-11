@@ -387,6 +387,10 @@ uses an explicit dispatch on `main` after an owner dispatch of
 [the v0.2.0 release procedure](docs/verification/release-v0.2.0.md) for
 candidate transfer and declaration inputs.
 
+Execution can also select explicit command or API harnesses by assignment or role.
+See [execution harness configuration and contracts](docs/runtime/execution-harnesses.md)
+for platform authentication, output admission, isolation and tested scope.
+
 Only after that command succeeds, create and install the qualified marketplace
 copy:
 

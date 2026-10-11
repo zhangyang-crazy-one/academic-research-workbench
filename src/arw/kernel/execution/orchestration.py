@@ -89,6 +89,7 @@ from arw.kernel.state.orchestration_models import (
     ExecutionMode,
     GateDecision,
     HostIdentityReceipt,
+    HostIdentityReceiptV2,
     HumanAuthority,
     HumanDecisionRecord,
     ImmutableAssignment,
@@ -354,7 +355,7 @@ class OrchestrationService:
     def record_host_identity(
         self,
         request: RuntimeCommandRequest,
-        receipt: HostIdentityReceipt,
+        receipt: HostIdentityReceipt | HostIdentityReceiptV2,
     ) -> CommandOutcome:
         """Accept retained host identity evidence through the sole writer."""
 
@@ -366,6 +367,26 @@ class OrchestrationService:
                 for digest in receipt.evidence_sha256
             ):
                 return "host-evidence-unknown", "host identity evidence is not canonical"
+            if isinstance(receipt, HostIdentityReceiptV2):
+                from arw.kernel.execution.configured_harness import identity_receipt_from_observation
+
+                matches = []
+                for accepted in state.accepted_proposals:
+                    if getattr(accepted.proposal, "host_agent_id", None) != receipt.host_agent_id:
+                        continue
+                    path = (self.run_root / "attempts" / accepted.attempt_id
+                            / "observations" / "harness-observation.json")
+                    try:
+                        validate_content_file(self.run_root, path.relative_to(self.run_root).as_posix(),
+                                              receipt.observation_sha256)
+                        observed = identity_receipt_from_observation(path, receipt_id=receipt.receipt_id,
+                            evidence_sha256=receipt.evidence_sha256)
+                    except (ValueError, RuntimeError, OSError):
+                        continue
+                    if observed.receipt_sha256 == receipt.receipt_sha256:
+                        matches.append(accepted.attempt_id)
+                if len(matches) != 1:
+                    return "host-observation-mismatch", "identity lacks an exact accepted task observation"
             return None
 
         return self.runtime.append_phase4_event(
@@ -1865,6 +1886,10 @@ class OrchestrationService:
                             "process_id": result.process_id,
                             "codex_version": result.codex_version,
                             "codex_binary_sha256": result.codex_binary_sha256,
+                            **({"runtime_version": result.runtime_version,
+                                "runtime_sha256": result.runtime_sha256,
+                                "harness_config_sha256": result.profile_digest}
+                               if result.runtime_sha256 else {}),
                         }
                     )
                 )
@@ -1882,10 +1907,10 @@ class OrchestrationService:
                         outcome=outcome,
                         host_agent_id=result.host_agent_id if result else None,
                         host_result_sha256=summary,
-                        observed_runtime_version=result.codex_version
+                        observed_runtime_version=(result.runtime_version or result.codex_version)
                         if result
                         else None,
-                        observed_runtime_sha256=result.codex_binary_sha256
+                        observed_runtime_sha256=(result.runtime_sha256 or result.codex_binary_sha256)
                         if result
                         else None,
                         observed_transport=str(result.transport)

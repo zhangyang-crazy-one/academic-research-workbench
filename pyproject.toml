@@ -62,6 +62,7 @@ markers = [
   "requires_materialized_sources: needs pinned snapshots under vendor/sources",
   "requires_offline_network_isolation: needs Linux, usable strace, and a working bwrap or unshare network namespace",
   "requires_paper_method_isolation: needs Linux, system Python >=3.13 and the adapter's actual bwrap namespace/read-only boundary",
+  "requires_harness_isolation: needs the configured command/API worker's actual Linux bubblewrap namespace",
   "requires_retained_evidence(*paths): needs retained evidence paths or env:VARIABLE inputs",
   "v2_compat: v2 compatibility baseline — pins v1 CLI/MCP/replay/projection contracts (tests/compat)",
 ]

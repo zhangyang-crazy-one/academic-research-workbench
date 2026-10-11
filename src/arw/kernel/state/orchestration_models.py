@@ -815,6 +815,48 @@ class HostIdentityReceipt(StrictModel):
         return sha256_hex(canonical_orchestration_model_bytes(self))
 
 
+class HostIdentityReceiptV2(StrictModel):
+    """Platform-neutral, parent-attested task boundary; not provider identity."""
+
+    schema_version: Literal["arw.host-identity-receipt.v2"]
+    receipt_id: StableRuntimeId
+    assignment_id: StableRuntimeId
+    attempt_id: StableRuntimeId
+    role_id: StableRuntimeId
+    worker_identity_id: StableRuntimeId
+    host_agent_id: Annotated[str, Field(min_length=1, max_length=256)]
+    transport: Annotated[str, Field(min_length=1, max_length=128)]
+    harness_kind: Annotated[str, Field(min_length=1, max_length=128)]
+    harness_config_sha256: Sha256
+    runtime_sha256: Sha256
+    request_sha256: Sha256
+    observation_sha256: Sha256
+    assignment_mapping_proven: bool
+    isolation_proven: bool
+    peer_isolation_proven: bool
+    credential_isolation_proven: bool
+    observed_at: UtcTimestamp
+    evidence_sha256: Annotated[
+        tuple[Sha256, ...], BeforeValidator(_freeze_json_array), Field(min_length=1, max_length=64)
+    ]
+
+    @field_validator("evidence_sha256")
+    @classmethod
+    def identity_evidence_is_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _require_unique(value, "host identity evidence hashes")
+
+    @model_validator(mode="after")
+    def formal_identity_claim_is_complete(self) -> Self:
+        if not (self.assignment_mapping_proven and self.isolation_proven
+                and self.peer_isolation_proven and self.credential_isolation_proven):
+            raise ValueError("formal host identity receipt requires every retained proof")
+        return self
+
+    @property
+    def receipt_sha256(self) -> str:
+        return sha256_hex(canonical_orchestration_model_bytes(self))
+
+
 class PanelSeat(StrictModel):
     assignment_id: StableRuntimeId
     attempt_id: StableRuntimeId

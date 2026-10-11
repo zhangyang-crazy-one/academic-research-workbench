@@ -368,6 +368,84 @@ def _rehydrate_prepared_run(service: Any) -> Any:
         execution_mode=state.execution_mode,
     )
 
+
+class _ConfiguredAssignmentAdapter(_AssignmentCodexExecAdapter):
+    def __init__(self, adapters: Mapping[str, Any], assignment_modes: Mapping[str, str] | None = None):
+        super().__init__(adapters)
+        self.assignment_modes = dict(assignment_modes or {})
+
+    async def dispatch(self, spec: Any) -> Any:
+        from arw.kernel.execution.execution import StaleAttempt
+
+        result = await super().dispatch(spec)
+        if not (result.execution_mode in {"assignment_injected_subagent", "native_profile"}
+                and result.formal_independence and result.assignment_mapping_proven
+                and result.isolation_proven):
+            raise StaleAttempt("configured adapter lacks retained mapping and isolation proof")
+        if (spec.assignment_id in self.assignment_modes
+                and result.execution_mode != self.assignment_modes[spec.assignment_id]):
+            raise StaleAttempt("configured adapter differs from the frozen execution mode")
+        return result
+
+
+def build_configured_dispatch_adapter(args: Any, assignments: tuple[Any, ...], *, registry=None):
+    """Explicit selection, with native proofs retained for any selected Codex seats."""
+    from arw.kernel.execution.configured_harness import ConfiguredHarnessAdapter
+    from arw.kernel.execution.execution import DispatchSpec
+    from arw.kernel.execution.harness_config import HarnessRegistry, load_harness_configuration
+    from arw.kernel.state.orchestration_models import locked_role_catalog
+
+    config = load_harness_configuration(args.harness_config)
+    expected = getattr(args, "harness_config_sha256", None)
+    if expected and expected != config.config_sha256:
+        raise CLIInputError("harness configuration digest mismatch")
+    if set(config.assignments) - {a.assignment_id for a in assignments}:
+        raise CLIInputError("harness selector names an unprepared assignment")
+    if set(config.roles) - {role.role_id for role in locked_role_catalog().roles}:
+        raise CLIInputError("harness selector names an unknown role")
+    if registry is None:
+        registry = HarnessRegistry()
+        for kind in ("api", "command"):
+            registry.register(kind, ConfiguredHarnessAdapter)
+    selected = {a.assignment_id: config.select(a.assignment_id, a.role_id)[1] for a in assignments}
+    native = None
+    native_ids = {key for key, entry in selected.items() if entry.kind == "codex"}
+    if native_ids:
+        native, _verification, reasons = _verified_dispatch_adapter(args)
+        if native is None:
+            raise CLIInputError("selected native Codex qualification unavailable: " + ",".join(reasons))
+        if set(native.adapters) != native_ids:
+            raise CLIInputError("native host evidence differs from selected Codex assignments")
+    adapters = {}
+    for assignment in assignments:
+        entry = selected[assignment.assignment_id]
+        if entry.kind == "codex":
+            adapter = native.adapters[assignment.assignment_id]
+            qualification = adapter.qualification_for(DispatchSpec(
+                assignment_id=assignment.assignment_id,
+                attempt_id=f"attempt.{assignment.assignment_id}.qualification",
+                acceptance_key=assignment.acceptance_key.value,
+                assignment_path=args.run_root / "assignments" / f"{assignment.assignment_id}.json",
+                attempt_root=args.run_root / "attempts" / f"attempt.{assignment.assignment_id}.qualification"))
+            if not (qualification.formal_independence and qualification.stable_host_identity
+                    and qualification.assignment_mapping_proven and qualification.isolation_proven
+                    and qualification.profile_configured and qualification.permission_configured
+                    and qualification.hook_configured
+                    and qualification.execution_mode == assignment.execution_mode):
+                raise CLIInputError("selected native Codex capability proof incomplete")
+        else:
+            if assignment.execution_mode != "assignment_injected_subagent":
+                raise CLIInputError("configured harness needs assignment_injected_subagent preparation")
+            adapter = registry.build(entry, config_sha256=config.config_sha256,
+                                     config_base=args.harness_config.resolve().parent,
+                                     config_snapshot=canonical_json_bytes(config.model_dump(mode="json")))
+            adapter.preflight(args.run_root)
+        adapters[assignment.assignment_id] = adapter
+    return _ConfiguredAssignmentAdapter(adapters, {a.assignment_id: a.execution_mode for a in assignments}), config.config_sha256
+
+
+_configured_dispatch_adapter = build_configured_dispatch_adapter
+
 def _dispatch_report_json(
     report: Any, integration_lock_sha256: str
 ) -> dict[str, object]:
@@ -398,4 +476,3 @@ def _dispatch_report_json(
             for outcome in report.outcomes
         ],
     }
-

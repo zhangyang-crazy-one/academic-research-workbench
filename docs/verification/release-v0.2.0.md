@@ -6,6 +6,13 @@ confirmation is anchored to the parent ledger's `occurred_at`. Proof checking
 remains independent of canonical parent replay; graph and hard-caption
 consumers verify evidence at their own boundaries.
 
+Named execution harnesses now support assignment/role/default routing to existing
+qualified Codex hosts, external command drivers, or configured Responses/Chat
+Completions APIs. Platform-neutral v2 identities bind retained local execution
+observations while original Codex v1 receipts remain readable. Local command and
+loopback HTTP regression evidence does not qualify live third-party models.
+See [the harness contract](../runtime/execution-harnesses.md).
+
 Since v0.1.0 the workbench also gained receipt-bound experiment planning,
 source-linked narrative workflows, bounded deduplicated writing receipts,
 versioned exact experiment evaluators, independent offline/native evaluation

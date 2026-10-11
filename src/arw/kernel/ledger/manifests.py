@@ -35,6 +35,7 @@ from arw.kernel.state.orchestration_models import (
     MAX_OUTPUT_BYTES,
     AttemptDescriptor,
     ImmutableAssignment,
+    HostIdentityReceiptV2,
     ProposalValidationError,
     WorkerProposal,
     canonical_orchestration_model_bytes,
@@ -546,6 +547,9 @@ def validate_accepted_event_manifests(
     prior_contract_events: list[CanonicalEvent] = []
     contract_cache: dict[str, object] = {}
     for event in events:
+        if (event.event_type == "host_identity.accepted"
+                and getattr(event.payload.receipt, "schema_version", None) == "arw.host-identity-receipt.v2"):
+            validate_harness_identity_content(root, event.payload.receipt)
         if event.event_type == "experiment.contract.accepted":
             validate_experiment_contract_event(
                 root, event, prior_contract_events, cache=contract_cache
@@ -664,6 +668,23 @@ def validate_accepted_event_manifests(
                 raise ManifestError("accepted Phase 4 prose or narrative check changed") from error
 
 
+def validate_harness_identity_content(root: Path, receipt: HostIdentityReceiptV2) -> None:
+    from arw.kernel.execution.configured_harness import identity_receipt_from_observation
+    from arw.kernel.ledger.source_locations import read_retained_bytes
+
+    relative = f"attempts/{receipt.attempt_id}/observations/harness-observation.json"
+    try:
+        raw = read_retained_bytes(root, relative, max_bytes=65536)
+        if sha256_hex(raw) != receipt.observation_sha256:
+            raise ValueError("digest mismatch")
+        observed = identity_receipt_from_observation(root / relative, receipt_id=receipt.receipt_id,
+                                                     evidence_sha256=receipt.evidence_sha256)
+        if observed.receipt_sha256 != receipt.receipt_sha256:
+            raise ValueError("identity mismatch")
+    except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        raise ManifestError("accepted harness identity or retained observation changed") from None
+
+
 def validate_event_manifest_semantics(
     root: Path,
     event: CanonicalEvent,
@@ -673,6 +694,20 @@ def validate_event_manifest_semantics(
 
     from arw.kernel.ledger.workflows import require_workflow
 
+    if (event.event_type == "host_identity.accepted"
+            and getattr(event.payload.receipt, "schema_version", None) == "arw.host-identity-receipt.v2"):
+        receipt = event.payload.receipt
+        known = {state_before.ledger_head_sha256, *state_before.canonical_event_sha256,
+                 *state_before.accepted_evidence_sha256, *state_before.accepted_proposal_sha256,
+                 *state_before.accepted_artifact_manifest_sha256, *state_before.accepted_passport_sha256}
+        known.update(getattr(item, "report_sha256") for item in state_before.panel_reports
+                     if getattr(item, "report_sha256", None))
+        matches = [p for p in state_before.accepted_proposals if p.attempt_id == receipt.attempt_id
+                   and p.assignment_id == receipt.assignment_id
+                   and getattr(p.proposal, "host_agent_id", None) == receipt.host_agent_id]
+        if len(matches) != 1 or set(receipt.evidence_sha256) - known:
+            raise ManifestError("harness identity lacks a prior accepted task and canonical evidence")
+        validate_harness_identity_content(root, receipt)
     if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
         assert isinstance(event.payload, ArtifactAcceptedPayload)
         manifest = load_artifact_manifest(root, event.payload.manifest_sha256)
