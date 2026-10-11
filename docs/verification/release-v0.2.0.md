@@ -13,6 +13,12 @@ observations while original Codex v1 receipts remain readable. Local command and
 loopback HTTP regression evidence does not qualify live third-party models.
 See [the harness contract](../runtime/execution-harnesses.md).
 
+Trusted experiment checks require typed canonical acceptance, contract/provenance
+acceptance before the receipt, and original evaluator replay of retained raw data.
+Ordinary JSON evidence cannot promote a self-reported check status. Host namespace
+qualification also normalizes hidden intermediate launcher aliases without
+mounting host HOME; network-free alias probes are separate from model canaries.
+
 Since v0.1.0 the workbench also gained receipt-bound experiment planning,
 source-linked narrative workflows, bounded deduplicated writing receipts,
 versioned exact experiment evaluators, independent offline/native evaluation

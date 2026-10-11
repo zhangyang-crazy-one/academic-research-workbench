@@ -462,18 +462,32 @@ def validate_contract_succession(
 
 
 def timing_from_run(
-    root: Path, contract_sha256: str, provenance_sha256: str
+    root: Path, contract_sha256: str, provenance_sha256: str, *, journal_prefix: Any = None
 ) -> TimingEvidence | None:
-    """Read acceptance order from a verified parent journal, never caller fields."""
+    """Read order from parent replay, optionally an already verified prefix.
 
-    from arw.kernel.ledger.journal import replay_run
+    Read-side projections supply their captured prefix to avoid consulting later
+    events or reacquiring a parent-held run lock. Receipt bytes cannot supply it.
+    """
+
+    from arw.kernel.ledger.journal import ReplayState, replay_run
 
     if not (root / "run-manifest.json").exists():
         if (root / "journal").exists() or (root / "events.jsonl").exists():
             raise ExperimentAcceptanceError("journal_missing", "run manifest is missing from a journaled run")
         return None
     # replay_run validates every accepted event's manifest while replaying.
-    replayed = replay_run(root)
+    if journal_prefix is not None:
+        manifest = strict_json_loads((root / "run-manifest.json").read_bytes())
+        if (not isinstance(journal_prefix, ReplayState) or not journal_prefix.validated
+                or journal_prefix.run_id != manifest["run_id"]
+                or journal_prefix.revision != len(journal_prefix.events)
+                or not journal_prefix.events
+                or journal_prefix.last_event_sha256 != journal_prefix.events[-1].event_sha256):
+            raise ExperimentAcceptanceError("invalid_journal_prefix", "expected a verified parent run prefix")
+        replayed = journal_prefix
+    else:
+        replayed = replay_run(root)
     if replayed.recovery_health != "healthy":
         raise ExperimentAcceptanceError("journal_unhealthy", "run journal is not healthy")
     contract_event = next(
@@ -855,6 +869,7 @@ def evaluate_experiment_acceptance(
     timing: Mapping[str, Any] | TimingEvidence | None = None,
     evaluator_version: Literal["1.0.0", "1.1.0", "1.2.0"] = ACCEPTANCE_EVALUATOR_VERSION,
     derive_timing: bool = True,
+    journal_prefix: Any = None,
 ) -> ExperimentAcceptanceResult:
     """Evaluate one contract version against sealed provenance and raw files."""
 
@@ -876,7 +891,8 @@ def evaluate_experiment_acceptance(
     root = root.resolve()
     if evaluator_version == "1.2.0":
         journal_timing = timing_from_run(
-            root, checked_contract.contract_sha256, checked_provenance.provenance_sha256
+            root, checked_contract.contract_sha256, checked_provenance.provenance_sha256,
+            journal_prefix=journal_prefix,
         )
         if derive_timing:
             checked_timing = journal_timing
@@ -919,6 +935,7 @@ def replay_experiment_acceptance(
     artifact_root: Path,
     *,
     timing: Mapping[str, Any] | TimingEvidence | None = None,
+    journal_prefix: Any = None,
 ) -> ExperimentAcceptanceResult:
     """Re-run the evaluator and require byte-identical canonical output."""
 
@@ -926,6 +943,7 @@ def replay_experiment_acceptance(
     replayed = evaluate_experiment_acceptance(
         contract, provenance, artifact_root, timing=timing, evaluator_version=recorded.evaluator_version,
         derive_timing=recorded.timing_scope is not None,
+        journal_prefix=journal_prefix,
     )
     if replayed.canonical_bytes() != recorded.canonical_bytes():
         raise ExperimentAcceptanceError("replay_mismatch", "experiment acceptance result does not replay")

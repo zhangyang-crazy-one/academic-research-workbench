@@ -3,6 +3,8 @@
 import importlib.machinery
 import importlib.util
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -68,3 +70,64 @@ def test_real_installed_codex_version_is_visible_without_authentication(tmp_path
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith(b"codex-cli ")
     assert not (fresh / "codex-home/auth.json").exists()
+
+
+@pytest.mark.parametrize("visible", ["/usr/local/bin", "/etc"])
+@pytest.mark.parametrize("native", [False, True])
+def test_visible_launcher_through_hidden_middle_alias_executes_in_actual_namespace(tmp_path, visible, native):
+    if not shutil.which("bwrap") or not shutil.which("node"):
+        pytest.skip("bubblewrap and Node are required for this actual namespace probe")
+    package = tmp_path / "private-prefix/lib/node_modules/codex"
+    (package / "bin").mkdir(parents=True)
+    (package / "package.json").write_text('{"type":"module"}')
+    script = package / "bin" / ("native-codex" if native else "codex.js")
+    sentinel = tmp_path / "private-prefix/credential-sentinel"
+    sentinel.write_text("dummy credential sentinel")
+    if native:
+        script.write_text('#!/bin/sh\ntest ! -e "$1" || exit 7\nprintf "NATIVE_VISIBLE\\n"\n')
+    else:
+        script.write_text('''#!/usr/bin/env node
+import fs from 'node:fs';
+if (fs.existsSync(process.argv[2])) process.exit(7);
+try { fs.writeFileSync(new URL('../forbidden-write', import.meta.url), 'bad'); process.exit(8); }
+catch (error) { if (error.code !== 'EROFS' && error.code !== 'EACCES') throw error; }
+console.log('RUNTIME_VISIBLE');
+''')
+    script.chmod(0o755)
+    middle = tmp_path / "hidden-alias/codex"
+    middle.parent.mkdir()
+    middle.symlink_to(script)
+    exposed = tmp_path / "visible"
+    exposed.mkdir()
+    (exposed / "arw-codex-review-fixture").symlink_to(middle)
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    (fresh / "home").mkdir()
+    (fresh / "codex-home").mkdir()
+    # Overlay only this process's namespace, never the actual /usr or /etc.
+    probe = '''import importlib.machinery,importlib.util,sys
+loader=importlib.machinery.SourceFileLoader("probe",sys.argv[1])
+spec=importlib.util.spec_from_loader(loader.name,loader)
+code=importlib.util.module_from_spec(spec); loader.exec_module(code)
+from pathlib import Path
+result=code._run_isolated(Path(sys.argv[2]),[sys.argv[3],sys.argv[4]])
+sys.stdout.buffer.write(result.stdout);sys.stderr.buffer.write(result.stderr)
+raise SystemExit(result.returncode)
+'''
+    result = subprocess.run(["bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/",
+        "--proc", "/proc", "--dev", "/dev",
+        "--ro-bind", str(exposed), visible, "--", sys.executable, "-c", probe,
+        str(ROOT / "scripts/qualify-codex-host"), str(fresh), f"{visible}/arw-codex-review-fixture", str(sentinel)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (b"NATIVE_VISIBLE\n" if native else b"RUNTIME_VISIBLE\n")
+    assert not (package / "forbidden-write").exists()
+
+
+@pytest.mark.parametrize("invalid", ["missing", "cycle"])
+def test_missing_or_cyclic_launcher_is_clearly_blocked(tmp_path, invalid):
+    code = module()
+    launcher = tmp_path / "codex"
+    launcher.symlink_to(tmp_path / "missing" if invalid == "missing" else launcher)
+    with pytest.raises(code.CanaryError, match="missing|cycle"):
+        code._codex_runtime_mounts(launcher)
