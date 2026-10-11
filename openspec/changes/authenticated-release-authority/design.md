@@ -21,6 +21,8 @@ Non-goals: infer intended use, qualify missing commercial grants, rewrite histor
 
 - Native TSan test compilation uses `cc -gz=zlib`, preserving full DWARF and all instrumentation while reducing whole-image copy/hash overhead in the unchanged foreign-namespace installation test. Capture the actual ELF image, compressed sections and original test exit status even on failure. A separate optional TSan-only dispatch supports completing that suite without rerunning already verified unchanged native inputs; original failed runs remain failed and all admitted jobs require their own successful raw records.
 
+- Phase 7 owns separate disk-backed roots for pytest temporary outputs and staging temporary assembly. The staging root is a sibling outside the pytest tree and cannot be overridden by caller environment. Existing accepted stage/evidence separation checks remain intact.
+
 ## Risks / Trade-offs
 
 The trust root is the repository owner's authenticated GitHub dispatch and the GitHub-hosted workflow at the exact source SHA. This supports the current personal repository, not organization delegation. A changed candidate, replaced asset or rerun requires new authorization. An interrupted publication after intermediate deletion requires restoring the asset and signing its new ID before proceeding.

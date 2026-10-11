@@ -9,12 +9,14 @@
 - [x] 2.1 Pin both native fresh-home dispatches to gpt-6.1-sol/high.
 - [x] 2.2 Forward explicit candidate/stage paths in strict tests while excluding credentials.
 - [x] 2.3 Verify identity substitution, forged approval, absent declaration, reruns, draft transfer and publication retry regressions.
-- [ ] 2.4 Validate workflow syntax, schemas, installed 0.2.0 behavior and local regression suite.
+- [x] 2.4 Validate workflow syntax, schemas, installed 0.2.0 behavior and local regression suite.
 - [x] 2.5 Requalify missing raw license evidence through a real audit and retain explicit historical reader support.
 - [x] 2.6 Execute complete upstream, ASan/UBSan and TSan qualification through the explicit CI profile and retain all raw records.
 - [x] 2.7 Prewarm the real installed runtime before offline MCP probes, provide a private namespace temporary directory, and verify current candidate SBOM bytes while preserving historical inventories.
 
 - [x] 2.8 Preserve full TSan instrumentation and DWARF with ELF debug compression, retain actual test-image evidence, and add a TSan-only dispatch with meaningful real-compiler and matrix tests. Full native qualification remains pending under 2.6.
+
+- [x] 2.9 Use verifier-owned sibling staging temporary roots for disk-backed pytest output; preserve accepted-root separation and caller override rejection, with real candidate Phase 1 verification.
 
 ## 3. Actual formal release
 
