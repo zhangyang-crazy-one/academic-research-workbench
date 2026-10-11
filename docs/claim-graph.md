@@ -35,3 +35,5 @@ or an authenticated intent is still waiting for its parent anchor. The complete
 JSON report remains available; default advisory projection succeeds without
 changing canonical files. Disclosure generation and ReviewConcern remain the
 independent later phase specified by issue #94.
+
+Trusted DOI metadata checks require an exact whole-artifact reference accepted as `citation-check-receipt`. The graph delegates the original citation acceptance validator, including the accepted reference record, immutable receipt address, response digest and offline parser replay. Ordinary accepted JSON retains only its declared content. A missing or altered original response produces `not_checked` with `citation_replay_unverifiable`; it cannot preserve a trusted `passed` result.

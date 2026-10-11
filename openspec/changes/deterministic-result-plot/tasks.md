@@ -30,3 +30,8 @@
 
 - [x] Verify dense grouped bar slot widths and an explicit linear-y requirement.
 - [x] Verify real hard-caption authority at qualification request time, including no-head-advance expiry and before-anchor refusal.
+
+## 2026-10-10 review amendments
+
+- [x] Format data ticks separately from layout coordinates with deterministic distinguishable significant figures.
+- [x] Reject unsupported continuous-axis multi-series bars explicitly during compilation; retain band grouped bars.

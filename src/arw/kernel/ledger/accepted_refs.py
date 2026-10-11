@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -74,6 +74,9 @@ class RefResolution:
     selected_value: object = None
 
 
+_CsvValue = TypeVar("_CsvValue")
+
+
 class ResolutionCache:
     """Single-operation memo for accepted-source resolution (#98).
 
@@ -87,17 +90,25 @@ class ResolutionCache:
     def __init__(self) -> None:
         self._runs: dict[str, list] = {}
         self._refs: dict[tuple[str, str], RefResolution] = {}
-        self._csv_rows: dict[tuple[str, str], tuple] = {}
+        self._csv_rows: dict[tuple[str, str, str], object] = {}
 
-    def csv_rows(self, ref: AcceptedRef, row_id_column: str, scan: Callable[[], tuple]) -> tuple:
-        """Return the globally validated full-table row scan for one CSV source."""
+    def csv_rows(
+        self,
+        ref: AcceptedRef,
+        row_id_column: str,
+        scan: Callable[[], _CsvValue],
+        *,
+        context: ResolutionContext,
+    ) -> _CsvValue:
+        """Retain validated headers, rows and row-ID index within this context."""
         key = (
             sha256_hex(canonical_json_bytes(ref.model_dump(mode="json"))),
             row_id_column,
+            _context_key(context),
         )
         if key not in self._csv_rows:
             self._csv_rows[key] = scan()
-        return self._csv_rows[key]
+        return cast(_CsvValue, self._csv_rows[key])
 
 
 def _context_key(context: ResolutionContext) -> str:
@@ -105,6 +116,9 @@ def _context_key(context: ResolutionContext) -> str:
         canonical_json_bytes(
             {
                 "project_id": context.project_id,
+                "project_root": str(context.project_root.resolve())
+                if context.project_root is not None
+                else None,
                 "run_roots": [str(Path(root).resolve()) for root in context.run_roots],
                 "run_prefixes": [
                     {

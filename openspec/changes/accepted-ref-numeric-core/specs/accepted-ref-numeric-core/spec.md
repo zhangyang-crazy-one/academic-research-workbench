@@ -31,3 +31,17 @@ The implementation SHALL preserve existing receipt and replay semantics and MUST
 #### Scenario: Legacy receipts
 - **WHEN** a rounded old receipt is supplied as numeric evidence
 - **THEN** it remains unchanged and cannot be upgraded to exact numeric provenance
+
+### Requirement: Versioned nested output dimensions
+V2 nested operands SHALL use child output units and preserve every other comparison-context field. V1 requests SHALL retain their original interpretation without byte migration.
+
+#### Scenario: Nested relative latency change
+- **WHEN** a value expression references relative change of 120 ms over 100 ms
+- **THEN** v2 accepts the same comparison identity with ratio unit and rejects ms or changed dataset identity
+
+### Requirement: Operation-local indexed CSV selection
+Each compilation SHALL validate and index a source once, and use direct row-ID lookup for explicit ID selections. Cache identity SHALL bind the complete resolution context.
+
+#### Scenario: More selected points in the same source
+- **WHEN** explicit row-ID requests increase while the source is unchanged within one compilation
+- **THEN** full row validation occurs once, subsequent row visits track selected IDs, and exact values, identities and SVG match uncached evaluation

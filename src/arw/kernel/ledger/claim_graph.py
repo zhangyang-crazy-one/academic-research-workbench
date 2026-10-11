@@ -412,7 +412,6 @@ def _closure(inputs: Inputs) -> None:
                 # remains replayable; it cannot authenticate the changed record.
 
 
-
 def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
     from arw.kernel.ledger.accepted_refs import to_accepted_ref
 
@@ -658,7 +657,7 @@ def _evaluate_registration(
         # Registrations preserve assertions. Trusted check results come only
         # from canonical accepted receipts via their existing validators.
         if result.status == "resolved" and result.raw_bytes is not None:
-            item["checks"] = _receipt_checks(result.raw_bytes)
+            item["checks"] = _receipt_checks(result.raw_bytes, result, inputs)
         dependency_item = {**item, "checks": list(item["checks"])}
         if binding.node_kind == "Figure":
             # Preserve the existing v1 dependency formula and retained
@@ -687,7 +686,7 @@ def _evaluate_registration(
     return evidence, dependency
 
 
-def _receipt_checks(raw: bytes) -> list[dict]:
+def _receipt_checks(raw: bytes, resolution, inputs: Inputs) -> list[dict]:
     try:
         value = strict_json_loads(raw)
     except ValueError:
@@ -695,16 +694,36 @@ def _receipt_checks(raw: bytes) -> list[dict]:
     if not isinstance(value, dict):
         return []
     if value.get("schema_version") == "arw.citation-check.v1":
-        from arw.kernel.policy.citations import CheckReceipt
+        from arw.kernel.policy.citations import CheckReceipt, validate_citation_artifact
+        from arw.kernel.state.accepted_ref import ParentArtifactRef
 
         receipt = CheckReceipt.model_validate_json(raw)
-        status = (
-            "passed"
-            if receipt.status == "verified"
-            else "failed"
-            if receipt.status in {"not_found", "retracted"}
-            else "not_checked"
-        )
+        status, reason = "not_checked", "citation_acceptance_unverified"
+        ref = resolution.ref
+        if isinstance(ref, ParentArtifactRef) and resolution.proven_scope == "bytes":
+            root, _, replay = inputs.runs[ref.run_id]
+            event = next(
+                e for e in replay.events if e.event_id == ref.accepting_event_id
+            )
+            artifact = load_artifact_manifest(root, event.payload.manifest_sha256)
+            if artifact.artifact_kind == "citation-check-receipt":
+                try:
+                    # The original boundary checks accepted reference type/hash,
+                    # canonical address, retained response and offline replay.
+                    prior = tuple(
+                        e for e in replay.events if e.sequence < event.sequence
+                    )
+                    validate_citation_artifact(root, artifact, prior)
+                    status = (
+                        "passed"
+                        if receipt.status == "verified"
+                        else "failed"
+                        if receipt.status in {"not_found", "retracted"}
+                        else "not_checked"
+                    )
+                    reason = None
+                except (OSError, ValueError):
+                    reason = "citation_replay_unverifiable"
         return [
             {
                 "method": "doi_metadata",
@@ -712,6 +731,7 @@ def _receipt_checks(raw: bytes) -> list[dict]:
                 "status": status,
                 "scope": "bibliographic_metadata_only",
                 "receipt_sha256": receipt.receipt_sha256,
+                **({"reason": reason} if reason is not None else {}),
             }
         ]
     if value.get("schema_version") == "arw.experiment-acceptance.v1":
@@ -867,7 +887,7 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     "artifact_kind": artifact.artifact_kind,
                     "source": ref,
                     **_resolution(resolved),
-                    "checks": _receipt_checks(resolved.raw_bytes)
+                    "checks": _receipt_checks(resolved.raw_bytes, resolved, inputs)
                     if resolved.raw_bytes
                     else [],
                 }

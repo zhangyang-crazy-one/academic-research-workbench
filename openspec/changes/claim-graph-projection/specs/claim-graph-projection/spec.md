@@ -71,3 +71,10 @@ Claim writes SHALL reserve core journal capacity. Readers SHALL freshly validate
 #### Scenario: No new parent events after expiry
 - **WHEN** a hard qualification request occurs after authority expiry while the parent head has not advanced
 - **THEN** the caption cannot authenticate despite historical authorization at anchor time
+
+### Requirement: Original citation proof delegation
+Trusted metadata checks SHALL require typed parent acceptance and delegation to the original citation replay validator.
+
+#### Scenario: Accepted receipt-shaped ordinary JSON
+- **WHEN** receipt-shaped JSON was accepted as ordinary research evidence, or an original response is absent or altered
+- **THEN** the graph never reports a trusted passed metadata check

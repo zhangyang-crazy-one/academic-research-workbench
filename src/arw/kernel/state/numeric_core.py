@@ -18,7 +18,8 @@ from arw.kernel.state.experiment_context import ComparisonContext
 from arw.kernel.state.models import Sha256, StrictModel
 
 MAX_INTEGER = 10**128 - 1
-EVALUATOR_VERSION = "arw.rational.v1"
+EVALUATOR_VERSION = "arw.rational.v2"
+SUPPORTED_EVALUATOR_VERSIONS = frozenset({"arw.rational.v1", EVALUATOR_VERSION})
 
 
 class RationalExact(StrictModel):

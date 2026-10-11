@@ -19,3 +19,8 @@
 ## PR #96 review
 
 - [x] Verify same-context nonnegative latency/throughput relative changes, zero denominator and negative-domain cases; retain ratio-only percentage-point differences.
+
+## 2026-10-10 review amendments
+
+- [x] Version nested output-unit semantics while preserving original v1 evaluation and historical sealed bytes.
+- [x] Build a per-operation validated CSV row-ID index and header cache; measure real row visits and compare uncached results and rendering.

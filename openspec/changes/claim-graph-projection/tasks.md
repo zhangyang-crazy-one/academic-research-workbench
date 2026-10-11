@@ -34,3 +34,7 @@
 - [x] 6.3 Reserve core journal capacity and document the minimum reader/downgrade boundary.
 - [x] 6.4 Bind hard caption applicability to an explicit instant or parent qualification request time.
 - [x] 6.5 Update launcher cases and execute the complete non-host CI test tree, schemas and compatibility checks.
+
+## 2026-10-10 review amendments
+
+- [x] Delegate trusted citation checks to the original parent acceptance/replay validator; reject generic accepted JSON promotion and verify missing/tampered responses.

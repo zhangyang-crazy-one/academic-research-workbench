@@ -47,3 +47,9 @@ core code and remains available when the optional renderer extension is disabled
 There is no historical JSON journal rewrite. The existing numbered SQLite
 migration helper is reused only for the disposable source projection, not to
 mutate canonical history.
+
+## Result-plot numeric labels and grouped bars
+
+SVG coordinates retain the fixed six-decimal layout format. Numeric tick labels use independent significant figures and scientific notation; near-neighbour ranges use an explicitly stated common axis offset when full labels would wrap. Nonzero small domains remain visibly nonzero, and tick labels remain distinct and deterministic.
+
+Multi-series grouped bars require a band x axis. A continuous x axis with multiple bar series reports `continuous_grouped_bar_unsupported` during compilation. Single-series continuous bars and band-axis grouped bars remain supported.

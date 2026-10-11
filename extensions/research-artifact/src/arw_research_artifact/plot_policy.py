@@ -507,6 +507,19 @@ def compile_plot(ir, resolution_context, *, acceptance_root=None):
                 )
             )
         layers.append((layer, tuple(sorted(data, key=lambda d: d.datum_id))))
+    if (
+        ir.scales.x.type != "band"
+        and len(
+            {
+                datum.series
+                for layer, rows in layers
+                if layer.mark == "bar"
+                for datum in rows
+            }
+        )
+        > 1
+    ):
+        raise PlotFault("continuous_grouped_bar_unsupported")
     if ir.figure_number is not None:
         metadata["figure_number"] = RationalExact(
             numerator=ir.figure_number, denominator=1

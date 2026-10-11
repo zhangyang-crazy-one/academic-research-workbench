@@ -44,6 +44,52 @@ def _log(value):
         return Fraction((Decimal(value.numerator) / Decimal(value.denominator)).ln())
 
 
+def _ticks(scale, limits):
+    lo, hi = limits
+    if scale.type != "log":
+        return tuple(lo + (hi - lo) * Fraction(i, 4) for i in range(5))
+    lo, hi = _log(lo), _log(hi)
+    with localcontext() as ctx:
+        ctx.prec = 400
+        return tuple(
+            Fraction((Decimal(value.numerator) / Decimal(value.denominator)).exp())
+            for value in (lo + (hi - lo) * Fraction(i, 4) for i in range(5))
+        )
+
+
+def _tick_labels(ticks):
+    """Data precision is independent of six-decimal SVG layout precision."""
+    with localcontext() as ctx:
+        ctx.prec = 400
+        numbers = tuple(Decimal(t.numerator) / Decimal(t.denominator) for t in ticks)
+        for precision in (6, 12, 24, 48, 96, 192, 384, 400):
+            labels = []
+            for number in numbers:
+                if number == 0:
+                    labels.append("0")
+                    continue
+                mantissa, exponent = format(number, f".{precision - 1}E").split("E")
+                mantissa = mantissa.rstrip("0").rstrip(".")
+                labels.append(
+                    mantissa if int(exponent) == 0 else f"{mantissa}e{int(exponent)}"
+                )
+            if len(set(labels)) == len(set(ticks)):
+                return tuple(labels)
+    raise PlotFault("tick_label_precision_unsupported")
+
+
+def _axis_labels(ticks):
+    labels = _tick_labels(ticks)
+    if max(map(len, labels)) <= 18:
+        return labels, None
+    # Near-neighbour data need a stated common offset, rather than hundreds
+    # of repeated leading digits wrapping across adjacent tick labels.
+    baseline = _tick_labels((ticks[0],))[0]
+    offset = Fraction(Decimal(baseline))
+    shifted = _tick_labels(tuple(tick - offset for tick in ticks))
+    return shifted, baseline
+
+
 class PlotRenderer:
     @property
     def identity(self):
@@ -60,7 +106,7 @@ class PlotRenderer:
                 + b"\0"
                 + Path(__file__).with_name("renderer.py").read_bytes()
             ),
-            normalization_policy="utf8-lf-exact-fraction-decimal400-log-layout6.v1",
+            normalization_policy="utf8-lf-exact-fraction-decimal400-log-layout6-tick-significant.v2",
         )
 
     def render(self, compiled):
@@ -166,23 +212,15 @@ class PlotRenderer:
             f'<line x1="{_number(left)}" y1="{_number(top)}" x2="{_number(left)}" y2="{_number(bottom)}" stroke="#222222"/>',
         ]
         # Exact rational ticks (log domain uses fixed Decimal geometric ticks).
-        for i in range(5):
-            if ir.scales.y.type == "log":
-                with localcontext() as ctx:
-                    ctx.prec = 400
-                    lo, hi = (_log(v) for v in y_domain)
-                    tick = Fraction(
-                        (
-                            Decimal((lo + (hi - lo) * Fraction(i, 4)).numerator)
-                            / Decimal((lo + (hi - lo) * Fraction(i, 4)).denominator)
-                        ).exp()
-                    )
-            else:
-                tick = y_domain[0] + (y_domain[1] - y_domain[0]) * Fraction(i, 4)
+        ticks = _ticks(ir.scales.y, y_domain)
+        labels, offset = _axis_labels(ticks)
+        if offset is not None:
+            parts.append(_text(f"y offset + ({offset})", 110, 65, 48, 11))
+        for tick, label in zip(ticks, labels, strict=True):
             y = numeric_position(tick, ir.scales.y, y_domain, bottom, top)
             parts += [
                 f'<line x1="85" y1="{_number(y)}" x2="90" y2="{_number(y)}" stroke="#222222"/>',
-                _text(_number(tick), 8, _number(y + 4), 18, 11),
+                _text(label, 8, _number(y + 4), 18, 11),
             ]
         if ir.scales.x.type == "band":
             for i, category in enumerate(categories):
@@ -193,23 +231,14 @@ class PlotRenderer:
                     _text(category, _number(x - 20), _number(bottom + 22), 18, 11)
                 )
         else:
-            for i in range(5):
-                lo, hi = x_domain
-                if ir.scales.x.type == "log":
-                    with localcontext() as ctx:
-                        ctx.prec = 400
-                        log_tick = _log(lo) + (_log(hi) - _log(lo)) * Fraction(i, 4)
-                        tick = Fraction(
-                            (
-                                Decimal(log_tick.numerator)
-                                / Decimal(log_tick.denominator)
-                            ).exp()
-                        )
-                else:
-                    tick = lo + (hi - lo) * Fraction(i, 4)
+            ticks = _ticks(ir.scales.x, x_domain)
+            labels, offset = _axis_labels(ticks)
+            if offset is not None:
+                parts.append(_text(f"x offset + ({offset})", 90, height - 135, 48, 11))
+            for tick, label in zip(ticks, labels, strict=True):
                 x = numeric_position(tick, ir.scales.x, x_domain, left, right)
                 parts.append(
-                    _text(_number(tick), _number(x - 15), _number(bottom + 22), 18, 11)
+                    _text(label, _number(x - 15), _number(bottom + 22), 18, 11)
                 )
         parts += [
             _text(ir.scales.y.unit, 8, 65, 20, 12),

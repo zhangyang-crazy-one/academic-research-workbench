@@ -25,6 +25,7 @@ from arw.kernel.ledger.accepted_refs import (
 from arw.kernel.state.numeric_core import (
     EVALUATOR_VERSION,
     MAX_INTEGER,
+    SUPPORTED_EVALUATOR_VERSIONS,
     CsvSelection,
     Derivation,
     DerivationRef,
@@ -48,6 +49,10 @@ class NumericDomainError(ValueError):
     pass
 
 
+class _CsvColumnMissing(NumericDomainError):
+    pass
+
+
 # Output-dimension contract for every evaluator operator.  Plots, axis checks
 # and caption bindings must consume this single derivation instead of
 # inheriting an operand unit (#97): a relative_change of 120 ms over 100 ms is
@@ -61,9 +66,9 @@ def result_unit(request: DerivationRequest) -> str:
 
     ``ratio``/``relative_change`` produce a dimensionless proportion and
     ``count`` produces a cardinality.  Every other operator preserves the
-    comparison-context unit; evaluation already requires every operand context
-    to equal ``request.context``, so the context unit is the operand unit for
-    any successful derivation, including derivation-reference operands.
+    comparison-context unit. In v2, nested operands use the child's output
+    unit while retaining every other comparison-context field. The v1 reader
+    retains its historical nested input-context interpretation.
     """
     op = request.expr.op
     if op in RATIO_RESULT_OPS:
@@ -151,9 +156,8 @@ def _predicate(fields: dict[str, str], predicate: RowPredicate) -> bool:
     return {"lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[predicate.op]
 
 
-def _csv_headers(raw: bytes) -> tuple | None:
+def _csv_headers(reader: csv.DictReader) -> tuple | None:
     """Return validated CSV headers, or None when they violate the budget."""
-    reader = csv.DictReader(io.StringIO(raw.decode("utf-8"), newline=""), strict=True)
     headers = reader.fieldnames
     if (
         not headers
@@ -165,7 +169,14 @@ def _csv_headers(raw: bytes) -> tuple | None:
     return tuple(headers)
 
 
-def _scan_csv_rows(raw: bytes, row_id_column: str) -> tuple:
+@dataclass(frozen=True)
+class ValidatedCsvTable:
+    headers: tuple[str, ...]
+    rows: tuple[tuple[str, dict[str, str]], ...]
+    rows_by_id: dict[str, dict[str, str]]
+
+
+def _scan_csv_rows(raw: bytes, row_id_column: str) -> ValidatedCsvTable:
     """Full-table scan with the global row checks, shareable per operation (#98).
 
     Row budget, row shape and bounded globally-unique row IDs are validated for
@@ -174,13 +185,16 @@ def _scan_csv_rows(raw: bytes, row_id_column: str) -> tuple:
     derivation keeps its own semantics; stored field dicts are private copies.
     """
     reader = csv.DictReader(io.StringIO(raw.decode("utf-8"), newline=""), strict=True)
-    seen, rows = set(), []
+    headers = _csv_headers(reader)
+    if headers is None:
+        raise NumericDomainError("CSV headers are missing, duplicate or exceed budget")
+    if row_id_column not in headers:
+        raise _CsvColumnMissing("CSV selected columns are absent")
+    seen, rows, by_id = set(), [], {}
     for index, fields in enumerate(reader):
         if index >= MAX_ROWS:
             raise NumericDomainError("CSV exceeds row budget")
-        if None in fields or any(
-            v is None or len(v) > 4096 for v in fields.values()
-        ):
+        if None in fields or any(v is None or len(v) > 4096 for v in fields.values()):
             raise NumericDomainError("CSV row shape or field budget is invalid")
         row_id = fields[row_id_column]
         if not row_id or row_id in seen or len(row_id) > 128:
@@ -188,8 +202,10 @@ def _scan_csv_rows(raw: bytes, row_id_column: str) -> tuple:
                 "CSV row IDs must be bounded, nonempty and globally unique"
             )
         seen.add(row_id)
-        rows.append((row_id, dict(fields)))
-    return tuple(rows)
+        fields = dict(fields)
+        rows.append((row_id, fields))
+        by_id[row_id] = fields
+    return ValidatedCsvTable(headers, tuple(rows), by_id)
 
 
 def resolve_operand(
@@ -248,21 +264,6 @@ def resolve_operand(
             return ResolvedOperand(
                 "unsupported", reason="CSV selection requires whole artifact bytes"
             )
-        headers = _csv_headers(resolved.raw_bytes)
-        if headers is None:
-            return ResolvedOperand(
-                "out_of_domain",
-                reason="CSV headers are missing, duplicate or exceed budget",
-            )
-        required = (
-            set(operand.columns) | set(operand.group_by) | {operand.row_id_column}
-        )
-        if isinstance(operand.row_set, RowPredicate):
-            required.add(operand.row_set.column)
-        if not required <= set(headers):
-            return ResolvedOperand(
-                "unsupported", reason="CSV selected columns are absent"
-            )
         table = (
             _scan_csv_rows(resolved.raw_bytes, operand.row_id_column)
             if cache is None
@@ -270,12 +271,27 @@ def resolve_operand(
                 operand.ref,
                 operand.row_id_column,
                 lambda: _scan_csv_rows(resolved.raw_bytes, operand.row_id_column),
+                context=context,
             )
         )
+        required = (
+            set(operand.columns) | set(operand.group_by) | {operand.row_id_column}
+        )
+        if isinstance(operand.row_set, RowPredicate):
+            required.add(operand.row_set.column)
+        if not required <= set(table.headers):
+            return ResolvedOperand(
+                "unsupported", reason="CSV selected columns are absent"
+            )
+        selected = table.rows
+        if isinstance(operand.row_set, RowIds):
+            if any(row_id not in table.rows_by_id for row_id in operand.row_set.ids):
+                raise NumericDomainError("requested CSV row IDs are absent")
+            selected = tuple(
+                (row_id, table.rows_by_id[row_id]) for row_id in operand.row_set.ids
+            )
         rows, excluded = [], []
-        for row_id, fields in table:
-            if isinstance(operand.row_set, RowIds) and row_id not in operand.row_set.ids:
-                continue
+        for row_id, fields in selected:
             if isinstance(operand.row_set, RowPredicate) and not _predicate(
                 fields, operand.row_set
             ):
@@ -298,10 +314,6 @@ def resolve_operand(
                     tuple(fields[c] for c in operand.group_by),
                 )
             )
-        if isinstance(operand.row_set, RowIds) and not set(
-            operand.row_set.ids
-        ) <= {row_id for row_id, _ in table}:
-            raise NumericDomainError("requested CSV row IDs are absent")
         rows.sort(key=lambda row: row.row_id)
         values = tuple(row.values[column] for row in rows for column in operand.columns)
         return ResolvedOperand(
@@ -312,6 +324,8 @@ def resolve_operand(
             unit=operand.unit,
             excluded_row_ids=tuple(sorted(excluded)),
         )
+    except _CsvColumnMissing:
+        return ResolvedOperand("unsupported", reason="CSV selected columns are absent")
     except (
         ValueError,
         UnicodeError,
@@ -389,7 +403,7 @@ def evaluate_derivation(
         request = DerivationRequest.model_validate_json(
             canonical_json_bytes(request.model_dump(mode="json"))
         )
-        if request.evaluator_version != EVALUATOR_VERSION:
+        if request.evaluator_version not in SUPPORTED_EVALUATOR_VERSIONS:
             return outcome("unsupported", "unsupported_evaluator_version")
         if identity in _seen or len(_seen) >= MAX_DEPTH:
             return outcome("out_of_domain", "cyclic or over-depth derivation")
@@ -427,11 +441,16 @@ def evaluate_derivation(
                     if derived.exact
                     else derived.values or tuple(g.exact for g in derived.groups)
                 )
+                derived_context = candidate.request.context
+                if request.evaluator_version == EVALUATOR_VERSION:
+                    derived_context = derived_context.model_copy(
+                        update={"unit": result_unit(candidate.request)}
+                    )
                 resolved = ResolvedOperand(
                     "exact",
                     values,
-                    context=candidate.request.context,
-                    unit=candidate.request.context.unit,
+                    context=derived_context,
+                    unit=derived_context.unit,
                 )
             else:
                 resolved = resolve_operand(arg, context, cache=cache)

@@ -873,7 +873,7 @@
       "$ref": "#/$defs/ComparisonContext"
     },
     "evaluator_version": {
-      "default": "arw.rational.v1",
+      "default": "arw.rational.v2",
       "maxLength": 64,
       "minLength": 1,
       "title": "Evaluator Version",

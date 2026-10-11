@@ -38,3 +38,17 @@ Result plots SHALL use the existing parent-only immutable artifact lifecycle wit
 #### Scenario: Reproduce accepted plot
 - **WHEN** an accepted result plot is inspected or reproduced
 - **THEN** all output digests and retained source identities are checked and reproduction yields the accepted SVG bytes
+
+### Requirement: Truthful distinct numeric tick labels
+Numeric labels SHALL use data precision independently of coordinate rounding and SHALL explicitly disclose any common offset.
+
+#### Scenario: Tiny or near-neighbour numeric domains
+- **WHEN** a legal domain contains tiny nonzero or closely spaced values
+- **THEN** labels distinguish the ticks without representing nonzero values as zero unless a stated axis offset explains the displayed values
+
+### Requirement: Explicit grouped-bar support boundary
+Multi-series grouped bars SHALL require a band x axis; unsupported continuous-axis combinations SHALL fail during compilation.
+
+#### Scenario: Two series share one continuous x value
+- **WHEN** two bar series use the same numeric x
+- **THEN** compilation reports continuous_grouped_bar_unsupported rather than emitting occluded bars
