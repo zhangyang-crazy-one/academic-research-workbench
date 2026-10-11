@@ -166,19 +166,46 @@ def _marketplace_payload(path: Path) -> None:
 
 
 def _codex_runtime_mounts(launcher: Path) -> list[str]:
-    """Expose only the observed CLI installation, preserving its symlink."""
-    resolved = launcher.resolve(strict=True)
+    """Expose the observed installation and normalize the first hidden alias.
+
+    Visible system/package links may point through unmounted HOME aliases.
+    Reify only that exact entry, never a host home or unrelated directory.
+    """
+    if not launcher.is_absolute():
+        raise CanaryError("Codex launcher must be an absolute path")
+    try:
+        resolved = launcher.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise CanaryError("Codex launcher is missing or has a symlink cycle") from None
     _regular_file(resolved, label="observed Codex launcher", max_bytes=1024 * 1024 * 1024)
     if resolved.name == "codex.js":
         package = resolved.parent.parent
         mounts = ["--ro-bind", str(package), str(package)]
     else:
         mounts = ["--ro-bind", str(resolved), str(resolved)]
-    already_visible = launcher.is_relative_to("/usr") or launcher.is_relative_to("/etc")
+    visible_roots = tuple(Path(p) for p in ("/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64"))
     if resolved.name == "codex.js":
-        already_visible = already_visible or launcher.is_relative_to(package)
-    if launcher != resolved and not already_visible:
-        mounts.extend(("--dir", str(launcher.parent), "--symlink", str(resolved), str(launcher)))
+        visible_roots += (package,)
+    candidate = launcher
+    for _ in range(64):
+        if candidate == resolved:
+            break
+        if not any(candidate.is_relative_to(root) for root in visible_roots):
+            mounts.extend(("--dir", str(candidate.parent), "--symlink", str(resolved), str(candidate)))
+            break
+        # Follow a symlink in any component, retaining its remaining suffix.
+        for component in (*reversed(candidate.parents), candidate):
+            if component.is_symlink():
+                target = Path(os.readlink(component))
+                if not target.is_absolute():
+                    target = component.parent / target
+                target /= candidate.relative_to(component)
+                candidate = Path(os.path.normpath(target))
+                break
+        else:
+            raise CanaryError("Codex launcher alias cannot be normalized")
+    else:
+        raise CanaryError("Codex launcher symlink chain exceeds its bound")
     return mounts
 
 
