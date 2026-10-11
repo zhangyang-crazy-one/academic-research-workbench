@@ -289,13 +289,13 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
 
 
 @pytest.mark.requires_retained_evidence("candidate_or_phase7")
-def test_installed_route_requires_qualification_lock(
+def test_installed_route_rejects_removed_qualification_lock(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
 ) -> None:
     installed, outside, environment = installed_stage
-    # Qualified stages now bundle their lock; a lock-less install has no
-    # qualification input to verify and must fail closed instead of degrading to PASS.
+    # A qualified stage binds its lock in the closed inventory. Removing that
+    # file invalidates the installed package before routing can begin.
     lock_file = installed / "supply-chain/integration-lock.json"
     if lock_file.is_file():
         lock_file.unlink()
@@ -310,12 +310,10 @@ def test_installed_route_requires_qualification_lock(
         cwd=outside,
         environment=command_environment,
     )
-    assert result.returncode == 0, f"arw route exited {result.returncode}"
-    route = json.loads(result.stdout)
-    assert route["integration_status"] == "BLOCKED"
-    assert route["reason_codes"] == ["integration_lock_not_verified"]
-    assert route["source_dependency_model"] == "bundled-pinned-adapter"
-    assert route["source_bundled"] is True
+    assert result.returncode == 65
+    assert "staged closed inventory differs from live files" in result.stderr
+    assert "runtime-artifact-invalid" in result.stderr
+    assert result.stdout == ""
 
 
 def _lifecycle(decision: EvidenceAccessDecision, kind: str) -> LifecycleEvidenceRecord:

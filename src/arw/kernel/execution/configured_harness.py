@@ -356,27 +356,54 @@ class ConfiguredHarnessAdapter:
             )
             roots = self._runtime_roots(run_root)
         files = {executable.resolve(strict=True)}
+        topology = []
         entries = 0
         for root in roots:
             if root.is_file():
                 files.add(root.resolve())
             else:
+                topology.append({"root": str(root), "path": ".", "type": "directory"})
                 for path in root.rglob("*"):
                     entries += 1
                     if path.is_symlink():
-                        if not path.resolve().is_relative_to(root):
+                        try:
+                            resolved = path.resolve(strict=True)
+                        except (OSError, RuntimeError):
+                            raise PermissionDenied(
+                                "selected runtime symlink is dangling or cyclic"
+                            ) from None
+                        if not resolved.is_relative_to(root):
                             raise PermissionDenied(
                                 "selected runtime symlink escapes its root"
                             )
+                        topology.append(
+                            {
+                                "root": str(root),
+                                "path": path.relative_to(root).as_posix(),
+                                "type": "symlink",
+                                "target": os.readlink(path),
+                                "resolved": resolved.relative_to(root).as_posix(),
+                            }
+                        )
                     elif path.is_file():
                         files.add(path)
-                    elif not path.is_dir():
+                    elif path.is_dir():
+                        topology.append(
+                            {
+                                "root": str(root),
+                                "path": path.relative_to(root).as_posix(),
+                                "type": "directory",
+                            }
+                        )
+                    else:
                         raise PermissionDenied(
                             "selected runtime contains a special file"
                         )
                     if entries > 16384:
                         raise PermissionDenied("runtime inventory exceeds file bound")
         digest = hashlib.sha256(canonical_json_bytes({"command": self.entry.command}))
+        for row in sorted(topology, key=lambda row: (row["root"], row["path"])):
+            digest.update(canonical_json_bytes(row))
         total = 0
         for path in sorted(files):
             status = path.stat()
@@ -504,10 +531,15 @@ class ConfiguredHarnessAdapter:
                                 "runtime credential appeared in API wire content"
                             )
                         wire[name] = data
-                if (
-                    await asyncio.to_thread(self._runtime_digest, run_root)
-                    != runtime_sha256
-                ):
+                try:
+                    current_runtime = await asyncio.to_thread(
+                        self._runtime_digest, run_root
+                    )
+                except (PermissionDenied, OSError, RuntimeError):
+                    raise StaleAttempt(
+                        "selected harness runtime became unavailable during execution"
+                    ) from None
+                if current_runtime != runtime_sha256:
                     raise StaleAttempt(
                         "selected harness runtime bytes changed during execution"
                     )
