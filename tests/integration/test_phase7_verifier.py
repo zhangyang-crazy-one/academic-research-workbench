@@ -43,6 +43,7 @@ def test_phase7_forwards_qualification_paths_without_credentials(
     monkeypatch.setenv("OPENAI_API_KEY", "do-not-forward")
     monkeypatch.setenv("GH_TOKEN", "do-not-forward")
     monkeypatch.setenv("ARW_STAGE_TMP_ROOT", str(tmp_path / "build/tmp/unsafe"))
+    monkeypatch.setenv("ARW_ISSUE27_RUNTIME_HOME", str(tmp_path / "caller-profile"))
     monkeypatch.setattr(verifier, "PROJECT_ROOT", tmp_path)
 
     def capture(argv, **kwargs):
@@ -51,7 +52,8 @@ def test_phase7_forwards_qualification_paths_without_credentials(
 
     monkeypatch.setattr(verifier.subprocess, "run", capture)
     verifier.run_command(tmp_path / "evidence", "probe", ["probe"],
-                         env={"ARW_STAGE_TMP_ROOT": str(tmp_path / "caller-override")})
+                         env={"ARW_STAGE_TMP_ROOT": str(tmp_path / "caller-override"),
+                              "ARW_ISSUE27_RUNTIME_HOME": str(tmp_path / "caller-cache")})
     assert {key: captured[key] for key in input_paths} == input_paths
     assert captured["ARW_STRICT_PREREQS"] == "1"
     assert "OPENAI_API_KEY" not in captured
@@ -61,6 +63,7 @@ def test_phase7_forwards_qualification_paths_without_credentials(
     assert stage_tmp.is_dir()
     assert not stage_tmp.is_relative_to(pytest_tmp)
     assert not pytest_tmp.is_relative_to(stage_tmp)
+    assert captured["ARW_ISSUE27_RUNTIME_HOME"] == str(pytest_tmp / "issue27-codex-home")
 
 
 @pytest.mark.requires_retained_evidence("build/evidence/phase-05/verdict.json", "build/evidence/phase-04.1-verifier-final-20260715f/commands/P04-05-T01/exit.json")

@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
+
+
+def isolated_stage_temporary_environment(root: Path) -> dict[str, str]:
+    """Keep subprocess and stage scratch beside, never above, accepted outputs."""
+    process = root / "process-tmp"
+    stage = root / "stage-tmp"
+    process.mkdir(parents=True, exist_ok=True)
+    stage.mkdir(parents=True, exist_ok=True)
+    return {"TMPDIR": str(process), "ARW_STAGE_TMP_ROOT": str(stage)}
 
 
 def configured_package_environment() -> dict[str, str]:
