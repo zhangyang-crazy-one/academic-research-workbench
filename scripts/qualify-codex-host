@@ -165,7 +165,24 @@ def _marketplace_payload(path: Path) -> None:
     )
 
 
-def _bwrap_prefix(fresh_root: Path) -> list[str]:
+def _codex_runtime_mounts(launcher: Path) -> list[str]:
+    """Expose only the observed CLI installation, preserving its symlink."""
+    resolved = launcher.resolve(strict=True)
+    _regular_file(resolved, label="observed Codex launcher", max_bytes=1024 * 1024 * 1024)
+    if resolved.name == "codex.js":
+        package = resolved.parent.parent
+        mounts = ["--ro-bind", str(package), str(package)]
+    else:
+        mounts = ["--ro-bind", str(resolved), str(resolved)]
+    already_visible = launcher.is_relative_to("/usr") or launcher.is_relative_to("/etc")
+    if resolved.name == "codex.js":
+        already_visible = already_visible or launcher.is_relative_to(package)
+    if launcher != resolved and not already_visible:
+        mounts.extend(("--dir", str(launcher.parent), "--symlink", str(resolved), str(launcher)))
+    return mounts
+
+
+def _bwrap_prefix(fresh_root: Path, *, codex_launcher: Path) -> list[str]:
     node = Path(shutil.which("node") or "").resolve()
     if not node.is_file() or node.parent.name != "bin":
         raise CanaryError("the exact Node runtime for the Codex launcher is unavailable")
@@ -202,6 +219,7 @@ def _bwrap_prefix(fresh_root: Path) -> list[str]:
         "--ro-bind",
         str(node_root),
         "/opt/node",
+        *_codex_runtime_mounts(codex_launcher),
         "--bind",
         str(fresh_root),
         "/work",
@@ -238,7 +256,7 @@ def _run_isolated(
 ) -> subprocess.CompletedProcess[bytes]:
     try:
         completed = subprocess.run(
-            [*_bwrap_prefix(fresh_root), *argv],
+            [*_bwrap_prefix(fresh_root, codex_launcher=Path(argv[0])), *argv],
             cwd=PROJECT_ROOT,
             env={"PATH": os.environ.get("PATH", os.defpath)},
             input=None,
