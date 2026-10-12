@@ -206,6 +206,17 @@ def verify_qualification(root: Path, build: dict, wheel_sha256: str) -> None:
     qualification = root / "qualification"
     if not qualification.exists():
         return
+    if (qualification / "release-qualification.json").exists():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+        from arw.kernel.policy.release_qualification import verify as verify_portable
+
+        try:
+            verify_portable(qualification,
+                source_commit=build.get("source_identity", {}).get("git_commit"),
+                wheel_sha256=wheel_sha256, build_sha256=digest(root / "build-evidence.json"))
+        except (OSError, TypeError, ValueError) as error:
+            fail(f"portable release qualification failed: {error}")
+        return
     phase7 = read_json(qualification / "phase-7-verification.json")
     stage = qualification / "stage"
     stage_files = files_under(stage)

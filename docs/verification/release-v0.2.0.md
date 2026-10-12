@@ -36,36 +36,23 @@ ReviewConcern integration remain follow-up work.
 1. Complete review and local gates; merge the exact tested changes to `main`.
 2. Wait for the successful push-to-main CI run and its signed wheel, sdist and
    SBOM. Download its candidate bundle and preserve those bytes unchanged.
-3. Using that wheel, build the native plugin stage, capture the three-fresh-HOME
-   Codex canary, generate the integration lock, and run `verify-phase-7`.
-   The complete non-host regression has a one-hour execution budget, including
-   the actual installed CLI regressions; every test and strict gate still runs.
-   The six native Codex dispatches explicitly select `gpt-6.1-sol/high` and use
-   existing platform authentication. They have no automatic retries.
-   Before the offline verifier, materialize declared Python build/runtime
-   dependencies in its owned nonhost HOME (`build/tmp/phase-07/phase7-nonhost/home`).
-   Bootstrap the exact candidate stage with `health --json` into
-   `build/tmp/phase-07/staged-codex-home` and
-   `build/tmp/phase-07/phase7-nonhost/issue27-codex-home`, using separate fresh
-   HOME directories. This package preparation makes no model calls, copies no
-   platform authentication, and supplies no qualified release subjects; the
-   original CI wheel/sdist/build evidence remain unchanged. The verifier then
-   forces offline operation and owns the opt-in runtime cache path. Installed
-   test fixtures keep process/stage scratch disjoint from their accepted outputs,
-   including when pytest runs below `build/tmp`.
-   Native safety records must match the current upstream test tree and retain
-   the complete original runtime/flags/inventory/network trace, not only a
-   collected PASS summary. When local privileged namespaces are unavailable,
-   use the explicit `ci.yml` input `release_native_qualification=true` on the
-   exact reviewed source ref. Admit only successful upstream, ASan/UBSan and
-   TSan artifacts whose live GitHub source/run IDs and raw digests match.
-4. Create a qualified candidate bundle containing the original CI build
-   evidence and subjects plus the actual Phase 7 stage/lock/canary evidence.
-   Use `scripts/phase7-release-evidence export` to retain the full actual
-   verifier root and pinned prior-phase graph, then add the unchanged stage,
-   lock, canary and its transitive files to that qualification root. The
-   consumer revalidates every command result and stream hash and reconstructs
-   the complete Phase 7 aggregate from the reviewed producer's validators.
+3. Build the allowlisted plugin stage from that wheel and run the default
+   `scripts/prepare-qualified-stage` path. It produces portable installed-core
+   qualification under the selected evidence root's `qualification/` directory.
+   This path checks package installation, core integrity, bounded artifact
+   inspection, canonical initialization, status and journal replay. It requires
+   no named harness, model, model credentials, integration lock, exact host
+   version, paid invocation or minimum number of fresh model sessions. Tool and
+   dependency versions are retained as observed metadata. Declared runtime
+   compatibility remains in package metadata; release eligibility follows actual
+   installation and behavior rather than equality to a previously observed host.
+   Python dependencies resolve from declared ranges in a private package profile;
+   subsequent core probes run offline. Source pins and native build/safety records
+   remain provenance of the shipped code, not a whitelist of execution platforms.
+4. Create the qualified bundle from unchanged CI subjects and evidence, using
+   `scripts/candidate-bundle create --qualification-root <qualification-dir>`.
+   The portable consumer verifies actual command results and stream digests,
+   the exact installed stage, original wheel and original build evidence.
    `check-release-candidate --technical-only` must pass. This mode establishes
    technical readiness and cannot authorize publication.
 5. Create a **draft** `v0.2.0` release with `--target` set to the exact main
@@ -78,10 +65,19 @@ ReviewConcern integration remain follow-up work.
    or a historical `PASS` does not establish permission.
 7. Dispatch `release.yml` using the same exact candidate identity. It verifies
    the independent signature and live GitHub actor/run/artifact/draft IDs,
-   validates the actual Phase 7 installation qualification evidence,
+   validates the portable installed-core qualification evidence,
    uploads only verified publication subjects,
    removes only the bound intermediate asset, and publishes the draft.
 8. Confirm the published tag commit and final wheel/sdist/SBOM digests.
+
+Specific deployment platforms can additionally use the native host qualifiers,
+including `qualify-codex-host` and the historical `verify-phase-7` path. Selecting
+an explicit legacy host-canary/launcher/native/lock tuple in preparation invokes
+that optional diagnostic. Those checks do not define the default formal release
+requirements. Pi, Claude, command drivers, API integrations and future harnesses
+retain their own models and authentication; release policy contains no platform
+or model brand whitelist. Updating a host does not force a package-release model
+rerun. Live platform evidence describes only the deployment actually observed.
 
 Preserved historical qualification/legal receipts remain unchanged. A new
 signed authority supplies the accountable declaration for this exact release;

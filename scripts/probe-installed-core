@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Exercise the real candidate CLI without any model platform or credentials."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--stage-root", type=Path, required=True)
+    args = parser.parse_args()
+    stage = args.stage_root.resolve(strict=True)
+    with tempfile.TemporaryDirectory(prefix="arw-release-core-") as temporary:
+        root = Path(temporary)
+        home, cwd = root / "home", root / "working-directory"
+        home.mkdir()
+        cwd.mkdir()
+        # A private profile is a package cache, not host login/model configuration.
+        environment = {
+            "PATH": os.environ.get("PATH", os.defpath),
+            "HOME": str(home),
+            "CODEX_HOME": str(root / "package-cache"),
+            "PYTHONNOUSERSITE": "1",
+            # The producer already selected this interpreter; it need not be
+            # discoverable on PATH. The launcher still checks its supported floor.
+            "ARW_PYTHON": sys.executable,
+        }
+        # Preserve explicit package-resolution settings; never forward model keys.
+        for key, value in os.environ.items():
+            if key.startswith(("PIP_INDEX_", "UV_INDEX_")) or key in {
+                "UV_DEFAULT_INDEX",
+                "UV_INDEX",
+                "PIP_EXTRA_INDEX_URL",
+                "UV_CACHE_DIR",
+                "SSL_CERT_FILE",
+                "SSL_CERT_DIR",
+            }:
+                environment[key] = value
+
+        def invoke(*arguments: str) -> dict:
+            process = subprocess.run(
+                [str(stage / "bin/arw"), *arguments],
+                cwd=cwd,
+                env=environment,
+                capture_output=True,
+                timeout=300,
+                check=False,
+            )
+            if process.returncode != 0:
+                raise ValueError(
+                    f"installed core command failed: {arguments[0]} ({process.returncode})"
+                )
+            if len(process.stdout) > 1024 * 1024:
+                raise ValueError("installed core reply exceeds bound")
+            result = json.loads(process.stdout)
+            if not isinstance(result, dict):
+                raise TypeError("installed core reply is not an object")
+            return result
+
+        health = invoke("health", "--json")
+        if health.get("status") != "ok":
+            raise ValueError("installed runtime is not ready")
+        # Later functional probes reuse only the successfully installed package.
+        environment.update(UV_OFFLINE="1", PIP_NO_INDEX="1")
+        route = invoke("route", "--core", "--json")
+        if route.get("core_integrity") != "PASS":
+            raise ValueError("installed core integrity is not PASS")
+        research = root / "research"
+        research.mkdir()
+        text = b"Public synthetic release-core observation.\n"
+        (research / "observation.txt").write_bytes(text)
+        inspect = invoke(
+            "artifact", "inspect", "--root", str(research), "--path", "observation.txt"
+        )
+        if (
+            not inspect.get("schema_version")
+            or inspect.get("content_sha256") != hashlib.sha256(text).hexdigest()
+        ):
+            raise ValueError("bounded artifact inspection did not return its contract")
+        (root / "outside.txt").write_bytes(b"public synthetic outside-root sentinel")
+        denied = subprocess.run(
+            [
+                str(stage / "bin/arw"),
+                "artifact",
+                "inspect",
+                "--root",
+                str(research),
+                "--path",
+                "../outside.txt",
+            ],
+            cwd=cwd,
+            env=environment,
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+        if denied.returncode != 65:
+            raise ValueError("artifact inspection did not reject root escape")
+        run = root / "run"
+        (run / "input").mkdir(parents=True)
+        (run / "input/source.txt").write_bytes(text)
+        request = root / "init.json"
+        request.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": "run-00000000-0000-4000-8000-000000000701",
+                    "occurred_at": datetime.now(UTC)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "immutable_input": {
+                        "path": "input/source.txt",
+                        "sha256": hashlib.sha256(text).hexdigest(),
+                    },
+                    "workflow_family": "academic-pipeline",
+                    "workflow_mode": "inline-role-prompts",
+                    "capabilities": ["canonical-journal"],
+                    "event_id": "evt-00000000-0000-4000-8000-000000000701",
+                    "command_id": "cmd-00000000-0000-4000-8000-000000000701",
+                    "actor_id": "parent.release-probe",
+                }
+            )
+        )
+        invoke("init", "--run-root", str(run), "--request", str(request))
+        status = invoke("status", "--run-root", str(run), "--json")
+        replay = invoke("replay", "--run-root", str(run))
+        if (
+            status.get("run_id") != replay.get("run_id")
+            or status.get("recovery_health") != "healthy"
+            or status.get("accepted_revision") != 1
+            or replay.get("revision") != 1
+            or replay.get("event_count") != 1
+            or status.get("ledger_head_sha256") != replay.get("last_event_sha256")
+        ):
+            raise ValueError("canonical status and journal replay differ")
+        print(
+            json.dumps(
+                {
+                    "schema_version": "arw.release-core-probe.v1",
+                    "status": "PASS",
+                    "checks": [
+                        "core-integrity",
+                        "bounded-artifact-read",
+                        "run-init",
+                        "run-status",
+                        "journal-replay",
+                    ],
+                    "observations": {
+                        "platform": health.get("platform"),
+                        "harness": "not-required",
+                        "model_calls": 0,
+                    },
+                },
+                sort_keys=True,
+            )
+        )
+
+
+if __name__ == "__main__":
+    main()

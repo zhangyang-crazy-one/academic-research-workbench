@@ -439,6 +439,86 @@ def test_concurrent_identical_qualification_serializes(tmp_path):
     )
 
 
+def test_identical_qualification_waits_for_slow_committed_writer(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic, sleep
+
+    root, service, ir = prepared(tmp_path)
+    req = request(root)
+    entered, release, second_started = Event(), Event(), Event()
+    held = []
+
+    def boundary(point):
+        if point == "files_durable" and not entered.is_set():
+            started = monotonic()
+            entered.set()
+            assert release.wait(3)
+            held.append(monotonic() - started)
+
+    service.boundary = boundary
+
+    def second():
+        second_started.set()
+        return service.qualify(ir, run_root=root, request=req)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(service.qualify, ir, run_root=root, request=req)
+        assert entered.wait(3)
+        later = pool.submit(second)
+        assert second_started.wait(3)
+        sleep(0.35)  # Longer than the journal's general 0.2-second timeout.
+        release.set()
+        outcomes = [first.result(timeout=3), later.result(timeout=3)]
+    assert held[0] >= 0.35
+    assert all(o["accepted"] for o in outcomes)
+    assert sum(not o["idempotent"] for o in outcomes) == 1
+    assert (
+        sum(
+            e.event_type == "research_artifact_accepted"
+            for e in replay_run(root).events
+        )
+        == 1
+    )
+
+
+def test_artifact_qualification_contention_has_bounded_timeout(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic
+
+    from arw.kernel.ledger.journal import JournalError, locked_replay
+    from arw.kernel.ledger.research_records import commit_artifact_pipeline
+
+    root, _, _ = prepared(tmp_path)
+    req = request(root)
+    entered, release = Event(), Event()
+    before = replay_run(root).last_event_sha256
+
+    def holder():
+        with locked_replay(root):
+            entered.set()
+            assert release.wait(3)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        holding = pool.submit(holder)
+        assert entered.wait(3)
+        started = monotonic()
+        try:
+            with pytest.raises(JournalError, match="writer lock is held"):
+                commit_artifact_pipeline(
+                    root,
+                    req,
+                    lambda _: pytest.fail("prepare ran without writer lock"),
+                    lock_timeout=0.05,
+                )
+            assert monotonic() - started < 1
+        finally:
+            release.set()
+        holding.result(timeout=3)
+    assert replay_run(root).last_event_sha256 == before
+
+
 def test_missing_binding_is_reported_without_doctor_repair(tmp_path):
     root, service, ir = prepared(tmp_path)
     req = request(root)

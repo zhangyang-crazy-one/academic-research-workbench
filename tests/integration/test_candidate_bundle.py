@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from arw import __version__
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/candidate-bundle"
@@ -494,3 +496,83 @@ def test_release_rejects_uncommitted_candidate_source(tmp_path: Path) -> None:
                               "--source-commit", "a" * 40], text=True, capture_output=True, check=False)
     assert checked.returncode != 0
     assert "uncommitted source tree" in checked.stderr
+
+
+@pytest.mark.parametrize("entrypoint", ["qualification", "create", "technical"])
+def test_portable_executable_mutation_is_rejected_before_new_manifest(
+    tmp_path: Path, entrypoint: str
+) -> None:
+    from arw.kernel.policy.release_qualification import (
+        CHECKS, PLANS, RECEIPT, SCHEMA, stage_digest,
+    )
+
+    build, evidence, wheel = candidate(tmp_path)
+    qualified = tmp_path / "portable"
+    stage = qualified / "stage"
+    launcher = stage / "bin/arw"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\nexit 0\n")
+    launcher.chmod(0o755)
+    installed_wheel = stage / "share/arw/wheels" / wheel.name
+    installed_wheel.parent.mkdir(parents=True)
+    shutil.copy2(wheel, installed_wheel)
+    installed_build = stage / "share/arw/evidence/candidate-build.json"
+    installed_build.parent.mkdir()
+    shutil.copy2(build, installed_build)
+    rows = []
+    for name, argv in PLANS.items():
+        location = qualified / "commands" / name
+        location.mkdir(parents=True)
+        write(location / "stdout.log", {
+            "schema_version": "arw.release-core-probe.v1",
+            "status": "PASS", "checks": list(CHECKS),
+        })
+        (location / "stderr.log").write_bytes(b"")
+        row = {"name": name, "argv": argv, "returncode": 0,
+               "stdout_sha256": sha(location / "stdout.log"),
+               "stderr_sha256": sha(location / "stderr.log")}
+        write(location / "result.json", row)
+        rows.append(row)
+    write(qualified / RECEIPT, {
+        "schema_version": SCHEMA, "source_commit": "a" * 40,
+        "wheel_sha256": sha(wheel), "build_evidence_sha256": sha(build),
+        "stage_sha256": stage_digest(stage), "technical_qualification": "PASS",
+        "commands": rows, "observations": {},
+    })
+    # Keep bytes identical and alter only permissions after the PASS receipt.
+    launcher.chmod(0o644)
+    if entrypoint == "qualification":
+        result = subprocess.run([
+            sys.executable, str(SCRIPT.with_name("qualify-release-candidate")),
+            "verify", "--qualification-root", str(qualified),
+            "--build-evidence", str(build),
+        ], capture_output=True, text=True, check=False)
+    else:
+        bundle = tmp_path / "bundle"
+        result = run("create", "--wheel", str(wheel), "--build-evidence", str(build),
+                     "--candidate-evidence-root", str(evidence),
+                     "--qualification-root", str(qualified), "--output-root", str(bundle))
+        assert result.returncode != 0
+        assert "installed stage changed" in result.stderr
+        assert not bundle.exists()
+        if entrypoint == "technical":
+            # Construct a newly inventoried transfer of the changed mode. The
+            # normal manifest checks pass; the original qualification must fail.
+            launcher.chmod(0o755)
+            created = run("create", "--wheel", str(wheel), "--build-evidence", str(build),
+                          "--candidate-evidence-root", str(evidence),
+                          "--qualification-root", str(qualified), "--output-root", str(bundle))
+            assert created.returncode == 0, created.stderr
+            changed = bundle / "qualification/stage/bin/arw"
+            changed.chmod(0o644)
+            manifest_path = bundle / "bundle-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            next(row for row in manifest["files"]
+                 if row["path"] == "qualification/stage/bin/arw")["executable_bits"] = 0
+            write(manifest_path, manifest)
+            result = subprocess.run([
+                sys.executable, str(RELEASE_CHECK), "--bundle-root", str(bundle),
+                "--source-commit", "a" * 40, "--technical-only",
+            ], capture_output=True, text=True, check=False)
+    assert result.returncode != 0
+    assert "installed stage changed" in result.stderr

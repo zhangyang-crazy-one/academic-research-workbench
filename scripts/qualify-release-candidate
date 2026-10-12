@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Create or verify portable installed-core release evidence, without a host lock."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+SOURCE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SOURCE / "src"))
+from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.policy.release_qualification import (
+    MAX_STREAM,
+    PLANS,
+    RECEIPT,
+    SCHEMA,
+    digest,
+    direct_files,
+    read,
+    stage_digest,
+    verify,
+)
+
+
+def create(args: argparse.Namespace) -> None:
+    stage = args.stage_root
+    direct_files(stage)
+    build = read(args.build_evidence)
+    source = build.get("source_identity", {})
+    if source.get("git_status") != "" or not source.get("git_commit"):
+        raise ValueError("candidate must identify a committed source")
+    wheels = [p for p in build.get("artifacts", []) if p.get("kind") == "wheel"]
+    if len(wheels) != 1:
+        raise ValueError("candidate wheel selection is ambiguous")
+    staged_wheels = list((stage / "share/arw/wheels").glob("*.whl"))
+    if (
+        len(staged_wheels) != 1
+        or digest(staged_wheels[0]) != wheels[0]["sha256"]
+        or digest(stage / "share/arw/evidence/candidate-build.json")
+        != digest(args.build_evidence)
+    ):
+        raise ValueError("installed inputs differ from candidate before execution")
+    if args.source_commit and args.source_commit != source["git_commit"]:
+        raise ValueError("requested candidate source differs from build evidence")
+    output = args.qualification_root
+    if output.exists() or output.is_symlink():
+        raise ValueError("choose a fresh qualification root")
+    if any(p.is_symlink() for p in (output, *output.parents)):
+        raise ValueError("unsafe qualification output")
+    resolved_stage, resolved_output = stage.resolve(), output.resolve()
+    if resolved_stage.is_relative_to(resolved_output) or resolved_output.is_relative_to(
+        resolved_stage
+    ):
+        raise ValueError("stage and qualification outputs must be disjoint")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=".release-qualification-", dir=output.parent
+    ) as temporary:
+        pending = Path(temporary) / "qualification"
+        shutil.copytree(stage, pending / "stage")
+        rows = []
+        for name, plan in PLANS.items():
+            argv = [
+                p.replace("$SOURCE", str(SOURCE))
+                .replace("$QUALIFICATION", str(pending))
+                .replace("$PYTHON", sys.executable)
+                for p in plan
+            ]
+            location = pending / "commands" / name
+            location.mkdir(parents=True)
+            # No authentication or model variables are inherited. Package cache
+            # selection is infrastructure and is not a version compatibility pin.
+            env = {
+                "PATH": os.environ.get("PATH", os.defpath),
+                "ARW_BUILD_PYTHON": sys.executable,
+                "ARW_PYTHON": sys.executable,
+            }
+            for key, value in os.environ.items():
+                if key.startswith(("PIP_INDEX_", "UV_INDEX_")) or key in {
+                    "UV_DEFAULT_INDEX",
+                    "UV_INDEX",
+                    "PIP_EXTRA_INDEX_URL",
+                    "UV_CACHE_DIR",
+                    "SSL_CERT_FILE",
+                    "SSL_CERT_DIR",
+                }:
+                    env[key] = value
+            with (
+                (location / "stdout.log").open("xb") as stdout,
+                (location / "stderr.log").open("xb") as stderr,
+            ):
+                process = subprocess.run(
+                    argv,
+                    cwd=pending,
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr,
+                    timeout=900,
+                    check=False,
+                )
+            if any(
+                (location / f"{s}.log").stat().st_size > MAX_STREAM
+                for s in ("stdout", "stderr")
+            ):
+                raise ValueError("qualification command output exceeds bound")
+            row = {
+                "name": name,
+                "argv": plan,
+                "returncode": process.returncode,
+                "stdout_sha256": digest(location / "stdout.log"),
+                "stderr_sha256": digest(location / "stderr.log"),
+            }
+            (location / "result.json").write_bytes(canonical_json_bytes(row))
+            rows.append(row)
+            if process.returncode:
+                # Retain genuine failed probes, without issuing a PASS receipt.
+                failed = output.with_name(output.name + ".failed")
+                if not failed.exists():
+                    pending.rename(failed)
+                raise ValueError(f"portable qualification {name} failed; see {failed}")
+        receipt = {
+            "schema_version": SCHEMA,
+            "source_commit": source["git_commit"],
+            "wheel_sha256": wheels[0]["sha256"],
+            "build_evidence_sha256": digest(args.build_evidence),
+            "stage_sha256": stage_digest(pending / "stage"),
+            "technical_qualification": "PASS",
+            "commands": rows,
+            "observations": {
+                "python": platform.python_version(),
+                "platform": platform.platform(),
+                "harness": "not-required",
+                "model_calls": 0,
+            },
+        }
+        (pending / RECEIPT).write_bytes(canonical_json_bytes(receipt))
+        verify(
+            pending,
+            source_commit=source["git_commit"],
+            wheel_sha256=wheels[0]["sha256"],
+            build_sha256=digest(args.build_evidence),
+        )
+        pending.rename(output)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("operation", choices=("create", "verify"))
+    parser.add_argument("--qualification-root", type=Path, required=True)
+    parser.add_argument("--stage-root", type=Path)
+    parser.add_argument("--build-evidence", type=Path, required=True)
+    parser.add_argument("--source-commit")
+    args = parser.parse_args()
+    if args.operation == "create":
+        if args.stage_root is None:
+            parser.error("create requires --stage-root")
+        create(args)
+    else:
+        build = read(args.build_evidence)
+        wheels = [p for p in build.get("artifacts", []) if p.get("kind") == "wheel"]
+        if len(wheels) != 1:
+            raise ValueError("candidate wheel selection is ambiguous")
+        verify(
+            args.qualification_root,
+            source_commit=args.source_commit or build["source_identity"]["git_commit"],
+            wheel_sha256=wheels[0]["sha256"],
+            build_sha256=digest(args.build_evidence),
+        )
+    print(
+        "portable release qualification verified; no harness or exact host version required"
+    )
+
+
+if __name__ == "__main__":
+    main()
