@@ -6,4 +6,4 @@
 ## 2. Acceptance evidence
 
 - [x] 2.1 Run actual pilots and retain failed v1, post-result v2, raw bytes, costs and digests.
-- [ ] 2.2 Verify cold replay and original failure preservation; document scope and submit one unmerged PR.
+- [x] 2.2 Verify cold replay and original failure preservation; document scope and submit one unmerged PR.
