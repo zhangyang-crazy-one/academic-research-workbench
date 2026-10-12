@@ -7,4 +7,4 @@
 
 - [x] 2.1 Add dated frozen venue policy snapshots and deterministic offline draft/replay CLI.
 - [x] 2.2 Validate unknown import/figure/code, original receipt tamper, old policy replay and human final-review boundaries.
-- [ ] 2.3 Document use and submit one independent unmerged PR for #121.
+- [x] 2.3 Document use and submit one independent unmerged PR for #121.
