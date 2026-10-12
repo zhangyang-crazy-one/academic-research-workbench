@@ -42,6 +42,17 @@ ReviewConcern integration remain follow-up work.
    the actual installed CLI regressions; every test and strict gate still runs.
    The six native Codex dispatches explicitly select `gpt-6.1-sol/high` and use
    existing platform authentication. They have no automatic retries.
+   Before the offline verifier, materialize declared Python build/runtime
+   dependencies in its owned nonhost HOME (`build/tmp/phase-07/phase7-nonhost/home`).
+   Bootstrap the exact candidate stage with `health --json` into
+   `build/tmp/phase-07/staged-codex-home` and
+   `build/tmp/phase-07/phase7-nonhost/issue27-codex-home`, using separate fresh
+   HOME directories. This package preparation makes no model calls, copies no
+   platform authentication, and supplies no qualified release subjects; the
+   original CI wheel/sdist/build evidence remain unchanged. The verifier then
+   forces offline operation and owns the opt-in runtime cache path. Installed
+   test fixtures keep process/stage scratch disjoint from their accepted outputs,
+   including when pytest runs below `build/tmp`.
    Native safety records must match the current upstream test tree and retain
    the complete original runtime/flags/inventory/network trace, not only a
    collected PASS summary. When local privileged namespaces are unavailable,

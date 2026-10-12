@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.candidate_inputs import candidate_stage_args
+from tests.candidate_inputs import (
+    candidate_stage_args,
+    isolated_stage_temporary_environment,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -108,6 +111,7 @@ class StagedHarness:
             "PATH": os.environ["PATH"],
             "PYTHONNOUSERSITE": "1",
             **self.network_environment,
+            **isolated_stage_temporary_environment(self.cwd / "temporary"),
         }
         if failpoint is not None:
             value["ARW_TEST_FAILPOINT"] = failpoint

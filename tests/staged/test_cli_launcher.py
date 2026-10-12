@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.candidate_inputs import candidate_stage_args, configured_package_environment
+from tests.candidate_inputs import (
+    candidate_stage_args,
+    configured_package_environment,
+    isolated_stage_temporary_environment,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_NAME = "academic-research-workbench"
@@ -103,6 +107,7 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
         **configured_package_environment(),
+        **isolated_stage_temporary_environment(tmp_path / "temporary"),
     }
 
     staged = subprocess.run(
@@ -209,6 +214,7 @@ def test_installed_cli_defaults_codex_home_when_unset(tmp_path: Path) -> None:
         "PATH": os.environ["PATH"],
         "PYTHONNOUSERSITE": "1",
         **configured_package_environment(),
+        **isolated_stage_temporary_environment(tmp_path / "temporary"),
     }
 
     staged = subprocess.run(

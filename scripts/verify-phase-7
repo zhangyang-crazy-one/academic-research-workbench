@@ -444,7 +444,7 @@ def run_command(root: Path, name: str, argv: list[str], *, env: dict[str, str] |
     if env:
         environment.update({key: value for key, value in env.items() if key in SAFE_ENVIRONMENT})
     # These controls are verifier-owned and cannot be overridden by a caller.
-    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary), "ARW_STAGE_TMP_ROOT": str(stage_temporary)})
+    environment.update({"HOME": str(isolated_home), "CODEX_HOME": str(isolated_codex_home), "UV_OFFLINE": "1", "PYTHONNOUSERSITE": "1", "PIP_NO_INDEX": "1", "TMPDIR": str(temporary), "ARW_STAGE_TMP_ROOT": str(stage_temporary), "ARW_ISSUE27_RUNTIME_HOME": str(temporary / "issue27-codex-home")})
     result = subprocess.run(argv, cwd=PROJECT_ROOT, env=environment, capture_output=True, check=False, timeout=timeout)
     stdout = _redact(result.stdout)
     stderr = _redact(result.stderr)
