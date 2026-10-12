@@ -210,3 +210,25 @@ def test_parser_1_1_0_arxiv_receipts_still_replay(reference, tmp_path):
     assert legacy.matched_id is None
     publish_check(tmp_path, legacy, raw)
     assert replay_check(tmp_path, arxiv_ref, legacy.receipt_sha256) == legacy
+
+
+@pytest.mark.parametrize("requested,observed,status", [
+    ("2401.12345", "2401.12346v1", "not_found"),
+    ("2401.12345v1", "2401.12345v1", "verified"),
+    ("2401.12345v1", "2401.12345", "not_found"),
+])
+def test_arxiv_base_and_pinned_version_boundaries(reference, requested, observed, status):
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": requested})
+    result = check_response(arxiv_ref, "arxiv", _arxiv_atom(observed), observed_at="2026-09-25T00:00:00Z")
+    assert result.status == status
+
+
+def test_multiple_versions_for_unversioned_reference_remain_ambiguous(reference):
+    import xml.etree.ElementTree as ET
+
+    feed = ET.fromstring(_arxiv_atom("2401.12345v1"))
+    feed.append(ET.fromstring(_arxiv_atom("2401.12345v2"))[0])
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345"})
+    result = check_response(arxiv_ref, "arxiv", ET.tostring(feed), observed_at="2026-09-25T00:00:00Z")
+    assert result.status == "ambiguous"
+    assert result.matched_id is None
