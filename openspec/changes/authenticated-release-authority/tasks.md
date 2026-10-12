@@ -23,6 +23,10 @@
 ## 3. Actual formal release
 
 - [ ] 3.1 Merge verified changes after CI and obtain exact successful main CI subjects.
-- [ ] 3.2 Regenerate actual candidate-bound host and Phase 7 qualification.
+- [ ] 3.2 Regenerate actual candidate-bound portable installed-core qualification; platform-specific host evidence is optional.
 - [ ] 3.3 Sign the user-confirmed declaration through authenticated owner dispatch.
 - [ ] 3.4 Publish v0.2.0 and verify final tag and asset digests.
+
+Owner amendment (2026-10-12): completed native model/host experiments above are
+historical diagnostics. Formal release does not mandate any harness, model or
+exact host version; portable-release-qualification supersedes that requirement.

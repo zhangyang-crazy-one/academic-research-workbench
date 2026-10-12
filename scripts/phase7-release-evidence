@@ -230,6 +230,16 @@ def verify_retained(evidence: Path, prior: Path, stage: Path, lock: Path, canary
 
 
 def verify_qualification(qualification: Path, source: Path, commit: str) -> dict:
+    if (qualification / "release-qualification.json").exists():
+        from arw.kernel.policy.release_qualification import digest, read, verify
+
+        build_path = qualification / "stage/share/arw/evidence/candidate-build.json"
+        build = read(build_path)
+        wheels = [row for row in build.get("artifacts", []) if row.get("kind") == "wheel"]
+        if len(wheels) != 1:
+            raise ValueError("portable candidate wheel is ambiguous")
+        return verify(qualification, source_commit=commit, wheel_sha256=wheels[0]["sha256"],
+                      build_sha256=digest(build_path))
     aggregate = verify_retained(qualification / "phase7-evidence", qualification / "prior",
         qualification / "stage", qualification / "integration-lock.json", qualification / "host-canary.json",
         source, commit)

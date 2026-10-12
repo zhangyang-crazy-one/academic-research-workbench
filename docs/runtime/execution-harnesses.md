@@ -144,3 +144,12 @@ loopback synthetic server, mixed CLI selection, strict parent acceptance, output
 and deadline limits, hostile envelopes, credentials and legacy replay. It does
 not qualify a live third-party service or CLI model. Deployment-specific runtime
 availability and authentication still require actual host qualification.
+
+## Release compatibility
+
+Formal package publication uses portable installed-core qualification. No named
+harness, model, exact host version or live model call is required for release.
+The native Codex lock above applies to its selected deployment route, not to
+all release candidates. Other configured routes retain their own credentials
+and models. Platform-specific host canaries remain optional diagnostics; their
+observed versions do not become a release-wide compatibility ceiling.
