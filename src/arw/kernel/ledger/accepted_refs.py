@@ -401,7 +401,11 @@ verify_ref = resolve_ref
 
 
 def to_accepted_ref(
-    value: object, context: ResolutionContext, *, adapter_kind: str | None = None
+    value: object,
+    context: ResolutionContext,
+    *,
+    adapter_kind: str | None = None,
+    cache: ResolutionCache | None = None,
 ) -> RefResolution:
     # Original integrity contracts are imported lazily: this necessary
     # ledger -> policy dependency must not create an import-time cycle.
@@ -453,7 +457,7 @@ def to_accepted_ref(
                 canonical_json_bytes(value.model_dump(mode="json"))
             )
         if isinstance(value, (ParentArtifactRef, JournalEventRef)):
-            return replace(resolve_ref(value, context), original=original)
+            return replace(resolve_ref(value, context, cache), original=original)
         if isinstance(value, ClaimEvidenceLink):
             return RefResolution("unsupported", original, reason="edge_not_ref")
         if isinstance(value, MemoryLink) and (
@@ -474,7 +478,7 @@ def to_accepted_ref(
             ),
         ):
             return RefResolution("unsupported", original, reason="unsupported_type")
-        runs = _runs(context)
+        runs = _runs(context) if cache is None else _cached_runs(context, cache)
         candidates = list(_accepted_events(runs))
         if isinstance(value, SourceLocator):
             candidates = [
