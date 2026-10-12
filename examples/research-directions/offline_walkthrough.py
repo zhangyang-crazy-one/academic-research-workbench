@@ -97,12 +97,12 @@ def execute(project: Path, plugin: Path):
             content_sha256=event.payload.artifact_sha256,
         ).model_dump(mode="json")
 
-    def admit(path, artifact_id):
+    def admit(path, artifact_id, media_type="application/json"):
         req = ArtifactAcceptanceRequest(
             **request().model_dump(),
             artifact_id=artifact_id,
             artifact_kind="research-evidence",
-            media_type="application/json",
+            media_type=media_type,
             content_path=path.relative_to(run).as_posix(),
             content_sha256=sha256_hex(path.read_bytes()),
             base_revision=replay_run(run).revision,
@@ -127,6 +127,7 @@ def execute(project: Path, plugin: Path):
         ),
         "source.synthetic-v1",
     )
+    source_manifest = replay_run(run).events[-1].payload.manifest_sha256
     reference = ReferenceRecord(
         reference_id="reference.synthetic",
         citation_key="Synthetic2026",
@@ -338,12 +339,14 @@ def execute(project: Path, plugin: Path):
     contract, _, _ = freeze_experiment_contract(
         contract, run, RuntimeCommandService(run), request()
     )
+    csv = b"sample,score\ns1,0.5\ns2,0.75\ns3,1\n"
+    (run / "results").mkdir(exist_ok=True)
+    (run / "results/raw.csv").write_bytes(csv)
+    admit(run / "results/raw.csv", "artifact.scores", "text/csv")
+    scores_manifest = replay_run(run).events[-1].payload.manifest_sha256
     results = []
     # Passing and failing recorded attempts both remain retained; no selection of only the best.
     for attempt, value in [("pass", 0.75), ("fail", 0.5)]:
-        csv = b"sample,score\ns1,0.5\ns2,0.75\ns3,1\n"
-        (run / "results").mkdir(exist_ok=True)
-        (run / f"results/{attempt}.csv").write_bytes(csv)
         metric = {"name": "accuracy", "value": value, "unit": "ratio"}
         metric["metric_sha256"] = sha256_hex(canonical_json_bytes(metric))
         provenance = {
@@ -355,10 +358,8 @@ def execute(project: Path, plugin: Path):
                 {
                     "uri_or_path": "inputs/synthetic-v1.json",
                     "content_sha256": source_ref["content_sha256"],
-                    "access_state": "publicly_verified",
-                    "manifest_sha256": sha256_hex(
-                        canonical_json_bytes({"synthetic": True})
-                    ),
+                    "access_state": "locally_supplied",
+                    "manifest_sha256": source_manifest,
                 }
             ],
             "model_identity": [
@@ -392,10 +393,8 @@ def execute(project: Path, plugin: Path):
                     "artifact_id": "artifact.scores",
                     "media_type": "text/csv",
                     "content_sha256": sha256_hex(csv),
-                    "manifest_sha256": sha256_hex(
-                        canonical_json_bytes({"synthetic": True, "attempt": attempt})
-                    ),
-                    "content_path": f"results/{attempt}.csv",
+                    "manifest_sha256": scores_manifest,
+                    "content_path": "results/raw.csv",
                 }
             ],
             "environment": [
@@ -415,7 +414,7 @@ def execute(project: Path, plugin: Path):
             },
             "execution_claim": {"mode": "external_only", "status": "imported"},
             "qualification_receipts": [],
-            "source_manifest_sha256": [source_ref["content_sha256"]],
+            "source_manifest_sha256": [source_manifest],
             "created_at": "2026-10-12T00:01:00Z",
         }
         accepted = ingest_experiment_provenance(

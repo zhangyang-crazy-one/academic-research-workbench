@@ -6,6 +6,15 @@ confirmation is anchored to the parent ledger's `occurred_at`. Proof checking
 remains independent of canonical parent replay; graph and hard-caption
 consumers verify evidence at their own boundaries.
 
+Project-bound research startup now shares the core stable identity with the
+legacy memory alias and persists exact initialization requests for interruption
+recovery. External versioned direction packages delegate original ARS profile
+and branch validation, AcceptedRef, citation and numeric replay; intake keeps
+source versions, carriers and declared reading separate from scientific support.
+The two replaceable examples and offline walkthrough retain negative and missing
+results without model calls or automatic author adoption. See the
+[research direction contract](../runtime/research-direction-workflow.md).
+
 Named execution harnesses now support assignment/role/default routing to existing
 qualified Codex hosts, external command drivers, or configured Responses/Chat
 Completions APIs. Platform-neutral v2 identities bind retained local execution

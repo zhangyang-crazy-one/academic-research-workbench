@@ -6,6 +6,31 @@ from pathlib import Path
 
 import pytest
 
+
+def test_direction_payload_is_admitted_by_producer_and_installed_reader():
+    import ast
+    from pathlib import Path
+
+    from arw.kernel.policy.core_stage_allowlist import STATIC_STAGE_PATHS
+
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "scripts/stage-plugin").read_text()
+    literal = (
+        text.split("static_files = ", 1)[1].split("\nstatic_files.update", 1)[0].strip()
+    )
+    producer = ast.literal_eval(literal)
+    for relative in (
+        "docs/runtime/research-direction-workflow.md",
+        "examples/research-directions/computational-pilot/package.json",
+        "examples/research-directions/semantics-llm/package.json",
+        "examples/research-directions/offline_walkthrough.py",
+        "schemas/v1/research-startup.schema.json",
+        "schemas/v1/research-direction.schema.json",
+    ):
+        assert relative in producer and relative in STATIC_STAGE_PATHS
+        assert (root / relative).is_file()
+
+
 from arw.kernel.policy.core_stage_allowlist import allowed_stage_path
 from arw.kernel.policy.schema_registry import SCHEMA_NAMES, regenerate_schemas
 
@@ -20,7 +45,8 @@ def _schema_allowlist() -> set[str]:
     # Execute only the repository producer's static inventory declarations.
     exec(compile(source[start:end], str(STAGE_SCRIPT), "exec"), namespace)  # noqa: S102
     return {
-        relative for relative in namespace["static_files"]
+        relative
+        for relative in namespace["static_files"]
         if relative.startswith("share/arw/schemas/")
     }
 
@@ -36,7 +62,9 @@ def _check_inventory(actual: set[str], expected: set[str]) -> None:
     )
 
 
-def test_stage_accepts_the_complete_registered_schema_projection(tmp_path: Path) -> None:
+def test_stage_accepts_the_complete_registered_schema_projection(
+    tmp_path: Path,
+) -> None:
     regenerate_schemas(tmp_path / "share/arw/schemas")
     observed = {
         path.relative_to(tmp_path).as_posix()
@@ -46,7 +74,9 @@ def test_stage_accepts_the_complete_registered_schema_projection(tmp_path: Path)
     assert expected == {f"share/arw/schemas/{name}" for name in SCHEMA_NAMES}
     _check_inventory(observed, expected)
     assert all(
-        allowed_stage_path(relative, "academic_research_workbench-0.2.0-py3-none-any.whl")
+        allowed_stage_path(
+            relative, "academic_research_workbench-0.2.0-py3-none-any.whl"
+        )
         for relative in observed
     )
     assert allowed_stage_path(
@@ -61,7 +91,8 @@ def test_stage_rejects_unknown_shared_schema_directory_files(extra: str) -> None
     with pytest.raises(SystemExit, match=extra.replace(".", r"\.")):
         _check_inventory(expected | {f"share/arw/schemas/{extra}"}, expected)
     assert not allowed_stage_path(
-        f"share/arw/schemas/{extra}", "academic_research_workbench-0.2.0-py3-none-any.whl"
+        f"share/arw/schemas/{extra}",
+        "academic_research_workbench-0.2.0-py3-none-any.whl",
     )
 
 
@@ -72,11 +103,14 @@ def test_stage_rejects_missing_registered_schema() -> None:
         _check_inventory(expected - {missing}, expected)
 
 
-@pytest.mark.parametrize("relative", (
-    "share/arw/schemas/nested/accepted-ref.schema.json",
-    "share/arw/schemas/../accepted-ref.schema.json",
-    "schemas/v1/unregistered.schema.json",
-))
+@pytest.mark.parametrize(
+    "relative",
+    (
+        "share/arw/schemas/nested/accepted-ref.schema.json",
+        "share/arw/schemas/../accepted-ref.schema.json",
+        "schemas/v1/unregistered.schema.json",
+    ),
+)
 def test_installed_loader_rejects_unregistered_schema_paths(relative: str) -> None:
     assert not allowed_stage_path(
         relative, "academic_research_workbench-0.2.0-py3-none-any.whl"

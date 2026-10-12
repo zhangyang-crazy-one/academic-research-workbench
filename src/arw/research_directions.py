@@ -498,6 +498,31 @@ def check(
                 and isinstance(value.get("attempts"), list)
                 and 0 < len(value["attempts"]) <= 256
                 and value.get("declared_complete") is True
+                and all(
+                    isinstance(a, dict)
+                    and isinstance(a.get("attempt_id"), str)
+                    and 0 < len(a["attempt_id"]) <= 256
+                    and a.get("status")
+                    in {
+                        "passed",
+                        "failed",
+                        "unsupported",
+                        "null_result",
+                        "timed_out",
+                        "unavailable",
+                        "aborted",
+                    }
+                    for a in value["attempts"]
+                )
+                and len({a["attempt_id"] for a in value["attempts"]})
+                == len(value["attempts"])
+                and (
+                    case.result_sha256 is None
+                    or any(
+                        a.get("result_sha256") == case.result_sha256
+                        for a in value["attempts"]
+                    )
+                )
             )
             row(
                 "all_attempts",

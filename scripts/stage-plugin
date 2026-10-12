@@ -1388,6 +1388,12 @@ def verify_technical_provenance(
 
 
 static_files = {
+    "docs/runtime/research-direction-workflow.md",
+    "examples/research-directions/computational-pilot/package.json",
+    "examples/research-directions/semantics-llm/package.json",
+    "examples/research-directions/offline_walkthrough.py",
+    "schemas/v1/research-startup.schema.json",
+    "schemas/v1/research-direction.schema.json",
     ".codex-plugin/plugin.json",
     ".mcp.json",
     ".file-base/build-evidence.json",
