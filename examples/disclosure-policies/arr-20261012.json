@@ -1,0 +1,16 @@
+{
+  "schema_version": "arw.ai-disclosure-policy.v1",
+  "venue": "ARR",
+  "policy_version": "arr-20261012",
+  "verified_on": "2026-10-12",
+  "source_url": "https://aclrollingreview.org/responsibleNLPresearch/",
+  "source_sha256": "726d3eb713f13ba015cbeed3f87dc514dde21516f458c945f24123007dbf516e",
+  "template": "checklist",
+  "requirements": [
+    "Report AI assistant use across research, coding and writing in the E1 response.",
+    "Provide relevant manuscript sections or an explanation for the chosen checklist answer.",
+    "Author must verify ACL publications ethics and authorship policy before submission."
+  ],
+  "source_digest_scope": "source-document",
+  "source_excerpt": null
+}

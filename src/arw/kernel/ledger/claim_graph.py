@@ -899,6 +899,8 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
     nodes = []
     edges = []
     manuscript_observations = []
+    participation_evidence = False
+    participation_error = False
     discovered = {}
     recorded_relations = []
     registrations = _registrations(inputs.journal)
@@ -906,6 +908,7 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
         for event in replay.events:
             if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
                 artifact = load_artifact_manifest(root, event.payload.manifest_sha256)
+                participation_evidence |= artifact.artifact_kind in {"ai-activity-receipt", "ai-participation-declaration"}
                 ref = _parent_ref(inputs, run_id, event)
                 resolved = _resolve(ref, inputs)
                 kind = (
@@ -1179,6 +1182,21 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     "status": "not_checked",
                     "reason": "multiple_claim_specific_bindings",
                 }
+    if participation_evidence:
+        from arw.kernel.ledger.ai_disclosure import capture, ref_key
+        from arw.kernel.state.accepted_ref import ParentArtifactRef
+
+        try:
+            summary = capture(_context(inputs))
+            participation = {ref_key(ParentArtifactRef.model_validate(m["target"])): m for m in summary["materials"]}
+            for observation in manuscript_observations:
+                target = ParentArtifactRef.model_validate(observation["accepted_ref"])
+                item = participation.get(ref_key(target))
+                if item:
+                    observation["ai_involvement"] = item["ai_involvement"]
+                    observation["ai_participation_evidence"] = item["histories"]
+        except (ValueError, RuntimeError, OSError, KeyError):
+            participation_error = True
     nodes.sort(key=lambda node: node["id"])
     edges.sort(key=canonical_json_bytes)
     coverage = {
@@ -1212,6 +1230,8 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
         "manuscripts": manuscript_observations,
     }
     advisory = []
+    if participation_error:
+        advisory.append({"code": "ai_participation_unverifiable", "scope": "advisory_only"})
     if coverage["unknown_occurrence_count"]:
         advisory.append(
             {
