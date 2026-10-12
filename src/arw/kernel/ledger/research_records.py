@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import stat
 import uuid
@@ -119,11 +120,20 @@ def publish_once(root: Path, relative: str, content: bytes) -> None:
         os.close(directory)
 
 
-def commit_artifact_pipeline(root, request, prepare, *, boundary=lambda _: None):
+def commit_artifact_pipeline(
+    root, request, prepare, *, boundary=lambda _: None, lock_timeout: float = 5.0
+):
     """Prepare under the writer lock; files precede event fsync, index follows it."""
     if request.actor_role != "parent_control_plane":
         raise ResearchRecordError("only the parent may qualify research artifacts")
-    with locked_replay(root) as (_, state):
+    if not math.isfinite(lock_timeout) or not 0 <= lock_timeout <= 30:
+        raise ResearchRecordError(
+            "qualification lock wait must be between 0 and 30 seconds"
+        )
+    # Qualification renders and validates retained artifacts while holding the
+    # writer lock. Give only this operation a bounded wait for an existing
+    # writer; general journal operations retain their short contention policy.
+    with locked_replay(root, lock_timeout=lock_timeout) as (_, state):
         if request.run_id != state.run_id or state.recovery_health != "healthy":
             raise ResearchRecordError(
                 "run identity or recovery health prevents qualification"
@@ -148,7 +158,9 @@ def commit_artifact_pipeline(root, request, prepare, *, boundary=lambda _: None)
             or existing.payload.artifact_sha256
             != sha256_hex(canonical_json_bytes(receipt.model_dump(mode="json")))
         ):
-            raise ResearchRecordError("command ID already binds different research content")
+            raise ResearchRecordError(
+                "command ID already binds different research content"
+            )
         operation_id = uuid.UUID(request.command_id.removeprefix("cmd-"))
 
         def identity(prefix, phase):
