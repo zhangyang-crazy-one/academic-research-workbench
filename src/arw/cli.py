@@ -618,7 +618,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json({"schema_version": "arw.research-operation-error.v1", "status": "rejected",
                          "reason_code": getattr(error, "code", "research_request_invalid"),
                          "message": str(error)[:256] if hasattr(error, "code") else "research request or retained history is invalid",
-                         "retained_files": retained_steps(args.project_root),
+                         "retained_files": retained_steps(args.project_root) if getattr(args, "project_root", None) is not None else [],
                          "retained_file_presence_is_not_admission": True})
             return 65
     if args.command == "artifact" and args.artifact_command in {"ro-crate-export", "ro-crate-verify"}:

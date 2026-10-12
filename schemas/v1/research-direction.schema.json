@@ -1,0 +1,1389 @@
+{
+  "$defs": {
+    "ByteChunk": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "byte_chunk",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "ByteChunk",
+      "type": "object"
+    },
+    "ComparisonCondition": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "condition_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Condition Id",
+          "type": "string"
+        },
+        "data_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Data Sha256",
+          "type": "string"
+        },
+        "evaluation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evaluation Sha256",
+          "type": "string"
+        },
+        "held_out_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Held Out Sha256"
+        },
+        "model_label": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Model Label",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "baseline",
+            "intervention",
+            "sham",
+            "other"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "token_budget": {
+          "maximum": 1000000000,
+          "minimum": 0,
+          "title": "Token Budget",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "condition_id",
+        "role",
+        "model_label",
+        "data_sha256",
+        "evaluation_sha256",
+        "token_budget"
+      ],
+      "title": "ComparisonCondition",
+      "type": "object"
+    },
+    "DirectionBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "ars_project_ref": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Ars Project Ref",
+          "type": "string"
+        },
+        "branch_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch Sha256"
+        },
+        "branch_snapshot": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch Snapshot"
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/DirectionCase"
+          },
+          "maxItems": 32,
+          "title": "Cases",
+          "type": "array"
+        },
+        "initial_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Initial Event Sha256",
+          "type": "string"
+        },
+        "package_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Sha256",
+          "type": "string"
+        },
+        "package_snapshot": {
+          "maxLength": 256,
+          "title": "Package Snapshot",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.direction-binding.v1",
+          "default": "arw.direction-binding.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "ars_project_ref",
+        "run_id",
+        "run_manifest_sha256",
+        "initial_event_sha256",
+        "package_sha256",
+        "package_snapshot"
+      ],
+      "title": "DirectionBinding",
+      "type": "object"
+    },
+    "DirectionCase": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "attempts_ref": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "parent-artifact": "#/$defs/ParentArtifactRef",
+                  "project-journal": "#/$defs/JournalEventRef"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParentArtifactRef"
+                },
+                {
+                  "$ref": "#/$defs/JournalEventRef"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempts Ref"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ComparisonCondition"
+          },
+          "maxItems": 16,
+          "title": "Conditions",
+          "type": "array"
+        },
+        "contract_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Sha256"
+        },
+        "contract_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Version"
+        },
+        "costs_ref": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "parent-artifact": "#/$defs/ParentArtifactRef",
+                  "project-journal": "#/$defs/JournalEventRef"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParentArtifactRef"
+                },
+                {
+                  "$ref": "#/$defs/JournalEventRef"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Costs Ref"
+        },
+        "definition_ref": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "parent-artifact": "#/$defs/ParentArtifactRef",
+                  "project-journal": "#/$defs/JournalEventRef"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParentArtifactRef"
+                },
+                {
+                  "$ref": "#/$defs/JournalEventRef"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Definition Ref"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/DirectionEvidence"
+          },
+          "maxItems": 32,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "hypothesis_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "narrative_candidate": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Narrative Candidate"
+        },
+        "result_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Sha256"
+        }
+      },
+      "required": [
+        "hypothesis_id"
+      ],
+      "title": "DirectionCase",
+      "type": "object"
+    },
+    "DirectionEvidence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "discriminator": {
+            "mapping": {
+              "parent-artifact": "#/$defs/ParentArtifactRef",
+              "project-journal": "#/$defs/JournalEventRef"
+            },
+            "propertyName": "scope"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParentArtifactRef"
+            },
+            {
+              "$ref": "#/$defs/JournalEventRef"
+            }
+          ],
+          "title": "Ref"
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "opposes",
+            "neutral",
+            "null_result",
+            "failed"
+          ],
+          "title": "Relation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relation",
+        "ref"
+      ],
+      "title": "DirectionEvidence",
+      "type": "object"
+    },
+    "DirectionPackage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "hypotheses": {
+          "items": {
+            "$ref": "#/$defs/HypothesisCandidate"
+          },
+          "maxItems": 32,
+          "title": "Hypotheses",
+          "type": "array"
+        },
+        "package_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Package Id",
+          "type": "string"
+        },
+        "package_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Sha256",
+          "type": "string"
+        },
+        "package_version": {
+          "maxLength": 32,
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "title": "Package Version",
+          "type": "string"
+        },
+        "profile": {
+          "additionalProperties": true,
+          "title": "Profile",
+          "type": "object"
+        },
+        "profile_history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 8,
+          "title": "Profile History",
+          "type": "array"
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/PackageSource"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Provenance",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "arw.direction-package.v1",
+          "default": "arw.direction-package.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "unknowns": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Unknowns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "package_id",
+        "package_version",
+        "package_sha256",
+        "title",
+        "scope",
+        "provenance",
+        "unknowns",
+        "profile"
+      ],
+      "title": "DirectionPackage",
+      "type": "object"
+    },
+    "HypothesisCandidate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "branch_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Branch Id",
+          "type": "string"
+        },
+        "definition_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "hypothesis_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "required_controls": {
+          "items": {
+            "enum": [
+              "baseline",
+              "equal_budget",
+              "sham",
+              "held_out",
+              "all_attempts",
+              "costs"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "title": "Required Controls",
+          "type": "array"
+        },
+        "scope": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "statement": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis_id",
+        "branch_id",
+        "definition_id",
+        "statement",
+        "scope"
+      ],
+      "title": "HypothesisCandidate",
+      "type": "object"
+    },
+    "JournalEventRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        },
+        "payload_selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Payload Selector",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "scope": {
+          "const": "project-journal",
+          "default": "project-journal",
+          "title": "Scope",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "sequence",
+        "event_sha256"
+      ],
+      "title": "JournalEventRef",
+      "type": "object"
+    },
+    "LineRange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "lines",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "title": "LineRange",
+      "type": "object"
+    },
+    "LiteratureIntake": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "package_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Package Sha256",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.literature-intake.v1",
+          "default": "arw.literature-intake.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/VersionedReading"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "package_sha256",
+        "sources"
+      ],
+      "title": "LiteratureIntake",
+      "type": "object"
+    },
+    "MarkdownSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "kind": {
+          "const": "markdown_section",
+          "title": "Kind",
+          "type": "string"
+        },
+        "occurrence": {
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Occurrence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "heading",
+        "occurrence"
+      ],
+      "title": "MarkdownSection",
+      "type": "object"
+    },
+    "Operationalization": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "alternative_measurements": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Alternative Measurements",
+          "type": "array"
+        },
+        "assumptions": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "author_interpretation": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Author Interpretation",
+          "type": "string"
+        },
+        "cannot_conclude": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Cannot Conclude",
+          "type": "array"
+        },
+        "confounders": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Confounders",
+          "type": "array"
+        },
+        "definition_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "evidence_sought": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Evidence Sought",
+          "type": "array"
+        },
+        "local_definition": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Local Definition",
+          "type": "string"
+        },
+        "measured_object": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Measured Object",
+          "type": "string"
+        },
+        "metric_definition": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Metric Definition",
+          "type": "string"
+        },
+        "refuting_observations": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Refuting Observations",
+          "type": "array"
+        },
+        "rival_explanations": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Rival Explanations",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "arw.operationalization.v1",
+          "default": "arw.operationalization.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "parent-artifact": "#/$defs/ParentArtifactRef",
+                "project-journal": "#/$defs/JournalEventRef"
+              },
+              "propertyName": "scope"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ParentArtifactRef"
+              },
+              {
+                "$ref": "#/$defs/JournalEventRef"
+              }
+            ]
+          },
+          "maxItems": 16,
+          "title": "Sources",
+          "type": "array"
+        },
+        "why_relevant": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Why Relevant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "definition_id",
+        "author_interpretation",
+        "rival_explanations",
+        "local_definition",
+        "measured_object",
+        "metric_definition",
+        "why_relevant",
+        "alternative_measurements",
+        "confounders",
+        "refuting_observations",
+        "cannot_conclude"
+      ],
+      "title": "Operationalization",
+      "type": "object"
+    },
+    "PackageSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "license": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "pointer": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Pointer",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "synthetic",
+            "candidate",
+            "metadata_only",
+            "read"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pointer",
+        "license",
+        "status"
+      ],
+      "title": "PackageSource",
+      "type": "object"
+    },
+    "ParentArtifactRef": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accepting_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Accepting Event Id",
+          "type": "string"
+        },
+        "accepting_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Accepting Event Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "producing_activity_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producing Activity Id"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Run Manifest Sha256",
+          "type": "string"
+        },
+        "scope": {
+          "const": "parent-artifact",
+          "default": "parent-artifact",
+          "title": "Scope",
+          "type": "string"
+        },
+        "selected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Sha256"
+        },
+        "selector": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Selector",
+          "type": "string"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id",
+        "run_id",
+        "run_manifest_sha256",
+        "artifact_id",
+        "accepting_event_id",
+        "accepting_event_sha256",
+        "content_sha256"
+      ],
+      "title": "ParentArtifactRef",
+      "type": "object"
+    },
+    "PdfLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "extraction_manifest_path": {
+          "minLength": 1,
+          "title": "Extraction Manifest Path",
+          "type": "string"
+        },
+        "extraction_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Manifest Sha256",
+          "type": "string"
+        },
+        "extractor_name": {
+          "enum": [
+            "pypdf",
+            "grobid",
+            "docling"
+          ],
+          "title": "Extractor Name",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pdf_page",
+            "pdf_paragraph",
+            "pdf_section",
+            "pdf_region",
+            "reference_entry"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "pdf_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "pdf_source_path": {
+          "minLength": 1,
+          "title": "Pdf Source Path",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.pdf-location.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "page",
+        "start",
+        "end",
+        "pdf_source_path",
+        "pdf_sha256",
+        "extraction_manifest_path",
+        "extraction_manifest_sha256",
+        "extractor_name",
+        "extractor_version"
+      ],
+      "title": "PdfLocation",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "discriminator": {
+            "mapping": {
+              "byte_chunk": "#/$defs/ByteChunk",
+              "lines": "#/$defs/LineRange",
+              "markdown_section": "#/$defs/MarkdownSection",
+              "pdf_page": "#/$defs/PdfLocation",
+              "pdf_paragraph": "#/$defs/PdfLocation",
+              "pdf_region": "#/$defs/PdfLocation",
+              "pdf_section": "#/$defs/PdfLocation",
+              "reference_entry": "#/$defs/PdfLocation",
+              "text_page": "#/$defs/TextPage"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LineRange"
+            },
+            {
+              "$ref": "#/$defs/TextPage"
+            },
+            {
+              "$ref": "#/$defs/MarkdownSection"
+            },
+            {
+              "$ref": "#/$defs/ByteChunk"
+            },
+            {
+              "$ref": "#/$defs/PdfLocation"
+            }
+          ],
+          "title": "Location"
+        },
+        "producing_activity_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Producing Activity Id",
+          "type": "string"
+        },
+        "quote_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Quote Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            "arw.source-locator.v1",
+            "arw.source-locator.v2"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Artifact Id",
+          "type": "string"
+        },
+        "source_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Event Sha256",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_artifact_id",
+        "source_sha256",
+        "source_event_id",
+        "source_event_sha256",
+        "producing_activity_id",
+        "location",
+        "quote_sha256"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "TextPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text_page",
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "page"
+      ],
+      "title": "TextPage",
+      "type": "object"
+    },
+    "VersionedReading": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "affected_records": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Affected Records",
+          "type": "array"
+        },
+        "carrier": {
+          "enum": [
+            "web_abstract",
+            "html",
+            "pdf",
+            "text"
+          ],
+          "title": "Carrier",
+          "type": "string"
+        },
+        "citation_receipts": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Citation Receipts",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Limitations",
+          "type": "array"
+        },
+        "note": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "read_ranges": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Read Ranges",
+          "type": "array"
+        },
+        "reader": {
+          "enum": [
+            "human",
+            "tool",
+            "unknown"
+          ],
+          "title": "Reader",
+          "type": "string"
+        },
+        "reading_status": {
+          "enum": [
+            "not_read",
+            "partial",
+            "read_declared",
+            "failed",
+            "timed_out"
+          ],
+          "title": "Reading Status",
+          "type": "string"
+        },
+        "reference": {
+          "additionalProperties": true,
+          "title": "Reference",
+          "type": "object"
+        },
+        "source_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "parent-artifact": "#/$defs/ParentArtifactRef",
+                  "project-journal": "#/$defs/JournalEventRef"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParentArtifactRef"
+                },
+                {
+                  "$ref": "#/$defs/JournalEventRef"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref"
+        },
+        "source_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Sha256"
+        },
+        "version_label": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Version Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "reference",
+        "version_label",
+        "carrier",
+        "reader",
+        "reading_status",
+        "note",
+        "limitations"
+      ],
+      "title": "VersionedReading",
+      "type": "object"
+    }
+  },
+  "$id": "https://academic-research-workbench.local/schemas/v1/research-direction.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+    "mapping": {
+      "arw.direction-binding.v1": "#/$defs/DirectionBinding",
+      "arw.direction-package.v1": "#/$defs/DirectionPackage",
+      "arw.literature-intake.v1": "#/$defs/LiteratureIntake",
+      "arw.operationalization.v1": "#/$defs/Operationalization"
+    },
+    "propertyName": "schema_version"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/DirectionPackage"
+    },
+    {
+      "$ref": "#/$defs/DirectionBinding"
+    },
+    {
+      "$ref": "#/$defs/Operationalization"
+    },
+    {
+      "$ref": "#/$defs/LiteratureIntake"
+    }
+  ]
+}

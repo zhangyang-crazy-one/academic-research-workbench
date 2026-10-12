@@ -1,9 +1,18 @@
 ---
 name: academic-research-workbench
-description: "ARW control-plane operations for an existing research run: run status, bounded local files/search, evidence and artifact admission, provenance/graph, audit replay, writing record and gates. Use for 审计台账、证据接纳、文件检索、研究图谱、运行状态、受控改写记录. For research methodology use academic-research-suite; for post-manuscript handoff use submission."
+description: "ARW control-plane operations for new or existing project-bound research: run status, bounded local files/search, evidence and artifact admission, provenance/graph, audit replay, writing record and gates. Use for 审计台账、证据接纳、文件检索、研究图谱、运行状态、受控改写记录. For research methodology use academic-research-suite; for post-manuscript handoff use submission."
 ---
 
 # Academic Research Workbench
+
+## New research directions and recovery
+
+Use `research start/status/resume` for a broad new direction before requesting
+a paper narrative. Read [the shared startup contract](references/research-direction-workflow.md)
+for versioned intake, original ARS validation and the offline walkthrough.
+Keep candidate hypotheses, record integrity, reading, experiment conformance
+and scientific support separate; hooks remain observational.
+
 
 Resolve the plugin root as the parent of this installed `skills/` directory, then run the
 installed launcher from that root:

@@ -10,6 +10,15 @@ allowed-tools: Read, Glob, Grep, WebSearch, Bash(uv *), Bash(python *), Bash(pyt
 
 # ARS-Codex
 
+## New research directions and recovery
+
+Use `research start/status/resume` for a broad new direction before requesting
+a paper narrative. Read [the shared startup contract](references/research-direction-workflow.md)
+for versioned intake, original ARS validation and the offline walkthrough.
+Keep candidate hypotheses, record integrity, reading, experiment conformance
+and scientific support separate; hooks remain observational.
+
+
 This is a Codex adapter for the ARS suite. The vendored ARS content lives under
 `ars/`; keep it as source material and route through this file first.
 

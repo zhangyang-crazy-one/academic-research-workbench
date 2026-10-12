@@ -11,6 +11,7 @@ class ResearchStartPlan(StrictModel):
     schema_version: Literal["arw.research-start.v1"] = "arw.research-start.v1"
     project_id: StableRuntimeId
     project_identity_sha256: Sha256
+    ars_project_ref: str = Field(min_length=1, max_length=2048)
     direction: str = Field(min_length=1, max_length=2048)
     phase: Literal["scoping", "literature", "experiment", "writing"]
     run_relative: str = Field(max_length=256)

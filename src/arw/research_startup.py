@@ -60,6 +60,7 @@ def _input(plan: ResearchStartPlan) -> bytes:
             "schema_version": "arw.research-intent.v1",
             "project_id": plan.project_id,
             "project_identity_sha256": plan.project_identity_sha256,
+            "ars_project_ref": plan.ars_project_ref,
             "direction": plan.direction,
             "phase": plan.phase,
             "run_id": plan.request.run_id,
@@ -108,7 +109,7 @@ def load_plan(
     return plan
 
 
-def _new_plan(root, identity, direction, phase, task_kind):
+def _new_plan(root, identity, direction, phase, task_kind, ars_project_ref=None):
     run_id = f"run-{uuid.uuid4()}"
     relative = f".arw/research/runs/{run_id}"
     identity_sha = sha256_hex(
@@ -121,6 +122,7 @@ def _new_plan(root, identity, direction, phase, task_kind):
             "schema_version": "arw.research-intent.v1",
             "project_id": identity.project_id,
             "project_identity_sha256": identity_sha,
+            "ars_project_ref": ars_project_ref or identity.project_id,
             "direction": direction,
             "phase": phase,
             "run_id": run_id,
@@ -153,6 +155,7 @@ def _new_plan(root, identity, direction, phase, task_kind):
     return ResearchStartPlan(
         project_id=identity.project_id,
         project_identity_sha256=identity_sha,
+        ars_project_ref=ars_project_ref or identity.project_id,
         direction=direction,
         phase=phase,
         run_relative=relative,
@@ -170,6 +173,7 @@ def start(
     expected_run_id=None,
     resume=False,
     plan_only=False,
+    ars_project_ref=None,
     boundary=lambda _: None,
 ):
     installed_core_preflight()  # A damaged stage cannot downgrade to editable mode.
@@ -248,7 +252,9 @@ def start(
                     raise ResearchStartupError(
                         "research_identity_conflict", "project identity differs"
                     )
-                plan = _new_plan(root, identity, direction, phase, task_kind)
+                plan = _new_plan(
+                    root, identity, direction, phase, task_kind, ars_project_ref
+                )
                 if (
                     expected_run_id is not None
                     and plan.request.run_id != expected_run_id
@@ -261,6 +267,11 @@ def start(
                     root, PLAN, canonical_json_bytes(plan.model_dump(mode="json"))
                 )
                 boundary("plan_durable")
+            if ars_project_ref is not None and ars_project_ref != plan.ars_project_ref:
+                raise ResearchStartupError(
+                    "research_ars_identity_conflict",
+                    "ARS project reference differs from the frozen startup",
+                )
             initialize_project(root, plan.project_id)
             load_plan(root, expected_project_id=plan.project_id)
             boundary("identity_durable")
@@ -447,6 +458,7 @@ def status(root: Path, *, expected_project_id=None, expected_run_id=None):
         "project": {
             "project_id": plan.project_id,
             "identity_sha256": plan.project_identity_sha256,
+            "ars_project_ref": plan.ars_project_ref,
             "identity_state": "retained"
             if identity_present
             else "pending_initialization",
