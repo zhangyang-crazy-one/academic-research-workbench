@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One explicit, fail-closed entry point for a technically qualified stage.
-# Network materialization, the offline native build, host canary retention,
-# lock creation, and final staging are deliberately separate boundaries.
+# Default portable release preparation; explicit legacy host inputs select
+# optional platform diagnostics. Candidate/source provenance is preserved.
 
 PROJECT_ROOT="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${ARW_BUILD_PYTHON:-$PROJECT_ROOT/.venv/bin/python}"
@@ -24,14 +23,15 @@ CANDIDATE_EVIDENCE_ROOT=""
 usage() {
   cat <<'EOF'
 Usage: prepare-qualified-stage --candidate-wheel PATH --build-evidence PATH \
-       --candidate-evidence-root PATH --host-canary-evidence PATH \
-       --codex-launcher PATH --codex-native-binary PATH \
+       --candidate-evidence-root PATH \
        [--credential-source PATH] [--integration-lock PATH] [--clean] \
        [--stage-root PATH] [--evidence-root PATH] [--run-native-tests]
 
 Materialize and verify pinned sources, build the modified file-base through
-offline-exec when needed, bind the retained exact Codex host canary into an
-integration lock, and assemble/validate the final allowlisted plugin stage.
+offline-exec when needed, and validate installed core behavior without a
+required harness, model invocation or exact host version.
+Optional legacy platform qualification: --host-canary-evidence PATH
+--codex-launcher PATH --codex-native-binary PATH [--integration-lock PATH].
 The command never fabricates host evidence and never turns a missing legal or
 technical input into a qualified package.
 EOF
@@ -146,7 +146,10 @@ CANDIDATE_ARGS=(--candidate-wheel "$CANDIDATE_WHEEL" \
   --build-evidence "$BUILD_EVIDENCE" \
   --candidate-evidence-root "$CANDIDATE_EVIDENCE_ROOT")
 
-[[ -n "$HOST_CANARY" ]] || fail "exact retained host canary is required; run scripts/qualify-codex-host first" 65
+LEGACY_PROFILE=0
+if [[ -n "$HOST_CANARY$CODEX_LAUNCHER$CODEX_NATIVE$LOCK_PATH$CREDENTIAL_SOURCE" ]]; then
+LEGACY_PROFILE=1
+[[ -n "$HOST_CANARY" ]] || fail "explicit legacy qualification requires a retained host canary" 65
 [[ -n "$CODEX_LAUNCHER" && -x "$CODEX_LAUNCHER" ]] \
   || fail "--codex-launcher must name an executable exact host launcher" 66
 [[ -n "$CODEX_NATIVE" && -x "$CODEX_NATIVE" ]] \
@@ -156,6 +159,7 @@ CANDIDATE_ARGS=(--candidate-wheel "$CANDIDATE_WHEEL" \
 if [[ -n "$CREDENTIAL_SOURCE" ]]; then
   [[ -d "$CREDENTIAL_SOURCE" && ! -L "$CREDENTIAL_SOURCE" ]] \
     || fail "credential source must be an existing non-symlink directory" 66
+fi
 fi
 
 if [[ ! -d "$PROJECT_ROOT/vendor/sources" ]]; then
@@ -175,6 +179,18 @@ if [[ ! -x "$PROJECT_ROOT/.file-base/bin/file-base" || ! -f "$PROJECT_ROOT/.file
     "$PROJECT_ROOT/scripts/offline-exec" "${OFFLINE_ARGS[@]}"
 fi
 "$PROJECT_ROOT/scripts/verify-sources" --inputs-only
+
+if [[ "$LEGACY_PROFILE" -eq 0 ]]; then
+  STAGE_CLEAN=()
+  [[ "$CLEAN" -eq 0 ]] || STAGE_CLEAN=(--clean)
+  "$PROJECT_ROOT/scripts/stage-plugin" "${STAGE_CLEAN[@]}" \
+    --stage-root "$STAGE_ROOT" --evidence-root "$EVIDENCE_ROOT/stage-build" "${CANDIDATE_ARGS[@]}"
+  "$PYTHON" "$PROJECT_ROOT/scripts/qualify-release-candidate" create \
+    --stage-root "$STAGE_ROOT" --build-evidence "$BUILD_EVIDENCE" \
+    --qualification-root "$EVIDENCE_ROOT/qualification"
+  printf 'portable qualified stage ready: %s\nqualification root: %s\n' "$STAGE_ROOT" "$EVIDENCE_ROOT/qualification"
+  exit 0
+fi
 
 if [[ -z "$LOCK_PATH" ]]; then
   LOCK_PATH="$EVIDENCE_ROOT/integration-lock.json"

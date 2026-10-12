@@ -77,6 +77,35 @@ def main() -> None:
     qualified_files = {path.relative_to(root).as_posix() for path in qualified.rglob("*") if path.is_file()}
     if not qualified_files or qualified_files != {path for path in listed if path.startswith("qualification/")}:
         fail("qualified evidence files differ from the transferred manifest")
+    portable = (qualified / "release-qualification.json").exists()
+    if portable:
+        subprocess.run([sys.executable, str(Path(__file__).with_name("qualify-release-candidate")),
+                        "verify", "--qualification-root", str(qualified),
+                        "--build-evidence", str(root / "build-evidence.json"),
+                        "--source-commit", args.source_commit], cwd=project_root, check=True)
+        subprocess.run([str(Path(__file__).with_name("stage-plugin")), "--validate-only",
+                        "--stage-root", str(qualified / "stage")], cwd=project_root, check=True)
+    else:
+        validate_legacy_qualification(qualified, args, wheel_sha, project_root)
+    if verdict.get("technical_qualification") != "PASS":
+        fail("candidate legal technical qualification is not PASS")
+    if args.technical_only:
+        print("check-release-candidate: technical checks passed; release authority remains unverified")
+        return
+    identity = ("repository", "release_tag", "candidate_run_id", "candidate_artifact_name")
+    if any(not getattr(args, field) for field in (*identity, "ci_bundle_root", "qualification_archive")):
+        fail("independent authority requires repository, release tag and candidate run/artifact identity")
+    command = [sys.executable, str(Path(__file__).with_name("release-authority")), "verify",
+               "--bundle-root", str(root), "--source-commit", args.source_commit]
+    for field in identity:
+        command.extend(["--" + field.replace("_", "-"), getattr(args, field)])
+    command.extend(["--ci-bundle-root", str(args.ci_bundle_root),
+                    "--qualification-archive", str(args.qualification_archive)])
+    subprocess.run(command, check=True)
+
+
+def validate_legacy_qualification(qualified: Path, args, wheel_sha: str, project_root: Path) -> None:
+    """Retain historical platform-specific readers; new releases use portable evidence."""
     phase7 = read(qualified / "phase-7-verification.json")
     if phase7.get("git_head") != args.source_commit or phase7.get("technical_qualification") != "PASS" or phase7.get("evidence_bound") is not True:
         fail("candidate-bound Phase 7 technical evidence is missing or blocked")
@@ -115,26 +144,11 @@ def main() -> None:
         )
     except (OSError, ValueError, IntegrationLockError, subprocess.CalledProcessError) as error:
         fail(f"qualified stage, canary or integration lock failed validation: {error}")
-    if verdict.get("technical_qualification") != "PASS":
-        fail("candidate legal technical qualification is not PASS")
     subprocess.run(
         [sys.executable, str(Path(__file__).with_name("phase7-release-evidence")), "verify",
          "--qualification-root", str(qualified), "--source-commit", args.source_commit],
         cwd=project_root, check=True,
     )
-    if args.technical_only:
-        print("check-release-candidate: technical checks passed; release authority remains unverified")
-        return
-    identity = ("repository", "release_tag", "candidate_run_id", "candidate_artifact_name")
-    if any(not getattr(args, field) for field in (*identity, "ci_bundle_root", "qualification_archive")):
-        fail("independent authority requires repository, release tag and candidate run/artifact identity")
-    command = [sys.executable, str(Path(__file__).with_name("release-authority")), "verify",
-               "--bundle-root", str(root), "--source-commit", args.source_commit]
-    for field in identity:
-        command.extend(["--" + field.replace("_", "-"), getattr(args, field)])
-    command.extend(["--ci-bundle-root", str(args.ci_bundle_root),
-                    "--qualification-archive", str(args.qualification_archive)])
-    subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":
