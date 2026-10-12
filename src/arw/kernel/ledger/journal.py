@@ -222,6 +222,7 @@ def initialize_run(
     request: InitRunRequest,
     *,
     lock_timeout: float = 0.2,
+    resume_initialization: bool = False,
 ) -> ReplayState:
     """Write an immutable manifest and the first hash-chained event once."""
 
@@ -278,15 +279,54 @@ def initialize_run(
         from arw.kernel.ledger.narrative import guard_start
         narrative_guard = guard_start(root, request.narrative_binding) if request.narrative_binding else nullcontext()
         with narrative_guard, _lock(root, lock_timeout):
+            reuse_segments = False
+            if resume_initialization:
+                if any(p.is_symlink() for p in (manifest_path, journal_root, segments_root, journal_path, root / JOURNAL_NAME)):
+                    raise JournalError("partial initialization path is unsafe")
+                if manifest_path.exists() and not journal_path.exists():
+                    _, prior_manifest = _read_manifest(root)
+                    if prior_manifest != manifest_bytes:
+                        raise JournalError("partial initialization manifest differs from request")
+                if segmented and journal_root.exists() and not journal_path.exists():
+                    if (
+                        not journal_root.is_dir()
+                        or any(p.name != "segments" for p in journal_root.iterdir())
+                        or (segments_root.exists() and (not segments_root.is_dir() or any(segments_root.iterdir())))
+                        or (root / JOURNAL_NAME).exists()
+                    ):
+                        raise JournalError("partial initialization journal is not empty and safe")
+                    reuse_segments = True
+                    if not segments_root.exists():
+                        segments_root.mkdir()
+                        _fsync_directory(journal_root)
+            if (
+                resume_initialization
+                and manifest_path.exists()
+                and not journal_path.exists()
+                and (not journal_root.exists() or reuse_segments)
+            ):
+                # Only an exact manifest-only initialization can be completed.
+                # Never replace a ledger, change an input, or reconstruct an
+                # accepted event from a mutable projection or session summary.
+                _, existing_manifest = _read_manifest(root)
+                if existing_manifest != manifest_bytes:
+                    raise JournalError("partial initialization manifest differs from request")
+                if segmented and not reuse_segments:
+                    raise JournalError("partial initialization segment directory is missing")
+                _write_exclusive(journal_path, event_bytes)
+                if segmented:
+                    _fsync_directory(segments_root)
+                _fsync_directory(root)
+                return _replay_unlocked(root)
             if (
                 manifest_path.exists()
                 or (root / JOURNAL_NAME).exists()
-                or journal_root.exists()
+                or (journal_root.exists() and not reuse_segments)
             ):
                 raise JournalError("run is already initialized or partially present")
             if segmented:
-                journal_root.mkdir()
-                segments_root.mkdir()
+                journal_root.mkdir(exist_ok=reuse_segments)
+                segments_root.mkdir(exist_ok=reuse_segments)
                 _fsync_directory(segments_root)
                 _fsync_directory(journal_root)
             _write_exclusive(manifest_path, manifest_bytes)

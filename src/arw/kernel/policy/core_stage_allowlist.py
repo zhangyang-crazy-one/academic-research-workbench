@@ -8,10 +8,12 @@ from __future__ import annotations
 
 # The staged adapter digest covers names and bytes, including dynamic tree
 # entries copied by stage-plugin.
-ARS_STAGE_TREE_SHA256 = "83ea255519f97609dc4cb1b370f5a463a7da93a413f3911f5eb94f2e8be3f13a"
+ARS_STAGE_TREE_SHA256 = "ac43d813116700a9d1ada6ffff817f2678d5975097e1133eff6d20ae9081381d"
 
 STATIC_STAGE_PATHS = frozenset({
     'schemas/v1/core-route.schema.json',
+    'schemas/v1/research-startup.schema.json',
+    'schemas/v1/research-direction.schema.json',
     '.codex-plugin/plugin.json',
     '.file-base/build-evidence.json',
     '.mcp.json',
@@ -22,6 +24,11 @@ STATIC_STAGE_PATHS = frozenset({
     'SBOM.cdx.json',
     'THIRD_PARTY_NOTICES.md',
     'bin/arw',
+    'skills/academic-research-workbench/references/research-direction-workflow.md',
+    'docs/runtime/research-direction-workflow.md',
+    'examples/research-directions/semantics-llm/package.json',
+    'examples/research-directions/computational-pilot/package.json',
+    'examples/research-directions/offline_walkthrough.py',
     'docs/runtime/durable-provenance.md',
     'docs/runtime/execution-provenance-recording.md',
     'docs/runtime/execution-harnesses.md',

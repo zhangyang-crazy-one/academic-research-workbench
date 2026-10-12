@@ -442,7 +442,9 @@ def local_store_files_provider(store_path: Path):
 def initialize_memory_project(root, project_id=None):
     from arw.kernel.capabilities import CapabilityUnavailable
     try:
-        return import_module("arw_research_memory.project").initialize_project(root, project_id)
+        from arw.kernel.ledger.projects import initialize_project
+
+        return initialize_project(root, project_id)
     except ImportError as error:
         raise CapabilityUnavailable("research.memory.save") from error
 
