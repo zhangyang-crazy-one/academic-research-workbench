@@ -57,3 +57,35 @@ Multi-series grouped bars require a band x axis. A continuous x axis with multip
 ## Concurrent qualification
 
 Research-artifact qualification waits up to five seconds for the canonical writer lock before preparing, rendering or committing. This operation-specific wait covers concurrent identical requests whose predecessor is still rendering or publishing. Once admitted, the ordinary immutable command identity and revision checks apply: identical retries return the accepted record; distinct stale requests fail. A timeout returns the existing canonical-writer-lock error without preparing or committing the waiting request. Internal callers may select a finite wait between zero and thirty seconds. General journal operations retain their existing timeout; no automatic retry or second writer is introduced.
+
+## Optional PGFPlots source export
+
+```bash
+arw artifact export-pgfplots --run-root RUN --input input/result-plot.json
+```
+
+This explicit operation uses the same original `compile_plot` result as SVG.
+Its immutable candidate contains `figure.tex` and `export.json`, with original
+`plot_value_id` values, exact rational coordinates, source/IR digests and a
+versioned exporter identity. Coordinates come from the compiled exact values,
+never rounded display strings or a separate statistical calculation. Category,
+series and stable-row jitter positions are layout only. Point, line, bar,
+strip and interval layers are exported. All user titles, captions, units,
+categories and series labels are escaped as plain TeX text; no arbitrary PGF
+keys, macros or external input files are accepted.
+
+No package is installed and no TeX executable runs. Source export is byte
+deterministic; fixed-environment rendering and publication quality remain
+`not_verified`. It does not modify the SVG receipt, accepted ledger or qualify
+result. Caller-side compilation requires an existing `pgfplots` package
+(`\usepackage{pgfplots}` / `\pgfplotsset{compat=1.18}`), an appropriate engine
+and fonts, followed by independent qualification. That optional environment
+qualification is not implemented by this source-only exporter. Large exact
+fractions and CJK text may exceed a chosen TeX environment's capabilities;
+source correctness does not establish successful visual rendering.
+
+Version observations checked 2026-10-12: [CTAN's package catalogue](https://ctan.org/pkg/pgfplots/?lang=en)
+reports **1.18.3**. The separate, unofficial [tikz.dev HTML manual](https://tikz.dev/pgfplots/reference)
+labels itself **1.18.2**. These are distinct sources, not an exact package or
+engine compatibility requirement. No TeX packages, fonts or manual bodies are
+redistributed.
