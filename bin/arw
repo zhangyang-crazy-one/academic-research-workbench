@@ -19,7 +19,6 @@ Commands:
   experiment     Accept numeric experiment claims against a versioned contract.
   learn          Evaluate and explicitly promote evidence-bound research lessons.
   memory         Save, recall, and hand off canonical project context.
-  research       Initialize a project, start a direction, and resume local research.
   provenance     Operate the opt-in Semantica-compatible Lite sidecar.
   orchestration-prepare/orchestration-dispatch
                  Prepare or dispatch parent-owned Phase 4 assignments.

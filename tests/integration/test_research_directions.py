@@ -511,6 +511,7 @@ def test_fixed_validator_does_not_forward_credentials(tmp_path, monkeypatch):
     def inspect(argv, **kwargs):
         observed.append((argv, kwargs["env"]))
         assert "-I" in argv
+        assert "-B" in argv
         assert kwargs["env"] == {
             "PATH": __import__("os").defpath,
             "PYTHONNOUSERSITE": "1",
@@ -550,3 +551,36 @@ def test_actual_offline_walkthrough_preserves_scopes(tmp_path):
     assert statuses(summary["checks"])["narrative"] == "human_review_required"
     assert statuses(summary["checks"])["evidence_null_result"] == "resolved"
     assert summary["version_upgrade"][0]["status"] == "review_required_not_false"
+
+
+def test_original_validator_never_adds_files_to_plugin_tree(tmp_path, monkeypatch):
+    import arw.research_directions as adapter
+
+    tools = tmp_path / "skills/academic-research-suite/ars/scripts"
+    tools.mkdir(parents=True)
+    for name in [
+        "research_workflow_profile.py",
+        "inquiry_branch_ledger.py",
+        "file_lock.py",
+    ]:
+        shutil.copy2(
+            ROOT / "skills/academic-research-suite/ars/scripts" / name, tools / name
+        )
+    monkeypatch.setenv("ARW_PLUGIN_ROOT", str(tmp_path))
+    monkeypatch.setattr(adapter, "installed_core_preflight", lambda: None)
+    before = {
+        p.relative_to(tmp_path): sha256_hex(p.read_bytes())
+        for p in tmp_path.rglob("*")
+        if p.is_file()
+    }
+    package = load_package(PACKAGE)
+    assert (
+        adapter.ars_check(package.profile)["stage_map"]["drafting"]["state"]
+        == "unresolved_fit"
+    )
+    after = {
+        p.relative_to(tmp_path): sha256_hex(p.read_bytes())
+        for p in tmp_path.rglob("*")
+        if p.is_file()
+    }
+    assert after == before

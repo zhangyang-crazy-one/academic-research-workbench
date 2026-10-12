@@ -116,7 +116,7 @@ def ars_check(profile, ledger=None, project_ref=None, *, profile_history=()):
             "direction branch snapshot exceeds its event bound",
         )
     process = subprocess.run(
-        [sys.executable, "-I", "-c", ARS_CHECK, str(tools)],
+        [sys.executable, "-I", "-B", "-c", ARS_CHECK, str(tools)],
         input=canonical_json_bytes(
             {
                 "profile": profile,

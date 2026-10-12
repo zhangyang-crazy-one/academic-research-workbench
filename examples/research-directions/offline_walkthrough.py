@@ -286,6 +286,7 @@ def execute(project: Path, plugin: Path):
     definition_ref = ref_for(replay_run(run).events[-1])
 
     # The author event is an explicit synthetic action in this demo, never produced by startup.
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(plugin / "skills/academic-research-suite/ars/scripts"))
     from inquiry_branch_ledger import append_event, new_ledger
 
