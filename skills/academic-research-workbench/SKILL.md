@@ -5,10 +5,7 @@ description: "ARW control-plane operations for new or existing project-bound res
 
 # Academic Research Workbench
 
-For new directions, use `research start/status/resume` and read the
-[shared startup contract](references/research-direction-workflow.md) before selecting a paper narrative.
-Keep hypotheses as candidates and separate reading, record integrity, experiment
-conformance and scientific support; hooks remain observational.
+For new directions, use `research start/status/resume`; read the [shared startup contract](references/research-direction-workflow.md) before selecting a paper narrative.
 
 Resolve the plugin root as the parent of this installed `skills/` directory, then run the
 installed launcher from that root:

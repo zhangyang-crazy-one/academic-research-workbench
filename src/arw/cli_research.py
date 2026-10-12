@@ -2,9 +2,6 @@
 
 from pathlib import Path
 
-from arw.kernel.ledger.projects import initialize_project, project_identity
-from arw.research_startup import project_root, start, status
-
 
 def configure(subparsers):
     parser = subparsers.add_parser(
@@ -87,6 +84,9 @@ def configure(subparsers):
 
 
 def handle(args):
+    from arw.kernel.ledger.projects import initialize_project, project_identity
+    from arw.research_startup import project_root, start, status
+
     action = args.research_command
     if action == "direction":
         from arw.research_directions import (
