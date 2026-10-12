@@ -34,6 +34,16 @@ def _crossref(*, retracted=False, items=None):
     return json.dumps({"message": {"items": items}}).encode()
 
 
+def _arxiv_atom(entry_id: str) -> bytes:
+    return (
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<entry><id>http://arxiv.org/abs/{entry_id}</id>"
+        "<title>Evidence for Alpha</title>"
+        "<published>2024-01-01T00:00:00Z</published>"
+        "<author><name>Smith</name></author></entry></feed>"
+    ).encode()
+
+
 def test_offline_replay_and_source_digest(reference, tmp_path):
     raw = _crossref()
     receipt = check_response(reference, "crossref", raw, observed_at="2026-09-25T00:00:00Z")
@@ -134,10 +144,9 @@ def test_all_provider_fixture_shapes(reference):
     dblp = {"result": {"hits": {"hit": [{"info": {"key": "journals/x/1", "title": reference.title,
                                                          "year": "2024", "authors": {"author": ["Smith"]}}}]}}}
     arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345"})
-    arxiv = b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/2401.12345</id><title>Evidence for Alpha</title><published>2024-01-01T00:00:00Z</published><author><name>Smith</name></author></entry></feed>'
     assert check_response(reference, "openalex", json.dumps(openalex).encode(), observed_at="2026-09-25T00:00:00Z").status == "retracted"
     assert check_response(reference, "dblp", json.dumps(dblp).encode(), observed_at="2026-09-25T00:00:00Z").status == "verified"
-    assert check_response(arxiv_ref, "arxiv", arxiv, observed_at="2026-09-25T00:00:00Z").status == "verified"
+    assert check_response(arxiv_ref, "arxiv", _arxiv_atom("2401.12345"), observed_at="2026-09-25T00:00:00Z").status == "verified"
 
 
 def test_ars_source_bridge_binds_existing_manifest():
@@ -157,7 +166,7 @@ def test_crossref_retraction_is_read_from_updated_by_on_the_work(reference):
     assert check_response(reference, "crossref", _crossref(items=notice), observed_at=observed).status == "verified"
     retracted = check_response(reference, "crossref", _crossref(retracted=True), observed_at=observed)
     assert retracted.status == "retracted"
-    assert retracted.parser_version == "1.1.0"
+    assert retracted.parser_version == "1.2.0"
     withdrawn = [{**notice[0], "update-to": [], "updated-by": [{"type": "withdrawal"}]}]
     assert check_response(reference, "crossref", _crossref(items=withdrawn), observed_at=observed).status == "retracted"
     corrected = [{**notice[0], "update-to": [], "updated-by": [{"type": "correction"}]}]
@@ -173,3 +182,53 @@ def test_parser_1_0_0_receipts_still_replay(reference, tmp_path):
     assert legacy.status == "retracted"
     publish_check(tmp_path, legacy, raw)
     assert replay_check(tmp_path, reference, legacy.receipt_sha256) == legacy
+
+
+def test_unversioned_arxiv_id_matches_versioned_atom_entry(reference):
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345"})
+    raw = _arxiv_atom("2401.12345v1")
+    receipt = check_response(arxiv_ref, "arxiv", raw, observed_at="2026-09-25T00:00:00Z")
+    assert receipt.status == "verified"
+    assert receipt.matched_id == "2401.12345v1"
+    assert receipt.parser_version == "1.2.0"
+
+
+def test_pinned_arxiv_version_does_not_match_a_different_version(reference):
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345v1"})
+    raw = _arxiv_atom("2401.12345v2")
+    receipt = check_response(arxiv_ref, "arxiv", raw, observed_at="2026-09-25T00:00:00Z")
+    assert receipt.status == "not_found"
+    assert receipt.matched_id is None
+
+
+def test_parser_1_1_0_arxiv_receipts_still_replay(reference, tmp_path):
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345"})
+    raw = _arxiv_atom("2401.12345v1")
+    legacy = check_response(arxiv_ref, "arxiv", raw, observed_at="2026-09-25T00:00:00Z",
+                            parser_version="1.1.0")
+    assert legacy.status == "not_found"
+    assert legacy.matched_id is None
+    publish_check(tmp_path, legacy, raw)
+    assert replay_check(tmp_path, arxiv_ref, legacy.receipt_sha256) == legacy
+
+
+@pytest.mark.parametrize("requested,observed,status", [
+    ("2401.12345", "2401.12346v1", "not_found"),
+    ("2401.12345v1", "2401.12345v1", "verified"),
+    ("2401.12345v1", "2401.12345", "not_found"),
+])
+def test_arxiv_base_and_pinned_version_boundaries(reference, requested, observed, status):
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": requested})
+    result = check_response(arxiv_ref, "arxiv", _arxiv_atom(observed), observed_at="2026-09-25T00:00:00Z")
+    assert result.status == status
+
+
+def test_multiple_versions_for_unversioned_reference_remain_ambiguous(reference):
+    import xml.etree.ElementTree as ET
+
+    feed = ET.fromstring(_arxiv_atom("2401.12345v1"))
+    feed.append(ET.fromstring(_arxiv_atom("2401.12345v2"))[0])
+    arxiv_ref = reference.model_copy(update={"doi": None, "arxiv_id": "2401.12345"})
+    result = check_response(arxiv_ref, "arxiv", ET.tostring(feed), observed_at="2026-09-25T00:00:00Z")
+    assert result.status == "ambiguous"
+    assert result.matched_id is None

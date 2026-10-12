@@ -26,10 +26,16 @@ CheckStatus = Literal[
 ]
 UseRole = Literal["supporting", "background", "research_object"]
 MAX_RESPONSE_BYTES = 1_048_576
-PARSER_VERSION = "1.1.0"
+PARSER_VERSION = "1.2.0"
 # 1.0.0 read Crossref retractions from `update-to`; kept so its receipts replay.
-ParserVersion = Literal["1.0.0", "1.1.0"]
+# 1.1.0 compared arXiv ids by exact string equality, so an unversioned reference
+# did not match a versioned Atom entry id; kept so its receipts replay.
+# 1.2.0: an unversioned reference arXiv id matches any version of that paper;
+# a pinned version still requires that exact version. matched_id records the
+# versioned id returned by arXiv (the Atom entry id's final path segment).
+ParserVersion = Literal["1.0.0", "1.1.0", "1.2.0"]
 _CROSSREF_RETRACTION_TYPES = frozenset({"retraction", "withdrawal", "removal"})
+_ARXIV_VERSION_SUFFIX = re.compile(r"(v\d+)$", re.IGNORECASE)
 
 
 class ReferenceRecord(StrictModel):
@@ -149,6 +155,35 @@ def _doi(value: str) -> str:
     return value.removeprefix("https://doi.org/").removeprefix("http://doi.org/")
 
 
+def _split_arxiv_id(arxiv_id: str) -> tuple[str, str | None]:
+    match = _ARXIV_VERSION_SUFFIX.search(arxiv_id)
+    if match is None:
+        return arxiv_id, None
+    return arxiv_id[: match.start()], match.group(1)
+
+
+def _arxiv_ids_agree(
+    reference_id: str, candidate_id: str, parser_version: ParserVersion
+) -> bool:
+    """Match a reference arXiv id against a candidate Atom-extracted id.
+
+    Parser 1.2.0 treats an unversioned reference as matching any version of
+    the same paper. A reference that pins a version still requires that
+    exact version. Older parsers compared the two strings for equality.
+    """
+    ref = reference_id.casefold()
+    cand = candidate_id.casefold()
+    if parser_version in {"1.0.0", "1.1.0"}:
+        return ref == cand
+    ref_base, ref_version = _split_arxiv_id(ref)
+    cand_base, cand_version = _split_arxiv_id(cand)
+    if ref_base != cand_base:
+        return False
+    if ref_version is None:
+        return True
+    return ref_version == cand_version
+
+
 def _query(reference: ReferenceRecord, provider: Provider) -> str:
     if provider == "arxiv" and reference.arxiv_id:
         return reference.arxiv_id
@@ -171,6 +206,8 @@ def _candidates(
         for entry in root.findall("a:entry", ns):
             result.append(
                 {
+                    # Atom ids include a version suffix (e.g. 2610.09554v1).
+                    # Keep it: matched_id records this observed id.
                     "id": (entry.findtext("a:id", default="", namespaces=ns)).rsplit(
                         "/", 1
                     )[-1],
@@ -286,7 +323,7 @@ def _result(
     for item in candidates:
         identifier = str(item.get("id") or "")
         if reference.arxiv_id and provider == "arxiv":
-            agrees = identifier.casefold() == reference.arxiv_id.casefold()
+            agrees = _arxiv_ids_agree(reference.arxiv_id, identifier, parser_version)
         elif reference.doi and item.get("doi"):
             agrees = _doi(str(item["doi"])) == _doi(reference.doi)
         elif reference.doi and provider in {"crossref", "openalex"}:
