@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export and offline-verify the actual Phase 7 command and prior receipt graph."""
+"""Export legacy Phase 7 evidence and verify retained release profiles."""
 
 from __future__ import annotations
 
@@ -299,7 +299,10 @@ def main() -> None:
         verify_qualification(args.qualification_root, args.source_root, args.source_commit)
     else:
         raise ValueError("provide required export or verification inputs")
-    print("phase7-release-evidence: actual command streams and pinned prior graph verified")
+    if args.operation == "verify" and (args.qualification_root / "release-qualification.json").exists():
+        print("phase7-release-evidence: portable installed-core command streams verified")
+    else:
+        print("phase7-release-evidence: actual command streams and pinned prior graph verified")
 
 
 if __name__ == "__main__":

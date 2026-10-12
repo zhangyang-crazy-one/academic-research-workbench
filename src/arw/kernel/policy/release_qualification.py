@@ -114,6 +114,11 @@ def verify(
         or digest(stage / "share/arw/evidence/candidate-build.json") != build_sha256
     ):
         raise ValueError("portable installed wheel/build differs from candidate")
+    source = read(stage / "share/arw/evidence/candidate-build.json").get(
+        "source_identity", {}
+    )
+    if source.get("git_commit") != source_commit or source.get("git_status") != "":
+        raise ValueError("portable staged build source identity differs")
     rows = receipt["commands"]
     if not isinstance(rows, list) or len(rows) != len(PLANS):
         raise ValueError("portable release command set differs")

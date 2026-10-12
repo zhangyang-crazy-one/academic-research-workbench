@@ -34,7 +34,10 @@ def portable(tmp_path: Path):
     build.parent.mkdir()
     build.write_bytes(
         canonical_json_bytes(
-            {"artifacts": [{"kind": "wheel", "sha256": digest(wheel)}]}
+            {
+                "source_identity": {"git_commit": "a" * 40, "git_status": ""},
+                "artifacts": [{"kind": "wheel", "sha256": digest(wheel)}],
+            }
         )
     )
     rows = []
@@ -160,6 +163,19 @@ def test_relative_and_absolute_transferred_paths_have_same_verdict(
     shutil.copytree(root, moved)
     monkeypatch.chdir(tmp_path)
     assert validate(moved, receipt) == validate(Path("download/qualification"), receipt)
+
+
+def test_rehashed_receipt_cannot_substitute_staged_build_source(portable):
+    root, receipt = portable
+    build = root / "stage/share/arw/evidence/candidate-build.json"
+    payload = read_result(build)
+    payload["source_identity"]["git_commit"] = "b" * 40
+    build.write_bytes(canonical_json_bytes(payload))
+    receipt["build_evidence_sha256"] = digest(build)
+    receipt["stage_sha256"] = stage_digest(root / "stage")
+    (root / RECEIPT).write_bytes(canonical_json_bytes(receipt))
+    with pytest.raises(ValueError, match="staged build source"):
+        validate(root, receipt)
 
 
 def test_export_reader_accepts_portable_profile_without_prior_phase_pins(portable):
