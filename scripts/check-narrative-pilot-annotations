@@ -25,6 +25,7 @@ def check(directory: Path, verify_sources: bool = False) -> dict:
     ):
         raise ValueError("exactly ten unique material and annotation rows are required")
     counts = dict.fromkeys(("pending", "kept", "superseded", "abandoned", "unknown"), 0)
+    owner_annotations = 0
     for row in rows:
         item = identities[row["sample_id"]]
         if row["source_sha256"] != item["source_sha256"]:
@@ -40,7 +41,25 @@ def check(directory: Path, verify_sources: bool = False) -> dict:
                 or hashlib.sha256(raw).hexdigest() != item["source_sha256"]
             ):
                 raise ValueError("pinned source bytes differ")
+        basis = row.get("annotation_basis", "").strip() or "source_history"
+        if basis not in ("source_history", "owner_response"):
+            raise ValueError("invalid annotation basis")
         status = row["human_status"].strip()
+        if basis == "owner_response":
+            if not row.get("human_annotation", "").strip():
+                raise ValueError("owner response needs the actual annotation text")
+            if any(
+                row[k].strip()
+                for k in ("human_status", "reason_status", "human_reason")
+            ):
+                raise ValueError("owner response must not be encoded as source history")
+            if not row["annotator_id"].strip() or not row["evidence_locator"].strip():
+                raise ValueError("actual annotator and response locator are required")
+            if not row["annotated_at_utc"].endswith("Z"):
+                raise ValueError("annotation recording timestamp must use UTC Z")
+            datetime.fromisoformat(row["annotated_at_utc"])
+            owner_annotations += 1
+            continue
         if not status:
             if any(
                 row[k].strip()
@@ -67,13 +86,19 @@ def check(directory: Path, verify_sources: bool = False) -> dict:
             raise ValueError("actual annotator and evidence locator are required")
         if not row["annotated_at_utc"].endswith("Z"):
             raise ValueError("actual annotation timestamp must use UTC Z")
-        datetime.fromisoformat(row["annotated_at_utc"].replace("Z", "+00:00"))
+        datetime.fromisoformat(row["annotated_at_utc"])
         counts[status] += 1
     return {
-        "status": "pending_human_annotations"
-        if counts["pending"]
-        else "ready_for_independent_comparison",
+        "status": (
+            "pending_human_annotations"
+            if counts["pending"]
+            else "owner_annotations_recorded"
+            if owner_annotations
+            else "ready_for_independent_comparison"
+        ),
         "sample_count": 10,
+        "owner_annotation_count": owner_annotations,
+        "source_history_comparison_ready": not (counts["pending"] or owner_annotations),
         "annotation_counts": counts,
         "agreement": "not_evaluated",
         "two_round_handoff_resume": "not_evaluated",

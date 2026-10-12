@@ -7,6 +7,14 @@ The pilot MUST retain ten pinned public source locators and leave actual human l
 - **WHEN** the source kit is prepared without human annotations
 - **THEN** no human disposition or agreement count is fabricated and readiness remains pending
 
+#### Scenario: Owner annotates through conversation
+- **WHEN** the owner supplies actual responses and a selected option and requests CSV transcription
+- **THEN** the CSV retains their annotation text, selected option, identity, response locator and recording time without inventing source-history labels
+
+#### Scenario: Owner response is not historical evidence
+- **WHEN** a row contains owner adoption or reporting instructions
+- **THEN** validation counts it as a recorded owner annotation, does not declare historical comparison ready, and rejects encoding the same row as source-history status/reason ground truth
+
 ### Requirement: Source scope and unknown reasons
 The pilot SHALL distinguish source metadata, machine encoding, human status and human reason, with explicit unknown where the annotator cannot verify a claim.
 

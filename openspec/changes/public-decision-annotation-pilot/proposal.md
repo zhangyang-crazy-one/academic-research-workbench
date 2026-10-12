@@ -1,13 +1,13 @@
 ## Why
 
-Issue #120 needs independent human labels to assess whether narrative trail preserves public research decisions. The owner authorized preparing ten public materials for their annotation; no human ground truth exists yet.
+Issue #120 needs independent human labels to assess whether narrative trail preserves public research decisions. The owner supplied ten answers and explicitly requested their transcription into the CSV, including option B (optional dimensions) for the third item. These answers must be retained without being silently converted into NumPy historical judgments.
 
 ## What Changes
 
 - Prepare ten pinned public numerical-research infrastructure decisions with source hashes and source locators.
-- Provide a blank independent annotation sheet and explicit status/reason rubric.
+- Retain all ten owner answers in the independent annotation sheet with response provenance and the third item's selected option.
 - Add an offline import/comparison workflow using existing narrative contracts, preserving unknown and two-round handoff evidence.
-- Keep actual human annotation and pilot accuracy pending until owner input.
+- Distinguish recorded owner answers from source-history labels; keep historical comparison and pilot accuracy pending.
 
 ## Capabilities
 

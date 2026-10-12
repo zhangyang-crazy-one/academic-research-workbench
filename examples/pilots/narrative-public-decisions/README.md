@@ -1,6 +1,8 @@
 # #120 公开研究决策标注材料
 
-请填写 [annotations.csv](annotations.csv)。十行的人工字段目前全部为空；这是待标注，不代表人工选择了 `unknown`。
+[annotations.csv](annotations.csv) 已逐条录入作者在当前会话给出的十项人工标注；第 3 项选择 **B：允许维度缺省**。`human_annotation` 保留回答原文，`selected_option` 记录 B，其余项没有补造选项。
+
+这些回答以 `annotation_basis=owner_response` 记录，内容包括采用意见和报备、转换、优化的条件。它们是真实人工输入，不自动等于 NumPy 的历史结论。因此 `human_status`、`reason_status`、`human_reason` 的历史判定字段保持空白，未从回答中补造四类状态或原作者动机。`annotator_id=owner`，`evidence_locator` 定位当前会话中的回答；`annotated_at_utc` 为代录时间，不声称是原消息发送时间。
 
 样本限定为 NumPy 的科学计算方法与研究基础设施提案。它们会影响数值研究和实验实现，但不是十篇独立论文；不能据此宣称普遍准确率。来源页面的 Status 只是已记录的公开元数据，不是替你填写的判定。
 
@@ -26,10 +28,10 @@
 - `annotator_id`：你的标注身份；`annotated_at_utc`：实际标注时间，形如 `2026-10-12T12:00:00Z`，不要提前填写。
 - `sample_id` 和 `source_sha256` 保持不变；表格编辑器需按文本保存摘要。
 
-填写后运行 `python3 scripts/check-narrative-pilot-annotations`。该检查仅验证材料和人工输入是否完整；不会将人工填写自动算作 ARW 输出或 pilot 一致率。
+运行 `python3 scripts/check-narrative-pilot-annotations`，检查分别统计作者回答和来源历史判定。十项作者回答已完整记录；来源历史比对准备状态仍为 false。旧版仅包含历史判定字段的 CSV 保持可读。该检查不会将人工填写自动算作 ARW 输出或 pilot 一致率。
 
 ## 当前证据范围
 
 材料在 2026-10-12 检索，使用 materials.json 中固定的 NumPy commit 和逐文件 SHA-256。只保存原始简述和来源元数据，不复制上游正文；原文版权仍归 NumPy 作者。protocol.json 在人工标注前冻结机器状态映射。
 
-人工标注、真实 narrative 导出与比对、两轮 handoff/resume 尚未完成。#120 保持开放，准备 PR 不宣称完成这些验收项。
+作者回答已录入；来源历史的结构化判定、真实 narrative 导出与比对、两轮 handoff/resume 尚未完成。#120 保持开放，PR 不宣称完成这些验收项。公开来源的冻结机器映射未因作者回答而调整。

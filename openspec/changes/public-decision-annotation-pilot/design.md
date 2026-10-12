@@ -1,14 +1,14 @@
 ## Context
 
-#120 requires ten actual independent human annotations. The owner has asked for materials to annotate. Ten NumPy proposals provide inspectable numerical-method and research infrastructure decisions, including maintained, superseded, rejected, withdrawn and deferred proposals.
+#120 requires ten actual independent human annotations. The owner returned ten answers, clarified the third as option B, and explicitly requested recording them in CSV. Ten NumPy proposals provide inspectable numerical-method and research infrastructure decisions, including maintained, superseded, rejected, withdrawn and deferred proposals.
 
 ## Goals / Non-Goals
 
-Prepare independently inspectable frozen source locators and a blank annotation sheet. Preserve pending versus explicitly unknown. Do not infer authors' motives from code diffs, claim pilot accuracy, or generalize this single-project convenience sample to all research.
+Retain independently inspectable frozen source locators and the owner's actual annotation text. Preserve owner answers, historical labels, pending and explicitly unknown as distinct information. Do not infer authors' motives from code diffs, claim pilot accuracy, or generalize this single-project convenience sample to all research.
 
 ## Decisions
 
-Record immutable upstream commit URLs, whole-source SHA-256 and retrieval date. Only brief original summaries and metadata observations are redistributed, not upstream bodies. Upstream status is a source observation, not the human label. Human status, reason, locator, identity and date remain blank. Before annotations, freeze a separate source-status encoding protocol; do not adjust the machine recipe to fit later human labels. Defer actual comparison and two-round handoff acceptance until the owner returns annotations.
+Record immutable upstream commit URLs, whole-source SHA-256 and retrieval date. Only brief original summaries and metadata observations are redistributed, not upstream bodies. Upstream status is a source observation, not the human label. Store the owner's answers in `human_annotation` with `annotation_basis=owner_response`, a current-session response locator, owner identity and transcription time; record option B in `selected_option`. Do not translate adoption conditions or reporting instructions into unsupported historical state/reason labels. Legacy source-history rows remain readable. Keep the previously frozen machine encoding unchanged. Defer actual historical comparison and two-round handoff acceptance until corresponding evidence exists.
 
 ## Risks / Trade-offs
 
