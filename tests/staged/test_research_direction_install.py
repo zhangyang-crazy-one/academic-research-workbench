@@ -40,6 +40,8 @@ def test_installed_start_intake_numeric_walkthrough_keeps_stage_immutable(tmp_pa
             str(ROOT / "scripts/stage-plugin"),
             "--stage-root",
             str(stage),
+            "--evidence-root",
+            str(tmp_path / "stage-evidence"),
             *candidate_stage_args(),
         ],
         env=env,
