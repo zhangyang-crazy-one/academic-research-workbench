@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Validate independent human inputs; never report pilot agreement here."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import re
+from datetime import datetime
+from pathlib import Path
+from urllib.request import urlopen
+
+
+def check(directory: Path, verify_sources: bool = False) -> dict:
+    materials = json.loads((directory / "materials.json").read_text())["materials"]
+    with (directory / "annotations.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    identities = {item["sample_id"]: item for item in materials}
+    if (
+        len(identities) != 10
+        or len(rows) != 10
+        or {r["sample_id"] for r in rows} != set(identities)
+    ):
+        raise ValueError("exactly ten unique material and annotation rows are required")
+    counts = dict.fromkeys(("pending", "kept", "superseded", "abandoned", "unknown"), 0)
+    for row in rows:
+        item = identities[row["sample_id"]]
+        if row["source_sha256"] != item["source_sha256"]:
+            raise ValueError("annotation source identity differs")
+        if not re.fullmatch(r"[0-9a-f]{64}", item["source_sha256"]):
+            raise ValueError("invalid source digest")
+        if verify_sources:
+            url = f"https://raw.githubusercontent.com/numpy/numpy/{item['source_commit']}/{item['source_path']}"
+            with urlopen(url, timeout=30) as stream:
+                raw = stream.read(262145)
+            if (
+                len(raw) > 262144
+                or hashlib.sha256(raw).hexdigest() != item["source_sha256"]
+            ):
+                raise ValueError("pinned source bytes differ")
+        status = row["human_status"].strip()
+        if not status:
+            if any(
+                row[k].strip()
+                for k in (
+                    "reason_status",
+                    "human_reason",
+                    "evidence_locator",
+                    "annotator_id",
+                    "annotated_at_utc",
+                )
+            ):
+                raise ValueError("partial annotation requires a human_status")
+            counts["pending"] += 1
+            continue
+        if status not in ("kept", "superseded", "abandoned", "unknown"):
+            raise ValueError("invalid human_status")
+        if row["reason_status"] not in ("documented", "unknown"):
+            raise ValueError("reason_status must be documented or unknown")
+        if row["reason_status"] == "documented" and not row["human_reason"].strip():
+            raise ValueError("documented reason needs text")
+        if row["reason_status"] == "unknown" and row["human_reason"].strip():
+            raise ValueError("unknown reason must not contain a guessed explanation")
+        if not row["annotator_id"].strip() or not row["evidence_locator"].strip():
+            raise ValueError("actual annotator and evidence locator are required")
+        if not row["annotated_at_utc"].endswith("Z"):
+            raise ValueError("actual annotation timestamp must use UTC Z")
+        datetime.fromisoformat(row["annotated_at_utc"].replace("Z", "+00:00"))
+        counts[status] += 1
+    return {
+        "status": "pending_human_annotations"
+        if counts["pending"]
+        else "ready_for_independent_comparison",
+        "sample_count": 10,
+        "annotation_counts": counts,
+        "agreement": "not_evaluated",
+        "two_round_handoff_resume": "not_evaluated",
+        "sources_verified": verify_sources,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--directory",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent
+        / "examples/pilots/narrative-public-decisions",
+    )
+    parser.add_argument(
+        "--verify-sources",
+        action="store_true",
+        help="explicit network verification of pinned public sources",
+    )
+    args = parser.parse_args()
+    try:
+        result = check(args.directory, args.verify_sources)
+    except (ValueError, KeyError, OSError) as error:
+        parser.exit(2, f"annotation validation failed: {error}\n")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
