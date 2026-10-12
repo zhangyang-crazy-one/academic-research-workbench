@@ -288,7 +288,7 @@ def test_source_hidden_installed_ars_route_and_bounded_receipt(
     )
 
 
-@pytest.mark.requires_retained_evidence("candidate_or_phase7")
+@pytest.mark.requires_retained_evidence("qualification:phase7")
 def test_installed_route_rejects_removed_qualification_lock(
     installed_stage: tuple[Path, Path, dict[str, str]],
     tmp_path: Path,
@@ -297,8 +297,8 @@ def test_installed_route_rejects_removed_qualification_lock(
     # A qualified stage binds its lock in the closed inventory. Removing that
     # file invalidates the installed package before routing can begin.
     lock_file = installed / "supply-chain/integration-lock.json"
-    if lock_file.is_file():
-        lock_file.unlink()
+    assert lock_file.is_file(), "this mutation requires a qualified stage with a lock"
+    lock_file.unlink()
     command_environment = {
         **environment,
         "HOME": str(tmp_path / "home"),

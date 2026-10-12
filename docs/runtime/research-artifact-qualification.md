@@ -53,3 +53,7 @@ mutate canonical history.
 SVG coordinates retain the fixed six-decimal layout format. Numeric tick labels use independent significant figures and scientific notation; near-neighbour ranges use an explicitly stated common axis offset when full labels would wrap. Nonzero small domains remain visibly nonzero, and tick labels remain distinct and deterministic.
 
 Multi-series grouped bars require a band x axis. A continuous x axis with multiple bar series reports `continuous_grouped_bar_unsupported` during compilation. Single-series continuous bars and band-axis grouped bars remain supported.
+
+## Concurrent qualification
+
+Research-artifact qualification waits up to five seconds for the canonical writer lock before preparing, rendering or committing. This operation-specific wait covers concurrent identical requests whose predecessor is still rendering or publishing. Once admitted, the ordinary immutable command identity and revision checks apply: identical retries return the accepted record; distinct stale requests fail. A timeout returns the existing canonical-writer-lock error without preparing or committing the waiting request. Internal callers may select a finite wait between zero and thirty seconds. General journal operations retain their existing timeout; no automatic retry or second writer is introduced.
