@@ -12,6 +12,8 @@ Add a distinct `arw.release-qualification.v1` profile with a closed command plan
 
 The default prepare-qualified-stage uses this profile when no explicit platform-lock inputs are selected. Explicit legacy inputs still invoke the historical platform diagnostic. candidate-bundle, check-release-candidate and the offline evidence consumer select the new reader by its receipt filename and reject mixed profiles. Original CI artifact hashes/source commit and owner OIDC authority remain authoritative.
 
+Installed-stage identity binds each regular file's relative path, content digest and executable permission bits. A newly generated transfer manifest cannot admit a permission change made after qualification. The producer and private core probe explicitly pass their running interpreter through ARW_BUILD_PYTHON / ARW_PYTHON; the launcher retains its minimum compatibility check without depending on interpreter discovery on PATH. Authentication variables remain excluded.
+
 ## Risks / Trade-offs
 
 Provider-internal behavior and native plugin trust are deployment concerns; core package verification does not claim live qualification of all platforms. Exact candidate hashes preserve provenance without imposing exact tool versions. Stream receipts attest observed local execution; independent CI signatures and owner release authority remain required for publication.

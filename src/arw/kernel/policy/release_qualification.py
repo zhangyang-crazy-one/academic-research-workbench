@@ -69,7 +69,11 @@ def stage_digest(stage: Path) -> str:
     return hashlib.sha256(
         canonical_json_bytes(
             sorted(
-                (p.relative_to(stage).as_posix(), digest(p))
+                (
+                    p.relative_to(stage).as_posix(),
+                    digest(p),
+                    stat.S_IMODE(p.stat().st_mode) & 0o111,
+                )
                 for p in direct_files(stage)
             )
         )

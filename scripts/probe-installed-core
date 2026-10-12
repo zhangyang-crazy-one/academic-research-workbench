@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,9 @@ def main() -> None:
             "HOME": str(home),
             "CODEX_HOME": str(root / "package-cache"),
             "PYTHONNOUSERSITE": "1",
+            # The producer already selected this interpreter; it need not be
+            # discoverable on PATH. The launcher still checks its supported floor.
+            "ARW_PYTHON": sys.executable,
         }
         # Preserve explicit package-resolution settings; never forward model keys.
         for key, value in os.environ.items():

@@ -11,4 +11,6 @@
 ## 3. Verification and delivery
 
 - [x] 3.1 Verify real installed lifecycle behavior, absent harnesses, mutations, unsafe paths and legacy readers.
+- [x] 3.3 Bind executable bits and verify permission mutation rejection at qualification, bundle creation and technical release checks.
+- [x] 3.4 Preserve the selected supported interpreter in the credential-isolated probe and verify an older-only PATH.
 - [ ] 3.2 Submit the verified change, then use fresh successful main CI subjects for the actual v0.2.0 publication.

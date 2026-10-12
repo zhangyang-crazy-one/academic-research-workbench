@@ -79,6 +79,7 @@ def create(args: argparse.Namespace) -> None:
             env = {
                 "PATH": os.environ.get("PATH", os.defpath),
                 "ARW_BUILD_PYTHON": sys.executable,
+                "ARW_PYTHON": sys.executable,
             }
             for key, value in os.environ.items():
                 if key.startswith(("PIP_INDEX_", "UV_INDEX_")) or key in {

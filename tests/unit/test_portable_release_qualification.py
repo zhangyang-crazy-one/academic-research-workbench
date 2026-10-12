@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import runpy
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,10 @@ def portable(tmp_path: Path):
     wheel = stage / "share/arw/wheels/candidate.whl"
     wheel.parent.mkdir(parents=True)
     wheel.write_bytes(b"candidate")
+    launcher = stage / "bin/arw"
+    launcher.parent.mkdir()
+    launcher.write_bytes(b"#!/bin/sh\nexit 0\n")
+    launcher.chmod(0o755)
     build = stage / "share/arw/evidence/candidate-build.json"
     build.parent.mkdir()
     build.write_bytes(
@@ -101,6 +106,7 @@ def test_no_harness_host_lock_or_pinned_tool_version_is_required(portable):
     "damage",
     [
         "stage",
+        "executable",
         "log",
         "failed",
         "bool-exit",
@@ -117,6 +123,8 @@ def test_changed_incomplete_or_unsafe_evidence_is_rejected(portable, damage):
     root, receipt = portable
     if damage == "stage":
         (root / "stage/extra").write_bytes(b"mutation")
+    elif damage == "executable":
+        (root / "stage/bin/arw").chmod(0o644)
     elif damage == "log":
         (root / "commands/installed-core/stdout.log").write_bytes(b"altered")
     elif damage in {"failed", "bool-exit", "plan"}:
@@ -281,3 +289,70 @@ def read_result(path):
     from arw.kernel.core.canonical import strict_json_loads
 
     return strict_json_loads(path.read_bytes())
+
+
+def test_probe_preserves_selected_interpreter_without_forwarding_credentials(
+    tmp_path, monkeypatch, capsys
+):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    # The actual interpreter is outside this PATH. Ambient overrides and model
+    # credentials must not determine the private installed probe environment.
+    monkeypatch.setenv("PATH", str(tmp_path / "old-python-only"))
+    monkeypatch.setenv("ARW_PYTHON", "/untrusted/ambient/python")
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-secret-must-not-forward")
+    monkeypatch.setattr(
+        sys, "argv", ["probe-installed-core", "--stage-root", str(stage)]
+    )
+    code = runpy.run_path(str(ROOT / "scripts/probe-installed-core"))
+    observed = []
+
+    def invoke(argv, **kwargs):
+        environment = kwargs["env"]
+        assert environment["ARW_PYTHON"] == sys.executable
+        assert "OPENAI_API_KEY" not in environment
+        assert environment["HOME"] != str(Path.home())
+        observed.append(argv[1])
+        if argv[1] == "health":
+            reply = {"status": "ok"}
+        elif argv[1] == "route":
+            reply = {"core_integrity": "PASS"}
+        elif argv[1] == "artifact":
+            if argv[-1] == "../outside.txt":
+                return SimpleNamespace(returncode=65, stdout=b"", stderr=b"")
+            reply = {
+                "schema_version": "fixture",
+                "content_sha256": digest(Path(argv[4]) / "observation.txt"),
+            }
+        elif argv[1] == "init":
+            reply = {}
+        elif argv[1] == "status":
+            reply = {
+                "run_id": "fixture-run",
+                "recovery_health": "healthy",
+                "accepted_revision": 1,
+                "ledger_head_sha256": "a" * 64,
+            }
+        else:
+            reply = {
+                "run_id": "fixture-run",
+                "revision": 1,
+                "event_count": 1,
+                "last_event_sha256": "a" * 64,
+            }
+        return SimpleNamespace(
+            returncode=0, stdout=canonical_json_bytes(reply), stderr=b""
+        )
+
+    monkeypatch.setattr(code["subprocess"], "run", invoke)
+    code["main"]()
+    assert observed == [
+        "health",
+        "route",
+        "artifact",
+        "artifact",
+        "init",
+        "status",
+        "replay",
+    ]
+    assert '"status": "PASS"' in capsys.readouterr().out

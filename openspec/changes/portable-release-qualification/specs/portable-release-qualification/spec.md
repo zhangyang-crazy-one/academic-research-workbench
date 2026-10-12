@@ -15,8 +15,12 @@ Formal release SHALL accept retained installed-core evidence without requiring a
 The verifier SHALL bind actual command outputs, installed stage and candidate wheel/build evidence to the reviewed source, reject malformed, failed, unsafe or changed receipts, and retain original CI subjects and independent publication authority.
 
 #### Scenario: Evidence mutation
-- **WHEN** command logs, stage bytes or candidate identity change after qualification
+- **WHEN** command logs, stage bytes, executable permission bits or candidate identity change after qualification
 - **THEN** creation, transfer and ordinary technical release checks reject the evidence
+
+#### Scenario: Explicit supported interpreter outside PATH
+- **WHEN** the selected compatible Python interpreter is outside PATH and PATH exposes only an older interpreter
+- **THEN** the private installed-core probe passes the selected interpreter explicitly to the launcher without forwarding model credentials or imposing an exact Python version
 
 ### Requirement: Optional deployment qualification
 Specific execution-platform qualifications SHALL remain available as optional diagnostics, and historical Phase 7 receipts SHALL remain readable without being mandatory for the default formal release.
