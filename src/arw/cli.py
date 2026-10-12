@@ -168,6 +168,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_learning(subparsers)
     from arw.cli_submission import configure as configure_submission
     configure_submission(subparsers)
+    from arw.cli_review import configure as configure_review
+    configure_review(subparsers)
     from arw.cli_claims import configure as configure_claims
     configure_claims(subparsers)
     from arw.cli_numeric import configure as configure_numeric
@@ -713,6 +715,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (SelectionAuditError, CapabilityUnavailable, ValueError, OSError) as error:
             _write_json({"status": "error", "code": getattr(error, "code", "selection_audit_invalid"), "message": str(error)[:256]})
             return 65
+    if args.command == "review":
+        from arw.cli_review import handle as handle_review
+        try:
+            _write_json(handle_review(args))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError) as error:
+            print(f"arw: review-error: {error}", file=sys.stderr)
+            return 65
+
     if args.command in {"claims", "numeric"}:
         if args.command == "claims":
             from arw.cli_claims import handle
