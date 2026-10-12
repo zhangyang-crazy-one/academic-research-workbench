@@ -12,6 +12,7 @@ ARS_STAGE_TREE_SHA256 = "83ea255519f97609dc4cb1b370f5a463a7da93a413f3911f5eb94f2
 
 STATIC_STAGE_PATHS = frozenset({
     'schemas/v1/core-route.schema.json',
+    'schemas/v1/research-startup.schema.json',
     '.codex-plugin/plugin.json',
     '.file-base/build-evidence.json',
     '.mcp.json',

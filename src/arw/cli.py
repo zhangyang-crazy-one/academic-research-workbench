@@ -154,6 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_ro_crate(artifact_commands)
     from arw.cli_memory import configure as configure_memory
     configure_memory(subparsers)
+    from arw.cli_research import configure as configure_research
+    configure_research(subparsers)
     from arw.cli_writing import configure as configure_writing
     configure_writing(subparsers)
     from arw.cli_narrative import configure as configure_narrative
@@ -604,6 +606,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             installed_core_preflight()
         except CoreIntegrityError as error:
             _write_json({"status": "BLOCKED", "reason_code": "core_integrity_invalid_or_drifted", "message": str(error)[:256]})
+            return 65
+    if args.command == "research":
+        from arw.cli_research import handle
+        from arw.research_startup import retained_steps
+
+        try:
+            _write_json(handle(args))
+            return 0
+        except (ValueError, RuntimeError, OSError) as error:
+            _write_json({"schema_version": "arw.research-operation-error.v1", "status": "rejected",
+                         "reason_code": getattr(error, "code", "research_request_invalid"),
+                         "message": str(error)[:256] if hasattr(error, "code") else "research request or retained history is invalid",
+                         "retained_files": retained_steps(args.project_root),
+                         "retained_file_presence_is_not_admission": True})
             return 65
     if args.command == "artifact" and args.artifact_command in {"ro-crate-export", "ro-crate-verify"}:
         from arw.cli_ro_crate import handle as handle_ro_crate
