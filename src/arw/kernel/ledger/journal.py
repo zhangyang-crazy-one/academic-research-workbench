@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import signal
+import stat
 from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
@@ -57,6 +58,8 @@ LOCK_NAME = ".journal.lock"
 FAILPOINT_ENV = "ARW_TEST_FAILPOINT"
 POST_FSYNC_SIGKILL = "post-journal-fsync-sigkill"
 PARTIAL_RUNTIME_APPEND_SIGKILL = "partial-runtime-append-sigkill"
+INITIALIZATION_PREPARED = ".initialization-prepared.json"
+INITIALIZATION_COMMITTED = ".initialization-committed.json"
 
 
 class JournalError(RuntimeError):
@@ -217,6 +220,136 @@ def _requested_failpoint() -> str | None:
     return value
 
 
+def _read_initialization_record(path: Path) -> tuple[dict, bytes]:
+    if path.is_symlink() or not stat.S_ISREG(path.stat().st_mode):
+        raise JournalError("initialization transaction is unsafe")
+    with path.open("rb") as stream:
+        raw = stream.read(2049)
+    if len(raw) > 2048:
+        raise JournalError("initialization transaction exceeds its budget")
+    try:
+        value = strict_json_loads(raw)
+        fields = {
+            "schema_version",
+            "run_id",
+            "request_sha256",
+            "manifest_sha256",
+            "initial_event_sha256",
+        }
+        if (
+            not isinstance(value, dict)
+            or set(value) != fields
+            or value["schema_version"] != "arw.initialization-transaction.v1"
+            or not isinstance(value["run_id"], str)
+            or any(
+                not isinstance(value[k], str)
+                or re.fullmatch(r"[0-9a-f]{64}", value[k]) is None
+                for k in fields - {"schema_version", "run_id"}
+            )
+            or canonical_json_bytes(value) != raw
+        ):
+            raise ValueError("invalid transaction")
+    except (ValueError, TypeError) as error:
+        raise JournalError("initialization transaction is malformed") from error
+    return value, raw
+
+
+def initialization_is_pending(root: Path, request: InitRunRequest) -> bool:
+    """Positive recovery evidence; absence of history is never authorization."""
+    completed = root / INITIALIZATION_COMMITTED
+    pending = root / INITIALIZATION_PREPARED
+    if completed.exists() or completed.is_symlink():
+        _read_initialization_record(completed)
+        return False
+    if not pending.exists() and not pending.is_symlink():
+        return False
+    value, _ = _read_initialization_record(pending)
+    if value["run_id"] != request.run_id or value["request_sha256"] != sha256_hex(
+        canonical_json_bytes(request.model_dump(mode="json", exclude_none=True))
+    ):
+        raise JournalError("initialization transaction differs from exact request")
+    manifest = root / MANIFEST_NAME
+    if (
+        manifest.exists()
+        and sha256_hex(manifest.read_bytes()) != value["manifest_sha256"]
+    ):
+        raise JournalError("initialization transaction differs from manifest")
+    journal_root = root / "journal"
+    if journal_root.exists():
+        if not journal_root.is_dir() or journal_root.is_symlink():
+            return False
+        for child in journal_root.iterdir():
+            if child.name != "segments" or not child.is_dir() or child.is_symlink():
+                return False
+            if next(child.iterdir(), None) is not None:
+                return False
+    # Material outside the initial input/storage makes missing history ambiguous.
+    # Never use an orphan artifact or projection to manufacture accepted events.
+    input_parts = Path(request.immutable_input.path).parts
+    allowed = {
+        INITIALIZATION_PREPARED,
+        LOCK_NAME,
+        MANIFEST_NAME,
+        "journal",
+        input_parts[0],
+    }
+    for entry in root.iterdir():
+        if entry.name not in allowed or entry.is_symlink():
+            return False
+    directory = root
+    for index, part in enumerate(input_parts[:-1]):
+        directory /= part
+        if not directory.is_dir():
+            return False
+        children = iter(directory.iterdir())
+        first = next(children, None)
+        expected = input_parts[index + 1]
+        if (
+            first is None
+            or next(children, None) is not None
+            or first.name != expected
+            or first.is_symlink()
+        ):
+            return False
+    return True
+
+
+def validate_initialization_transaction(
+    root: Path, replay: ReplayState
+) -> bytes | None:
+    pending = root / INITIALIZATION_PREPARED
+    if not pending.exists() and not pending.is_symlink():
+        if (root / INITIALIZATION_COMMITTED).exists() or (
+            root / INITIALIZATION_COMMITTED
+        ).is_symlink():
+            raise JournalError("initialization completion has no prepared transaction")
+        return None  # Intact legacy runs require no transaction migration.
+    value, raw = _read_initialization_record(pending)
+    if (
+        replay.run_id != value["run_id"]
+        or not replay.events
+        or replay.events[0].event_sha256 != value["initial_event_sha256"]
+        or sha256_hex((root / MANIFEST_NAME).read_bytes()) != value["manifest_sha256"]
+    ):
+        raise JournalError("initialization transaction differs from canonical history")
+    completed = root / INITIALIZATION_COMMITTED
+    if (completed.exists() or completed.is_symlink()) and _read_initialization_record(
+        completed
+    )[1] != raw:
+        raise JournalError(
+            "initialization completion differs from prepared transaction"
+        )
+    return raw
+
+
+def _seal_initialization(root: Path, replay: ReplayState) -> None:
+    raw = validate_initialization_transaction(root, replay)
+    completed = root / INITIALIZATION_COMMITTED
+    if raw is not None and not completed.exists():
+        _write_exclusive(completed, raw)
+        _fsync_directory(root)
+
+
 def initialize_run(
     run_root: Path,
     request: InitRunRequest,
@@ -279,6 +412,40 @@ def initialize_run(
         from arw.kernel.ledger.narrative import guard_start
         narrative_guard = guard_start(root, request.narrative_binding) if request.narrative_binding else nullcontext()
         with narrative_guard, _lock(root, lock_timeout):
+            if resume_initialization:
+                transaction = canonical_json_bytes(
+                    {
+                        "schema_version": "arw.initialization-transaction.v1",
+                        "run_id": request.run_id,
+                        "request_sha256": sha256_hex(
+                            canonical_json_bytes(
+                                request.model_dump(mode="json", exclude_none=True)
+                            )
+                        ),
+                        "manifest_sha256": sha256_hex(manifest_bytes),
+                        "initial_event_sha256": initial.event_sha256,
+                    }
+                )
+                pending = root / INITIALIZATION_PREPARED
+                if not pending.exists() and not pending.is_symlink():
+                    if (
+                        manifest_path.exists()
+                        or journal_root.exists()
+                        or journal_path.exists()
+                    ):
+                        raise JournalError(
+                            "missing history has no initialization transaction"
+                        )
+                    _write_exclusive(pending, transaction)
+                    _fsync_directory(root)
+                if _read_initialization_record(pending)[1] != transaction:
+                    raise JournalError(
+                        "initialization transaction differs from exact request"
+                    )
+                if not initialization_is_pending(root, request):
+                    raise JournalError(
+                        "committed or ambiguous history cannot be reinitialized"
+                    )
             reuse_segments = False
             if resume_initialization:
                 if any(p.is_symlink() for p in (manifest_path, journal_root, segments_root, journal_path, root / JOURNAL_NAME)):
@@ -317,7 +484,9 @@ def initialize_run(
                 if segmented:
                     _fsync_directory(segments_root)
                 _fsync_directory(root)
-                return _replay_unlocked(root)
+                replay = _replay_unlocked(root)
+                _seal_initialization(root, replay)
+                return replay
             if (
                 manifest_path.exists()
                 or (root / JOURNAL_NAME).exists()
@@ -342,7 +511,9 @@ def initialize_run(
                 _fsync_directory(segments_root)
                 _fsync_directory(journal_root)
             _fsync_directory(root)
-            return _replay_unlocked(root)
+            replay = _replay_unlocked(root)
+            _seal_initialization(root, replay)
+            return replay
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
 
@@ -852,7 +1023,10 @@ def locked_replay(
             # behavior without exposing a request-controlled bypass.
             inject("phase7.lock-acquire")
             inject("phase7.lock-owner-death", kill=True)
-            yield root, _replay_unlocked(root)
+            replay = _replay_unlocked(root)
+            if not read_only:
+                _seal_initialization(root, replay)
+            yield root, replay
     except portalocker.exceptions.LockException as error:
         raise JournalError("canonical writer lock is held") from error
 

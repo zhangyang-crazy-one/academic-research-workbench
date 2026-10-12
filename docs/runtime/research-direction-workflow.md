@@ -31,6 +31,24 @@ move directories; `--project-id` and `--run-id` can pin expected identities.
 The legacy `memory init-project` alias uses this core identity service without
 requiring a configured memory provider.
 
+New runs retain `.initialization-prepared.json` and
+`.initialization-committed.json` inside the run root. These exact, immutable
+transaction receipts bind the request, manifest and first event; they never
+replace journal replay or prove acceptance of a research record. Completion is
+sealed after initialization and before any later parent mutation, including
+after an initializer was killed immediately after the first event became durable.
+Status is read-only and does not seal transactions.
+
+A missing first segment is recoverable only with an exact prepared transaction,
+no completion receipt, safe empty journal storage and no additional run material.
+Missing completed history, orphan material, changed/symlinked transactions or
+legacy manifest-only runs without positive transaction evidence produce
+`research_history_damaged`. Resume preserves the scene and requires explicit
+recovery; it does not manufacture a new revision-1 journal. Intact older runs
+remain readable without receipts. Back up the whole run and recover original
+journal bytes from a trusted copy rather than treating orphan artifacts as proof
+of their original acceptance.
+
 Status reports lifecycle (`RUNNING`) beside workflow stage (`initialized`),
 accepted record count, recovery health and actual gate records. These fields do
 not mean an experiment is running. Editable source reports core `UNVERIFIED`;
