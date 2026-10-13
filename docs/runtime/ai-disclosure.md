@@ -1,5 +1,7 @@
 # AI participation disclosure
 
+Summary, complete draft envelope and CLI input share a 2 MiB byte budget. Generation refuses a draft that its replay reader could not accept; no content is silently truncated. This includes text, policy, embedded summary and digest fields.
+
 `arw disclosure summary` inventories **all included parent-accepted artifacts**,
 including unreferenced text, result-plot/figure specifications and analysis
 code. It reads original artifact/activity evidence, not ClaimGraph labels,
