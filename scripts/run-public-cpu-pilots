@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""Run inspected CPU pilots; refuses to overwrite an existing evidence directory."""
+
+# ruff: noqa: E402 -- source-checkout bootstrap precedes ARW imports
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tomllib
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+REPO = Path(__file__).resolve().parent.parent
+PACKAGES = tomllib.loads((REPO / "pyproject.toml").read_text())["tool"]["hatch"][
+    "build"
+]["targets"]["wheel"]["packages"]
+SOURCE_PATHS = [str((REPO / p).parent) for p in PACKAGES]
+sys.path[:0] = SOURCE_PATHS
+
+from arw.kernel.artifacts.experiment_provenance import (
+    ProvenanceAuthorityEnvelope,
+    ingest_experiment_provenance,
+)
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
+from arw.kernel.execution.runtime import RuntimeCommandService
+from arw.kernel.ledger.journal import initialize_run, replay_run
+from arw.kernel.ledger.workflows import CORE_WORKFLOW
+from arw.kernel.state.models import InitRunRequest, RuntimeCommandRequest
+
+
+def utc():
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(canonical_json_bytes(value))
+
+
+def command_request(root, run_id):
+    return RuntimeCommandRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": run_id,
+            "event_id": f"evt-{uuid4()}",
+            "command_id": f"cmd-{uuid4()}",
+            "expected_revision": replay_run(root).revision,
+            "occurred_at": utc(),
+            "actor_id": "parent.runtime",
+            "actor_role": "parent_control_plane",
+        }
+    )
+
+
+def invoke(root, label, *args):
+    env = dict(
+        os.environ,
+        PYTHONPATH=os.pathsep.join(SOURCE_PATHS),
+        PYTHONDONTWRITEBYTECODE="1",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "arw.cli", *args],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+    (root / f"{label}.stdout").write_text(result.stdout)
+    (root / f"{label}.stderr").write_text(result.stderr)
+    if result.returncode:
+        raise RuntimeError(
+            f"{label} failed; retained stdout/stderr, exit {result.returncode}"
+        )
+    return json.loads(result.stdout)
+
+
+def freeze(root, run_id, name, version, tolerance, predecessor=None):
+    contract = {
+        "schema_version": "arw.experiment-contract.v1",
+        "contract_id": f"contract.{name}",
+        "contract_version": version,
+        "claim_id": f"claim.{name}",
+        "claim_sha256": sha256_hex(
+            canonical_json_bytes({"claim": name, "quantity": "analytic target"})
+        ),
+        "declared_timing": "predeclared",
+        "checks": [
+            {
+                "check_id": "check.analytic-target",
+                "kind": "numeric_reproduction",
+                "reported_metric": "analytic_target",
+                "unit": "ratio",
+                "operator": "mean@1",
+                "data": {
+                    "artifact_id": "artifact.observations",
+                    "format": "csv",
+                    "column": "value",
+                    "row_id_column": "trial",
+                },
+                "tolerance": {"absolute": tolerance, "relative": "0"},
+            }
+        ],
+    }
+    if predecessor:
+        contract["supersedes_contract_sha256"] = predecessor
+    path = root / f"contract-v{version}.json"
+    write(path, contract)
+    request = root / f"freeze-v{version}-request.json"
+    write(request, command_request(root, run_id).model_dump(mode="json"))
+    result = invoke(
+        root,
+        f"freeze-v{version}",
+        "experiment",
+        "freeze",
+        "--run-root",
+        str(root),
+        "--contract",
+        str(path),
+        "--request",
+        str(request),
+    )
+    return result, path
+
+
+def one_pilot(destination, index, name, trials, target, tolerance, samples=None):
+    root = destination / name
+    (root / "input").mkdir(parents=True)
+    config = {"experiment": name, "trials": trials}
+    if samples:
+        config["samples"] = samples
+    write(root / "input/config.json", config)
+    shutil.copyfile(
+        REPO / "examples/pilots/cpu-experiments/runner.py", root / "input/runner.py"
+    )
+    raw = (root / "input/config.json").read_bytes()
+    run_id = f"run-00000000-0000-4000-8000-{index:012d}"
+    initialize_run(
+        root,
+        InitRunRequest.model_validate(
+            {
+                "schema_version": "1.0.0",
+                "run_id": run_id,
+                "occurred_at": utc(),
+                "immutable_input": {
+                    "path": "input/config.json",
+                    "sha256": sha256_hex(raw),
+                },
+                "workflow_family": "academic-pipeline",
+                "workflow_mode": "inline-role-prompts",
+                "workflow_definition_id": CORE_WORKFLOW.definition_id,
+                "workflow_definition_sha256": CORE_WORKFLOW.sha256,
+                "journal_layout": "segmented-v1",
+                "capabilities": ["canonical-journal"],
+                "event_id": f"evt-{uuid4()}",
+                "command_id": f"cmd-{uuid4()}",
+                "actor_id": "parent.runtime",
+            }
+        ),
+    )
+    frozen, contract_path = freeze(
+        root, run_id, name, 1, "0" if name == "trapezoid" else tolerance
+    )
+    # This inspected worker is explicitly authorized by the owner-issued pilot task.
+    # The offline evaluator itself never starts it or authorizes arbitrary artifacts.
+    result = subprocess.run(
+        [sys.executable, str(root / "input/runner.py"), "--root", str(root)],
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+    (root / "worker.stdout").write_text(result.stdout)
+    (root / "worker.stderr").write_text(result.stderr)
+    if result.returncode:
+        raise RuntimeError(f"worker failed: {result.returncode}; raw logs retained")
+    execution = json.loads((root / "results/execution.json").read_text())
+    model = {"name": f"analytic.{name}", "revision": "pilot.v1"}
+    model["source_sha256"] = sha256_hex(canonical_json_bytes(model))
+    configuration = {"name": f"{name}.config", "content_type": "application/json"}
+    configuration["canonical_sha256"] = sha256_hex(canonical_json_bytes(configuration))
+    metric = {"name": "analytic_target", "value": target, "unit": "ratio"}
+    metric["metric_sha256"] = sha256_hex(canonical_json_bytes(metric))
+    artifact = {
+        "artifact_id": "artifact.observations",
+        "media_type": "text/csv",
+        "content_path": "results/raw.csv",
+        "content_sha256": sha256_hex((root / "results/raw.csv").read_bytes()),
+    }
+    write(root / "results/raw-manifest.json", artifact)
+    artifact["manifest_sha256"] = sha256_hex(
+        (root / "results/raw-manifest.json").read_bytes()
+    )
+    source_manifest = {
+        "config_sha256": sha256_hex(raw),
+        "runner_sha256": sha256_hex((root / "input/runner.py").read_bytes()),
+        "generator": "analytic/stdlib seeded data",
+        "license": "CC-BY-NC-4.0; see repository LICENSES",
+        "execution_authorization": "owner-requested #119 inspected CPU pilot",
+    }
+    write(root / "source-manifest.json", source_manifest)
+    provenance = {
+        "schema_version": "arw.experiment-provenance.v1",
+        "provenance_id": f"provenance.{name}",
+        "run_id": run_id,
+        "experiment_id": f"experiment.{name}",
+        "source_datasets": [
+            {
+                "uri_or_path": "input/config.json",
+                "content_sha256": sha256_hex(raw),
+                "access_state": "locally_supplied",
+                "manifest_sha256": None,
+            }
+        ],
+        "model_identity": [model],
+        "configuration": [configuration],
+        "metrics": [metric],
+        "artifacts": [artifact],
+        "environment": [
+            {
+                "key": "python.version",
+                "redacted_value_or_digest": execution["python_version"],
+                "tool_version": execution["python_version"],
+                "redacted": True,
+            }
+        ],
+        "runner": {
+            "identity": "runner.public-stdlib-cpu",
+            "command_digest": sha256_hex(
+                canonical_json_bytes(["python", "input/runner.py", "--root", "RUN"])
+            ),
+            "host_digest": sha256_hex(
+                canonical_json_bytes(
+                    {
+                        "machine_architecture": execution["machine_architecture"],
+                        "python_version": execution["python_version"],
+                    }
+                )
+            ),
+            "started_at": execution["started_at"],
+            "finished_at": execution["finished_at"],
+        },
+        "execution_claim": {"mode": "external_only", "status": "imported"},
+        "qualification_receipts": [],
+        "source_manifest_sha256": [
+            sha256_hex((root / "source-manifest.json").read_bytes())
+        ],
+        "created_at": execution["finished_at"],
+    }
+    service = RuntimeCommandService(root)
+    admitted = ingest_experiment_provenance(
+        provenance,
+        root,
+        ProvenanceAuthorityEnvelope(service, command_request(root, run_id)),
+    )
+    write(
+        root / "provenance-admission.json",
+        {
+            "sequence": admitted.outcome.event.sequence,
+            "event_sha256": admitted.outcome.event.event_sha256,
+            "provenance_sha256": admitted.provenance.provenance_sha256,
+        },
+    )
+    outputs = []
+    versions = [(frozen, contract_path)]
+    for version in (1, 2) if name == "trapezoid" else (1,):
+        if version == 2:
+            versions.append(
+                freeze(root, run_id, name, 2, tolerance, frozen["contract_sha256"])
+            )
+        freeze_result, path = versions[-1]
+        accepted = invoke(
+            root,
+            f"accept-v{version}",
+            "experiment",
+            "accept",
+            "--run-root",
+            str(root),
+            "--contract",
+            str(path),
+            "--provenance-sha256",
+            admitted.provenance.provenance_sha256,
+            "--publish",
+        )
+        replayed = invoke(
+            root,
+            f"replay-v{version}",
+            "experiment",
+            "replay",
+            "--run-root",
+            str(root),
+            "--result-sha256",
+            accepted["result_sha256"],
+        )
+        outputs.append(
+            {
+                "version": version,
+                "freeze_sequence": freeze_result["sequence"],
+                "result_sha256": accepted["result_sha256"],
+                "overall_status": accepted["result"]["overall_status"],
+                "predeclaration": accepted["result"]["predeclaration"],
+                "replay": replayed["status"],
+            }
+        )
+    # Cold replay v1 again after v2 admission must preserve failure bytes.
+    if len(outputs) == 2:
+        cold = invoke(
+            root,
+            "v1-after-v2",
+            "experiment",
+            "replay",
+            "--run-root",
+            str(root),
+            "--result-sha256",
+            outputs[0]["result_sha256"],
+        )
+        assert cold["overall_status"] == "failed"
+        assert outputs[1]["predeclaration"] == "predeclaration_contradicted"
+        assert outputs[1]["overall_status"] == "passed"
+    else:
+        assert outputs[0]["overall_status"] == "passed"
+    assert outputs[0]["predeclaration"] == "verified_predeclared"
+    state = replay_run(root)
+    assert state.recovery_health == "healthy"
+    write(root / "canonical-replay.json", state.public_dict())
+    return {
+        "experiment": name,
+        "provenance_sequence": admitted.outcome.event.sequence,
+        "results": outputs,
+        "costs": execution,
+        "canonical_replay_health": state.recovery_health,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    reports = [
+        one_pilot(output, 1191, "trapezoid", [8, 16, 32], 1 / 3, "0.002"),
+        one_pilot(output, 1192, "finite-difference", [0.1, 0.05, 0.025], 1.0, "0.001"),
+        one_pilot(
+            output,
+            1193,
+            "monte-carlo-pi",
+            [7, 11, 19],
+            3.141592653589793,
+            "0.04",
+            20000,
+        ),
+    ]
+    summary = {
+        "schema_version": "arw.public-cpu-pilots.v1",
+        "source_base_commit": "1166d28e3ebd7e95f7e808c8b434fa325dcfe768",
+        "proof_scope": "contract_precedes_provenance_acceptance_only; not pre-data-collection proof",
+        "scientific_scope": "contract_conformance_only; three analytic numerical mini-experiments, not publication benchmarks",
+        "controlled_execution_qualified": False,
+        "model_calls": 0,
+        "pilots": reports,
+    }
+    write(output / "report.json", summary)
+    inventory = {
+        p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(output.rglob("*"))
+        if p.is_file()
+    }
+    write(output / "inventory.json", inventory)
+    print(
+        json.dumps(
+            {
+                "status": "completed",
+                "experiments": 3,
+                "receipts": 4,
+                "output": str(output),
+            },
+            indent=2,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
