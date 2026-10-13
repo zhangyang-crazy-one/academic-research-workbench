@@ -77,10 +77,10 @@ def test_same_compiled_values_ids_safe_text_and_source_bytes(tmp_path, monkeypat
 
 
 def test_nonterminating_fraction_uses_exact_value_not_display(tmp_path):
-    from arw.kernel.state.result_plot import PlotDatum, PlotEncoding, PlotLayer
     from arw.kernel.state.numeric_core import RowIds
-    from tests.unit.test_numeric_core import request, selection
+    from arw.kernel.state.result_plot import PlotDatum, PlotEncoding, PlotLayer
     from tests.unit.test_accepted_refs import accepted_fixture
+    from tests.unit.test_numeric_core import request, selection
 
     _, context, ref, _ = accepted_fixture(
         tmp_path, b"id,score,category\na,0,A\nb,0,A\nc,1,A\n"
