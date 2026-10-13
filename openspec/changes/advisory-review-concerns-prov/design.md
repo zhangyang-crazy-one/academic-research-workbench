@@ -15,3 +15,7 @@ Read-only rule diagnostics suggest evidence clarification for claims lacking sup
 ## Risks / Trade-offs
 
 Taxonomy mistaken for validated prediction -> explicit advisory_only and no scores. Public review data rights -> only taxonomy/source links, no corpus install or redistribution until separate license review. Stale manuscript -> frozen vector replay with current applicability separately unknown. Exported remarks may be private -> explicit original artifact selection/privacy policy, no automatic publication.
+
+## Owner review amendment
+
+Expose review through the public launcher, bound diagnosis by count/bytes with omitted_concern_count, preserve zero-omission legacy digests, and reject non-object CLI input.

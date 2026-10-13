@@ -181,3 +181,49 @@ def test_schema_drift():
     root = Path(__file__).resolve().parents[2]
     for name, document in review_concern_schema_documents().items():
         assert json.loads((root / "schemas/v1" / name).read_text()) == document
+
+
+def test_large_manuscript_reports_explicit_omissions_and_replays(tmp_path):
+    from tests.integration.test_precise_source_locators import accept, seed
+    from tests.unit.test_narrative import project, plan
+    from arw.kernel.ledger import narrative
+
+    p = project(tmp_path)
+    narrative.register(p)
+    narrative.select(p, plan())
+    run, _ = seed(p)
+    (run / "draft.txt").write_text(" ".join(str(i) for i in range(1050)))
+    assert accept(run, "artifact.draft", "draft.txt", 40, kind="manuscript").accepted
+    report = diagnose(p, (run,))
+    assert len(report.concerns) == 1000
+    assert report.omitted_concern_count == 50
+    assert replay_report(report, p, (run,)) == report
+    assert report.sha256 == diagnose(p, (run,)).sha256
+    assert len(canonical_json_bytes(report.model_dump(mode="json"))) <= 2_097_152
+
+
+@pytest.mark.parametrize("action", ["verify", "replay", "prov"])
+def test_review_input_rejects_non_object_without_attribute_error(tmp_path, action):
+    from argparse import Namespace
+    from arw.cli_review import handle
+
+    path = tmp_path / "input.json"
+    path.write_text("[]")
+    args = Namespace(
+        project_root=tmp_path, run_root=[tmp_path], review_command=action, input=path
+    )
+    with pytest.raises(ValueError, match="JSON object"):
+        handle(args)
+
+
+def test_zero_omissions_preserve_original_report_bytes(tmp_path):
+    from arw.kernel.state.review_concern import ReviewConcernReport
+
+    project, run = prepared(tmp_path)
+    report = diagnose(project, (run,))
+    assert "omitted_concern_count" not in report.model_dump(mode="json")
+    old = report.model_dump(mode="json")
+    assert (
+        ReviewConcernReport.model_validate_json(canonical_json_bytes(old)).sha256
+        == report.sha256
+    )

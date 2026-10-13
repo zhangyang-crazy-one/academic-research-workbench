@@ -44,6 +44,8 @@ def handle(args):
         report = diagnose(args.project_root, roots)
         return {**report.model_dump(mode="json"), "report_sha256": report.sha256}
     value = read(args.input)
+    if not isinstance(value, dict):
+        raise ValueError("review input must be a JSON object")
     if args.review_command == "verify":
         concern = ReviewConcern.model_validate_json(canonical_json_bytes(value))
         validate_concern(concern, args.project_root, roots)

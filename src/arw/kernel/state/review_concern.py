@@ -48,6 +48,9 @@ class ReviewConcernReport(StrictModel):
     )
     snapshot_manifest: SnapshotManifest
     concerns: tuple[ReviewConcern, ...] = Field(max_length=1000)
+    omitted_concern_count: int = Field(
+        default=0, ge=0, exclude_if=lambda count: count == 0
+    )
     interpretation: Literal[
         "advisory_only; not a score, scientific gate or predictor accuracy claim"
     ] = "advisory_only; not a score, scientific gate or predictor accuracy claim"

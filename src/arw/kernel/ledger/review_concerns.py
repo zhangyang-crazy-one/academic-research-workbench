@@ -86,10 +86,31 @@ def diagnose(project_root, run_roots):
                     source="rule",
                 )
             )
-    report = ReviewConcernReport(
-        snapshot_manifest=snapshot,
-        concerns=tuple(sorted(concerns, key=lambda c: c.concern_id)),
-    )
+    ordered = tuple(sorted(concerns, key=lambda c: c.concern_id))
+
+    def bounded_report(count):
+        return ReviewConcernReport(
+            snapshot_manifest=snapshot,
+            concerns=ordered[:count],
+            omitted_concern_count=len(ordered) - count,
+        )
+
+    count = min(1000, len(ordered))
+    report = bounded_report(count)
+    if len(canonical_json_bytes(report.model_dump(mode="json"))) > 2_097_152:
+        low, high = 0, count
+        while low < high:
+            middle = (low + high + 1) // 2
+            if (
+                len(
+                    canonical_json_bytes(bounded_report(middle).model_dump(mode="json"))
+                )
+                <= 2_097_152
+            ):
+                low = middle
+            else:
+                high = middle - 1
+        report = bounded_report(low)
     replay_report(report, project_root, run_roots)
     return report
 
@@ -137,6 +158,8 @@ def export_prov(report: ReviewConcernReport, project_root, run_roots):
             "arw:generator": report.generator_version,
         },
     ]
+    if report.omitted_concern_count:
+        nodes[0]["arw:omittedConcernCount"] = report.omitted_concern_count
     for concern in report.concerns:
         target_id = "#target." + sha256_hex(
             canonical_json_bytes(concern.target.model_dump(mode="json"))

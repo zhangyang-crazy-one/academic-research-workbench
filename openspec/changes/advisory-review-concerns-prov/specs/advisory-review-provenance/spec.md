@@ -27,3 +27,10 @@ Exported PROV JSON-LD SHALL be selected through original parent artifact and RO-
 #### Scenario: Additional provenance crate
 - **WHEN** PROV JSON-LD is accepted and selected into a new crate
 - **THEN** original structure/byte/source checks validate it and the previous crate digest stays unchanged
+
+### Requirement: Bounded diagnosis with explicit omissions
+Diagnosis SHALL return at most 1000 concerns within the existing report byte budget and record the omitted concern count instead of failing for a supported large manuscript.
+
+#### Scenario: More than 1000 eligible occurrences
+- **WHEN** the source graph contains 1050 eligible occurrences
+- **THEN** diagnosis returns a bounded, replayable advisory report with explicit omissions and does not alter scientific hard checks
