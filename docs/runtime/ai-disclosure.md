@@ -1,5 +1,7 @@
 # AI participation disclosure
 
+Summary, complete draft envelope and CLI input share a 2 MiB byte budget. Generation refuses a draft that its replay reader could not accept; no content is silently truncated. This includes text, policy, embedded summary and digest fields.
+
 `arw disclosure summary` inventories **all included parent-accepted artifacts**,
 including unreferenced text, result-plot/figure specifications and analysis
 code. It reads original artifact/activity evidence, not ClaimGraph labels,
@@ -79,5 +81,3 @@ submitting a disclosure. This command neither supplies a checklist yes/no
 answer nor certifies policy compliance or submits anything.
 
 Imported receipts document import history, not proof of AI drafting. Versioned generator 1.1.0 makes this distinction explicit; existing 1.0.0 drafts retain their original replay recipe. Invalid or unreadable accepted artifacts still fail explicitly; they are not silently skipped.
-
-Summary, complete draft envelope and CLI input share a 2 MiB byte budget. Generation refuses a draft that its replay reader could not accept; no content is silently truncated. This includes text, policy, embedded summary and digest fields.
