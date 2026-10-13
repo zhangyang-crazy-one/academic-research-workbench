@@ -1,0 +1,228 @@
+{
+  "schema_version": "arw.public-decision-materials.v1",
+  "retrieved_on": "2026-10-12",
+  "sample_scope": "Ten NumPy method/infrastructure proposals for numerical research; not ten independent research papers or a representative accuracy estimate.",
+  "annotated_count": 0,
+  "materials": [
+    {
+      "sample_id": "nep-0019",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0019-rng-policy.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0019-rng-policy.html",
+      "source_sha256": "4508d5cc7229c2e7815f4ea867b42765d962b2e04fb4a2237dd3ddcd96e264ee",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0019-rng-policy.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2018-05-24",
+      "updated_observation": "2019-05-21",
+      "resolution_observation": "https://mail.python.org/pipermail/numpy-discussion/2018-July/078380.html",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "随机数流兼容策略",
+      "reading_prompt": "考察精确跨版本随机数流与算法改进之间的政策调整。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0018",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0018-array-function-protocol.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0018-array-function-protocol.html",
+      "source_sha256": "82a71a18030851a60772a50429269f24eebb1e10afa5964b2ab745a8d077ce24",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0018-array-function-protocol.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2018-05-29",
+      "updated_observation": "2019-05-25",
+      "resolution_observation": "https://mail.python.org/pipermail/numpy-discussion/2018-August/078493.html",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "高层数组函数分派",
+      "reading_prompt": "考察让不同数组后端复用 NumPy 高层函数接口的方案。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0020",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0020-gufunc-signature-enhancement.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0020-gufunc-signature-enhancement.html",
+      "source_sha256": "33e02ced1fa2046796da6c2663c1d4834d2eb3feaef3ebd20175b6546b3f5c4a",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0020-gufunc-signature-enhancement.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2018-06-10",
+      "updated_observation": "unknown",
+      "resolution_observation": "https://mail.python.org/pipermail/numpy-discussion/2018-April/077959.html,",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "广义通用函数签名扩展",
+      "reading_prompt": "考察核心维度签名扩展及其对通用数值运算的影响。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0034",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0034-infer-dtype-is-object.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0034-infer-dtype-is-object.html",
+      "source_sha256": "503e37c782acb969fc78f58b2c3c42e3b345878ab52fa99140384ef0914f101a",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0034-infer-dtype-is-object.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2019-10-10",
+      "updated_observation": "unknown",
+      "resolution_observation": "https://mail.python.org/pipermail/numpy-discussion/2019-October/080200.html",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "不自动推断不规则序列为 object",
+      "reading_prompt": "考察对不规则嵌套序列隐式 object 数组推断的调整。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0038",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0038-SIMD-optimizations.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0038-SIMD-optimizations.html",
+      "source_sha256": "401de27217119eaefb8af635e194dc9358085b30f902dc4c80daf368fb878f32",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0038-SIMD-optimizations.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2019-11-25",
+      "updated_observation": "unknown",
+      "resolution_observation": "`NumPy Discussion <https://mail.python.org/archives/list/numpy-discussion@python.org/thread/PVWJ74UVBRZ5ZWF6MDU7EUSJXVNILAQB/#PVWJ74UVBRZ5ZWF6MDU7EUSJXVNILAQB>`_",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "SIMD 向量化优化",
+      "reading_prompt": "考察数值计算的跨平台 SIMD 优化方案。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0050",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0050-scalar-promotion.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0050-scalar-promotion.html",
+      "source_sha256": "9068c2e6ff03105aef9b8347975c9b37abf6d333ecee0f05d100ddfcf67e3fa5",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0050-scalar-promotion.rst",
+      "source_status_observation": "Final",
+      "created_observation": "2021-05-25",
+      "updated_observation": "unknown",
+      "resolution_observation": "unknown",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "Python 标量类型提升",
+      "reading_prompt": "考察 Python 标量与数组混合运算的类型提升规则。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0011",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0011-deferred-ufunc-evaluation.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0011-deferred-ufunc-evaluation.html",
+      "source_sha256": "aa7f82f21493b826a43413761ddbbd2eb649042248acf3e721b2e581e969657f",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0011-deferred-ufunc-evaluation.rst",
+      "source_status_observation": "Deferred",
+      "created_observation": "30-Nov-2010",
+      "updated_observation": "unknown",
+      "resolution_observation": "unknown",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "延迟 UFunc 求值",
+      "reading_prompt": "考察延迟执行数组运算以改变内存与求值策略的方案。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0016",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0016-abstract-array.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0016-abstract-array.html",
+      "source_sha256": "c03ae4cac8fa03d788bec5eb094c65ff8cc3054050d267722bd55fe9446d878d",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0016-abstract-array.rst",
+      "source_status_observation": "Withdrawn",
+      "created_observation": "2018-03-06",
+      "updated_observation": "unknown",
+      "resolution_observation": "https://github.com/numpy/numpy/pull/12174",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "识别 duck arrays 的抽象基类",
+      "reading_prompt": "考察以抽象基类识别第三方数组的方案及后续撤回记录。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0017",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0017-split-out-maskedarray.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0017-split-out-maskedarray.html",
+      "source_sha256": "983051a0028c8abf65743ff3f4931bfa371c7ba6a9fc6eb6c1147a0b06e43e22",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0017-split-out-maskedarray.rst",
+      "source_status_observation": "Rejected",
+      "created_observation": "2018-03-22",
+      "updated_observation": "unknown",
+      "resolution_observation": "https://mail.python.org/pipermail/numpy-discussion/2018-May/078026.html",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "将 masked arrays 拆出",
+      "reading_prompt": "考察将缺失值处理模块从主数组库拆出的方案及否决记录。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    },
+    {
+      "sample_id": "nep-0037",
+      "source_url": "https://github.com/numpy/numpy/blob/db8bac3fa50b6843fd72db54b145e04253447d38/doc/neps/nep-0037-array-module.rst",
+      "rendered_url": "https://numpy.org/neps/nep-0037-array-module.html",
+      "source_sha256": "70cbe987142a0a6779e3fb03d073e16fb4068f1aed820701073dfae286259bda",
+      "source_commit": "db8bac3fa50b6843fd72db54b145e04253447d38",
+      "source_path": "doc/neps/nep-0037-array-module.rst",
+      "source_status_observation": "Superseded",
+      "created_observation": "2019-12-29",
+      "updated_observation": "unknown",
+      "resolution_observation": "https://mail.python.org/archives/list/numpy-discussion@python.org/message/Z6AA5CL47NHBNEPTFWYOTSUVSRDGHYPN/",
+      "human_label": null,
+      "human_reason": null,
+      "title_zh": "NumPy-like 模块分派",
+      "reading_prompt": "考察模块级数组分派方案及被其他方案替代的记录。",
+      "read_sections": [
+        "Status / Resolution",
+        "Abstract",
+        "Motivation and rationale or equivalent decision discussion"
+      ],
+      "source_metadata_is_human_label": false
+    }
+  ]
+}
