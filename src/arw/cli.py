@@ -168,6 +168,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_learning(subparsers)
     from arw.cli_submission import configure as configure_submission
     configure_submission(subparsers)
+    from arw.cli_disclosure import configure as configure_disclosure
+    configure_disclosure(subparsers)
     from arw.cli_claims import configure as configure_claims
     configure_claims(subparsers)
     from arw.cli_numeric import configure as configure_numeric
@@ -713,6 +715,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (SelectionAuditError, CapabilityUnavailable, ValueError, OSError) as error:
             _write_json({"status": "error", "code": getattr(error, "code", "selection_audit_invalid"), "message": str(error)[:256]})
             return 65
+    if args.command == "disclosure":
+        from arw.cli_disclosure import handle as handle_disclosure
+        try:
+            _write_json(handle_disclosure(args))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError) as error:
+            print(f"arw: disclosure-error: {error}", file=sys.stderr)
+            return 65
+
     if args.command in {"claims", "numeric"}:
         if args.command == "claims":
             from arw.cli_claims import handle

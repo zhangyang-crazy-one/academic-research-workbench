@@ -1,0 +1,16 @@
+{
+  "schema_version": "arw.ai-disclosure-policy.v1",
+  "venue": "IEEE",
+  "policy_version": "ieee-20261012",
+  "verified_on": "2026-10-12",
+  "source_url": "https://open.ieee.org/author-guidelines-for-artificial-intelligence-ai-generated-text/",
+  "source_sha256": "d42a1d05a876901656674b4d5da0c14cbe9dc0b774e09b4e6effb0501ea89aea",
+  "source_digest_scope": "retained-primary-excerpts",
+  "source_excerpt": "shall be disclosed in the acknowledgments section; The AI system used shall be identified; text, figures, images, and code",
+  "template": "acknowledgments",
+  "requirements": [
+    "Disclose generated text, figures, images and code in acknowledgments.",
+    "Identify the system, affected sections and extent of generated content.",
+    "Editing or grammar enhancement is distinguished from generation; disclosure of such assistance is recommended."
+  ]
+}
