@@ -19,12 +19,13 @@ def configure(subparsers):
 
 def read(path):
     from arw.kernel.core.canonical import strict_json_loads
+    from arw.kernel.ledger.review_concerns import MAX_REVIEW_BYTES
 
     if path.is_symlink():
         raise ValueError("review input must be a regular file")
     with path.open("rb") as handle:
-        raw = handle.read(2_097_153)
-    if len(raw) > 2_097_152:
+        raw = handle.read(MAX_REVIEW_BYTES + 1)
+    if len(raw) > MAX_REVIEW_BYTES:
         raise ValueError("review input budget exceeded")
     return strict_json_loads(raw)
 
@@ -35,14 +36,14 @@ def handle(args):
         diagnose,
         export_prov,
         replay_report,
+        report_envelope,
         validate_concern,
     )
     from arw.kernel.state.review_concern import ReviewConcern, ReviewConcernReport
 
     roots = tuple(args.run_root)
     if args.review_command == "diagnose":
-        report = diagnose(args.project_root, roots)
-        return {**report.model_dump(mode="json"), "report_sha256": report.sha256}
+        return report_envelope(diagnose(args.project_root, roots))
     value = read(args.input)
     if not isinstance(value, dict):
         raise ValueError("review input must be a JSON object")  # noqa: TRY004 - CLI handles ValueError
@@ -60,4 +61,4 @@ def handle(args):
     replay_report(report, args.project_root, roots)
     if args.review_command == "prov":
         return export_prov(report, args.project_root, roots)
-    return {**report.model_dump(mode="json"), "report_sha256": report.sha256}
+    return report_envelope(report)
