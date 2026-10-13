@@ -122,6 +122,7 @@ class PGFPlotsExporter:
             "% source plot_value_id: " + v.plot_value_id for v in compiled.plot_values
         ]
         parts += [r"\begin{tikzpicture}", r"\begin{axis}[" + ",\n".join(options) + "]"]
+        legend_series = set()
         for layer, data in compiled.layers:
             groups = sorted(
                 {(d.series, d.pair_id if layer.paired else None) for d in data},
@@ -152,10 +153,14 @@ class PGFPlotsExporter:
                     if layer.mark == "bar"
                     else "only marks,mark=*"
                 )
+                show_legend = bool(group[0]) and group[0] not in legend_series
                 if layer.role == "interval":
-                    for d in selected:
+                    for index, d in enumerate(selected):
                         parts.append(
-                            r"\addplot+[mark=none,color=" + color + "] coordinates {"
+                            r"\addplot+[mark=none,color="
+                            + color
+                            + ("" if show_legend and index == 0 else ",forget plot")
+                            + "] coordinates {"
                         )
                         x = rational(x_coordinate(d, layer))
                         for endpoint in (d.lower, d.upper):
@@ -170,7 +175,12 @@ class PGFPlotsExporter:
                         parts.append("};")
                 else:
                     parts.append(
-                        r"\addplot+[" + style + ",color=" + color + "] coordinates {"
+                        r"\addplot+["
+                        + style
+                        + ",color="
+                        + color
+                        + ("" if show_legend else ",forget plot")
+                        + "] coordinates {"
                     )
                     for d in selected:
                         # IDs are compiler-generated StableRuntimeIds; comments
@@ -184,8 +194,9 @@ class PGFPlotsExporter:
                             + ")"
                         )
                     parts.append("};")
-                if group[0]:
+                if show_legend:
                     parts.append(r"\addlegendentry{" + tex_text(group[0]) + "}")
+                    legend_series.add(group[0])
         parts += [
             r"\end{axis}",
             r"\end{tikzpicture}",

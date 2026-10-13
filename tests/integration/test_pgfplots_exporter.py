@@ -165,3 +165,82 @@ def test_finite_decimals_do_not_use_tex_division():
         (Fraction(1, 3), "{1/3}"),
     ]:
         assert rational(value) == expected
+
+
+def named(layer, name):
+    return layer.model_copy(
+        update={
+            "data": tuple(d.model_copy(update={"series": name}) for d in layer.data)
+        }
+    )
+
+
+def legend_queue(source):
+    lines = source.decode().splitlines()
+    return (
+        [
+            line
+            for line in lines
+            if line.startswith(r"\addplot+") and "forget plot" not in line
+        ],
+        [line for line in lines if line.startswith(r"\addlegendentry")],
+    )
+
+
+def test_unnamed_layer_does_not_steal_named_legend_style(tmp_path):
+    _, context, ref, _ = result_fixture(tmp_path)
+    ir = plot(
+        (
+            aggregate(ref),
+            named(
+                aggregate(ref, category="B", pointer="/B", layer_id="layer.named"),
+                "Named",
+            ),
+        )
+    )
+    source, _ = PGFPlotsExporter().export(compile_plot(ir, context))
+    styles, entries = legend_queue(source)
+    assert entries == [r"\addlegendentry{Named}"]
+    assert len(styles) == 1
+    assert "red,230;green,159;blue,0" in styles[0]
+
+
+def test_interval_segments_have_one_legend_per_series(tmp_path):
+    from tests.integration.test_result_plots import interval
+
+    _, context, ref, _ = result_fixture(tmp_path)
+    a = named(interval(ref), "Series A")
+    first = a.data[0]
+    a = a.model_copy(
+        update={
+            "data": (
+                first,
+                first.model_copy(update={"datum_id": "interval.b", "category": "B"}),
+            )
+        }
+    )
+    b = named(interval(ref).model_copy(update={"layer_id": "layer.second"}), "Series B")
+    source, _ = PGFPlotsExporter().export(compile_plot(plot((a, b)), context))
+    styles, entries = legend_queue(source)
+    assert entries == [r"\addlegendentry{Series A}", r"\addlegendentry{Series B}"]
+    assert len(styles) == 2
+    assert "red,0;green,0;blue,0" in styles[0]
+    assert "red,230;green,159;blue,0" in styles[1]
+    assert source.count(b"forget plot") == 1
+
+
+def test_same_series_across_point_and_interval_has_one_legend(tmp_path):
+    from tests.integration.test_result_plots import interval
+
+    _, context, ref, _ = result_fixture(tmp_path)
+    source, _ = PGFPlotsExporter().export(
+        compile_plot(
+            plot((named(aggregate(ref), "Model A"), named(interval(ref), "Model A"))),
+            context,
+        )
+    )
+    styles, entries = legend_queue(source)
+    assert entries == [r"\addlegendentry{Model A}"]
+    assert len(styles) == 1
+    assert "only marks" in styles[0]
+    assert b"forget plot" in source
