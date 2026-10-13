@@ -13,3 +13,7 @@ Compile once with the original compiler and pinned SVG renderer check. Export ra
 ## Risks / Trade-offs
 
 TeX arithmetic and CJK/fonts are host-dependent -> always not_verified until a separately qualified engine/package/font environment exists. TeX parser control syntax -> escaped per character, no raw labels or option fragments. Very large exact fractions -> retain exact source but do not claim compiled rendering success. CTAN package version and unofficial HTML manual version are distinct observations, not compatibility pins.
+
+## Owner review amendment
+
+Emit finite decimals without TeX division, document arithmetic/CJK prerequisites, and remove unreachable CLI dispatch.

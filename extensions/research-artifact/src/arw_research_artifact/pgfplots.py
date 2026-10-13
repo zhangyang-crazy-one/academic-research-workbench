@@ -33,14 +33,23 @@ def tex_text(value: str) -> str:
 
 
 def rational(value: Fraction) -> str:
-    # Original exact numerator/denominator, not presentation rounding or a
-    # new scientific derivation. TeX's eventual numeric interpretation remains
-    # host-dependent and explicitly unqualified.
-    return (
-        str(value.numerator)
-        if value.denominator == 1
-        else f"{{{value.numerator}/{value.denominator}}}"
-    )
+    # Avoid TeX division for finite decimals while preserving exact values.
+    denominator = value.denominator
+    twos = fives = 0
+    while denominator % 2 == 0:
+        denominator //= 2
+        twos += 1
+    while denominator % 5 == 0:
+        denominator //= 5
+        fives += 1
+    if denominator != 1:
+        return f"{{{value.numerator}/{value.denominator}}}"
+    places = max(twos, fives)
+    scaled = value.numerator * 2 ** (places - twos) * 5 ** (places - fives)
+    if places == 0:
+        return str(scaled)
+    digits = str(abs(scaled)).zfill(places + 1)
+    return ("-" if scaled < 0 else "") + digits[:-places] + "." + digits[-places:]
 
 
 class PGFPlotsExporter:
@@ -50,9 +59,9 @@ class PGFPlotsExporter:
         palette_source = Path(__file__).with_name("plot_renderer.py").read_bytes()
         return RendererIdentity(
             name="arw.result-pgfplots",
-            version="1.0.0",
+            version="1.0.1",
             identity_digest=sha256_hex(own + b"\0" + palette_source),
-            normalization_policy="utf8-lf-inert-text-exact-rational.v1",
+            normalization_policy="utf8-lf-inert-text-exact-decimal-or-rational.v1",
         )
 
     def export(self, compiled):
@@ -198,6 +207,6 @@ class PGFPlotsExporter:
             "fixed_environment_render": "not_verified",
             "publication_quality": "not_verified",
             "tex_invoked": False,
-            "requires": "Caller-provided pgfplots with compat=1.18; engine/package/font qualification not performed",
+            "requires": "Caller-provided pgfplots with compat=1.18; CJK labels require a Unicode-capable engine and configured CJK fonts/packages (e.g. XeLaTeX with xeCJK/ctex); engine/package/font qualification not performed",
         }
         return source, metadata

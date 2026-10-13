@@ -104,7 +104,7 @@ def handle(args, provider):
         return provider.export_pgfplots(ir, run_root=args.run_root, **options)
     if action == "render":
         return provider.render(ir, run_root=args.run_root, **options)
-    if action in {"source-bridge", "caption-targets", "export-pgfplots"}:
+    if action in {"source-bridge", "caption-targets"}:
         if ir.artifact_kind != "result_plot":
             raise ValueError("result_plot_required")
         method = "source_bridge" if action == "source-bridge" else "caption_targets"

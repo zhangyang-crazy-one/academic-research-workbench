@@ -7,7 +7,7 @@ import subprocess
 from fractions import Fraction
 
 import pytest
-from arw_research_artifact.pgfplots import PGFPlotsExporter, tex_text
+from arw_research_artifact.pgfplots import PGFPlotsExporter, rational, tex_text
 from arw_research_artifact.plot_policy import PlotFault, compile_plot
 from arw_research_artifact.plot_renderer import PlotRenderer
 from arw_research_artifact.service import ResearchArtifactService
@@ -62,7 +62,7 @@ def test_same_compiled_values_ids_safe_text_and_source_bytes(tmp_path, monkeypat
     )
     assert r"\input" not in source.decode()
     assert tex_text(label) in source.decode()
-    assert "{831/1000}" in source.decode() and "{104/125}" in source.decode()
+    assert "0.831" in source.decode() and "0.832" in source.decode()
     before = (root / "journal/segments/00000001.jsonl").read_bytes()
     out = ResearchArtifactService().export_pgfplots(
         ir, run_root=root, resolution_context=context
@@ -154,3 +154,14 @@ def test_cli_writes_optional_source_candidate(tmp_path, capsys):
     assert output["fixed_environment_render"] == "not_verified"
     assert (root / output["path"]).is_file()
     assert (root / output["manifest_path"]).is_file()
+
+
+def test_finite_decimals_do_not_use_tex_division():
+    for value, expected in [
+        (Fraction(1000003, 1000000), "1.000003"),
+        (Fraction(-1, 8), "-0.125"),
+        (Fraction(98765432101, 1000), "98765432.101"),
+        (Fraction(0), "0"),
+        (Fraction(1, 3), "{1/3}"),
+    ]:
+        assert rational(value) == expected

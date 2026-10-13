@@ -89,3 +89,11 @@ reports **1.18.3**. The separate, unofficial [tikz.dev HTML manual](https://tikz
 labels itself **1.18.2**. These are distinct sources, not an exact package or
 engine compatibility requirement. No TeX packages, fonts or manual bodies are
 redistributed.
+
+Finite decimal coordinates are emitted as exact decimal literals to avoid
+PGF math division rounding; nonterminating fractions retain numerator/denominator
+expressions. Actual TeX arithmetic and coordinate rendering have finite,
+engine-dependent precision; source value identity is not an exact rendered
+coordinate guarantee. CJK labels require a Unicode-capable engine and suitable
+fonts/packages, such as XeLaTeX with xeCJK or ctex. ARW does not install or
+qualify these caller-side prerequisites.
