@@ -97,3 +97,5 @@ engine-dependent precision; source value identity is not an exact rendered
 coordinate guarantee. CJK labels require a Unicode-capable engine and suitable
 fonts/packages, such as XeLaTeX with xeCJK or ctex. ARW does not install or
 qualify these caller-side prerequisites.
+
+PGFPlots emits one legend entry per named series across all layers. Unnamed plots, additional interval segments and repeated series use forget plot, preserving legend/style correspondence.
