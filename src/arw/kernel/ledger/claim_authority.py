@@ -53,7 +53,21 @@ def _authority_state(inputs: Inputs, attestation: AuthenticatedAttestation):
             "authority_digest_mismatch",
             "authority acceptance identity or digest differs",
         )
-    reduced = reduce_events(replay.workflow_definition_id, replay.events)
+    base = inputs.cache.get("query_base")
+    if base is None:
+        reduced = reduce_events(replay.workflow_definition_id, replay.events)
+    else:
+        # Authorities are immutable accepted envelopes. Membership in this
+        # exact historical prefix was checked above; reduce their acceptance
+        # prefix with the original reducer, never a later projection or label.
+        key = (requested.authority_run_id, source.event_sha256)
+        authorities = base.cache.setdefault("query_authority_reductions", {})
+        if key not in authorities:
+            authorities[key] = reduce_events(
+                replay.workflow_definition_id,
+                replay.events[: source.resulting_revision],
+            )
+        reduced = authorities[key]
     state = next(
         (a for a in reduced.human_authorities if a.source_event_id == source.event_id),
         None,
@@ -66,7 +80,7 @@ def _authority_state(inputs: Inputs, attestation: AuthenticatedAttestation):
 
 
 def verify_anchor_journal(
-    run_root: Path, event, *, held_lock_roots: tuple[Path, ...] = ()
+    run_root: Path, event, *, held_lock_roots: tuple[Path, ...] = (), query_inputs=None
 ):
     """Pre-admission cross-log validation under the parent writer lock.
 
@@ -84,7 +98,14 @@ def verify_anchor_journal(
         raise ClaimGraphError(
             "project_mismatch", "anchor project identity or root differs"
         )
-    journal, _, _ = narrative._read(project, at_sequence=payload.journal_sequence)
+    if query_inputs is None:
+        journal, _, _ = narrative._read(project, at_sequence=payload.journal_sequence)
+    else:
+        journal = query_inputs.journal[: payload.journal_sequence]
+        if not journal or len(journal) != payload.journal_sequence:
+            raise ClaimGraphError(
+                "dependency_outside_prefix", "anchor journal is outside query"
+            )
     confirmation = journal[-1]
     if (
         confirmation["kind"] != "claim.attested"
@@ -97,9 +118,18 @@ def verify_anchor_journal(
     roots = tuple(
         project / payload.run_locations[r.run_id] for r in att.snapshot_manifest.runs
     )
-    inputs = _read_inputs(
-        project, roots, att.snapshot_manifest, held_lock_roots=held_lock_roots
-    )
+    if query_inputs is None:
+        inputs = _read_inputs(
+            project, roots, att.snapshot_manifest, held_lock_roots=held_lock_roots
+        )
+    else:
+        from arw.kernel.ledger.claim_graph import _historical_inputs
+
+        if project != query_inputs.root or tuple(roots) != tuple(
+            query_inputs.runs[r.run_id][0] for r in att.snapshot_manifest.runs
+        ):
+            raise ClaimGraphError("project_mismatch", "anchor roots differ from query")
+        inputs = _historical_inputs(query_inputs, att.snapshot_manifest)
     _closure(inputs)
     old = _registrations(inputs.journal).get(att.claim_id)
     if old is None or old.claim.sha256 != att.claim_sha256:
@@ -298,11 +328,16 @@ def verify_authenticated_record(
             "current_applicability": "unanchored",
             "reason": "parent_anchor_missing",
         }
-    state = verify_anchor_journal(
-        inputs.runs[att.authority.authority_run_id][0],
-        anchor,
-        held_lock_roots=inputs.held_lock_roots,
-    )
+    proof_key = (att.snapshot_manifest.sha256, anchor.event_sha256)
+    proofs = inputs.cache.setdefault("query_anchor_proofs", {})
+    if proof_key not in proofs:
+        proofs[proof_key] = verify_anchor_journal(
+            inputs.runs[att.authority.authority_run_id][0],
+            anchor,
+            held_lock_roots=inputs.held_lock_roots,
+            query_inputs=inputs,
+        )
+    state = proofs[proof_key]
     validate_claim_authority_envelope(state, att, anchor.occurred_at)
     if (
         anchor.payload.attestation.model_dump(mode="json")
