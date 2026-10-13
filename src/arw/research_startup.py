@@ -14,7 +14,15 @@ from arw.kernel.core.canonical import (
     strict_json_loads,
 )
 from arw.kernel.core.privacy import reject_secret_shapes
-from arw.kernel.ledger.journal import JOURNAL_NAME, initialize_run, replay_run
+from arw.kernel.ledger.journal import (
+    JOURNAL_NAME,
+    JournalError,
+    initialization_is_pending,
+    initialize_run,
+    locked_replay,
+    replay_run,
+    validate_initialization_transaction,
+)
 from arw.kernel.ledger.manifests import validate_accepted_event_manifests
 from arw.kernel.ledger.narrative import binding_for_start, guard_run
 from arw.kernel.ledger.projects import initialize_project, project_identity
@@ -292,9 +300,22 @@ def start(
                 )
                 boundary("input_durable")
                 if not _journal_path(run, plan).exists():
+                    if (run / "run-manifest.json").exists():
+                        _require_pending_initialization(run, plan)
                     initialize_run(
                         run, plan.request, lock_timeout=1, resume_initialization=True
                     )
+                else:
+                    # Seal a surviving transaction before later parent writes;
+                    # replay remains exclusively authoritative for accepted data.
+                    try:
+                        with locked_replay(run, lock_timeout=1):
+                            pass
+                    except JournalError as error:
+                        raise ResearchStartupError(
+                            "research_history_damaged",
+                            "canonical history or initialization transaction is damaged",
+                        ) from error
                 boundary("run_durable")
                 _validate_run(root, plan)
     except portalocker.exceptions.LockException as error:
@@ -322,6 +343,20 @@ def _journal_path(run, plan):
         if plan.request.journal_layout == "segmented-v1"
         else run / JOURNAL_NAME
     )
+
+
+def _require_pending_initialization(run, plan):
+    try:
+        pending = initialization_is_pending(run, plan.request)
+    except (JournalError, OSError) as error:
+        raise ResearchStartupError(
+            "research_history_damaged", "initialization transaction is damaged"
+        ) from error
+    if not pending:
+        raise ResearchStartupError(
+            "research_history_damaged",
+            "canonical history is missing; explicit recovery is required",
+        )
 
 
 def _validate_run(root, plan):
@@ -356,6 +391,12 @@ def _validate_run(root, plan):
             "research_history_damaged", "canonical history needs explicit recovery"
         )
     validate_accepted_event_manifests(run, replay.events)
+    try:
+        validate_initialization_transaction(run, replay)
+    except (JournalError, OSError) as error:
+        raise ResearchStartupError(
+            "research_history_damaged", "initialization transaction is damaged"
+        ) from error
     return run, raw, replay
 
 
@@ -392,6 +433,7 @@ def status(root: Path, *, expected_project_id=None, expected_run_id=None):
             "initialized history is missing its identity or manifest",
         )
     if (run / "run-manifest.json").exists() and not initialized:
+        _require_pending_initialization(run, plan)
         manifest = RunManifest.model_validate(
             strict_json_loads(
                 read_retained_bytes(run, "run-manifest.json", max_bytes=65536)

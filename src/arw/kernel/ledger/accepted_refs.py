@@ -92,6 +92,18 @@ class ResolutionCache:
         self._refs: dict[tuple[str, str], RefResolution] = {}
         self._csv_rows: dict[tuple[str, str, str], object] = {}
 
+    def prime_verified_runs(self, context: ResolutionContext, runs: list) -> None:
+        """Seed only parent-validated canonical replays for this exact context.
+
+        Internal Python operation boundary; never populated from graph output,
+        CLI input or serialized cache state.
+        """
+        self._runs[_context_key(context)] = list(runs)
+
+    def verified_runs(self, context: ResolutionContext) -> tuple:
+        """Inspect canonical replays already resolved within this operation."""
+        return tuple(self._runs.get(_context_key(context), ()))
+
     def csv_rows(
         self,
         ref: AcceptedRef,
@@ -401,7 +413,11 @@ verify_ref = resolve_ref
 
 
 def to_accepted_ref(
-    value: object, context: ResolutionContext, *, adapter_kind: str | None = None
+    value: object,
+    context: ResolutionContext,
+    *,
+    adapter_kind: str | None = None,
+    cache: ResolutionCache | None = None,
 ) -> RefResolution:
     # Original integrity contracts are imported lazily: this necessary
     # ledger -> policy dependency must not create an import-time cycle.
@@ -453,7 +469,7 @@ def to_accepted_ref(
                 canonical_json_bytes(value.model_dump(mode="json"))
             )
         if isinstance(value, (ParentArtifactRef, JournalEventRef)):
-            return replace(resolve_ref(value, context), original=original)
+            return replace(resolve_ref(value, context, cache), original=original)
         if isinstance(value, ClaimEvidenceLink):
             return RefResolution("unsupported", original, reason="edge_not_ref")
         if isinstance(value, MemoryLink) and (
@@ -474,7 +490,7 @@ def to_accepted_ref(
             ),
         ):
             return RefResolution("unsupported", original, reason="unsupported_type")
-        runs = _runs(context)
+        runs = _runs(context) if cache is None else _cached_runs(context, cache)
         candidates = list(_accepted_events(runs))
         if isinstance(value, SourceLocator):
             candidates = [
