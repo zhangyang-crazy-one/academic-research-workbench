@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from arw.kernel.core.canonical import (
@@ -277,8 +277,133 @@ def _context(inputs: Inputs):
     )
 
 
+def _historical_inputs(inputs: Inputs, fixed: SnapshotManifest) -> Inputs:
+    """Query-private sub-prefixes of original-validated, pinned maximum reads."""
+    base = inputs.cache.get("query_base", inputs)
+    snapshots = base.cache.setdefault("query_snapshots", {})
+    if fixed.sha256 in snapshots:
+        return snapshots[fixed.sha256]
+    if fixed.project_id != base.manifest.project_id:
+        raise ClaimGraphError("project_mismatch", "historical project differs")
+    journal = base.journal[: fixed.journal.sequence]
+    if (
+        not journal
+        or len(journal) != fixed.journal.sequence
+        or journal[-1]["event_sha256"] != fixed.journal.head_sha256
+    ):
+        raise ClaimGraphError("mixed_snapshot", "journal prefix differs")
+    maximums = {r.run_id: r for r in base.manifest.runs}
+    replays = base.cache.setdefault("query_maximum_replays", {})
+    runs = {}
+    from arw.kernel.ledger.journal import replay_run_under_held_lock
+
+    for cut in fixed.runs:
+        maximum = maximums.get(cut.run_id)
+        if (
+            maximum is None
+            or cut.revision > maximum.revision
+            or cut.run_manifest_sha256 != maximum.run_manifest_sha256
+        ):
+            raise ClaimGraphError("mixed_snapshot", "run prefix is outside query")
+        run, manifest, _ = base.runs[cut.run_id]
+        binding = manifest.narrative_binding
+        if binding is not None and not any(
+            event["event_sha256"] == binding.initial_sha256
+            and event["version"] == binding.initial_version
+            for event in journal
+        ):
+            raise ClaimGraphError(
+                "dependency_outside_prefix",
+                "run narrative binding is outside historical journal",
+            )
+        key = (
+            str(run),
+            cut.run_id,
+            maximum.revision,
+            maximum.head_sha256,
+            maximum.run_manifest_sha256,
+        )
+        if key not in replays:
+            reader = (
+                replay_run_under_held_lock
+                if run in base.held_lock_roots
+                else replay_run_prefix
+            )
+            replays[key] = reader(
+                run,
+                revision=maximum.revision,
+                expected_head_sha256=maximum.head_sha256,
+                expected_manifest_sha256=maximum.run_manifest_sha256,
+            )
+        accepted = replays[key]
+        events = accepted.events[: cut.revision]
+        if (
+            not events
+            or len(events) != cut.revision
+            or events[-1].resulting_revision != cut.revision
+            or events[-1].event_sha256 != cut.head_sha256
+        ):
+            raise ClaimGraphError("mixed_snapshot", "run prefix head differs")
+        prefix = replace(
+            accepted,
+            revision=cut.revision,
+            last_event_sha256=cut.head_sha256,
+            event_count=len(events),
+            events=events,
+            segments=(),  # Read-only historical view has no appendable disk cursor.
+            event_ids=frozenset(e.event_id for e in events),
+            command_ids=frozenset(e.command_id for e in events),
+        )
+        runs[cut.run_id] = (run, manifest, prefix)
+    historical = Inputs(
+        base.root,
+        fixed,
+        journal,
+        runs,
+        cache={"query_base": base},
+        held_lock_roots=base.held_lock_roots,
+        figure_verifier=base.figure_verifier,
+    )
+    snapshots[fixed.sha256] = historical
+    return historical
+
+
+def _extends(inputs: Inputs, prior: Inputs) -> bool:
+    if (
+        inputs.root != prior.root
+        or inputs.manifest.project_id != prior.manifest.project_id
+    ):
+        return False
+    if (
+        len(inputs.journal) < len(prior.journal)
+        or inputs.journal[len(prior.journal) - 1]["event_sha256"]
+        != prior.manifest.journal.head_sha256
+    ):
+        return False
+    for run_id, old in prior.runs.items():
+        current = inputs.runs.get(run_id)
+        if current is None or current[0] != old[0] or current[1] != old[1]:
+            return False
+        if (
+            len(current[2].events) < old[2].revision
+            or current[2].events[old[2].revision - 1].event_sha256
+            != old[2].last_event_sha256
+        ):
+            return False
+    return True
+
+
 def _closure(inputs: Inputs) -> None:
     """Every explicitly recorded cross-log reference belongs to this vector."""
+    base = inputs.cache.get("query_base")
+    previous = base.cache.get("query_closure") if base is not None else None
+    if previous is not None and previous[0].manifest == inputs.manifest:
+        return
+    extends = previous is not None and _extends(inputs, previous[0])
+    journal_cut = previous[0].manifest.journal.sequence if extends else 0
+    run_cuts = (
+        {k: v[2].revision for k, v in previous[0].runs.items()} if extends else {}
+    )
     parent_events = {
         run_id: {e.event_id: e for e in item[2].events}
         for run_id, item in inputs.runs.items()
@@ -286,7 +411,7 @@ def _closure(inputs: Inputs) -> None:
     all_events = [e for item in inputs.runs.values() for e in item[2].events]
     journal_events = {e["sequence"]: e for e in inputs.journal}
 
-    visited = [0]
+    visited = [previous[1] if extends else 0]
 
     def walk(value, referring_sequence, depth=0):
         visited[0] += 1
@@ -379,9 +504,12 @@ def _closure(inputs: Inputs) -> None:
                 walk(child, referring_sequence, depth + 1)
 
     for event in inputs.journal:
-        walk(event["payload"], event["sequence"])
+        if event["sequence"] > journal_cut:
+            walk(event["payload"], event["sequence"])
     for item in inputs.runs.values():
         for event in item[2].events:
+            if event.resulting_revision <= run_cuts.get(event.run_id, 0):
+                continue
             if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
                 manifest = load_artifact_manifest(
                     item[0], event.payload.manifest_sha256
@@ -410,16 +538,51 @@ def _closure(inputs: Inputs) -> None:
                 # A changed but valid journal confirmation makes this anchor
                 # unverifiable in _attestations. Its immutable local acceptance
                 # remains replayable; it cannot authenticate the changed record.
+    if base is not None:
+        base.cache["query_closure"] = (inputs, visited[0])
 
 
 def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
-    from arw.kernel.ledger.accepted_refs import to_accepted_ref
+    from arw.kernel.ledger.accepted_refs import (
+        ResolutionCache,
+        to_accepted_ref,
+    )
 
     key = (adapter, sha256_hex(canonical_json_bytes(original)))
     if key not in inputs.cache:
+        context = _context(inputs)
+        memo = inputs.cache.setdefault("accepted_resolution", ResolutionCache())
+        if "query_base" in inputs.cache:
+            memo.prime_verified_runs(
+                context,
+                [
+                    (root, manifest, prefix.run_manifest_sha256, replay)
+                    for prefix in inputs.manifest.runs
+                    for root, manifest, replay in (inputs.runs[prefix.run_id],)
+                ],
+            )
         inputs.cache[key] = to_accepted_ref(
-            original, _context(inputs), adapter_kind=ADAPTER_KINDS.get(adapter)
+            original, context, adapter_kind=ADAPTER_KINDS.get(adapter), cache=memo
         )
+        if "query_base" not in inputs.cache:
+            maximums = {r.run_id: r for r in inputs.manifest.runs}
+            for root, manifest, digest, replay in memo.verified_runs(context):
+                cut = maximums[manifest.run_id]
+                if (replay.revision, replay.last_event_sha256, digest) == (
+                    cut.revision,
+                    cut.head_sha256,
+                    cut.run_manifest_sha256,
+                ):
+                    cache_key = (
+                        str(root),
+                        cut.run_id,
+                        cut.revision,
+                        cut.head_sha256,
+                        digest,
+                    )
+                    inputs.cache.setdefault("query_maximum_replays", {})[cache_key] = (
+                        replay
+                    )
     return inputs.cache[key]
 
 
@@ -735,49 +898,90 @@ def _receipt_checks(raw: bytes, resolution, inputs: Inputs) -> list[dict]:
             }
         ]
     if value.get("schema_version") == "arw.experiment-acceptance.v1":
+        from dataclasses import replace
+
         from arw.kernel.artifacts.experiment_acceptance import (
             ExperimentAcceptanceResult,
-            load_experiment_contract,
             load_experiment_acceptance,
+            load_experiment_contract,
             replay_experiment_acceptance,
             timing_from_run,
         )
-        from arw.kernel.artifacts.experiment_provenance import load_experiment_provenance
+        from arw.kernel.artifacts.experiment_provenance import (
+            load_experiment_provenance,
+        )
         from arw.kernel.state.accepted_ref import ParentArtifactRef
-        from dataclasses import replace
 
         result = ExperimentAcceptanceResult.model_validate_json(raw)
         trusted, reason = False, "experiment_acceptance_unverified"
         ref = resolution.ref
         if isinstance(ref, ParentArtifactRef) and resolution.proven_scope == "bytes":
             root, _, replay = inputs.runs[ref.run_id]
-            event = next(e for e in replay.events if e.event_id == ref.accepting_event_id)
+            event = next(
+                e for e in replay.events if e.event_id == ref.accepting_event_id
+            )
             artifact = load_artifact_manifest(root, event.payload.manifest_sha256)
-            if (artifact.artifact_kind in {"experiment-acceptance", "experiment-acceptance-result"}
-                    and artifact.content_path == f"experiment/acceptance/sha256/{result.result_sha256}.json"):
+            if (
+                artifact.artifact_kind
+                in {"experiment-acceptance", "experiment-acceptance-result"}
+                and artifact.content_path
+                == f"experiment/acceptance/sha256/{result.result_sha256}.json"
+            ):
                 try:
-                    prior = tuple(e for e in replay.events if e.sequence < event.sequence)
-                    contract_events = [e for e in prior if e.event_type == "experiment.contract.accepted"
-                                       and e.payload.contract_sha256 == result.contract_sha256]
-                    provenance_events = [e for e in prior if e.event_type == "experiment.provenance.accepted"
-                                         and e.payload.provenance_sha256 == result.provenance_sha256]
+                    prior = tuple(
+                        e for e in replay.events if e.sequence < event.sequence
+                    )
+                    contract_events = [
+                        e
+                        for e in prior
+                        if e.event_type == "experiment.contract.accepted"
+                        and e.payload.contract_sha256 == result.contract_sha256
+                    ]
+                    provenance_events = [
+                        e
+                        for e in prior
+                        if e.event_type == "experiment.provenance.accepted"
+                        and e.payload.provenance_sha256 == result.provenance_sha256
+                    ]
                     if len(contract_events) != 1 or len(provenance_events) != 1:
-                        raise ValueError("experiment dependencies not accepted before receipt")
-                    prefix = replace(replay, events=prior, revision=len(prior), event_count=len(prior),
-                                     last_event_sha256=prior[-1].event_sha256)
+                        raise ValueError(
+                            "experiment dependencies not accepted before receipt"
+                        )
+                    prefix = replace(
+                        replay,
+                        events=prior,
+                        revision=len(prior),
+                        event_count=len(prior),
+                        last_event_sha256=prior[-1].event_sha256,
+                    )
                     contract = load_experiment_contract(root, result.contract_sha256)
-                    provenance = load_experiment_provenance(root, result.provenance_sha256)
+                    provenance = load_experiment_provenance(
+                        root, result.provenance_sha256
+                    )
                     if provenance.run_id != ref.run_id:
                         raise ValueError("experiment provenance run identity differs")
                     retained = load_experiment_acceptance(root, result.result_sha256)
                     if retained.canonical_bytes() != raw:
                         raise ValueError("experiment result is not canonical")
-                    timing = (timing_from_run(root, result.contract_sha256, result.provenance_sha256,
-                                              journal_prefix=prefix)
-                              if result.predeclaration in {"verified_predeclared", "predeclaration_contradicted"}
-                              else None)
-                    replay_experiment_acceptance(result, contract, provenance, root,
-                                                 timing=timing, journal_prefix=prefix)
+                    timing = (
+                        timing_from_run(
+                            root,
+                            result.contract_sha256,
+                            result.provenance_sha256,
+                            journal_prefix=prefix,
+                        )
+                        if result.predeclaration
+                        in {"verified_predeclared", "predeclaration_contradicted"}
+                        else None
+                    )
+                    replay_experiment_acceptance(
+                        result,
+                        contract,
+                        provenance,
+                        root,
+                        timing=timing,
+                        journal_prefix=prefix,
+                    )
                     trusted, reason = True, None
                 except (OSError, ValueError, RuntimeError, KeyError):
                     reason = "experiment_replay_unverifiable"
@@ -793,7 +997,9 @@ def _receipt_checks(raw: bytes, resolution, inputs: Inputs) -> list[dict]:
             {
                 "method": c.kind,
                 "version": result.evaluator_version,
-                "status": mapping.get(c.status, "not_checked") if trusted else "not_checked",
+                "status": mapping.get(c.status, "not_checked")
+                if trusted
+                else "not_checked",
                 "scope": result.scope,
                 "check_id": c.check_id,
                 "legacy_observed_display": c.observed,
@@ -823,13 +1029,7 @@ def _attestations(
         # Independently reconstruct the exact predecessor vector; declarations
         # do not assert permission and never acquire an authenticated label.
         try:
-            historical = _read_inputs(
-                inputs.root,
-                tuple(inputs.runs[r.run_id][0] for r in att.snapshot_manifest.runs),
-                att.snapshot_manifest,
-                figure_verifier=inputs.figure_verifier,
-                held_lock_roots=inputs.held_lock_roots,
-            )
+            historical = _historical_inputs(inputs, att.snapshot_manifest)
             _closure(historical)
             old = _registrations(historical.journal).get(att.claim_id)
             valid = old is not None and old.claim.sha256 == att.claim_sha256
@@ -899,6 +1099,8 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
     nodes = []
     edges = []
     manuscript_observations = []
+    participation_evidence = False
+    participation_error = False
     discovered = {}
     recorded_relations = []
     registrations = _registrations(inputs.journal)
@@ -906,6 +1108,7 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
         for event in replay.events:
             if event.event_type in {"artifact.accepted", "research_artifact_accepted"}:
                 artifact = load_artifact_manifest(root, event.payload.manifest_sha256)
+                participation_evidence |= artifact.artifact_kind in {"ai-activity-receipt", "ai-participation-declaration"}
                 ref = _parent_ref(inputs, run_id, event)
                 resolved = _resolve(ref, inputs)
                 kind = (
@@ -1179,6 +1382,21 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
                     "status": "not_checked",
                     "reason": "multiple_claim_specific_bindings",
                 }
+    if participation_evidence:
+        from arw.kernel.ledger.ai_disclosure import capture, ref_key
+        from arw.kernel.state.accepted_ref import ParentArtifactRef
+
+        try:
+            summary = capture(_context(inputs))
+            participation = {ref_key(ParentArtifactRef.model_validate(m["target"])): m for m in summary["materials"]}
+            for observation in manuscript_observations:
+                target = ParentArtifactRef.model_validate(observation["accepted_ref"])
+                item = participation.get(ref_key(target))
+                if item:
+                    observation["ai_involvement"] = item["ai_involvement"]
+                    observation["ai_participation_evidence"] = item["histories"]
+        except (ValueError, RuntimeError, OSError, KeyError):
+            participation_error = True
     nodes.sort(key=lambda node: node["id"])
     edges.sort(key=canonical_json_bytes)
     coverage = {
@@ -1212,6 +1430,8 @@ def _project(inputs: Inputs, *, evaluation_time: str | None = None) -> dict:
         "manuscripts": manuscript_observations,
     }
     advisory = []
+    if participation_error:
+        advisory.append({"code": "ai_participation_unverifiable", "scope": "advisory_only"})
     if coverage["unknown_occurrence_count"]:
         advisory.append(
             {

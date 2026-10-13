@@ -13,6 +13,7 @@ Commands:
   writing        Prepare and record source-bound manuscript revisions.
   narrative      Register and select a fixed project paper argument strategy.
   review         Diagnose advisory concerns and export source-bound PROV.
+  disclosure     Summarize AI participation and prepare disclosure drafts.
   claims         Project and explicitly attest revision-bound manuscript claims.
   numeric        Evaluate exact source-bound numeric derivations.
   selection-audit Export or replay retained candidate selection evidence.

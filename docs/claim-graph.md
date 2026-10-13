@@ -37,3 +37,26 @@ changing canonical files. Disclosure generation and ReviewConcern remain the
 independent later phase specified by issue #94.
 
 Trusted DOI metadata checks require an exact whole-artifact reference accepted as `citation-check-receipt`. The graph delegates the original citation acceptance validator, including the accepted reference record, immutable receipt address, response digest and offline parser replay. Ordinary accepted JSON retains only its declared content. A missing or altered original response produces `not_checked` with `citation_replay_unverifiable`; it cannot preserve a trusted `passed` result.
+
+### Query-local historical validation
+
+Authenticated confirmation projection reuses original-validated run prefixes
+within a single operation. Reuse binds exact project/run roots, manifest
+hashes, revisions, heads and caller-held lock scope. Historical journal/run
+cuts must be actual sub-prefixes of that vector; dependency closure extends
+only monotonically and otherwise runs the complete checker. Immutable human
+authority envelopes are obtained with the original reducer at their canonical
+acceptance prefix, after checking membership in the requested historical cut.
+Anchor proofs additionally bind the snapshot and anchor event digest.
+
+This cache does not persist or cross queries. Parent admission keeps the
+original uncached proof path; current views still perform an uncached final
+head read. Lock conflicts and unavailable or changed evidence retain their
+original refusal/unverifiable semantics. Fixed older views do not inspect
+irrelevant later tails.
+
+The 30/60 real-anchor regression compares canonical output bytes to the
+uncached proof path and counts original prefix reads: one shared original
+prefix read at either size for the single-run fixture. Replayed revisions are
+34/64. Timing is informational; original canonical replay, parsing and output
+construction still contribute cost and are not replaced by a cache assertion.

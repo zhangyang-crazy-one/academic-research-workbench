@@ -1,0 +1,17 @@
+{
+  "cost_scope": "worker numerical-loop wall and process CPU time only; excludes parent/CLI overhead",
+  "energy_cost": "unknown",
+  "finished_at": "2026-10-12T12:00:19Z",
+  "gpu_used": false,
+  "machine_architecture": "x86_64",
+  "measurements": {
+    "cpu_seconds": 0.007354790999999996,
+    "wall_seconds": 0.0073797020013444126
+  },
+  "model_calls": 0,
+  "monetary_cost": "unknown",
+  "peak_memory_bytes": "unknown",
+  "processes": 1,
+  "python_version": "3.14.6",
+  "started_at": "2026-10-12T12:00:19Z"
+}

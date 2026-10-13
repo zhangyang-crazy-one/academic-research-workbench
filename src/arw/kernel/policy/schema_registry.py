@@ -35,6 +35,7 @@ from arw.kernel.state.accepted_ref import (
     accepted_ref_schema_documents,
 )
 from arw.kernel.state.review_concern import review_concern_schema_documents
+from arw.kernel.state.ai_disclosure import ai_disclosure_schema_documents
 from arw.kernel.state.claim_graph import claim_graph_schema_documents
 from arw.kernel.state.execution_schema import execution_provenance_schema_document
 from arw.kernel.state.failure_diagnosis import failure_diagnosis_schema_documents
@@ -84,6 +85,7 @@ RESEARCH_ARTIFACT_SCHEMA_NAMES = tuple(research_artifact_schema_documents())
 RESULT_PLOT_SCHEMA_NAMES = tuple(result_plot_schema_documents())
 CLAIM_GRAPH_SCHEMA_NAMES = tuple(claim_graph_schema_documents())
 REVIEW_CONCERN_SCHEMA_NAMES = tuple(review_concern_schema_documents())
+AI_DISCLOSURE_SCHEMA_NAMES = tuple(ai_disclosure_schema_documents())
 NARRATIVE_REALIZATION_SCHEMA_NAMES = tuple(narrative_realization_schema_documents())
 
 PHASE1_SCHEMA_NAMES: tuple[str, ...] = (
@@ -144,6 +146,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + RESULT_PLOT_SCHEMA_NAMES
     + CLAIM_GRAPH_SCHEMA_NAMES
     + REVIEW_CONCERN_SCHEMA_NAMES
+    + AI_DISCLOSURE_SCHEMA_NAMES
     + NARRATIVE_REALIZATION_SCHEMA_NAMES
     + SUBMISSION_SCHEMA_NAMES
     + ACCEPTED_REF_SCHEMA_NAMES
@@ -351,6 +354,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in REVIEW_CONCERN_SCHEMA_NAMES and candidate != review_concern_schema_documents()[name]:
         raise SchemaRegistryError("review concern schema drift")
+    if name in AI_DISCLOSURE_SCHEMA_NAMES and candidate != ai_disclosure_schema_documents()[name]:
+        raise SchemaRegistryError("AI disclosure schema drift")
     if name in CLAIM_GRAPH_SCHEMA_NAMES and candidate != claim_graph_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in NARRATIVE_REALIZATION_SCHEMA_NAMES and candidate != narrative_realization_schema_documents()[name]:
@@ -424,6 +429,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = result_plot_schema_documents()[name]
         elif name in REVIEW_CONCERN_SCHEMA_NAMES:
             document = review_concern_schema_documents()[name]
+        elif name in AI_DISCLOSURE_SCHEMA_NAMES:
+            document = ai_disclosure_schema_documents()[name]
         elif name in CLAIM_GRAPH_SCHEMA_NAMES:
             document = claim_graph_schema_documents()[name]
         elif name in RESEARCH_ARTIFACT_SCHEMA_NAMES:

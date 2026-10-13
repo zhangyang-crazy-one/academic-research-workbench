@@ -170,6 +170,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_submission(subparsers)
     from arw.cli_review import configure as configure_review
     configure_review(subparsers)
+    from arw.cli_disclosure import configure as configure_disclosure
+    configure_disclosure(subparsers)
     from arw.cli_claims import configure as configure_claims
     configure_claims(subparsers)
     from arw.cli_numeric import configure as configure_numeric
@@ -722,6 +724,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         except (ValueError, RuntimeError, OSError, KeyError) as error:
             print(f"arw: review-error: {error}", file=sys.stderr)
+    if args.command == "disclosure":
+        from arw.cli_disclosure import handle as handle_disclosure
+        try:
+            _write_json(handle_disclosure(args))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError) as error:
+            print(f"arw: disclosure-error: {error}", file=sys.stderr)
             return 65
 
     if args.command in {"claims", "numeric"}:
