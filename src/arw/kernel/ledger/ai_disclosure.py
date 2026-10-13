@@ -216,7 +216,10 @@ def make_draft(
         "human_final_review": "pending",
         "submission": "not_performed",
     }
-    return {**body, "draft_sha256": sha256_hex(canonical_json_bytes(body))}
+    draft = {**body, "draft_sha256": sha256_hex(canonical_json_bytes(body))}
+    if len(canonical_json_bytes(draft)) > MAX_BYTES:
+        raise ValueError("AI disclosure draft output budget exceeded")
+    return draft
 
 
 def replay_draft(value: dict, context: ResolutionContext):

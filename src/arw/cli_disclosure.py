@@ -21,12 +21,13 @@ def configure(subparsers):
 
 def read(path):
     from arw.kernel.core.canonical import strict_json_loads
+    from arw.kernel.ledger.ai_disclosure import MAX_BYTES
 
     if path.is_symlink():
         raise ValueError("disclosure input must be a regular file")
     with path.open("rb") as handle:
-        raw = handle.read(2_097_153)
-    if len(raw) > 2_097_152:
+        raw = handle.read(MAX_BYTES + 1)
+    if len(raw) > MAX_BYTES:
         raise ValueError("disclosure input budget exceeded")
     return strict_json_loads(raw)
 
