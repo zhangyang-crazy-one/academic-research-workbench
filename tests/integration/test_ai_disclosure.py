@@ -299,3 +299,29 @@ def test_malformed_participation_cannot_introduce_a_scientific_gate(tmp_path):
     assert before["hard_checks"] == after["hard_checks"]
     assert after["coverage"]["manuscripts"][0]["ai_involvement"] == "unknown"
     assert any(a["code"] == "ai_participation_unverifiable" for a in after["advisory"])
+
+
+def test_imported_receipt_wording_and_old_generator_replay(tmp_path):
+    run, ctx, ref, _ = accepted_fixture(tmp_path, b"Imported prose.")
+    receipt = AIActivityReceipt(
+        activity_id="activity.imported",
+        target=ref,
+        usage="imported",
+        system="unknown",
+        harness="synthetic",
+        model="synthetic",
+        detail="Imported history, not proof of AI drafting.",
+    )
+    accept(
+        run,
+        ref,
+        receipt.model_dump(mode="json"),
+        "ai-activity-receipt",
+        "receipt.imported",
+    )
+    current = make_draft(ctx, policy())
+    assert "does not establish AI drafting" in current["text"]
+    assert replay_draft(current, ctx) == current
+    old = make_draft(ctx, policy(), generator_version="1.0.0")
+    assert old["generator_version"] == "1.0.0"
+    assert replay_draft(old, ctx) == old

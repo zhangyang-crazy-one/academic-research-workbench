@@ -15,3 +15,7 @@ PolicySnapshot retains a venue, version, verified date, primary source URL/diges
 ## Risks / Trade-offs
 
 Incomplete real history -> unknown plus human review. Declared receipt contents mistaken for authenticated calls -> explicit proof scope. Policy changing -> dated frozen snapshots and owner verification before submission. No source redistribution permission -> retain brief normalized paraphrases and source digests, not full policy documents. Invented application status -> no automatic submission or approval fields.
+
+## Owner review amendment
+
+Expose disclosure through the public launcher and distinguish imported receipts from AI drafting in versioned draft wording, preserving generator 1.0.0 replay.

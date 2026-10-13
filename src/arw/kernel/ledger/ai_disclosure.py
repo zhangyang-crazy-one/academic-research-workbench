@@ -167,7 +167,11 @@ def capture(context: ResolutionContext):
     return summary
 
 
-def make_draft(context: ResolutionContext, policy: AIDisclosurePolicy):
+def make_draft(
+    context: ResolutionContext, policy: AIDisclosurePolicy, *, generator_version="1.1.0"
+):
+    if generator_version not in {"1.0.0", "1.1.0"}:
+        raise ValueError("unsupported disclosure generator")
     summary = capture(context)
     lines = [
         f"{policy.venue} AI involvement disclosure draft ({policy.template})",
@@ -189,16 +193,22 @@ def make_draft(context: ResolutionContext, policy: AIDisclosurePolicy):
         for history in entry["histories"]:
             record = history["record"]
             system = record.get("system") or "system identity unknown"
-            lines.append(
-                f"  {history['status']}: {history['usage']}; {system}; {record['detail']}"
-            )
+            if generator_version == "1.1.0" and history["usage"] == "imported":
+                lines.append(
+                    f"  {history['status']}: imported material receipt/declaration; "
+                    f"does not establish AI drafting; {system}; {record['detail']}"
+                )
+            else:
+                lines.append(
+                    f"  {history['status']}: {history['usage']}; {system}; {record['detail']}"
+                )
     unknown = sum(m["ai_involvement"] == "unknown" for m in summary["materials"])
     lines.append(
         f"Unknown material histories: {unknown}; no assertion of exclusively human creation. Add manuscript section locators and review every external/imported edit before submission."
     )
     body = {
         "schema_version": "arw.ai-disclosure-draft.v1",
-        "generator_version": "1.0.0",
+        "generator_version": generator_version,
         "policy": policy.model_dump(mode="json"),
         "policy_sha256": policy.sha256,
         "summary": summary,
@@ -230,7 +240,7 @@ def replay_draft(value: dict, context: ResolutionContext):
         context,
         run_prefixes=tuple(RunPrefix(**p) for p in value["summary"]["run_prefixes"]),
     )
-    expected = make_draft(fixed, policy)
+    expected = make_draft(fixed, policy, generator_version=value["generator_version"])
     if canonical_json_bytes(expected) != canonical_json_bytes(value):
         raise ValueError("disclosure draft replay mismatch")
     return expected

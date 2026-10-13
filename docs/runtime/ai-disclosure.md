@@ -77,3 +77,5 @@ Every output is a **draft**: `human_final_review: pending`,
 sections, external/imported edits and actual system usage before approving and
 submitting a disclosure. This command neither supplies a checklist yes/no
 answer nor certifies policy compliance or submits anything.
+
+Imported receipts document import history, not proof of AI drafting. Versioned generator 1.1.0 makes this distinction explicit; existing 1.0.0 drafts retain their original replay recipe. Invalid or unreadable accepted artifacts still fail explicitly; they are not silently skipped.
