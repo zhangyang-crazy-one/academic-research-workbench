@@ -39,6 +39,11 @@ sealed after initialization and before any later parent mutation, including
 after an initializer was killed immediately after the first event became durable.
 Status is read-only and does not seal transactions.
 
+Legacy runs created before these receipts existed are not automatically
+reinitialized when their journal is missing, even if an old initialization may
+have been interrupted after writing its manifest. Preserve the run and use
+explicit recovery; absence of history does not authorize a revision reset.
+
 A missing first segment is recoverable only with an exact prepared transaction,
 no completion receipt, safe empty journal storage and no additional run material.
 Missing completed history, orphan material, changed/symlinked transactions or
