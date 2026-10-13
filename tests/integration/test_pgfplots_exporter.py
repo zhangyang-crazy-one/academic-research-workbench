@@ -181,7 +181,7 @@ def legend_queue(source):
         [
             line
             for line in lines
-            if line.startswith(r"\addplot+") and "forget plot" not in line
+            if line.startswith(r"\addplot[") and "forget plot" not in line
         ],
         [line for line in lines if line.startswith(r"\addlegendentry")],
     )
@@ -244,3 +244,127 @@ def test_same_series_across_point_and_interval_has_one_legend(tmp_path):
     assert len(styles) == 1
     assert "only marks" in styles[0]
     assert b"forget plot" in source
+
+
+def plot_styles(source):
+    return [
+        line for line in source.decode().splitlines() if line.startswith(r"\addplot")
+    ]
+
+
+def tex_rgb(hex_color):
+    rgb = hex_color.lstrip("#")
+    return "{rgb,255:red,%d;green,%d;blue,%d}" % (
+        int(rgb[:2], 16),
+        int(rgb[2:4], 16),
+        int(rgb[4:], 16),
+    )
+
+
+@pytest.mark.parametrize("palette", ["monochrome", "okabe_ito"])
+def test_every_plot_owns_line_and_marker_colors_without_default_cycle(
+    tmp_path, palette
+):
+    """#140: no PGFPlots cycle-list marker fill can leak into an explicit palette."""
+    from arw.kernel.state.result_plot import PlotPresentation
+    from arw_research_artifact.plot_renderer import OKABE_ITO
+
+    _, context, ref, _ = result_fixture(tmp_path)
+    first = named(aggregate(ref), "Model A")
+    second = named(
+        aggregate(ref, category="B", pointer="/B", layer_id="layer.second"), "Model A"
+    )
+    ir = plot((first, second)).model_copy(
+        update={"presentation": PlotPresentation(palette=palette)}
+    )
+    source, _ = PGFPlotsExporter().export(compile_plot(ir, context))
+    styles = plot_styles(source)
+    assert len(styles) == 2 and not any(s.startswith(r"\addplot+") for s in styles)
+    expected = tex_rgb("#222222" if palette == "monochrome" else OKABE_ITO[0])
+    for style in styles:
+        assert "color=" + expected in style
+        assert "mark options={solid,draw=" + expected + ",fill=" + expected + "}" in (
+            style
+        )
+    # Both layers of one series share the exact style; only the second is
+    # excluded from the legend queue.
+    assert styles[1] == styles[0].replace(
+        "] coordinates {", ",forget plot] coordinates {"
+    )
+
+
+def test_paired_lines_use_series_color_for_every_visual_key(tmp_path):
+    from arw.kernel.state.result_plot import PlotEncoding, PlotLayer
+    from tests.integration.test_result_plots import selection
+    from tests.unit.test_accepted_refs import accepted_fixture
+
+    _, context, ref, _ = accepted_fixture(
+        tmp_path,
+        b"id,score,category,series,order,pair\na,0.1,A,S,1,p1\nb,0.2,B,S,2,p1\nc,0.3,A,S,3,p2\nd,0.4,B,S,4,p2\n",
+    )
+    line = PlotLayer(
+        layer_id="layer.pair",
+        role="observation",
+        mark="line",
+        source=selection(ref),
+        paired=True,
+        encoding=PlotEncoding(
+            x="category", y="score", series="series", order="order", pair_id="pair"
+        ),
+    )
+    source, _ = PGFPlotsExporter().export(compile_plot(plot((line,)), context))
+    styles = plot_styles(source)
+    assert len(styles) == 2  # one path per pair, one legend entry
+    for style in styles:
+        assert style.startswith(r"\addplot[solid,mark=*,color=")
+        color = style.split("color=", 1)[1].split(",mark options", 1)[0]
+        assert "draw=" + color + ",fill=" + color in style
+
+
+def test_optional_tex_compile_uses_only_palette_marker_fills(tmp_path):
+    """Runs only where a TeX engine with PGFPlots already exists."""
+    import shutil
+
+    if shutil.which("pdflatex") is None or shutil.which("kpsewhich") is None:
+        pytest.skip("pdflatex with PGFPlots is not installed")
+    if not subprocess.run(
+        ["kpsewhich", "pgfplots.sty"], capture_output=True, text=True
+    ).stdout.strip():
+        pytest.skip("PGFPlots is not installed")
+    from arw.kernel.state.result_plot import PlotPresentation
+
+    _, context, ref, _ = result_fixture(tmp_path)
+    ir = plot(
+        (
+            named(aggregate(ref), "Model A"),
+            named(
+                aggregate(ref, category="B", pointer="/B", layer_id="layer.second"),
+                "Model A",
+            ),
+        )
+    ).model_copy(update={"presentation": PlotPresentation(palette="monochrome")})
+    source, _ = PGFPlotsExporter().export(compile_plot(ir, context))
+    (tmp_path / "figure.tex").write_bytes(source)
+    (tmp_path / "doc.tex").write_text(
+        "\\pdfcompresslevel=0\\pdfobjcompresslevel=0\n"
+        "\\documentclass{article}\\usepackage{pgfplots}\\pgfplotsset{compat=1.18}\n"
+        "\\begin{document}\\input{figure.tex}\\end{document}\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "doc.tex"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout[-2000:]
+    pdf = (tmp_path / "doc.pdf").read_bytes()
+    fills = {
+        line.strip()
+        for line in pdf.decode("latin-1").splitlines()
+        if line.strip().endswith(" rg")
+    }
+    # Default cycle fills are blue!80!black and red!80!black.
+    assert "0 0 0.8 rg" not in fills and "0.8 0 0 rg" not in fills
+    assert any(f.startswith("0.13") for f in fills)

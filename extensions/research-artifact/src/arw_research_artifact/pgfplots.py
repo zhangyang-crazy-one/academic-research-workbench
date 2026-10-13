@@ -146,18 +146,23 @@ class PGFPlotsExporter:
                     + str(int(rgb[4:], 16))
                     + "}"
                 )
+                # Plain \addplot: the exporter owns every visual key. \addplot+
+                # would prepend PGFPlots' default cycle list, whose `every mark`
+                # fill survives an outer color= and leaks blue/red markers into
+                # monochrome or cross-layer series (#140).
+                marks = "mark options={solid,draw=" + color + ",fill=" + color + "}"
                 style = (
-                    "mark=*"
+                    "solid,mark=*,color=" + color + "," + marks
                     if layer.mark == "line"
-                    else "ybar,bar width=8pt"
+                    else "ybar,bar width=8pt,draw=" + color + ",fill=" + color
                     if layer.mark == "bar"
-                    else "only marks,mark=*"
+                    else "only marks,mark=*,color=" + color + "," + marks
                 )
                 show_legend = bool(group[0]) and group[0] not in legend_series
                 if layer.role == "interval":
                     for index, d in enumerate(selected):
                         parts.append(
-                            r"\addplot+[mark=none,color="
+                            r"\addplot[solid,mark=none,color="
                             + color
                             + ("" if show_legend and index == 0 else ",forget plot")
                             + "] coordinates {"
@@ -175,10 +180,8 @@ class PGFPlotsExporter:
                         parts.append("};")
                 else:
                     parts.append(
-                        r"\addplot+["
+                        r"\addplot["
                         + style
-                        + ",color="
-                        + color
                         + ("" if show_legend else ",forget plot")
                         + "] coordinates {"
                     )
