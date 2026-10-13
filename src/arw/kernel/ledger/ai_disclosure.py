@@ -63,17 +63,25 @@ def capture(context: ResolutionContext):
                 content_sha256=artifact.content_sha256,
             )
             resolved = resolve_ref(ref, fixed, memo)
-            if resolved.status != "resolved" or resolved.proven_scope != "bytes":
+            if resolved.status != "resolved" or resolved.proven_scope not in {
+                "bytes",
+                "structural_capsule",
+                "metadata_only",
+            }:
                 raise ValueError("AI disclosure source is unavailable or changed")
             if artifact.artifact_kind in RECORDS:
                 model, status = RECORDS[artifact.artifact_kind]
                 record = model.model_validate_json(resolved.raw_bytes)
-                if record.target.selector:
+                if record.target.selector or record.target.selected_sha256:
                     raise ValueError(
                         "participation target must bind whole artifact bytes"
                     )
                 target = resolve_ref(record.target, fixed, memo)
-                if target.status != "resolved" or target.proven_scope != "bytes":
+                if target.status != "resolved" or target.proven_scope not in {
+                    "bytes",
+                    "structural_capsule",
+                    "metadata_only",
+                }:
                     raise ValueError(
                         "participation target is unavailable or outside prefix"
                     )
@@ -102,6 +110,8 @@ def capture(context: ResolutionContext):
                     "ai_involvement": "unknown",
                     "histories": [],
                 }
+                if resolved.proven_scope != "bytes":
+                    entries[ref_key(ref)]["content_proof_scope"] = resolved.proven_scope
             if len(entries) + len(records) > MAX_ITEMS:
                 raise ValueError("AI disclosure item budget exceeded")
     for record, status, source, sequence in records:
