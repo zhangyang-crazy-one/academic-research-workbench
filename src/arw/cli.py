@@ -724,6 +724,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         except (ValueError, RuntimeError, OSError, KeyError) as error:
             print(f"arw: review-error: {error}", file=sys.stderr)
+            return 65
+
     if args.command == "disclosure":
         from arw.cli_disclosure import handle as handle_disclosure
         try:
