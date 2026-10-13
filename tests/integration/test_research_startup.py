@@ -36,6 +36,66 @@ def test_core_identity_is_shared_with_old_memory_alias(tmp_path, monkeypatch):
         initialize_project(tmp_path, "project.other")
 
 
+@pytest.mark.parametrize("unsealed", [False, True])
+@pytest.mark.parametrize("lose_completion", [False, True])
+def test_accepted_history_loss_is_not_partial_initialization(
+    tmp_path, unsealed, lose_completion
+):
+    from arw.research_startup import ResearchStartupError
+
+    if unsealed:
+        _kill_initialization(tmp_path, "first_event_durable")
+        first = status(tmp_path)
+    else:
+        first = start(tmp_path, direction="synthetic history integrity")
+    run = tmp_path / first["run_relative"]
+    raw = canonical_json_bytes({"synthetic": True})
+    (run / "reading.json").write_bytes(raw)
+    prior = replay_run(run)
+    request = ArtifactAcceptanceRequest.model_validate(
+        {
+            "schema_version": "1.0.0",
+            "run_id": prior.run_id,
+            "occurred_at": load_plan(tmp_path).request.occurred_at,
+            "event_id": f"evt-{uuid.uuid4()}",
+            "command_id": f"cmd-{uuid.uuid4()}",
+            "actor_id": "parent.fixture",
+            "actor_role": "parent_control_plane",
+            "expected_revision": prior.revision,
+            "artifact_id": "reading.synthetic",
+            "artifact_kind": "research-evidence",
+            "media_type": "application/json",
+            "content_path": "reading.json",
+            "content_sha256": sha256_hex(raw),
+            "base_revision": prior.revision,
+            "consumed_sha256": [prior.last_event_sha256],
+        }
+    )
+    assert RuntimeCommandService(run).accept_artifact(request).accepted
+    completed = run / ".initialization-committed.json"
+    assert completed.is_file()
+    assert status(tmp_path)["run"]["revision"] == 2
+    segment = run / "journal/segments/00000001.jsonl"
+    segment.unlink()
+    if lose_completion:
+        completed.unlink()
+    remaining = {
+        p.relative_to(tmp_path): p.read_bytes()
+        for p in tmp_path.rglob("*")
+        if p.is_file()
+    }
+    for operation in (lambda: status(tmp_path), lambda: start(tmp_path, resume=True)):
+        with pytest.raises(ResearchStartupError) as error:
+            operation()
+        assert error.value.code == "research_history_damaged"
+        assert not segment.exists()
+        assert remaining == {
+            p.relative_to(tmp_path): p.read_bytes()
+            for p in tmp_path.rglob("*")
+            if p.is_file()
+        }
+
+
 def test_actual_cli_start_retry_status_and_material_acceptance(tmp_path, capsys):
     args = [
         "research",
@@ -91,6 +151,82 @@ def test_actual_cli_start_retry_status_and_material_acceptance(tmp_path, capsys)
     assert report["scientific_evidence"]["status"] == "not_evaluated"
 
 
+@pytest.mark.parametrize("damage", ["missing", "changed", "symlink", "orphan_material"])
+def test_incomplete_transaction_is_not_retroactively_authorized(tmp_path, damage):
+    from arw.research_startup import ResearchStartupError
+
+    _kill_initialization(tmp_path, "manifest_only")
+    plan = load_plan(tmp_path)
+    run = tmp_path / plan.run_relative
+    pending = run / ".initialization-prepared.json"
+    if damage == "missing":
+        pending.unlink()
+    elif damage == "changed":
+        body = json.loads(pending.read_bytes())
+        body["request_sha256"] = "0" * 64
+        pending.write_bytes(canonical_json_bytes(body))
+    elif damage == "symlink":
+        saved = run.parent / "saved-transaction.json"
+        saved.write_bytes(pending.read_bytes())
+        pending.unlink()
+        pending.symlink_to(saved)
+    else:
+        (run / "unattributed-result.json").write_bytes(b"{}")
+    for operation in (lambda: status(tmp_path), lambda: start(tmp_path, resume=True)):
+        with pytest.raises(ResearchStartupError) as error:
+            operation()
+        assert error.value.code == "research_history_damaged"
+        assert not (run / "journal/segments/00000001.jsonl").exists()
+
+
+def test_legacy_healthy_run_remains_readable_but_loss_is_ambiguous(tmp_path):
+    from arw.research_startup import ResearchStartupError
+
+    original = start(tmp_path, direction="legacy intact compatibility")
+    run = tmp_path / original["run_relative"]
+    (run / ".initialization-prepared.json").unlink()
+    (run / ".initialization-committed.json").unlink()
+    assert status(tmp_path) == original
+    assert start(tmp_path, resume=True) == original
+    (run / "journal/segments/00000001.jsonl").unlink()
+    for operation in (lambda: status(tmp_path), lambda: start(tmp_path, resume=True)):
+        with pytest.raises(ResearchStartupError) as error:
+            operation()
+        assert error.value.code == "research_history_damaged"
+
+
+def test_read_only_status_does_not_seal_interrupted_initialization(tmp_path):
+    _kill_initialization(tmp_path, "first_event_durable")
+    plan = load_plan(tmp_path)
+    run = tmp_path / plan.run_relative
+    completed = run / ".initialization-committed.json"
+    assert not completed.exists()
+    assert status(tmp_path)["run"]["revision"] == 1
+    assert not completed.exists()
+    assert start(tmp_path, resume=True)["run"]["revision"] == 1
+    assert completed.is_file()
+
+
+@pytest.mark.parametrize(
+    "name", [".initialization-prepared.json", ".initialization-committed.json"]
+)
+def test_damaged_transaction_with_intact_history_is_rejected(tmp_path, name):
+    from arw.research_startup import ResearchStartupError
+
+    first = start(tmp_path, direction="transaction integrity")
+    run = tmp_path / first["run_relative"]
+    record = run / name
+    body = json.loads(record.read_bytes())
+    body["initial_event_sha256"] = "0" * 64
+    record.write_bytes(canonical_json_bytes(body))
+    with pytest.raises(ResearchStartupError) as error:
+        status(tmp_path)
+    assert error.value.code == "research_history_damaged"
+    assert (
+        replay_run(run).revision == 1
+    )  # Canonical replay does not trust this receipt.
+
+
 @pytest.mark.parametrize(
     "point",
     [
@@ -106,33 +242,7 @@ def test_actual_cli_start_retry_status_and_material_acceptance(tmp_path, capsys)
     ],
 )
 def test_actual_sigkill_resumes_same_requests_without_duplicate_events(tmp_path, point):
-    code = """import os,signal,sys
-from pathlib import Path
-from arw.research_startup import start
-from arw.kernel.ledger import journal
-point=sys.argv[2]
-def stop(label):
- if label==point:os.kill(os.getpid(),signal.SIGKILL)
-if point in {"manifest_only","first_event_durable"}:
- original=journal._write_exclusive
- def write(path,data):
-  original(path,data)
-  if path.name==("run-manifest.json" if point=="manifest_only" else "00000001.jsonl"):os.kill(os.getpid(),signal.SIGKILL)
- journal._write_exclusive=write
-if point in {"journal_directory","segments_directory"}:
- original_mkdir=Path.mkdir
- def mkdir(path,*args,**kwargs):
-  original_mkdir(path,*args,**kwargs)
-  if path.name==("journal" if point=="journal_directory" else "segments"):os.kill(os.getpid(),signal.SIGKILL)
- Path.mkdir=mkdir
-start(Path(sys.argv[1]),direction="修正对世界的理解",boundary=stop)
-"""
-    process = subprocess.run(
-        [sys.executable, "-c", code, str(tmp_path), point],
-        capture_output=True,
-        check=False,
-    )
-    assert process.returncode == -9, process.stderr
+    _kill_initialization(tmp_path, point)
     plan = load_plan(tmp_path, allow_pending_identity=True)
     report = start(tmp_path, resume=True)
     assert report["project"]["project_id"] == plan.project_id
@@ -233,3 +343,33 @@ def test_paper_start_uses_existing_selection_and_stale_guards(tmp_path):
     with pytest.raises(ValueError):
         status(tmp_path)
     assert replay_run(tmp_path / ready["run_relative"]).revision == 1
+
+
+def _kill_initialization(tmp_path, point):
+    code = """import os,signal,sys
+from pathlib import Path
+from arw.research_startup import start
+from arw.kernel.ledger import journal
+point=sys.argv[2]
+def stop(label):
+ if label==point:os.kill(os.getpid(),signal.SIGKILL)
+if point in {"manifest_only","first_event_durable"}:
+ original=journal._write_exclusive
+ def write(path,data):
+  original(path,data)
+  if path.name==("run-manifest.json" if point=="manifest_only" else "00000001.jsonl"):os.kill(os.getpid(),signal.SIGKILL)
+ journal._write_exclusive=write
+if point in {"journal_directory","segments_directory"}:
+ original_mkdir=Path.mkdir
+ def mkdir(path,*args,**kwargs):
+  original_mkdir(path,*args,**kwargs)
+  if path.name==("journal" if point=="journal_directory" else "segments"):os.kill(os.getpid(),signal.SIGKILL)
+ Path.mkdir=mkdir
+start(Path(sys.argv[1]),direction="修正对世界的理解",boundary=stop)
+"""
+    process = subprocess.run(
+        [sys.executable, "-c", code, str(tmp_path), point],
+        capture_output=True,
+        check=False,
+    )
+    assert process.returncode == -9, process.stderr
