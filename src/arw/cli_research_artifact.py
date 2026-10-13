@@ -10,13 +10,13 @@ from arw.kernel.state.research_artifact import ResearchArtifactIR
 
 
 def configure(commands):
-    for name in ("ir", "render", "qualify", "reproduce", "doctor", "purge", "source-bridge", "caption-targets"):
+    for name in ("ir", "render", "qualify", "reproduce", "doctor", "purge", "source-bridge", "caption-targets", "export-pgfplots"):
         parser = commands.add_parser(name)
         parser.add_argument("--run-root", type=Path, required=True)
-        if name in {"ir", "render", "qualify", "reproduce", "source-bridge", "caption-targets"}:
+        if name in {"ir", "render", "qualify", "reproduce", "source-bridge", "caption-targets", "export-pgfplots"}:
             parser.add_argument("--source-run-root", type=Path, action="append", default=[])
             parser.add_argument("--project-root", type=Path)
-        if name in {"ir", "render", "qualify", "source-bridge", "caption-targets"}:
+        if name in {"ir", "render", "qualify", "source-bridge", "caption-targets", "export-pgfplots"}:
             parser.add_argument(
                 "--input",
                 type=Path,
@@ -100,6 +100,8 @@ def handle(args, provider):
         if args.source_run_root or args.project_root:
             raise ValueError("plot_source_context_requires_result_plot")
         options = {}
+    if action == "export-pgfplots":
+        return provider.export_pgfplots(ir, run_root=args.run_root, **options)
     if action == "render":
         return provider.render(ir, run_root=args.run_root, **options)
     if action in {"source-bridge", "caption-targets"}:

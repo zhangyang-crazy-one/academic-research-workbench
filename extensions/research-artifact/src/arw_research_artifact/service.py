@@ -135,6 +135,23 @@ class ResearchArtifactService:
             "path": f"{prefix}/figure.svg",
         }
 
+    def export_pgfplots(self, ir, *, run_root, resolution_context=None):
+        if ir.artifact_kind != "result_plot":
+            raise IRValidationFault("result_plot_required")
+        from .pgfplots import PGFPlotsExporter
+        from .plot_policy import compile_plot
+
+        context = self._plot_context(ir, run_root, resolution_context)
+        compiled = compile_plot(ir, context, acceptance_root=run_root)
+        # Preserve source/domain safety and the current pinned SVG identity.
+        raw, _ = self._render(ir, run_root=run_root, resolution_context=context, compiled=compiled)
+        exporter = PGFPlotsExporter()
+        source, metadata = exporter.export(compiled)
+        prefix = f".arw/artifacts/candidates/{ir.artifact_id}/{sha256_hex(raw)}/pgfplots/{exporter.identity.identity_digest}"
+        publish_once(run_root, f"{prefix}/figure.tex", source)
+        publish_once(run_root, f"{prefix}/export.json", canonical_json_bytes(metadata))
+        return {"status": "source_exported", "path": f"{prefix}/figure.tex", "manifest_path": f"{prefix}/export.json", **metadata}
+
     def capture_result_plot(
         self,
         ir,
