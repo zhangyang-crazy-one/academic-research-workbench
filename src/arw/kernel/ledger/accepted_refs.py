@@ -92,6 +92,18 @@ class ResolutionCache:
         self._refs: dict[tuple[str, str], RefResolution] = {}
         self._csv_rows: dict[tuple[str, str, str], object] = {}
 
+    def prime_verified_runs(self, context: ResolutionContext, runs: list) -> None:
+        """Seed only parent-validated canonical replays for this exact context.
+
+        Internal Python operation boundary; never populated from graph output,
+        CLI input or serialized cache state.
+        """
+        self._runs[_context_key(context)] = list(runs)
+
+    def verified_runs(self, context: ResolutionContext) -> tuple:
+        """Inspect canonical replays already resolved within this operation."""
+        return tuple(self._runs.get(_context_key(context), ()))
+
     def csv_rows(
         self,
         ref: AcceptedRef,

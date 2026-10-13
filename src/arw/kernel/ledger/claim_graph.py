@@ -545,7 +545,6 @@ def _closure(inputs: Inputs) -> None:
 def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
     from arw.kernel.ledger.accepted_refs import (
         ResolutionCache,
-        _context_key,
         to_accepted_ref,
     )
 
@@ -554,25 +553,36 @@ def _resolve(original: dict, inputs: Inputs, adapter: str = "accepted_ref"):
         context = _context(inputs)
         memo = inputs.cache.setdefault("accepted_resolution", ResolutionCache())
         if "query_base" in inputs.cache:
-            memo._runs[_context_key(context)] = [
-                (root, manifest, prefix.run_manifest_sha256, replay)
-                for prefix in inputs.manifest.runs
-                for root, manifest, replay in (inputs.runs[prefix.run_id],)
-            ]
+            memo.prime_verified_runs(
+                context,
+                [
+                    (root, manifest, prefix.run_manifest_sha256, replay)
+                    for prefix in inputs.manifest.runs
+                    for root, manifest, replay in (inputs.runs[prefix.run_id],)
+                ],
+            )
         inputs.cache[key] = to_accepted_ref(
             original, context, adapter_kind=ADAPTER_KINDS.get(adapter), cache=memo
         )
         if "query_base" not in inputs.cache:
             maximums = {r.run_id: r for r in inputs.manifest.runs}
-            for root, manifest, digest, replay in memo._runs.get(
-                _context_key(context), ()
-            ):
+            for root, manifest, digest, replay in memo.verified_runs(context):
                 cut = maximums[manifest.run_id]
                 if (replay.revision, replay.last_event_sha256, digest) == (
-                    cut.revision, cut.head_sha256, cut.run_manifest_sha256
+                    cut.revision,
+                    cut.head_sha256,
+                    cut.run_manifest_sha256,
                 ):
-                    cache_key = (str(root), cut.run_id, cut.revision, cut.head_sha256, digest)
-                    inputs.cache.setdefault("query_maximum_replays", {})[cache_key] = replay
+                    cache_key = (
+                        str(root),
+                        cut.run_id,
+                        cut.revision,
+                        cut.head_sha256,
+                        digest,
+                    )
+                    inputs.cache.setdefault("query_maximum_replays", {})[cache_key] = (
+                        replay
+                    )
     return inputs.cache[key]
 
 
@@ -888,49 +898,90 @@ def _receipt_checks(raw: bytes, resolution, inputs: Inputs) -> list[dict]:
             }
         ]
     if value.get("schema_version") == "arw.experiment-acceptance.v1":
+        from dataclasses import replace
+
         from arw.kernel.artifacts.experiment_acceptance import (
             ExperimentAcceptanceResult,
-            load_experiment_contract,
             load_experiment_acceptance,
+            load_experiment_contract,
             replay_experiment_acceptance,
             timing_from_run,
         )
-        from arw.kernel.artifacts.experiment_provenance import load_experiment_provenance
+        from arw.kernel.artifacts.experiment_provenance import (
+            load_experiment_provenance,
+        )
         from arw.kernel.state.accepted_ref import ParentArtifactRef
-        from dataclasses import replace
 
         result = ExperimentAcceptanceResult.model_validate_json(raw)
         trusted, reason = False, "experiment_acceptance_unverified"
         ref = resolution.ref
         if isinstance(ref, ParentArtifactRef) and resolution.proven_scope == "bytes":
             root, _, replay = inputs.runs[ref.run_id]
-            event = next(e for e in replay.events if e.event_id == ref.accepting_event_id)
+            event = next(
+                e for e in replay.events if e.event_id == ref.accepting_event_id
+            )
             artifact = load_artifact_manifest(root, event.payload.manifest_sha256)
-            if (artifact.artifact_kind in {"experiment-acceptance", "experiment-acceptance-result"}
-                    and artifact.content_path == f"experiment/acceptance/sha256/{result.result_sha256}.json"):
+            if (
+                artifact.artifact_kind
+                in {"experiment-acceptance", "experiment-acceptance-result"}
+                and artifact.content_path
+                == f"experiment/acceptance/sha256/{result.result_sha256}.json"
+            ):
                 try:
-                    prior = tuple(e for e in replay.events if e.sequence < event.sequence)
-                    contract_events = [e for e in prior if e.event_type == "experiment.contract.accepted"
-                                       and e.payload.contract_sha256 == result.contract_sha256]
-                    provenance_events = [e for e in prior if e.event_type == "experiment.provenance.accepted"
-                                         and e.payload.provenance_sha256 == result.provenance_sha256]
+                    prior = tuple(
+                        e for e in replay.events if e.sequence < event.sequence
+                    )
+                    contract_events = [
+                        e
+                        for e in prior
+                        if e.event_type == "experiment.contract.accepted"
+                        and e.payload.contract_sha256 == result.contract_sha256
+                    ]
+                    provenance_events = [
+                        e
+                        for e in prior
+                        if e.event_type == "experiment.provenance.accepted"
+                        and e.payload.provenance_sha256 == result.provenance_sha256
+                    ]
                     if len(contract_events) != 1 or len(provenance_events) != 1:
-                        raise ValueError("experiment dependencies not accepted before receipt")
-                    prefix = replace(replay, events=prior, revision=len(prior), event_count=len(prior),
-                                     last_event_sha256=prior[-1].event_sha256)
+                        raise ValueError(
+                            "experiment dependencies not accepted before receipt"
+                        )
+                    prefix = replace(
+                        replay,
+                        events=prior,
+                        revision=len(prior),
+                        event_count=len(prior),
+                        last_event_sha256=prior[-1].event_sha256,
+                    )
                     contract = load_experiment_contract(root, result.contract_sha256)
-                    provenance = load_experiment_provenance(root, result.provenance_sha256)
+                    provenance = load_experiment_provenance(
+                        root, result.provenance_sha256
+                    )
                     if provenance.run_id != ref.run_id:
                         raise ValueError("experiment provenance run identity differs")
                     retained = load_experiment_acceptance(root, result.result_sha256)
                     if retained.canonical_bytes() != raw:
                         raise ValueError("experiment result is not canonical")
-                    timing = (timing_from_run(root, result.contract_sha256, result.provenance_sha256,
-                                              journal_prefix=prefix)
-                              if result.predeclaration in {"verified_predeclared", "predeclaration_contradicted"}
-                              else None)
-                    replay_experiment_acceptance(result, contract, provenance, root,
-                                                 timing=timing, journal_prefix=prefix)
+                    timing = (
+                        timing_from_run(
+                            root,
+                            result.contract_sha256,
+                            result.provenance_sha256,
+                            journal_prefix=prefix,
+                        )
+                        if result.predeclaration
+                        in {"verified_predeclared", "predeclaration_contradicted"}
+                        else None
+                    )
+                    replay_experiment_acceptance(
+                        result,
+                        contract,
+                        provenance,
+                        root,
+                        timing=timing,
+                        journal_prefix=prefix,
+                    )
                     trusted, reason = True, None
                 except (OSError, ValueError, RuntimeError, KeyError):
                     reason = "experiment_replay_unverifiable"
@@ -946,7 +997,9 @@ def _receipt_checks(raw: bytes, resolution, inputs: Inputs) -> list[dict]:
             {
                 "method": c.kind,
                 "version": result.evaluator_version,
-                "status": mapping.get(c.status, "not_checked") if trusted else "not_checked",
+                "status": mapping.get(c.status, "not_checked")
+                if trusted
+                else "not_checked",
                 "scope": result.scope,
                 "check_id": c.check_id,
                 "legacy_observed_display": c.observed,
