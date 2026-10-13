@@ -49,3 +49,15 @@ Monetary, energy and peak-memory cost are `unknown`, with no fabricated zero.
 Model calls are explicitly zero because the inspected workflow contains none.
 Cold replay and changed-raw-data refusal are covered by
 `tests/integration/test_public_cpu_pilots.py`.
+
+## Interpretation of the trapezoid failure
+
+The v1 failure is the finite-step trapezoidal approximation error for x², not
+merely floating-point roundoff. At n=8,16,32 the exact discretization errors
+are 1/(6n²); their mean is 7/6144 (approximately 0.00113932291667). A zero
+tolerance rejects this error; the recorded v2 tolerance 0.002 accepts it.
+The JSON target is a Python floating approximation to 1/3, which adds only a
+much smaller representation difference. Retained report/receipt bytes are
+unchanged. These three analytic mini-experiments exercise mean@1 only and
+prove workflow integrity; they do not cover grouped row IDs, missing-value
+policies or the full range of real research experiments.
