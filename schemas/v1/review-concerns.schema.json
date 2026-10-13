@@ -4,26 +4,26 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "claim_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Claim Sha256",
+          "type": "string"
+        },
         "kind": {
           "const": "claim-revision",
           "default": "claim-revision",
           "title": "Kind",
           "type": "string"
         },
-        "claim_id": {
-          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
-          "title": "Claim Id",
-          "type": "string"
-        },
         "revision": {
           "minimum": 1,
           "title": "Revision",
           "type": "integer"
-        },
-        "claim_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Claim Sha256",
-          "type": "string"
         }
       },
       "required": [
@@ -38,15 +38,15 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "sequence": {
-          "minimum": 1,
-          "title": "Sequence",
-          "type": "integer"
-        },
         "head_sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Head Sha256",
           "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
         }
       },
       "required": [
@@ -60,16 +60,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "derivation_id": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Derivation Id",
-          "type": "string"
-        },
         "decimals": {
           "maximum": 18,
           "minimum": 0,
           "title": "Decimals",
           "type": "integer"
+        },
+        "derivation_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Id",
+          "type": "string"
         },
         "rounding_mode": {
           "enum": [
@@ -80,18 +80,18 @@
           "title": "Rounding Mode",
           "type": "string"
         },
+        "scale": {
+          "$ref": "#/$defs/RationalExact",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
         "unit_suffix": {
           "default": "",
           "maxLength": 64,
           "title": "Unit Suffix",
           "type": "string"
-        },
-        "scale": {
-          "$ref": "#/$defs/RationalExact",
-          "default": {
-            "numerator": 1,
-            "denominator": 1
-          }
         }
       },
       "required": [
@@ -106,6 +106,32 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "derivation_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Derivation Id"
+        },
+        "figure_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Figure Ref"
+        },
         "kind": {
           "enum": [
             "numeric_token",
@@ -113,6 +139,21 @@
             "citation_sentence"
           ],
           "title": "Kind",
+          "type": "string"
+        },
+        "length": {
+          "exclusiveMinimum": 0,
+          "maximum": 1048576,
+          "title": "Length",
+          "type": "integer"
+        },
+        "locator_version": {
+          "default": "arw.utf8-byte-span.v1",
+          "enum": [
+            "arw.utf8-byte-span.v1",
+            "arw.writing-citation-bindings.v2"
+          ],
+          "title": "Locator Version",
           "type": "string"
         },
         "manuscript_ref": {
@@ -123,31 +164,6 @@
         "manuscript_sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Manuscript Sha256",
-          "type": "string"
-        },
-        "offset": {
-          "minimum": 0,
-          "title": "Offset",
-          "type": "integer"
-        },
-        "length": {
-          "exclusiveMinimum": 0,
-          "maximum": 1048576,
-          "title": "Length",
-          "type": "integer"
-        },
-        "selected_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Selected Sha256",
-          "type": "string"
-        },
-        "locator_version": {
-          "default": "arw.utf8-byte-span.v1",
-          "enum": [
-            "arw.utf8-byte-span.v1",
-            "arw.writing-citation-bindings.v2"
-          ],
-          "title": "Locator Version",
           "type": "string"
         },
         "numeric_class": {
@@ -174,42 +190,23 @@
           "default": null,
           "title": "Numeric Class"
         },
-        "derivation_id": {
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "plot_revision": {
           "anyOf": [
             {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
+              "minimum": 1,
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Derivation Id"
-        },
-        "presentation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/NumericPresentation"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "figure_ref": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Figure Ref"
+          "title": "Plot Revision"
         },
         "plot_value_id": {
           "anyOf": [
@@ -224,18 +221,21 @@
           "default": null,
           "title": "Plot Value Id"
         },
-        "plot_revision": {
+        "presentation": {
           "anyOf": [
             {
-              "minimum": 1,
-              "type": "integer"
+              "$ref": "#/$defs/NumericPresentation"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Plot Revision"
+          "default": null
+        },
+        "selected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Selected Sha256",
+          "type": "string"
         }
       },
       "required": [
@@ -273,16 +273,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "numerator": {
-          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
-          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
-          "title": "Numerator",
-          "type": "integer"
-        },
         "denominator": {
           "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
           "minimum": 1,
           "title": "Denominator",
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "minimum": -99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "title": "Numerator",
           "type": "integer"
         }
       },
@@ -297,50 +297,11 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "schema_version": {
-          "const": "arw.review-concern.v1",
-          "default": "arw.review-concern.v1",
-          "title": "Schema Version",
-          "type": "string"
-        },
-        "concern_id": {
-          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
-          "title": "Concern Id",
-          "type": "string"
-        },
-        "snapshot_manifest": {
-          "$ref": "#/$defs/SnapshotManifest"
-        },
-        "target": {
-          "discriminator": {
-            "mapping": {
-              "claim-revision": "#/$defs/ClaimRevisionTarget",
-              "occurrence": "#/$defs/OccurrenceTarget"
-            },
-            "propertyName": "kind"
-          },
-          "oneOf": [
-            {
-              "$ref": "#/$defs/ClaimRevisionTarget"
-            },
-            {
-              "$ref": "#/$defs/OccurrenceTarget"
-            }
-          ],
-          "title": "Target"
-        },
-        "proposition_type": {
-          "default": "REQUEST",
-          "enum": [
-            "EVALUATION",
-            "REQUEST",
-            "FACT",
-            "REFERENCE",
-            "QUOTE",
-            "NON-ARG"
-          ],
-          "title": "Proposition Type",
-          "type": "string"
+        "advisory": {
+          "const": true,
+          "default": true,
+          "title": "Advisory",
+          "type": "boolean"
         },
         "argumentative_zone": {
           "anyOf": [
@@ -363,11 +324,38 @@
           "default": null,
           "title": "Argumentative Zone"
         },
+        "concern_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Concern Id",
+          "type": "string"
+        },
         "message": {
           "maxLength": 2048,
           "minLength": 1,
           "title": "Message",
           "type": "string"
+        },
+        "proposition_type": {
+          "default": "REQUEST",
+          "enum": [
+            "EVALUATION",
+            "REQUEST",
+            "FACT",
+            "REFERENCE",
+            "QUOTE",
+            "NON-ARG"
+          ],
+          "title": "Proposition Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "arw.review-concern.v1",
+          "default": "arw.review-concern.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_manifest": {
+          "$ref": "#/$defs/SnapshotManifest"
         },
         "source": {
           "default": "author",
@@ -378,11 +366,23 @@
           "title": "Source",
           "type": "string"
         },
-        "advisory": {
-          "const": true,
-          "default": true,
-          "title": "Advisory",
-          "type": "boolean"
+        "target": {
+          "discriminator": {
+            "mapping": {
+              "claim-revision": "#/$defs/ClaimRevisionTarget",
+              "occurrence": "#/$defs/OccurrenceTarget"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ClaimRevisionTarget"
+            },
+            {
+              "$ref": "#/$defs/OccurrenceTarget"
+            }
+          ],
+          "title": "Target"
         }
       },
       "required": [
@@ -398,6 +398,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
         "run_id": {
           "pattern": "^[a-z][a-z0-9._-]{2,95}$",
           "title": "Run Id",
@@ -406,16 +416,6 @@
         "run_manifest_sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Run Manifest Sha256",
-          "type": "string"
-        },
-        "revision": {
-          "minimum": 1,
-          "title": "Revision",
-          "type": "integer"
-        },
-        "head_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Head Sha256",
           "type": "string"
         }
       },
@@ -432,34 +432,6 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "schema_version": {
-          "const": "arw.claim-graph-snapshot.v1",
-          "default": "arw.claim-graph-snapshot.v1",
-          "title": "Schema Version",
-          "type": "string"
-        },
-        "project_id": {
-          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
-          "title": "Project Id",
-          "type": "string"
-        },
-        "journal": {
-          "$ref": "#/$defs/JournalPrefix"
-        },
-        "runs": {
-          "items": {
-            "$ref": "#/$defs/RunPrefix"
-          },
-          "maxItems": 32,
-          "title": "Runs",
-          "type": "array"
-        },
-        "projection_version": {
-          "const": "arw.claim-graph.v1",
-          "default": "arw.claim-graph.v1",
-          "title": "Projection Version",
-          "type": "string"
-        },
         "adapter_matrix_version": {
           "const": "arw.accepted-ref-adapters.v1",
           "default": "arw.accepted-ref-adapters.v1",
@@ -470,6 +442,34 @@
           "const": "arw.canonical-json.v1",
           "default": "arw.canonical-json.v1",
           "title": "Canonicalization Version",
+          "type": "string"
+        },
+        "journal": {
+          "$ref": "#/$defs/JournalPrefix"
+        },
+        "project_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "arw.claim-graph.v1",
+          "default": "arw.claim-graph.v1",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/RunPrefix"
+          },
+          "maxItems": 32,
+          "title": "Runs",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "arw.claim-graph-snapshot.v1",
+          "default": "arw.claim-graph-snapshot.v1",
+          "title": "Schema Version",
           "type": "string"
         }
       },
@@ -482,24 +482,10 @@
       "type": "object"
     }
   },
+  "$id": "https://academic-research-workbench.local/schemas/v1/review-concerns.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": "arw.review-concerns.v1",
-      "default": "arw.review-concerns.v1",
-      "title": "Schema Version",
-      "type": "string"
-    },
-    "generator_version": {
-      "const": "arw.review-diagnostics.v1",
-      "default": "arw.review-diagnostics.v1",
-      "title": "Generator Version",
-      "type": "string"
-    },
-    "snapshot_manifest": {
-      "$ref": "#/$defs/SnapshotManifest"
-    },
     "concerns": {
       "items": {
         "$ref": "#/$defs/ReviewConcern"
@@ -508,11 +494,17 @@
       "title": "Concerns",
       "type": "array"
     },
-    "omitted_concern_count": {
-      "default": 0,
-      "minimum": 0,
-      "title": "Omitted Concern Count",
-      "type": "integer"
+    "corpus_redistribution": {
+      "const": "not_performed; separate license review required",
+      "default": "not_performed; separate license review required",
+      "title": "Corpus Redistribution",
+      "type": "string"
+    },
+    "generator_version": {
+      "const": "arw.review-diagnostics.v1",
+      "default": "arw.review-diagnostics.v1",
+      "title": "Generator Version",
+      "type": "string"
     },
     "interpretation": {
       "const": "advisory_only; not a score, scientific gate or predictor accuracy claim",
@@ -520,11 +512,20 @@
       "title": "Interpretation",
       "type": "string"
     },
-    "corpus_redistribution": {
-      "const": "not_performed; separate license review required",
-      "default": "not_performed; separate license review required",
-      "title": "Corpus Redistribution",
+    "omitted_concern_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Omitted Concern Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "arw.review-concerns.v1",
+      "default": "arw.review-concerns.v1",
+      "title": "Schema Version",
       "type": "string"
+    },
+    "snapshot_manifest": {
+      "$ref": "#/$defs/SnapshotManifest"
     }
   },
   "required": [
@@ -532,6 +533,5 @@
     "concerns"
   ],
   "title": "ReviewConcernReport",
-  "type": "object",
-  "$id": "https://academic-research-workbench.local/schemas/v1/review-concerns.schema.json"
+  "type": "object"
 }

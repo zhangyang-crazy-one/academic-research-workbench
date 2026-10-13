@@ -184,9 +184,9 @@ def test_schema_drift():
 
 
 def test_large_manuscript_reports_explicit_omissions_and_replays(tmp_path):
-    from tests.integration.test_precise_source_locators import accept, seed
-    from tests.unit.test_narrative import project, plan
     from arw.kernel.ledger import narrative
+    from tests.integration.test_precise_source_locators import accept, seed
+    from tests.unit.test_narrative import plan, project
 
     p = project(tmp_path)
     narrative.register(p)
@@ -205,6 +205,7 @@ def test_large_manuscript_reports_explicit_omissions_and_replays(tmp_path):
 @pytest.mark.parametrize("action", ["verify", "replay", "prov"])
 def test_review_input_rejects_non_object_without_attribute_error(tmp_path, action):
     from argparse import Namespace
+
     from arw.cli_review import handle
 
     path = tmp_path / "input.json"

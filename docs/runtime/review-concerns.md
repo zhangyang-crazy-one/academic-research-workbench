@@ -76,3 +76,5 @@ or third-party corpus qualification run.
 Clickable reading-view manuscript HTML is optional and remains unsupported in
 this delivery. Concerns JSON and PROV source links provide the implemented
 headless author workflow.
+
+Diagnosis retains at most 1000 concerns and the existing 2 MiB report byte limit. Nonzero omitted_concern_count explicitly reports additional eligible concerns; omitted concerns do not imply absence of problems. Zero omissions leave legacy report bytes/digests unchanged. PROV exports retain the omission count.
