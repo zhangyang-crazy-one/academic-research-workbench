@@ -6,6 +6,6 @@
 
 ## 2. Human pilot acceptance
 
-- [ ] 2.1 Owner supplies actual independent status/reason labels and source locators.
+- [x] 2.1 Record actual owner-confirmed status labels and source locators; reasons remain unknown. Disclose source-explanation assistance and preserve the previous policy responses separately.
 - [ ] 2.2 Import source decisions through existing narrative commands, export trails and compare labels/reasons with counts.
 - [ ] 2.3 Execute two-round handoff/resume and retain abandoned-route notices and current-state equality.

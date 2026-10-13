@@ -1,6 +1,6 @@
 ## ADDED Requirements
 
-### Requirement: Independent human ground truth
+### Requirement: Traceable human annotations
 The pilot MUST retain ten pinned public source locators and leave actual human labels pending until the owner annotates them.
 
 #### Scenario: Unannotated material
@@ -14,6 +14,14 @@ The pilot MUST retain ten pinned public source locators and leave actual human l
 #### Scenario: Owner response is not historical evidence
 - **WHEN** a row contains owner adoption or reporting instructions
 - **THEN** validation counts it as a recorded owner annotation, does not declare historical comparison ready, and rejects encoding the same row as source-history status/reason ground truth
+
+#### Scenario: Owner explicitly confirms historical states
+- **WHEN** the owner supplies ten state labels after a source explanation
+- **THEN** those labels and original wording are recorded in the source-history CSV, previous adoption responses remain separately preserved, unconfirmed reasons stay unknown, and source-explanation assistance is disclosed
+
+#### Scenario: Human label differs from source status
+- **WHEN** the owner labels sample 10 kept while its fixed source says Superseded
+- **THEN** both observations remain unchanged and the later comparison reports the difference without retuning the frozen machine mapping
 
 ### Requirement: Source scope and unknown reasons
 The pilot SHALL distinguish source metadata, machine encoding, human status and human reason, with explicit unknown where the annotator cannot verify a claim.
