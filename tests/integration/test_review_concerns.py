@@ -228,3 +228,82 @@ def test_zero_omissions_preserve_original_report_bytes(tmp_path):
         ReviewConcernReport.model_validate_json(canonical_json_bytes(old)).sha256
         == report.sha256
     )
+
+
+def test_truncated_diagnosis_envelope_round_trips_through_bounded_reader(
+    tmp_path, monkeypatch
+):
+    """#141: the digest-bearing CLI envelope, not only its body, fits the reader."""
+    from argparse import Namespace
+
+    from arw import cli_review
+    from arw.kernel.ledger import review_concerns as review
+    from arw.kernel.state.accepted_ref import ParentArtifactRef
+    from arw.kernel.state.claim_graph import Occurrence, SnapshotManifest
+
+    digest = "a" * 64
+    project_id = "p" + "." * 24
+    run_id = "run-00000000-0000-4000-8000-000000000000"
+    snapshot = SnapshotManifest(
+        project_id=project_id,
+        journal={"sequence": 1, "head_sha256": digest},
+        runs=tuple(
+            {
+                "run_id": run_id[:-4] + f"{i:04d}",
+                "run_manifest_sha256": digest,
+                "revision": 2,
+                "head_sha256": digest,
+            }
+            for i in range(2)
+        ),
+    )
+    ref = ParentArtifactRef(
+        project_id=project_id,
+        run_id=run_id,
+        run_manifest_sha256=digest,
+        artifact_id="artifact.draft",
+        accepting_event_id="evt-00000000-0000-4000-8000-000000000000",
+        accepting_event_sha256=digest,
+        content_sha256=digest,
+    )
+    occurrence = Occurrence(
+        kind="numeric_token",
+        manuscript_ref=ref.model_dump(mode="json"),
+        manuscript_sha256=digest,
+        offset=1000,
+        length=1,
+        selected_sha256=digest,
+    )
+    view = {
+        "snapshot_manifest": snapshot.model_dump(mode="json"),
+        "nodes": [
+            {
+                "node_kind": "Occurrence",
+                "registration": "unknown",
+                **occurrence.model_copy(update={"offset": 1000 + 2 * i}).model_dump(
+                    mode="json"
+                ),
+            }
+            for i in range(1000)
+        ],
+    }
+    replayed = []
+    monkeypatch.setattr(review, "graph", lambda *a, **k: view)
+    monkeypatch.setattr(
+        review, "replay_report", lambda report, *a, **k: replayed.append(report)
+    )
+    payload = cli_review.handle(
+        Namespace(project_root=tmp_path, run_root=[], review_command="diagnose")
+    )
+    assert payload["omitted_concern_count"] > 0
+    raw = canonical_json_bytes(payload)
+    assert len(raw) <= 2_097_152  # bounded reader limit
+    path = tmp_path / "report.json"
+    path.write_bytes(raw)
+    again = cli_review.handle(
+        Namespace(
+            project_root=tmp_path, run_root=[], review_command="replay", input=path
+        )
+    )
+    assert canonical_json_bytes(again) == raw
+    assert replayed[-1].sha256 == payload["report_sha256"]

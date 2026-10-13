@@ -97,16 +97,11 @@ def diagnose(project_root, run_roots):
 
     count = min(1000, len(ordered))
     report = bounded_report(count)
-    if len(canonical_json_bytes(report.model_dump(mode="json"))) > 2_097_152:
+    if not report_envelope_fits(report):
         low, high = 0, count
         while low < high:
             middle = (low + high + 1) // 2
-            if (
-                len(
-                    canonical_json_bytes(bounded_report(middle).model_dump(mode="json"))
-                )
-                <= 2_097_152
-            ):
+            if report_envelope_fits(bounded_report(middle)):
                 low = middle
             else:
                 high = middle - 1
@@ -115,9 +110,23 @@ def diagnose(project_root, run_roots):
     return report
 
 
+MAX_REVIEW_BYTES = 2_097_152
+
+
+def report_envelope(report: ReviewConcernReport) -> dict:
+    """The exact public CLI/file envelope: report body plus its digest."""
+    return {**report.model_dump(mode="json"), "report_sha256": report.sha256}
+
+
+def report_envelope_fits(report: ReviewConcernReport) -> bool:
+    # Producers and the bounded file reader share this budget, so every
+    # emitted diagnosis can be read back by replay/prov unchanged.
+    return len(canonical_json_bytes(report_envelope(report))) <= MAX_REVIEW_BYTES
+
+
 def replay_report(report: ReviewConcernReport, project_root, run_roots):
     raw = canonical_json_bytes(report.model_dump(mode="json"))
-    if len(raw) > 2_097_152:
+    if not report_envelope_fits(report):
         raise ValueError("review report byte budget exceeded")
     report = ReviewConcernReport.model_validate_json(raw)
     inputs = _read_inputs(project_root, run_roots, report.snapshot_manifest)
