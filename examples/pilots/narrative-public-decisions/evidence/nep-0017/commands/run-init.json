@@ -1,0 +1,1 @@
+{"argv":["init","--run-root","run","--request","init-request.json","--task-kind","paper","--project-root","."],"exit_code":0,"recorded_at":"2026-10-14T04:33:17Z"}

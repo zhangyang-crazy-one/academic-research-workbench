@@ -12,8 +12,9 @@
   "comparison": "Report status agreement, disagreement and explicit unknown separately, with reasons evaluated separately. Pending rows are not unknown labels. Status encoding is an operational proposal-to-trail mapping, not evidence that a research author selected a paper direction. Do not retune the encoding after seeing human labels.",
   "current_acceptance": {
     "human_annotated_count": 10,
-    "trail_export_count": 0,
-    "comparison": "pending",
-    "two_round_handoff_resume": "pending"
+    "trail_export_count": 10,
+    "comparison": "completed_with_disagreement",
+    "two_round_handoff_resume": "completed: two rounds each for nep-0016 and nep-0017",
+    "report": "evidence/report.json"
   }
 }

@@ -7,7 +7,7 @@ Issue #120 needs traceable human labels to assess whether narrative trail preser
 - Prepare ten pinned public numerical-research infrastructure decisions with source hashes and source locators.
 - Preserve the earlier owner answers and option B in a separate response sheet; record the ten newly confirmed historical states with their actual response provenance and unknown reasons.
 - Add an offline import/comparison workflow using existing narrative contracts, preserving unknown and two-round handoff evidence.
-- Distinguish recorded owner answers from source-history labels; keep historical comparison and pilot accuracy pending.
+- Distinguish recorded owner answers from source-history labels; retain actual source-bound CLI trails, transparent agreement/disagreement/unknown counts and four canonical continuation rounds without claiming generalized accuracy.
 
 ## Capabilities
 
@@ -19,4 +19,4 @@ None. No trail contract changes.
 
 ## Impact
 
-Examples, offline pilot scripts and evidence documentation. No production evaluator changes, paid model calls or new dependencies. One PR for #120; status-label recording alone does not close the issue before trail comparison and handoff/resume acceptance.
+Examples, offline pilot scripts and evidence documentation. No production evaluator changes, paid model calls or new dependencies. One PR for #120 now supplies the trail comparison and two-round handoff/resume evidence required for review and issue closure after merge.

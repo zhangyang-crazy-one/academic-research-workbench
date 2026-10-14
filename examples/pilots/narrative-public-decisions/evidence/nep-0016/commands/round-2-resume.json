@@ -1,0 +1,1 @@
+{"argv":["resume","--run-root","run","--request","round-2-resume-request.json","--memory-handoff","memory.pilot-round-2","--memory-project-root",".","--memory-max-tokens","16384"],"exit_code":0,"recorded_at":"2026-10-14T04:33:13Z"}

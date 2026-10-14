@@ -1,0 +1,19 @@
+{
+  "schema_version": "arw.narrative-pilot-protocol.v1",
+  "frozen_before_human_annotations": true,
+  "source_status_encoding": {
+    "Final": "kept",
+    "Superseded": "superseded",
+    "Withdrawn": "abandoned",
+    "Rejected": "abandoned",
+    "Deferred": "unknown"
+  },
+  "source_reason_encoding": "unknown unless explicit public decision rationale is independently located; no inference from code diffs",
+  "comparison": "Report status agreement, disagreement and explicit unknown separately, with reasons evaluated separately. Pending rows are not unknown labels. Status encoding is an operational proposal-to-trail mapping, not evidence that a research author selected a paper direction. Do not retune the encoding after seeing human labels.",
+  "current_acceptance": {
+    "human_annotated_count": 10,
+    "trail_export_count": 0,
+    "comparison": "pending",
+    "two_round_handoff_resume": "pending"
+  }
+}
