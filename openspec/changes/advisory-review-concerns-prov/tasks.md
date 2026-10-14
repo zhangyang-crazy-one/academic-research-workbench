@@ -12,3 +12,5 @@
 ## 3. Owner review amendments
 
 - [x] 3.1 Expose review through the public launcher, bound diagnosis by count/bytes with omitted_concern_count, preserve zero-omission legacy digests, and reject non-object CLI input.
+
+- [x] 3.2 Revalidate all registered manuscript occurrences for claim-only targets; verify changed/deleted text/plain sources through the public verify/replay/prov commands (#146).

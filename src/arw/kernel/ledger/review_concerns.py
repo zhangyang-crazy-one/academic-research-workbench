@@ -39,6 +39,8 @@ def validate_concern(concern: ReviewConcern, project_root, run_roots, *, inputs=
             raise ValueError(
                 "review concern claim revision differs from canonical journal"
             )
+        for occurrence in registration.occurrences:
+            _check_occurrence(occurrence, inputs)
     else:
         _check_occurrence(target.occurrence, inputs)
     reject_secret_shapes(canonical_json_bytes(concern.model_dump(mode="json")))
