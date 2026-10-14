@@ -14,6 +14,11 @@ Startup SHALL retain exact requests and committed steps, resume identical partia
 - **WHEN** startup stops after a durable step or the complete project moves to another directory
 - **THEN** resume uses the same identity and request without duplicate acceptance, and explicit mismatched identity or changed input is rejected
 
+#### Scenario: Killed receipt writer
+- **WHEN** initialization is killed while writing a prepared or committed receipt
+- **THEN** only complete fsynced bytes are published exclusively as a final receipt, and resume uses the retained exact request without duplicate initialization events
+- **AND** unpublished fragments remain non-authoritative and preserved; malformed published receipts and unsafe staging paths are rejected
+
 ### Requirement: Layered readiness
 Status SHALL independently report core integrity, project/stage, material availability, selected operation checks, executor readiness and scientific admission; unchecked operations SHALL remain not_evaluated.
 

@@ -11,6 +11,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import portalocker
 from pydantic import ValidationError
@@ -60,6 +61,10 @@ POST_FSYNC_SIGKILL = "post-journal-fsync-sigkill"
 PARTIAL_RUNTIME_APPEND_SIGKILL = "partial-runtime-append-sigkill"
 INITIALIZATION_PREPARED = ".initialization-prepared.json"
 INITIALIZATION_COMMITTED = ".initialization-committed.json"
+INITIALIZATION_STAGING = ".initialization-staging"
+INITIALIZATION_FRAGMENT_PATTERN = re.compile(
+    r"^\.initialization-(?:prepared|committed)\.json\.[0-9a-f]{32}\.tmp$"
+)
 
 
 class JournalError(RuntimeError):
@@ -176,6 +181,50 @@ def _write_exclusive(path: Path, value: bytes) -> None:
         os.fsync(handle.fileno())
 
 
+def _initialization_staging(root: Path, *, create: bool = False) -> Path | None:
+    directory = root / INITIALIZATION_STAGING
+    if directory.is_symlink():
+        raise JournalError("initialization staging path is unsafe")
+    if not directory.exists():
+        if not create:
+            return None
+        directory.mkdir(mode=0o700)
+        _fsync_directory(root)
+    if not directory.is_dir():
+        raise JournalError("initialization staging path is unsafe")
+    for fragment in directory.iterdir():
+        if (
+            fragment.is_symlink()
+            or not fragment.is_file()
+            or INITIALIZATION_FRAGMENT_PATTERN.fullmatch(fragment.name) is None
+        ):
+            raise JournalError("initialization staging contains unsafe material")
+    return directory
+
+
+def _publish_initialization_record(path: Path, value: bytes) -> None:
+    """Publish complete fsynced receipt bytes without replacing any final record.
+
+    A killed writer can leave a non-authoritative staging fragment. Preserve
+    it; only the final prepared record can authorize interrupted initialization.
+    """
+    if path.name not in {INITIALIZATION_PREPARED, INITIALIZATION_COMMITTED}:
+        raise JournalError("invalid initialization receipt name")
+    directory = _initialization_staging(path.parent, create=True)
+    assert directory is not None
+    temporary = directory / f"{path.name}.{uuid4().hex}.tmp"
+    durable = False
+    try:
+        _write_exclusive(temporary, value)
+        durable = True
+        os.link(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        if durable:
+            temporary.unlink()
+            _fsync_directory(directory)
+
+
 def _input_digest_matches(root: Path, manifest_input: Any) -> None:
     lexical = root.joinpath(*Path(manifest_input.path).parts)
     cursor = root
@@ -288,11 +337,13 @@ def initialization_is_pending(root: Path, request: InitRunRequest) -> bool:
     input_parts = Path(request.immutable_input.path).parts
     allowed = {
         INITIALIZATION_PREPARED,
+        INITIALIZATION_STAGING,
         LOCK_NAME,
         MANIFEST_NAME,
         "journal",
         input_parts[0],
     }
+    _initialization_staging(root)
     for entry in root.iterdir():
         if entry.name not in allowed or entry.is_symlink():
             return False
@@ -346,8 +397,7 @@ def _seal_initialization(root: Path, replay: ReplayState) -> None:
     raw = validate_initialization_transaction(root, replay)
     completed = root / INITIALIZATION_COMMITTED
     if raw is not None and not completed.exists():
-        _write_exclusive(completed, raw)
-        _fsync_directory(root)
+        _publish_initialization_record(completed, raw)
 
 
 def initialize_run(
@@ -436,8 +486,7 @@ def initialize_run(
                         raise JournalError(
                             "missing history has no initialization transaction"
                         )
-                    _write_exclusive(pending, transaction)
-                    _fsync_directory(root)
+                    _publish_initialization_record(pending, transaction)
                 if _read_initialization_record(pending)[1] != transaction:
                     raise JournalError(
                         "initialization transaction differs from exact request"
