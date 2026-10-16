@@ -33,20 +33,20 @@
             ],
             "tokens": [
               {
-                "token_id": "t0",
+                "token_id": "tok0",
                 "text": "red",
                 "representation_id": "e_red",
                 "masked": false
               },
               {
-                "token_id": "t1",
+                "token_id": "tok1",
                 "text": "blue",
                 "representation_id": "e_blue",
                 "masked": false
               }
             ],
             "axes": [
-              "sequence axis: t0,t1",
+              "sequence axis: tok0,tok1",
               "embedding axis: red,blue"
             ]
           },
@@ -61,7 +61,7 @@
             "parameters": "frozen",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "tokens",
                 "object_id": "utterance",
@@ -92,7 +92,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "vector2",
                 "object_id": "utterance",
@@ -112,7 +112,7 @@
             "source_component": "tokens",
             "source_port": "out",
             "target_component": "project",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "data",
             "payload": "ordered token IDs",
             "trigger": "always",
@@ -123,7 +123,7 @@
             "source_component": "project",
             "source_port": "out",
             "target_component": "result",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "data",
             "payload": "two-dimensional count vector",
             "trigger": "always",
@@ -235,7 +235,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "episode",
                 "object_id": "episode",
@@ -265,7 +265,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "request",
                 "object_id": "call",
@@ -296,7 +296,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "episode",
                 "object_id": "episode",
@@ -334,7 +334,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "episode",
                 "object_id": "episode",
@@ -354,7 +354,7 @@
             "source_component": "request",
             "source_port": "out",
             "target_component": "observe",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "action",
             "payload": "lookup request and arguments",
             "trigger": "always",
@@ -365,7 +365,7 @@
             "source_component": "observe",
             "source_port": "out",
             "target_component": "decide",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "observation",
             "payload": "updated episode and history",
             "trigger": "always",
@@ -376,7 +376,7 @@
             "source_component": "decide",
             "source_port": "again",
             "target_component": "request",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "control",
             "payload": "same observed episode",
             "trigger": "not answer_present AND attempts < 2",
@@ -387,7 +387,7 @@
             "source_component": "decide",
             "source_port": "done",
             "target_component": "done",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "control",
             "payload": "terminal episode",
             "trigger": "answer_present OR attempts >= 2",
@@ -578,7 +578,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "rule",
                 "object_id": "rule",
@@ -609,7 +609,7 @@
             "parameters": "not_applicable",
             "ports": [
               {
-                "port_id": "in",
+                "port_id": "input",
                 "direction": "input",
                 "value_type": "rule",
                 "object_id": "rule",
@@ -629,7 +629,7 @@
             "source_component": "before",
             "source_port": "out",
             "target_component": "revise",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "data",
             "payload": "original rule plus counterexample",
             "trigger": "always",
@@ -640,7 +640,7 @@
             "source_component": "revise",
             "source_port": "out",
             "target_component": "after",
-            "target_port": "in",
+            "target_port": "input",
             "relation_type": "data",
             "payload": "guarded rule; unknown flight retained",
             "trigger": "always",
