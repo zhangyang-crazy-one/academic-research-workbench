@@ -14,3 +14,9 @@
 - [x] 3.3 Bind executable bits and verify permission mutation rejection at qualification, bundle creation and technical release checks.
 - [x] 3.4 Preserve the selected supported interpreter in the credential-isolated probe and verify an older-only PATH.
 - [ ] 3.2 Submit the verified change, then use fresh successful main CI subjects for the actual v0.2.0 publication.
+
+## 4. Bounded integrity hashing (#150)
+
+- [x] 4.1 Stream build-identity, core and integration-lock hashes with unchanged digests and fail-closed behavior; verify empty/boundary/large inputs, bounded allocation, I/O failure, replacement, symlinks and fresh processes.
+
+Snapshot digest reuse, cross-process preflight deduplication and installed-command startup A/B remain separate follow-up scope in #150.

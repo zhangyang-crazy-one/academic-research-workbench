@@ -22,6 +22,11 @@ The verifier SHALL bind actual command outputs, installed stage and candidate wh
 - **WHEN** the selected compatible Python interpreter is outside PATH and PATH exposes only an older interpreter
 - **THEN** the private installed-core probe passes the selected interpreter explicitly to the launcher without forwarding model credentials or imposing an exact Python version
 
+#### Scenario: Large staged payload
+- **WHEN** an installed build identity or integrity verifier hashes a large native payload
+- **THEN** its SHA-256 matches the original bytes while hashing allocation is bounded independently of file size, and existing path, coverage and tamper checks are preserved
+- **AND** no persistent digest trust cache or parent-process success flag replaces independent verification
+
 ### Requirement: Optional deployment qualification
 Specific execution-platform qualifications SHALL remain available as optional diagnostics, and historical Phase 7 receipts SHALL remain readable without being mandatory for the default formal release.
 

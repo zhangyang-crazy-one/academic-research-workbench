@@ -35,6 +35,15 @@ For an installed launcher, an explicit `ARW_PLUGIN_ROOT` must equal that
 launcher's stage root. Use agent mode only with a source checkout; it cannot
 relabel an installed bundle as editable source.
 
+Integrity file hashing reads live bytes in 1 MiB chunks through a shared
+SHA-256 helper, including build-identity payloads, core verification and
+IntegrationLock bindings. Digest values and existing path, topology, coverage
+and error checks are unchanged. Each check reads the file again; there is no
+persistent digest cache, trusted parent success flag or skipped child preflight.
+Bounded hash allocation does not imply fewer logical reads, lower overall
+startup latency or a measured MCP startup improvement. Those require separate
+installed-artifact measurements and mutation-safe reuse design (issue #150).
+
 - The plugin manifest (`.codex-plugin/plugin.json`) declares the capability
   set (`research`, `literature`, `experiment`, `evidence`, `files`, `graph`,
   `provenance`, `artifact`, `audit`).

@@ -7,7 +7,6 @@ qualification; that remains the IntegrationLock verifier's responsibility.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.metadata
 import json
 import os
@@ -16,7 +15,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from arw.kernel.core.canonical import canonical_json_bytes
+from arw.kernel.core.canonical import canonical_json_bytes, sha256_file
 from arw.kernel.policy.core_stage_allowlist import (
     ARS_STAGE_TREE_SHA256,
     allowed_stage_path,
@@ -53,7 +52,7 @@ def _object(root: Path, relative: str) -> dict[str, Any]:
 
 
 def _digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_file(path)
 
 
 def _verify_executing_wheel(stage_root: Path, wheel_relative: str) -> None:

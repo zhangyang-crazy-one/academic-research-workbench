@@ -39,7 +39,11 @@ from pydantic import (
     model_validator,
 )
 
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_file,
+    strict_json_loads,
+)
 from arw.kernel.policy.hook_contracts import (
     CodexHookReceipt,
     HookContractError,
@@ -988,7 +992,7 @@ class IntegrationDiagnosticReport(LockModel):
 
 def _digest(path: Path) -> str:
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        return sha256_file(path)
     except OSError as error:
         raise IntegrationLockError(f"cannot hash {path}: {error}") from error
 

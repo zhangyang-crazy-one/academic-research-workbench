@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 
@@ -33,6 +34,16 @@ def canonical_event_bytes(event: Mapping[str, object]) -> bytes:
 
 def sha256_hex(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    """Hash live file bytes with bounded memory; never cache a trust decision."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def seal_event(event: Mapping[str, object]) -> dict[str, object]:

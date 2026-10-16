@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0.0",
+  "measurement_scope": "isolated hash and controlled retained-stage verifier",
+  "python_version": "3.14.6",
+  "records": [
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.024973794992547482,
+      "tracemalloc_peak_bytes": 33555427,
+      "ru_maxrss_kib": 51032,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 0
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.013181191025068983,
+      "tracemalloc_peak_bytes": 2229795,
+      "ru_maxrss_kib": 20924,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 0
+    },
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.02518733000033535,
+      "tracemalloc_peak_bytes": 33555427,
+      "ru_maxrss_kib": 51156,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 1
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.013341350015252829,
+      "tracemalloc_peak_bytes": 2229795,
+      "ru_maxrss_kib": 20924,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 1
+    },
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.025061166990781203,
+      "tracemalloc_peak_bytes": 33555427,
+      "ru_maxrss_kib": 51164,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 2
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "32MiB.bin",
+      "wall_seconds": 0.013593437994131818,
+      "tracemalloc_peak_bytes": 2229795,
+      "ru_maxrss_kib": 20924,
+      "result": "83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302",
+      "repeat": 2
+    },
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.36712226099916734,
+      "tracemalloc_peak_bytes": 536871909,
+      "ru_maxrss_kib": 542684,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 0
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.18449092202354223,
+      "tracemalloc_peak_bytes": 2229797,
+      "ru_maxrss_kib": 20924,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 0
+    },
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.3659424379875418,
+      "tracemalloc_peak_bytes": 536871909,
+      "ru_maxrss_kib": 542680,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 1
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.18199577697669156,
+      "tracemalloc_peak_bytes": 2229797,
+      "ru_maxrss_kib": 20924,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 1
+    },
+    {
+      "mode": "baseline",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.36377185699529946,
+      "tracemalloc_peak_bytes": 536871909,
+      "ru_maxrss_kib": 542684,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 2
+    },
+    {
+      "mode": "stream",
+      "kind": "hash",
+      "input": "512MiB.bin",
+      "wall_seconds": 0.18126195200602524,
+      "tracemalloc_peak_bytes": 2229797,
+      "ru_maxrss_kib": 20924,
+      "result": "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767",
+      "repeat": 2
+    },
+    {
+      "mode": "baseline",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.8283335489977617,
+      "tracemalloc_peak_bytes": 311396077,
+      "ru_maxrss_kib": 382776,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 0
+    },
+    {
+      "mode": "stream",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.452707369986456,
+      "tracemalloc_peak_bytes": 15406131,
+      "ru_maxrss_kib": 89064,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 0
+    },
+    {
+      "mode": "baseline",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.8214882019965444,
+      "tracemalloc_peak_bytes": 311397521,
+      "ru_maxrss_kib": 382652,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 1
+    },
+    {
+      "mode": "stream",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.486099436006043,
+      "tracemalloc_peak_bytes": 15406631,
+      "ru_maxrss_kib": 89408,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 1
+    },
+    {
+      "mode": "baseline",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.835104627010878,
+      "tracemalloc_peak_bytes": 311396456,
+      "ru_maxrss_kib": 382828,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 2
+    },
+    {
+      "mode": "stream",
+      "kind": "preflight",
+      "input": "retained-stage",
+      "wall_seconds": 2.4143491569848265,
+      "tracemalloc_peak_bytes": 15407013,
+      "ru_maxrss_kib": 89148,
+      "result": {
+        "stage_inventory_sha256": "9d87a386641b96dcfd9eabe13e1dc11837a7f931c71bf59ce8ce4f46313a1ad7",
+        "build_identity_sha256": "d9cacde966bd03894cc6a98ade71856028ec0d681ed4c5406ba2b92891db73a5",
+        "first_party_wheel_sha256": "05a814713fa0a798e61b7ffba88d7a3ffcab695cc53942a62a8397f12e70b73d"
+      },
+      "repeat": 2
+    }
+  ],
+  "measurement_date": "2026-10-16",
+  "baseline_commit": "a796c074a3aeec4601c80daa742f2e34bf526799",
+  "baseline_method": "fresh process substitutes only the original hashlib.sha256(path.read_bytes()).hexdigest() implementation into verifier hashing aliases; same retained stage and verifier checks",
+  "source_sha256": {
+    "src/arw/kernel/core/canonical.py": "398857b3a17ec12e2e976c040763f397a3f4514c17e95fc74225d6e48636dc7a",
+    "src/arw/kernel/policy/build_identity.py": "64a5ee64ea40d2a7107a41bcbb9d585caff222f6901662ae36c17947fd0a5712",
+    "src/arw/kernel/policy/core_integrity.py": "8a7c7c5effe6efc3d2987f9e8cef8371c0d34f099cd1040472a4548cb49ef72d",
+    "src/arw/kernel/policy/integration_lock.py": "eb2a4c39608d11cf4303ad076fe84bbe114199bd5af1671accdf82cd4bcb2d74",
+    "examples/benchmarks/integrity-hashing/benchmark.py": "e53ec04ab932cca3cc985782d3fc94bb9ca07670b1fb7effe701304d5103ed35"
+  },
+  "not_measured": [
+    "full installed version/route/MCP startup",
+    "process-tree RSS or PSS",
+    "logical read count",
+    "idle RSS",
+    "deduplication and mutation-safe snapshot reuse"
+  ]
+}
