@@ -210,7 +210,9 @@ jobs:
           ./scripts/verify-sources --inputs-only
       - name: Resolve native legal checker from configured index
         run: |
-          uv pip install --python .venv/bin/python 'scancode-toolkit>=32.5.0'
+          # Issue #155: plugincode 32.0.0 cannot register hooks with pluggy 1.7.0.
+          uv pip install --python .venv/bin/python 'scancode-toolkit>=32.5.0' 'pluggy!=1.7.0'
+          .venv/bin/scancode --version
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Verify publish surface before building artifacts
         run: |
