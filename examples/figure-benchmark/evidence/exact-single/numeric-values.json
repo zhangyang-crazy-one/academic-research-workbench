@@ -1,0 +1,872 @@
+[
+  {
+    "plot_value_id": "plot.value.110cf9d09ad710f2a88c6513dfa90b95",
+    "derivation_id": "4b3085629721a870edc6e471bfb5d56045f445340477c4161f0fea12a56bf3d1",
+    "exact": {
+      "numerator": 83,
+      "denominator": 100
+    },
+    "layer": "raw.points",
+    "datum_id": "baseline.0",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "baseline.0"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "4b3085629721a870edc6e471bfb5d56045f445340477c4161f0fea12a56bf3d1",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "baseline.0"
+  },
+  {
+    "plot_value_id": "plot.value.65ab48bce2350f362bcc910989afbefa",
+    "derivation_id": "4e556b036155fa496f7e5f6830218c228da007e60e6ae0a9bdbbfb626bf1d6bb",
+    "exact": {
+      "numerator": 831,
+      "denominator": 1000
+    },
+    "layer": "raw.points",
+    "datum_id": "baseline.1",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "baseline.1"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "4e556b036155fa496f7e5f6830218c228da007e60e6ae0a9bdbbfb626bf1d6bb",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "baseline.1"
+  },
+  {
+    "plot_value_id": "plot.value.e5d144fd83a3d9615501dd33287755ca",
+    "derivation_id": "86f9ae813642a89cef2cd47e898c14641345c5b3df756966e18db9f29d9867ab",
+    "exact": {
+      "numerator": 104,
+      "denominator": 125
+    },
+    "layer": "raw.points",
+    "datum_id": "baseline.2",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "baseline.2"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "86f9ae813642a89cef2cd47e898c14641345c5b3df756966e18db9f29d9867ab",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "baseline.2"
+  },
+  {
+    "plot_value_id": "plot.value.37cc2947f0e25efebacef361b201fc49",
+    "derivation_id": "31b7e9a84105f5c3efed80737442ab272e11cb813f1e7bd8b17ee9bce889adce",
+    "exact": {
+      "numerator": 831,
+      "denominator": 1000
+    },
+    "layer": "raw.points",
+    "datum_id": "proposed.0",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "proposed.0"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "31b7e9a84105f5c3efed80737442ab272e11cb813f1e7bd8b17ee9bce889adce",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "proposed.0"
+  },
+  {
+    "plot_value_id": "plot.value.8f764c9afae88bcca0b64a5eca822885",
+    "derivation_id": "9157247ef39d7059a280468c1a5c77ee741b049cc5afed1047e7ad45ce555c69",
+    "exact": {
+      "numerator": 104,
+      "denominator": 125
+    },
+    "layer": "raw.points",
+    "datum_id": "proposed.1",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "proposed.1"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "9157247ef39d7059a280468c1a5c77ee741b049cc5afed1047e7ad45ce555c69",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "proposed.1"
+  },
+  {
+    "plot_value_id": "plot.value.200d4079d6f82c1dca53d8cc95cedcbf",
+    "derivation_id": "3e06461d1cb53360167eee4118d1b89a39197ad5a7da83b170bbc56bee3e461c",
+    "exact": {
+      "numerator": 833,
+      "denominator": 1000
+    },
+    "layer": "raw.points",
+    "datum_id": "proposed.2",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "csv_selection",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.raw",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000003",
+            "accepting_event_sha256": "6b14866e1592fd6f7f3995b1ff811b868e5b1d75db566cad8ea553fb0de769cb",
+            "content_sha256": "5dcf4666a2c96a95f8fdce743e630dc207debb883bf6e8187ca49cd8d028a94b",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "columns": [
+            "score"
+          ],
+          "row_id_column": "id",
+          "row_set": {
+            "kind": "ids",
+            "ids": [
+              "proposed.2"
+            ]
+          },
+          "group_by": [],
+          "missing_policy": "reject",
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          },
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "3e06461d1cb53360167eee4118d1b89a39197ad5a7da83b170bbc56bee3e461c",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": "proposed.2"
+  },
+  {
+    "plot_value_id": "plot.value.d7448b29565598ff1a60123d5035f692",
+    "derivation_id": "98e8890115f7d601cdd6d08a1442d8f6e54149e0d01dfe16d311dcf31ac481f3",
+    "exact": {
+      "numerator": 83,
+      "denominator": 100
+    },
+    "layer": "ranges",
+    "datum_id": "range.baseline",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "lower",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/lower/baseline",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "98e8890115f7d601cdd6d08a1442d8f6e54149e0d01dfe16d311dcf31ac481f3",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  },
+  {
+    "plot_value_id": "plot.value.7450e5ac9a12feaf4603c8d742e64b1b",
+    "derivation_id": "cf212db75cbb2403c76f588fda9526dffd705ad0dca34976528aba2aac8f83c9",
+    "exact": {
+      "numerator": 104,
+      "denominator": 125
+    },
+    "layer": "ranges",
+    "datum_id": "range.baseline",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "upper",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/upper/baseline",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "cf212db75cbb2403c76f588fda9526dffd705ad0dca34976528aba2aac8f83c9",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  },
+  {
+    "plot_value_id": "plot.value.cad11f636939baeab944e58773d35b36",
+    "derivation_id": "820ac53115e33ff51ee0f552840d0a5d85639bfc2488d89d6a36141f9b017bd1",
+    "exact": {
+      "numerator": 831,
+      "denominator": 1000
+    },
+    "layer": "ranges",
+    "datum_id": "range.proposed",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "lower",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/lower/proposed",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "820ac53115e33ff51ee0f552840d0a5d85639bfc2488d89d6a36141f9b017bd1",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  },
+  {
+    "plot_value_id": "plot.value.198f258bdf1f182324c2a01110ee68d0",
+    "derivation_id": "4fa98f9803a367ab589a64cf5db90e1a7a68b9d344e6facf4b62da8ac9804648",
+    "exact": {
+      "numerator": 833,
+      "denominator": 1000
+    },
+    "layer": "ranges",
+    "datum_id": "range.proposed",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "upper",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/upper/proposed",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "4fa98f9803a367ab589a64cf5db90e1a7a68b9d344e6facf4b62da8ac9804648",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  },
+  {
+    "plot_value_id": "plot.value.2c53cd74035c356944257411297b6f04",
+    "derivation_id": "49e712002dcc6c55c3f4a8f69e1d932361f73a40d3d32e8f4c3efe0e2c18330f",
+    "exact": {
+      "numerator": 831,
+      "denominator": 1000
+    },
+    "layer": "means",
+    "datum_id": "mean.baseline",
+    "series": "baseline",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/mean/baseline",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "49e712002dcc6c55c3f4a8f69e1d932361f73a40d3d32e8f4c3efe0e2c18330f",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  },
+  {
+    "plot_value_id": "plot.value.5b9a3761e6895d24a934ca9d385f324f",
+    "derivation_id": "cb41c11c257772dded6e9f4144d174b5e004d30f8a6adb6cc4df160bd6466230",
+    "exact": {
+      "numerator": 104,
+      "denominator": 125
+    },
+    "layer": "means",
+    "datum_id": "mean.proposed",
+    "series": "proposed",
+    "category": "toy",
+    "channel": "y",
+    "statistic": "value",
+    "expr": {
+      "schema_version": "arw.numeric-expression.v1",
+      "op": "value",
+      "args": [
+        {
+          "kind": "scalar_json",
+          "ref": {
+            "scope": "parent-artifact",
+            "project_id": "project.public-figures",
+            "run_id": "run-00000000-0000-4000-8000-000000000153",
+            "run_manifest_sha256": "536883e2149096260ef3bccafcb437368828a48913aec99a2e455600f522c1e2",
+            "artifact_id": "evidence.synthetic",
+            "accepting_event_id": "evt-00000000-0000-4000-8000-000000000002",
+            "accepting_event_sha256": "1c5ff0dc6b3792c042e92511330c885cbea30cb9adb393e4df69050c74c24935",
+            "content_sha256": "a5c5776aae0835005d5625954953c53b224a7bb893676a2ea9e525ef6b1beb70",
+            "selector": "",
+            "selected_sha256": null,
+            "producing_activity_id": null,
+            "source_locator": null
+          },
+          "json_pointer": "/values/mean/proposed",
+          "unit": "ratio",
+          "scale": {
+            "numerator": 1,
+            "denominator": 1
+          },
+          "context": {
+            "metric_definition": "toy score",
+            "unit": "ratio",
+            "dataset": "public synthetic observations",
+            "split": "toy",
+            "evaluation_condition": "fixed supplied values"
+          }
+        }
+      ]
+    },
+    "unit": "ratio",
+    "scale": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "display": {
+      "derivation_id": "cb41c11c257772dded6e9f4144d174b5e004d30f8a6adb6cc4df160bd6466230",
+      "decimals": 3,
+      "rounding_mode": "ROUND_HALF_EVEN",
+      "unit_suffix": "",
+      "scale": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "revision": 1,
+    "stable_row_id": null
+  }
+]

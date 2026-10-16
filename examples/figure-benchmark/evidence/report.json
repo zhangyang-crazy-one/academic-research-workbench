@@ -1,0 +1,952 @@
+{
+  "schema_version": "arw.public-figure-benchmark.v1",
+  "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+  "source_license": "MIT; repository-authored synthetic data and task descriptions",
+  "profile": {
+    "source": "author-defined benchmark profile, no venue certification",
+    "checked_at": "2026-10-16",
+    "dpi": 150,
+    "minimum_font_pt": 7.0,
+    "font_family": "Noto Sans CJK SC, sans-serif"
+  },
+  "producer": "ARW deterministic benchmark generator; no independent visual acceptance",
+  "records": [
+    {
+      "id": "exact-single",
+      "task_id": "exact",
+      "candidate": "single",
+      "selected": true,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "dd826b9142762a1e0caf834cd32c1396cb2a13deedc2105c3caad263aff53975",
+      "svg_sha256": "bbb920fee6046ed095219fb0f3485b524aaf0a0d0e4a564567cd75850cb098be",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "251580596bc45be8685823cf1c79fd23f8dc8b00bcb6a14d6556dc760d071677",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 768,
+        "width_mm": 180.0,
+        "height_mm": 130.0,
+        "dpi": 150.0,
+        "ink_pixels": 16202,
+        "ink_bounds": [
+          11,
+          37,
+          1009,
+          693
+        ],
+        "border_ink": false,
+        "png_sha256": "f54b752b9b507ff45edbcdc01a3ac02d55462998b7effaa88cc1d39dab3320bd",
+        "pdf_sha256": "f4727b1db7aab4dc932579f62f513b3425035c8d6a4355ae533a824a3236d239",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 7.015748031496063,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "passed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Simple explicit comparison; no significance claim. Inspect separation of raw points/means and grayscale series discrimination."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "selection_reason": "Single layout: frozen simple quantitative comparison or controlled stress task; no three-candidate exploration required. Independent review remains pending.",
+      "review_binding_sha256": "50a919ce2bb24424d528bbd0a2e721df87ae2cdd2ffa6f24ed15cc443b16bb4e"
+    },
+    {
+      "id": "loop-row",
+      "task_id": "loop",
+      "candidate": "row",
+      "selected": false,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "92887bcac0eca82900f2e5ad142c2b5f03d4e049412803489b12a1ccb2509ee3",
+      "svg_sha256": "07f8b7cb8123a9b4554d232f040f817f6d1001e82944faa3180bde1be0fe691f",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "f0b8fd5390d2aa31840e48bd955c8b54a7b01ef664c2c0a02fce3de450f9ccab",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 16252,
+        "ink_bounds": [
+          22,
+          31,
+          992,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "9280d4dfd3dacb45a382a224a09be03bd3f7630fcba419cd6d6fc95b0c65aaab",
+        "pdf_sha256": "b12d4ea9440faee5985777998955a3bf4c0affcd463afb7e6540ad4a5eb83afb",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 2.41752,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Parallel panels share facts; inspect small labels and relation routing."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "687b7c69f80329f4b40f7393897b495d35a8369d6e3902611bdfb1a4e7dba421",
+      "selection_reason": "Not selected by producer: parallel/grid organization reduces labels to 2.42 pt (required 7.00 pt) and increases relation-reading density. Facts are unchanged; human confirmation pending.",
+      "review_binding_sha256": "6a99439ccb1e008aa916151befe263331ee84a2bb5fb5160474801ca5c679056"
+    },
+    {
+      "id": "loop-column",
+      "task_id": "loop",
+      "candidate": "column",
+      "selected": true,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "b232f0457db17a8351dfd63afba998a239d64343d4dbd0afe14e307493345a1a",
+      "svg_sha256": "d3a248833e1d8b4cf15e2ff7117b680ad074b5309be536c72cc677090e121c49",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "4a087f7872f99f03d1681e26c33d3e276ae25326fe9e57a35cd31a295d0f5444",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 40124,
+        "ink_bounds": [
+          22,
+          31,
+          885,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "0e7874a6e51aab151777cb4094d5ba958d0acc2c60e1dd8bca6c476c71e13d29",
+        "pdf_sha256": "52e1f9488c464c3bf1cddc362249b74d180ca6e14252ec6e62045c740104bbee",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 6.170752,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Column separates source, typed mechanism and evidence with the largest full-width labels."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "687b7c69f80329f4b40f7393897b495d35a8369d6e3902611bdfb1a4e7dba421",
+      "selection_reason": "Producer preselection: full-width panels give the largest readable labels. Actual minimum 6.17 pt versus required 7.00 pt; any failure remains open. Human structural-choice confirmation pending.",
+      "review_binding_sha256": "eb7f632271eb83af97269cc9afc371c8fb6af643e53a1180c4f3f527634b71f5"
+    },
+    {
+      "id": "loop-grid",
+      "task_id": "loop",
+      "candidate": "grid",
+      "selected": false,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "6568b0ff2b67c7d0635b8832ab409f66f11fbdb7d47c639baa2a02494b65eaf0",
+      "svg_sha256": "e59b7cdfeb96fcfef33385cbf0a57beaa92531150dec89a672d03c6bc9ba3e2a",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "e7e89868c66902c61a3704d135b7c6c730f8e99120d69b16b2444754e2b2535d",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 31453,
+        "ink_bounds": [
+          22,
+          31,
+          958,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "28e9b651ae1ed62e453f0086ef601bc13e00916844ef3776260298274aeb7f8c",
+        "pdf_sha256": "f2fb75ac0f61c86a209c927a35e91082db3166cb1fccb8e5219a38350a2b042d",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 3.719618,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Parallel panels share facts; inspect small labels and relation routing."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "687b7c69f80329f4b40f7393897b495d35a8369d6e3902611bdfb1a4e7dba421",
+      "selection_reason": "Not selected by producer: parallel/grid organization reduces labels to 3.72 pt (required 7.00 pt) and increases relation-reading density. Facts are unchanged; human confirmation pending.",
+      "review_binding_sha256": "e53324dd1594b77593a9b4b86828e02ddf9b1fefed07ea98da498c0b8afeb5b6"
+    },
+    {
+      "id": "mixed-row",
+      "task_id": "mixed",
+      "candidate": "row",
+      "selected": false,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "6d53ede4258ab0884be637a41bb56c6db7dc4403f26373544a6d5a0cb4bbaaf3",
+      "svg_sha256": "7f59cc336d1053309a14aaf5fcf218a62a97375962e806a30fa48140bba2e8af",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "04e402f1e7e50ebc82d86939555b60c60618e4d8343b1f2419706efeeeb8da38",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 15897,
+        "ink_bounds": [
+          22,
+          31,
+          1025,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "bed1c7869876c1092e6d4989152e23ef7f654f08970fed3d108f82e117da3149",
+        "pdf_sha256": "16fb6e55d336f7393adb5aba28d39982d779ecc85a0a26f84309299d58e51b0c",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 2.136915,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Parallel panels share facts; inspect small labels and relation routing."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "08f036e84b6601623c9087d6ef692a7b85c7782d6dcf1969416aae84b65fee77",
+      "selection_reason": "Not selected by producer: parallel/grid organization reduces labels to 2.14 pt (required 7.00 pt) and increases relation-reading density. Facts are unchanged; human confirmation pending.",
+      "review_binding_sha256": "fab335e73c141f3b19b0753329e319c1f7c8a30adfc7572ed6e4cb63614d8da3"
+    },
+    {
+      "id": "mixed-column",
+      "task_id": "mixed",
+      "candidate": "column",
+      "selected": true,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "c19f5dcf9f6ca721b1792ca10407f7053b99ce1de374e50752fa7e727d34808f",
+      "svg_sha256": "4fc20a98240053ca262c2592dac6c7696aa60cbf41b630fa36841fb10bedc37f",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "0566d360e92ec192d86b72ed5b064b814a7c422724a00ecc822f1d5ae694759b",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 38427,
+        "ink_bounds": [
+          22,
+          31,
+          991,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "39446f36cb999c9dee8e3c7c859b101e8e89cb85d96bc23afe2d478e8ffbacc2",
+        "pdf_sha256": "89406408b211450978ea7efb37ba2fe70c87d95c1634276a1d464faa3a43ed29",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 6.7407449999999995,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Column separates source, typed mechanism and evidence with the largest full-width labels."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "08f036e84b6601623c9087d6ef692a7b85c7782d6dcf1969416aae84b65fee77",
+      "selection_reason": "Producer preselection: full-width panels give the largest readable labels. Actual minimum 6.74 pt versus required 7.00 pt; any failure remains open. Human structural-choice confirmation pending.",
+      "review_binding_sha256": "6665f27960d9b815fceb05a5e8aad0b9affad63ae2979f207fa8b1f61f89fe8a"
+    },
+    {
+      "id": "mixed-grid",
+      "task_id": "mixed",
+      "candidate": "grid",
+      "selected": false,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "feb1f00aa16e9727d58c7c9fafca89e50958586d6132f01bd7eec05cf0d6c72e",
+      "svg_sha256": "ba5c1606e1a3536bc35a6b177daa59086de331a6157387dbc5f7be04b885609c",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "74fb0e61a40e9e171e3371d4b0ee4e8ac482f2b0a0ee3075ba63d454c938af5c",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 33208,
+        "ink_bounds": [
+          22,
+          31,
+          991,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "c0a0c801238e7ad1211bc03eace549240055be65d153fd95a53cb6683d8261c9",
+        "pdf_sha256": "8544b25e377fbce85a719d275c0cc7e4101f6fbe3f596231b6288b1a6159f07b",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 3.719618,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Parallel panels share facts; inspect small labels and relation routing."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "08f036e84b6601623c9087d6ef692a7b85c7782d6dcf1969416aae84b65fee77",
+      "selection_reason": "Not selected by producer: parallel/grid organization reduces labels to 3.72 pt (required 7.00 pt) and increases relation-reading density. Facts are unchanged; human confirmation pending.",
+      "review_binding_sha256": "4d39a0dcb4fe7650beb2eee3851883da387d37cee4b922335c5f7b67ba52056c"
+    },
+    {
+      "id": "stress-single",
+      "task_id": "stress",
+      "candidate": "single",
+      "selected": true,
+      "task_sha256": "c2857d8863aae55fee9a6c2484f3cb14c58a2a5d51b8dfdde68a10c109677ba4",
+      "ir_sha256": "5de16f7d8562f3ca67d25950c730fc29c2fa3e4b0c6df5a0fd9a81b58103dbfa",
+      "svg_sha256": "756fe51705973a5650c0cd367516157fc084301623b94c37e9df953a9e2d5b8a",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "cff9dd13f21ef9d403a7d83627b6853e4991dabf2279b1585cc83aff8af9a67f",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 532,
+        "height_px": 532,
+        "width_mm": 90.0,
+        "height_mm": 90.0,
+        "dpi": 150.0,
+        "ink_pixels": 12611,
+        "ink_bounds": [
+          22,
+          30,
+          327,
+          526
+        ],
+        "border_ink": false,
+        "png_sha256": "132c13bf209b64097b48ff315c919c62f0183db2c8272136a171e8514d19e838",
+        "pdf_sha256": "cc22b46b75b8c7db72eb3b32894ecdfe874c4276425afa7a219601b2ac54d7ca",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "min_font_pt": 1.525632,
+      "provenance_numeric": "passed",
+      "mechanical": {
+        "render": "passed",
+        "nonempty": "passed",
+        "border_screen": "passed",
+        "glyph_probe": "passed",
+        "minimum_font": "failed"
+      },
+      "visual_argument": {
+        "status": "producer_critique_only",
+        "finding": "Simple explicit comparison; no significance claim. Inspect separation of raw points/means and grayscale series discrimination."
+      },
+      "independent_human": "pending",
+      "facts_sha256": "049cf7ad3a2754b6b6ab50da7ce7be54b0976bbcf607b90baf3dadd312cd7dc4",
+      "selection_reason": "Single layout: frozen simple quantitative comparison or controlled stress task; no three-candidate exploration required. Independent review remains pending.",
+      "review_binding_sha256": "d05952fe8cd019bdabf5787554425cb14e073ee40942a630ddd0287501a4efad"
+    }
+  ],
+  "human_acceptance": "pending",
+  "publication_visual_pass": false,
+  "negative_cases": [
+    {
+      "id": "number_replaced",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Frozen exact rational value is replaced by 999/1000; associated mark position also changes.",
+      "detector_evidence": {
+        "expected_exact": {
+          "numerator": 83,
+          "denominator": 100
+        },
+        "injected_exact": {
+          "numerator": 999,
+          "denominator": 1000
+        },
+        "reference_differences": {
+          "missing_ids": [],
+          "numeric_mark_positions": [
+            "plot.value.110cf9d09ad710f2a88c6513dfa90b95"
+          ],
+          "series_colors": [],
+          "edge_directions": [],
+          "viewport_changed": false
+        },
+        "exact_value_mismatches": [
+          "plot.value.110cf9d09ad710f2a88c6513dfa90b95"
+        ]
+      },
+      "svg_sha256": "08895574eaa1dd1ffc817e06e9ed4826183d02652d361f37c8855b02a8aeda64",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "7da2fe55e126b2ab20ac951af1db1194c2202fc1fddb921f3bcb90837aa13e6c",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 768,
+        "width_mm": 180.0,
+        "height_mm": 130.0,
+        "dpi": 150.0,
+        "ink_pixels": 16242,
+        "ink_bounds": [
+          11,
+          37,
+          1009,
+          693
+        ],
+        "border_ink": false,
+        "png_sha256": "2bacff5fbce9f4fbc0d29ff9f5dcc6debf2404b1ea8a02effe537315b3fdbf3c",
+        "pdf_sha256": "bdc290a3db6c14f3a07c05a0f3b25fb8927f3853d1a564d962304d1c685d7bc1",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    },
+    {
+      "id": "arrow_reversed",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Frozen directed control answer requires marker-end, not marker-start.",
+      "detector_evidence": {
+        "reference_differences": {
+          "missing_ids": [],
+          "numeric_mark_positions": [],
+          "series_colors": [],
+          "edge_directions": [
+            "arw_panel_2",
+            "arw_panel_2__control.next"
+          ],
+          "viewport_changed": false
+        }
+      },
+      "svg_sha256": "69c9bef28bc6b0969ca1fa9735581b6946302cdaa55473ff1ef4beaecc1c7b6e",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "2514b8be4bdce42323e7689967fc3d98debe365cafadfd37316432160198cfb6",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 40129,
+        "ink_bounds": [
+          22,
+          31,
+          885,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "477d89c3c452fd2d5316d7431f40a601d55b4ab1887f203c1d9992e5467ddc2d",
+        "pdf_sha256": "d4c53df2389ddc3b18b1d8cf15538769038c0d14a274b893ffcf6c909c2946ff",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    },
+    {
+      "id": "object_missing",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Frozen required analysis object is absent from the SVG identity inventory.",
+      "detector_evidence": {
+        "reference_differences": {
+          "missing_ids": [
+            "arw_panel_2__analysis"
+          ],
+          "numeric_mark_positions": [],
+          "series_colors": [],
+          "edge_directions": [],
+          "viewport_changed": false
+        }
+      },
+      "svg_sha256": "550270bcdfc4d96540ca1942bf05d52e1b203d14d6593cf806961d07ed84e3f5",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "cc4f792eab75deb33ec297fe432e5101b4a3f28cb0915b415c00c61f00aadb10",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1949,
+        "width_mm": 180.0,
+        "height_mm": 330.0,
+        "dpi": 150.0,
+        "ink_pixels": 37913,
+        "ink_bounds": [
+          22,
+          31,
+          885,
+          1942
+        ],
+        "border_ink": false,
+        "png_sha256": "12ad3752f15ee84850c37fbaba50f43266f37f634df4a7c0267ee32cae177e31",
+        "pdf_sha256": "cd93e41c8b0576b73d692966a3b23ef8a83bc2f9b4a15d9e5b3a8cda26dc629f",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    },
+    {
+      "id": "cropped",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Expected source viewport is changed and actual edge ink is screened.",
+      "detector_evidence": {
+        "reference_differences": {
+          "missing_ids": [],
+          "numeric_mark_positions": [],
+          "series_colors": [],
+          "edge_directions": [],
+          "viewport_changed": true
+        },
+        "expected_viewbox": "0 0 800 560",
+        "injected_viewbox": "100 100 160 90",
+        "actual_ink_pixels": 0
+      },
+      "svg_sha256": "fb57e7b9b8c6b10c085747f257140932e88d413d7a57b268c543dc827d7fc3b9",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "086e5947324bdf555a7f31a37ff63f917085586300d70d77944d0f85e86da169",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 768,
+        "width_mm": 180.0,
+        "height_mm": 130.0,
+        "dpi": 150.0,
+        "ink_pixels": 0,
+        "ink_bounds": [
+          1063,
+          768,
+          -1,
+          -1
+        ],
+        "border_ink": false,
+        "png_sha256": "086e5947324bdf555a7f31a37ff63f917085586300d70d77944d0f85e86da169",
+        "pdf_sha256": "7afd3709d2c9c8a51567dba3134f6a594dafa728123b7e31add92d369bd7ab72",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    },
+    {
+      "id": "glyph_missing",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Pango glyph probe counts an unsupported scalar in the injected actual text.",
+      "detector_evidence": {
+        "reference_differences": {
+          "missing_ids": [],
+          "numeric_mark_positions": [],
+          "series_colors": [],
+          "edge_directions": [],
+          "viewport_changed": false
+        }
+      },
+      "svg_sha256": "5932122519c6e854d215392e65a563c19993179b3d3c36acea0002074acb7b14",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "29c6e111af654b014708766251421eecbcade4325662efdf44dbc03acd7ce6d7",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 1,
+        "width_px": 1063,
+        "height_px": 768,
+        "width_mm": 180.0,
+        "height_mm": 130.0,
+        "dpi": 150.0,
+        "ink_pixels": 14157,
+        "ink_bounds": [
+          11,
+          37,
+          1009,
+          693
+        ],
+        "border_ink": false,
+        "png_sha256": "fa59c9b5ac0e7f9d2ffd81eb9ac37fc1f221466442a2fb44d1f7c2f152d1283e",
+        "pdf_sha256": "c7a0f3e7aa8acb8f7fa3c2f06a8693c43b083db1039b10ba31397f62b1a288dd",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    },
+    {
+      "id": "encoding_mismatch",
+      "expected": "detected",
+      "detector_status": "passed",
+      "observation": "Frozen series/accepted SVG color differs; this is a synthetic mutation check, not general color perception.",
+      "detector_evidence": {
+        "reference_differences": {
+          "missing_ids": [],
+          "numeric_mark_positions": [],
+          "series_colors": [
+            "plot.value.110cf9d09ad710f2a88c6513dfa90b95"
+          ],
+          "edge_directions": [],
+          "viewport_changed": false
+        }
+      },
+      "svg_sha256": "e502ece4c4d95a4e151cda6cc7dc46a75d0dddaa2975f056e884a056ec2e1c5e",
+      "pixels": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "57088f49159c4c38d814dd8a7819ba4f01201526f56302e673e3d044da5903e2",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 768,
+        "width_mm": 180.0,
+        "height_mm": 130.0,
+        "dpi": 150.0,
+        "ink_pixels": 16202,
+        "ink_bounds": [
+          11,
+          37,
+          1009,
+          693
+        ],
+        "border_ink": false,
+        "png_sha256": "7262c6dcae6625574222bef6b0aa2c684353e479c2e9896424d51d43211bcd86",
+        "pdf_sha256": "985e8f319f0d202656f346009277a455f19900f217c19aa859b43886604c395b",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "scope": "Known injected fault only; detector success does not certify arbitrary scientific correctness."
+    }
+  ],
+  "mechanical_summary": {
+    "passed": 33,
+    "failed": 7,
+    "unavailable": 0,
+    "not_run": 0,
+    "denominator": 40
+  },
+  "independent_review_summary": {
+    "reviewed": 0,
+    "pending": 4,
+    "denominator": 4
+  }
+}
