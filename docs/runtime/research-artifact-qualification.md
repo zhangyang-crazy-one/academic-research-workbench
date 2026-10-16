@@ -147,3 +147,39 @@ compositor never creates that review. #153 supplies actual rasterized benchmarks
 and the independent human-review packet. Tests in
 `tests/integration/test_figure_composition.py` exercise real accepted numeric
 children, two layouts, original v1 reproduction, malformed sources and safe SVG.
+
+## Bounded mechanism figure (issue #162, first milestone)
+
+`artifact_kind: mechanism_figure` dispatches through the existing artifact
+`ir/render/qualify/inspect/reproduce` commands. Its independent
+`arw.mechanism-figure-ir.v1` binds an accepted `arw.mechanism-facts.v1` selected
+value, its SHA-256 and renderer identity. Same-run AcceptedRef resolution,
+historical prefixes, source bytes and the parent writer lock remain authoritative.
+The compiler requires the declared component/route inventories, compatible typed
+ports, preserved object/state identity, explicit sourced operations, a connected
+object chain and a conditional feedback/exit contract. Its renderer copies source
+literals and never fills in a missing scientific mechanism.
+
+Four small component families use explicit manual point geometry: token and
+representation correspondence, port operations with ordered local expansion,
+conditional continue/stop, and before/after candidate states. SVG remains inert
+and editable, with fixed fonts, physical units and a bounded output. Text that
+does not fit fails instead of being silently shrunk. This is a consistency and
+mechanism-expression foundation, not automatic scientific validation or layout
+search. Quantitative computation remains in the existing numeric/plot pipeline.
+
+`arw.mechanism-advisory-review.v1` records a separate figure-reviewer role,
+actual-pixel reading, source/IR/SVG/PNG/font/environment bindings, specific findings,
+reader retelling and measured review resources. A model advisory record cannot
+assert human acceptance or publication visual PASS. It is intentionally a
+separate schema from `arw.visual-review.v1`; passing its identity as the latter
+review fails qualification. The existing parent acceptance protocol remains the
+only writer of canonical qualification evidence.
+
+See [the runnable public packet](../../examples/mechanism-figures/README.md) for
+three actual source-bound examples, retained first/second-round pixels and
+independent review. Missing pixels or human acceptance, unresolved findings and
+unsupported draw.io/three-strategy capabilities remain explicit. Source, geometry,
+font or environment changes expire the relevant advisory binding; environment
+binding covers the recorded rasterizer inventory, not an attestation of the
+entire host. No additional model/provider/version is a release requirement.

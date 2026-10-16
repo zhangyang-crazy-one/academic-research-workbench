@@ -1,0 +1,350 @@
+{
+  "$defs": {
+    "MechanismCell": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Semantic Id",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1400,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1400,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        },
+        "width": {
+          "maximum": 500,
+          "minimum": 120,
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "maximum": 1000,
+          "minimum": 80,
+          "title": "Height",
+          "type": "number"
+        }
+      },
+      "required": [
+        "semantic_id",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "MechanismCell",
+      "type": "object"
+    },
+    "MechanismRoute": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Semantic Id",
+          "type": "string"
+        },
+        "via": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "maximum": 1400,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "maximum": 1400,
+                "minimum": 0,
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "maxItems": 4,
+          "title": "Via",
+          "type": "array"
+        },
+        "label_x": {
+          "maximum": 1400,
+          "minimum": 0,
+          "title": "Label X",
+          "type": "number"
+        },
+        "label_y": {
+          "maximum": 1400,
+          "minimum": 0,
+          "title": "Label Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "semantic_id",
+        "label_x",
+        "label_y"
+      ],
+      "title": "MechanismRoute",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "ResearchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ledger_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Ledger Event Id",
+          "type": "string"
+        },
+        "ledger_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Event Sha256",
+          "type": "string"
+        },
+        "json_pointer": {
+          "maxLength": 512,
+          "pattern": "^(|/.*)$",
+          "title": "Json Pointer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "artifact_id",
+        "sha256",
+        "ledger_event_id",
+        "ledger_event_sha256",
+        "json_pointer"
+      ],
+      "title": "ResearchBinding",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.mechanism-figure-ir.v1",
+      "default": "arw.mechanism-figure-ir.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "const": "mechanism_figure",
+      "default": "mechanism_figure",
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "source": {
+      "$ref": "#/$defs/ResearchBinding"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "width_mm": {
+      "maximum": 500,
+      "minimum": 80,
+      "title": "Width Mm",
+      "type": "number"
+    },
+    "height_mm": {
+      "maximum": 500,
+      "minimum": 80,
+      "title": "Height Mm",
+      "type": "number"
+    },
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/MechanismCell"
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "title": "Cells",
+      "type": "array"
+    },
+    "routes": {
+      "items": {
+        "$ref": "#/$defs/MechanismRoute"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Routes",
+      "type": "array"
+    },
+    "min_font_pt": {
+      "default": 8.0,
+      "maximum": 14,
+      "minimum": 7,
+      "title": "Min Font Pt",
+      "type": "number"
+    },
+    "profile": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Profile",
+      "type": "string"
+    },
+    "renderer_hints": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "publication_critical": {
+      "default": false,
+      "title": "Publication Critical",
+      "type": "boolean"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision",
+    "source",
+    "source_sha256",
+    "width_mm",
+    "height_mm",
+    "cells",
+    "routes",
+    "profile",
+    "renderer_hints",
+    "validation_policy"
+  ],
+  "title": "MechanismFigureIR",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/mechanism-figure-ir.schema.json"
+}

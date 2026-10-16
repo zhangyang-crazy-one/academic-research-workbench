@@ -1,0 +1,34 @@
+[
+  {
+    "case_id": "case-1",
+    "truth": "missing_step",
+    "expected": "changes_required"
+  },
+  {
+    "case_id": "case-2",
+    "truth": "reverse_arrow",
+    "expected": "changes_required"
+  },
+  {
+    "case_id": "case-3",
+    "truth": "object_identity",
+    "expected": "changes_required"
+  },
+  {
+    "case_id": "case-4",
+    "truth": "stop_role_label",
+    "expected": "changes_required",
+    "nominal_generator_name": "missing_stop",
+    "coverage_note": "The reviewed image changes the role prefix only; predicate text remains. Do not count this as full stop-condition omission."
+  },
+  {
+    "case_id": "case-5",
+    "truth": "fabricated_value",
+    "expected": "changes_required"
+  },
+  {
+    "case_id": "case-6",
+    "truth": "small_text",
+    "expected": "changes_required"
+  }
+]

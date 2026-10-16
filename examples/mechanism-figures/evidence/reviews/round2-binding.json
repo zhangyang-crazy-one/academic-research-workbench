@@ -1,0 +1,250 @@
+{
+  "normal_bindings": [
+    {
+      "id": "representation",
+      "binding_actual": {
+        "source_sha256": "71ddcec9e0aa4e0ff2a7b09e271fb5b351be85de601f1edbbd52b7572aa64b49",
+        "ir_sha256": "6b1b5b6d67d8134d6a51b9a383b99b92e13471c8c4c65dd3a82c8c2d7b6ac70d",
+        "svg_sha256": "eb82ab790477d98f6e841fde9669d06c4dcd9e9b5ac532523f2f885b72820f89",
+        "png_sha256": "60bedfa3c3b8ebea749762b45ed6b0bc71ed62d33b4c9d31fa44fbdf5a3cd38f",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_expected": {
+        "source_sha256": "71ddcec9e0aa4e0ff2a7b09e271fb5b351be85de601f1edbbd52b7572aa64b49",
+        "ir_sha256": "6b1b5b6d67d8134d6a51b9a383b99b92e13471c8c4c65dd3a82c8c2d7b6ac70d",
+        "svg_sha256": "eb82ab790477d98f6e841fde9669d06c4dcd9e9b5ac532523f2f885b72820f89",
+        "png_sha256": "60bedfa3c3b8ebea749762b45ed6b0bc71ed62d33b4c9d31fa44fbdf5a3cd38f",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_matches": {
+        "source_sha256": true,
+        "ir_sha256": true,
+        "svg_sha256": true,
+        "png_sha256": true,
+        "font_sha256": true,
+        "environment_sha256": true
+      },
+      "source_matches_task_revision2": true,
+      "source_file_sha_matches_ir_reference": false,
+      "ir_source_answer_sha_matches": true,
+      "ir_json_pointer_matches": true,
+      "font_files": [
+        {
+          "description": "Noto Sans CJK SC 12 @wght=400",
+          "family": "Noto Sans CJK SC",
+          "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+          "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1",
+          "actual_sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "matches": true
+        }
+      ],
+      "source_file_canonical_sha_matches_ir_reference": true
+    },
+    {
+      "id": "tool-loop",
+      "binding_actual": {
+        "source_sha256": "1de5370d75152f7cdece64ca9cd5a19e89003a6f77da4d9ab77d7f775252b2f3",
+        "ir_sha256": "6e94f6883c620d596d0b635d3025366ecddea98edee78528db53ece53efa6b6b",
+        "svg_sha256": "cc65bc885d54a41ceac636842d7dd5ea3a6c1647d0c5898bd848d79b4caeba5c",
+        "png_sha256": "18b5abe7406f4d9831f8f233cbe8573a3ea3e999c9f055880297147ec6a57bb1",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_expected": {
+        "source_sha256": "1de5370d75152f7cdece64ca9cd5a19e89003a6f77da4d9ab77d7f775252b2f3",
+        "ir_sha256": "6e94f6883c620d596d0b635d3025366ecddea98edee78528db53ece53efa6b6b",
+        "svg_sha256": "cc65bc885d54a41ceac636842d7dd5ea3a6c1647d0c5898bd848d79b4caeba5c",
+        "png_sha256": "18b5abe7406f4d9831f8f233cbe8573a3ea3e999c9f055880297147ec6a57bb1",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_matches": {
+        "source_sha256": true,
+        "ir_sha256": true,
+        "svg_sha256": true,
+        "png_sha256": true,
+        "font_sha256": true,
+        "environment_sha256": true
+      },
+      "source_matches_task_revision2": true,
+      "source_file_sha_matches_ir_reference": false,
+      "ir_source_answer_sha_matches": true,
+      "ir_json_pointer_matches": true,
+      "font_files": [
+        {
+          "description": "Noto Sans CJK SC 12 @wght=400",
+          "family": "Noto Sans CJK SC",
+          "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+          "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1",
+          "actual_sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "matches": true
+        }
+      ],
+      "source_file_canonical_sha_matches_ir_reference": true
+    },
+    {
+      "id": "constraint",
+      "binding_actual": {
+        "source_sha256": "19a4f7717679c7cd52aeccfe2551677e74dd0e57e32600c57848475a627dc374",
+        "ir_sha256": "1e579c3cfde6ac8f93e9796b35e1aacedbfb30fd71c3a7808afd1511e88c5990",
+        "svg_sha256": "1ccd3d04363c507fddfa62b3e8691bfe42bff35d2acae916b1a6b8d7d75945e6",
+        "png_sha256": "b19ed453725ebb6ae84b2c0bd0bad7eb78b917cc7b7c1985ed491406b79fa05e",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_expected": {
+        "source_sha256": "19a4f7717679c7cd52aeccfe2551677e74dd0e57e32600c57848475a627dc374",
+        "ir_sha256": "1e579c3cfde6ac8f93e9796b35e1aacedbfb30fd71c3a7808afd1511e88c5990",
+        "svg_sha256": "1ccd3d04363c507fddfa62b3e8691bfe42bff35d2acae916b1a6b8d7d75945e6",
+        "png_sha256": "b19ed453725ebb6ae84b2c0bd0bad7eb78b917cc7b7c1985ed491406b79fa05e",
+        "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+        "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+      },
+      "binding_matches": {
+        "source_sha256": true,
+        "ir_sha256": true,
+        "svg_sha256": true,
+        "png_sha256": true,
+        "font_sha256": true,
+        "environment_sha256": true
+      },
+      "source_matches_task_revision2": true,
+      "source_file_sha_matches_ir_reference": false,
+      "ir_source_answer_sha_matches": true,
+      "ir_json_pointer_matches": true,
+      "font_files": [
+        {
+          "description": "Noto Sans CJK SC 12 @wght=400",
+          "family": "Noto Sans CJK SC",
+          "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+          "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1",
+          "actual_sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+          "matches": true
+        }
+      ],
+      "source_file_canonical_sha_matches_ir_reference": true
+    }
+  ],
+  "blind_bindings": [
+    {
+      "case_id": "case-1",
+      "png_sha256": "126ff7e343a4710b0fd5bb82434eede96fefd49b31dcf890bf0f57ab1ad3436d",
+      "png_matches": true,
+      "svg_sha256_observed": "8dd44610a9025fabd6fba205ff2f381a6a71ae44abec04c705436b4b00fb6a77",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    },
+    {
+      "case_id": "case-2",
+      "png_sha256": "d7691c9e80083f8ffe4ec8519bf21214a5b56ce3fa972bdad9c1f510c49e74ee",
+      "png_matches": true,
+      "svg_sha256_observed": "73153ac170448ca8f051a06ce4f8fffc94059ca9bf6c4685567b0eaff91d7c5b",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    },
+    {
+      "case_id": "case-3",
+      "png_sha256": "4c843c1d4923267f78a5eebe0a0449988549fb449bb00e99b87a604850e33958",
+      "png_matches": true,
+      "svg_sha256_observed": "6eedfadcdb9ddb93fc685aa2a490916426bb80d024fd196301a8fde6d55ce93b",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    },
+    {
+      "case_id": "case-4",
+      "png_sha256": "eda667c3e908be484a4c60f841be503ece46d9690d744154083bee7c49f2bcf7",
+      "png_matches": true,
+      "svg_sha256_observed": "25935281f074ede10022811317c8c5cdd979f4a6404d8122f2568b3a08620255",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    },
+    {
+      "case_id": "case-5",
+      "png_sha256": "fb17035bd77da7cb3e6249546b5a8dc6a8720c90d3a1bbb3d82a96d89e7d7259",
+      "png_matches": true,
+      "svg_sha256_observed": "65893b7dbb5f04db132a7da52f9423c5fd11987d7dcb18e5c4862e78cfdf918f",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    },
+    {
+      "case_id": "case-6",
+      "png_sha256": "8284bff61b1ea6fdd892201fb404a010f451ddfaa563daf58fa9679af85f680c",
+      "png_matches": true,
+      "svg_sha256_observed": "c76412bcb1f5c89559bff0475c4e8a3ee22ffdb48a6c9b4b3f3457f95dba6cc4",
+      "svg_hash_binding_provided": false,
+      "limitation": "Blind bundle provides no exact SVG/source/IR binding. task_id maps to frozen reviewer-input answer; PNG hash and font/environment metadata checked."
+    }
+  ],
+  "environment_actual": {
+    "librsvg": {
+      "unavailable": "Command '['pkg-config', '--modversion', 'librsvg-2.0']' returned non-zero exit status 1."
+    },
+    "pango": "1.57.1",
+    "cairo": "1.18.4",
+    "python": "3.11.10"
+  },
+  "environment_matches": false,
+  "environment_limit": "Default shell python is 3.11.10; project .venv/bin/python and python3.14 report 3.14.6. librsvg shared-library exported version, pango/cairo pkg-config versions and project interpreter match declared environment. This verifies availability/metadata, not historical execution attestation.",
+  "task_revision": 2,
+  "v1_file_sha256": "b1da4bac9889b3a75e824501dfc50d973177052b132d83e0cefe90b27e773a9c",
+  "v1_supersedes_matches": true,
+  "source_changes": [
+    {
+      "task_id": "representation",
+      "v1_answer_matches_round1_frozen": true,
+      "changed_fields": []
+    },
+    {
+      "task_id": "tool-loop",
+      "v1_answer_matches_round1_frozen": true,
+      "changed_fields": [
+        {
+          "component": "request",
+          "field": "steps",
+          "before": [
+            "Initial observed state has no answer.",
+            "Request lookup(key=public-toy)."
+          ],
+          "after": [
+            "Initial state: attempts=0 and answer_present=false.",
+            "Increment attempts; request lookup(key=public-toy)."
+          ]
+        },
+        {
+          "component": "observe",
+          "field": "steps",
+          "before": [
+            "Tool returns observation=found.",
+            "Append observation to event history.",
+            "Set answer_present=true."
+          ],
+          "after": [
+            "Synthetic lookup returns found or missing.",
+            "Append observation to event history.",
+            "Set answer_present=(observation == found)."
+          ]
+        }
+      ]
+    },
+    {
+      "task_id": "constraint",
+      "v1_answer_matches_round1_frozen": true,
+      "changed_fields": []
+    }
+  ],
+  "all_normal_binding_matches": true,
+  "source_reference_limit": "IR source.sha256 is checked against both raw and canonical task document digests; a false check is not itself proof of tampering because the exact immutable artifact may have different formatting or artifact packaging.",
+  "producer_compatible_environment_actual": {
+    "name": "librsvg",
+    "version": "2.62.3",
+    "pango": "1.57.1",
+    "cairo": "1.18.4",
+    "python": "3.14.6"
+  },
+  "producer_compatible_environment_matches": true
+}
