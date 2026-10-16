@@ -13,10 +13,16 @@
 - [x] 3.1 Verify real installed lifecycle behavior, absent harnesses, mutations, unsafe paths and legacy readers.
 - [x] 3.3 Bind executable bits and verify permission mutation rejection at qualification, bundle creation and technical release checks.
 - [x] 3.4 Preserve the selected supported interpreter in the credential-isolated probe and verify an older-only PATH.
-- [ ] 3.2 Submit the verified change, then use fresh successful main CI subjects for the actual v0.2.0 publication.
+- [ ] 3.2 Use fresh successful main CI subjects, portable qualification and owner authority for publication; the historical v0.2.0 tag is superseded by the planned v0.2.1 candidate, without moving the old tag.
 
 ## 4. Bounded integrity hashing (#150)
 
 - [x] 4.1 Stream build-identity, core and integration-lock hashes with unchanged digests and fail-closed behavior; verify empty/boundary/large inputs, bounded allocation, I/O failure, replacement, symlinks and fresh processes.
 
 Snapshot digest reuse, cross-process preflight deduplication and installed-command startup A/B remain separate follow-up scope in #150.
+
+## 5. v0.2.1 release identity (#164)
+
+- [x] 5.1 Align package, plugin, launcher and release metadata; preserve old IntegrationLock readers and verify current identity consistency and mismatch rejection.
+- [ ] 5.2 Review the metadata PR, then generate signed main CI subjects and fresh portable installed-core qualification for the final release commit.
+- [ ] 5.3 Obtain the actual owner use/distribution declaration and independently verify publication authority before publishing the new tag.

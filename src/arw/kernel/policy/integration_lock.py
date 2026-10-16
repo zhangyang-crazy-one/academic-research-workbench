@@ -363,7 +363,7 @@ class ARSBinding(LockModel):
 
 class ARWRuntimeBinding(LockModel):
     package: Literal["academic-research-workbench"]
-    version: Literal["0.1.0", "0.2.0"]
+    version: Literal["0.1.0", "0.2.0", "0.2.1"]
     pyproject: FileBinding
     plugin_manifest: FileBinding
     cli_launcher: FileBinding
@@ -1503,7 +1503,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     if project.get("project", {}).get("name") != "academic-research-workbench":
         raise IntegrationLockError("staged ARW package name is invalid")
     package_version = project.get("project", {}).get("version")
-    if package_version not in ("0.1.0", "0.2.0"):
+    if package_version not in ("0.1.0", "0.2.0", "0.2.1"):
         raise IntegrationLockError("staged ARW package version is not qualified")
     plugin = _read_object(
         _bound_file(stage_root, plugin_manifest), label="staged plugin manifest"
@@ -1554,7 +1554,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
         )
     return ARWRuntimeBinding(
         package="academic-research-workbench",
-        version=cast(Literal["0.1.0", "0.2.0"], package_version),
+        version=cast(Literal["0.1.0", "0.2.0", "0.2.1"], package_version),
         pyproject=pyproject,
         plugin_manifest=plugin_manifest,
         cli_launcher=cli_launcher,
@@ -3838,7 +3838,7 @@ def _load_build_identity_binding(
         raise IntegrationLockError(
             "build identity plugin.version drifts from staged plugin manifest"
         )
-    if not re.fullmatch(r"0\.[12]\.0(?:\+codex\.[a-z0-9-]+)?", str(declared_version)):
+    if not re.fullmatch(r"0\.(?:1\.0|2\.[01])(?:\+codex\.[a-z0-9-]+)?", str(declared_version)):
         raise IntegrationLockError(
             f"build identity plugin.version is not qualified: {declared_version}"
         )
