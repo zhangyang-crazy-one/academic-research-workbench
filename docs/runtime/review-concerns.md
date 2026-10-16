@@ -16,6 +16,12 @@ or out-of-prefix dependency cannot supply a valid association. Replay validates
 target provenance and exact record identity; it does not establish that an
 author's diagnostic judgment is correct or currently applicable.
 
+A claim-revision target also revalidates every occurrence in its canonical
+registration through the original manuscript digest and selected-span checks.
+This applies even to a claim-only report and to text/plain manuscripts, so
+changed or deleted source bytes fail single-concern verification, report replay
+and PROV export without relying on another occurrence-target concern.
+
 The read-only rules request evidence/scope clarification for a registered claim
 without supporting evidence and explicit registration of unregistered or
 unchecked occurrences. They do not predict review outcomes. Records contain

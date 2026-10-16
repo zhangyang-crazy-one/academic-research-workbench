@@ -14,6 +14,10 @@ Every concern SHALL bind a concrete occurrence or exact claim revision and a ful
 - **WHEN** manuscript bytes or target claim digest differs from its saved binding
 - **THEN** concern target replay is refused rather than treated as current
 
+#### Scenario: Claim-only target loses manuscript source
+- **WHEN** a claim-only concern references a registered occurrence whose text/plain manuscript is changed or deleted
+- **THEN** single-concern verification, report replay and PROV export revalidate every registered occurrence and reject the stale source binding without modifying canonical history
+
 ### Requirement: Optional rhetorical annotations and corpus boundary
 Argumentative Zoning SHALL be optional and external corpora MUST NOT be redistributed before license review.
 
