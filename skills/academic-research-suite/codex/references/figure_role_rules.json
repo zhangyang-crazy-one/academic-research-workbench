@@ -61,6 +61,19 @@
         "editable_text"
       ],
       "font_family": "Noto Sans CJK SC, sans-serif"
+    },
+    "v1_composition_svg": {
+      "roles": [
+        "composite"
+      ],
+      "capabilities": [
+        "multi_panel",
+        "editable_text",
+        "sequence",
+        "entity_graph",
+        "independent_axes"
+      ],
+      "font_family": "Noto Sans CJK SC, sans-serif"
     }
   }
 }

@@ -1,0 +1,486 @@
+{
+  "$defs": {
+    "CompositionLayout": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "row",
+            "column",
+            "grid"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "row_ratios": {
+          "items": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Row Ratios",
+          "type": "array"
+        },
+        "column_ratios": {
+          "items": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Column Ratios",
+          "type": "array"
+        },
+        "gap_pt": {
+          "default": 12,
+          "maximum": 36,
+          "minimum": 4,
+          "title": "Gap Pt",
+          "type": "integer"
+        },
+        "axes": {
+          "const": "independent",
+          "default": "independent",
+          "title": "Axes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "row_ratios",
+        "column_ratios"
+      ],
+      "title": "CompositionLayout",
+      "type": "object"
+    },
+    "CompositionPanel": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Panel Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "audit_view",
+            "quantitative",
+            "schematic"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "label": {
+          "pattern": "^[a-d]$",
+          "title": "Label",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "reading_order": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Reading Order",
+          "type": "integer"
+        },
+        "position": {
+          "$ref": "#/$defs/PanelPosition"
+        },
+        "content_kind": {
+          "enum": [
+            "sequence",
+            "entity_graph",
+            "accepted_v1"
+          ],
+          "title": "Content Kind",
+          "type": "string"
+        },
+        "content_ref": {
+          "$ref": "#/$defs/ResearchBinding"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "renderer": {
+          "$ref": "#/$defs/RendererIdentity"
+        },
+        "claims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ResearchBinding"
+          },
+          "maxItems": 8,
+          "title": "Claims",
+          "type": "array"
+        }
+      },
+      "required": [
+        "panel_id",
+        "role",
+        "label",
+        "title",
+        "reading_order",
+        "position",
+        "content_kind",
+        "content_ref",
+        "content_sha256",
+        "renderer"
+      ],
+      "title": "CompositionPanel",
+      "type": "object"
+    },
+    "PanelPosition": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "row": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Row",
+          "type": "integer"
+        },
+        "column": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Column",
+          "type": "integer"
+        },
+        "row_span": {
+          "default": 1,
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Row Span",
+          "type": "integer"
+        },
+        "column_span": {
+          "default": 1,
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Column Span",
+          "type": "integer"
+        },
+        "align": {
+          "default": "center",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "title": "Align",
+          "type": "string"
+        }
+      },
+      "required": [
+        "row",
+        "column"
+      ],
+      "title": "PanelPosition",
+      "type": "object"
+    },
+    "RendererIdentity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity Digest",
+          "type": "string"
+        },
+        "normalization_policy": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Normalization Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "identity_digest",
+        "normalization_policy"
+      ],
+      "title": "RendererIdentity",
+      "type": "object"
+    },
+    "ResearchBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ledger_event_id": {
+          "pattern": "^evt-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Ledger Event Id",
+          "type": "string"
+        },
+        "ledger_event_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Event Sha256",
+          "type": "string"
+        },
+        "json_pointer": {
+          "maxLength": 512,
+          "pattern": "^(|/.*)$",
+          "title": "Json Pointer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "artifact_id",
+        "sha256",
+        "ledger_event_id",
+        "ledger_event_sha256",
+        "json_pointer"
+      ],
+      "title": "ResearchBinding",
+      "type": "object"
+    },
+    "SemanticEncoding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Semantic Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "circle",
+            "square",
+            "diamond"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "line_style": {
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted"
+          ],
+          "title": "Line Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "semantic_id",
+        "label",
+        "color",
+        "shape",
+        "line_style"
+      ],
+      "title": "SemanticEncoding",
+      "type": "object"
+    },
+    "ValidationPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "REQUIRED",
+          "title": "Schema",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "REQUIRED",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "semantic": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Semantic",
+          "type": "string"
+        },
+        "render": {
+          "const": "REQUIRED",
+          "title": "Render",
+          "type": "string"
+        },
+        "visual": {
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "NOT_APPLICABLE"
+          ],
+          "title": "Visual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "provenance",
+        "semantic",
+        "render",
+        "visual"
+      ],
+      "title": "ValidationPolicy",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.figure-composition-ir.v1",
+      "default": "arw.figure-composition-ir.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_kind": {
+      "const": "figure_composition",
+      "default": "figure_composition",
+      "title": "Artifact Kind",
+      "type": "string"
+    },
+    "artifact_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "visual_argument": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Visual Argument",
+      "type": "string"
+    },
+    "width_mm": {
+      "maximum": 500,
+      "minimum": 40,
+      "title": "Width Mm",
+      "type": "number"
+    },
+    "height_mm": {
+      "maximum": 500,
+      "minimum": 40,
+      "title": "Height Mm",
+      "type": "number"
+    },
+    "panels": {
+      "items": {
+        "$ref": "#/$defs/CompositionPanel"
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "title": "Panels",
+      "type": "array"
+    },
+    "layout": {
+      "$ref": "#/$defs/CompositionLayout"
+    },
+    "encodings": {
+      "items": {
+        "$ref": "#/$defs/SemanticEncoding"
+      },
+      "maxItems": 24,
+      "title": "Encodings",
+      "type": "array"
+    },
+    "legend_ids": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 12,
+      "title": "Legend Ids",
+      "type": "array"
+    },
+    "renderer_hints": {
+      "$ref": "#/$defs/RendererIdentity"
+    },
+    "publication_critical": {
+      "default": false,
+      "title": "Publication Critical",
+      "type": "boolean"
+    },
+    "validation_policy": {
+      "$ref": "#/$defs/ValidationPolicy"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision",
+    "visual_argument",
+    "width_mm",
+    "height_mm",
+    "panels",
+    "layout",
+    "encodings",
+    "legend_ids",
+    "renderer_hints",
+    "validation_policy"
+  ],
+  "title": "FigureCompositionIR",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/figure-composition-ir.schema.json"
+}

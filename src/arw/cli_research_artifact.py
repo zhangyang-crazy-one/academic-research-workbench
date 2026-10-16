@@ -95,6 +95,12 @@ def handle(args, provider):
             run_roots=tuple(dict.fromkeys([args.run_root, *args.source_run_root])),
             project_root=args.project_root,
         )}
+    elif isinstance(payload, dict) and payload.get("artifact_kind") == "figure_composition":
+        from arw.kernel.state.figure_composition import FigureCompositionIR
+        if args.source_run_root or args.project_root:
+            raise ValueError("composition_cross_run_children_unsupported")
+        ir = FigureCompositionIR.model_validate_json(raw)
+        options = {}
     else:
         ir = ResearchArtifactIR.model_validate_json(raw)
         if args.source_run_root or args.project_root:
