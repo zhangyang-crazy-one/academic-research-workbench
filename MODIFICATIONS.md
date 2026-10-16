@@ -72,3 +72,8 @@ The machine-readable source manifest is authoritative for exact tree, patch, art
 - Research direction adapter (2026-10-12, issues #115/#116): the ARW-owned root routers link the shared project startup/intake contract. Original bundled ARS profile and inquiry validators remain byte-preserved; external synthetic examples are explicitly candidate data, with source/license inventory and no independent scientific authority.
 
 - Figure role overlay (2026-10-16, issue #151): ARW-owned role/rule matrix, bounded brief planner, progressive loading and public synthetic fixtures override mismatched style/statistics defaults within scope. Bundled `ars/` bytes, upstream source identities, license texts and runtime v1 artifact contracts remain unchanged.
+
+- Issue #152: added first-party bounded FigureComposition v1 contracts, canonical
+  source/accepted-child adapter, inert SVG compositor and lifecycle dispatch.
+  Existing ResearchArtifactIR/ResultPlotIR v1 models and renderer bytes are
+  unchanged; no upstream artwork, source pin, license text or dependency changed.

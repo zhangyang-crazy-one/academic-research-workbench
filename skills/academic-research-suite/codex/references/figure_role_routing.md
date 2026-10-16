@@ -58,3 +58,5 @@ custom fonts, strict-box certification or depth must be reported unavailable.
 Six synthetic public briefs and saved routing outputs live in
 `codex/tests/fixtures/figure_roles/`. They test instruction selection, not visual
 quality. They contain no private manuscripts, external artworks or model calls.
+
+The additive `v1_composition_svg` backend accepts explicit 2–4 panel FigureComposition v1 specifications, same-run canonical object/accepted-child bindings and independent axes. It supports bounded sequence/entity-graph objects and editable SVG text; it does not generate arbitrary layouts, recolor accepted plots, share axes or certify final-size legibility. The existing single-panel backend records retain their original capabilities. See `docs/runtime/research-artifact-qualification.md` in the ARW repository for its admission and typography contract.
