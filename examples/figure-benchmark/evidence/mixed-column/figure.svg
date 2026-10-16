@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180mm" height="330mm" viewBox="0 0 510.23622 935.433071"><desc>The same observed sample has a bound representation and exact accepted numeric evidence.</desc><text x="10" y="24" font-size="11" font-family="Noto Sans CJK SC, sans-serif"><tspan x="10" dy="0">(a) Observed source</tspan></text><g id="arw_panel_1" transform="translate(148.545932 42) scale(0.473654)"><g><g font-family="Noto Sans CJK SC, sans-serif"><circle cx="20" cy="20" r="8" fill="#0072B2" stroke="#222222" stroke-width="1" /><line x1="34" y1="20" x2="58" y2="20" stroke="#0072B2" stroke-width="2" stroke-dasharray="" /><text x="68" y="25" font-size="16"><tspan x="68" dy="0">sample / observed</tspan></text><g id="arw_panel_1__observation.a"><rect x="8" y="48" width="420" height="76" fill="#ffffff" stroke="#0072B2" stroke-width="2" /><text x="20" y="70" font-size="16"><tspan x="20" dy="0">观测 A / observation A</tspan></text></g><g id="arw_panel_1__observation.b"><text x="20" y="154" font-size="16"><tspan x="20" dy="0">x = 0.831; y = 0.832</tspan></text></g></g></g></g><text x="10" y="174.572178" font-size="11" font-family="Noto Sans CJK SC, sans-serif"><tspan x="10" dy="0">(b) Bound representation</tspan></text><g id="arw_panel_2" transform="translate(10 217.097113) scale(0.544707)"><g><g font-family="Noto Sans CJK SC, sans-serif"><text x="10" y="20" font-size="14"><tspan x="10" dy="0">Bound local mechanism: sample, analysis</tspan></text><defs><marker id="arw_panel_2__arrow.support.observation" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#333333" /></marker></defs><g id="arw_panel_2__support.observation"><path d="M28,80 L430,80 L430,220 L28,220 L28,220" fill="none" stroke="#333333" stroke-width="2" stroke-dasharray="2 3" marker-end="url(#arw_panel_2__arrow.support.observation)" /><text x="435" y="150.0" font-size="14"><tspan x="435" dy="0">(1)</tspan></text><text x="580" y="80" font-size="14"><tspan x="580" dy="0">(1) support: provided evidence</tspan><tspan x="580" dy="20"> only</tspan></text></g><g id="arw_panel_2__sample"><circle cx="20" cy="80" r="8" fill="#0072B2" stroke="#222222" stroke-width="1" /><line x1="34" y1="80" x2="58" y2="80" stroke="#0072B2" stroke-width="2" stroke-dasharray="" /><text x="68" y="70" font-size="18"><tspan x="68" dy="0">Observed input</tspan></text><text x="68" y="105" font-size="14"><tspan x="68" dy="0">sample [input; observed]</tspan></text></g><g id="arw_panel_2__analysis"><polygon points="20,211 29,220 20,229 11,220" fill="#D55E00" stroke="#222222" stroke-width="1" /><line x1="34" y1="220" x2="58" y2="220" stroke="#D55E00" stroke-width="2" stroke-dasharray="8 4" /><text x="68" y="210" font-size="18"><tspan x="68" dy="0">Fixed analysis</tspan></text><text x="68" y="245" font-size="14"><tspan x="68" dy="0">analysis [method; fixed]</tspan></text></g></g></g></g><text x="10" y="463.716535" font-size="11" font-family="Noto Sans CJK SC, sans-serif"><tspan x="10" dy="0">(c) Accepted exact evidence</tspan></text><g id="arw_panel_3" transform="translate(10 501.992126) scale(0.612795)"><g role="img"><title>Synthetic close estimates</title>
+<desc>Single-panel exact-source result plot. SVG byte determinism does not certify host fonts or publication quality.</desc>
+<g font-family="Noto Sans CJK SC, sans-serif" fill="#222222">
+<text x="30" y="35" font-size="20"><tspan x="30" dy="0">Synthetic close estimates</tspan></text>
+<line x1="90" y1="380" x2="760" y2="380" stroke="#222222" />
+<line x1="90" y1="80" x2="90" y2="380" stroke="#222222" />
+<line x1="85" y1="380" x2="90" y2="380" stroke="#222222" />
+<text x="8" y="384" font-size="11"><tspan x="8" dy="0">8.2985e-1</tspan></text>
+<line x1="85" y1="305" x2="90" y2="305" stroke="#222222" />
+<text x="8" y="309" font-size="11"><tspan x="8" dy="0">8.30675e-1</tspan></text>
+<line x1="85" y1="230" x2="90" y2="230" stroke="#222222" />
+<text x="8" y="234" font-size="11"><tspan x="8" dy="0">8.315e-1</tspan></text>
+<line x1="85" y1="155" x2="90" y2="155" stroke="#222222" />
+<text x="8" y="159" font-size="11"><tspan x="8" dy="0">8.32325e-1</tspan></text>
+<line x1="85" y1="80" x2="90" y2="80" stroke="#222222" />
+<text x="8" y="84" font-size="11"><tspan x="8" dy="0">8.3315e-1</tspan></text>
+<text x="405" y="402" font-size="11"><tspan x="405" dy="0">toy</tspan></text>
+<text x="8" y="65" font-size="12"><tspan x="8" dy="0">ratio</tspan></text>
+<text x="90" y="445" font-size="12"><tspan x="90" dy="0">synthetic condition</tspan></text>
+<g id="arw_panel_3__raw.points">
+<circle id="arw_panel_3__plot.value.110cf9d09ad710f2a88c6513dfa90b95" cx="412.965157" cy="366.363636" r="4" fill="#000000" />
+<circle id="arw_panel_3__plot.value.65ab48bce2350f362bcc910989afbefa" cx="417.598121" cy="275.454545" r="4" fill="#000000" />
+<circle id="arw_panel_3__plot.value.e5d144fd83a3d9615501dd33287755ca" cx="417.75257" cy="184.545455" r="4" fill="#000000" />
+<circle id="arw_panel_3__plot.value.37cc2947f0e25efebacef361b201fc49" cx="433.988548" cy="275.454545" r="4" fill="#E69F00" />
+<circle id="arw_panel_3__plot.value.8f764c9afae88bcca0b64a5eca822885" cx="433.925564" cy="184.545455" r="4" fill="#E69F00" />
+<circle id="arw_panel_3__plot.value.200d4079d6f82c1dca53d8cc95cedcbf" cx="441.069222" cy="93.636364" r="4" fill="#E69F00" />
+</g>
+<g id="arw_panel_3__ranges">
+<g id="arw_panel_3__plot.value.d7448b29565598ff1a60123d5035f692"><line x1="413" y1="366.363636" x2="413" y2="184.545455" stroke="#000000" stroke-width="2" />
+<line x1="408" y1="366.363636" x2="418" y2="366.363636" stroke="#000000" />
+<line id="arw_panel_3__plot.value.7450e5ac9a12feaf4603c8d742e64b1b" x1="408" y1="184.545455" x2="418" y2="184.545455" stroke="#000000" /></g>
+<g id="arw_panel_3__plot.value.cad11f636939baeab944e58773d35b36"><line x1="437" y1="275.454545" x2="437" y2="93.636364" stroke="#E69F00" stroke-width="2" />
+<line x1="432" y1="275.454545" x2="442" y2="275.454545" stroke="#E69F00" />
+<line id="arw_panel_3__plot.value.198f258bdf1f182324c2a01110ee68d0" x1="432" y1="93.636364" x2="442" y2="93.636364" stroke="#E69F00" /></g>
+</g>
+<g id="arw_panel_3__means">
+<circle id="arw_panel_3__plot.value.2c53cd74035c356944257411297b6f04" cx="413" cy="275.454545" r="4" fill="#000000" />
+<circle id="arw_panel_3__plot.value.5b9a3761e6895d24a934ca9d385f324f" cx="437" cy="184.545455" r="4" fill="#E69F00" />
+</g>
+<rect x="90" y="450" width="10" height="10" fill="#000000" />
+<text x="105" y="460" font-size="11"><tspan x="105" dy="0">baseline</tspan></text>
+<rect x="200" y="450" width="10" height="10" fill="#E69F00" />
+<text x="215" y="460" font-size="11"><tspan x="215" dy="0">proposed</tspan></text>
+<text x="30" y="495" font-size="12"><tspan x="30" dy="0">Synthetic raw points jittered horizontally; central means and precomputed ranges, not confidenc</tspan><tspan x="30" dy="18">e intervals.</tspan></text>
+</g>
+</g></g><g transform="translate(10 875.433071) scale(0.6)"><circle cx="20" cy="20" r="8" fill="#0072B2" stroke="#222222" stroke-width="1" /><line x1="34" y1="20" x2="58" y2="20" stroke="#0072B2" stroke-width="2" stroke-dasharray="" /><text x="68" y="25" font-size="16" font-family="Noto Sans CJK SC, sans-serif">Sample</text></g><g transform="translate(10 895.433071) scale(0.6)"><polygon points="20,11 29,20 20,29 11,20" fill="#D55E00" stroke="#222222" stroke-width="1" /><line x1="34" y1="20" x2="58" y2="20" stroke="#D55E00" stroke-width="2" stroke-dasharray="8 4" /><text x="68" y="25" font-size="16" font-family="Noto Sans CJK SC, sans-serif">Analysis</text></g><g transform="translate(10 915.433071) scale(0.6)"><rect x="12" y="12" width="16" height="16" fill="#009E73" stroke="#222222" stroke-width="1" /><line x1="34" y1="20" x2="58" y2="20" stroke="#009E73" stroke-width="2" stroke-dasharray="2 3" /><text x="68" y="25" font-size="16" font-family="Noto Sans CJK SC, sans-serif">Exit</text></g></svg>
