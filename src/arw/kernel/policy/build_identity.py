@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from arw.kernel.core.canonical import sha256_file
 from arw.kernel.policy.schema_registry import (
     SchemaRegistryError,
     aggregate_schema_sha256,
@@ -59,7 +60,7 @@ def load_packaged_build_identity() -> tuple[dict[str, Any], str]:
             not relative.startswith("share/arw/schemas/")
             or not candidate.is_relative_to(schema_root)
             or not candidate.is_file()
-            or hashlib.sha256(candidate.read_bytes()).hexdigest() != expected
+            or sha256_file(candidate) != expected
         ):
             raise BuildIdentityError(f"packaged schema digest mismatch: {relative}")
         schema_entries.append((relative, expected))
@@ -73,7 +74,7 @@ def load_packaged_build_identity() -> tuple[dict[str, Any], str]:
             not candidate.is_relative_to(root)
             or raw_candidate.is_symlink()
             or not candidate.is_file()
-            or hashlib.sha256(candidate.read_bytes()).hexdigest() != entry["sha256"]
+            or sha256_file(candidate) != entry["sha256"]
         ):
             raise BuildIdentityError(f"packaged payload digest mismatch: {relative}")
     return identity, hashlib.sha256(raw).hexdigest()
