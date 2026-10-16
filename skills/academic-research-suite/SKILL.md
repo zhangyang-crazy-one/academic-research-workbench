@@ -12,8 +12,7 @@ allowed-tools: Read, Glob, Grep, WebSearch, Bash(uv *), Bash(python *), Bash(pyt
 
 For new directions, use `research start/status/resume`; read the [shared startup contract](references/research-direction-workflow.md) before selecting a paper narrative.
 
-This is a Codex adapter for the ARS suite. The vendored ARS content lives under
-`ars/`; keep it as source material and route through this file first.
+This Codex adapter routes to vendored ARS source material under `ars/`.
 
 ## Versioning
 
