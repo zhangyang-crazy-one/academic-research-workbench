@@ -1,0 +1,72 @@
+{
+  "structural_comparison": {
+    "status": "changes_required",
+    "scope": "source-answer SVG structure only",
+    "human_status": "human_pending",
+    "publication_visual_pass": false,
+    "findings": [
+      {
+        "finding_id": "component_content:decide",
+        "type": "necessary_content_or_scientific_difference",
+        "severity": "error",
+        "semantic_id": "decide",
+        "expected": "stop: answer_present OR attempts >= 2",
+        "observed": "INNOVATION: Bounded return or stopconceptual | inference | parameters: not_applicableCheck answer_present and attempts < 2.continue: not answer_present AND attempts < 2input input: episode / episode@observedoutput again: episode / episode@observedoutput done: episode / episode@stopped",
+        "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+        "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+      }
+    ]
+  },
+  "raster": {
+    "status": "passed",
+    "requested_font_available": true,
+    "grayscale_sha256": "8528ecdd151ccf129d4e4dd73e440a510f89dfdb2d67072f8db44f1743668be0",
+    "rasterizer": {
+      "name": "librsvg",
+      "version": "2.62.3",
+      "pango": "1.57.1",
+      "cairo": "1.18.4",
+      "python": "3.14.6"
+    },
+    "fonts": [
+      {
+        "description": "Noto Sans CJK SC 12 @wght=400",
+        "family": "Noto Sans CJK SC",
+        "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+        "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+        "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+      }
+    ],
+    "font_probe_unknown_glyphs": 0,
+    "width_px": 1063,
+    "height_px": 2269,
+    "width_mm": 180.0,
+    "height_mm": 384.175,
+    "dpi": 150.0,
+    "ink_pixels": 390325,
+    "ink_bounds": [
+      25,
+      22,
+      1032,
+      2149
+    ],
+    "border_ink": false,
+    "png_sha256": "6ad5ff55dedf0bdf4b74d1846a21f7424041871b708f8ceb8076ef1637b99aee",
+    "pdf_sha256": "76afc8983b9254e98367179e86b5be8f2c36688c4e2b7357e68e2c91d9824980",
+    "limitations": [
+      "Pango coverage probe does not prove readable pixel glyphs.",
+      "Border screening does not certify absence of all clipping or occlusion.",
+      "Color/grayscale perception requires human review."
+    ]
+  },
+  "exact_binding": {
+    "source_sha256": "1de5370d75152f7cdece64ca9cd5a19e89003a6f77da4d9ab77d7f775252b2f3",
+    "ir_sha256": "6e94f6883c620d596d0b635d3025366ecddea98edee78528db53ece53efa6b6b",
+    "svg_sha256": "d851c61f1866daffabfa7e937b4190115a7bc647525ca5e4311bf18a744428ae",
+    "png_sha256": "6ad5ff55dedf0bdf4b74d1846a21f7424041871b708f8ceb8076ef1637b99aee",
+    "font_sha256": "c4b8d93e50b11f3aed079b834bd6635753bf561ad3047a74d060472aaf5d3bbd",
+    "environment_sha256": "2c60d0c1e399ca90a4162895b421f94981961dd83561177d3110c05f02aa1e70"
+  },
+  "independent_pixel_review": "not_run: two-round budget exhausted",
+  "note": "Full stop text omitted from decision component; full relation trigger remains as a distinct source requirement."
+}

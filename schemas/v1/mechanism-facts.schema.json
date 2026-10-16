@@ -1,0 +1,414 @@
+{
+  "$defs": {
+    "MechanismComponent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Semantic Id",
+          "type": "string"
+        },
+        "component_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Component Version",
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "token_representation",
+            "port_operation",
+            "conditional_loop",
+            "candidate_state"
+          ],
+          "title": "Family",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "observed",
+            "measured",
+            "known",
+            "conceptual",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "source_location": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Source Location",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "training",
+            "inference",
+            "conceptual"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "parameters": {
+          "enum": [
+            "frozen",
+            "trainable",
+            "not_applicable"
+          ],
+          "title": "Parameters",
+          "type": "string"
+        },
+        "ports": {
+          "items": {
+            "$ref": "#/$defs/MechanismPort"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Ports",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "tokens": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TokenCorrespondence"
+          },
+          "maxItems": 4,
+          "title": "Tokens",
+          "type": "array"
+        },
+        "axes": {
+          "default": [],
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Axes",
+          "type": "array"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "stop_condition": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop Condition"
+        },
+        "before": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before"
+        },
+        "after": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After"
+        }
+      },
+      "required": [
+        "semantic_id",
+        "family",
+        "label",
+        "status",
+        "source_location",
+        "phase",
+        "parameters",
+        "ports",
+        "steps"
+      ],
+      "title": "MechanismComponent",
+      "type": "object"
+    },
+    "MechanismPort": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "port_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Port Id",
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "input",
+            "output"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "value_type": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Value Type",
+          "type": "string"
+        },
+        "object_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Object Id",
+          "type": "string"
+        },
+        "state_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "State Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "port_id",
+        "direction",
+        "value_type",
+        "object_id",
+        "state_id"
+      ],
+      "title": "MechanismPort",
+      "type": "object"
+    },
+    "MechanismRelation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Semantic Id",
+          "type": "string"
+        },
+        "source_component": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Component",
+          "type": "string"
+        },
+        "source_port": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Source Port",
+          "type": "string"
+        },
+        "target_component": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Target Component",
+          "type": "string"
+        },
+        "target_port": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Target Port",
+          "type": "string"
+        },
+        "relation_type": {
+          "enum": [
+            "data",
+            "condition",
+            "control",
+            "retrieval",
+            "action",
+            "observation",
+            "supervision",
+            "parameter_update"
+          ],
+          "title": "Relation Type",
+          "type": "string"
+        },
+        "payload": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Payload",
+          "type": "string"
+        },
+        "trigger": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Trigger",
+          "type": "string"
+        },
+        "feedback": {
+          "default": false,
+          "title": "Feedback",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "semantic_id",
+        "source_component",
+        "source_port",
+        "target_component",
+        "target_port",
+        "relation_type",
+        "payload",
+        "trigger"
+      ],
+      "title": "MechanismRelation",
+      "type": "object"
+    },
+    "TokenCorrespondence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "token_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Token Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 24,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "representation_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Representation Id",
+          "type": "string"
+        },
+        "masked": {
+          "default": false,
+          "title": "Masked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "token_id",
+        "text",
+        "representation_id"
+      ],
+      "title": "TokenCorrespondence",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.mechanism-facts.v1",
+      "default": "arw.mechanism-facts.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "question": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Question",
+      "type": "string"
+    },
+    "claim": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Claim",
+      "type": "string"
+    },
+    "data_nature": {
+      "enum": [
+        "synthetic",
+        "research"
+      ],
+      "title": "Data Nature",
+      "type": "string"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/MechanismComponent"
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "title": "Components",
+      "type": "array"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/MechanismRelation"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Relations",
+      "type": "array"
+    },
+    "innovation_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Innovation Id",
+      "type": "string"
+    },
+    "object_chain": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+        "type": "string"
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "title": "Object Chain",
+      "type": "array"
+    },
+    "candidate_exception": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Candidate Exception",
+      "type": "string"
+    }
+  },
+  "required": [
+    "question",
+    "claim",
+    "data_nature",
+    "components",
+    "relations",
+    "innovation_id",
+    "object_chain",
+    "candidate_exception"
+  ],
+  "title": "MechanismFacts",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/mechanism-facts.schema.json"
+}
