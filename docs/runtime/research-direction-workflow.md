@@ -39,6 +39,15 @@ sealed after initialization and before any later parent mutation, including
 after an initializer was killed immediately after the first event became durable.
 Status is read-only and does not seal transactions.
 
+New receipt publication writes complete bytes and fsyncs a unique temporary
+file in `.initialization-staging/`, then publishes the final receipt atomically
+and exclusively and syncs the run directory. A killed writer can leave an
+unpublished fragment, which is preserved and never treated as a prepared or
+committed transaction. Normal resume can complete initialization using the
+retained request and actual final receipts. Published malformed receipts still
+require explicit review; resume neither deletes them nor reconstructs history
+from staging fragments. Staging symlinks and unexpected entries are rejected.
+
 Legacy runs created before these receipts existed are not automatically
 reinitialized when their journal is missing, even if an old initialization may
 have been interrupted after writing its manifest. Preserve the run and use
