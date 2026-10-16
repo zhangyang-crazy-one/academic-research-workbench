@@ -190,14 +190,17 @@ class CompositionRenderer:
                 parts.append(f'<g id="{segment.segment_id}">')
                 if segment.highlighted:
                     parts.append(
-                        f'<rect x="8" y="{y - 22}" width="420" height="76" fill="{encodings[obj.object_id].color}"/>'
+                        f'<rect x="8" y="{y - 22}" width="420" height="76" fill="#ffffff" stroke="{encodings[obj.object_id].color}" stroke-width="2"/>'
                     )
                 parts.append(_text(segment.text, 20, y, 40, 16))
                 parts.append("</g>")
             width, height = 450, 85 * len(obj.segments) + 55
         else:
             assert isinstance(obj, EntityGraphObject)
-            width, height = 900, max(240, 140 * len(obj.entities) + 80)
+            width, height = (
+                900,
+                max(240, 140 * len(obj.entities) + 80, 120 * len(obj.relations) + 60),
+            )
             if obj.expanded_group:
                 parts.append(
                     _text(
@@ -210,32 +213,35 @@ class CompositionRenderer:
                         14,
                     )
                 )
+            entity_start = len(parts)
             positions = {}
             for i, e in enumerate(obj.entities):
                 y = 80 + i * 140
                 positions[e.object_id] = y
                 parts.append(f'<g id="{e.object_id}">')
                 symbol(e.object_id, 20, y)
-                parts.append(_text(e.label, 68, y + 5, 30, 18))
+                parts.append(_text(e.label, 68, y - 10, 30, 18))
                 parts.append(
                     _text(
                         f"{e.object_id} [{e.entity_type}; {e.state_id}]",
                         68,
-                        y + 38,
+                        y + 25,
                         38,
                         14,
                     )
                 )
                 parts.append("</g>")
+            entity_parts = parts[entity_start:]
+            parts = parts[:entity_start]
             for i, r in enumerate(obj.relations):
                 sy, ty = positions[r.source], positions[r.target]
-                rail = 470 + i * 32
+                rail = 430 + i * 10
                 # A per-relation marker and labeled path preserve source direction.
                 parts.append(
                     f'<defs><marker id="arrow.{r.relation_id}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#333333"/></marker></defs>'
                 )
                 via = ty if sy != ty else ty - 35
-                path = f"M420,{sy} L{rail},{sy} L{rail},{via} L420,{via} L420,{ty}"
+                path = f"M28,{sy} L{rail},{sy} L{rail},{via} L28,{via} L28,{ty}"
                 arrow = (
                     f' marker-end="url(#arrow.{r.relation_id})"' if r.directed else ""
                 )
@@ -244,15 +250,19 @@ class CompositionRenderer:
                     f'<g id="{r.relation_id}"><path d="{path}" fill="none" stroke="#333333" stroke-width="2" stroke-dasharray="{dash}"{arrow}/>'
                 )
                 parts.append(
+                    _text(f"({i + 1})", rail + 5, (sy + ty) / 2 + 18 * (i % 3), 6, 14)
+                )
+                parts.append(
                     _text(
-                        f"{r.relation_type}: {r.label}",
-                        rail + 12,
-                        (sy + ty) / 2 + 14 * (i % 3),
-                        23,
+                        f"({i + 1}) {r.relation_type}: {r.label}",
+                        580,
+                        80 + i * 120,
+                        30,
                         14,
                     )
                 )
                 parts.append("</g>")
+            parts.extend(entity_parts)
         return safe_tree(
             (
                 f'<svg xmlns="{NS[1:-1]}" viewBox="0 0 {width} {height}"><g font-family="Noto Sans CJK SC, sans-serif">'
