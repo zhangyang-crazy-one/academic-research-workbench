@@ -1,0 +1,21 @@
+{
+  "status": "candidate",
+  "visual": "UNAVAILABLE",
+  "typography": [
+    {
+      "panel_id": "panel.0",
+      "min_font_pt": 7.578464,
+      "uniform_scale": 0.47365412656751243
+    },
+    {
+      "panel_id": "panel.1",
+      "min_font_pt": 7.625898000000001,
+      "uniform_scale": 0.5447069116360455
+    },
+    {
+      "panel_id": "panel.2",
+      "min_font_pt": 6.7407449999999995,
+      "uniform_scale": 0.6127952755905511
+    }
+  ]
+}

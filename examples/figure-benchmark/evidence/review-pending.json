@@ -1,0 +1,38 @@
+[
+  {
+    "task_id": "exact",
+    "producer": "ARW deterministic benchmark generator; no independent visual acceptance",
+    "reviewer": null,
+    "role": "human_nonproducer",
+    "binding_sha256": "50a919ce2bb24424d528bbd0a2e721df87ae2cdd2ffa6f24ed15cc443b16bb4e",
+    "decision": null,
+    "reason": null
+  },
+  {
+    "task_id": "loop",
+    "producer": "ARW deterministic benchmark generator; no independent visual acceptance",
+    "reviewer": null,
+    "role": "human_nonproducer",
+    "binding_sha256": "eb7f632271eb83af97269cc9afc371c8fb6af643e53a1180c4f3f527634b71f5",
+    "decision": null,
+    "reason": null
+  },
+  {
+    "task_id": "mixed",
+    "producer": "ARW deterministic benchmark generator; no independent visual acceptance",
+    "reviewer": null,
+    "role": "human_nonproducer",
+    "binding_sha256": "6665f27960d9b815fceb05a5e8aad0b9affad63ae2979f207fa8b1f61f89fe8a",
+    "decision": null,
+    "reason": null
+  },
+  {
+    "task_id": "stress",
+    "producer": "ARW deterministic benchmark generator; no independent visual acceptance",
+    "reviewer": null,
+    "role": "human_nonproducer",
+    "binding_sha256": "d05952fe8cd019bdabf5787554425cb14e073ee40942a630ddd0287501a4efad",
+    "decision": null,
+    "reason": null
+  }
+]

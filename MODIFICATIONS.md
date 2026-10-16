@@ -77,3 +77,9 @@ The machine-readable source manifest is authoritative for exact tree, patch, art
   source/accepted-child adapter, inert SVG compositor and lifecycle dispatch.
   Existing ResearchArtifactIR/ResultPlotIR v1 models and renderer bytes are
   unchanged; no upstream artwork, source pin, license text or dependency changed.
+
+- Issue #153: added first-party public synthetic scientific-figure tasks, optional
+  system librsvg/Pango rasterization, known-fault tests and retained pixel/font/
+  environment evidence. All human decisions remain blank pending independent
+  review; no upstream images, scientific-visualization skill, fonts or paid model
+  outputs were copied into the source adapter.
