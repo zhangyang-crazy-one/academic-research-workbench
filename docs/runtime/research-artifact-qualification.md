@@ -99,3 +99,51 @@ fonts/packages, such as XeLaTeX with xeCJK or ctex. ARW does not install or
 qualify these caller-side prerequisites.
 
 PGFPlots emits one legend entry per named series across all layers. Unnamed plots, additional interval segments and repeated series use forget plot, preserving legend/style correspondence.
+
+## Bounded scientific composition (FigureComposition v1)
+
+Issue #152 adds an independent `arw.figure-composition-ir.v1` and
+`arw.figure-composition-receipt.v1`. The existing artifact `ir`, `render`,
+`qualify`, `inspect` and `reproduce` commands dispatch on
+`artifact_kind: figure_composition`. Supply the specification to `artifact ir`
+to obtain the current compositor identity before freezing the IR. Admission uses
+the existing parent request and four-stage canonical artifact protocol.
+
+A composition declares 2–4 panels, physical width/height in mm, a single visual
+argument, reading order, and a row/column/grid layout with ratios, explicit cells,
+bounded spans and start/center/end alignment. Axes remain independent. Sources
+are same-run `ResearchBinding`s resolved through the existing AcceptedRef adapter
+and optional historical-prefix context; cross-run child composition is explicitly
+unsupported. Each panel pins its selected canonical content SHA-256 and renderer.
+Claims also use canonical bindings. Repeated object IDs convey identity only;
+they do not establish a transformation between different state IDs.
+
+Source JSON can contain a bounded sequence (ordered, identified segments with
+explicit local highlights) or entity graph (typed/identified states, labelled
+control/data/support relations with explicit direction, one optional local group).
+The shared encoding table maps object IDs to color, shape and line style; legends
+use that same table. Graph relation styles encode relation type explicitly. The
+compositor does not infer causal edges or compute data.
+
+An `accepted_v1` panel selects the complete accepted receipt of a v1 schematic or
+result plot. The compiler verifies receipt/event/output hashes, binding and pinned
+backend identity, copies the controlled SVG subtree, namespaces IDs/markers/clips,
+and only translates and uniformly scales it. No child crop, recoloring, numerical
+recomputation or uploaded SVG import is allowed. A conflicting result-series
+encoding requires a new separately validated/accepted child candidate; automatic
+creation of such a candidate is unsupported. Existing child legends and axes stay
+unchanged. A shared composition legend can reference an existing result series
+only when its declared encoding matches the accepted child's existing encoding.
+
+The receipt reports each child's actual minimum font size in composed points and
+scale. Text stays editable. This measurement does not prove glyph coverage,
+clipping freedom or final-size readability; glyph coverage remains `not_verified`.
+A small font is a visible review finding, not an automatic visual PASS. Target
+sizes, layout, sources, encodings and child identities are part of the composition
+IR digest; output-bound visual evidence expires when any of them changes.
+Publication-critical compositions require an independently accepted
+`arw.visual-review.v1` binding the composition's own IR and SVG hashes. The
+compositor never creates that review. #153 supplies actual rasterized benchmarks
+and the independent human-review packet. Tests in
+`tests/integration/test_figure_composition.py` exercise real accepted numeric
+children, two layouts, original v1 reproduction, malformed sources and safe SVG.
