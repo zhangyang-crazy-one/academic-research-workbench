@@ -140,28 +140,28 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 290.336,
+        "height_mm": 288.925,
         "cells": [
           {
             "semantic_id": "tokens",
             "x": 48.0,
             "y": 70.0,
             "width": 410.0,
-            "height": 180.0
+            "height": 170.0
           },
           {
             "semantic_id": "project",
             "x": 48.0,
-            "y": 285.0,
+            "y": 282.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 185.0
           },
           {
             "semantic_id": "result",
             "x": 48.0,
-            "y": 500.0,
+            "y": 509.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 160.0
           }
         ],
         "routes": [
@@ -170,46 +170,46 @@
             "via": [
               [
                 478.0,
-                160.0
+                155.0
               ],
               [
                 478.0,
-                267.0
+                264.0
               ],
               [
                 30.0,
-                267.0
+                264.0
               ],
               [
                 30.0,
-                370.0
+                374.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 730.0
+            "label_y": 726.0
           },
           {
             "semantic_id": "sum",
             "via": [
               [
                 478.0,
-                370.0
+                374.5
               ],
               [
                 478.0,
-                482.0
+                491.0
               ],
               [
                 30.0,
-                482.0
+                491.0
               ],
               [
                 30.0,
-                585.0
+                589.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 764.0
+            "label_y": 760.0
           }
         ],
         "min_font_pt": 8.0,
@@ -250,8 +250,8 @@
               }
             ],
             "steps": [
-              "Initial observed state has no answer.",
-              "Request lookup(key=public-toy)."
+              "Initial state: attempts=0 and answer_present=false.",
+              "Increment attempts; request lookup(key=public-toy)."
             ]
           },
           {
@@ -280,9 +280,9 @@
               }
             ],
             "steps": [
-              "Tool returns observation=found.",
+              "Synthetic lookup returns found or missing.",
               "Append observation to event history.",
-              "Set answer_present=true."
+              "Set answer_present=(observation == found)."
             ]
           },
           {
@@ -405,35 +405,35 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 390.172,
+        "height_mm": 384.175,
         "cells": [
           {
             "semantic_id": "request",
             "x": 48.0,
             "y": 70.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 155.0
           },
           {
             "semantic_id": "observe",
             "x": 48.0,
-            "y": 285.0,
+            "y": 267.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 185.0
           },
           {
             "semantic_id": "decide",
             "x": 48.0,
-            "y": 500.0,
+            "y": 494.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 175.0
           },
           {
             "semantic_id": "done",
             "x": 48.0,
-            "y": 715.0,
+            "y": 711.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 160.0
           }
         ],
         "routes": [
@@ -442,53 +442,53 @@
             "via": [
               [
                 478.0,
-                155.0
+                147.5
               ],
               [
                 478.0,
-                267.0
+                249.0
               ],
               [
                 30.0,
-                267.0
+                249.0
               ],
               [
                 30.0,
-                370.0
+                359.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 945.0
+            "label_y": 928.0
           },
           {
             "semantic_id": "observed",
             "via": [
               [
                 478.0,
-                370.0
+                359.5
               ],
               [
                 478.0,
-                482.0
+                476.0
               ],
               [
                 30.0,
-                482.0
+                476.0
               ],
               [
                 30.0,
-                585.0
+                581.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 979.0
+            "label_y": 962.0
           },
           {
             "semantic_id": "retry",
             "via": [
               [
                 490.0,
-                556.6666666666666
+                552.3333333333334
               ],
               [
                 490.0,
@@ -500,34 +500,34 @@
               ],
               [
                 24.0,
-                155.0
+                147.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 1013.0
+            "label_y": 996.0
           },
           {
             "semantic_id": "stop",
             "via": [
               [
                 478.0,
-                613.3333333333334
+                610.6666666666666
               ],
               [
                 478.0,
-                697.0
+                693.0
               ],
               [
                 30.0,
-                697.0
+                693.0
               ],
               [
                 30.0,
-                800.0
+                791.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 1047.0
+            "label_y": 1030.0
           }
         ],
         "min_font_pt": 8.0,
@@ -657,28 +657,28 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 290.336,
+        "height_mm": 285.397,
         "cells": [
           {
             "semantic_id": "before",
             "x": 48.0,
             "y": 70.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 160.0
           },
           {
             "semantic_id": "revise",
             "x": 48.0,
-            "y": 285.0,
+            "y": 272.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 185.0
           },
           {
             "semantic_id": "after",
             "x": 48.0,
-            "y": 500.0,
+            "y": 499.0,
             "width": 410.0,
-            "height": 170.0
+            "height": 160.0
           }
         ],
         "routes": [
@@ -687,51 +687,54 @@
             "via": [
               [
                 478.0,
-                155.0
+                150.0
               ],
               [
                 478.0,
-                267.0
+                254.0
               ],
               [
                 30.0,
-                267.0
+                254.0
               ],
               [
                 30.0,
-                370.0
+                364.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 730.0
+            "label_y": 716.0
           },
           {
             "semantic_id": "guard",
             "via": [
               [
                 478.0,
-                370.0
+                364.5
               ],
               [
                 478.0,
-                482.0
+                481.0
               ],
               [
                 30.0,
-                482.0
+                481.0
               ],
               [
                 30.0,
-                585.0
+                579.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 764.0
+            "label_y": 750.0
           }
         ],
         "min_font_pt": 8.0,
         "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification"
       }
     }
-  ]
+  ],
+  "task_revision": 2,
+  "supersedes_tasks_sha256": "b1da4bac9889b3a75e824501dfc50d973177052b132d83e0cefe90b27e773a9c",
+  "source_amendment": "Explicit synthetic-task correction after independent round1: initialize/increment retry counter and provide found/missing tool outcomes. Preserve original facts and pixels; do not infer these operations in the renderer."
 }
