@@ -1,0 +1,268 @@
+{
+  "$defs": {
+    "MechanismFinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "scientific_error",
+            "necessary_content_omission",
+            "readability",
+            "reference_gap",
+            "optional_style"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "major",
+            "minor",
+            "suggestion"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "affected_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Affected Ids",
+          "type": "array"
+        },
+        "source_requirement": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Source Requirement",
+          "type": "string"
+        },
+        "pixel_observation": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Pixel Observation",
+          "type": "string"
+        },
+        "difference": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Difference",
+          "type": "string"
+        },
+        "recommendation": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "pass_condition": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Pass Condition",
+          "type": "string"
+        },
+        "uncertainty": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Uncertainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "category",
+        "severity",
+        "affected_ids",
+        "source_requirement",
+        "pixel_observation",
+        "difference",
+        "recommendation",
+        "pass_condition",
+        "uncertainty"
+      ],
+      "title": "MechanismFinding",
+      "type": "object"
+    },
+    "MechanismReviewBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "ir_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ir Sha256",
+          "type": "string"
+        },
+        "svg_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Svg Sha256",
+          "type": "string"
+        },
+        "png_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Png Sha256",
+          "type": "string"
+        },
+        "font_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Font Sha256",
+          "type": "string"
+        },
+        "environment_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Environment Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_sha256",
+        "ir_sha256",
+        "svg_sha256",
+        "png_sha256",
+        "font_sha256",
+        "environment_sha256"
+      ],
+      "title": "MechanismReviewBinding",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "arw.mechanism-advisory-review.v1",
+      "default": "arw.mechanism-advisory-review.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "reviewed",
+        "changes_required",
+        "unavailable",
+        "human_pending"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "binding": {
+      "$ref": "#/$defs/MechanismReviewBinding"
+    },
+    "producer_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Producer Id",
+      "type": "string"
+    },
+    "reviewer_id": {
+      "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+      "title": "Reviewer Id",
+      "type": "string"
+    },
+    "pixels_read": {
+      "title": "Pixels Read",
+      "type": "boolean"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/MechanismFinding"
+      },
+      "maxItems": 40,
+      "title": "Findings",
+      "type": "array"
+    },
+    "reader_retelling": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "maxProperties": 5,
+      "minProperties": 5,
+      "title": "Reader Retelling",
+      "type": "object"
+    },
+    "reference_comparisons": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Reference Comparisons",
+      "type": "array"
+    },
+    "elapsed_seconds": {
+      "minimum": 0,
+      "title": "Elapsed Seconds",
+      "type": "number"
+    },
+    "tool_calls": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Calls"
+    },
+    "tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tokens"
+    },
+    "cost_note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Cost Note",
+      "type": "string"
+    },
+    "human_status": {
+      "const": "human_pending",
+      "default": "human_pending",
+      "title": "Human Status",
+      "type": "string"
+    },
+    "publication_visual_pass": {
+      "const": false,
+      "default": false,
+      "title": "Publication Visual Pass",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "binding",
+    "producer_id",
+    "reviewer_id",
+    "pixels_read",
+    "findings",
+    "reader_retelling",
+    "reference_comparisons",
+    "elapsed_seconds",
+    "cost_note"
+  ],
+  "title": "MechanismAdvisoryReview",
+  "type": "object",
+  "$id": "https://academic-research-workbench.local/schemas/v1/mechanism-advisory-review.schema.json"
+}

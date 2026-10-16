@@ -60,6 +60,7 @@ from arw.kernel.state.research_learning import learning_schema_documents
 from arw.kernel.state.research_memory import research_memory_schema_documents
 from arw.kernel.state.research_startup import research_startup_schema_documents
 from arw.kernel.state.research_direction import research_direction_schema_documents
+from arw.kernel.state.mechanism_figure import mechanism_figure_schema_documents
 from arw.kernel.state.figure_composition import figure_composition_schema_documents
 from arw.kernel.state.result_plot import result_plot_schema_documents
 from arw.kernel.state.submission import (
@@ -83,6 +84,7 @@ RESEARCH_DIRECTION_SCHEMA_NAMES = tuple(research_direction_schema_documents())
 
 PROVENANCE_SCHEMA_NAMES = tuple(provenance_schema_documents())
 RESEARCH_ARTIFACT_SCHEMA_NAMES = tuple(research_artifact_schema_documents())
+MECHANISM_FIGURE_SCHEMA_NAMES = tuple(mechanism_figure_schema_documents())
 FIGURE_COMPOSITION_SCHEMA_NAMES = tuple(figure_composition_schema_documents())
 RESULT_PLOT_SCHEMA_NAMES = tuple(result_plot_schema_documents())
 CLAIM_GRAPH_SCHEMA_NAMES = tuple(claim_graph_schema_documents())
@@ -145,6 +147,7 @@ SCHEMA_NAMES: tuple[str, ...] = (
     + RESEARCH_STARTUP_SCHEMA_NAMES
     + RESEARCH_MEMORY_SCHEMA_NAMES
     + RESEARCH_ARTIFACT_SCHEMA_NAMES
+    + MECHANISM_FIGURE_SCHEMA_NAMES
     + FIGURE_COMPOSITION_SCHEMA_NAMES
     + RESULT_PLOT_SCHEMA_NAMES
     + CLAIM_GRAPH_SCHEMA_NAMES
@@ -353,6 +356,8 @@ def validate_schema_document(name: str, document: Mapping[str, Any]) -> None:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESEARCH_ARTIFACT_SCHEMA_NAMES and candidate != research_artifact_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
+    if name in MECHANISM_FIGURE_SCHEMA_NAMES and candidate != mechanism_figure_schema_documents()[name]:
+        raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in FIGURE_COMPOSITION_SCHEMA_NAMES and candidate != figure_composition_schema_documents()[name]:
         raise SchemaRegistryError(f"{name} differs from its model projection")
     if name in RESULT_PLOT_SCHEMA_NAMES and candidate != result_plot_schema_documents()[name]:
@@ -430,6 +435,8 @@ def regenerate_schemas(destination: Path) -> tuple[tuple[str, str], ...]:
             document = research_startup_schema_documents()[name]
         elif name in RESEARCH_MEMORY_SCHEMA_NAMES:
             document = research_memory_schema_documents()[name]
+        elif name in MECHANISM_FIGURE_SCHEMA_NAMES:
+            document = mechanism_figure_schema_documents()[name]
         elif name in FIGURE_COMPOSITION_SCHEMA_NAMES:
             document = figure_composition_schema_documents()[name]
         elif name in RESULT_PLOT_SCHEMA_NAMES:

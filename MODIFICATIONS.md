@@ -83,3 +83,12 @@ The machine-readable source manifest is authoritative for exact tree, patch, art
   environment evidence. All human decisions remain blank pending independent
   review; no upstream images, scientific-visualization skill, fonts or paid model
   outputs were copied into the source adapter.
+
+
+- Issue #162: first-party mechanism figure contracts/renderer and public synthetic
+  examples; additive `v1_mechanism_svg` capability record and separate advisory
+  `figure-reviewer` instructions in the existing Codex overlay
+  `codex/references/figure_role_routing.md` / `figure_role_rules.json`.
+  Vendored ARS content and its CC BY-NC 4.0 attribution remain unchanged; the
+  overlay changes follow the adapter's existing attribution. No external assets,
+  model service or mandatory editor dependencies are bundled.

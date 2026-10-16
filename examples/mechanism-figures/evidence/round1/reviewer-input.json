@@ -1,0 +1,601 @@
+{
+  "schema_version": "arw.mechanism-advisory-input.v1",
+  "instructions": "Read actual PNG pixels and frozen answers. No producer scores or selection conclusions are provided. Diagnose differences; do not edit or approve publication.",
+  "tasks": [
+    {
+      "id": "representation",
+      "source_answer": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "How does this fixed token sequence become a count vector?",
+        "claim": "One-hot lookup then sequence summation produces the supplied count vector.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "tokens",
+            "component_version": "1",
+            "family": "token_representation",
+            "label": "Concrete token-to-vector mapping",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "tokens",
+                "object_id": "utterance",
+                "state_id": "tokens"
+              }
+            ],
+            "steps": [
+              "Use the supplied two-token vocabulary."
+            ],
+            "tokens": [
+              {
+                "token_id": "tok0",
+                "text": "red",
+                "representation_id": "e_red",
+                "masked": false
+              },
+              {
+                "token_id": "tok1",
+                "text": "blue",
+                "representation_id": "e_blue",
+                "masked": false
+              }
+            ],
+            "axes": [
+              "sequence axis: tok0,tok1",
+              "embedding axis: red,blue"
+            ]
+          },
+          {
+            "semantic_id": "project",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Sum the supplied one-hot vectors",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "frozen",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "tokens",
+                "object_id": "utterance",
+                "state_id": "tokens"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "vector2",
+                "object_id": "utterance",
+                "state_id": "sum"
+              }
+            ],
+            "steps": [
+              "E(red)=[1,0]; E(blue)=[0,1].",
+              "Lookup X=[E(red), E(blue)].",
+              "Sum sequence axis: y=[1,1]."
+            ]
+          },
+          {
+            "semantic_id": "result",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Representation before and after",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "vector2",
+                "object_id": "utterance",
+                "state_id": "sum"
+              }
+            ],
+            "steps": [
+              "Retain the utterance identity; no trained attention."
+            ],
+            "before": "red, blue (ordered tokens)",
+            "after": "y=[1,1] (two-dimensional count vector)"
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "lookup",
+            "source_component": "tokens",
+            "source_port": "out",
+            "target_component": "project",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "ordered token IDs",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "sum",
+            "source_component": "project",
+            "source_port": "out",
+            "target_component": "result",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "two-dimensional count vector",
+            "trigger": "always",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "project",
+        "object_chain": [
+          "tokens",
+          "project",
+          "result"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification",
+      "ir": "representation.ir.json",
+      "svg": "representation.svg",
+      "png": "representation.png",
+      "source_sha256": "71ddcec9e0aa4e0ff2a7b09e271fb5b351be85de601f1edbbd52b7572aa64b49",
+      "ir_sha256": "b455921e2eee7f5420d9a7a484ba815a0ccbf5180522cfcc0f5dbeee93fabe97",
+      "svg_sha256": "4aef7f546b6120c5d07e59e10d0dea2457d295f4ae6c8211df358af4365e8ae1",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "0c4b22783a490dce8cf4c233476f8f4d56c5ebce95abca565f22c312980edfb7",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1715,
+        "width_mm": 180.0,
+        "height_mm": 290.336,
+        "dpi": 150.0,
+        "ink_pixels": 366813,
+        "ink_bounds": [
+          26,
+          22,
+          997,
+          1595
+        ],
+        "border_ink": false,
+        "png_sha256": "748dd5c17a26e4ddd7a29d23ce6137d6673fe74b04b55ee02a09a183f3b5bff7",
+        "pdf_sha256": "837228cc1a64985dbcc9d2eb44293c0e88661f26a2df359436561d18c2ce2d54",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      }
+    },
+    {
+      "id": "tool-loop",
+      "source_answer": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "When does the tool loop return and when does it stop?",
+        "claim": "An observation updates episode state; an explicit predicate selects retry or stop.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "request",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Prepare a deterministic tool request",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "request",
+                "object_id": "call",
+                "state_id": "prepared"
+              }
+            ],
+            "steps": [
+              "Initial observed state has no answer.",
+              "Request lookup(key=public-toy)."
+            ]
+          },
+          {
+            "semantic_id": "observe",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Read observation and update state",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "request",
+                "object_id": "call",
+                "state_id": "prepared"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              }
+            ],
+            "steps": [
+              "Tool returns observation=found.",
+              "Append observation to event history.",
+              "Set answer_present=true."
+            ]
+          },
+          {
+            "semantic_id": "decide",
+            "component_version": "1",
+            "family": "conditional_loop",
+            "label": "Bounded return or stop",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "again",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "done",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "stopped"
+              }
+            ],
+            "steps": [
+              "Check answer_present and attempts < 2."
+            ],
+            "condition": "not answer_present AND attempts < 2",
+            "stop_condition": "answer_present OR attempts >= 2"
+          },
+          {
+            "semantic_id": "done",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Terminal episode state",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "stopped"
+              }
+            ],
+            "steps": [
+              "Return retained observation, without another request."
+            ],
+            "before": "No accepted answer",
+            "after": "Answer found, or bounded no-answer exit"
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "call",
+            "source_component": "request",
+            "source_port": "out",
+            "target_component": "observe",
+            "target_port": "input",
+            "relation_type": "action",
+            "payload": "lookup request and arguments",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "observed",
+            "source_component": "observe",
+            "source_port": "out",
+            "target_component": "decide",
+            "target_port": "input",
+            "relation_type": "observation",
+            "payload": "updated episode and history",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "retry",
+            "source_component": "decide",
+            "source_port": "again",
+            "target_component": "request",
+            "target_port": "input",
+            "relation_type": "control",
+            "payload": "same observed episode",
+            "trigger": "not answer_present AND attempts < 2",
+            "feedback": true
+          },
+          {
+            "semantic_id": "stop",
+            "source_component": "decide",
+            "source_port": "done",
+            "target_component": "done",
+            "target_port": "input",
+            "relation_type": "control",
+            "payload": "terminal episode",
+            "trigger": "answer_present OR attempts >= 2",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "decide",
+        "object_chain": [
+          "request",
+          "observe",
+          "decide",
+          "done"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification",
+      "ir": "tool-loop.ir.json",
+      "svg": "tool-loop.svg",
+      "png": "tool-loop.png",
+      "source_sha256": "ae44c1bd91129da587db07a4a7d29cf8ac4ea616f72e0204b1bedf5b7b26cd5b",
+      "ir_sha256": "dbe9cb4673d7fce2234df5175cd80186bdde40a19568a522ef6d598b64effb7a",
+      "svg_sha256": "050863e4478efdcb5f0f82f72a29f25ec11988855606531e883d5bbdcb76a2c3",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "20e4d1e38d4776dd9e7f4a6181ac21579b83ccf3b8f5d7e5bfc3562e11efd5c0",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 2305,
+        "width_mm": 180.0,
+        "height_mm": 390.172,
+        "dpi": 150.0,
+        "ink_pixels": 400359,
+        "ink_bounds": [
+          25,
+          23,
+          1022,
+          2185
+        ],
+        "border_ink": false,
+        "png_sha256": "8aeea6814d86f6550a6f268f5744dd2f7174d677bf65939c8fb0ec331e96fa60",
+        "pdf_sha256": "b0d7383f3544cce360c010b8c7d0fd14f66dd61fec309a9a22c8905c1052cda2",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      }
+    },
+    {
+      "id": "constraint",
+      "source_answer": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "How does a retained counterexample revise a semantic constraint?",
+        "claim": "A penguin counterexample yields an explicit exception without inventing observations.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "before",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Original rule and counterexample",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "counterexample"
+              }
+            ],
+            "steps": [
+              "Toy domain: birds, penguins and possible flight.",
+              "Counterexample: penguin is a bird that cannot fly."
+            ],
+            "before": "bird -> may_fly",
+            "after": "Counterexample is retained"
+          },
+          {
+            "semantic_id": "revise",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Add a sourced exception guard",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "counterexample"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "guarded"
+              }
+            ],
+            "steps": [
+              "Retain bird(penguin).",
+              "Exclude penguins from may_fly rule.",
+              "Keep other birds as unknown, not observed flight."
+            ]
+          },
+          {
+            "semantic_id": "after",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Revised constraint with a known limit",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "guarded"
+              }
+            ],
+            "steps": [
+              "No inference that every other bird actually flies."
+            ],
+            "before": "Unconditional bird rule",
+            "after": "bird AND not penguin -> may_fly (conceptual)"
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "counterexample",
+            "source_component": "before",
+            "source_port": "out",
+            "target_component": "revise",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "original rule plus counterexample",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "guard",
+            "source_component": "revise",
+            "source_port": "out",
+            "target_component": "after",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "guarded rule; unknown flight retained",
+            "trigger": "always",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "revise",
+        "object_chain": [
+          "before",
+          "revise",
+          "after"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification",
+      "ir": "constraint.ir.json",
+      "svg": "constraint.svg",
+      "png": "constraint.png",
+      "source_sha256": "19a4f7717679c7cd52aeccfe2551677e74dd0e57e32600c57848475a627dc374",
+      "ir_sha256": "6036aa2bd0ddc24b5481eff0143d69e46ff1df65504c3700b49383f3fe819f7d",
+      "svg_sha256": "442a29a9952c66c18c28082d203e4d861796f7cd637c1e148dd5f2da4a9b6090",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "5697fb0fe8ce86032ce2b9475af08fd4a5e284fa6ab58e8b427e7139d082e2e7",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1715,
+        "width_mm": 180.0,
+        "height_mm": 290.336,
+        "dpi": 150.0,
+        "ink_pixels": 370353,
+        "ink_bounds": [
+          26,
+          22,
+          997,
+          1595
+        ],
+        "border_ink": false,
+        "png_sha256": "13b234f1d9365024eb73a1e7fb877f30027a70cc649ccfbab51f3376dce44739",
+        "pdf_sha256": "4dc22034793d5012e9efdc1c02d6cc7f50977b63b1fdaed00b6a34b0a101a07f",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      }
+    }
+  ],
+  "human_status": "human_pending"
+}

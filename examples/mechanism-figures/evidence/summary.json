@@ -1,0 +1,36 @@
+{
+  "scope": "Issue 162 milestone 1; two actual advisory review rounds; not final mechanism/visual acceptance",
+  "structural_normal": 3,
+  "structural_normal_flagged": 0,
+  "structural_faults": 16,
+  "structural_detected": 16,
+  "structural_count_note": "Round2 report retains its original 15 controls; supplemental/report.json adds full stop-text omission, detected structurally and actually rasterized, without a third independent pixel review.",
+  "independent_blind_cases": 6,
+  "independent_case_observations": 6,
+  "confirmed_scientific_errors_on_normal": 0,
+  "generalization": "No population sensitivity or specificity claim; advisory readability/source-scope findings on normal figures are retained.",
+  "original_findings": {
+    "resolved": 2,
+    "partly_resolved": 3
+  },
+  "new_normal_findings": 2,
+  "independent_full_stop_omission_pixel_review": "not_run: two-round review budget exhausted",
+  "human_status": "human_pending",
+  "publication_visual_pass": false,
+  "automatic_model_api_calls": 0,
+  "review_harness": "Codex native subagent, gpt-6.1-sol/high in this development run; not a product requirement",
+  "review_cost": {
+    "wall_seconds": 396.392,
+    "nested_tool_calls": 43,
+    "tokens": null,
+    "amount": null,
+    "note": "Actual reviewer-reported sampled intervals/tool counts; token/monetary metering unavailable."
+  },
+  "deferred": [
+    "three source-preserving explanation strategies",
+    "optional draw.io editor round-trip and privacy checks",
+    "remaining partial/new visual and scope findings",
+    "independent human acceptance"
+  ],
+  "native_review_rounds": 2
+}

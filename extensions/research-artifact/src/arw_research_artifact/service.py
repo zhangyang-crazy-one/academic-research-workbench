@@ -49,6 +49,12 @@ class ResearchArtifactService:
                 "renderer_hints", self.plot_renderer.identity.model_dump(mode="json")
             )
             return ResultPlotIR.model_validate_json(json.dumps(specification))
+        if specification.get("artifact_kind") == "mechanism_figure":
+            from arw.kernel.state.mechanism_figure import MechanismFigureIR
+            from .mechanism import MechanismRenderer
+            specification = dict(specification)
+            specification.setdefault("renderer_hints", MechanismRenderer().identity.model_dump(mode="json"))
+            return MechanismFigureIR.model_validate_json(json.dumps(specification))
         if specification.get("artifact_kind") == "figure_composition":
             from arw.kernel.state.figure_composition import FigureCompositionIR
             from .composition import CompositionRenderer
@@ -60,6 +66,9 @@ class ResearchArtifactService:
         )
 
     def _renderer_for(self, ir):
+        if ir.artifact_kind == "mechanism_figure":
+            from .mechanism import MechanismRenderer
+            return MechanismRenderer()
         if ir.artifact_kind == "figure_composition":
             from .composition import CompositionRenderer
             return CompositionRenderer()
@@ -112,6 +121,9 @@ class ResearchArtifactService:
         return replay_run(run_root)
 
     def _render(self, ir, *, run_root=None, resolution_context=None, compiled=None):
+        if ir.artifact_kind == "mechanism_figure":
+            from .mechanism import render_mechanism
+            return render_mechanism(self, ir, run_root=run_root, resolution_context=resolution_context)
         if ir.artifact_kind == "figure_composition":
             from .composition import render_composition
             raw, output, _ = render_composition(self, ir, run_root=run_root, resolution_context=resolution_context)
@@ -248,6 +260,12 @@ class ResearchArtifactService:
         hard_caption_checks=False,
         attestation_verifier=None,
     ):
+        if ir.artifact_kind == "mechanism_figure":
+            if hard_caption_checks:
+                raise IRValidationFault("result_plot_required")
+            from .mechanism import qualify_mechanism
+            return qualify_mechanism(self, ir, run_root=run_root, request=request,
+                visual_review_id=visual_review_id, resolution_context=resolution_context)
         if ir.artifact_kind == "figure_composition":
             if hard_caption_checks:
                 raise IRValidationFault("result_plot_required")
@@ -474,6 +492,9 @@ class ResearchArtifactService:
         if json.loads(raw).get("artifact_kind") == "figure_composition":
             from arw.kernel.state.figure_composition import FigureCompositionReceipt
             model = FigureCompositionReceipt
+        if json.loads(raw).get("artifact_kind") == "mechanism_figure":
+            from arw.kernel.state.mechanism_figure import MechanismFigureReceipt
+            model = MechanismFigureReceipt
         receipt = model.model_validate_json(raw)
         for output in receipt.outputs:
             if not output.path.startswith(prefix + "/"):
@@ -518,6 +539,9 @@ class ResearchArtifactService:
         if json.loads(raw).get("artifact_kind") == "figure_composition":
             from arw.kernel.state.figure_composition import FigureCompositionIR
             model = FigureCompositionIR
+        if json.loads(raw).get("artifact_kind") == "mechanism_figure":
+            from arw.kernel.state.mechanism_figure import MechanismFigureIR
+            model = MechanismFigureIR
         ir = model.model_validate_json(raw)
         _, output = self._render(
             ir, run_root=run_root, resolution_context=resolution_context
