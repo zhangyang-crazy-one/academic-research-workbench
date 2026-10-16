@@ -25,13 +25,26 @@ def rewrite_rows(directory, transform):
         writer.writerows(rows)
 
 
-def test_actual_answers_and_optional_dimension_choice_are_retained():
+def test_actual_answers_and_optional_dimension_choice_are_retained(tmp_path):
     result = check(KIT)
+    assert result["source_history_comparison_ready"] is True
+    assert result["annotation_counts"] == {
+        "pending": 0,
+        "kept": 7,
+        "superseded": 0,
+        "abandoned": 2,
+        "unknown": 1,
+    }
+    directory = shutil.copytree(KIT, tmp_path / "kit")
+    shutil.copyfile(
+        directory / "owner-policy-responses.csv", directory / "annotations.csv"
+    )
+    result = check(directory)
     assert result["owner_annotation_count"] == 10
     assert result["status"] == "owner_annotations_recorded"
     assert result["source_history_comparison_ready"] is False
     assert result["agreement"] == "not_evaluated"
-    with (KIT / "annotations.csv").open(newline="") as stream:
+    with (KIT / "owner-policy-responses.csv").open(newline="") as stream:
         rows = list(csv.DictReader(stream))
     assert rows[2]["selected_option"] == "B"
     assert rows[2]["human_annotation"] == "B 应该选择允许缺省。"
@@ -52,6 +65,9 @@ def test_actual_answers_and_optional_dimension_choice_are_retained():
 )
 def test_invalid_transcription_is_rejected(tmp_path, field, value, message):
     directory = shutil.copytree(KIT, tmp_path / "kit")
+    shutil.copyfile(
+        directory / "owner-policy-responses.csv", directory / "annotations.csv"
+    )
     rewrite_rows(directory, lambda rows: rows[0].update({field: value}))
     with pytest.raises(ValueError, match=message):
         check(directory)
