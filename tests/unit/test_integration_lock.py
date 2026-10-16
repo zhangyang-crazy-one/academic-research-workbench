@@ -220,7 +220,7 @@ def _runtime_stage(
     return root
 
 
-@pytest.mark.parametrize("version", ("0.1.0", "0.2.0"))
+@pytest.mark.parametrize("version", ("0.1.0", "0.2.0", "0.2.1"))
 @pytest.mark.parametrize("suffix", ("", "+codex.codex-0-160-1-92f3ea5-20261008"))
 def test_arw_runtime_preserves_legacy_and_current_version_bindings(
     tmp_path: Path, version: str, suffix: str
@@ -251,6 +251,8 @@ def test_arw_runtime_preserves_legacy_and_current_version_bindings(
         ("0.3.0", "0.3.0", "0.3.0", "package version"),
         ("0.2.0", "0.2.0+falsified", "0.2.0", "plugin version"),
         ("0.2.0", "0.2.0+codex.", "0.2.0", "plugin version"),
+        ("0.2.1", "0.2.0", "0.2.1", "plugin version"),
+        ("0.2.1", "0.2.1", "0.2.0", "wheel filename"),
     ),
 )
 def test_arw_runtime_rejects_mismatched_or_unsupported_versions(
@@ -1144,7 +1146,7 @@ def _refresh_canary_stage_identity(paths: dict[str, Path]) -> None:
     paths["canary"].write_bytes(canonical_json_bytes(canary))
 
 
-@pytest.mark.parametrize("version", ("0.1.0", "0.2.0"))
+@pytest.mark.parametrize("version", ("0.1.0", "0.2.0", "0.2.1"))
 def test_legacy_and_current_complete_integration_locks_round_trip(
     tmp_path: Path, version: str
 ) -> None:

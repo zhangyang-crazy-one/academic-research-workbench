@@ -384,7 +384,7 @@ replaced by CI's technical bundle. Manual release dispatch supplies
 `candidate_run_id`, `candidate_artifact_name`, and `release_tag`. Publication
 uses an explicit dispatch on `main` after an owner dispatch of
 `release-authority.yml` has signed the exact qualified draft asset. See
-[the v0.2.0 release procedure](docs/verification/release-v0.2.0.md) for
+[the v0.2.1 release preparation](docs/verification/release-v0.2.1.md) for
 candidate transfer and declaration inputs.
 
 Execution can also select explicit command or API harnesses by assignment or role.

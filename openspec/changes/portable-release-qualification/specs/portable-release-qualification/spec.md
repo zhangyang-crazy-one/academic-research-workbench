@@ -33,3 +33,8 @@ Specific execution-platform qualifications SHALL remain available as optional di
 #### Scenario: Existing evidence reader
 - **WHEN** a legacy qualified bundle is supplied
 - **THEN** the existing reader verifies its original bindings without rewriting the historical receipt
+
+#### Scenario: New stability package identity
+- **WHEN** a 0.2.1 stage is inspected or an optional IntegrationLock is produced
+- **THEN** package, plugin and wheel identities must agree on 0.2.1, including a valid optional plugin cache suffix
+- **AND** retained 0.1.0 and 0.2.0 locks remain readable without rewriting them or treating them as fresh release qualification
