@@ -18,6 +18,11 @@ The verifier SHALL bind actual command outputs, installed stage and candidate wh
 - **WHEN** command logs, stage bytes, executable permission bits or candidate identity change after qualification
 - **THEN** creation, transfer and ordinary technical release checks reject the evidence
 
+#### Scenario: Complete registered schema inventory
+- **WHEN** the producer stages all currently registered shared schemas, including a registry larger than 128 entries
+- **THEN** the bounded build-identity schema accepts the complete inventory without omitting registered schemas
+- **AND** inventories above the explicit 256-entry capacity, missing registered entries and unregistered paths remain rejected at their respective validation boundaries
+
 #### Scenario: Explicit supported interpreter outside PATH
 - **WHEN** the selected compatible Python interpreter is outside PATH and PATH exposes only an older interpreter
 - **THEN** the private installed-core probe passes the selected interpreter explicitly to the launcher without forwarding model credentials or imposing an exact Python version
