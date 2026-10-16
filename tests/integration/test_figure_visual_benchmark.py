@@ -223,10 +223,10 @@ def test_reference_detector_uses_geometry_direction_and_identity():
     import xml.etree.ElementTree as ET
 
     expected = ET.fromstring(
-        '<svg viewBox="0 0 100 100"><circle id="value.one" cx="10" cy="20" r="4" fill="#000000"/><g id="edge.one"><path marker-end="url(#arrow)"/></g><g id="object.one"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle id="value.one" cx="10" cy="20" r="4" fill="#000000"/><g id="edge.one"><path marker-end="url(#arrow)"/></g><g id="object.one"/></svg>'
     )
     actual = ET.fromstring(
-        '<svg viewBox="0 0 10 10"><circle id="value.one" cx="10" cy="50" r="4" fill="#ff0000"/><g id="edge.one"><path marker-start="url(#arrow)"/></g></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle id="value.one" cx="10" cy="50" r="4" fill="#ff0000"/><g id="edge.one"><path marker-start="url(#arrow)"/></g></svg>'
     )
     delta = benchmark.reference_differences(expected, actual)
     assert delta["missing_ids"] == ["object.one"]
