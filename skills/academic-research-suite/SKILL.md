@@ -12,8 +12,7 @@ allowed-tools: Read, Glob, Grep, WebSearch, Bash(uv *), Bash(python *), Bash(pyt
 
 For new directions, use `research start/status/resume`; read the [shared startup contract](references/research-direction-workflow.md) before selecting a paper narrative.
 
-This is a Codex adapter for the ARS suite. The vendored ARS content lives under
-`ars/`; keep it as source material and route through this file first.
+This Codex adapter routes to vendored ARS source material under `ars/`.
 
 ## Versioning
 
@@ -401,8 +400,9 @@ open full text, user-supplied local full text, or inaccessible full text.
 
 ## Manuscript Artifact and Figure Boundaries
 
-Read [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md)
-when drafting manuscript-facing text, figures, tables, captions or exports.
+For figures, first apply [figure role routing](codex/references/figure_role_routing.md) before upstream templates.
+For manuscript text, figures, captions and exports, read
+[manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md).
 
 ## Fact-Locked Results Revision and Manuscript Hygiene
 
