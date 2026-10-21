@@ -8,7 +8,7 @@ from __future__ import annotations
 
 # The staged adapter digest covers names and bytes, including dynamic tree
 # entries copied by stage-plugin.
-ARS_STAGE_TREE_SHA256 = "6c5ee03ea37e56cb706ae7eaf245ec3ecaec70006e07fe6e2ecb6c37fa4bc3f5"
+ARS_STAGE_TREE_SHA256 = "b30c7ce5fb7e6361a77d322e3aa471feb25490d9247af5c52e57d8a23ad2892f"
 
 STATIC_STAGE_PATHS = frozenset({
     'schemas/v1/core-route.schema.json',
