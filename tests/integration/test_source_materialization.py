@@ -114,6 +114,12 @@ def test_materializer_tree_digest_uses_the_manifest_wire_encoding() -> None:
 
 @pytest.mark.requires_materialized_sources
 @pytest.mark.requires_offline_network_isolation
+@pytest.mark.requires_retained_evidence(
+    "build/evidence/phase-01/pre-vendor-license/receipt.json",
+    "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+    ".file-base/bin/file-base",
+    ".file-base/build-evidence.json",
+)
 def test_network_denied_verification_retains_namespace_and_syscall_evidence(tmp_path: Path) -> None:
     offline = REPOSITORY_ROOT / "scripts/offline-exec"
     verifier = REPOSITORY_ROOT / "scripts/verify-sources"

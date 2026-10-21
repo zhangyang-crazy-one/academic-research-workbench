@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
+pytestmark = pytest.mark.requires_retained_evidence(
+    "build/evidence/phase-01/pre-vendor-license/receipt.json",
+    "build/evidence/phase-01/pre-vendor-license/commands/native-invocations.log",
+    "build/evidence/phase-01/pre-vendor-license/commands/001-native-gate-selftest/command.json",
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
