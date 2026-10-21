@@ -1,0 +1,7 @@
+id,score,category,series
+baseline.0,0.83,toy,baseline
+baseline.1,0.831,toy,baseline
+baseline.2,0.832,toy,baseline
+proposed.0,0.831,toy,proposed
+proposed.1,0.832,toy,proposed
+proposed.2,0.833,toy,proposed
