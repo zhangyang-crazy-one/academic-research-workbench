@@ -153,3 +153,33 @@ def test_fresh_process_rehashes_changed_file(tmp_path):
         results.append(result.stdout.strip())
         assert results[-1] == hashlib.sha256(raw).hexdigest()
     assert results[0] != results[1]
+
+
+def test_launcher_reuses_one_large_payload_within_the_same_identity_check(tmp_path):
+    launcher = (
+        Path(__file__).resolve().parents[2] / "bin/arw"
+    ).read_text(encoding="utf-8")
+    start = launcher.index("def sha(path):")
+    end = launcher.index("def object_at(relative):", start)
+    namespace = {"digest_cache": {}, "os": os, "hashlib": hashlib}
+    exec(launcher[start:end], namespace)
+    payload = tmp_path / "native-payload"
+    payload.write_bytes(b"native" * 300000)
+    reads = {"count": 0}
+    real_open = Path.open
+
+    def counted_open(self, *args, **kwargs):
+        if self == payload:
+            reads["count"] += 1
+        return real_open(self, *args, **kwargs)
+
+    Path.open = counted_open
+    try:
+        first = namespace["sha"](payload)
+        second = namespace["sha"](payload)
+    finally:
+        Path.open = real_open
+    assert first == second == hashlib.sha256(payload.read_bytes()).hexdigest()
+    assert reads["count"] == 1
+    payload.write_bytes(b"changed native bytes")
+    assert namespace["sha"](payload) == hashlib.sha256(payload.read_bytes()).hexdigest()

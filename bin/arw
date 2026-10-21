@@ -287,18 +287,36 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
 
 plugin_root = Path(sys.argv[1]).resolve()
 wheel_dir = Path(sys.argv[2]).resolve()
+digest_cache = {}
 def sha(path):
+    key = os.fspath(path)
+    before = path.stat()
+    identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    cached = digest_cache.get(key)
+    if cached is not None and cached[0] == identity:
+        return cached[1]
     value = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
-    return value.hexdigest()
+    digest = value.hexdigest()
+    after = path.stat()
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if identity != after_identity:
+        digest_cache.pop(key, None)
+        raise SystemExit(f"staged file changed while hashing: {path}")
+    if cached is not None and digest != cached[1]:
+        digest_cache.pop(key, None)
+        return sha(path)
+    digest_cache[key] = (after_identity, digest)
+    return digest
 
 def object_at(relative):
     path = plugin_root / relative
