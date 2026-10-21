@@ -1,0 +1,66 @@
+{
+  "version": "arw.figure-role-rules.v1",
+  "priority": [
+    "scientific_truth_and_safety",
+    "verified_venue_and_explicit_author",
+    "matching_role",
+    "optional_style"
+  ],
+  "common": {
+    "scientific_truth": "Every datum, object, relation and uncertainty must be source-grounded; conceptual elements must be labelled. No invented causal edge or result.",
+    "safe_output": "Use the selected backend contract; no scripts, external SVG references, arbitrary execution or admission bypass.",
+    "physical_readability": "Assess fonts and strokes at the declared physical size; pixels and a valid SVG do not establish publication readability.",
+    "caption_boundary": "Figure titles and explanations belong outside the canvas; panel tags and short object labels are allowed.",
+    "format_priority": "Verified venue constraints and explicit author choices apply within scope; report conflicts, retain factual/safety rules and use one font/title policy."
+  },
+  "roles": {
+    "audit_view": {
+      "evidence_status": "Make source, state and limitations explicit; audit annotations are not manuscript labels."
+    },
+    "quantitative": {
+      "quantitative_axes": "Use honest axes/units when encoding values, preserving all data, intervals and precision.",
+      "uncertainty_semantics": "Distinguish raw points, precomputed intervals and distributions; never invent an interval.",
+      "fair_comparison": "No misleading comparison perspective or decorative depth that distorts numerical comparison."
+    },
+    "schematic": {
+      "typed_relations": "Differentiate control, data and support relations with explicit labels and evidence. Axes and APA statistics formatting are not universal schematic requirements.",
+      "sourced_depth": "Spatial depth is allowed when it expresses a sourced scientific object or mechanism; renderer support must be checked."
+    },
+    "composite": {
+      "child_roles": "Route each child panel independently; preserve child units and role rules.",
+      "panel_argument": "Specify reading order, meaningful panel relationships and stable shared semantic encoding."
+    }
+  },
+  "optional": {
+    "strict_box": "Apply the explicit strict SVG box-diagram workflow, including its geometry and inspection checks.",
+    "flat_minimal_muted": "Use flat/minimal/muted treatment only because this profile was explicitly selected."
+  },
+  "backends": {
+    "v1_result_svg": {
+      "roles": [
+        "quantitative"
+      ],
+      "capabilities": [
+        "point_estimates",
+        "raw_points",
+        "intervals",
+        "single_panel",
+        "editable_text"
+      ],
+      "font_family": "Noto Sans CJK SC, sans-serif"
+    },
+    "v1_schematic_svg": {
+      "roles": [
+        "schematic",
+        "audit_view"
+      ],
+      "capabilities": [
+        "labelled_nodes",
+        "typed_edges",
+        "single_panel",
+        "editable_text"
+      ],
+      "font_family": "Noto Sans CJK SC, sans-serif"
+    }
+  }
+}

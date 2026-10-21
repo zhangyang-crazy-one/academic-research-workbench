@@ -401,8 +401,7 @@ open full text, user-supplied local full text, or inaccessible full text.
 
 ## Manuscript Artifact and Figure Boundaries
 
-Read [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md)
-when drafting manuscript-facing text, figures, tables, captions or exports.
+Apply [figure role routing](codex/references/figure_role_routing.md) before [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md).
 
 ## Fact-Locked Results Revision and Manuscript Hygiene
 
