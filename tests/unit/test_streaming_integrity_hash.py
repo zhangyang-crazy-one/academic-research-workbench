@@ -161,15 +161,16 @@ def test_launcher_reuses_one_large_payload_within_the_same_identity_check(tmp_pa
     ).read_text(encoding="utf-8")
     start = launcher.index("def sha(path):")
     end = launcher.index("def object_at(relative):", start)
-    namespace = {"digest_cache": {}, "os": os, "hashlib": hashlib}
-    exec(launcher[start:end], namespace)
+    namespace = {"os": os, "hashlib": hashlib}
+    exec("digest_cache = {}\n" + launcher[start:end], namespace)
     payload = tmp_path / "native-payload"
     payload.write_bytes(b"native" * 300000)
     reads = {"count": 0}
     real_open = Path.open
 
     def counted_open(self, *args, **kwargs):
-        if self == payload:
+        mode = kwargs.get("mode", args[0] if args else "r")
+        if self == payload and "b" in mode and "w" not in mode and "a" not in mode and "+" not in mode:
             reads["count"] += 1
         return real_open(self, *args, **kwargs)
 
@@ -182,4 +183,36 @@ def test_launcher_reuses_one_large_payload_within_the_same_identity_check(tmp_pa
     assert first == second == hashlib.sha256(payload.read_bytes()).hexdigest()
     assert reads["count"] == 1
     payload.write_bytes(b"changed native bytes")
-    assert namespace["sha"](payload) == hashlib.sha256(payload.read_bytes()).hexdigest()
+    Path.open = counted_open
+    try:
+        changed = namespace["sha"](payload)
+    finally:
+        Path.open = real_open
+    assert changed == hashlib.sha256(payload.read_bytes()).hexdigest()
+    assert reads["count"] == 3
+
+    original = payload.read_bytes()
+    Path.open = counted_open
+    real_stat = Path.stat
+
+    def stable_identity(self, *args, **kwargs):
+        result = real_stat(self, *args, **kwargs)
+        if self != payload:
+            return result
+        return os.stat_result((
+            result.st_mode, result.st_ino, result.st_dev, result.st_nlink,
+            result.st_uid, result.st_gid, len(original), result.st_atime,
+            result.st_mtime, result.st_ctime,
+        ))
+
+    Path.stat = stable_identity
+    try:
+        payload.write_bytes(b"same identity, different bytes")
+        recomputed = namespace["sha"](payload)
+    finally:
+        Path.stat = real_stat
+        Path.open = real_open
+    assert recomputed == hashlib.sha256(payload.read_bytes()).hexdigest()
+    assert recomputed != hashlib.sha256(original).hexdigest()
+    # The conflicting cached digest is discarded, then the replacement is read once.
+    assert reads["count"] == 5

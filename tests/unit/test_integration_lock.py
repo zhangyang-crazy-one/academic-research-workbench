@@ -4024,8 +4024,7 @@ def test_one_audit_reuses_a_payload_digest_and_rejects_replacement(tmp_path: Pat
     assert reads == [payload]
 
     payload.write_bytes(b"alpha-replaced")
-    with pytest.raises(IntegrationLockError, match="file changed while hashing"):
-        cache.digest(payload)
+    assert cache.digest(payload) == original(payload)
     assert len(reads) == 2
 
     fresh = integration_lock_module._AuditDigestCache()

@@ -1052,7 +1052,7 @@ class _AuditDigestCache:
         if not _VerifiedDigest(before, digest).matches(after):
             self._entries.pop(key, None)
             raise IntegrationLockError(f"file changed while hashing: {path}")
-        if cached is not None and digest != cached.digest:
+        if cached is not None and digest != cached.digest and cached.matches(after):
             self._entries.pop(key, None)
             raise IntegrationLockError(f"file changed while hashing: {path}")
         self._entries[key] = _VerifiedDigest(after, digest)
