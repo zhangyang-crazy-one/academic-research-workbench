@@ -5,6 +5,14 @@ for reproducible and auditable research runs. Canonical run state is kept in
 the append-only ledger; file-base and research-graph indexes are disposable
 projections.
 
+## Optional research figure assets
+
+The [200-object research figure pack](assets/research-figures/README.md) contains
+editable SVGs, transparent PNGs, original generated prototypes and prompts, with
+an offline searchable gallery. It is a repository-only resource, not an installed
+ARW backend or a scientific-validation claim; see its provenance and licensing
+notes before reuse.
+
 ## ARS integration boundary
 
 ARW uses the current locally maintained and reshaped Academic Research Suite

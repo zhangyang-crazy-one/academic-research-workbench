@@ -33,6 +33,9 @@ storm = [
   "tavily-python>=0.7.27",
 ]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/assets/research-figures"]
+
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/arw",
