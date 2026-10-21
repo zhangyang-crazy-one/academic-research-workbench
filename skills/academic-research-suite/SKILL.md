@@ -401,9 +401,7 @@ open full text, user-supplied local full text, or inaccessible full text.
 
 ## Manuscript Artifact and Figure Boundaries
 
-For figures, first apply [figure role routing](codex/references/figure_role_routing.md) before upstream templates.
-For manuscript text, figures, captions and exports, read
-[manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md).
+Apply [figure role routing](codex/references/figure_role_routing.md) before [manuscript artifact and figure boundaries](codex/references/manuscript_artifact_and_figures.md).
 
 ## Fact-Locked Results Revision and Manuscript Hygiene
 
