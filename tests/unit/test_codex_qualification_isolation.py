@@ -20,10 +20,39 @@ def module():
     return instance
 
 
+def _namespace_probe_skip(*, nested: bool = False) -> str | None:
+    """Skip when this runner cannot host the actual namespace probe."""
+    if not shutil.which("bwrap") or not shutil.which("node"):
+        return "bubblewrap and Node are required for this actual namespace probe"
+    node = Path(shutil.which("node") or "").resolve()
+    if not node.is_file() or node.parent.name != "bin":
+        return "the exact Node runtime for the Codex launcher is unavailable"
+    probe = [
+        "bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/",
+        "--proc", "/proc", "--dev", "/dev",
+    ]
+    if nested:
+        # The alias test creates a second namespace from inside the first.
+        probe += ["--", "bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/",
+                  "--proc", "/proc", "--dev", "/dev"]
+    probe += ["--", "/bin/true"]
+    result = subprocess.run(
+        probe,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode != 0:
+        return "bubblewrap user namespaces are unavailable on this runner"
+    return None
+
+
 @pytest.mark.parametrize("symlink", [None, "outside", "inside"])
 def test_real_namespace_executes_only_mounted_runtime_and_keeps_host_files_hidden(tmp_path, symlink):
-    if not shutil.which("bwrap") or not shutil.which("node"):
-        pytest.skip("bubblewrap and Node are required for this actual namespace probe")
+    reason = _namespace_probe_skip()
+    if reason:
+        pytest.skip(reason)
     code = module()
     package = tmp_path / "private-prefix/lib/node_modules/codex"
     (package / "bin").mkdir(parents=True)
@@ -75,8 +104,9 @@ def test_real_installed_codex_version_is_visible_without_authentication(tmp_path
 @pytest.mark.parametrize("visible", ["/usr/local/bin", "/etc"])
 @pytest.mark.parametrize("native", [False, True])
 def test_visible_launcher_through_hidden_middle_alias_executes_in_actual_namespace(tmp_path, visible, native):
-    if not shutil.which("bwrap") or not shutil.which("node"):
-        pytest.skip("bubblewrap and Node are required for this actual namespace probe")
+    reason = _namespace_probe_skip(nested=True)
+    if reason:
+        pytest.skip(reason)
     package = tmp_path / "private-prefix/lib/node_modules/codex"
     (package / "bin").mkdir(parents=True)
     (package / "package.json").write_text('{"type":"module"}')

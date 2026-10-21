@@ -746,6 +746,25 @@ PY
     fi
     exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli files "$@"
     ;;
+  resume)
+    # Ordinary resume stays on the generic runtime path. A memory handoff
+    # must bind the same installed manifest as `memory`, or cli.py rejects
+    # a root without a manifest before recovery starts (#145).
+    for arg in "$@"; do
+      if [[ "$arg" == "--memory-handoff" || "$arg" == --memory-handoff=* ]]; then
+        [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
+          || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
+        export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
+        break
+      fi
+    done
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+      export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
+    fi
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli "$COMMAND" "$@"
+    ;;
   *)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"

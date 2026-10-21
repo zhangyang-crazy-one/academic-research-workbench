@@ -1,8 +1,10 @@
 """Canonical memory behavior, bounded recall, governance, and harness isolation."""
 
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from arw_research_memory.project import MemoryAccessDenied, initialize_project
@@ -536,6 +538,111 @@ def test_standard_passport_resume_consumes_handoff(tmp_path):
         json.loads(result.stdout)["memory_handoff"]["next_concrete_action"]
         == "Evaluate the paired comparison"
     )
+
+
+def _launcher_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("ARW_PLUGIN_MANIFEST", None)
+    env.pop("ARW_PLUGIN_ROOT", None)
+    env["ARW_RUNTIME"] = "local-dev"
+    return env
+
+
+def test_launcher_resume_memory_handoff_binds_manifest(tmp_path):
+    from arw.kernel.execution.runtime import RuntimeCommandService
+    from arw.kernel.state.models import CheckpointRequest
+
+    root, service = prepared(tmp_path)
+    saved = service.save(handoff(root), request=request(root))
+    checkpoint = RuntimeCommandService(root).create_checkpoint(
+        CheckpointRequest.model_validate(
+            {
+                **request(root, 172).model_dump(),
+                "checkpoint_kind": "explicit",
+                "fresh_until": None,
+            }
+        )
+    )
+    assert checkpoint.accepted
+    resume_request = {
+        **request(root, 173).model_dump(),
+        "actor_role": "operator",
+        "passport_sha256": checkpoint.state.current_passport_sha256,
+    }
+    path = root / "resume-request.json"
+    path.write_text(json.dumps(resume_request))
+    launcher = Path(__file__).resolve().parents[2] / "bin" / "arw"
+    result = subprocess.run(
+        [
+            str(launcher),
+            "resume",
+            "--run-root",
+            str(root),
+            "--request",
+            str(path),
+            "--memory-handoff",
+            saved["memory_id"],
+            "--memory-project-root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_launcher_env(),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["accepted"] is True
+    assert (
+        payload["memory_handoff"]["next_concrete_action"]
+        == "Evaluate the paired comparison"
+    )
+    assert "plugin-manifest-missing" not in result.stderr
+
+
+def test_launcher_ordinary_resume_does_not_require_manifest(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "bin" / "arw"
+    result = subprocess.run(
+        [str(launcher), "resume", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_launcher_env(),
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "usage: arw resume" in result.stdout
+    assert "plugin-manifest-missing" not in result.stderr
+
+
+def test_launcher_resume_handoff_rejects_missing_manifest(tmp_path):
+    plugin = tmp_path / "plugin"
+    (plugin / "bin").mkdir(parents=True)
+    source = Path(__file__).resolve().parents[2]
+    launcher = plugin / "bin" / "arw"
+    launcher.write_bytes((source / "bin" / "arw").read_bytes())
+    launcher.chmod(0o755)
+    (plugin / ".venv").symlink_to(source / ".venv", target_is_directory=True)
+    result = subprocess.run(
+        [
+            str(launcher),
+            "resume",
+            "--memory-handoff",
+            "memory.missing",
+            "--run-root",
+            str(tmp_path / "run"),
+            "--request",
+            str(tmp_path / "request.json"),
+            "--memory-project-root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_launcher_env(),
+    )
+    assert result.returncode == 66, result.stdout + result.stderr
+    assert "plugin-manifest-missing" in result.stderr
 
 
 def test_successor_event_crash_retry_finishes_supersession(tmp_path):

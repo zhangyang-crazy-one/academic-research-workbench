@@ -121,8 +121,23 @@ jobs:
             src/arw/files_opt_in.py src/arw/platform_support.py
           .venv/bin/pyright src/arw/kernel/core \
             src/arw/files_opt_in.py src/arw/platform_support.py
-      - name: Materialize pinned source snapshots
+      - name: Restore pinned legal receipt and materialize source snapshots
         run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          err = 'pinned legal receipt digest mismatch'
+          assert sha == manifest['pre_vendor_receipt']['sha256'], err
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
+          PY
           ./scripts/materialize-sources --clean
       - name: Verify source manifest wire digests
         env:
