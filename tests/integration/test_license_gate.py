@@ -132,7 +132,10 @@ def _refresh_wheel_evidence(wheel: Path, evidence_path: Path) -> None:
 
 
 @pytest.mark.requires_materialized_sources
-@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_retained_evidence(
+    "build/evidence/phase-01/pre-vendor-license/receipt.json",
+    "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+)
 def test_gate_rejects_resealed_wheel_without_required_license(tmp_path: Path) -> None:
     wheel, evidence_path = _build_candidate(tmp_path / "valid-candidate")
     with zipfile.ZipFile(wheel) as source:
@@ -167,7 +170,10 @@ def test_gate_rejects_resealed_wheel_without_required_license(tmp_path: Path) ->
 
 
 @pytest.mark.requires_materialized_sources
-@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_retained_evidence(
+    "build/evidence/phase-01/pre-vendor-license/receipt.json",
+    "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+)
 def test_post_materialization_gate_preserves_native_toolchain_and_receipt(tmp_path: Path) -> None:
     evidence_parent = Path(os.environ.get("ARW_LICENSE_GATE_TEST_ROOT", str(tmp_path)))
     evidence_root = evidence_parent / "gate-output"
@@ -217,7 +223,10 @@ def test_post_materialization_gate_preserves_native_toolchain_and_receipt(tmp_pa
 
 
 @pytest.mark.requires_materialized_sources
-@pytest.mark.requires_retained_evidence("build/evidence/phase-01/pre-vendor-license/receipt.json")
+@pytest.mark.requires_retained_evidence(
+    "build/evidence/phase-01/pre-vendor-license/receipt.json",
+    "build/evidence/phase-01/pre-vendor-license/generated/THIRD_PARTY_NOTICES.md",
+)
 def test_gate_rejects_resealed_undeclared_dist_info(tmp_path: Path) -> None:
     original_root = tmp_path / "valid-candidate"
     original_wheel, _ = _build_candidate(original_root)
