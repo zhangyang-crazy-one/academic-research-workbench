@@ -42,7 +42,7 @@ def test_real_candidate_stage_install_and_transfer(tmp_path: Path) -> None:
     digest = wheel_row["sha256"]
     assert _sha256(wheel) == digest
 
-    _run(str(ROOT / "scripts/license-gate"), "--wheel", str(wheel),
+    _run(sys.executable, str(ROOT / "scripts/license-gate"), "--wheel", str(wheel),
          "--build-evidence", str(build_evidence), "--output-root", str(gate))
     _run(str(ROOT / "scripts/stage-plugin"), "--candidate-wheel", str(wheel),
          "--build-evidence", str(build_evidence), "--candidate-evidence-root", str(gate),

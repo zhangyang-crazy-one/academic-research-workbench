@@ -79,6 +79,7 @@ def _run_gate(evidence_root: Path, candidate: tuple[Path, Path] | None = None) -
     environment.update({"PYTHONNOUSERSITE": "1"})
     return subprocess.run(
         [
+            sys.executable,
             str(gate),
             "--source-manifest",
             "vendor/source-manifest.json",
