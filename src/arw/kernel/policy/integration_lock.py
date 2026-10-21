@@ -1006,23 +1006,31 @@ def _digest(path: Path) -> str:
 class _VerifiedDigest:
     """One live digest observed during a single audit invocation.
 
-    The record cannot outlive the call and is not a trust decision. Reuse is
-    valid only while the same descriptor still names the same regular file;
-    replacement or identity drift discards it and rehashes.
+    The record cannot outlive the call and is not a trust decision. POSIX
+    change time helps detect in-place writes with restored size and mtime,
+    subject to filesystem timestamp resolution and consistency.
+    This is change detection, not an immutable snapshot or a guarantee against
+    concurrent writers. Platforms without POSIX change time must rehash.
     """
 
-    __slots__ = ("device", "digest", "inode", "mtime_ns", "size")
+    __slots__ = ("ctime_ns", "device", "digest", "inode", "mtime_ns", "size")
 
     def __init__(self, stat_result: os.stat_result, digest: str) -> None:
+        self.ctime_ns = getattr(stat_result, "st_ctime_ns", None)
         self.device = stat_result.st_dev
         self.inode = stat_result.st_ino
         self.size = stat_result.st_size
         self.mtime_ns = stat_result.st_mtime_ns
         self.digest = digest
 
+    def reusable(self) -> bool:
+        # On Windows ctime may mean creation time, not last metadata change.
+        return os.name == "posix" and isinstance(self.ctime_ns, int) and self.ctime_ns > 0
+
     def matches(self, stat_result: os.stat_result) -> bool:
         return (
-            stat_result.st_dev == self.device
+            getattr(stat_result, "st_ctime_ns", None) == self.ctime_ns
+            and stat_result.st_dev == self.device
             and stat_result.st_ino == self.inode
             and stat_result.st_size == self.size
             and stat_result.st_mtime_ns == self.mtime_ns
@@ -1041,7 +1049,12 @@ class _AuditDigestCache:
             self._entries.pop(key, None)
             raise IntegrationLockError(f"cannot hash {path}: {error}") from error
         cached = self._entries.get(key)
-        if cached is not None and cached.matches(before):
+        if (
+            cached is not None
+            and cached.reusable()
+            and stat.S_ISREG(before.st_mode)
+            and cached.matches(before)
+        ):
             return cached.digest
         digest = _digest(path)
         try:

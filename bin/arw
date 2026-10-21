@@ -288,6 +288,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -298,9 +299,15 @@ digest_cache = {}
 def sha(path):
     key = os.fspath(path)
     before = path.stat()
-    identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    # POSIX ctime helps detect writes with restored mtime, subject to filesystem
+    # timestamp resolution and consistency. This is only
+    # per-call change detection, not proof of immutability against writers.
+    ctime_ns = getattr(before, "st_ctime_ns", None)
+    identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, ctime_ns)
+    reusable = (os.name == "posix" and isinstance(ctime_ns, int)
+                and ctime_ns > 0 and stat.S_ISREG(before.st_mode))
     cached = digest_cache.get(key)
-    if cached is not None and cached[0] == identity:
+    if reusable and cached is not None and cached[0] == identity:
         return cached[1]
     value = hashlib.sha256()
     with path.open("rb") as stream:
@@ -308,13 +315,11 @@ def sha(path):
             value.update(block)
     digest = value.hexdigest()
     after = path.stat()
-    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+                      getattr(after, "st_ctime_ns", None))
     if identity != after_identity:
         digest_cache.pop(key, None)
         raise SystemExit(f"staged file changed while hashing: {path}")
-    if cached is not None and digest != cached[1]:
-        digest_cache.pop(key, None)
-        return sha(path)
     digest_cache[key] = (after_identity, digest)
     return digest
 

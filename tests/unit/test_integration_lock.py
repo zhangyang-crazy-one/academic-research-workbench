@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -4021,11 +4022,11 @@ def test_one_audit_reuses_a_payload_digest_and_rejects_replacement(tmp_path: Pat
     cache = integration_lock_module._AuditDigestCache()
     first = cache.digest(payload)
     assert cache.digest(payload) == first
-    assert reads == [payload]
+    assert len(reads) == (1 if os.name == "posix" else 2)
 
     payload.write_bytes(b"alpha-replaced")
     assert cache.digest(payload) == original(payload)
-    assert len(reads) == 2
+    assert len(reads) == (2 if os.name == "posix" else 3)
 
     fresh = integration_lock_module._AuditDigestCache()
     assert fresh.digest(payload) == original(payload)
