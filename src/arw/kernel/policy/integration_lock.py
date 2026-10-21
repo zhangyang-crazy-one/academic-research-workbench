@@ -301,9 +301,15 @@ class FileBinding(LockModel):
     sha256: Sha256
 
     @classmethod
-    def from_path(cls, root: Path, relative: str) -> FileBinding:
+    def from_path(
+        cls,
+        root: Path,
+        relative: str,
+        cache: "_AuditDigestCache | None" = None,
+    ) -> FileBinding:
         path = _regular_file_under(root, relative)
-        return cls(path=relative, sha256=_digest(path))
+        digest = _digest(path) if cache is None else cache.digest(path)
+        return cls(path=relative, sha256=digest)
 
     @field_validator("path")
     @classmethod
@@ -997,6 +1003,62 @@ def _digest(path: Path) -> str:
         raise IntegrationLockError(f"cannot hash {path}: {error}") from error
 
 
+class _VerifiedDigest:
+    """One live digest observed during a single audit invocation.
+
+    The record cannot outlive the call and is not a trust decision. Reuse is
+    valid only while the same descriptor still names the same regular file;
+    replacement or identity drift discards it and rehashes.
+    """
+
+    __slots__ = ("device", "digest", "inode", "mtime_ns", "size")
+
+    def __init__(self, stat_result: os.stat_result, digest: str) -> None:
+        self.device = stat_result.st_dev
+        self.inode = stat_result.st_ino
+        self.size = stat_result.st_size
+        self.mtime_ns = stat_result.st_mtime_ns
+        self.digest = digest
+
+    def matches(self, stat_result: os.stat_result) -> bool:
+        return (
+            stat_result.st_dev == self.device
+            and stat_result.st_ino == self.inode
+            and stat_result.st_size == self.size
+            and stat_result.st_mtime_ns == self.mtime_ns
+        )
+
+
+class _AuditDigestCache:
+    def __init__(self) -> None:
+        self._entries: dict[str, _VerifiedDigest] = {}
+
+    def digest(self, path: Path) -> str:
+        key = os.fspath(path)
+        try:
+            before = path.stat()
+        except OSError as error:
+            self._entries.pop(key, None)
+            raise IntegrationLockError(f"cannot hash {path}: {error}") from error
+        cached = self._entries.get(key)
+        if cached is not None and cached.matches(before):
+            return cached.digest
+        digest = _digest(path)
+        try:
+            after = path.stat()
+        except OSError as error:
+            self._entries.pop(key, None)
+            raise IntegrationLockError(f"cannot hash {path}: {error}") from error
+        if not _VerifiedDigest(before, digest).matches(after):
+            self._entries.pop(key, None)
+            raise IntegrationLockError(f"file changed while hashing: {path}")
+        if cached is not None and digest != cached.digest:
+            self._entries.pop(key, None)
+            raise IntegrationLockError(f"file changed while hashing: {path}")
+        self._entries[key] = _VerifiedDigest(after, digest)
+        return digest
+
+
 def _safe_root(root: Path, *, label: str) -> Path:
     if root.is_symlink() or not root.is_dir():
         raise IntegrationLockError(f"{label} root must be a direct directory")
@@ -1045,6 +1107,15 @@ def _read_object(path: Path, *, label: str) -> dict[str, object]:
 def _bound_file(root: Path, binding: FileBinding) -> Path:
     path = _regular_file_under(root, binding.path)
     if _digest(path) != binding.sha256:
+        raise IntegrationLockError(f"digest drift: {binding.path}")
+    return path
+
+
+def _bound_file_cached(
+    root: Path, binding: FileBinding, cache: _AuditDigestCache
+) -> Path:
+    path = _regular_file_under(root, binding.path)
+    if cache.digest(path) != binding.sha256:
         raise IntegrationLockError(f"digest drift: {binding.path}")
     return path
 
@@ -1420,14 +1491,16 @@ def _source_binding(
 
 
 def _validate_bundled_ars(
-    stage_root: Path, source_manifest: Mapping[str, object]
+    stage_root: Path,
+    source_manifest: Mapping[str, object],
+    cache: "_AuditDigestCache | None" = None,
 ) -> ARSBinding:
     root = _safe_root(
         stage_root / "skills/academic-research-suite", label="bundled ARS"
     )
-    manifest_binding = FileBinding.from_path(root, "manifest.json")
-    version_binding = FileBinding.from_path(root, "VERSION")
-    router_binding = FileBinding.from_path(root, "SKILL.md")
+    manifest_binding = FileBinding.from_path(root, "manifest.json", cache)
+    version_binding = FileBinding.from_path(root, "VERSION", cache)
+    router_binding = FileBinding.from_path(root, "SKILL.md", cache)
     manifest = _read_object(root / "manifest.json", label="bundled ARS manifest")
     try:
         version = (root / "VERSION").read_text(encoding="ascii").strip()
@@ -1490,10 +1563,14 @@ def _validate_bundled_ars(
         ) from error
 
 
-def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
-    pyproject = FileBinding.from_path(stage_root, "pyproject.toml")
-    plugin_manifest = FileBinding.from_path(stage_root, ".codex-plugin/plugin.json")
-    cli_launcher = FileBinding.from_path(stage_root, "bin/arw")
+def _validate_arw_runtime(
+    stage_root: Path, cache: "_AuditDigestCache | None" = None
+) -> ARWRuntimeBinding:
+    pyproject = FileBinding.from_path(stage_root, "pyproject.toml", cache)
+    plugin_manifest = FileBinding.from_path(
+        stage_root, ".codex-plugin/plugin.json", cache
+    )
+    cli_launcher = FileBinding.from_path(stage_root, "bin/arw", cache)
     try:
         project = tomllib.loads(
             _bound_file(stage_root, pyproject).read_text(encoding="utf-8")
@@ -1529,7 +1606,7 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
     if wheels[0].name != f"academic_research_workbench-{package_version}-py3-none-any.whl":
         raise IntegrationLockError("ARW wheel filename does not match the staged runtime")
     wheel_relative = wheels[0].relative_to(stage_root).as_posix()
-    wheel = FileBinding.from_path(stage_root, wheel_relative)
+    wheel = FileBinding.from_path(stage_root, wheel_relative, cache)
     wheel_tree, members = _zip_tree_sha256(wheels[0])
     if any(name.startswith(("ars/", "academic_research_suite/")) for name in members):
         raise IntegrationLockError(
@@ -1564,14 +1641,22 @@ def _validate_arw_runtime(stage_root: Path) -> ARWRuntimeBinding:
 
 
 def _validate_file_base(
-    stage_root: Path, source_manifest: Mapping[str, object]
+    stage_root: Path,
+    source_manifest: Mapping[str, object],
+    cache: "_AuditDigestCache | None" = None,
 ) -> FileBaseBinding:
-    source_binding = FileBinding.from_path(stage_root, "vendor/source-manifest.json")
-    mcp_manifest_binding = FileBinding.from_path(stage_root, "vendor/mcp-manifest.json")
-    evidence_binding = FileBinding.from_path(
-        stage_root, ".file-base/build-evidence.json"
+    source_binding = FileBinding.from_path(
+        stage_root, "vendor/source-manifest.json", cache
     )
-    binary_binding = FileBinding.from_path(stage_root, "libexec/file-base-mcp")
+    mcp_manifest_binding = FileBinding.from_path(
+        stage_root, "vendor/mcp-manifest.json", cache
+    )
+    evidence_binding = FileBinding.from_path(
+        stage_root, ".file-base/build-evidence.json", cache
+    )
+    binary_binding = FileBinding.from_path(
+        stage_root, "libexec/file-base-mcp", cache
+    )
     component = _component(source_manifest, "file-base")
     mcp_manifest = _read_object(
         _bound_file(stage_root, mcp_manifest_binding), label="MCP integration manifest"
@@ -1637,7 +1722,10 @@ def _validate_file_base(
             ) from error
         bindings.append(binding)
         patch_file = _regular_file_under(stage_root, binding.path)
-        if _digest(patch_file) != binding.sha256:
+        observed_patch = (
+            _digest(patch_file) if cache is None else cache.digest(patch_file)
+        )
+        if observed_patch != binding.sha256:
             raise IntegrationLockError(f"file-base patch bytes drifted: {binding.path}")
         expected_rows.append(binding.model_dump(mode="json"))
     if evidence_patches != expected_rows:
@@ -2073,6 +2161,7 @@ def build_integration_lock(
     codex_launcher: Path,
     codex_native_binary: Path,
     host_canary_evidence: Path,
+    cache: "_AuditDigestCache | None" = None,
 ) -> IntegrationLock:
     """Build a lock from the stage's bundled ARS bytes.
 
@@ -2080,11 +2169,12 @@ def build_integration_lock(
     """
 
     stage_root = _safe_root(stage_root, label="stage")
+    digest_cache = cache if cache is not None else _AuditDigestCache()
     source_path = _regular_file_under(stage_root, "vendor/source-manifest.json")
     source_manifest = _read_object(source_path, label="source manifest")
-    arw_runtime = _validate_arw_runtime(stage_root)
-    ars = _validate_bundled_ars(stage_root, source_manifest)
-    file_base = _validate_file_base(stage_root, source_manifest)
+    arw_runtime = _validate_arw_runtime(stage_root, digest_cache)
+    ars = _validate_bundled_ars(stage_root, source_manifest, digest_cache)
+    file_base = _validate_file_base(stage_root, source_manifest, digest_cache)
     host = observe_codex_host(codex_launcher, codex_native_binary)
     if not is_supported_codex_cli_version(host.cli_version):
         raise IntegrationLockError(
@@ -2269,6 +2359,7 @@ def _verify_digest_path(
     *,
     label: str,
     staged_payloads: frozenset[str] | None = None,
+    cache: _AuditDigestCache | None = None,
 ) -> None:
     """Verify a ``digestPath`` entry has live bytes that match its declared sha256.
 
@@ -2301,7 +2392,8 @@ def _verify_digest_path(
         raise IntegrationLockError(
             f"{label} digestPath target is missing or unsafe: {relative}"
         ) from error
-    if _digest(path) != digest:
+    observed = _digest(path) if cache is None else cache.digest(path)
+    if observed != digest:
         raise IntegrationLockError(
             f"{label} digestPath live bytes do not match declared digest: {relative}"
         )
@@ -2318,6 +2410,7 @@ def _verify_aggregate_sha256(
     *,
     label: str,
     staged_payloads: frozenset[str] | None = None,
+    cache: _AuditDigestCache | None = None,
 ) -> list[tuple[str, str]]:
     """Verify a derived aggregate digest equals ``aggregate_schema_sha256``.
 
@@ -2342,6 +2435,7 @@ def _verify_aggregate_sha256(
             item,
             label=f"{label} entry #{index}",
             staged_payloads=staged_payloads,
+            cache=cache,
         )
         materialized.append((item["path"], item["sha256"]))
     if aggregate_schema_sha256(materialized) != claimed:
@@ -3749,6 +3843,7 @@ def _load_build_identity_binding(
     source_manifest: Mapping[str, object],
     *,
     staged_payloads: frozenset[str] | None = None,
+    cache: _AuditDigestCache | None = None,
 ) -> tuple[BuildIdentityBinding, dict[str, object]]:
     schema_document = _validate_build_identity_schema(stage_root)
     identity = _read_pretty_sorted_json(
@@ -3871,12 +3966,14 @@ def _load_build_identity_binding(
         native.get("binary"),
         label="build identity native.binary",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
     _verify_digest_path(
         stage_root,
         native.get("build_evidence"),
         label="build identity native.build_evidence",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
 
     # ----- projection (query_launcher + derived aggregates) -------------------
@@ -3904,6 +4001,7 @@ def _load_build_identity_binding(
         projection.get("query_launcher"),
         label="build identity projection.query_launcher",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
     expected_patch_set = _projection_patch_set_sha256(list(patches))
     if projection.get("patch_set_sha256") != expected_patch_set:
@@ -3926,6 +4024,7 @@ def _load_build_identity_binding(
         header_entry,
         label="build identity file_contract.header",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
     # The staged header is no longer the semantic authority: the verifier
     # regenerates the expected header bytes from the staged checked
@@ -3959,6 +4058,7 @@ def _load_build_identity_binding(
         runtime_artifact.get("first_party_wheel"),
         label="build identity runtime_artifact.first_party_wheel",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
 
     # ----- schemas files + derived aggregate ---------------------------------
@@ -3971,6 +4071,7 @@ def _load_build_identity_binding(
         schemas.get("aggregate_sha256"),
         label="build identity schemas",
         staged_payloads=staged_payloads,
+        cache=cache,
     )
 
     # ----- evidence files (5 surfaces; pre_vendor+legal are single JSON, the
@@ -3994,6 +4095,7 @@ def _load_build_identity_binding(
             entry,
             label=f"build identity evidence.{field}",
             staged_payloads=staged_payloads,
+            cache=cache,
         )
         if entry["path"] != expected_path:
             raise IntegrationLockError(
@@ -4027,6 +4129,7 @@ def _load_build_identity_binding(
                 sub_entry,
                 label=(f"build identity evidence.{field}.{kind}"),
                 staged_payloads=staged_payloads,
+                cache=cache,
             )
             if sub_entry["path"] != expected_path:
                 raise IntegrationLockError(
@@ -4090,6 +4193,7 @@ def observe_build_identity_binding(
             stage_root,
             source_manifest,
             staged_payloads=staged_payloads,
+            cache=_AuditDigestCache(),
         )
     except IntegrationLockError as error:
         raise IntegrationLockError(
@@ -4127,8 +4231,10 @@ def _referenced_host_canary_paths(
         if relative == excluded_single or relative.startswith(excluded_prefix):
             referenced.add(relative)
 
+    digest_cache = _AuditDigestCache()
+
     def record_binding(binding: FileBinding) -> Path:
-        path = _bound_file(evidence_root, binding)
+        path = _bound_file_cached(evidence_root, binding, digest_cache)
         if not path.is_relative_to(stage_root):
             raise IntegrationLockError(
                 "staged Codex host evidence escapes the plugin stage"
@@ -4144,7 +4250,7 @@ def _referenced_host_canary_paths(
         CodexHostEvidenceBundle,
         label="Codex host evidence bundle",
     )
-    if bundle_path != _bound_file(evidence_root, canary.evidence_bundle):
+    if bundle_path != _bound_file_cached(evidence_root, canary.evidence_bundle, digest_cache):
         raise IntegrationLockError("Codex host evidence bundle path drift")
     for receipt in canary.fresh_home_receipts:
         record_binding(receipt)
@@ -4169,6 +4275,7 @@ def validate_live_audit_manifests(
     host_canary_evidence: Path | None = None,
     *,
     verify_host_canary_closure: bool = True,
+    cache: "_AuditDigestCache | None" = None,
 ) -> None:
     """Fail-closed gate over the live stage-inventory and build-identity manifests.
 
@@ -4179,6 +4286,8 @@ def validate_live_audit_manifests(
     manifests exist; the gate runs in :func:`verify_integration_lock` after
     the rebuilt lock bytes equal the supplied lock, before PASS is returned.
     """
+
+    digest_cache = cache if cache is not None else _AuditDigestCache()
 
     stage_root = _safe_root(stage_root, label="stage")
     actual: set[str] = set()
@@ -4258,6 +4367,7 @@ def validate_live_audit_manifests(
         stage_root,
         source_manifest,
         staged_payloads=frozenset(declared_payload_paths),
+        cache=digest_cache,
     )
     if (
         expected_build_identity is not None
@@ -4345,7 +4455,7 @@ def validate_live_audit_manifests(
             "stage inventory covered_files order is not canonical"
         )
     for relative, record in covered_by_path.items():
-        actual_digest = _digest(stage_root / relative)
+        actual_digest = digest_cache.digest(_regular_file_under(stage_root, relative))
         if actual_digest != record["sha256"]:
             raise IntegrationLockError(
                 f"stage inventory coverage digest mismatch: {relative}"
@@ -4395,7 +4505,7 @@ def validate_live_audit_manifests(
             f"missing={missing}; extra={extra}"
         )
     for relative, declared in payloads_by_path.items():
-        actual_digest = _digest(stage_root / relative)
+        actual_digest = digest_cache.digest(_regular_file_under(stage_root, relative))
         if actual_digest != declared:
             raise IntegrationLockError(
                 f"build identity staged_payload digest mismatch: {relative}"
@@ -4412,15 +4522,22 @@ def verify_integration_lock(
 ) -> IntegrationVerification:
     """Rebuild the lock from live bytes and fail on any missing or drifted field."""
 
+    digest_cache = _AuditDigestCache()
     observed = build_integration_lock(
         stage_root=stage_root,
         codex_launcher=codex_launcher,
         codex_native_binary=codex_native_binary,
         host_canary_evidence=host_canary_evidence,
+        cache=digest_cache,
     )
     if integration_lock_bytes(observed) != integration_lock_bytes(lock):
         raise IntegrationLockError("live integration identity differs from the lock")
-    validate_live_audit_manifests(stage_root, lock.build_identity, host_canary_evidence)
+    validate_live_audit_manifests(
+        stage_root,
+        lock.build_identity,
+        host_canary_evidence,
+        cache=digest_cache,
+    )
     lock_bytes = integration_lock_bytes(lock)
     return IntegrationVerification(
         schema_version="arw.integration-verification.v1",
