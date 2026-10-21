@@ -28,7 +28,20 @@ def _namespace_probe_skip() -> str | None:
     if not node.is_file() or node.parent.name != "bin":
         return "the exact Node runtime for the Codex launcher is unavailable"
     probe = subprocess.run(
-        ["bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/", "--", "/bin/true"],
+        [
+            "bwrap",
+            "--die-with-parent",
+            "--unshare-pid",
+            "--ro-bind",
+            "/",
+            "/",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--",
+            "/bin/true",
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=5,
