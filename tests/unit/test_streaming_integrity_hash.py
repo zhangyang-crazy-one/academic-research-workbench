@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tracemalloc
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -153,3 +155,181 @@ def test_fresh_process_rehashes_changed_file(tmp_path):
         results.append(result.stdout.strip())
         assert results[-1] == hashlib.sha256(raw).hexdigest()
     assert results[0] != results[1]
+
+
+def test_launcher_reuses_one_large_payload_within_the_same_identity_check(tmp_path):
+    launcher = (
+        Path(__file__).resolve().parents[2] / "bin/arw"
+    ).read_text(encoding="utf-8")
+    start = launcher.index("def sha(path):")
+    end = launcher.index("def object_at(relative):", start)
+    namespace = {"os": os, "stat": stat, "hashlib": hashlib}
+    exec("digest_cache = {}\n" + launcher[start:end], namespace)
+    payload = tmp_path / "native-payload"
+    payload.write_bytes(b"native" * 300000)
+    reads = {"count": 0}
+    real_open = Path.open
+
+    def counted_open(self, *args, **kwargs):
+        mode = kwargs.get("mode", args[0] if args else "r")
+        if self == payload and "b" in mode and "w" not in mode and "a" not in mode and "+" not in mode:
+            reads["count"] += 1
+        return real_open(self, *args, **kwargs)
+
+    Path.open = counted_open
+    try:
+        first = namespace["sha"](payload)
+        second = namespace["sha"](payload)
+    finally:
+        Path.open = real_open
+    assert first == second == hashlib.sha256(payload.read_bytes()).hexdigest()
+    assert reads["count"] == (1 if os.name == "posix" else 2)
+    payload.write_bytes(b"changed native bytes")
+    Path.open = counted_open
+    try:
+        changed = namespace["sha"](payload)
+    finally:
+        Path.open = real_open
+    assert changed == hashlib.sha256(payload.read_bytes()).hexdigest()
+    assert reads["count"] == (2 if os.name == "posix" else 3)
+
+
+
+def _launcher_digest_reader():
+    launcher = (Path(__file__).resolve().parents[2] / "bin/arw").read_text(
+        encoding="utf-8"
+    )
+    start = launcher.index("def sha(path):")
+    end = launcher.index("def object_at(relative):", start)
+    namespace = {"os": os, "stat": stat, "hashlib": hashlib}
+    exec("digest_cache = {}\n" + launcher[start:end], namespace)
+    return namespace["sha"]
+
+
+@pytest.mark.parametrize("kind", ["audit", "launcher"])
+def test_digest_cache_checks_real_same_size_write_with_restored_mtime(tmp_path, kind):
+    reader = (integration_lock._AuditDigestCache().digest
+              if kind == "audit" else _launcher_digest_reader())
+    path = tmp_path / "payload"
+    path.write_bytes(b"alpha")
+    before = path.stat()
+    first = reader(path)
+    path.write_bytes(b"omega")
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    after = path.stat()
+    # Real stat objects retain nanoseconds; tuple-built os.stat_result does not.
+    assert (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) == (
+        before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns
+    )
+    if kind == "audit":
+        # Within one audit, changed identity is a rejection, not a new baseline.
+        with pytest.raises(integration_lock.IntegrationLockError, match="changed"):
+            reader(path)
+    else:
+        assert reader(path) == hashlib.sha256(b"omega").hexdigest() != first
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX change time")
+# Audit descriptor races are exercised against real files in test_audit_digest_reuse.
+def test_launcher_rejects_same_size_mutation_during_hash(tmp_path, monkeypatch):
+    reader = _launcher_digest_reader()
+    path = tmp_path / "payload"
+    path.write_bytes(b"alpha")
+    before = path.stat()
+    real_open = Path.open
+
+    class MutatingReader:
+        def __enter__(self):
+            self.stream = real_open(path, "rb")
+            return self
+
+        def __exit__(self, *args):
+            self.stream.close()
+
+        def read(self, size):
+            data = self.stream.read(size)
+            if data:
+                with real_open(path, "wb") as target:
+                    target.write(b"omega")
+                os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return data
+
+    monkeypatch.setattr(Path, "open", lambda *args, **kwargs: MutatingReader())
+    with pytest.raises((integration_lock.IntegrationLockError, SystemExit),
+                       match="changed while hashing"):
+        reader(path)
+    monkeypatch.setattr(Path, "open", real_open)
+    assert reader(path) == hashlib.sha256(b"omega").hexdigest()
+
+
+@pytest.mark.parametrize("unsupported", ["ctime", "platform", "regular"])
+def test_launcher_rehashes_without_change_detection(tmp_path, monkeypatch, unsupported):
+    reader = _launcher_digest_reader()
+    path = tmp_path / "payload"
+    path.write_bytes(b"alpha")
+    reads = []
+    real_open = Path.open
+    real_stat = Path.stat
+
+    def counted_open(self, *args, **kwargs):
+        reads.append(self)
+        return real_open(self, *args, **kwargs)
+
+    def unsupported_stat(self, *args, **kwargs):
+        result = real_stat(self, *args, **kwargs)
+        return SimpleNamespace(
+            st_dev=result.st_dev, st_ino=result.st_ino, st_size=result.st_size,
+            st_mtime_ns=result.st_mtime_ns,
+            st_ctime_ns=None if unsupported == "ctime" else result.st_ctime_ns,
+            st_mode=stat.S_IFIFO if unsupported == "regular" else result.st_mode,
+        )
+
+    if unsupported == "platform":
+        # Change only the helper's os binding, not pathlib's global platform.
+        fake_os = SimpleNamespace(name="nt", fspath=os.fspath)
+        reader.__globals__["os"] = fake_os
+    else:
+        monkeypatch.setattr(Path, "stat", unsupported_stat)
+    monkeypatch.setattr(Path, "open", counted_open)
+    assert reader(path) == reader(path) == hashlib.sha256(b"alpha").hexdigest()
+    assert reads == [path, path]
+
+
+@pytest.mark.parametrize("kind", ["audit", "launcher"])
+def test_digest_cache_rechecks_replacement_missing_file_and_read_error(tmp_path, monkeypatch, kind):
+    def new_reader():
+        return (integration_lock._AuditDigestCache().digest
+                if kind == "audit" else _launcher_digest_reader())
+
+    reader = new_reader()
+    path = tmp_path / "payload"
+    path.write_bytes(b"alpha")
+    first = reader(path)
+    before = path.stat()
+    replacement = tmp_path / "replacement"
+    replacement.write_bytes(b"omega")
+    os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns))
+    replacement.replace(path)
+    expected = hashlib.sha256(b"omega").hexdigest()
+    if kind == "audit":
+        with pytest.raises(integration_lock.IntegrationLockError, match="changed"):
+            reader(path)
+        assert new_reader()(path) == expected != first
+    else:
+        assert reader(path) == new_reader()(path) == expected != first
+    path.unlink()
+    with pytest.raises((OSError, integration_lock.IntegrationLockError)):
+        reader(path)
+    path.write_bytes(b"new payload")
+    def denied_open(*args, **kwargs):
+        raise PermissionError("injected read denial")
+
+    if kind == "audit":
+        reader = new_reader()
+        monkeypatch.setattr(os, "open", denied_open)
+    else:
+        monkeypatch.setattr(Path, "open", denied_open)
+    with pytest.raises((OSError, integration_lock.IntegrationLockError), match="injected read denial"):
+        reader(path)
+    monkeypatch.undo()
+    assert reader(path) == hashlib.sha256(b"new payload").hexdigest()

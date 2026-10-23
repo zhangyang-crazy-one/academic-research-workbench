@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -3999,3 +4000,35 @@ def test_staged_evidence_json_rejects_duplicate_object_keys(
         IntegrationLockError, match="duplicate JSON object key|strict unambiguous JSON"
     ):
         _build(integration_fixture)
+
+
+def test_one_audit_reuses_a_payload_digest_and_rejects_replacement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A payload hashed while building the lock is not read again during audit.
+
+    Replacing that same path before the audit still fails closed. The cache is
+    created inside one verification and does not persist across calls.
+    """
+
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(b"alpha")
+    reads: list[Path] = []
+    original = hashlib.file_digest
+
+    def counting(stream, algorithm):
+        reads.append(Path(stream.name))
+        return original(stream, algorithm)
+
+    monkeypatch.setattr(hashlib, "file_digest", counting)
+    cache = integration_lock_module._AuditDigestCache()
+    first = cache.digest(payload)
+    assert cache.digest(payload) == first
+    assert len(reads) == (1 if os.name == "posix" else 2)
+
+    payload.write_bytes(b"alpha-replaced")
+    # An observed identity is fixed for this audit; rehashing must not admit it.
+    with pytest.raises(IntegrationLockError, match="changed during audit"):
+        cache.digest(payload)
+    assert len(reads) == (1 if os.name == "posix" else 2)
+
+    fresh = integration_lock_module._AuditDigestCache()
+    assert fresh.digest(payload) == hashlib.sha256(payload.read_bytes()).hexdigest()
