@@ -91,3 +91,10 @@ TDD RED：新增策略测试最先得到 `13 failed`（缺少 observation 函数
 原有 gate rationale 上限仍为 4096 字符，evidence 上限仍为 128 项；添加完整冲突后超限会明确拒绝，不能截断或静默丢失冲突。此补丁不提供整份 ARS passport 自动发现/写回、科学真值判决、人工 waiver 签字或自动释放历史 blocker。
 
 阻塞：无本地实现/提交阻塞。远端 freshness、native 门禁和真实在线服务不计为已验证。
+
+## 主代理独立复验
+
+2026-10-23，主代理检查生产接线、accepted artifact/source绑定和保留冲突的
+实现后，在此工作树重新运行上列五个专项测试文件：**63 passed in 47.86s**。
+OpenSpec strict与提交diff检查通过。子代理报告的74项兼容通过/3跳过保留为
+子代理证据，本段不将其改写成主代理重跑。
