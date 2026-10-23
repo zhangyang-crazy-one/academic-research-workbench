@@ -79,7 +79,35 @@
               "E(red)=[1,0]; E(blue)=[0,1].",
               "Lookup X=[E(red), E(blue)].",
               "Sum sequence axis: y=[1,1]."
-            ]
+            ],
+            "coordinate_sum": {
+              "step_index": 2,
+              "axis_labels": [
+                "red",
+                "blue"
+              ],
+              "operands": [
+                {
+                  "label": "E(red)",
+                  "values": [
+                    1,
+                    0
+                  ]
+                },
+                {
+                  "label": "E(blue)",
+                  "values": [
+                    0,
+                    1
+                  ]
+                }
+              ],
+              "result_label": "y",
+              "result": [
+                1,
+                1
+              ]
+            }
           },
           {
             "semantic_id": "result",
@@ -140,7 +168,7 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 288.925,
+        "height_mm": 323.497,
         "cells": [
           {
             "semantic_id": "tokens",
@@ -154,12 +182,12 @@
             "x": 48.0,
             "y": 282.0,
             "width": 410.0,
-            "height": 185.0
+            "height": 290.0
           },
           {
             "semantic_id": "result",
             "x": 48.0,
-            "y": 509.0,
+            "y": 614.0,
             "width": 410.0,
             "height": 160.0
           }
@@ -182,34 +210,34 @@
               ],
               [
                 30.0,
-                374.5
+                427.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 726.0
+            "label_y": 821.0
           },
           {
             "semantic_id": "sum",
             "via": [
               [
                 478.0,
-                374.5
+                427.0
               ],
               [
                 478.0,
-                491.0
+                596.0
               ],
               [
                 30.0,
-                491.0
+                596.0
               ],
               [
                 30.0,
-                589.0
+                694.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 760.0
+            "label_y": 855.0
           }
         ],
         "min_font_pt": 8.0,
@@ -225,6 +253,31 @@
         "data_nature": "synthetic",
         "components": [
           {
+            "semantic_id": "initialize",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Initialize once per episode",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "initial"
+              }
+            ],
+            "steps": [
+              "Initial state: attempts=0 and answer_present=false.",
+              "Once per episode; retry bypasses this state."
+            ],
+            "before": "New episode",
+            "after": "attempts=0; answer_present=false"
+          },
+          {
             "semantic_id": "request",
             "component_version": "1",
             "family": "port_operation",
@@ -234,6 +287,13 @@
             "phase": "inference",
             "parameters": "not_applicable",
             "ports": [
+              {
+                "port_id": "initial",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "initial"
+              },
               {
                 "port_id": "input",
                 "direction": "input",
@@ -250,7 +310,6 @@
               }
             ],
             "steps": [
-              "Initial state: attempts=0 and answer_present=false.",
               "Increment attempts; request lookup(key=public-toy)."
             ]
           },
@@ -350,6 +409,17 @@
         ],
         "relations": [
           {
+            "semantic_id": "initialized",
+            "source_component": "initialize",
+            "source_port": "out",
+            "target_component": "request",
+            "target_port": "initial",
+            "relation_type": "control",
+            "payload": "new episode, initialized exactly once",
+            "trigger": "new episode only",
+            "feedback": false
+          },
+          {
             "semantic_id": "call",
             "source_component": "request",
             "source_port": "out",
@@ -396,6 +466,7 @@
         ],
         "innovation_id": "decide",
         "object_chain": [
+          "initialize",
           "request",
           "observe",
           "decide",
@@ -405,129 +476,159 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 384.175,
+        "height_mm": 500.0,
         "cells": [
           {
-            "semantic_id": "request",
+            "semantic_id": "initialize",
             "x": 48.0,
             "y": 70.0,
             "width": 410.0,
-            "height": 155.0
+            "height": 170.0
+          },
+          {
+            "semantic_id": "request",
+            "x": 48.0,
+            "y": 322.0,
+            "width": 410.0,
+            "height": 150.0
           },
           {
             "semantic_id": "observe",
             "x": 48.0,
-            "y": 267.0,
+            "y": 514.0,
             "width": 410.0,
             "height": 185.0
           },
           {
             "semantic_id": "decide",
             "x": 48.0,
-            "y": 494.0,
+            "y": 741.0,
             "width": 410.0,
-            "height": 175.0
+            "height": 230.0
           },
           {
             "semantic_id": "done",
             "x": 48.0,
-            "y": 711.0,
+            "y": 1013.0,
             "width": 410.0,
             "height": 160.0
           }
         ],
         "routes": [
           {
+            "semantic_id": "initialized",
+            "via": [
+              [
+                478.0,
+                155.0
+              ],
+              [
+                478.0,
+                304.0
+              ],
+              [
+                30.0,
+                304.0
+              ],
+              [
+                30.0,
+                372.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1220.0
+          },
+          {
             "semantic_id": "call",
             "via": [
               [
                 478.0,
-                147.5
+                397.0
               ],
               [
                 478.0,
-                249.0
+                496.0
               ],
               [
                 30.0,
-                249.0
+                496.0
               ],
               [
                 30.0,
-                359.5
+                606.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 928.0
+            "label_y": 1254.0
           },
           {
             "semantic_id": "observed",
             "via": [
               [
                 478.0,
-                359.5
+                606.5
               ],
               [
                 478.0,
-                476.0
+                723.0
               ],
               [
                 30.0,
-                476.0
+                723.0
               ],
               [
                 30.0,
-                581.5
+                856.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 962.0
+            "label_y": 1288.0
           },
           {
             "semantic_id": "retry",
             "via": [
               [
-                490.0,
-                552.3333333333334
+                498.0,
+                817.6666666666666
               ],
               [
-                490.0,
-                60.0
+                498.0,
+                270.0
               ],
               [
-                24.0,
-                60.0
+                16.0,
+                270.0
               ],
               [
-                24.0,
-                147.5
+                16.0,
+                422.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 996.0
+            "label_y": 1322.0
           },
           {
             "semantic_id": "stop",
             "via": [
               [
                 478.0,
-                610.6666666666666
+                894.3333333333334
               ],
               [
                 478.0,
-                693.0
+                995.0
               ],
               [
                 30.0,
-                693.0
+                995.0
               ],
               [
                 30.0,
-                791.0
+                1093.0
               ]
             ],
             "label_x": 20.0,
-            "label_y": 1030.0
+            "label_y": 1356.0
           }
         ],
         "min_font_pt": 8.0,
@@ -620,7 +721,13 @@
               "No inference that every other bird actually flies."
             ],
             "before": "Unconditional bird rule",
-            "after": "bird AND not penguin -> may_fly (conceptual)"
+            "after": "bird AND not penguin -> may_fly (conceptual)",
+            "rule_change": {
+              "before_component": "before",
+              "retained_clause": "bird",
+              "added_clause": "AND not penguin",
+              "conclusion": "-> may_fly"
+            }
           }
         ],
         "relations": [
@@ -657,7 +764,7 @@
       },
       "layout": {
         "width_mm": 180.0,
-        "height_mm": 285.397,
+        "height_mm": 312.914,
         "cells": [
           {
             "semantic_id": "before",
@@ -678,7 +785,7 @@
             "x": 48.0,
             "y": 499.0,
             "width": 410.0,
-            "height": 160.0
+            "height": 245.0
           }
         ],
         "routes": [
@@ -703,7 +810,7 @@
               ]
             ],
             "label_x": 20.0,
-            "label_y": 716.0
+            "label_y": 791.0
           },
           {
             "semantic_id": "guard",
@@ -722,11 +829,11 @@
               ],
               [
                 30.0,
-                579.0
+                621.5
               ]
             ],
             "label_x": 20.0,
-            "label_y": 750.0
+            "label_y": 825.0
           }
         ],
         "min_font_pt": 8.0,
@@ -734,7 +841,7 @@
       }
     }
   ],
-  "task_revision": 2,
-  "supersedes_tasks_sha256": "b1da4bac9889b3a75e824501dfc50d973177052b132d83e0cefe90b27e773a9c",
-  "source_amendment": "Explicit synthetic-task correction after independent round1: initialize/increment retry counter and provide found/missing tool outcomes. Preserve original facts and pixels; do not infer these operations in the renderer."
+  "task_revision": 3,
+  "supersedes_tasks_sha256": "6364065e8a3c8e672efe92b692f9f45d2fc82986575db0d27c3b44113599731c",
+  "source_amendment": "Source-author synthetic clarification of retained v2 facts: decompose once-only initialization from repeated increment/request with distinct initial/retry inputs; expose supplied one-hot coordinates and guarded-rule clauses as structured display facts. No changed outcomes, thresholds, tokens or inference claims. Preserve tasks.v2.json and its SHA plus all round1/2 evidence."
 }

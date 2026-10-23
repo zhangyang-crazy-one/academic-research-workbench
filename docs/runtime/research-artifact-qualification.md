@@ -183,3 +183,15 @@ unsupported draw.io/three-strategy capabilities remain explicit. Source, geometr
 font or environment changes expire the relevant advisory binding; environment
 binding covers the recorded rasterizer inventory, not an attestation of the
 entire host. No additional model/provider/version is a release requirement.
+
+Mechanism renderer 1.1.0 additionally supports optional source-authored
+`coordinate_sum` and `rule_change` structures. Exact toy operands/results must
+agree with the supplied step literals and dimensional sum; rule clauses must
+match the named original component and the revised expression. These fields are
+additive to `arw.mechanism-facts.v1`; no experimental values are synthesized.
+The public revision-3 loop splits the existing once-only initialization from
+increment/request with distinct initial/retry inputs. Local predicates bind to
+relation ports independent of their inventory order. Manual routes require an
+intact-name horizontal gap; too-small branch/table/rule geometry is rejected.
+New pixels require a new exact-output review; historical 1.0.0 review bindings
+cannot qualify a 1.1.0 output.

@@ -35,3 +35,18 @@ The host workflow SHALL use a separate read-only figure-reviewer context with ac
 #### Scenario: Two-round real review
 - **WHEN** the public tasks are revised following independent pixel findings
 - **THEN** the second reviewer pass compares actual previous/current pixels, verifies exact bindings and records resolved, partial and new issues without human acceptance or automatic publication PASS.
+
+### Requirement: Explicit normal-figure repair grammar
+Source-authored exact coordinate expansion SHALL preserve each operand and
+coordinate. A changed rule guard SHALL be isolated from retained clauses. A
+once-only initial state SHALL be outside the repeated request path, with distinct
+initial and retry input identities. Each conditional predicate SHALL connect to
+the output port named by its relation rather than by port inventory order.
+
+#### Scenario: Retry or output-port inventory reorder
+- **WHEN** the loop takes two missing results or the output-port inventory is reordered
+- **THEN** retry enters the increment/request component without initialization and each predicate remains bound to its own relation/port.
+
+#### Scenario: Repaired local labels and structured source expansion
+- **WHEN** the supplied normal fixtures render at the author-defined profile
+- **THEN** edge names are intact in reserved route gaps, exact coordinate additions are in separate columns, and the new guard is boxed in aligned before/after expressions; mechanical checks do not imply independent pixel acceptance.

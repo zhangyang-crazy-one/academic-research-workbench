@@ -109,3 +109,25 @@ strategies and selection evidence, remaining mechanism/visual findings,
 independent human acceptance, and an optional draw.io adapter with real editor
 round-trip and publication privacy checks. General attention/tensor graphics,
 automatic layouts and arbitrary editor import are unsupported in this milestone.
+
+## Round3 repair packet (2026-10-23)
+
+The [round3 packet](evidence/round3/README.md) implements the retained normal
+figure repairs and provides [new exact-output reviewer inputs](evidence/round3/reviewer-input.json).
+It is producer evidence awaiting independent pixel/reference review, not a third
+review or acceptance. Round1/2 evidence is unchanged. Revision 3 preserves
+`tasks.v2.json` and SHA, decomposes initialization from the repeated request, and
+makes the supplied coordinate/rule expansion explicit. The
+[mechanical record](evidence/round3/mechanical.json) verifies v2 scientific fact
+preservation after that declared decomposition.
+
+Reproduce into a **new** directory using the run command above, then screen actual
+font ink bounds and local-label edge clearance with the optional GI interpreter:
+
+```sh
+/usr/bin/python3 examples/mechanism-figures/check_readability.py build/mechanism-pixels
+```
+
+The [task 3.2 assessment](strategy-assessment.md) records available source facts,
+the missing representation control/treatment and implementation steps. The new
+coordinate table and guard diff do not count as three explanation strategies.

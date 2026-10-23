@@ -35,6 +35,42 @@ class TokenCorrespondence(StrictModel):
     masked: bool = False
 
 
+class CoordinateOperand(StrictModel):
+    label: Text
+    values: tuple[int, ...] = Field(min_length=2, max_length=4)
+
+
+class CoordinateSum(StrictModel):
+    """Author-supplied exact toy algebra, not inferred experimental values."""
+
+    step_index: int = Field(ge=0, le=3)
+    axis_labels: tuple[Text, ...] = Field(min_length=2, max_length=4)
+    operands: tuple[CoordinateOperand, ...] = Field(min_length=2, max_length=4)
+    result_label: Text
+    result: tuple[int, ...] = Field(min_length=2, max_length=4)
+
+    @model_validator(mode="after")
+    def consistent(self):
+        width = len(self.axis_labels)
+        if len(self.result) != width or any(
+            len(o.values) != width for o in self.operands
+        ):
+            raise ValueError("mechanism_coordinate_sum_dimensions")
+        if any(
+            sum(o.values[i] for o in self.operands) != v
+            for i, v in enumerate(self.result)
+        ):
+            raise ValueError("mechanism_coordinate_sum_inconsistent")
+        return self
+
+
+class RuleChange(StrictModel):
+    before_component: StableRuntimeId
+    retained_clause: Text
+    added_clause: Text
+    conclusion: Text
+
+
 class MechanismComponent(StrictModel):
     semantic_id: StableRuntimeId
     component_version: Literal["1"] = "1"
@@ -54,6 +90,8 @@ class MechanismComponent(StrictModel):
     stop_condition: Text | None = None
     before: Text | None = None
     after: Text | None = None
+    coordinate_sum: CoordinateSum | None = None
+    rule_change: RuleChange | None = None
 
     @model_validator(mode="after")
     def concrete(self):
@@ -77,6 +115,25 @@ class MechanismComponent(StrictModel):
             raise ValueError("mechanism_operation_input_output_required")
         if self.phase == "inference" and self.parameters == "trainable":
             raise ValueError("mechanism_inference_parameter_update_unsupported")
+        if self.coordinate_sum:
+            table = self.coordinate_sum
+
+            def vector(values):
+                return "[" + ",".join(map(str, values)) + "]"
+
+            if (
+                self.family != "port_operation"
+                or table.step_index >= len(self.steps)
+                or f"{table.result_label}={vector(table.result)}"
+                not in self.steps[table.step_index]
+                or any(
+                    f"{o.label}={vector(o.values)}" not in " ".join(self.steps)
+                    for o in table.operands
+                )
+            ):
+                raise ValueError("mechanism_coordinate_sum_source_mismatch")
+        if self.rule_change and self.family != "candidate_state":
+            raise ValueError("mechanism_rule_change_family")
         return self
 
 
@@ -159,6 +216,17 @@ class MechanismFacts(StrictModel):
             for pair in zip(self.object_chain, self.object_chain[1:])
         ):
             raise ValueError("mechanism_object_chain_disconnected")
+        for c in self.components:
+            if c.rule_change:
+                d = c.rule_change
+                old = components.get(d.before_component)
+                if (
+                    old is None
+                    or f"{d.retained_clause} {d.conclusion}" != old.before
+                    or f"{d.retained_clause} {d.added_clause} {d.conclusion}"
+                    not in (c.after or "")
+                ):
+                    raise ValueError("mechanism_rule_change_source_mismatch")
         return self
 
 

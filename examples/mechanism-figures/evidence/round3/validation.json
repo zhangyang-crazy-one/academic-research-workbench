@@ -1,0 +1,73 @@
+{
+  "status": "已验证",
+  "base_commit": "6d2509c829156352f99c2058a903b5749f32e6e4",
+  "branch": "fix/pr175-mechanism-readability",
+  "pythonpath": "src:extensions/research-artifact/src (isolated worktree working directory)",
+  "commands": [
+    {
+      "command": "PYTHONPATH=src:extensions/research-artifact/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python -m pytest tests/integration/test_mechanism_readability.py -q (before implementation)",
+      "exit_code": 1,
+      "output": "7 failed in 0.62s; see reproduction-red.json"
+    },
+    {
+      "command": "PYTHONPATH=src:extensions/research-artifact/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python -m pytest tests/integration/test_mechanism_readability.py tests/integration/test_mechanism_figures.py tests/integration/test_figure_composition.py tests/integration/test_figure_visual_benchmark.py tests/schema/test_schema_drift.py tests/unit/test_bundled_ars_pin.py -q",
+      "exit_code": 0,
+      "output": "........................................................................ [ 82%]\n...............                                                          [100%]\n87 passed in 27.04s"
+    },
+    {
+      "command": "PYTHONPATH=src:extensions/research-artifact/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python examples/mechanism-figures/run.py examples/mechanism-figures/evidence/round3 --raster-python /usr/bin/python3",
+      "exit_code": 0,
+      "output": {
+        "normal": 3,
+        "normal_flagged": 0,
+        "injected": 16,
+        "detected": 16,
+        "human_status": "human_pending"
+      }
+    },
+    {
+      "command": "/usr/bin/python3 examples/mechanism-figures/check_readability.py examples/mechanism-figures/evidence/round3",
+      "exit_code": 0,
+      "output": {
+        "status": "passed",
+        "checks": 421,
+        "source_v2_facts_preserved": true
+      }
+    },
+    {
+      "command": "openspec validate mechanism-figure-components --strict",
+      "exit_code": 0,
+      "output": "Change 'mechanism-figure-components' is valid"
+    },
+    {
+      "command": "ruff check examples/mechanism-figures/check_readability.py tests/integration/test_mechanism_readability.py",
+      "exit_code": 0,
+      "output": "All checks passed!"
+    },
+    {
+      "command": "ruff check --isolated --select E9,F63,F7,F82 extensions/research-artifact/src/arw_research_artifact/mechanism.py src/arw/kernel/state/mechanism_figure.py tests/integration/test_mechanism_figures.py examples/mechanism-figures/check_readability.py tests/integration/test_mechanism_readability.py",
+      "exit_code": 0,
+      "output": "All checks passed!"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": "PYTHONPATH=src:extensions/research-artifact/src /home/zhangyangrui/my_programes/academic-research-workbench/.venv/bin/python -m pytest tests/integration/test_mechanism_readability.py::test_round3_packet_hashes_bind_current_renderer_source_pixels_and_replay -q",
+      "exit_code": 0,
+      "output": "1 passed in 0.40s"
+    }
+  ],
+  "unchanged_ars_adapter_tree_sha256": "b30c7ce5fb7e6361a77d322e3aa471feb25490d9247af5c52e57d8a23ad2892f",
+  "independent_pixel_review": "not_run",
+  "human_status": "human_pending",
+  "publication_visual_pass": false,
+  "not_verified": [
+    "Independent reference/new-pixel review",
+    "Human acceptance",
+    "Task3.2 three strategies",
+    "Native file-base / full plugin staging / host canary"
+  ]
+}

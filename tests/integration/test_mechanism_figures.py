@@ -98,11 +98,12 @@ def test_stop_condition_is_not_optional(tmp_path):
     missing = example.injected(svg, "missing_stop")
     assert inspect_mechanism(facts, ir, missing)["findings"]
     content = ET.fromstring(missing).find(".//*[@id='content.decide']")
-    assert facts.components[2].stop_condition.replace(" ", "") not in "".join(
+    decide = next(c for c in facts.components if c.semantic_id == "decide")
+    assert decide.stop_condition.replace(" ", "") not in "".join(
         content.itertext()
     ).replace(" ", "")
     bad = facts.model_dump(mode="json")
-    bad["components"][2]["stop_condition"] = None
+    next(c for c in bad["components"] if c["semantic_id"] == "decide")["stop_condition"] = None
     with pytest.raises(ValidationError, match="mechanism_condition_and_stop_required"):
         MechanismFacts.model_validate_json(json.dumps(bad))
 

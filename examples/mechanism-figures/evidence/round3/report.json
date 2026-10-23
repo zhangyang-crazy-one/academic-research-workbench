@@ -1,0 +1,1045 @@
+{
+  "tasks_sha256": "5cbc05eb4d4b0ce6b03e056a85d0477f6ecbbc229da2a729adb3c0d23367b7e0",
+  "scope": "Issue 162 milestone 1; manual layouts and structural checks",
+  "tasks": [
+    {
+      "id": "representation",
+      "source_answer_comparison": {
+        "status": "reviewed",
+        "scope": "source-answer SVG structure only",
+        "human_status": "human_pending",
+        "publication_visual_pass": false,
+        "findings": []
+      },
+      "exploratory_accepted": true,
+      "reproduction": {
+        "status": "reproduced",
+        "artifact_id": "mechanism.representation",
+        "output_sha256": "983816777b1900f6271dbc354cc646732d53907cb2493392513a6453d70087ab",
+        "renderer": {
+          "name": "arw.mechanism-svg",
+          "version": "1.1.0",
+          "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+          "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+        }
+      },
+      "publication_without_review": {
+        "accepted": false,
+        "qualification": "FAIL",
+        "receipt": {
+          "receipt_version": "arw.mechanism-figure-receipt.v1",
+          "artifact_kind": "mechanism_figure",
+          "artifact_id": "mechanism.representation.publication",
+          "revision": 1,
+          "ir_sha256": "b4975bc53b3e4800528967052f896bbe6e6640885832c2b113694e4355db9f15",
+          "renderer": {
+            "name": "arw.mechanism-svg",
+            "version": "1.1.0",
+            "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+            "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+          },
+          "inputs": [
+            {
+              "binding_id": "binding.mechanism",
+              "artifact_id": "source.mechanisms",
+              "sha256": "2966ef13f498cbf022ca989b5e87aa44f9e0adce458a164d20c7ae115742d171",
+              "ledger_event_id": "evt-00000000-0000-4000-8000-000000000002",
+              "ledger_event_sha256": "1686f074f3440e286238a0a43422b531ed76478b97b6660fb4794911eb8fd372",
+              "json_pointer": "/tasks/0/facts"
+            }
+          ],
+          "outputs": [
+            {
+              "path": ".arw/artifacts/candidates/mechanism.representation.publication/b4975bc53b3e4800528967052f896bbe6e6640885832c2b113694e4355db9f15/ir.json",
+              "sha256": "b4975bc53b3e4800528967052f896bbe6e6640885832c2b113694e4355db9f15"
+            },
+            {
+              "path": ".arw/artifacts/candidates/mechanism.representation.publication/b4975bc53b3e4800528967052f896bbe6e6640885832c2b113694e4355db9f15/figure.svg",
+              "sha256": "983816777b1900f6271dbc354cc646732d53907cb2493392513a6453d70087ab"
+            }
+          ],
+          "min_font_pt": 8.0,
+          "validation_policy": {
+            "schema": "REQUIRED",
+            "provenance": "REQUIRED",
+            "semantic": "REQUIRED",
+            "render": "REQUIRED",
+            "visual": "REQUIRED"
+          },
+          "validation": {
+            "schema": "PASS",
+            "provenance": "PASS",
+            "semantic": "PASS",
+            "render": "PASS",
+            "visual": "UNAVAILABLE"
+          },
+          "qualification": "FAIL",
+          "purpose": "publication-critical",
+          "visual_reviewer": null,
+          "reason_codes": []
+        }
+      },
+      "ir_sha256": "fe7a2d0e4250cfa9303eec6b784ec4adcd4a1c597fd0bd8e692eedbbfcad141f",
+      "svg_sha256": "983816777b1900f6271dbc354cc646732d53907cb2493392513a6453d70087ab",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "01d3e2d0999dcb12fb7dc718e9df702eff24d35e03edb8ddae3a9eb8d2c7dd7f",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1911,
+        "width_mm": 180.0,
+        "height_mm": 323.497,
+        "dpi": 150.0,
+        "ink_pixels": 465089,
+        "ink_bounds": [
+          25,
+          22,
+          997,
+          1785
+        ],
+        "border_ink": false,
+        "png_sha256": "c6ed3779928905ca4a11060c7fbe8e79f00bbd32577fb22f0b56970e06768aaf",
+        "pdf_sha256": "006f11501477f64def209c3803736a1b614517be8652dd70caaf2e80bb9b1b43",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "faults": [
+        {
+          "fault": "missing_component",
+          "svg": "representation.negative.missing_component.svg",
+          "sha256": "794a6e40fdfe27fbb137a28119e44f752e007a6478472536e29491ee434b6b1c",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_inventory:svg",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "svg",
+              "expected": [
+                "project",
+                "result",
+                "tokens"
+              ],
+              "observed": [
+                "project",
+                "result"
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "Concrete token-to-vector mapping",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "conceptual | inference | parameters: not_applicable",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "Use the supplied two-token vocabulary.",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "tok0: red -> e_red",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "tok1: blue -> e_blue",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "axes: sequence axis: tok0,tok1; embedding axis: red,blue",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_identity:tokens.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens.out",
+              "expected": "output out: tokens / utterance@tokens",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_missing:tokens.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens.out",
+              "expected": "visible port",
+              "observed": null,
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "reverse_arrow",
+          "svg": "representation.negative.reverse_arrow.svg",
+          "sha256": "a66e4fbcdab626e6246228d98659cc005d2a8770251407926ce667786bb0de3d",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "edge_direction_or_endpoint:lookup",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "lookup",
+              "expected": [
+                [
+                  458.0,
+                  155.0
+                ],
+                [
+                  48.0,
+                  427.0
+                ]
+              ],
+              "observed": [
+                [
+                  48.0,
+                  427.0
+                ],
+                [
+                  30.0,
+                  427.0
+                ],
+                [
+                  30.0,
+                  264.0
+                ],
+                [
+                  478.0,
+                  264.0
+                ],
+                [
+                  478.0,
+                  155.0
+                ],
+                [
+                  458.0,
+                  155.0
+                ]
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "small_text",
+          "svg": "representation.negative.small_text.svg",
+          "sha256": "7a9ae964b002bb69411f2b46d2dfe36f8a96614df672f5ecbc1b643da8d27b38",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "minimum_font:mechanism.claim",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "mechanism.claim",
+              "expected": 8.0,
+              "observed": "2",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "token_mapping",
+          "svg": "representation.negative.token_mapping.svg",
+          "sha256": "dbe9566935b2e326d330de50266aabcd38e4594945fe38c529953f980e22b8d2",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:tokens",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "tokens",
+              "expected": "tok0: red -> e_red",
+              "observed": "Concrete token-to-vector mappingconceptual | inference | parameters: not_applicableUse the supplied two-token vocabulary.tok0: red->e_bluetok1: blue->e_blueaxes: sequence axis: tok0,tok1; embedding axis: red,blueoutput out: tokens / utterance@tokens",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "freeze_state",
+          "svg": "representation.negative.freeze_state.svg",
+          "sha256": "886307c3b94e3a04296af0a3d5e8a1f56c12b5e7b401bb1c4add7325e93de8ce",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:project",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "project",
+              "expected": "conceptual | inference | parameters: frozen",
+              "observed": "INNOVATION: Sum the supplied one-hot vectorsconceptual | inference | parameters: trainable1. E(red)=[1,0]; E(blue)=[0,1].2. Lookup X=[E(red), E(blue)].3. Sum sequence axis: y=[1,1].coordinateredblueE(red)10E(blue)01y1 + 0 = 10 + 1 = 1input input: tokens / utterance@tokensoutput out: vector2 / utterance@sum",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "missing_step",
+          "svg": "representation.negative.missing_step.svg",
+          "sha256": "3dc327950109004cc8224c7ba43a23aa6d89e21dafe8e7f0a2b5bde28021f770",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:project",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "project",
+              "expected": "Lookup X=[E(red), E(blue)].",
+              "observed": "INNOVATION: Sum the supplied one-hot vectorsconceptual | inference | parameters: frozen1. E(red)=[1,0]; E(blue)=[0,1].2. Step omitted.3. Sum sequence axis: y=[1,1].coordinateredblueE(red)10E(blue)01y1 + 0 = 10 + 1 = 1input input: tokens / utterance@tokensoutput out: vector2 / utterance@sum",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "fabricated_value",
+          "svg": "representation.negative.fabricated_value.svg",
+          "sha256": "758ff9dada64478e6f75c95f58cfe38c7a4b12c8cd396c1a6dd175b4b5912636",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:project",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "project",
+              "expected": "Sum sequence axis: y=[1,1].",
+              "observed": "INNOVATION: Sum the supplied one-hot vectorsconceptual | inference | parameters: frozen1. E(red)=[1,0]; E(blue)=[0,1].2. Lookup X=[E(red), E(blue)].3. Sum sequence axis: y=[999,999].coordinateredblueE(red)10E(blue)01y1 + 0 = 10 + 1 = 1input input: tokens / utterance@tokensoutput out: vector2 / utterance@sum",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "object_identity",
+          "svg": "representation.negative.object_identity.svg",
+          "sha256": "7a93f5737d820c249c0d15a904c756e151cf167e0a375342fc6715e2d540cda2",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "port_identity:project.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "project.out",
+              "expected": "output out: vector2 / utterance@sum",
+              "observed": "INNOVATION: Sum the supplied one-hot vectorsconceptual | inference | parameters: frozen1. E(red)=[1,0]; E(blue)=[0,1].2. Lookup X=[E(red), E(blue)].3. Sum sequence axis: y=[1,1].coordinateredblueE(red)10E(blue)01y1 + 0 = 10 + 1 = 1input input: tokens / utterance@tokensoutput out: vector2 / unrelated@sum",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tool-loop",
+      "source_answer_comparison": {
+        "status": "reviewed",
+        "scope": "source-answer SVG structure only",
+        "human_status": "human_pending",
+        "publication_visual_pass": false,
+        "findings": []
+      },
+      "exploratory_accepted": true,
+      "reproduction": {
+        "status": "reproduced",
+        "artifact_id": "mechanism.tool-loop",
+        "output_sha256": "17094990f99118d0055447487a2488fdb7587c3c48bdd0d5ed2f120332ca9e5a",
+        "renderer": {
+          "name": "arw.mechanism-svg",
+          "version": "1.1.0",
+          "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+          "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+        }
+      },
+      "publication_without_review": {
+        "accepted": false,
+        "qualification": "FAIL",
+        "receipt": {
+          "receipt_version": "arw.mechanism-figure-receipt.v1",
+          "artifact_kind": "mechanism_figure",
+          "artifact_id": "mechanism.tool-loop.publication",
+          "revision": 1,
+          "ir_sha256": "02e7be6ad866393881afb19bb98e7ac079ac5f84fe08c86995b1dd9f41128fc7",
+          "renderer": {
+            "name": "arw.mechanism-svg",
+            "version": "1.1.0",
+            "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+            "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+          },
+          "inputs": [
+            {
+              "binding_id": "binding.mechanism",
+              "artifact_id": "source.mechanisms",
+              "sha256": "2966ef13f498cbf022ca989b5e87aa44f9e0adce458a164d20c7ae115742d171",
+              "ledger_event_id": "evt-00000000-0000-4000-8000-000000000002",
+              "ledger_event_sha256": "1686f074f3440e286238a0a43422b531ed76478b97b6660fb4794911eb8fd372",
+              "json_pointer": "/tasks/1/facts"
+            }
+          ],
+          "outputs": [
+            {
+              "path": ".arw/artifacts/candidates/mechanism.tool-loop.publication/02e7be6ad866393881afb19bb98e7ac079ac5f84fe08c86995b1dd9f41128fc7/ir.json",
+              "sha256": "02e7be6ad866393881afb19bb98e7ac079ac5f84fe08c86995b1dd9f41128fc7"
+            },
+            {
+              "path": ".arw/artifacts/candidates/mechanism.tool-loop.publication/02e7be6ad866393881afb19bb98e7ac079ac5f84fe08c86995b1dd9f41128fc7/figure.svg",
+              "sha256": "17094990f99118d0055447487a2488fdb7587c3c48bdd0d5ed2f120332ca9e5a"
+            }
+          ],
+          "min_font_pt": 8.0,
+          "validation_policy": {
+            "schema": "REQUIRED",
+            "provenance": "REQUIRED",
+            "semantic": "REQUIRED",
+            "render": "REQUIRED",
+            "visual": "REQUIRED"
+          },
+          "validation": {
+            "schema": "PASS",
+            "provenance": "PASS",
+            "semantic": "PASS",
+            "render": "PASS",
+            "visual": "UNAVAILABLE"
+          },
+          "qualification": "FAIL",
+          "purpose": "publication-critical",
+          "visual_reviewer": null,
+          "reason_codes": []
+        }
+      },
+      "ir_sha256": "ba7aacbfdbcd3750e42cec5f07250c15183535800370a175270ed60964bb336d",
+      "svg_sha256": "17094990f99118d0055447487a2488fdb7587c3c48bdd0d5ed2f120332ca9e5a",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "fe76febbc84ad3c0f787b045c3b547d7644c7a571a88f71f41c1339bd49eca29",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 2953,
+        "width_mm": 180.0,
+        "height_mm": 500.0,
+        "dpi": 150.0,
+        "ink_pixels": 506222,
+        "ink_bounds": [
+          25,
+          22,
+          1038,
+          2828
+        ],
+        "border_ink": false,
+        "png_sha256": "bf7303dc393630c3fb458173ffe8e3786dc3c16dd5e2f93d5a232a9f339f3768",
+        "pdf_sha256": "6052028d50f656d636282152d3cf49430ce505bda513e463bd900f76bd98a69f",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "faults": [
+        {
+          "fault": "missing_component",
+          "svg": "tool-loop.negative.missing_component.svg",
+          "sha256": "6aaeb4ad885702fdbca343071f34d042073f07471e0528d86b7a3ea7e0567254",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_inventory:svg",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "svg",
+              "expected": [
+                "decide",
+                "done",
+                "initialize",
+                "observe",
+                "request"
+              ],
+              "observed": [
+                "decide",
+                "done",
+                "observe",
+                "request"
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "Initialize once per episode",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "conceptual | inference | parameters: not_applicable",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "Initial state: attempts=0 and answer_present=false.",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "Once per episode; retry bypasses this state.",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "before: New episode",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:initialize",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize",
+              "expected": "after: attempts=0; answer_present=false",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_identity:initialize.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize.out",
+              "expected": "output out: episode / episode@initial",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_missing:initialize.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialize.out",
+              "expected": "visible port",
+              "observed": null,
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "reverse_arrow",
+          "svg": "tool-loop.negative.reverse_arrow.svg",
+          "sha256": "79ff161a5cb75c664f03a1f737c700ff8312d0484a83f9b59340867b9d545b94",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "edge_direction_or_endpoint:initialized",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "initialized",
+              "expected": [
+                [
+                  458.0,
+                  155.0
+                ],
+                [
+                  48.0,
+                  372.0
+                ]
+              ],
+              "observed": [
+                [
+                  48.0,
+                  372.0
+                ],
+                [
+                  30.0,
+                  372.0
+                ],
+                [
+                  30.0,
+                  304.0
+                ],
+                [
+                  478.0,
+                  304.0
+                ],
+                [
+                  478.0,
+                  155.0
+                ],
+                [
+                  458.0,
+                  155.0
+                ]
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "small_text",
+          "svg": "tool-loop.negative.small_text.svg",
+          "sha256": "428ddf3d94b8c29678543908fb60dfa45fbbaa39a70b896e94e72cc726aecfbd",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "minimum_font:mechanism.claim",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "mechanism.claim",
+              "expected": 8.0,
+              "observed": "2",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "stop_role_label",
+          "svg": "tool-loop.negative.stop_role_label.svg",
+          "sha256": "4f5b344d6049f4d5995e352bf1e799d17a424ad4f2d00f2b215d9ec306eaaedf",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:decide",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "decide",
+              "expected": "stop: answer_present OR attempts >= 2",
+              "observed": "INNOVATION: Bounded return or stopconceptual | inference | parameters: not_applicableCheck answer_present and attempts < 2.continue: not answer_present AND attempts < 2removed: answer_present OR attempts >= 2input input: episode / episode@observedoutput again: episode / episode@observedoutput done: episode / episode@stopped",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "missing_stop",
+          "svg": "tool-loop.negative.missing_stop.svg",
+          "sha256": "04f370670f477a738707a35ba682f7cecdd6a5bc771232744d5c334a867de785",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_content:decide",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "decide",
+              "expected": "stop: answer_present OR attempts >= 2",
+              "observed": "INNOVATION: Bounded return or stopconceptual | inference | parameters: not_applicableCheck answer_present and attempts < 2.continue: not answer_present AND attempts < 2input input: episode / episode@observedoutput again: episode / episode@observedoutput done: episode / episode@stopped",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "constraint",
+      "source_answer_comparison": {
+        "status": "reviewed",
+        "scope": "source-answer SVG structure only",
+        "human_status": "human_pending",
+        "publication_visual_pass": false,
+        "findings": []
+      },
+      "exploratory_accepted": true,
+      "reproduction": {
+        "status": "reproduced",
+        "artifact_id": "mechanism.constraint",
+        "output_sha256": "9c9287447564fb1969d727772e15314fb5bb91b226716b8114b9934453c97c8d",
+        "renderer": {
+          "name": "arw.mechanism-svg",
+          "version": "1.1.0",
+          "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+          "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+        }
+      },
+      "publication_without_review": {
+        "accepted": false,
+        "qualification": "FAIL",
+        "receipt": {
+          "receipt_version": "arw.mechanism-figure-receipt.v1",
+          "artifact_kind": "mechanism_figure",
+          "artifact_id": "mechanism.constraint.publication",
+          "revision": 1,
+          "ir_sha256": "9220622bcbe92f5f53309f3fe3e66bd58f7578a85688b45a49ca0839e30bc817",
+          "renderer": {
+            "name": "arw.mechanism-svg",
+            "version": "1.1.0",
+            "identity_digest": "6587ed37ca5cde5326524a261e203e17ed39bfbbd06669524e109a958af4576f",
+            "normalization_policy": "utf8-svg-explicit-ports-pt.v1"
+          },
+          "inputs": [
+            {
+              "binding_id": "binding.mechanism",
+              "artifact_id": "source.mechanisms",
+              "sha256": "2966ef13f498cbf022ca989b5e87aa44f9e0adce458a164d20c7ae115742d171",
+              "ledger_event_id": "evt-00000000-0000-4000-8000-000000000002",
+              "ledger_event_sha256": "1686f074f3440e286238a0a43422b531ed76478b97b6660fb4794911eb8fd372",
+              "json_pointer": "/tasks/2/facts"
+            }
+          ],
+          "outputs": [
+            {
+              "path": ".arw/artifacts/candidates/mechanism.constraint.publication/9220622bcbe92f5f53309f3fe3e66bd58f7578a85688b45a49ca0839e30bc817/ir.json",
+              "sha256": "9220622bcbe92f5f53309f3fe3e66bd58f7578a85688b45a49ca0839e30bc817"
+            },
+            {
+              "path": ".arw/artifacts/candidates/mechanism.constraint.publication/9220622bcbe92f5f53309f3fe3e66bd58f7578a85688b45a49ca0839e30bc817/figure.svg",
+              "sha256": "9c9287447564fb1969d727772e15314fb5bb91b226716b8114b9934453c97c8d"
+            }
+          ],
+          "min_font_pt": 8.0,
+          "validation_policy": {
+            "schema": "REQUIRED",
+            "provenance": "REQUIRED",
+            "semantic": "REQUIRED",
+            "render": "REQUIRED",
+            "visual": "REQUIRED"
+          },
+          "validation": {
+            "schema": "PASS",
+            "provenance": "PASS",
+            "semantic": "PASS",
+            "render": "PASS",
+            "visual": "UNAVAILABLE"
+          },
+          "qualification": "FAIL",
+          "purpose": "publication-critical",
+          "visual_reviewer": null,
+          "reason_codes": []
+        }
+      },
+      "ir_sha256": "bc6f94b70f36e4fc6d9b8d013f43f4dc4e722cbb1f67fbefd36f1ad5f5a7b1b9",
+      "svg_sha256": "9c9287447564fb1969d727772e15314fb5bb91b226716b8114b9934453c97c8d",
+      "raster": {
+        "status": "passed",
+        "requested_font_available": true,
+        "grayscale_sha256": "eee3133545033ee039c73d1d8fdfc2aea1e4316ea58e1570ce471d7805bd5e16",
+        "rasterizer": {
+          "name": "librsvg",
+          "version": "2.62.3",
+          "pango": "1.57.1",
+          "cairo": "1.18.4",
+          "python": "3.14.6"
+        },
+        "fonts": [
+          {
+            "description": "Noto Sans CJK SC 12 @wght=400",
+            "family": "Noto Sans CJK SC",
+            "file": "/usr/share/fonts/google-noto-sans-cjk-vf-fonts/NotoSansCJK-VF.ttc",
+            "sha256": "d3d8256cdec8dbcb3552284bc6b20c734dd60c2ee9df83b5758e34807c4bac32",
+            "license_metadata": "google-noto-sans-cjk-vf-fonts 2.004 | OFL-1.1"
+          }
+        ],
+        "font_probe_unknown_glyphs": 0,
+        "width_px": 1063,
+        "height_px": 1848,
+        "width_mm": 180.0,
+        "height_mm": 312.914,
+        "dpi": 150.0,
+        "ink_pixels": 331748,
+        "ink_bounds": [
+          26,
+          22,
+          997,
+          1722
+        ],
+        "border_ink": false,
+        "png_sha256": "745609875f052e48a760993d520eb04aad183ec8292725676e1bf60a646219bc",
+        "pdf_sha256": "451724aaea2412a3d1e43961b87a6aa6f4f078f6f15a690d4c943b3c88e0afcb",
+        "limitations": [
+          "Pango coverage probe does not prove readable pixel glyphs.",
+          "Border screening does not certify absence of all clipping or occlusion.",
+          "Color/grayscale perception requires human review."
+        ]
+      },
+      "faults": [
+        {
+          "fault": "missing_component",
+          "svg": "constraint.negative.missing_component.svg",
+          "sha256": "048997d70ac2a1cefb1a322d2f0c3aea03930948dcdf262228f9f3c8c780006e",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "component_inventory:svg",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "svg",
+              "expected": [
+                "after",
+                "before",
+                "revise"
+              ],
+              "observed": [
+                "after",
+                "revise"
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "Original rule and counterexample",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "conceptual | inference | parameters: not_applicable",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "Toy domain: birds, penguins and possible flight.",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "Counterexample: penguin is a bird that cannot fly.",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "before: bird -> may_fly",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "component_content:before",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before",
+              "expected": "after: Counterexample is retained",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_identity:before.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before.out",
+              "expected": "output out: rule / rule@counterexample",
+              "observed": "",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            },
+            {
+              "finding_id": "port_missing:before.out",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "before.out",
+              "expected": "visible port",
+              "observed": null,
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "reverse_arrow",
+          "svg": "constraint.negative.reverse_arrow.svg",
+          "sha256": "35a3741f4425043721128e95e51f2ffbe3360b3391336eb5b91bf1140e7be626",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "edge_direction_or_endpoint:counterexample",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "counterexample",
+              "expected": [
+                [
+                  458.0,
+                  150.0
+                ],
+                [
+                  48.0,
+                  364.5
+                ]
+              ],
+              "observed": [
+                [
+                  48.0,
+                  364.5
+                ],
+                [
+                  30.0,
+                  364.5
+                ],
+                [
+                  30.0,
+                  254.0
+                ],
+                [
+                  478.0,
+                  254.0
+                ],
+                [
+                  478.0,
+                  150.0
+                ],
+                [
+                  458.0,
+                  150.0
+                ]
+              ],
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        },
+        {
+          "fault": "small_text",
+          "svg": "constraint.negative.small_text.svg",
+          "sha256": "b1439f89e5b9fb8c932bddca415397890959457d41dfe44ecc33529a8120128f",
+          "detected": true,
+          "findings": [
+            {
+              "finding_id": "minimum_font:mechanism.claim",
+              "type": "necessary_content_or_scientific_difference",
+              "severity": "error",
+              "semantic_id": "mechanism.claim",
+              "expected": 8.0,
+              "observed": "2",
+              "pass_condition": "Restore the frozen source requirement and rerun this comparison.",
+              "uncertainty": "Structural SVG comparison only; final pixels require a separate reviewer."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "human_status": "human_pending",
+  "publication_visual_pass": false,
+  "explanation_search": "deferred",
+  "drawio": "unsupported",
+  "elapsed_seconds": 4.072,
+  "automatic_model_calls": 0,
+  "structural_counts": {
+    "normal": 3,
+    "normal_flagged": 0,
+    "injected": 16,
+    "detected": 16
+  }
+}

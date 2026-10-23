@@ -15,3 +15,29 @@ Complex methods exceed the small component budget → reject unsupported input. 
 
 ## Independent review amendment
 The owner's 2026-10-16 comment requires a separate read-only figure-reviewer with actual pixels, frozen answers, reference/version comparisons and concrete findings. Two native Codex reviewer rounds were run without producer scores. Source revision 2 explicitly corrects synthetic counter facts while retaining v1 and its original output. Partial/new findings remain open after the fixed two-round budget. A historical control changed only a stop role prefix; it is classified as such, not as full stop-condition omission. The latter has a separate actual raster/structural supplement without independent third-round pixel review. No source or visual status is promoted by the advisory record.
+
+## Round3 repair implementation (2026-10-23)
+
+Revision 3 retains v2 bytes/SHA and all round1/2 outputs. Its explicit synthetic
+source amendment decomposes the already supplied initialization into a separate
+once-only component and distinct initial/retry inputs; it adds structured exact
+coordinate operands/results and a source-linked rule-clause diff. Removing only
+that declared decomposition reproduces every v2 scientific fact exactly.
+
+Renderer 1.1.0 places intact edge names in reserved long horizontal route gaps,
+links each conditional predicate to the relation's actual source port (regardless
+of port inventory order), renders coordinate columns with individual additions,
+and isolates the exact added guard with alignment, border and weight cues.
+Manual layouts must provide a sufficiently long horizontal label segment and
+space for output-aligned predicates; unsupported geometry fails explicitly.
+
+`evidence/round3` is a producer repair packet for a future independent review,
+not a third advisory review. It retains real SVG/PNG/PDF/gray outputs, admitted
+sources/replay, exact binding and mechanical source/font-ink/edge checks. Old
+review bindings remain historical and cannot approve the new renderer/output.
+The original two-round review budget is not extended by this packet.
+
+The bounded strategy assessment is in
+`examples/mechanism-figures/strategy-assessment.md`. It identifies an absent
+representation control/treatment and the needed view/trace contracts; cosmetic
+layout variants do not complete 3.2.

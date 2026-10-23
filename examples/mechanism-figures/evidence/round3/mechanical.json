@@ -1,0 +1,2489 @@
+{
+  "scope": "Mechanical SVG source/port/font-ink geometry checks; not independent pixel review",
+  "status": "passed",
+  "source_v2_facts_preserved_after_declared_decomposition": true,
+  "tasks_sha256": "5cbc05eb4d4b0ce6b03e056a85d0477f6ecbbc229da2a729adb3c0d23367b7e0",
+  "geometry_environment": {
+    "interpreter": "3.14.6",
+    "dpi_for_point_coordinates": 72
+  },
+  "tasks": [
+    {
+      "id": "representation",
+      "status": "passed",
+      "checks": [
+        {
+          "check": "text_inside_canvas:mechanism.claim",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:mechanism.question",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.lookup",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.lookup",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.sum",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.sum",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.8",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.9",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.tokens.10",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.axis-label",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.axis.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.axis.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.operand.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.0.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.0.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.operand.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.1.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.1.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.result",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.sum.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:coordinate.project.sum.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.project.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.result.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.8",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.9",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.tokens.10",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.axis-label",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.axis.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.axis.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.operand.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.0.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.0.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.operand.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.1.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.1.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.result",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.sum.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:coordinate.project.sum.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.project.6",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.axis.0",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.0.0",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.1.0",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.sum.0",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.axis.1",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.0.1",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.1.1",
+          "passed": true
+        },
+        {
+          "check": "coordinate.project.sum.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.result.6",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:lookup",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:lookup:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:lookup:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:lookup:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:lookup:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:lookup:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:sum:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:sum:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:sum:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:sum:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:lookup:sum:4",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:sum",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:lookup:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:lookup:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:lookup:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:lookup:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:lookup:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:sum:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:sum:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:sum:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:sum:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:sum:sum:4",
+          "passed": true
+        }
+      ],
+      "text_ink_bounds_pt": {
+        "mechanism.claim": [
+          12.109375,
+          10.84375,
+          341.29296875,
+          31.17578125
+        ],
+        "mechanism.question": [
+          12.796875,
+          36.53125,
+          223.1796875,
+          44.82812499999999
+        ],
+        "edge-label.lookup": [
+          239.13281249999997,
+          250.64062499999997,
+          262.859375,
+          258.828125
+        ],
+        "relation.lookup": [
+          20.734375,
+          814.6406249999999,
+          181.28906249999997,
+          822.875
+        ],
+        "edge-label.sum": [
+          246.44921874999997,
+          584.546875,
+          261.078125,
+          589.109375
+        ],
+        "relation.sum": [
+          20.25,
+          848.640625,
+          215.39062499999997,
+          856.875
+        ],
+        "label.tokens.0": [
+          60.46875,
+          81.64062499999999,
+          181.28515624999997,
+          90.0
+        ],
+        "label.tokens.1": [
+          60.40625,
+          92.8984375,
+          239.51562499999997,
+          101.83593749999999
+        ],
+        "label.tokens.2": [
+          60.78125,
+          109.83984375,
+          198.74218749999997,
+          118.07421874999999
+        ],
+        "label.tokens.3": [
+          66.21875,
+          124.44140625,
+          96.09765625,
+          130.91015625
+        ],
+        "label.tokens.4": [
+          241.87499999999997,
+          126.03515624999999,
+          248.23437499999997,
+          129.62890625
+        ],
+        "label.tokens.5": [
+          276.90625,
+          124.44140625,
+          296.17578125,
+          131.92578125
+        ],
+        "label.tokens.6": [
+          66.21875,
+          148.04296875,
+          100.52734374999999,
+          154.51171875
+        ],
+        "label.tokens.7": [
+          241.87499999999997,
+          149.63671875,
+          248.23437499999997,
+          153.23046874999997
+        ],
+        "label.tokens.8": [
+          276.90625,
+          148.04296875,
+          300.6015625,
+          155.52734374999997
+        ],
+        "label.tokens.9": [
+          60.46875,
+          168.64062499999997,
+          255.85156249999997,
+          177.0
+        ],
+        "label.tokens.10": [
+          60.40625,
+          185.2421875,
+          195.7578125,
+          193.4296875
+        ],
+        "label.project.0": [
+          60.796875,
+          293.640625,
+          227.5078125,
+          301.828125
+        ],
+        "label.project.1": [
+          60.40625,
+          304.8984375,
+          207.78124999999997,
+          313.8359375
+        ],
+        "label.project.2": [
+          70.703125,
+          324.65234374999994,
+          167.05859374999997,
+          332.77734374999994
+        ],
+        "label.project.3": [
+          70.3125,
+          353.25390625,
+          170.28906249999997,
+          361.62890624999994
+        ],
+        "label.project.4": [
+          70.234375,
+          382.07421875,
+          172.93359374999997,
+          390.27734375
+        ],
+        "coordinate.project.axis-label": [
+          70.40625,
+          398.640625,
+          108.03125,
+          405.109375
+        ],
+        "coordinate.project.axis.0": [
+          192.73437499999997,
+          398.640625,
+          203.05859374999997,
+          405.109375
+        ],
+        "coordinate.project.axis.1": [
+          314.734375,
+          398.640625,
+          329.484375,
+          405.109375
+        ],
+        "coordinate.project.operand.0": [
+          70.796875,
+          410.05468749999994,
+          90.45703125,
+          418.1796875
+        ],
+        "coordinate.project.0.0": [
+          192.70312499999997,
+          410.7421875,
+          195.921875,
+          416.60156249999994
+        ],
+        "coordinate.project.0.1": [
+          314.390625,
+          410.6328125,
+          318.046875,
+          416.71093749999994
+        ],
+        "coordinate.project.operand.1": [
+          70.796875,
+          421.65234374999994,
+          94.46484375,
+          429.77734374999994
+        ],
+        "coordinate.project.1.0": [
+          192.39062499999997,
+          422.23046874999994,
+          196.04687499999997,
+          428.30859375
+        ],
+        "coordinate.project.1.1": [
+          314.703125,
+          422.33984374999994,
+          317.921875,
+          428.19921875
+        ],
+        "coordinate.project.result": [
+          70.109375,
+          441.45703124999994,
+          74.0625,
+          447.67578124999994
+        ],
+        "coordinate.project.sum.0": [
+          192.70312499999997,
+          439.83203125,
+          219.63281249999997,
+          445.91015624999994
+        ],
+        "coordinate.project.sum.1": [
+          314.390625,
+          439.83203125,
+          341.6328125,
+          445.91015624999994
+        ],
+        "label.project.5": [
+          60.609375,
+          464.04296874999994,
+          197.05078124999997,
+          472.23046875
+        ],
+        "label.project.6": [
+          60.40625,
+          475.640625,
+          189.53515624999997,
+          483.828125
+        ],
+        "label.result.0": [
+          60.796875,
+          625.5312499999999,
+          171.5078125,
+          633.828125
+        ],
+        "label.result.1": [
+          60.40625,
+          636.8984375,
+          239.51562499999997,
+          645.8359374999999
+        ],
+        "label.result.2": [
+          60.796875,
+          653.83984375,
+          234.15624999999997,
+          662.07421875
+        ],
+        "label.result.3": [
+          66.21875,
+          669.25390625,
+          154.55468749999997,
+          688.98046875
+        ],
+        "label.result.4": [
+          269.40625,
+          669.25390625,
+          375.703125,
+          688.98046875
+        ],
+        "label.result.5": [
+          243.37499999999997,
+          671.03515625,
+          249.734375,
+          674.62890625
+        ],
+        "label.result.6": [
+          60.609375,
+          708.6406249999999,
+          190.828125,
+          716.828125
+        ]
+      }
+    },
+    {
+      "id": "tool-loop",
+      "status": "passed",
+      "checks": [
+        {
+          "check": "text_inside_canvas:mechanism.claim",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:mechanism.question",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.initialized",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.initialized",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.call",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.call",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.observed",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.observed",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.retry",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.retry",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.stop",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.stop",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.initialize.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.request.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.observe.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:predicate.decide.again",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:predicate.decide.done",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.decide.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.done.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.initialize.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.request.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.observe.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:predicate.decide.again",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:predicate.decide.done",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.decide.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.done.6",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:initialized",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:initialized:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:initialized:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:initialized:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:initialized:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:initialized:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:call:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:call:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:call:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:call:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:call:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:observed:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:observed:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:observed:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:observed:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:observed:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:retry:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:retry:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:retry:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:retry:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:retry:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:stop:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:stop:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:stop:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:stop:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:initialized:stop:4",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:call",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:initialized:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:initialized:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:initialized:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:initialized:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:initialized:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:call:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:call:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:call:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:call:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:call:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:observed:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:observed:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:observed:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:observed:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:observed:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:retry:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:retry:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:retry:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:retry:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:retry:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:stop:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:stop:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:stop:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:stop:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:call:stop:4",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:observed",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:initialized:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:initialized:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:initialized:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:initialized:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:initialized:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:call:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:call:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:call:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:call:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:call:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:observed:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:observed:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:observed:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:observed:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:observed:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:retry:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:retry:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:retry:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:retry:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:retry:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:stop:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:stop:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:stop:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:stop:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:observed:stop:4",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:retry",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:initialized:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:initialized:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:initialized:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:initialized:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:initialized:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:call:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:call:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:call:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:call:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:call:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:observed:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:observed:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:observed:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:observed:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:observed:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:retry:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:retry:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:retry:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:retry:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:retry:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:stop:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:stop:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:stop:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:stop:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:retry:stop:4",
+          "passed": true
+        },
+        {
+          "check": "predicate_exact:retry",
+          "passed": true
+        },
+        {
+          "check": "predicate_port_binding:retry",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:stop",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:initialized:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:initialized:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:initialized:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:initialized:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:initialized:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:call:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:call:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:call:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:call:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:call:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:observed:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:observed:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:observed:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:observed:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:observed:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:retry:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:retry:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:retry:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:retry:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:retry:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:stop:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:stop:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:stop:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:stop:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:stop:stop:4",
+          "passed": true
+        },
+        {
+          "check": "predicate_exact:stop",
+          "passed": true
+        },
+        {
+          "check": "predicate_port_binding:stop",
+          "passed": true
+        }
+      ],
+      "text_ink_bounds_pt": {
+        "mechanism.claim": [
+          12.828124999999995,
+          10.843749999999996,
+          315.9023437499999,
+          33.160156249999986
+        ],
+        "mechanism.question": [
+          12.203124999999993,
+          36.64062499999999,
+          203.7109374999999,
+          44.828124999999986
+        ],
+        "edge-label.initialized": [
+          226.0078124999999,
+          290.6406249999999,
+          258.7187499999999,
+          297.10937499999994
+        ],
+        "relation.initialized": [
+          20.609374999999993,
+          1213.6406249999995,
+          303.1992187499999,
+          1221.8749999999995
+        ],
+        "edge-label.call": [
+          244.0078124999999,
+          482.64062499999983,
+          255.69140624999991,
+          489.1093749999998
+        ],
+        "relation.call": [
+          20.406249999999996,
+          1247.6406249999995,
+          220.8203124999999,
+          1255.9999999999995
+        ],
+        "edge-label.observed": [
+          233.6054687499999,
+          709.6406249999999,
+          265.5937499999999,
+          716.1093749999998
+        ],
+        "relation.observed": [
+          20.406249999999996,
+          1281.6406249999995,
+          254.4140624999999,
+          1289.8749999999995
+        ],
+        "edge-label.retry": [
+          244.7343749999999,
+          257.4374999999999,
+          260.5429687499999,
+          264.87499999999994
+        ],
+        "relation.retry": [
+          20.734374999999993,
+          1315.5312499999995,
+          348.3554687499999,
+          1323.8749999999995
+        ],
+        "edge-label.stop": [
+          243.85156249999991,
+          982.4374999999995,
+          258.7578124999999,
+          989.8281249999997
+        ],
+        "relation.stop": [
+          20.249999999999996,
+          1349.6406249999998,
+          272.4609374999999,
+          1357.8281249999995
+        ],
+        "label.initialize.0": [
+          60.79687499999994,
+          81.64062499999994,
+          151.5078124999999,
+          89.82812499999996
+        ],
+        "label.initialize.1": [
+          60.40624999999994,
+          92.89843749999994,
+          239.51562499999977,
+          101.83593749999989
+        ],
+        "label.initialize.2": [
+          60.79687499999994,
+          109.7304687499999,
+          237.04687499999977,
+          118.02734374999989
+        ],
+        "label.initialize.3": [
+          60.46874999999994,
+          121.4414062499999,
+          210.23046874999977,
+          129.6757812499999
+        ],
+        "label.initialize.4": [
+          66.73437499999996,
+          136.93359374999991,
+          137.8437499999999,
+          145.2304687499999
+        ],
+        "label.initialize.5": [
+          269.4687499999998,
+          136.93359374999991,
+          345.5429687499998,
+          156.82812499999991
+        ],
+        "label.initialize.6": [
+          243.37499999999977,
+          138.6367187499999,
+          249.7343749999998,
+          142.2304687499999
+        ],
+        "label.initialize.7": [
+          60.40624999999994,
+          176.2421874999999,
+          190.9843749999999,
+          184.4296874999999
+        ],
+        "label.request.0": [
+          60.79687499999994,
+          333.64062499999983,
+          185.3554687499999,
+          341.8281249999998
+        ],
+        "label.request.1": [
+          60.40624999999994,
+          344.89843749999983,
+          239.51562499999977,
+          353.8359374999998
+        ],
+        "label.request.2": [
+          70.70312499999994,
+          364.6523437499998,
+          261.4374999999998,
+          373.07421874999983
+        ],
+        "label.request.3": [
+          60.60937499999994,
+          386.44140624999955,
+          192.9531249999998,
+          394.62890624999955
+        ],
+        "label.request.4": [
+          60.60937499999994,
+          398.0429687499996,
+          205.27343749999977,
+          406.23046874999955
+        ],
+        "label.request.5": [
+          60.40624999999994,
+          409.64062499999955,
+          185.5468749999999,
+          417.82812499999955
+        ],
+        "label.observe.0": [
+          60.79687499999994,
+          525.6406249999995,
+          182.26171874999991,
+          533.8281249999995
+        ],
+        "label.observe.1": [
+          60.40624999999994,
+          536.8984374999995,
+          239.51562499999977,
+          545.8359374999995
+        ],
+        "label.observe.2": [
+          70.70312499999994,
+          556.7304687499995,
+          225.9453124999998,
+          565.1992187499995
+        ],
+        "label.observe.3": [
+          70.31249999999994,
+          585.4414062499995,
+          206.84374999999977,
+          593.6757812499995
+        ],
+        "label.observe.4": [
+          70.23437499999994,
+          613.8554687499995,
+          232.49999999999977,
+          622.2304687499995
+        ],
+        "label.observe.5": [
+          60.60937499999994,
+          635.6406249999995,
+          186.8398437499999,
+          643.8281249999995
+        ],
+        "label.observe.6": [
+          60.40624999999994,
+          647.2421874999995,
+          203.9765624999998,
+          655.4296874999997
+        ],
+        "label.decide.0": [
+          60.79687499999994,
+          752.6406249999995,
+          190.70703124999991,
+          760.8281249999995
+        ],
+        "label.decide.1": [
+          60.40624999999994,
+          763.8984374999995,
+          239.51562499999977,
+          772.8359374999992
+        ],
+        "label.decide.2": [
+          60.46874999999994,
+          780.8398437499991,
+          201.92578124999977,
+          789.0273437499991
+        ],
+        "predicate.decide.again": [
+          66.40624999999994,
+          813.6796874999991,
+          232.95703124999977,
+          821.6953124999991
+        ],
+        "predicate.decide.done": [
+          66.24999999999994,
+          890.5664062499991,
+          202.5898437499998,
+          898.3632812499992
+        ],
+        "label.decide.3": [
+          60.60937499999994,
+          916.7734374999992,
+          205.27343749999977,
+          924.9609374999991
+        ],
+        "label.decide.4": [
+          60.40624999999994,
+          928.3749999999991,
+          211.1054687499998,
+          936.7343749999992
+        ],
+        "label.decide.5": [
+          60.40624999999994,
+          939.9765624999991,
+          206.2968749999998,
+          948.1640624999992
+        ],
+        "label.done.0": [
+          60.24999999999995,
+          1024.640624999999,
+          139.39062499999991,
+          1032.828124999999
+        ],
+        "label.done.1": [
+          60.40624999999994,
+          1035.898437499999,
+          239.51562499999977,
+          1044.835937499999
+        ],
+        "label.done.2": [
+          60.79687499999994,
+          1052.839843749999,
+          248.22656249999977,
+          1061.027343749999
+        ],
+        "label.done.3": [
+          66.73437499999996,
+          1068.3320312499993,
+          164.07031249999991,
+          1076.6289062499993
+        ],
+        "label.done.4": [
+          269.4687499999998,
+          1068.3320312499993,
+          381.8671874999998,
+          1086.511718749999
+        ],
+        "label.done.5": [
+          243.37499999999977,
+          1070.0351562499993,
+          249.7343749999998,
+          1073.628906249999
+        ],
+        "label.done.6": [
+          60.60937499999994,
+          1107.640624999999,
+          201.45703124999977,
+          1115.828124999999
+        ]
+      }
+    },
+    {
+      "id": "constraint",
+      "status": "passed",
+      "checks": [
+        {
+          "check": "text_inside_canvas:mechanism.claim",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:mechanism.question",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.counterexample",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.counterexample",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:edge-label.guard",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:relation.guard",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.before.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.revise.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.added-label",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.before",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.before.retained",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.before.conclusion",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.after",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.after.retained",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.after.conclusion",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:rule.after.added",
+          "passed": true
+        },
+        {
+          "check": "text_inside_canvas:label.after.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.before.7",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.revise.6",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.0",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.1",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.2",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.3",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.4",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.5",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.added-label",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.before",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.before.retained",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.before.conclusion",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.after",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.after.retained",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.after.conclusion",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:rule.after.added",
+          "passed": true
+        },
+        {
+          "check": "text_inside_component:label.after.6",
+          "passed": true
+        },
+        {
+          "check": "rule.after.exact_added_clause",
+          "passed": true
+        },
+        {
+          "check": "rule.after.emphasis",
+          "passed": true
+        },
+        {
+          "check": "rule.after.guard_inside_box",
+          "passed": true
+        },
+        {
+          "check": "rule.after.aligned.retained",
+          "passed": true
+        },
+        {
+          "check": "rule.after.aligned.conclusion",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:counterexample",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:counterexample:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:counterexample:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:counterexample:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:counterexample:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:counterexample:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:guard:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:guard:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:guard:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:guard:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:counterexample:guard:4",
+          "passed": true
+        },
+        {
+          "check": "intact_edge_name:guard",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:counterexample:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:counterexample:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:counterexample:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:counterexample:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:counterexample:4",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:guard:0",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:guard:1",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:guard:2",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:guard:3",
+          "passed": true
+        },
+        {
+          "check": "edge_label_clear:guard:guard:4",
+          "passed": true
+        }
+      ],
+      "text_ink_bounds_pt": {
+        "mechanism.claim": [
+          12.453125,
+          10.843749999999998,
+          340.21875,
+          31.17578125
+        ],
+        "mechanism.question": [
+          12.796874999999998,
+          36.640625,
+          245.515625,
+          44.828125
+        ],
+        "edge-label.counterexample": [
+          218.0078125,
+          240.640625,
+          274.6484375,
+          248.828125
+        ],
+        "relation.counterexample": [
+          20.406249999999996,
+          784.640625,
+          268.9375,
+          793.0
+        ],
+        "edge-label.guard": [
+          241.40625,
+          467.640625,
+          260.98828125,
+          476.0
+        ],
+        "relation.guard": [
+          20.406249999999996,
+          818.53125,
+          246.765625,
+          827.0
+        ],
+        "label.before.0": [
+          60.46874999999999,
+          81.640625,
+          177.1328125,
+          90.0
+        ],
+        "label.before.1": [
+          60.40625,
+          92.8984375,
+          239.515625,
+          101.8359375
+        ],
+        "label.before.2": [
+          60.24999999999999,
+          109.73046875,
+          227.12890625,
+          118.19921874999999
+        ],
+        "label.before.3": [
+          60.46874999999999,
+          121.33203125,
+          233.78125,
+          129.80078125
+        ],
+        "label.before.4": [
+          66.734375,
+          136.93359375,
+          144.48046875000003,
+          145.27734375
+        ],
+        "label.before.5": [
+          269.46875,
+          136.93359375,
+          354.484375,
+          155.109375
+        ],
+        "label.before.6": [
+          243.375,
+          138.63671875,
+          249.734375,
+          142.23046875
+        ],
+        "label.before.7": [
+          60.40625,
+          176.2421875,
+          199.52734375,
+          184.4296875
+        ],
+        "label.revise.0": [
+          60.79687499999999,
+          283.64062499999994,
+          216.6328125,
+          292.0
+        ],
+        "label.revise.1": [
+          60.40625,
+          294.89843749999994,
+          239.515625,
+          303.8359375
+        ],
+        "label.revise.2": [
+          70.703125,
+          314.65234375,
+          151.23828125,
+          323.19921875
+        ],
+        "label.revise.3": [
+          70.3125,
+          343.33203124999994,
+          204.09765625,
+          351.80078125
+        ],
+        "label.revise.4": [
+          70.23437500000001,
+          371.93359375,
+          251.78125,
+          380.40234375
+        ],
+        "label.revise.5": [
+          60.609375,
+          393.640625,
+          200.8203125,
+          401.82812499999994
+        ],
+        "label.revise.6": [
+          60.40625,
+          405.2421875,
+          171.4453125,
+          413.6015625
+        ],
+        "label.after.0": [
+          60.79687499999999,
+          510.640625,
+          190.49609375,
+          517.109375
+        ],
+        "label.after.1": [
+          60.40625,
+          521.8984375,
+          239.515625,
+          530.8359375
+        ],
+        "label.after.2": [
+          60.79687499999999,
+          538.73046875,
+          224.26171875,
+          547.07421875
+        ],
+        "label.after.3": [
+          66.734375,
+          554.33203125,
+          173.61328125,
+          560.91015625
+        ],
+        "label.after.4": [
+          269.46875,
+          554.33203125,
+          373.2734375,
+          574.27734375
+        ],
+        "label.after.5": [
+          243.375,
+          556.03515625,
+          249.734375,
+          559.62890625
+        ],
+        "rule.after.added-label": [
+          136.23046875,
+          589.03125,
+          187.91015625,
+          595.109375
+        ],
+        "rule.after.before": [
+          60.734375,
+          603.73046875,
+          84.27343750000001,
+          610.30859375
+        ],
+        "rule.after.before.retained": [
+          105.73437500000001,
+          603.83984375,
+          118.546875,
+          610.30859375
+        ],
+        "rule.after.before.conclusion": [
+          232.9765625,
+          603.73046875,
+          268.9921875,
+          612.07421875
+        ],
+        "rule.after.after": [
+          60.46874999999999,
+          626.93359375,
+          78.015625,
+          633.51171875
+        ],
+        "rule.after.after.retained": [
+          105.73437500000001,
+          627.04296875,
+          118.546875,
+          633.51171875
+        ],
+        "rule.after.after.conclusion": [
+          232.9765625,
+          626.93359375,
+          268.9921875,
+          635.27734375
+        ],
+        "rule.after.added": [
+          136.16796875,
+          626.91796875,
+          196.05859375,
+          635.33984375
+        ],
+        "label.after.6": [
+          60.609375,
+          659.640625,
+          172.73828125,
+          668.0
+        ]
+      }
+    }
+  ],
+  "independent_pixel_review": "not_run",
+  "human_status": "human_pending",
+  "publication_visual_pass": false,
+  "limits": [
+    "Text ink containment does not establish reader comprehension.",
+    "Edge clearance only screens local labels against orthogonal relation paths; it does not grade all visual interactions."
+  ]
+}

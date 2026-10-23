@@ -7,6 +7,7 @@ import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 
 from arw.kernel.core.canonical import canonical_json_bytes, sha256_hex
@@ -155,7 +156,7 @@ class MechanismRenderer:
     def identity(self):
         return RendererIdentity(
             name="arw.mechanism-svg",
-            version="1.0.0",
+            version="1.1.0",
             identity_digest=sha256_hex(Path(__file__).read_bytes()),
             normalization_policy="utf8-svg-explicit-ports-pt.v1",
         )
@@ -243,13 +244,22 @@ class MechanismRenderer:
                     "marker-end": "url(#arrow." + relation.relation_type + ")",
                 },
             )
-            sx, sy = points[0]
+            # Reserve the long horizontal routing gap for an intact local name.
+            # A narrow source-exit gutter cannot hold words like counterexample.
+            spans = [(a, b) for a, b in pairwise(points) if a[1] == b[1]]
+            label_width = len(relation.semantic_id) * ir.min_font_pt * 0.65
+            spans = [(a, b) for a, b in spans if abs(b[0] - a[0]) >= label_width + 12]
+            if not spans:
+                raise IRValidationFault(
+                    "mechanism_local_label_gap_required:" + relation.semantic_id
+                )
+            a, b = max(spans, key=lambda pair: abs(pair[1][0] - pair[0][0]))
             text_element(
                 root,
                 "edge-label." + relation.semantic_id,
-                wrap(relation.semantic_id, width - sx - 7, ir.min_font_pt),
-                sx + 5,
-                sy - 7,
+                (relation.semantic_id,),
+                (a[0] + b[0] - label_width) / 2,
+                a[1] - 7,
                 ir.min_font_pt,
             )
             label = (
@@ -290,7 +300,18 @@ class MechanismRenderer:
                     "stroke-width": "2" if innovation else "1",
                 },
             )
-            self._component(group, component, cell, ir.min_font_pt, innovation)
+            self._component(
+                group,
+                component,
+                cell,
+                ir.min_font_pt,
+                innovation,
+                [
+                    r
+                    for r in facts.relations
+                    if r.source_component == component.semantic_id
+                ],
+            )
             for port in component.ports:
                 x, y = port_position(component, cell, port.port_id)
                 ET.SubElement(
@@ -311,7 +332,7 @@ class MechanismRenderer:
             raise IRValidationFault("mechanism_output_budget_exceeded")
         return raw
 
-    def _component(self, group, c, cell, size, innovation):
+    def _component(self, group, c, cell, size, innovation, relations):
         content = ET.SubElement(group, NS + "g", {"id": "content." + c.semantic_id})
         x, y, w = cell.x + 12, cell.y + 10, cell.width - 24
         row = size * 1.45
@@ -335,7 +356,13 @@ class MechanismRenderer:
         if c.family == "port_operation":
             for i, step in enumerate(c.steps):
                 lines = wrap(f"{i + 1}. {step}", w - 20, size)
+                table = (
+                    c.coordinate_sum
+                    if c.coordinate_sum and c.coordinate_sum.step_index == i
+                    else None
+                )
                 h = len(lines) * row + 8
+                table_height = (len(table.operands) + 2) * row + 14 if table else 0
                 ET.SubElement(
                     content,
                     NS + "rect",
@@ -343,7 +370,7 @@ class MechanismRenderer:
                         "x": str(x),
                         "y": str(y),
                         "width": str(w),
-                        "height": str(h),
+                        "height": str(h + table_height),
                         "fill": "#ffffff",
                         "stroke": "#0072b2",
                         "stroke-width": "0.7",
@@ -351,6 +378,11 @@ class MechanismRenderer:
                 )
                 text(f"{i + 1}. {step}", x + 10, y + 3, w - 20)
                 y += h
+                if table:
+                    self._coordinates(
+                        content, c.semantic_id, table, x + 10, y, w - 20, size
+                    )
+                    y += table_height
                 if i != len(c.steps) - 1:
                     ET.SubElement(
                         content,
@@ -400,7 +432,65 @@ class MechanismRenderer:
                 text("axes: " + "; ".join(c.axes))
             pair = None
             if c.condition:
-                pair = ("continue: " + c.condition, "stop: " + c.stop_condition)
+                # Bind each predicate to its actual output circle, not left/right
+                # boxes whose position has no relationship to top/bottom exits.
+                outputs = [p for p in c.ports if p.direction == "output"]
+                if len(outputs) != 2:
+                    raise IRValidationFault("mechanism_two_branch_ports_required")
+                branches = {r.source_port: r for r in relations}
+                if len(relations) != 2 or set(branches) != {p.port_id for p in outputs}:
+                    raise IRValidationFault("mechanism_branch_port_binding_required")
+                for p in outputs:
+                    relation = branches[p.port_id]
+                    role, predicate = (
+                        ("continue", c.condition)
+                        if relation.feedback
+                        else ("stop", c.stop_condition)
+                    )
+                    if relation.trigger != predicate:
+                        raise IRValidationFault("mechanism_branch_predicate_mismatch")
+                    value = role + ": " + predicate
+                    px, py = port_position(c, cell, p.port_id)
+                    lines = wrap(value, w - 42, size)
+                    h = len(lines) * row + 10
+                    top = py - h / 2
+                    if top < y:
+                        raise IRValidationFault(
+                            "mechanism_predicate_space_required:" + c.semantic_id
+                        )
+                    ET.SubElement(
+                        content,
+                        NS + "rect",
+                        {
+                            "x": str(x),
+                            "y": str(top),
+                            "width": str(w - 30),
+                            "height": str(h),
+                            "fill": "#ffffff",
+                            "stroke": "#333333",
+                        },
+                    )
+                    text_element(
+                        content,
+                        f"predicate.{c.semantic_id}.{p.port_id}",
+                        lines,
+                        x + 6,
+                        top + 5 + size,
+                        size,
+                    )
+                    ET.SubElement(
+                        content,
+                        NS + "line",
+                        {
+                            "id": f"predicate-link.{c.semantic_id}.{p.port_id}",
+                            "x1": str(x + w - 30),
+                            "y1": str(py),
+                            "x2": str(px),
+                            "y2": str(py),
+                            "stroke": "#333333",
+                        },
+                    )
+                    y = top + h + 5
             elif c.before:
                 pair = ("before: " + c.before, "after: " + c.after)
             if pair:
@@ -428,6 +518,9 @@ class MechanismRenderer:
                 if c.before:
                     text(" -> ", x + half, y + 4, 20)
                 y += h + 5
+            if c.rule_change:
+                self._rule_change(content, c.semantic_id, c.rule_change, x, y, w, size)
+                y += row * 5 + 8
         y += 5
         for p in c.ports:
             text(
@@ -437,6 +530,135 @@ class MechanismRenderer:
             raise IRValidationFault(
                 "mechanism_component_text_does_not_fit:" + c.semantic_id
             )
+
+    def _coordinates(self, parent, identity, table, x, y, width, size):
+        row = size * 1.45
+        col = width / (len(table.axis_labels) + 1)
+        text_element(
+            parent,
+            f"coordinate.{identity}.axis-label",
+            ("coordinate",),
+            x,
+            y + size,
+            size,
+        )
+        for j, name in enumerate(table.axis_labels):
+            text_element(
+                parent,
+                f"coordinate.{identity}.axis.{j}",
+                (name,),
+                x + (j + 1) * col,
+                y + size,
+                size,
+            )
+        for i, operand in enumerate(table.operands):
+            yy = y + (i + 1) * row + size
+            text_element(
+                parent,
+                f"coordinate.{identity}.operand.{i}",
+                (operand.label,),
+                x,
+                yy,
+                size,
+            )
+            for j, value in enumerate(operand.values):
+                text_element(
+                    parent,
+                    f"coordinate.{identity}.{i}.{j}",
+                    (str(value),),
+                    x + (j + 1) * col,
+                    yy,
+                    size,
+                )
+        yy = y + (len(table.operands) + 1) * row + 3
+        ET.SubElement(
+            parent,
+            NS + "line",
+            {
+                "id": f"coordinate.{identity}.sum-bar",
+                "x1": str(x),
+                "x2": str(x + width),
+                "y1": str(yy),
+                "y2": str(yy),
+                "stroke": "#333333",
+            },
+        )
+        text_element(
+            parent,
+            f"coordinate.{identity}.result",
+            (table.result_label,),
+            x,
+            yy + size + 3,
+            size,
+        )
+        for j, value in enumerate(table.result):
+            expression = (
+                " + ".join(str(o.values[j]) for o in table.operands)
+                + " = "
+                + str(value)
+            )
+            if len(wrap(expression, col - 8, size)) != 1:
+                raise IRValidationFault("mechanism_coordinate_column_too_narrow")
+            text_element(
+                parent,
+                f"coordinate.{identity}.sum.{j}",
+                (expression,),
+                x + (j + 1) * col,
+                yy + size + 3,
+                size,
+            )
+
+    def _rule_change(self, parent, identity, change, x, y, width, size):
+        row = size * 1.45
+        prefix = f"rule.{identity}."
+        # Stable columns expose unchanged antecedent/conclusion and isolate the
+        # exact added source clause, including a non-color border/weight cue.
+        left = x + 45
+        added_x = left + (len(change.retained_clause) + 2) * size * 0.65
+        added_width = (len(change.added_clause) + 2) * size * 0.65
+        conclusion_x = added_x + added_width + 8
+        if conclusion_x + len(change.conclusion) * size * 0.65 > x + width:
+            raise IRValidationFault("mechanism_rule_columns_too_narrow")
+        text_element(
+            parent, prefix + "added-label", ("ADDED GUARD",), added_x, y + size, size
+        )
+        for i, role in enumerate(("before", "after")):
+            yy = y + (i * 2 + 2) * row
+            text_element(parent, prefix + role, (role + ":",), x, yy, size)
+            text_element(
+                parent,
+                prefix + role + ".retained",
+                (change.retained_clause,),
+                left,
+                yy,
+                size,
+            )
+            text_element(
+                parent,
+                prefix + role + ".conclusion",
+                (change.conclusion,),
+                conclusion_x,
+                yy,
+                size,
+            )
+            if role == "after":
+                ET.SubElement(
+                    parent,
+                    NS + "rect",
+                    {
+                        "id": prefix + "guard-box",
+                        "x": str(added_x - 3),
+                        "y": str(yy - size - 3),
+                        "width": str(added_width),
+                        "height": str(row + 6),
+                        "fill": "#fff3d6",
+                        "stroke": "#333333",
+                        "stroke-width": "2",
+                    },
+                )
+                text_element(
+                    parent, prefix + "added", (change.added_clause,), added_x, yy, size
+                ).set("font-weight", "bold")
 
 
 def render_mechanism(service, ir, *, run_root, resolution_context=None, events=None):

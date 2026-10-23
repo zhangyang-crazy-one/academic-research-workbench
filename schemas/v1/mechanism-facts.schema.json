@@ -1,5 +1,89 @@
 {
   "$defs": {
+    "CoordinateOperand": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "values"
+      ],
+      "title": "CoordinateOperand",
+      "type": "object"
+    },
+    "CoordinateSum": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Author-supplied exact toy algebra, not inferred experimental values.",
+      "properties": {
+        "step_index": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Step Index",
+          "type": "integer"
+        },
+        "axis_labels": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Axis Labels",
+          "type": "array"
+        },
+        "operands": {
+          "items": {
+            "$ref": "#/$defs/CoordinateOperand"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Operands",
+          "type": "array"
+        },
+        "result_label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Result Label",
+          "type": "string"
+        },
+        "result": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Result",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_index",
+        "axis_labels",
+        "operands",
+        "result_label",
+        "result"
+      ],
+      "title": "CoordinateSum",
+      "type": "object"
+    },
     "MechanismComponent": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -161,6 +245,28 @@
           ],
           "default": null,
           "title": "After"
+        },
+        "coordinate_sum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateSum"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rule_change": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleChange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -292,6 +398,43 @@
         "trigger"
       ],
       "title": "MechanismRelation",
+      "type": "object"
+    },
+    "RuleChange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "before_component": {
+          "pattern": "^[a-z][a-z0-9._-]{2,95}$",
+          "title": "Before Component",
+          "type": "string"
+        },
+        "retained_clause": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Retained Clause",
+          "type": "string"
+        },
+        "added_clause": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Added Clause",
+          "type": "string"
+        },
+        "conclusion": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Conclusion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "before_component",
+        "retained_clause",
+        "added_clause",
+        "conclusion"
+      ],
+      "title": "RuleChange",
       "type": "object"
     },
     "TokenCorrespondence": {

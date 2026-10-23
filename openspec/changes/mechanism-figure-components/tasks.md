@@ -18,3 +18,12 @@
 - [ ] 3.2 Add three source-preserving explanation strategies with selection evidence (later milestone).
 - [ ] 3.3 Optional draw.io adapter/editor round-trip and publication privacy checks (later milestone, not required to use SVG).
 - [ ] 3.4 Resolve retained partial/new figure findings (local labels, coordinate-wise representation, guard emphasis, once-only init/retry scope) and rebind a future review; no third review in this two-round run.
+
+Round3 implementation evidence (2026-10-23): the 3.4 producer repairs and future
+exact-output input packet are implemented and mechanically tested in
+`examples/mechanism-figures/evidence/round3`. The checkbox remains open pending
+the main agent's separately arranged actual-pixel/reference review of those new
+outputs; no human or publication acceptance is inferred. Task 3.2 assessment and
+precise source/implementation gaps are recorded in
+`examples/mechanism-figures/strategy-assessment.md`; no strategy completion is
+claimed.
