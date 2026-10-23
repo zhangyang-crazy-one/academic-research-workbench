@@ -70,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--provider", action="append", required=True, choices=("crossref", "openalex", "dblp", "arxiv"))
     gate.add_argument("--run-root", type=Path, help="Canonical parent-owned run to evaluate.")
     gate.add_argument("--request", type=Path, help="Parent runtime command request for a canonical gate.")
+    gate.add_argument("--literature-entry", type=Path, help="Exact ARS literature_corpus entry JSON; canonical gates require its parent-accepted ars-literature-entry artifact.")
     pdf = subparsers.add_parser("pdf", help="Extract a local PDF into retained text and locator proposals.")
     pdf.add_argument("--root", required=True, type=Path)
     pdf.add_argument("--path", required=True)
