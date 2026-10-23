@@ -36,3 +36,12 @@ Commands and final outcomes are also recorded in the matching OpenSpec verificat
 
 
 Final targeted run: **55 passed**. Ruff: `All checks passed!`. `git diff --check`: no output. OpenSpec strict validation: valid. Exact commands and TDD results are retained in `openspec/changes/scholarly-pdf-extraction-locators/verification.md`.
+
+## Parent independent verification
+
+On 2026-10-23 the parent reviewed the production mapper, bounded parser process,
+receipt identities and historical compatibility changes, then reran the same
+four targeted test files: **55 passed in 12.62s**. Strict OpenSpec validation
+and the commit diff check passed. Real Docling/model execution remains unverified;
+converter doubles and actual resource-limited child processes are distinguished
+above. The private primary checkout and its pending edits were not modified.
