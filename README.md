@@ -130,6 +130,24 @@ observations remain evidence about the inputs used, not compatibility pins.
 The launcher accepts newer Python versions that satisfy the minimum; each host
 still needs to pass its runtime and dependency qualification checks.
 
+CI selects Python environments according to the dependency surface being tested:
+
+| CI coverage | Python test environment | Dependency scope |
+| --- | --- | --- |
+| Linux `Python` | `3.14` minor, latest available patch | All extras plus `dev`, `ars-test` and `storm`; full non-host test tree and candidate regressions. |
+| Linux `Python core (latest)` | Floating `3.x` | Core plus `dev`; canonical state, manifests, recovery, platform reporting and CI contract regressions; independent of candidate and optional ML jobs. |
+| Codex overlay | `3.13`, `3.14` | Core plus `dev` and `ars-test`; overlay regressions and quality gates. |
+| Package boundary / macOS core | Floating `3.x` | Packaging/legal checks or focused core tests, respectively; no scholarly PDF or STORM install. |
+
+The `3.14` selection is a CI test environment, not a runtime version pin:
+`requires-python` remains `>=3.13`, with open dependency ranges and no lockfile.
+PR #176's [failed Python job](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39569504862/job/119121900907)
+selected CPython 3.15 through `3.x` and failed before tests because `torch`
+had no `cp315` wheel required by `docling`. Advance the complete-extras CI
+minor once its full dependency surface resolves and passes on the newer minor.
+Independent latest-Python core success does not qualify optional ML capabilities;
+dependency resolution alone also does not verify parsing or model execution.
+
 ### Platform support
 
 | Platform | Support | CI coverage and limits |
