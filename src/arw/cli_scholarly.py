@@ -7,7 +7,11 @@ from pathlib import Path
 from urllib.error import HTTPError
 from uuid import uuid4
 
-from arw.kernel.core.canonical import canonical_json_bytes, strict_json_loads
+from arw.kernel.core.canonical import (
+    canonical_json_bytes,
+    sha256_hex,
+    strict_json_loads,
+)
 from arw.kernel.execution.host_dispatch import _blocked_execution_adapter
 from arw.kernel.execution.orchestration import OrchestrationService
 from arw.kernel.ledger.journal import replay_run
@@ -17,10 +21,13 @@ from arw.kernel.policy.citations import (
     ReferenceRecord,
     ReferenceUse,
     accepted_citation_evidence,
+    accepted_literature_evidence,
     check_response,
     check_unavailable,
+    contamination_observation,
     evaluate_use,
     fetch_response,
+    literature_entry_for_reference,
     load_check_history,
     publish_check,
 )
@@ -36,12 +43,24 @@ from arw.pdf_extraction import (
 )
 
 
-def _read_model(path: Path, model, *, max_bytes: int = 65_536):
+def _read_bytes(path: Path, *, max_bytes: int = 65_536) -> bytes:
     if path.is_symlink() or not path.is_file() or path.stat().st_size > max_bytes:
         raise ValueError("unsafe or oversized scholarly input")
     raw = path.read_bytes()
     strict_json_loads(raw)
-    return model.model_validate_json(raw)
+    return raw
+
+
+def _read_model(path: Path, model, *, max_bytes: int = 65_536):
+    return model.model_validate_json(_read_bytes(path, max_bytes=max_bytes))
+
+
+def _citation_observation(args, reference, receipts):
+    raw = _read_bytes(args.literature_entry) if args.literature_entry else None
+    entry = literature_entry_for_reference(reference, raw) if raw is not None else None
+    observation = contamination_observation(reference, receipts, entry=entry)
+    observation["literature_entry_sha256"] = sha256_hex(raw) if raw is not None else None
+    return raw, observation
 
 
 def _canonical_citation_gate(
@@ -63,6 +82,11 @@ def _canonical_citation_gate(
         raise ValueError("requested citation receipt is not parent-accepted")
     receipts = tuple(receipt for _, receipt in accepted)
     proposal = evaluate_use(use, reference, receipts, applicable=args.provider)
+    entry_raw, observation = _citation_observation(args, reference, receipts)
+    literature_evidence = (
+        accepted_literature_evidence(args.run_root, reference, entry_raw, events)
+        if entry_raw is not None else ()
+    )
     disposition = proposal["verdict"]
     verdict = (
         "PASS"
@@ -71,7 +95,7 @@ def _canonical_citation_gate(
         if disposition == "BLOCK"
         else "BLOCKED"
     )
-    evidence = (ref_manifest, use_manifest, *(digest for digest, _ in accepted))
+    evidence = (ref_manifest, use_manifest, *(digest for digest, _ in accepted), *literature_evidence)
     raw_blockers = proposal.get("open_blocker_receipts", ())
     blocker_list: list[str] = [str(item) for item in raw_blockers] if isinstance(raw_blockers, (list, tuple)) else []
     history = ",".join(blocker_list)
@@ -84,6 +108,7 @@ def _canonical_citation_gate(
     )
     if disposition == "HUMAN_REVIEW":
         rationale += "; human_review_required"
+    rationale += "; contamination=" + canonical_json_bytes(observation).decode().rstrip("\n")
     if len(rationale) > 4096:
         raise ValueError("citation gate rationale exceeds contract limit")
     decision = GateDecision(
@@ -108,6 +133,10 @@ def _canonical_citation_gate(
                     "citation-evidence-changed",
                     "accepted citation evidence changed before gate append",
                 )
+            if entry_raw is not None and accepted_literature_evidence(
+                args.run_root, reference, entry_raw, replayed.events
+            ) != literature_evidence:
+                return "citation-evidence-changed", "accepted ARS literature evidence changed"
         except (ValueError, RuntimeError, OSError) as error:
             return "citation-evidence-invalid", str(error)
         return None
@@ -115,7 +144,7 @@ def _canonical_citation_gate(
     outcome = OrchestrationService(
         args.run_root, adapter=_blocked_execution_adapter()
     ).evaluate_gate(request, decision, prevalidate=prevalidate)
-    return outcome.model_dump(mode="json")
+    return {**outcome.model_dump(mode="json"), "contamination_observation": observation}
 
 
 def handle(args) -> dict[str, object]:
@@ -198,6 +227,7 @@ def handle(args) -> dict[str, object]:
                 use, reference, receipts, applicable=args.provider
             ),
             "parent_admission": "required",
+            "contamination_observation": _citation_observation(args, reference, receipts)[1],
         }
     if args.provider == "grobid":
         if not args.grobid_endpoint:

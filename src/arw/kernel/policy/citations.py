@@ -8,7 +8,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -19,6 +19,9 @@ from arw.kernel.core.canonical import (
 )
 from arw.kernel.ledger.manifests import _safe_directory, _write_once
 from arw.kernel.state.models import Sha256, StrictModel, UtcTimestamp
+
+if TYPE_CHECKING:
+    from arw.kernel.policy.research_integrity import ARSLiteratureCorpusEntry
 
 Provider = Literal["crossref", "openalex", "dblp", "arxiv"]
 CheckStatus = Literal[
@@ -72,16 +75,8 @@ class ReferenceUse(StrictModel):
     role: UseRole
 
 
-def reference_from_source_manifest(source) -> ReferenceRecord:
-    """Bind the shared reference identity to an existing ARS research source."""
-    from arw.kernel.policy.research_integrity import (
-        ResearchSourceManifest,
-        research_integrity_sha256,
-    )
-
-    if not isinstance(source, ResearchSourceManifest):
-        raise TypeError("reference source must be a ResearchSourceManifest")
-    authors = tuple(
+def _author_names(authors) -> tuple[str, ...]:
+    return tuple(
         str(
             getattr(author, "literal", None)
             or " ".join(
@@ -93,13 +88,24 @@ def reference_from_source_manifest(source) -> ReferenceRecord:
                 if part
             )
         )
-        for author in source.authors
+        for author in authors
     )
+
+
+def reference_from_source_manifest(source) -> ReferenceRecord:
+    """Bind the shared reference identity to an existing ARS research source."""
+    from arw.kernel.policy.research_integrity import (
+        ResearchSourceManifest,
+        research_integrity_sha256,
+    )
+
+    if not isinstance(source, ResearchSourceManifest):
+        raise TypeError("reference source must be a ResearchSourceManifest")
     return ReferenceRecord(
         reference_id=source.source_id,
         citation_key=source.citation_key,
         title=source.title,
-        authors=authors,
+        authors=_author_names(source.authors),
         year=source.year,
         doi=source.doi,
         arxiv_id=source.arxiv_id,
@@ -833,4 +839,139 @@ def contamination_signals(receipts: Sequence[CheckReceipt]) -> dict[str, bool]:
         f"{p}_unmatched": r.status == "not_found"
         for p, r in latest.items()
         if r is not None and r.status in {"not_found", "verified", "retracted"}
+    }
+
+
+def literature_entry_for_reference(
+    reference: ReferenceRecord, raw: bytes
+) -> ARSLiteratureCorpusEntry:
+    """Validate an exact passport entry without changing its fields or annotations."""
+    from arw.kernel.policy.research_integrity import ARSLiteratureCorpusEntry
+
+    entry = ARSLiteratureCorpusEntry.model_validate(strict_json_loads(raw))
+    if (
+        entry.citation_key != reference.citation_key
+        or entry.title != reference.title
+        or _author_names(entry.authors) != reference.authors
+        or entry.year != reference.year
+        or entry.doi != reference.doi
+        or entry.arxiv_id != reference.arxiv_id
+    ):
+        raise ValueError("ARS literature entry differs from citation reference")
+    return entry
+
+
+def accepted_literature_evidence(
+    root: Path, reference: ReferenceRecord, raw: bytes, events
+) -> tuple[str, ...]:
+    """Bind an explicit self-report snapshot to accepted, retained entry/source bytes."""
+    from arw.kernel.ledger.manifests import load_artifact_manifest
+    from arw.kernel.ledger.source_locations import read_retained_bytes
+    from arw.kernel.policy.research_integrity import ResearchSourceManifest
+    from arw.kernel.state.models import ArtifactAcceptedPayload
+
+    entry = literature_entry_for_reference(reference, raw)
+    entry_digest = sha256_hex(raw)
+    bibliographic_digest = sha256_hex(canonical_json_bytes(
+        entry.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    ))
+    entry_manifest = None
+    source_manifest = None
+    for event in events:
+        if event.event_type != "artifact.accepted" or not isinstance(
+            event.payload, ArtifactAcceptedPayload
+        ):
+            continue
+        digest = event.payload.manifest_sha256
+        manifest = load_artifact_manifest(root, digest)
+        is_entry = (
+            manifest.artifact_kind == "ars-literature-entry"
+            and manifest.content_sha256 == entry_digest
+        )
+        is_source = (
+            reference.source_manifest_sha256 is not None
+            and manifest.artifact_kind == "research-source-manifest"
+            and manifest.content_sha256 == reference.source_manifest_sha256
+        )
+        if not (is_entry or is_source):
+            continue
+        retained = read_retained_bytes(root, manifest.content_path, max_bytes=65_536)
+        if sha256_hex(retained) != manifest.content_sha256:
+            raise ValueError("accepted citation literature evidence bytes changed")
+        if is_entry:
+            if retained != raw:
+                raise ValueError("accepted ARS literature entry differs")
+            entry_manifest = digest
+        if is_source:
+            source = ResearchSourceManifest.model_validate_json(retained)
+            if (
+                source.bibliographic_sha256 != bibliographic_digest
+                or reference_from_source_manifest(source) != reference
+            ):
+                raise ValueError("accepted source does not bind the ARS literature entry")
+            source_manifest = digest
+    if entry_manifest is None:
+        raise ValueError("ARS literature entry requires a parent-accepted artifact")
+    if reference.source_manifest_sha256 is not None and source_manifest is None:
+        raise ValueError("ARS literature entry requires the parent-accepted source")
+    return (entry_manifest,) if source_manifest is None else (entry_manifest, source_manifest)
+
+
+def contamination_observation(
+    reference: ReferenceRecord,
+    receipts: Sequence[CheckReceipt],
+    *,
+    entry: ARSLiteratureCorpusEntry | None = None,
+) -> dict[str, object]:
+    """Keep resolver observations and self-report conflicts; neither is scientific truth."""
+    from arw.kernel.policy.research_integrity import (
+        ContaminationSignalOmissions,
+        ContaminationSignals,
+    )
+
+    reference_digest = sha256_hex(canonical_json_bytes(reference.model_dump(mode="json")))
+    if any(r.reference_sha256 != reference_digest for r in receipts):
+        raise ValueError("citation receipt names another reference")
+    if entry is not None:
+        entry = literature_entry_for_reference(reference, canonical_json_bytes(
+            entry.model_dump(mode="json", by_alias=True, exclude_unset=True)
+        ))
+    signals = ContaminationSignals.model_validate(contamination_signals(receipts))
+    latest = {r.provider: r for r in sorted(
+        receipts, key=lambda r: (r.observed_at, r.receipt_sha256)
+    )}
+    omissions = {
+        f"{provider}_unmatched": "api_degraded"
+        for provider, receipt in latest.items()
+        if provider in {"crossref", "openalex", "arxiv"} and receipt.status == "unavailable"
+    }
+    if omissions:
+        omissions = ContaminationSignalOmissions.model_validate(omissions).model_dump(exclude_unset=True)
+    reported = (
+        entry.contamination_signals.model_dump(exclude_unset=True)
+        if entry is not None and entry.contamination_signals is not None else {}
+    )
+    reported_omissions = (
+        entry.contamination_signal_omissions.model_dump(exclude_unset=True)
+        if entry is not None and entry.contamination_signal_omissions is not None else {}
+    )
+    conflicts = []
+    for receipt in sorted(receipts, key=lambda r: (r.observed_at, r.receipt_sha256)):
+        for signal, observed in contamination_signals([receipt]).items():
+            if signal in reported and reported[signal] != observed:
+                conflicts.append({
+                    "signal": signal, "reported_value": reported[signal],
+                    "resolver_value": observed, "receipt_sha256": receipt.receipt_sha256,
+                })
+    return {
+        "schema_version": "arw.citation-contamination-observation.v1",
+        "reference_sha256": reference_digest,
+        "contamination_signals": signals.model_dump(exclude_unset=True),
+        "contamination_signal_omissions": omissions,
+        "lookup_states": {p: r.status for p, r in sorted(latest.items())},
+        "self_reported": None if entry is None else {
+            "contamination_signals": reported,
+            "contamination_signal_omissions": reported_omissions,
+        },
+        "conflicts": conflicts,
     }
