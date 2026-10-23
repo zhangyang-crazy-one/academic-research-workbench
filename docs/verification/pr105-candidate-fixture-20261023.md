@@ -17,3 +17,17 @@ The interpreter was the primary checkout's existing Python 3.14 environment; `PY
 ## 未验证
 
 Installation and execution of every newly proposed optional dependency, hosted CI on the repaired head, and release qualification. The separate floating-Python optional-wheel resolution failure requires the independent CI compatibility repair.
+
+## Dependency resolution and final scope
+
+A real Python 3.14 full-group resolver dry-run rejected the proposed floors:
+`sentence-transformers>=6.1` requires `huggingface-hub>=1.3`, while
+`knowledge-storm>=1.1.1` requires `dspy-ai==2.4.9`, whose allowed datasets require
+`huggingface-hub<1.0`. This was a resolver failure, not an installed runtime test.
+
+The owner previously rejected the equivalent gratuitous floor raises in
+[PR #46](https://github.com/zhangyang-crazy-one/academic-research-workbench/pull/46#issuecomment-6049033313).
+The final branch therefore restores all dependency declarations to the main
+baseline and retains only the resilient synthetic inventory fixture. Existing
+open lower bounds already permit compatible newer versions; no upper bounds,
+lockfile, optional-feature removal, or resolver bypass was introduced.
