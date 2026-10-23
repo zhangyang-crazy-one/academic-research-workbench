@@ -4012,21 +4012,23 @@ def test_one_audit_reuses_a_payload_digest_and_rejects_replacement(tmp_path: Pat
     payload = tmp_path / "payload.bin"
     payload.write_bytes(b"alpha")
     reads: list[Path] = []
-    original = integration_lock_module.sha256_file
+    original = hashlib.file_digest
 
-    def counting(path: Path) -> str:
-        reads.append(Path(path))
-        return original(path)
+    def counting(stream, algorithm):
+        reads.append(Path(stream.name))
+        return original(stream, algorithm)
 
-    monkeypatch.setattr(integration_lock_module, "sha256_file", counting)
+    monkeypatch.setattr(hashlib, "file_digest", counting)
     cache = integration_lock_module._AuditDigestCache()
     first = cache.digest(payload)
     assert cache.digest(payload) == first
     assert len(reads) == (1 if os.name == "posix" else 2)
 
     payload.write_bytes(b"alpha-replaced")
-    assert cache.digest(payload) == original(payload)
-    assert len(reads) == (2 if os.name == "posix" else 3)
+    # An observed identity is fixed for this audit; rehashing must not admit it.
+    with pytest.raises(IntegrationLockError, match="changed during audit"):
+        cache.digest(payload)
+    assert len(reads) == (1 if os.name == "posix" else 2)
 
     fresh = integration_lock_module._AuditDigestCache()
-    assert fresh.digest(payload) == original(payload)
+    assert fresh.digest(payload) == hashlib.sha256(payload.read_bytes()).hexdigest()

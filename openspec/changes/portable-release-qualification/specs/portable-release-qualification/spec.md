@@ -27,6 +27,12 @@ The verifier SHALL bind actual command outputs, installed stage and candidate wh
 - **THEN** its SHA-256 matches the original bytes while hashing allocation is bounded independently of file size, and existing path, coverage and tamper checks are preserved
 - **AND** no persistent digest trust cache or parent-process success flag replaces independent verification
 
+#### Scenario: Invocation-local digest reuse
+- **WHEN** one integration verification rebuilds a lock and validates its live audit manifests, or a standalone build, audit or build-identity observation runs
+- **THEN** only private cache state owned by that invocation may reuse a digest; public entrypoints SHALL NOT accept caller cache state across invocations
+- **AND** reuse requires a live regular-file descriptor and matching path/descriptor device, inode, size, mtime, ctime and mode before/after access; observed identity drift, replacement, unsafe paths and read errors reject the invocation even if replacement bytes match
+- **AND** cached paths are rechecked before return, unusable inode/POSIX change-time identity requires independent reads, and subsequent public invocations hash independently
+
 ### Requirement: Optional deployment qualification
 Specific execution-platform qualifications SHALL remain available as optional diagnostics, and historical Phase 7 receipts SHALL remain readable without being mandatory for the default formal release.
 

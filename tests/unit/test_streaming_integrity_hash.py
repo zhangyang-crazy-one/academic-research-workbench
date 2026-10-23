@@ -207,7 +207,7 @@ def _launcher_digest_reader():
 
 
 @pytest.mark.parametrize("kind", ["audit", "launcher"])
-def test_digest_cache_rehashes_real_same_size_write_with_restored_mtime(tmp_path, kind):
+def test_digest_cache_checks_real_same_size_write_with_restored_mtime(tmp_path, kind):
     reader = (integration_lock._AuditDigestCache().digest
               if kind == "audit" else _launcher_digest_reader())
     path = tmp_path / "payload"
@@ -221,14 +221,18 @@ def test_digest_cache_rehashes_real_same_size_write_with_restored_mtime(tmp_path
     assert (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) == (
         before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns
     )
-    assert reader(path) == hashlib.sha256(b"omega").hexdigest() != first
+    if kind == "audit":
+        # Within one audit, changed identity is a rejection, not a new baseline.
+        with pytest.raises(integration_lock.IntegrationLockError, match="changed"):
+            reader(path)
+    else:
+        assert reader(path) == hashlib.sha256(b"omega").hexdigest() != first
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX change time")
-@pytest.mark.parametrize("kind", ["audit", "launcher"])
-def test_digest_cache_rejects_same_size_mutation_during_hash(tmp_path, monkeypatch, kind):
-    reader = (integration_lock._AuditDigestCache().digest
-              if kind == "audit" else _launcher_digest_reader())
+# Audit descriptor races are exercised against real files in test_audit_digest_reuse.
+def test_launcher_rejects_same_size_mutation_during_hash(tmp_path, monkeypatch):
+    reader = _launcher_digest_reader()
     path = tmp_path / "payload"
     path.write_bytes(b"alpha")
     before = path.stat()
@@ -258,11 +262,9 @@ def test_digest_cache_rejects_same_size_mutation_during_hash(tmp_path, monkeypat
     assert reader(path) == hashlib.sha256(b"omega").hexdigest()
 
 
-@pytest.mark.parametrize("kind", ["audit", "launcher"])
 @pytest.mark.parametrize("unsupported", ["ctime", "platform", "regular"])
-def test_digest_cache_rehashes_without_change_detection(tmp_path, monkeypatch, kind, unsupported):
-    reader = (integration_lock._AuditDigestCache().digest
-              if kind == "audit" else _launcher_digest_reader())
+def test_launcher_rehashes_without_change_detection(tmp_path, monkeypatch, unsupported):
+    reader = _launcher_digest_reader()
     path = tmp_path / "payload"
     path.write_bytes(b"alpha")
     reads = []
@@ -285,10 +287,7 @@ def test_digest_cache_rehashes_without_change_detection(tmp_path, monkeypatch, k
     if unsupported == "platform":
         # Change only the helper's os binding, not pathlib's global platform.
         fake_os = SimpleNamespace(name="nt", fspath=os.fspath)
-        if kind == "audit":
-            monkeypatch.setattr(integration_lock, "os", fake_os)
-        else:
-            reader.__globals__["os"] = fake_os
+        reader.__globals__["os"] = fake_os
     else:
         monkeypatch.setattr(Path, "stat", unsupported_stat)
     monkeypatch.setattr(Path, "open", counted_open)
@@ -312,18 +311,25 @@ def test_digest_cache_rechecks_replacement_missing_file_and_read_error(tmp_path,
     os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns))
     replacement.replace(path)
     expected = hashlib.sha256(b"omega").hexdigest()
-    assert reader(path) == new_reader()(path) == expected != first
+    if kind == "audit":
+        with pytest.raises(integration_lock.IntegrationLockError, match="changed"):
+            reader(path)
+        assert new_reader()(path) == expected != first
+    else:
+        assert reader(path) == new_reader()(path) == expected != first
     path.unlink()
     with pytest.raises((OSError, integration_lock.IntegrationLockError)):
         reader(path)
     path.write_bytes(b"new payload")
-    real_open = Path.open
-
     def denied_open(*args, **kwargs):
         raise PermissionError("injected read denial")
 
-    monkeypatch.setattr(Path, "open", denied_open)
+    if kind == "audit":
+        reader = new_reader()
+        monkeypatch.setattr(os, "open", denied_open)
+    else:
+        monkeypatch.setattr(Path, "open", denied_open)
     with pytest.raises((OSError, integration_lock.IntegrationLockError), match="injected read denial"):
         reader(path)
-    monkeypatch.setattr(Path, "open", real_open)
+    monkeypatch.undo()
     assert reader(path) == hashlib.sha256(b"new payload").hexdigest()
