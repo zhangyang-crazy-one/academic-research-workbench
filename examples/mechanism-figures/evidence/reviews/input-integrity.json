@@ -1,0 +1,227 @@
+[
+  {
+    "id": "representation",
+    "files": {
+      "ir": {
+        "sha256": "b455921e2eee7f5420d9a7a484ba815a0ccbf5180522cfcc0f5dbeee93fabe97",
+        "matches": true
+      },
+      "svg": {
+        "sha256": "4aef7f546b6120c5d07e59e10d0dea2457d295f4ae6c8211df358af4365e8ae1",
+        "matches": true
+      },
+      "png": {
+        "sha256": "748dd5c17a26e4ddd7a29d23ce6137d6673fe74b04b55ee02a09a183f3b5bff7",
+        "matches": true
+      }
+    },
+    "paths": [
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#0072b2"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#7a5195"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#333333"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#00796b"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#a85100"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#005f73"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8c2d5d"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8b0000"
+      },
+      {
+        "id": "edge.lookup",
+        "points": "458.0,160.0 478.0,160.0 478.0,267.0 30.0,267.0 30.0,370.0 48.0,370.0",
+        "fill": "none",
+        "stroke": "#0072b2",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "",
+        "marker-end": "url(#arrow.data)"
+      },
+      {
+        "id": "edge.sum",
+        "points": "458.0,370.0 478.0,370.0 478.0,482.0 30.0,482.0 30.0,585.0 48.0,585.0",
+        "fill": "none",
+        "stroke": "#0072b2",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "",
+        "marker-end": "url(#arrow.data)"
+      }
+    ]
+  },
+  {
+    "id": "tool-loop",
+    "files": {
+      "ir": {
+        "sha256": "dbe9cb4673d7fce2234df5175cd80186bdde40a19568a522ef6d598b64effb7a",
+        "matches": true
+      },
+      "svg": {
+        "sha256": "050863e4478efdcb5f0f82f72a29f25ec11988855606531e883d5bbdcb76a2c3",
+        "matches": true
+      },
+      "png": {
+        "sha256": "8aeea6814d86f6550a6f268f5744dd2f7174d677bf65939c8fb0ec331e96fa60",
+        "matches": true
+      }
+    },
+    "paths": [
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#0072b2"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#7a5195"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#333333"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#00796b"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#a85100"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#005f73"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8c2d5d"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8b0000"
+      },
+      {
+        "id": "edge.call",
+        "points": "458.0,155.0 478.0,155.0 478.0,267.0 30.0,267.0 30.0,370.0 48.0,370.0",
+        "fill": "none",
+        "stroke": "#a85100",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "",
+        "marker-end": "url(#arrow.action)"
+      },
+      {
+        "id": "edge.observed",
+        "points": "458.0,370.0 478.0,370.0 478.0,482.0 30.0,482.0 30.0,585.0 48.0,585.0",
+        "fill": "none",
+        "stroke": "#005f73",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "5 2",
+        "marker-end": "url(#arrow.observation)"
+      },
+      {
+        "id": "edge.retry",
+        "points": "458.0,556.6666666666666 490.0,556.6666666666666 490.0,60.0 24.0,60.0 24.0,155.0 48.0,155.0",
+        "fill": "none",
+        "stroke": "#333333",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "6 3",
+        "marker-end": "url(#arrow.control)"
+      },
+      {
+        "id": "edge.stop",
+        "points": "458.0,613.3333333333334 478.0,613.3333333333334 478.0,697.0 30.0,697.0 30.0,800.0 48.0,800.0",
+        "fill": "none",
+        "stroke": "#333333",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "6 3",
+        "marker-end": "url(#arrow.control)"
+      }
+    ]
+  },
+  {
+    "id": "constraint",
+    "files": {
+      "ir": {
+        "sha256": "6036aa2bd0ddc24b5481eff0143d69e46ff1df65504c3700b49383f3fe819f7d",
+        "matches": true
+      },
+      "svg": {
+        "sha256": "442a29a9952c66c18c28082d203e4d861796f7cd637c1e148dd5f2da4a9b6090",
+        "matches": true
+      },
+      "png": {
+        "sha256": "13b234f1d9365024eb73a1e7fb877f30027a70cc649ccfbab51f3376dce44739",
+        "matches": true
+      }
+    },
+    "paths": [
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#0072b2"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#7a5195"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#333333"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#00796b"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#a85100"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#005f73"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8c2d5d"
+      },
+      {
+        "d": "M 0 0 L 7 3.5 L 0 7 Z",
+        "fill": "#8b0000"
+      },
+      {
+        "id": "edge.counterexample",
+        "points": "458.0,155.0 478.0,155.0 478.0,267.0 30.0,267.0 30.0,370.0 48.0,370.0",
+        "fill": "none",
+        "stroke": "#0072b2",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "",
+        "marker-end": "url(#arrow.data)"
+      },
+      {
+        "id": "edge.guard",
+        "points": "458.0,370.0 478.0,370.0 478.0,482.0 30.0,482.0 30.0,585.0 48.0,585.0",
+        "fill": "none",
+        "stroke": "#0072b2",
+        "stroke-width": "1.2",
+        "stroke-dasharray": "",
+        "marker-end": "url(#arrow.data)"
+      }
+    ]
+  }
+]

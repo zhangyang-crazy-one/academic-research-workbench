@@ -1,0 +1,16 @@
+[
+  {
+    "name": "openhands",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2025/file/a4b6ad6b48850c0c331d1259fc66a69c-Paper-Conference.pdf",
+    "sha256": "aa202e49650291a4b9e3cb669a9f3c2e96795dfea48d55b1bde0f9a5bef5d61d",
+    "png": "build/mechanism-162-independent-review/openhands-page3.png",
+    "status": "rendered"
+  },
+  {
+    "name": "vggt",
+    "url": "https://arxiv.org/pdf/2503.11651",
+    "sha256": "5d7ab44d129172f39ef5918feb0014c4d041fd0e92f995d4dbbd7327a6e91d52",
+    "png": "build/mechanism-162-independent-review/vggt-page3.png",
+    "status": "rendered"
+  }
+]

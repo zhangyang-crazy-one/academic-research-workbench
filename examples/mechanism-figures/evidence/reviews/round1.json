@@ -1,0 +1,188 @@
+{
+  "schema_version": "arw.independent-figure-review.v1",
+  "round": 1,
+  "role": "independent_figure_reviewer",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "high",
+  "human_status": "human_pending",
+  "publication_approval": false,
+  "producer_role": false,
+  "scope": "Read-only review of frozen answers, actual PNGs, SVG text and route geometry; only independent-review evidence directory written.",
+  "blindness": {
+    "did_not_read": [
+      "report.json",
+      "producer scores",
+      "producer selection/evaluation conclusions"
+    ],
+    "independence_limitation": "Role separation and withheld producer conclusions do not establish statistical independence; reviewer and producer may share model-family biases."
+  },
+  "input": {
+    "path": "build/mechanism-162-review-one/reviewer-input.json",
+    "sha256": "4a744deb05c63462590d0f0e9a27651bc408f6c3397289bd9dfd43fcf1b9f5ff",
+    "integrity_evidence": "input-integrity.json",
+    "all_nine_ir_svg_png_digests_match": true
+  },
+  "actual_pixel_views": [
+    "representation.png",
+    "tool-loop.png",
+    "constraint.png",
+    "openhands-page3.png",
+    "vggt-page3.png"
+  ],
+  "reference_comparison": [
+    {
+      "id": "OpenHands-ICLR2025-Fig2",
+      "source": "https://proceedings.iclr.cc/paper_files/paper/2025/file/a4b6ad6b48850c0c331d1259fc66a69c-Paper-Conference.pdf",
+      "page_1_based": 3,
+      "web_attempt": "Initial fetch timed out; subsequent open and screenshot succeeded as references but did not expose readable pixel payload through the first web wrapper. Second MCP wrapper returned ImageDisplayed markers. Actual visual inspection was performed with view_image on a local pdftoppm raster of the downloaded official PDF.",
+      "local_pixel": "openhands-page3.png",
+      "observed": "Three adjoining regions organize agent, event stream and runtime. Compact action/observation labels sit at the corresponding transitions, and concrete event cards show the objects being retained.",
+      "applicability": "Useful comparison for state/action/observation continuity and local relation labels. It is not a retry/stop predicate specification and supplies no scientific facts for the synthetic loop."
+    },
+    {
+      "id": "VGGT-author-preprint-Fig2",
+      "requested_source": "https://openaccess.thecvf.com/content/CVPR2025/papers/Wang_VGGT_Visual_Geometry_Grounded_Transformer_CVPR_2025_paper.pdf",
+      "actual_source": "https://arxiv.org/pdf/2503.11651",
+      "page_1_based": 3,
+      "limitation": "Requested CVPR PDF returned 403 and its screenshot could not resolve. Oxford author-hosted PDF also failed. The actual pixels are the authors arXiv v1 preprint (visible page marker/date in PDF), not independently verified to be pixel-identical to the CVPR proceedings version.",
+      "local_pixel": "vggt-page3.png",
+      "observed": "Image patches become colored token stacks. Enclosed repeated attention stages and short arrow paths connect representations to concrete, separately named output forms.",
+      "applicability": "Useful comparison for displaying object transformation and meaningful intermediate representations. Do not import learned attention, camera tokens or architectural claims into the supplied one-hot example."
+    }
+  ],
+  "reader_retell": {
+    "representation": {
+      "input": "Ordered tok0=red and tok1=blue, vocabulary/embedding axes red,blue.",
+      "transformation": "Lookup [1,0] and [0,1], then sum across sequence axis.",
+      "innovation": "Author-designated project component; this is a synthetic explanatory emphasis, not validated scientific novelty.",
+      "output": "Same utterance becomes count vector y=[1,1].",
+      "feedback": "None; source declares a feed-forward chain.",
+      "limits": "All supplied algebra is visible in prose; object transformation is not drawn directly."
+    },
+    "tool-loop": {
+      "input": "Observed episode initially has no answer; prepare lookup(key=public-toy).",
+      "transformation": "Request returns found; append observation to history; set answer_present=true; evaluate predicates.",
+      "innovation": "Author-designated decide stage explicitly separates retry and stop.",
+      "output": "Stopped episode retaining observation; alternatively a declared bounded no-answer exit.",
+      "feedback": "retry returns the same observed episode to request iff not answer_present AND attempts<2; stop iff answer_present OR attempts>=2.",
+      "limits": "The given found observation only demonstrates answer-present stopping. Counter-update semantics are unspecified in the source."
+    },
+    "constraint": {
+      "input": "Conceptual bird -> may_fly rule and retained penguin counterexample.",
+      "transformation": "Retain bird(penguin), add not-penguin guard, preserve uncertainty for other birds.",
+      "innovation": "Author-designated revise stage adds the exception guard.",
+      "output": "bird AND not penguin -> may_fly, conceptual; no claim of observed flight for every other bird.",
+      "feedback": "None; counterexample is an input payload, not a drawn feedback loop.",
+      "limits": "No empirical/model experiment or outside scientific evidence was supplied; all facts are synthetic author definitions."
+    }
+  },
+  "findings": [
+    {
+      "finding_id": "R1-TITLE-WRAP",
+      "type": "readability",
+      "severity": "medium",
+      "affected_ids": [
+        "representation:mechanism.claim",
+        "tool-loop:mechanism.claim"
+      ],
+      "source_requirement": "The frozen claim must remain readable at the declared 180 mm profile; the words count vector and retry communicate the mechanism.",
+      "pixel_observation": "representation title ends its first line with vect and places or. on the next line; tool-loop title breaks retry as ret / ry. These are visible in the actual PNG, not inferred from SVG font size.",
+      "difference": "Characters are present, but word-internal wrapping interrupts the central claim despite unused width/space below.",
+      "recommendation": "Use word-aware English wrapping and explicit safe fallback only for genuinely overlong tokens; reserve an adequate claim block.",
+      "pass_condition": "Re-render both claims at the same profile: vector and retry each appear intact, with no clipping or overlap.",
+      "uncertainty": "No missing glyphs observed; this is word-wrap quality, not proof that every font/platform fails."
+    },
+    {
+      "finding_id": "R1-EDGE-LABELS",
+      "type": "readability",
+      "severity": "high",
+      "affected_ids": [
+        "representation:edge.lookup",
+        "representation:edge.sum",
+        "representation:relation.lookup",
+        "representation:relation.sum",
+        "tool-loop:edge.call",
+        "tool-loop:edge.observed",
+        "tool-loop:edge.retry",
+        "tool-loop:edge.stop",
+        "tool-loop:relation.retry",
+        "tool-loop:relation.stop",
+        "constraint:edge.counterexample",
+        "constraint:edge.guard"
+      ],
+      "source_requirement": "Frozen relations define concrete payloads and triggers; the tool-loop question specifically asks when retry and stop occur.",
+      "pixel_observation": "All relation descriptions sit in a detached list beneath the last card. No arrow carries its own name/payload. tool-loop has two identical gray dashed control exits on the right of decide, while the retry/stop predicate text is inside the card or far below. Mapping requires tracing a long perimeter route.",
+      "difference": "The graph is topologically interpretable, but branch meaning is not spatially attached to the corresponding route. The source provides the needed labels; this is placement loss, not missing scientific facts.",
+      "recommendation": "Place compact retry and stop labels plus predicates beside their exits; place short typed payload labels on the corresponding data/action/observation routes. A separate details legend may remain.",
+      "pass_condition": "A reader looking only at decide and its outgoing routes can identify each trigger and destination without the bottom list. Other edges can be matched to payloads without full-page backtracking.",
+      "uncertainty": "No route-crossing defect or reversed arrow was observed. Severity reflects the central comprehension task, not a generic prohibition on legends."
+    },
+    {
+      "finding_id": "R1-REPRESENTATION-PRIMITIVES",
+      "type": "reference_gap",
+      "severity": "high",
+      "affected_ids": [
+        "representation:tokens",
+        "representation:project",
+        "representation:result"
+      ],
+      "source_requirement": "Question: How does this fixed token sequence become a count vector? Source supplies two tokens, E(red)=[1,0], E(blue)=[0,1], sequence and embedding axes, and y=[1,1].",
+      "pixel_observation": "The three cards show these objects as prose lines. No token tiles, 2x2 lookup matrix, axis-aligned vector entries, or visible summation operator is drawn. Large blank card areas dominate the 180 x 290.336 mm artifact.",
+      "difference": "Compared with the actually viewed VGGT Fig2, where colored token stacks and grouping make the transformed object visible, this figure requires reconstructing the transformation from text. The reference is explanatory precedent only; attention layers are not applicable to this synthetic mechanism.",
+      "recommendation": "Within the provided facts, draw red/blue token objects, the two supplied one-hot rows with labeled axes, and a visible sum across the sequence axis yielding [1,1]. Preserve the absence of trained attention.",
+      "pass_condition": "The actual PNG allows a reader to follow each token to its given vector and see the axis and operation yielding both output coordinates; no learned/attention claim is added.",
+      "uncertainty": "The current profile does not mandate a venue aspect ratio or a specific pictogram language. This is an advisory mechanism-explanation gap, not an invented format violation."
+    },
+    {
+      "finding_id": "R1-CONSTRAINT-DIFF",
+      "type": "reference_gap",
+      "severity": "medium",
+      "affected_ids": [
+        "constraint:before",
+        "constraint:revise",
+        "constraint:after"
+      ],
+      "source_requirement": "Source requires retained bird(penguin), exclusion of penguins from may_fly, and retention of unknown flight for other birds.",
+      "pixel_observation": "Before/after expressions and the exception operations are embedded in separate prose cards. The retained fact, newly added guard, and unchanged unknown status are not visually distinguished; the blue innovation outline surrounds a whole text box.",
+      "difference": "The viewer can repeat the prose but cannot visually separate retained evidence from the single changed predicate. The observed reference figures attach different representations and outputs to the relevant operation rather than using only a generic card outline.",
+      "recommendation": "Show the rule before and after in an aligned comparison with only the sourced added guard highlighted. Keep a retained penguin counterexample and a clearly marked unknown state for other birds. Do not substitute observed flight examples.",
+      "pass_condition": "A reader can point to the unchanged fact, changed guard and remaining unknown status in the PNG, with no implication that every other bird actually flies.",
+      "uncertainty": "may_fly is not formally defined by the source. Treat it as the supplied conceptual permission/possibility term; do not infer that the figure asserts observed flight."
+    },
+    {
+      "finding_id": "R1-LOOP-COUNTER-SOURCE",
+      "type": "necessary_content_omission",
+      "severity": "medium",
+      "affected_ids": [
+        "tool-loop:request",
+        "tool-loop:observe",
+        "tool-loop:decide",
+        "tool-loop:done"
+      ],
+      "source_requirement": "The frozen claim calls the loop bounded; decide tests attempts < 2 / attempts >= 2; done permits a bounded no-answer exit.",
+      "pixel_observation": "Actual cards show no attempts initialization or increment. observe always states observation=found and answer_present=true; the only supplied worked path therefore stops on answer presence, while the no-answer bound is a declared alternative.",
+      "difference": "This insufficiency originates in the frozen scientific answer as well as the figure. The predicate is accurately copied, but finite retry behavior cannot be derived without a supplied counter-update convention or externally provided attempts state.",
+      "recommendation": "Request/source-author a counter-state definition or explicitly label attempts as externally supplied state and the unsuccessful branch as a conditional rule rather than a demonstrated trace. The renderer must not invent failed observations or an increment rule.",
+      "pass_condition": "Either authoritative revised facts define counter initialization/update and branch conditions, or the figure clearly limits its claim to selecting retry/stop given externally supplied attempts. The found example is not presented as evidence for an unsuccessful execution.",
+      "uncertainty": "A conventional externally maintained counter could resolve the gap, but that convention is absent from the input. This is not evidence of an infinite running implementation or of an empirical error."
+    }
+  ],
+  "non_findings": [
+    "No visible clipped body text, missing glyph square, reversed arrow or component omission was identified in the inspected PNGs.",
+    "Source relations are present as text and correctly routed; the issue is local readability, not absent source content.",
+    "The synthetic/conceptual labels are visible, so no empirical result is inferred from the innovation emphasis.",
+    "The 8pt font metadata and raster/font provenance in reviewer-input are environmental context, not independent proof of readable pixels or venue compliance."
+  ],
+  "assessment": "Revision advised for explanation and readable relation attribution. No publication approval. human_pending remains unchanged.",
+  "resources": {
+    "started_utc": "2026-10-16T04:04:36+00:00",
+    "evidence_written_utc": "2026-10-16T04:07:46.027955+00:00",
+    "elapsed_wall_seconds": 190.028,
+    "nested_tool_calls_through_report_write": 24,
+    "functions_exec_wrappers_through_report_write": 12,
+    "count_definition": "Counts each actual nested tool invocation including the report-writing exec_command. Metadata filtering/store/text/image helpers and collaboration messages are excluded. Initial failed hash lookup and web retrieval attempts are included.",
+    "tokens": "unavailable",
+    "amount": "unavailable",
+    "limitations": "Wall interval starts at the first recorded clock sample, after initial input read. Token and monetary metering were not exposed."
+  }
+}

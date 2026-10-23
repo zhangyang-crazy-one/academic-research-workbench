@@ -74,6 +74,21 @@
         "independent_axes"
       ],
       "font_family": "Noto Sans CJK SC, sans-serif"
+    },
+    "v1_mechanism_svg": {
+      "roles": [
+        "schematic"
+      ],
+      "capabilities": [
+        "single_panel",
+        "editable_text",
+        "token_representation",
+        "port_operation",
+        "conditional_loop",
+        "candidate_state",
+        "manual_layout"
+      ],
+      "font_family": "Noto Sans CJK SC, sans-serif"
     }
   }
 }

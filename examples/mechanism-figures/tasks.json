@@ -1,0 +1,847 @@
+{
+  "schema_version": "arw.mechanism-tasks.v1",
+  "license": "MIT",
+  "tasks": [
+    {
+      "id": "representation",
+      "facts": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "How does this fixed token sequence become a count vector?",
+        "claim": "One-hot lookup then sequence summation produces the supplied count vector.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "tokens",
+            "component_version": "1",
+            "family": "token_representation",
+            "label": "Concrete token-to-vector mapping",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "tokens",
+                "object_id": "utterance",
+                "state_id": "tokens"
+              }
+            ],
+            "steps": [
+              "Use the supplied two-token vocabulary."
+            ],
+            "tokens": [
+              {
+                "token_id": "tok0",
+                "text": "red",
+                "representation_id": "e_red",
+                "masked": false
+              },
+              {
+                "token_id": "tok1",
+                "text": "blue",
+                "representation_id": "e_blue",
+                "masked": false
+              }
+            ],
+            "axes": [
+              "sequence axis: tok0,tok1",
+              "embedding axis: red,blue"
+            ]
+          },
+          {
+            "semantic_id": "project",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Sum the supplied one-hot vectors",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "frozen",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "tokens",
+                "object_id": "utterance",
+                "state_id": "tokens"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "vector2",
+                "object_id": "utterance",
+                "state_id": "sum"
+              }
+            ],
+            "steps": [
+              "E(red)=[1,0]; E(blue)=[0,1].",
+              "Lookup X=[E(red), E(blue)].",
+              "Sum sequence axis: y=[1,1]."
+            ],
+            "coordinate_sum": {
+              "step_index": 2,
+              "axis_labels": [
+                "red",
+                "blue"
+              ],
+              "operands": [
+                {
+                  "label": "E(red)",
+                  "values": [
+                    1,
+                    0
+                  ]
+                },
+                {
+                  "label": "E(blue)",
+                  "values": [
+                    0,
+                    1
+                  ]
+                }
+              ],
+              "result_label": "y",
+              "result": [
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "semantic_id": "result",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Representation before and after",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "vector2",
+                "object_id": "utterance",
+                "state_id": "sum"
+              }
+            ],
+            "steps": [
+              "Retain the utterance identity; no trained attention."
+            ],
+            "before": "red, blue (ordered tokens)",
+            "after": "y=[1,1] (two-dimensional count vector)"
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "lookup",
+            "source_component": "tokens",
+            "source_port": "out",
+            "target_component": "project",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "ordered token IDs",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "sum",
+            "source_component": "project",
+            "source_port": "out",
+            "target_component": "result",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "two-dimensional count vector",
+            "trigger": "always",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "project",
+        "object_chain": [
+          "tokens",
+          "project",
+          "result"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "layout": {
+        "width_mm": 180.0,
+        "height_mm": 323.497,
+        "cells": [
+          {
+            "semantic_id": "tokens",
+            "x": 48.0,
+            "y": 70.0,
+            "width": 410.0,
+            "height": 170.0
+          },
+          {
+            "semantic_id": "project",
+            "x": 48.0,
+            "y": 282.0,
+            "width": 410.0,
+            "height": 290.0
+          },
+          {
+            "semantic_id": "result",
+            "x": 48.0,
+            "y": 614.0,
+            "width": 410.0,
+            "height": 160.0
+          }
+        ],
+        "routes": [
+          {
+            "semantic_id": "lookup",
+            "via": [
+              [
+                478.0,
+                155.0
+              ],
+              [
+                478.0,
+                264.0
+              ],
+              [
+                30.0,
+                264.0
+              ],
+              [
+                30.0,
+                427.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 821.0
+          },
+          {
+            "semantic_id": "sum",
+            "via": [
+              [
+                478.0,
+                427.0
+              ],
+              [
+                478.0,
+                596.0
+              ],
+              [
+                30.0,
+                596.0
+              ],
+              [
+                30.0,
+                694.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 855.0
+          }
+        ],
+        "min_font_pt": 8.0,
+        "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification"
+      }
+    },
+    {
+      "id": "tool-loop",
+      "facts": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "When does the tool loop return and when does it stop?",
+        "claim": "An observation updates episode state; an explicit predicate selects retry or stop.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "initialize",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Initialize once per episode",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "initial"
+              }
+            ],
+            "steps": [
+              "Initial state: attempts=0 and answer_present=false.",
+              "Once per episode; retry bypasses this state."
+            ],
+            "before": "New episode",
+            "after": "attempts=0; answer_present=false"
+          },
+          {
+            "semantic_id": "request",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Prepare a deterministic tool request",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "initial",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "initial"
+              },
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "request",
+                "object_id": "call",
+                "state_id": "prepared"
+              }
+            ],
+            "steps": [
+              "Increment attempts; request lookup(key=public-toy)."
+            ]
+          },
+          {
+            "semantic_id": "observe",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Read observation and update state",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "request",
+                "object_id": "call",
+                "state_id": "prepared"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              }
+            ],
+            "steps": [
+              "Synthetic lookup returns found or missing.",
+              "Append observation to event history.",
+              "Set answer_present=(observation == found)."
+            ]
+          },
+          {
+            "semantic_id": "decide",
+            "component_version": "1",
+            "family": "conditional_loop",
+            "label": "Bounded return or stop",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "again",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "observed"
+              },
+              {
+                "port_id": "done",
+                "direction": "output",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "stopped"
+              }
+            ],
+            "steps": [
+              "Check answer_present and attempts < 2."
+            ],
+            "condition": "not answer_present AND attempts < 2",
+            "stop_condition": "answer_present OR attempts >= 2"
+          },
+          {
+            "semantic_id": "done",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Terminal episode state",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "episode",
+                "object_id": "episode",
+                "state_id": "stopped"
+              }
+            ],
+            "steps": [
+              "Return retained observation, without another request."
+            ],
+            "before": "No accepted answer",
+            "after": "Answer found, or bounded no-answer exit"
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "initialized",
+            "source_component": "initialize",
+            "source_port": "out",
+            "target_component": "request",
+            "target_port": "initial",
+            "relation_type": "control",
+            "payload": "new episode, initialized exactly once",
+            "trigger": "new episode only",
+            "feedback": false
+          },
+          {
+            "semantic_id": "call",
+            "source_component": "request",
+            "source_port": "out",
+            "target_component": "observe",
+            "target_port": "input",
+            "relation_type": "action",
+            "payload": "lookup request and arguments",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "observed",
+            "source_component": "observe",
+            "source_port": "out",
+            "target_component": "decide",
+            "target_port": "input",
+            "relation_type": "observation",
+            "payload": "updated episode and history",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "retry",
+            "source_component": "decide",
+            "source_port": "again",
+            "target_component": "request",
+            "target_port": "input",
+            "relation_type": "control",
+            "payload": "same observed episode",
+            "trigger": "not answer_present AND attempts < 2",
+            "feedback": true
+          },
+          {
+            "semantic_id": "stop",
+            "source_component": "decide",
+            "source_port": "done",
+            "target_component": "done",
+            "target_port": "input",
+            "relation_type": "control",
+            "payload": "terminal episode",
+            "trigger": "answer_present OR attempts >= 2",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "decide",
+        "object_chain": [
+          "initialize",
+          "request",
+          "observe",
+          "decide",
+          "done"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "layout": {
+        "width_mm": 180.0,
+        "height_mm": 500.0,
+        "cells": [
+          {
+            "semantic_id": "initialize",
+            "x": 48.0,
+            "y": 70.0,
+            "width": 410.0,
+            "height": 170.0
+          },
+          {
+            "semantic_id": "request",
+            "x": 48.0,
+            "y": 322.0,
+            "width": 410.0,
+            "height": 150.0
+          },
+          {
+            "semantic_id": "observe",
+            "x": 48.0,
+            "y": 514.0,
+            "width": 410.0,
+            "height": 185.0
+          },
+          {
+            "semantic_id": "decide",
+            "x": 48.0,
+            "y": 741.0,
+            "width": 410.0,
+            "height": 230.0
+          },
+          {
+            "semantic_id": "done",
+            "x": 48.0,
+            "y": 1013.0,
+            "width": 410.0,
+            "height": 160.0
+          }
+        ],
+        "routes": [
+          {
+            "semantic_id": "initialized",
+            "via": [
+              [
+                478.0,
+                155.0
+              ],
+              [
+                478.0,
+                304.0
+              ],
+              [
+                30.0,
+                304.0
+              ],
+              [
+                30.0,
+                372.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1220.0
+          },
+          {
+            "semantic_id": "call",
+            "via": [
+              [
+                478.0,
+                397.0
+              ],
+              [
+                478.0,
+                496.0
+              ],
+              [
+                30.0,
+                496.0
+              ],
+              [
+                30.0,
+                606.5
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1254.0
+          },
+          {
+            "semantic_id": "observed",
+            "via": [
+              [
+                478.0,
+                606.5
+              ],
+              [
+                478.0,
+                723.0
+              ],
+              [
+                30.0,
+                723.0
+              ],
+              [
+                30.0,
+                856.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1288.0
+          },
+          {
+            "semantic_id": "retry",
+            "via": [
+              [
+                498.0,
+                817.6666666666666
+              ],
+              [
+                498.0,
+                270.0
+              ],
+              [
+                16.0,
+                270.0
+              ],
+              [
+                16.0,
+                422.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1322.0
+          },
+          {
+            "semantic_id": "stop",
+            "via": [
+              [
+                478.0,
+                894.3333333333334
+              ],
+              [
+                478.0,
+                995.0
+              ],
+              [
+                30.0,
+                995.0
+              ],
+              [
+                30.0,
+                1093.0
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 1356.0
+          }
+        ],
+        "min_font_pt": 8.0,
+        "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification"
+      }
+    },
+    {
+      "id": "constraint",
+      "facts": {
+        "schema_version": "arw.mechanism-facts.v1",
+        "question": "How does a retained counterexample revise a semantic constraint?",
+        "claim": "A penguin counterexample yields an explicit exception without inventing observations.",
+        "data_nature": "synthetic",
+        "components": [
+          {
+            "semantic_id": "before",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Original rule and counterexample",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "counterexample"
+              }
+            ],
+            "steps": [
+              "Toy domain: birds, penguins and possible flight.",
+              "Counterexample: penguin is a bird that cannot fly."
+            ],
+            "before": "bird -> may_fly",
+            "after": "Counterexample is retained"
+          },
+          {
+            "semantic_id": "revise",
+            "component_version": "1",
+            "family": "port_operation",
+            "label": "Add a sourced exception guard",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "counterexample"
+              },
+              {
+                "port_id": "out",
+                "direction": "output",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "guarded"
+              }
+            ],
+            "steps": [
+              "Retain bird(penguin).",
+              "Exclude penguins from may_fly rule.",
+              "Keep other birds as unknown, not observed flight."
+            ]
+          },
+          {
+            "semantic_id": "after",
+            "component_version": "1",
+            "family": "candidate_state",
+            "label": "Revised constraint with a known limit",
+            "status": "conceptual",
+            "source_location": "Public synthetic task definition; no model experiment",
+            "phase": "inference",
+            "parameters": "not_applicable",
+            "ports": [
+              {
+                "port_id": "input",
+                "direction": "input",
+                "value_type": "rule",
+                "object_id": "rule",
+                "state_id": "guarded"
+              }
+            ],
+            "steps": [
+              "No inference that every other bird actually flies."
+            ],
+            "before": "Unconditional bird rule",
+            "after": "bird AND not penguin -> may_fly (conceptual)",
+            "rule_change": {
+              "before_component": "before",
+              "retained_clause": "bird",
+              "added_clause": "AND not penguin",
+              "conclusion": "-> may_fly"
+            }
+          }
+        ],
+        "relations": [
+          {
+            "semantic_id": "counterexample",
+            "source_component": "before",
+            "source_port": "out",
+            "target_component": "revise",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "original rule plus counterexample",
+            "trigger": "always",
+            "feedback": false
+          },
+          {
+            "semantic_id": "guard",
+            "source_component": "revise",
+            "source_port": "out",
+            "target_component": "after",
+            "target_port": "input",
+            "relation_type": "data",
+            "payload": "guarded rule; unknown flight retained",
+            "trigger": "always",
+            "feedback": false
+          }
+        ],
+        "innovation_id": "revise",
+        "object_chain": [
+          "before",
+          "revise",
+          "after"
+        ],
+        "candidate_exception": "Milestone 1: author-specified mechanism layout; three explanation strategies are deferred."
+      },
+      "layout": {
+        "width_mm": 180.0,
+        "height_mm": 312.914,
+        "cells": [
+          {
+            "semantic_id": "before",
+            "x": 48.0,
+            "y": 70.0,
+            "width": 410.0,
+            "height": 160.0
+          },
+          {
+            "semantic_id": "revise",
+            "x": 48.0,
+            "y": 272.0,
+            "width": 410.0,
+            "height": 185.0
+          },
+          {
+            "semantic_id": "after",
+            "x": 48.0,
+            "y": 499.0,
+            "width": 410.0,
+            "height": 245.0
+          }
+        ],
+        "routes": [
+          {
+            "semantic_id": "counterexample",
+            "via": [
+              [
+                478.0,
+                150.0
+              ],
+              [
+                478.0,
+                254.0
+              ],
+              [
+                30.0,
+                254.0
+              ],
+              [
+                30.0,
+                364.5
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 791.0
+          },
+          {
+            "semantic_id": "guard",
+            "via": [
+              [
+                478.0,
+                364.5
+              ],
+              [
+                478.0,
+                481.0
+              ],
+              [
+                30.0,
+                481.0
+              ],
+              [
+                30.0,
+                621.5
+              ]
+            ],
+            "label_x": 20.0,
+            "label_y": 825.0
+          }
+        ],
+        "min_font_pt": 8.0,
+        "profile": "Author-defined synthetic mechanism profile, 180 mm, 8 pt minimum; not venue certification"
+      }
+    }
+  ],
+  "task_revision": 3,
+  "supersedes_tasks_sha256": "6364065e8a3c8e672efe92b692f9f45d2fc82986575db0d27c3b44113599731c",
+  "source_amendment": "Source-author synthetic clarification of retained v2 facts: decompose once-only initialization from repeated increment/request with distinct initial/retry inputs; expose supplied one-hot coordinates and guarded-rule clauses as structured display facts. No changed outcomes, thresholds, tokens or inference claims. Preserve tasks.v2.json and its SHA plus all round1/2 evidence."
+}

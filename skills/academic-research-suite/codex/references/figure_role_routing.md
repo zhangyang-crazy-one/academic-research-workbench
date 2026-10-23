@@ -60,3 +60,39 @@ Six synthetic public briefs and saved routing outputs live in
 quality. They contain no private manuscripts, external artworks or model calls.
 
 The additive `v1_composition_svg` backend accepts explicit 2–4 panel FigureComposition v1 specifications, same-run canonical object/accepted-child bindings and independent axes. It supports bounded sequence/entity-graph objects and editable SVG text; it does not generate arbitrary layouts, recolor accepted plots, share axes or certify final-size legibility. The existing single-panel backend records retain their original capabilities. See `docs/runtime/research-artifact-qualification.md` in the ARW repository for its admission and typography contract.
+
+
+## Mechanism figures and the separate figure-reviewer role
+
+For a key method figure, first state its sourced question/claim, concrete input,
+operation, object/state change, innovation and any return/stop conditions. A
+module name alone is insufficient evidence of its internals. The additive
+`v1_mechanism_svg` backend supports a small, same-run accepted mechanism document:
+token/representation correspondence, explicit operation steps and typed ports,
+conditional return/exit and before/after state comparison with supplied manual
+geometry. It does not infer attention, tensor values, missing scientific steps,
+or automatic three-strategy layouts. Numeric result panels continue through the
+existing numeric/plot core; a mechanism's supplied literal example is not a new
+statistical computation. Preserve source status, training/inference and
+frozen/trainable distinctions. General matrices/tensors and draw.io are not
+implemented by this first renderer.
+
+After actual final-size pixels exist, dispatch a separate `figure-reviewer`
+through the selected configured harness. Supply original sources/locations,
+frozen facts, IR/SVG/PNG and their exact source/output/font/environment digests,
+profile and 2–3 mechanism-matched reference figures. Withhold the producer's
+scores and selection conclusions. Missing pixels/sources means unavailable.
+Require content-vs-output, reference-vs-explanation and revision-vs-revision
+comparisons, with concrete findings (affected ID/region, requirement, observed
+difference, severity, proposed fix and pass condition), plus a reader retelling
+of input/transformation/innovation/output/feedback. Reference design is not a
+source of new scientific facts. Simple accurate figures are valid.
+
+The figure-reviewer is read-only and advisory: it cannot alter canonical
+research state, declare human acceptance or issue publication PASS. Same-model
+role separation is not statistical independence. Set explicit rounds/cost
+budgets before iterating; the public example uses two review rounds. Fix facts
+before readability and style. At the limit retain unresolved findings and ask
+for human judgment rather than relaxing acceptance. Any changed source, IR,
+output, font or environment expires the old binding. Product harness selection
+remains configurable; this role does not impose a model, provider or version.

@@ -1,0 +1,304 @@
+{
+  "schema_version": "arw.independent-figure-review.v1",
+  "round": 2,
+  "final_budgeted_round": true,
+  "role": "independent_figure_reviewer",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "high",
+  "human_status": "human_pending",
+  "publication_approval": false,
+  "advisory_only": true,
+  "scope": "Only independent-review evidence files written; no figure or source edits. Nine actual PNGs viewed in this round; normal SVG text/metadata inspected and case-2 route/case-6 font cross-checked.",
+  "blindness": {
+    "not_read": [
+      "negative-truth.json",
+      "run.py injection mappings",
+      "report.json detection results",
+      "producer scores"
+    ],
+    "case_selection": "Only case-1 through case-6 names from reviewer-blind-cases.json were used; no negative filenames used to infer defects.",
+    "limitations": "Normal figures and task sources were visible before blind cases, providing a legitimate source comparison baseline. Role separation does not establish statistical independence. No claim of measured accuracy, perfect recall or zero false positives is made without a later external truth comparison."
+  },
+  "input_sha256": "320f03db80e80b69e70d3ad93048e4cc4bd1d225ba49bdba74758533d27fe0ba",
+  "blind_input_sha256": "9f553e80d6c6728c21183e842345d61c2a21f0da549deacdbbd8668710a808c6",
+  "binding_evidence": "round2-binding.json",
+  "binding_summary": {
+    "normal_exact_fields": "18 of 18 source/IR/SVG/PNG/font/environment bindings recomputed and matched",
+    "source_reference": "IR source.sha256 matches canonical entire tasks.json, not its human-formatted raw bytes; IR JSON pointers and facts digests match revised source.",
+    "source_revision": "v1 file digest equals supersedes_tasks_sha256; v1 frozen answers all match round1. Only tool-loop request/observe steps changed in v2.",
+    "font": "Recorded Noto font file content digest independently matches.",
+    "environment": "Project Python3.14.6 and actual shared librsvg2.62.3/Pango1.57.1/Cairo1.18.4 available and match. Default shell Python is 3.11.10, which is not treated as producer environment drift. Availability/metadata is not historical execution attestation.",
+    "blind_cases": "All 6 PNG byte hashes match. Blind input lacks exact source/IR/SVG binding; SVG observed hashes recorded without pretending an expected binding exists."
+  },
+  "round1_disposition": [
+    {
+      "finding_id": "R1-TITLE-WRAP",
+      "status": "resolved",
+      "pixel_evidence": "Normal representation now wraps before vector.; normal tool-loop now wraps before retry or stop. Neither original claim breaks inside those words.",
+      "remaining": "A new edge-label wrapping issue is recorded separately as R2-EDGE-WRAP."
+    },
+    {
+      "finding_id": "R1-EDGE-LABELS",
+      "status": "partially_resolved",
+      "pixel_evidence": "lookup, sum, call, observed, retry, stop, counterexample, guard now appear beside source exits. The tool-loop continue/stop predicates appear as separate nearby boxes.",
+      "remaining": "Typed payloads remain in the distant bottom list. Retry and stop predicates are inside a shared decision card and do not have short direct links to their respective ports. Their left/right box placement does not itself identify the top/bottom exits. New counterexample wrapping issue is separate.",
+      "severity_now": "medium"
+    },
+    {
+      "finding_id": "R1-REPRESENTATION-PRIMITIVES",
+      "status": "partially_resolved",
+      "pixel_evidence": "Actual PNG now has named red->e_red and blue->e_blue rows, three sequential operation boxes, and a side-by-side before/after state.",
+      "remaining": "One-hot coordinates, axis-wise summation and output are still text lines. There is no visible matrix/coordinate sum showing how output coordinate 1 receives one count from red and coordinate 2 from blue. No content was omitted; residual is visual explanatory depth.",
+      "severity_now": "medium"
+    },
+    {
+      "finding_id": "R1-CONSTRAINT-DIFF",
+      "status": "partially_resolved",
+      "pixel_evidence": "Before/after states are now paired, and retain/exclude/unknown operations are three separate boxes.",
+      "remaining": "Retained fact and newly added not penguin predicate still have identical visual treatment; changed guard is not isolated within an aligned before/after expression. Unknown state is explicitly stated in text and not contradicted.",
+      "severity_now": "low"
+    },
+    {
+      "finding_id": "R1-LOOP-COUNTER-SOURCE",
+      "status": "resolved_by_explicit_source_revision",
+      "pixel_evidence": "Normal tool-loop now visibly gives attempts=0 and answer_present=false, increments attempts before request, allows found or missing, and sets answer_present from observation.",
+      "source_evidence": "task_revision=2, v1 original file preserved with matching supersedes digest; all three v1 answers equal round1 frozen answers; only request/observe steps in tool-loop changed. Facts hash changed and normal IR/SVG/PNG were rebound.",
+      "remaining": "One-time initialization versus retry scope remains a diagram reading ambiguity recorded as R2-INIT-SCOPE, not a missing source-counter rule."
+    }
+  ],
+  "normal_findings": [
+    {
+      "finding_id": "R2-EDGE-WRAP",
+      "type": "readability",
+      "severity": "medium",
+      "affected_ids": [
+        "constraint:edge-label.counterexample",
+        "constraint:edge.counterexample"
+      ],
+      "source_requirement": "The retained counterexample relation must be identifiable in the actual pixels at the 180mm/8pt minimum profile.",
+      "pixel_observation": "The new right-side label breaks counterexample as countere / xample. Its second line lies at the level of the blue outgoing horizontal segment; the route passes immediately through/along the second-line region.",
+      "difference": "Local labeling fixes the earlier remote legend problem but introduces a narrow-gutter word split and line/label collision risk. Body text and claim remain readable.",
+      "recommendation": "Provide enough label width or route a reserved label area above/below the segment; keep the entire edge name intact.",
+      "pass_condition": "Actual PNG shows counterexample as an intact word without line through its text bounds, clipping or collision.",
+      "uncertainty": "The pixel overlap is localized to the right gutter. This is not a finding of missing semantics or an arrow reversal."
+    },
+    {
+      "finding_id": "R2-INIT-SCOPE",
+      "type": "readability",
+      "severity": "medium",
+      "affected_ids": [
+        "tool-loop:request",
+        "tool-loop:label.request.2",
+        "tool-loop:label.request.3",
+        "tool-loop:edge.retry"
+      ],
+      "source_requirement": "The explicit source amendment defines initial attempts=0, then increments attempts before each request; retry must retain the same observed episode, including accumulated attempts.",
+      "pixel_observation": "The request card displays Initial state: attempts=0 ... as numbered step 1, followed by a down arrow to Increment attempts... as step 2. Retry enters the same enclosing request card; no once-only marker or bypass separates initialization from repeated execution.",
+      "difference": "The wording Initial state supports the intended once-only interpretation, but the new sequential-box grammar also permits reading initialization as part of each request invocation. Under that unintended reading the no-answer counter would be reset; actual implementation nontermination has not been demonstrated.",
+      "recommendation": "Distinguish a one-time incoming initial-state annotation from the repeatable increment/request operation, or explicitly mark step 1 once and route retry to step 2.",
+      "pass_condition": "A reader can trace two missing results to attempts=1 then attempts=2 without traversing a reset step, and can identify the bounded stop condition.",
+      "uncertainty": "This is a semantic reading ambiguity, not a confirmed scientific_error: source wording says Initial state and does not explicitly instruct resetting on retry. Do not count this as a normal-figure confirmed science false positive."
+    }
+  ],
+  "normal_scientific_error_assessment": [
+    {
+      "task_id": "representation",
+      "confirmed_scientific_errors": [],
+      "assessment": "No unsupported numbers, token identity replacement or source contradiction found in normal pixels."
+    },
+    {
+      "task_id": "tool-loop",
+      "confirmed_scientific_errors": [],
+      "semantic_ambiguity_ids": [
+        "R2-INIT-SCOPE"
+      ],
+      "assessment": "Source amendment is explicit and preserved. One-time init vs repeatable block scope is an uncertain reading risk, not counted as a confirmed scientific error."
+    },
+    {
+      "task_id": "constraint",
+      "confirmed_scientific_errors": [],
+      "assessment": "Guarded conceptual rule and retained unknown status match source; no observed-flight fabrication found."
+    }
+  ],
+  "blind_case_findings": [
+    {
+      "finding_id": "R2-BLIND-1",
+      "type": "necessary_content_omission",
+      "severity": "high",
+      "affected_ids": [
+        "case-1:label.project.3",
+        "case-1:project"
+      ],
+      "source_requirement": "representation project.steps[1] explicitly requires Lookup X=[E(red), E(blue)].",
+      "pixel_observation": "The central operation sequence reads 1. E(red)=[1,0]; E(blue)=[0,1]. / 2. Step omitted. / 3. Sum sequence axis: y=[1,1].",
+      "difference": "The actual lookup that forms the sequence representation is absent, replaced by an omission placeholder. Token names and final vector remain present.",
+      "recommendation": "Restore the source-specified lookup step; preserve the given input order.",
+      "pass_condition": "Case pixels show the concrete lookup expression rather than Step omitted., with its position between embedding definitions and summation.",
+      "uncertainty": "Top-level claim still names lookup, so the whole concept has not vanished. The necessary internal transformation is specifically omitted."
+    },
+    {
+      "finding_id": "R2-BLIND-2",
+      "type": "scientific_error",
+      "severity": "high",
+      "affected_ids": [
+        "case-2:edge.call",
+        "case-2:request.out",
+        "case-2:observe.input"
+      ],
+      "source_requirement": "tool-loop relation call is action request.out -> observe.input and carries the lookup request and arguments.",
+      "pixel_observation": "The orange route has its arrowhead at the request card right-side call port, pointing back into request; the observe card left-side port has no receiving arrowhead. SVG edge.call point order independently confirms the reverse path.",
+      "difference": "The action direction is reversed relative to the frozen answer although the labels and card order still imply request then observation.",
+      "recommendation": "Restore request-to-observe routing and the arrowhead at observe.input.",
+      "pass_condition": "The actual orange route departs request.out and terminates with an arrowhead at observe.input.",
+      "uncertainty": "This is an arrow direction defect, not a claim that the separately visible gray feedback route is itself reversed."
+    },
+    {
+      "finding_id": "R2-BLIND-3",
+      "type": "scientific_error",
+      "severity": "high",
+      "affected_ids": [
+        "case-3:label.project.6",
+        "case-3:project.out",
+        "case-3:result.input"
+      ],
+      "source_requirement": "representation must retain the utterance identity: project.out object_id=utterance,state=sum and result.input the same identity/state.",
+      "pixel_observation": "The central output line reads output out: vector2 / unrelated@sum, while the final card receives vector2 / utterance@sum and says retain the utterance identity.",
+      "difference": "The producer output identity changes to an unsupported unrelated object and breaks continuity across sum even though the numeric vector remains [1,1].",
+      "recommendation": "Use utterance@sum consistently at project output and result input.",
+      "pass_condition": "Actual pixels show matching utterance@sum on both sides of the sum connection.",
+      "uncertainty": "No alternate unrelated object is defined in either frozen v1 or revised source; the identity change is not supported."
+    },
+    {
+      "finding_id": "R2-BLIND-4",
+      "type": "readability",
+      "severity": "medium",
+      "affected_ids": [
+        "case-4:label.decide.4",
+        "case-4:decide"
+      ],
+      "source_requirement": "tool-loop stop condition is explicitly answer_present OR attempts >= 2; its role as stopping must remain unambiguous.",
+      "pixel_observation": "The right predicate box says removed: answer_present OR attempts >= 2 instead of identifying it as stop. A stop edge label and the complete stop condition in the bottom relation list remain visible.",
+      "difference": "The stopping role is replaced by an unsupported removal annotation in the decision panel. The condition itself has NOT been fully deleted: its expression and a remote stop association remain. This supports a labeling/conflicting presentation diagnosis, not a claim of wholesale predicate omission.",
+      "recommendation": "Restore the stop role in the local decision box and remove the unsupported removed annotation.",
+      "pass_condition": "The local predicate is explicitly labeled stop and agrees with the surviving stop edge/bottom relation.",
+      "uncertainty": "Without injection truth, this is classified as role-label corruption/readability. It may be intended as an annotation, but no source authorizes a removal operation. No blind ground-truth category is inferred."
+    },
+    {
+      "finding_id": "R2-BLIND-5",
+      "type": "scientific_error",
+      "severity": "high",
+      "affected_ids": [
+        "case-5:label.project.4",
+        "case-5:project",
+        "case-5:result"
+      ],
+      "source_requirement": "representation sums E(red)=[1,0] and E(blue)=[0,1] along sequence axis to y=[1,1].",
+      "pixel_observation": "The third operation box says Sum sequence axis: y=[999,999]. The later after-state still says y=[1,1].",
+      "difference": "[999,999] contradicts both the supplied algebra and the final rendered result; no source supplies that value.",
+      "recommendation": "Restore the supplied sum [1,1] and ensure all displayed occurrences agree.",
+      "pass_condition": "The operation and final state both display [1,1], consistent with the two given one-hot vectors.",
+      "uncertainty": "This is not an empirical estimate with uncertainty: the task supplies exact synthetic vectors."
+    },
+    {
+      "finding_id": "R2-BLIND-6",
+      "type": "readability",
+      "severity": "high",
+      "affected_ids": [
+        "case-6:mechanism.claim"
+      ],
+      "source_requirement": "Author-defined profile has minimum 8pt, and the synthetic claim must remain readable in actual pixels.",
+      "pixel_observation": "The top claim is extremely small relative to the question and all body labels; it occupies a short sliver near the upper left and cannot be read comfortably at this supplied image scale. SVG mechanism.claim font-size=2 confirms the pixel observation.",
+      "difference": "The main scientific summary and its synthetic qualifier are rendered far below the minimum, despite normal body text remaining readable.",
+      "recommendation": "Render the claim at least 8pt with adequate wrapping and height.",
+      "pass_condition": "Actual pixels show the entire claim and synthetic qualifier legibly at the declared minimum or larger, without clipping.",
+      "uncertainty": "The text has not been semantically replaced according to inspected SVG; the diagnosed defect is visibility/profile compliance, not a false scientific claim."
+    }
+  ],
+  "blind_case_assessment": [
+    {
+      "case_id": "case-1",
+      "task_id": "representation",
+      "observed_difference": "R2-BLIND-1",
+      "scientific_error_confirmed": false,
+      "truth_mapping_seen": false
+    },
+    {
+      "case_id": "case-2",
+      "task_id": "tool-loop",
+      "observed_difference": "R2-BLIND-2",
+      "scientific_error_confirmed": true,
+      "truth_mapping_seen": false
+    },
+    {
+      "case_id": "case-3",
+      "task_id": "representation",
+      "observed_difference": "R2-BLIND-3",
+      "scientific_error_confirmed": true,
+      "truth_mapping_seen": false
+    },
+    {
+      "case_id": "case-4",
+      "task_id": "tool-loop",
+      "observed_difference": "R2-BLIND-4",
+      "scientific_error_confirmed": false,
+      "truth_mapping_seen": false
+    },
+    {
+      "case_id": "case-5",
+      "task_id": "representation",
+      "observed_difference": "R2-BLIND-5",
+      "scientific_error_confirmed": true,
+      "truth_mapping_seen": false
+    },
+    {
+      "case_id": "case-6",
+      "task_id": "constraint",
+      "observed_difference": "R2-BLIND-6",
+      "scientific_error_confirmed": false,
+      "truth_mapping_seen": false
+    }
+  ],
+  "reader_retell": {
+    "representation": {
+      "input": "Ordered tok0=red and tok1=blue, vocabulary/embedding axes red,blue.",
+      "transformation": "Lookup [1,0] and [0,1], then sum across sequence axis.",
+      "innovation": "Author-designated project component; this is a synthetic explanatory emphasis, not validated scientific novelty.",
+      "output": "Same utterance becomes count vector y=[1,1].",
+      "feedback": "None; source declares a feed-forward chain.",
+      "limits": "New token correspondence rows, ordered operation boxes and paired states improve reconstruction; coordinate-wise matrix sum is still textual."
+    },
+    "tool-loop": {
+      "input": "Once-only initial episode attempts=0, answer_present=false (intended source reading).",
+      "transformation": "Increment attempts before lookup; synthetic tool may return found or missing; append observation; set answer_present=(observation==found).",
+      "innovation": "Author-designated decide separates retry and stop using explicit predicates.",
+      "output": "Retained terminal episode on found, or after two missing attempts.",
+      "feedback": "If no answer and attempts<2, retain observed episode and request again; stop on answer_present OR attempts>=2.",
+      "limits": "No actual tool experiment is claimed. Diagram does not clearly separate the once-only initial-state box from the retry target."
+    },
+    "constraint": {
+      "input": "Conceptual bird -> may_fly rule and retained penguin counterexample.",
+      "transformation": "Retain bird(penguin), add not-penguin guard, preserve uncertainty for other birds.",
+      "innovation": "Author-designated revise stage adds the exception guard.",
+      "output": "bird AND not penguin -> may_fly, conceptual; no claim of observed flight for every other bird.",
+      "feedback": "None; counterexample is an input payload, not a drawn feedback loop.",
+      "limits": "Unknown flight for other birds remains explicit; paired states improve comparison, but added predicate is not visually isolated."
+    }
+  },
+  "references": {
+    "reuse_from": "round1.json reference_comparison and locally viewed page3 rasters; no repeat downloads",
+    "OpenHands": "Official ICLR2025 Fig2 actual pixels previously viewed: nearby action/observation labels and concrete history objects are useful explanation precedents. No retry/stop semantics imported.",
+    "VGGT": "Actual pixels were authors arXiv v1 Fig2, not verified identical to requested CVPR2025 proceedings PDF, which returned 403. Colored token representations and explicit operations are comparison precedents only; do not import attention/3D claims.",
+    "scope": "These papers inform graphical explanation only, not synthetic task scientific evidence."
+  },
+  "resources": {
+    "started_utc": "2026-10-16T04:11:13+00:00",
+    "evidence_written_utc": "2026-10-16T04:14:39.363763+00:00",
+    "elapsed_wall_seconds": 206.364,
+    "nested_tool_calls_through_report_write": 19,
+    "functions_exec_wrappers_through_report_write": 10,
+    "count_definition": "Each nested tools invocation counted, including read/hash/environment probes, 9 view_image calls and this report-writing exec_command; helper outputs and collaboration messages excluded.",
+    "tokens": "unavailable",
+    "amount": "unavailable"
+  },
+  "assessment": "Original two issues resolved (title wrap and explicit source counter omission); three partially resolved. Two normal readability/semantic-scope issues remain. Six blind-case-specific differences observed; no truth-based hit/miss statistics calculated. Last budgeted round ends with human_pending and no publication approval."
+}

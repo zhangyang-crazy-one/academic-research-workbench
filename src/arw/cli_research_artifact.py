@@ -95,6 +95,12 @@ def handle(args, provider):
             run_roots=tuple(dict.fromkeys([args.run_root, *args.source_run_root])),
             project_root=args.project_root,
         )}
+    elif isinstance(payload, dict) and payload.get("artifact_kind") == "mechanism_figure":
+        from arw.kernel.state.mechanism_figure import MechanismFigureIR
+        if args.source_run_root or args.project_root:
+            raise ValueError("mechanism_cross_run_sources_unsupported")
+        ir = MechanismFigureIR.model_validate_json(raw)
+        options = {}
     elif isinstance(payload, dict) and payload.get("artifact_kind") == "figure_composition":
         from arw.kernel.state.figure_composition import FigureCompositionIR
         if args.source_run_root or args.project_root:

@@ -1,0 +1,90 @@
+[
+  {
+    "file": "extensions/research-artifact/src/arw_research_artifact/mechanism.py",
+    "baseline": [
+      [
+        "RUF007",
+        "Prefer `itertools.pairwise()` over `zip()` when iterating over successive pairs"
+      ]
+    ],
+    "current": [
+      [
+        "RUF007",
+        "Prefer `itertools.pairwise()` over `zip()` when iterating over successive pairs"
+      ]
+    ],
+    "introduced": []
+  },
+  {
+    "file": "src/arw/kernel/state/mechanism_figure.py",
+    "baseline": [
+      [
+        "SIM102",
+        "Use a single `if` statement instead of nested `if` statements"
+      ]
+    ],
+    "current": [
+      [
+        "SIM102",
+        "Use a single `if` statement instead of nested `if` statements"
+      ]
+    ],
+    "introduced": []
+  },
+  {
+    "file": "tests/integration/test_mechanism_figures.py",
+    "baseline": [
+      [
+        "I001",
+        "Import block is un-sorted or un-formatted"
+      ],
+      [
+        "RUF059",
+        "Unpacked variable `root` is never used"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ],
+      [
+        "PLW1510",
+        "`subprocess.run` without explicit `check` argument"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ]
+    ],
+    "current": [
+      [
+        "I001",
+        "Import block is un-sorted or un-formatted"
+      ],
+      [
+        "RUF059",
+        "Unpacked variable `root` is never used"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ],
+      [
+        "PLW1510",
+        "`subprocess.run` without explicit `check` argument"
+      ],
+      [
+        "C408",
+        "Unnecessary `dict()` call (rewrite as a literal)"
+      ]
+    ],
+    "introduced": []
+  }
+]
