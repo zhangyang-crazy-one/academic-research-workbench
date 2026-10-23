@@ -15,6 +15,8 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 ROOT = Path(__file__).resolve().parents[2]
 CURRENT_VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
@@ -163,6 +165,17 @@ def candidate(tmp_path: Path, **wheel_options: object) -> tuple[Path, Path]:
         info = tarfile.TarInfo(f"{DISTRIBUTION_STEM}/PKG-INFO")
         info.size = len(metadata)
         archive.addfile(info, io.BytesIO(metadata))
+    runtime_inventory = []
+    for declaration in configuration["project"]["dependencies"]:
+        requirement = Requirement(declaration)
+        assert requirement.specifier and all(
+            item.operator == ">=" for item in requirement.specifier
+        ), "candidate fixture expects the project's open lower-bound policy"
+        version = str(max(Version(item.version) for item in requirement.specifier))
+        runtime_inventory.append({
+            "name": requirement.name, "version": version, "license": "MIT",
+            "installed_content_sha256": "1" * 64,
+        })
     evidence = {
         "schema_version": "1.0.0",
         "source_identity": {
@@ -180,20 +193,12 @@ def candidate(tmp_path: Path, **wheel_options: object) -> tuple[Path, Path]:
             "argv": ["python", "-m", "hatchling", "build"],
             "requirements": configuration["build-system"]["requires"],
         },
-        "resolved_runtime_inventory": [
-            {"name": name, "version": version, "license": "MIT", "installed_content_sha256": "1" * 64}
-            for name, version in (("jsonschema", "4.26.0"), ("platformdirs", "4.11.6"),
-                                  ("portalocker", "3.2.0"), ("pydantic", "2.13.4"))
-        ],
+        "resolved_runtime_inventory": runtime_inventory,
         "runtime_resolution_environment": {
             "python": {"version": "3.14.6", "executable": "/tmp/validation/bin/python"},
             "uv": {"version": "uv 0.11.28"},
             "install_argv": ["uv", "pip", "install"],
-            "inventory": [
-                {"name": name, "version": version, "license": "MIT", "installed_content_sha256": "1" * 64}
-                for name, version in (("jsonschema", "4.26.0"), ("platformdirs", "4.11.6"),
-                                      ("portalocker", "3.2.0"), ("pydantic", "2.13.4"))
-            ],
+            "inventory": [row.copy() for row in runtime_inventory],
         },
         "artifacts": [
             {"kind": "wheel", "path": f"dist/{wheel.name}", "size": wheel.stat().st_size, "sha256": sha256(wheel)},
