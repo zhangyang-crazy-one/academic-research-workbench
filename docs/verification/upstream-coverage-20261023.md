@@ -255,3 +255,7 @@
 | #175 | `cb6f27db8d2ba9fa61d4050096a7423d6a28d102` | 5 | 0 | 1 | 1 |
 | #171 | `aa7b254c11d9b9f3d0a2db62810fc449d2e83e3e` | 5 | 0 | 1 | 1 |
 | #105 | `f6af84050f22683670951235898db7374d6372ec` | 4 | 1 | 1 | 2 |
+
+托管失败进一步核对：#178 的 Python job [120317040164](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39923823317/job/120317040164) 在 `test_network_denied_verification_retains_namespace_and_syscall_evidence` 返回97，而非CFF检查失败；#105最终head的[Python job120318715576](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39924244106/job/120318715576)也在同一测试返回97，主代理已下载核实失败日志。两者以尚未纳入#170前置修复的main为base。相对地，#177 [Python job120311259387](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39922068397/job/120311259387) 已通过source manifest验证、v2 compatibility和complete non-host test tree，最后观察时正在运行bundled ARS self-tests。这里只按实际step结果陈述，不宣称整job或release通过。
+
+建议集成顺序：先审核#170和其后续#177，再审核基于main的各独立修复；图形链仍按#172→#173→#174→#175。此建议不是合并授权；本轮没有合并main、关闭issue或发布版本。
