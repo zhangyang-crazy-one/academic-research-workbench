@@ -31,3 +31,9 @@ The final branch therefore restores all dependency declarations to the main
 baseline and retains only the resilient synthetic inventory fixture. Existing
 open lower bounds already permit compatible newer versions; no upper bounds,
 lockfile, optional-feature removal, or resolver bypass was introduced.
+
+Final-scope parent verification: 63 targeted tests passed again after restoring
+the baseline dependency declarations. In a separate clean Python 3.14 environment,
+`scripts/install-unmanaged-deps.py --dry-run --all-extras dev ars-test storm`
+resolved 213 packages successfully (including sentence-transformers 5.7.0).
+This is an online resolver dry-run, not installation or model execution.
