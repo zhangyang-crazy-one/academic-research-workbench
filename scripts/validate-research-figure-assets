@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Validate the optional figure pack without third-party dependencies."""
+import hashlib
+import json
+from pathlib import Path
+import struct
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1] / "assets/research-figures"
+
+
+def validate():
+    records = json.loads((ROOT / "manifest.json").read_text())
+    assert [r["id"] for r in records] == [f"A{i:03d}" for i in range(1, 201)]
+    groups = {}
+    for record in records:
+        groups[record["group"]] = groups.get(record["group"], 0) + 1
+        for kind in ("svg", "png", "prototype"):
+            path = ROOT / record[kind]
+            assert path.resolve().is_relative_to(ROOT.resolve())
+            data = path.read_bytes()
+            assert hashlib.sha256(data).hexdigest() == record["sha256_" + kind], path
+            if kind != "svg":
+                assert data[:8] == b"\x89PNG\r\n\x1a\n", path
+                if kind == "png":
+                    assert struct.unpack(">II", data[16:24]) == (512, 512), path
+                    assert data[25] in (4, 6), (path, "alpha channel missing")
+            else:
+                assert b"<!DOCTYPE" not in data and b"<!ENTITY" not in data
+                svg = ET.fromstring(data)
+                assert svg.tag == "{http://www.w3.org/2000/svg}svg"
+                for element in svg.iter():
+                    assert element.tag.rsplit("}", 1)[-1] not in ("image", "script", "foreignObject")
+                    for key, value in element.attrib.items():
+                        assert not key.lower().startswith("on")
+                        if key.rsplit("}", 1)[-1] == "href":
+                            assert value.startswith("#")
+                        if "url(" in value:
+                            assert "url(#" in value
+        for prompt in record["prompt_files"]:
+            assert (ROOT / prompt).resolve().is_relative_to(ROOT.resolve())
+            assert (ROOT / prompt).read_text().strip()
+    assert len(groups) == 5 and set(groups.values()) == {40}, groups
+    for directory, suffix in (("svg", ".svg"), ("png", ".png"), ("prototypes", ".png")):
+        assert {p.stem for p in (ROOT / directory).glob("*" + suffix)} == {r["id"] for r in records}
+    assert len(list((ROOT / "prompts").glob("*.txt"))) == 200
+    print("PASS: 200 SVGs, 200 final PNGs, 200 prototypes, 200 prompts; five groups of 40")
+
+
+if __name__ == "__main__":
+    validate()

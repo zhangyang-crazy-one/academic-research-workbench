@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="512" height="512" viewBox="0 0 512 512">
+<title>Local coordinate frame</title>
+<desc>Original native editable reconstruction from an individually generated prototype; flat scientific illustration.</desc>
+<g stroke-linecap="round" stroke-linejoin="round"><g inkscape:label="Vertical coordinate" ><path d="M247 303V155H232L256 112L280 155H265V303Z" fill="#8EBFC8" stroke="#203B56" stroke-width="4"/></g><g inkscape:label="Left coordinate" ><path d="M250 300L139 366L131 352L108 393L155 393L148 379L263 313Z" fill="#B8D9E4" stroke="#203B56" stroke-width="4"/></g><g inkscape:label="Right coordinate" ><path d="M262 300L373 366L381 352L404 393L357 393L364 379L249 313Z" fill="#E4F2F7" stroke="#203B56" stroke-width="4"/></g><g inkscape:label="Coordinate origin" ><circle cx="256" cy="306" r="19" fill="#F5F8FA" stroke="#203B56" stroke-width="4"/></g></g></svg>

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="512" height="512" viewBox="0 0 512 512">
+<title>Rigid cube</title>
+<desc>Original native editable reconstruction from an individually generated prototype; flat scientific illustration.</desc>
+<g stroke-linecap="round" stroke-linejoin="round"><g inkscape:label="Cube top face" ><polygon points="256,115 380,184 256,253 132,184" fill="#F5F8FA" stroke="#203B56" stroke-width="3.5"/></g><g inkscape:label="Cube left face" ><polygon points="132,184 256,253 256,395 132,325" fill="#8EBFC8" stroke="#203B56" stroke-width="3.5"/></g><g inkscape:label="Cube right face" ><polygon points="256,253 380,184 380,325 256,395" fill="#E4F2F7" stroke="#203B56" stroke-width="3.5"/></g></g></svg>

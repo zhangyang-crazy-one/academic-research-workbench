@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Build a deterministic portable asset ZIP after validating source bytes."""
+from pathlib import Path
+import json
+import runpy
+import sys
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
+
+repository = Path(__file__).resolve().parents[1]
+if len(sys.argv) != 2:
+    raise SystemExit("usage: package-research-figure-assets OUTPUT.zip")
+root = repository / "assets/research-figures"
+output = Path(sys.argv[1]).resolve()
+if output.is_relative_to(root):
+    raise SystemExit("output must be outside the asset source directory")
+runpy.run_path(str(repository / "scripts/validate-research-figure-assets"), run_name="__main__")
+members = {"README.md", "index.html", "manifest.json"}
+for record in json.loads((root / "manifest.json").read_text()):
+    members.update(record[key] for key in ("svg", "png", "prototype"))
+    members.update(record["prompt_files"])
+paths = []
+for name in sorted(members):
+    path = root / name
+    if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+        raise SystemExit("unsafe asset path: " + name)
+    if any(parent.is_symlink() for parent in path.parents if parent != root.parent):
+        raise SystemExit("symlink asset parent: " + name)
+    if not path.is_file():
+        raise SystemExit("missing asset: " + name)
+    paths.append((name, path))
+with ZipFile(output, "x", compression=ZIP_DEFLATED, compresslevel=6) as archive:
+    for name, path in paths:
+        info = ZipInfo(name, (2026, 10, 20, 0, 0, 0))
+        info.compress_type = ZIP_DEFLATED
+        info.external_attr = 0o100644 << 16
+        archive.writestr(info, path.read_bytes())
+print(output)

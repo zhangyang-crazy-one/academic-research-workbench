@@ -1,0 +1,41 @@
+name: Research figure asset integrity
+
+on:
+  pull_request:
+    paths:
+      - 'assets/research-figures/**'
+      - 'scripts/*research-figure-assets'
+      - '.github/workflows/research-figure-assets.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/research-figures/**'
+      - 'scripts/*research-figure-assets'
+      - '.github/workflows/research-figure-assets.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Validate and package all assets without dependencies
+        env:
+          ASSET_ZIP: ${{ runner.temp }}/research-figures.zip
+        run: |
+          python3 scripts/validate-research-figure-assets
+          python3 scripts/package-research-figure-assets "$ASSET_ZIP"
+          python3 - <<'PY'
+          import os
+          from zipfile import ZipFile
+          with ZipFile(os.environ['ASSET_ZIP']) as archive:
+              assert len(archive.namelist()) == 803
+              assert archive.testzip() is None
+          PY
