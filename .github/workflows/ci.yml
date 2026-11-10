@@ -58,6 +58,39 @@ jobs:
           .venv/bin/python -m pytest -q tests/staged/test_supply_chain_inventory.py::test_use_distribution_technical_provenance_hashes_are_fresh
           .venv/bin/python skills/academic-research-suite/codex/scripts/ars_codex_quality_gates.py all --json
 
+  python-core-latest:
+    name: Python core (latest)
+    if: >-
+      github.event_name != 'schedule' &&
+      !(github.event_name == 'workflow_dispatch' &&
+      (inputs.nightly_native_sanitizers || inputs.release_native_qualification))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+          # Do not let a runner-cached older minor satisfy latest-core coverage.
+          check-latest: true
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      - name: Resolve core test environment from declared ranges
+        run: uv venv && ./scripts/install-python --group dev
+      - name: Exercise core behavior on latest Python without optional ML dependencies
+        env:
+          PYTHONNOUSERSITE: "1"
+          UV_OFFLINE: "1"
+        run: >-
+          .venv/bin/python -m pytest -q
+          tests/unit/test_canonical.py
+          tests/unit/test_manifests.py
+          tests/unit/test_recovery_scan.py
+          tests/unit/test_platform_support.py
+          tests/unit/test_ci_python_compatibility.py
+
   python:
     name: Python
     if: >-
@@ -73,7 +106,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.x"
+          # CI environment for all optional ML wheels; not a runtime version pin.
+          # The independent python-core-latest job covers floating 3.x.
+          python-version: "3.14"
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
@@ -121,8 +156,23 @@ jobs:
             src/arw/files_opt_in.py src/arw/platform_support.py
           .venv/bin/pyright src/arw/kernel/core \
             src/arw/files_opt_in.py src/arw/platform_support.py
-      - name: Materialize pinned source snapshots
+      - name: Restore pinned legal receipt and materialize source snapshots
         run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path('vendor/source-manifest.json').read_text())
+          receipt = Path('supply-chain/pre-vendor-receipt.json')
+          target = Path(manifest['pre_vendor_receipt']['path'])
+          sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+          err = 'pinned legal receipt digest mismatch'
+          assert sha == manifest['pre_vendor_receipt']['sha256'], err
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(receipt.read_bytes())
+          target.with_name('receipt.sha256').write_text(f'{sha}\n')
+          PY
           ./scripts/materialize-sources --clean
       - name: Verify source manifest wire digests
         env:
@@ -406,7 +456,7 @@ jobs:
       - name: Install native test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap strace build-essential
+          sudo apt-get install -y bubblewrap strace build-essential iproute2
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev
@@ -459,6 +509,18 @@ jobs:
           PY
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
+      - name: Verify real sudo and ordinary offline startup
+        run: |
+          ARW_TEST_SUDO=1 .venv/bin/python -m pytest -q \
+            tests/integration/test_offline_exec_identity.py \
+            --basetemp=build/evidence/ci-offline-startup
+      - name: Retain offline startup regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-startup-regression
+          path: build/evidence/ci-offline-startup
+          if-no-files-found: warn
       - name: Run nightly ASan and UBSan suite
         if: >-
           github.event_name == 'schedule' ||
@@ -545,7 +607,7 @@ jobs:
       - name: Install native test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap strace build-essential
+          sudo apt-get install -y bubblewrap strace build-essential iproute2
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev

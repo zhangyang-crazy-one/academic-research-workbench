@@ -130,6 +130,28 @@ observations remain evidence about the inputs used, not compatibility pins.
 The launcher accepts newer Python versions that satisfy the minimum; each host
 still needs to pass its runtime and dependency qualification checks.
 
+CI selects Python environments according to the dependency surface being tested:
+
+| CI coverage | Python test environment | Dependency scope |
+| --- | --- | --- |
+| Linux `Python` | `3.14` minor, latest available patch | All extras plus `dev`, `ars-test` and `storm`; full non-host test tree and candidate regressions. |
+| Linux `Python core (latest)` | Floating `3.x`, checking the latest stable release | Core plus `dev`; canonical state, manifests, recovery, platform reporting and CI contract regressions; independent of candidate and optional ML jobs. |
+| Codex overlay | `3.13`, `3.14` | Core plus `dev` and `ars-test`; overlay regressions and quality gates. |
+| Package boundary / macOS core | Floating `3.x` | Packaging/legal checks or focused core tests, respectively; no scholarly PDF or STORM install. |
+
+The `3.14` selection is a CI test environment, not a runtime version pin:
+`requires-python` remains `>=3.13`, with open dependency ranges and no lockfile.
+PR #176's [failed Python job](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39569504862/job/119121900907)
+selected CPython 3.15 through `3.x` and failed before tests because `torch`
+had no `cp315` wheel required by `docling`. Advance the complete-extras CI
+minor once its full dependency surface resolves and passes on the newer minor.
+Independent latest-Python core success does not qualify optional ML capabilities;
+dependency resolution alone also does not verify parsing or model execution.
+The latest-core job enables `setup-python`'s `check-latest` so an older minor
+already cached on the runner cannot stand in for the newest stable Python.
+Its selected interpreter and test results, rather than a green historical run
+on a different minor, establish what was exercised.
+
 ### Platform support
 
 | Platform | Support | CI coverage and limits |
@@ -139,8 +161,15 @@ still needs to pass its runtime and dependency qualification checks.
 | Windows | Unsupported | No Windows CI job or native file-base qualification; POSIX descriptor-relative file access and the Bash launcher are unavailable. |
 
 `arw health --json` reports the running platform's tier and capabilities that
-are unavailable for platform reasons. A successful health response observes the
-environment; it does not grant release qualification. Linux native jobs build
+are unavailable for platform reasons. Explicit agent mode, automatic source-checkout
+preflight, and `python -m arw.cli health --json` share the same `platform` and
+`file_base` diagnostics. `runtime_mode` identifies `agent`, `plugin`, or `direct`
+(for a direct CLI invocation outside the launcher). Launcher interpreter metadata
+is retained when available. Missing optional native file-base keeps core `status`
+`ok`; inspect `file_base.reason_code`, `native_binary`, `recommendation`, and
+`enable_command` for capability blockers and next steps. Health never installs
+native dependencies or enables project configuration. A successful health
+response observes the environment; it does not grant release qualification. Linux native jobs build
 from pinned source snapshots in ignored work areas and do not rewrite
 `vendor/source-manifest.json`.
 Initial setup or a later dependency install needs access to the configured

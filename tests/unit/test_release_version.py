@@ -23,4 +23,5 @@ def test_current_release_metadata_and_launcher_versions_are_coherent() -> None:
         r'importlib\.metadata\.version\("academic-research-workbench"\) != "([^"]+)"',
         (ROOT / "bin/arw").read_text(encoding="utf-8"),
     )
-    assert launcher_versions == [__version__, __version__]
+    # Agent and plugin health share one version guard; require it to remain present.
+    assert launcher_versions == [__version__]

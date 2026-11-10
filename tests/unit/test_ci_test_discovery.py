@@ -55,7 +55,9 @@ def test_ci_runs_configured_test_tree_with_only_codex_host_excluded() -> None:
     )
     assert not any(token.startswith("--ignore") for token in command)
     assert any(
-        step.get("name") == "Materialize pinned source snapshots" for step in steps
+        step.get("name")
+        == "Restore pinned legal receipt and materialize source snapshots"
+        for step in steps
     )
     assert any(
         step.get("name") == "Verify source manifest wire digests" for step in steps

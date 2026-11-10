@@ -67,8 +67,10 @@ if [[ "$(id -u)" -eq 0 && -n "${SUDO_UID:-}" && "$SUDO_UID" != "0" ]]; then
   [[ -n "${SUDO_GID:-}" ]] || fail "SUDO_GID is absent" 69
   command -v setpriv >/dev/null 2>&1 \
     || fail "setpriv is required to run the command as the invoking user" 69
+  # Restore unshare's parent-death signal after the UID/GID changes (which
+  # clear it), and preserve bwrap's no-new-privileges guarantee explicitly.
   RUN_AS=(setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups
-    --inh-caps=-all --bounding-set=-all --)
+    --inh-caps=-all --bounding-set=-all --no-new-privs --pdeathsig keep --)
 fi
 "${RUN_AS[@]}" mkdir -p "$EVIDENCE_ROOT"
 
@@ -83,13 +85,32 @@ if [[ -n "${ARW_SANITIZER_RUNTIME_DIR:-}" ]]; then
 fi
 
 MECHANISM=""
-if command -v bwrap >/dev/null 2>&1 \
+NAMESPACE_PREFIX=()
+if [[ ${#RUN_AS[@]} -gt 0 ]]; then
+  # bwrap drops capabilities before executing its child, so a later setpriv
+  # cannot reliably switch away from root. unshare keeps them only until the
+  # existing setpriv drop. Do not create a user namespace or fall back to root.
+  IP="$(command -v ip || true)"
+  [[ -n "$IP" ]] || fail "ip (iproute2) is required for namespace-local loopback" 69
+  # A fresh unshare network namespace has loopback down. Bring up only its
+  # private lo, before giving up CAP_NET_ADMIN; the target gets no capabilities.
+  NAMESPACE_PREFIX=(unshare --net --pid --fork --kill-child=KILL --mount-proc
+    /bin/bash -c 'set -euo pipefail; "$1" link set dev lo up; shift; exec "$@"'
+    offline-exec-init "$IP")
+  command -v unshare >/dev/null 2>&1 \
+    || fail "unshare is required for sudo namespace isolation" 69
+  "${NAMESPACE_PREFIX[@]}" "${RUN_AS[@]}" /bin/true \
+    || fail "sudo namespace setup or invoking-user privilege drop failed" 69
+  MECHANISM="unshare-root-net"
+elif command -v bwrap >/dev/null 2>&1 \
   && bwrap --die-with-parent --unshare-net --unshare-pid --dev-bind / / --proc /proc \
     -- /bin/true >/dev/null 2>&1; then
   MECHANISM="bwrap-unshare-net"
+  NAMESPACE_PREFIX=(bwrap --die-with-parent --unshare-net --unshare-pid --dev-bind / / --proc /proc)
 elif command -v unshare >/dev/null 2>&1 \
   && unshare --user --map-root-user --net --pid --fork --mount-proc /bin/true >/dev/null 2>&1; then
   MECHANISM="unshare-user-net"
+  NAMESPACE_PREFIX=(unshare --user --map-root-user --net --pid --fork --mount-proc)
 else
   fail "neither bwrap nor unshare can establish a denied network namespace" 69
 fi
@@ -117,13 +138,7 @@ namespace_command=(
 # A private PID namespace makes the sandbox init reap orphaned descendants and
 # kill any that outlive the command, so a leaked process tree can neither look
 # alive to a supervisor nor keep the audit (and the job) running forever.
-if [[ "$MECHANISM" == "bwrap-unshare-net" ]]; then
-  denied_command=(bwrap --die-with-parent --unshare-net --unshare-pid --dev-bind / / --proc /proc
-    -- "${RUN_AS[@]}" "${namespace_command[@]}")
-else
-  denied_command=(unshare --user --map-root-user --net --pid --fork --mount-proc
-    "${RUN_AS[@]}" "${namespace_command[@]}")
-fi
+denied_command=("${NAMESPACE_PREFIX[@]}" "${RUN_AS[@]}" "${namespace_command[@]}")
 
 set +e
 # --seccomp-bpf stops tracees only on the audited network syscalls instead of
