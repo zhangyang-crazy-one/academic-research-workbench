@@ -374,16 +374,11 @@ def source_main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1:] == ["health", "--json"]:
-        from arw.platform_support import platform_support
+        from arw.health import health_report
 
         print(
             json.dumps(
-                {
-                    "command": "health",
-                    "status": "ok",
-                    "file_base": health(),
-                    "platform": platform_support(),
-                },
+                health_report(),
                 sort_keys=True,
                 separators=(",", ":"),
             )

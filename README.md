@@ -139,8 +139,15 @@ still needs to pass its runtime and dependency qualification checks.
 | Windows | Unsupported | No Windows CI job or native file-base qualification; POSIX descriptor-relative file access and the Bash launcher are unavailable. |
 
 `arw health --json` reports the running platform's tier and capabilities that
-are unavailable for platform reasons. A successful health response observes the
-environment; it does not grant release qualification. Linux native jobs build
+are unavailable for platform reasons. Explicit agent mode, automatic source-checkout
+preflight, and `python -m arw.cli health --json` share the same `platform` and
+`file_base` diagnostics. `runtime_mode` identifies `agent`, `plugin`, or `direct`
+(for a direct CLI invocation outside the launcher). Launcher interpreter metadata
+is retained when available. Missing optional native file-base keeps core `status`
+`ok`; inspect `file_base.reason_code`, `native_binary`, `recommendation`, and
+`enable_command` for capability blockers and next steps. Health never installs
+native dependencies or enables project configuration. A successful health
+response observes the environment; it does not grant release qualification. Linux native jobs build
 from pinned source snapshots in ignored work areas and do not rewrite
 `vendor/source-manifest.json`.
 Initial setup or a later dependency install needs access to the configured
