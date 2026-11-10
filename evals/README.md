@@ -172,3 +172,14 @@ canonical receipt digest, and `verify` recomputes it from retained inputs.
 same-model run. This suite does not add #69 claim types, write to the learning
 ledger, or promote a heuristic. The proposed paid-run protocol is in
 `evals/experiment_understanding/LIVE-PLAN.md`.
+
+### Bounded independent execution pilot
+
+[INDEPENDENT-PILOT.md](experiment_understanding/INDEPENDENT-PILOT.md) adds an
+opt-in, fail-closed Linux Python-candidate runner over these same three tasks.
+It freezes method/public/scorer identities, excludes host answers/cwd/logs/resume
+from candidate mounts, and runs mandatory scorer controls after all outputs are
+sealed. This is not a native-model isolation claim. Retained local trials failed
+namespace startup (0/3 delivered). The separately retained successful hosted
+trial completed all three real boundary-tested tasks; its full public synthetic
+packet includes frozen inputs, all attempts/costs/logs and a replayable receipt.

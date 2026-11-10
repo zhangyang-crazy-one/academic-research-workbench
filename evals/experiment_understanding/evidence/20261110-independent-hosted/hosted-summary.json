@@ -1,0 +1,20 @@
+{
+  "head": "a3acacdf43f58bc58973b1829d1d85e95d6424f1",
+  "artifact_id": 13735396836,
+  "artifact_sha256": "ba2e593c6e2f07a5117ee02e1b07f084fb15521c35295d89e7ea9b60ad93dcdb",
+  "delivered_count": 3,
+  "planned_count": 3,
+  "status": "completed",
+  "elapsed_ms": [
+    30,
+    31,
+    30
+  ],
+  "source_method_input_log_output_bindings": "verified",
+  "scorer_controls": "verified",
+  "independent_receipt_replay": "verified",
+  "claims": {
+    "arbitrary_model_isolation": false,
+    "scientific_quality": false
+  }
+}

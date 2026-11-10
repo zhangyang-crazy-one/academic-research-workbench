@@ -603,56 +603,27 @@ fi
 case "$COMMAND" in
   health)
     [[ "${1:-}" == "--json" && $# -eq 1 ]] || fail "usage" "health requires --json" 64
-    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
-      exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - "$RUNTIME_IDENTITY" "$INTERPRETER_SOURCE" <<'PY'
-import importlib.metadata
-import json
-import platform
-import sys
-
-if importlib.metadata.version("academic-research-workbench") != "0.2.1":
-    raise SystemExit("installed package version mismatch")
-
-json.dump(
-    {
-        "command": "health",
-        "interpreter_source": sys.argv[2],
-        "python": platform.python_version(),
-        "runtime_identity": sys.argv[1],
-        "runtime_mode": "agent",
-        "status": "ok",
-    },
-    sys.stdout,
-    sort_keys=True,
-    separators=(",", ":"),
-)
-sys.stdout.write("\n")
-PY
-    fi
     # The installed wheel cannot infer its plugin bundle from __file__. Bind
     # the launcher root while leaving explicit roots to files_opt_in validation.
     export ARW_PLUGIN_ROOT="${ARW_PLUGIN_ROOT:-$PLUGIN_ROOT}"
-    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - "$RUNTIME_IDENTITY" <<'PY'
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" - "$RUNTIME_IDENTITY" "${INTERPRETER_SOURCE:-}" <<'PY'
 import importlib.metadata
 import json
 import platform
 import sys
-from arw.files_opt_in import health
-from arw.platform_support import platform_support
+from arw.health import health_report
 
 
 if importlib.metadata.version("academic-research-workbench") != "0.2.1":
     raise SystemExit("installed package version mismatch")
 
+report = health_report()
+report.update(python=platform.python_version(), runtime_identity=sys.argv[1])
+if report["runtime_mode"] == "agent":
+    report["interpreter_source"] = sys.argv[2]
+
 json.dump(
-    {
-        "command": "health",
-        "python": platform.python_version(),
-        "runtime_identity": sys.argv[1],
-        "status": "ok",
-        "file_base": health(),
-        "platform": platform_support(),
-    },
+    report,
     sys.stdout,
     sort_keys=True,
     separators=(",", ":"),

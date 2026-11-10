@@ -652,10 +652,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json({"status": "error", "code": getattr(error, "code", "scholarly_request_invalid"), "message": str(error)})
             return 65
     if args.command == "health":
-        from arw.files_opt_in import health
-        from arw.platform_support import platform_support
+        from arw.health import health_report
 
-        _write_json({"command": "health", "status": "ok", "file_base": health(), "platform": platform_support()})
+        _write_json(health_report())
         return 0
     if args.command == "submission":
         from arw.cli_submission import handle
