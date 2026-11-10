@@ -135,7 +135,7 @@ CI selects Python environments according to the dependency surface being tested:
 | CI coverage | Python test environment | Dependency scope |
 | --- | --- | --- |
 | Linux `Python` | `3.14` minor, latest available patch | All extras plus `dev`, `ars-test` and `storm`; full non-host test tree and candidate regressions. |
-| Linux `Python core (latest)` | Floating `3.x` | Core plus `dev`; canonical state, manifests, recovery, platform reporting and CI contract regressions; independent of candidate and optional ML jobs. |
+| Linux `Python core (latest)` | Floating `3.x`, checking the latest stable release | Core plus `dev`; canonical state, manifests, recovery, platform reporting and CI contract regressions; independent of candidate and optional ML jobs. |
 | Codex overlay | `3.13`, `3.14` | Core plus `dev` and `ars-test`; overlay regressions and quality gates. |
 | Package boundary / macOS core | Floating `3.x` | Packaging/legal checks or focused core tests, respectively; no scholarly PDF or STORM install. |
 
@@ -147,6 +147,10 @@ had no `cp315` wheel required by `docling`. Advance the complete-extras CI
 minor once its full dependency surface resolves and passes on the newer minor.
 Independent latest-Python core success does not qualify optional ML capabilities;
 dependency resolution alone also does not verify parsing or model execution.
+The latest-core job enables `setup-python`'s `check-latest` so an older minor
+already cached on the runner cannot stand in for the newest stable Python.
+Its selected interpreter and test results, rather than a green historical run
+on a different minor, establish what was exercised.
 
 ### Platform support
 

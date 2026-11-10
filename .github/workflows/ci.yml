@@ -72,6 +72,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
+          # Do not let a runner-cached older minor satisfy latest-core coverage.
+          check-latest: true
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false

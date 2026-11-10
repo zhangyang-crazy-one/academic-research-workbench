@@ -134,3 +134,96 @@ Full logs remain at the following local paths; the source-linked excerpts above 
 - `/tmp/arw-ci-python-compat-20261023-clean-core.log` — SHA-256 `fe42aef2f01ee62d2b4d63f28db704c5569106d439ce79ba6286acbb0302613c`
 - `/tmp/arw-ci-python-compat-20261023-clean-core-final.log` — SHA-256 `deee0bd30636aa3dfa50d8a1e4d7c3a2ee78297cbfb2598f4facc7446677d811`
 - `/tmp/arw-ci-python-compat-20261023-interpreters.log` — SHA-256 `ee5bdc2a2d66dd01b3de935b9b5684b31cd182d6f8ede2b974e67552b195f772`
+
+## Revalidation and latest-interpreter repair — 2026-11-10
+
+Reviewed remote #177 head `cff4b7642f3d7672f4fd6ba45932a8546529d5ec`
+against its explicit #170 base `3cb8651a9dfaadbf7a075da343ae4c93d1791ba6`.
+Main was still `c8760e03df9843a69b68141f1e15a0dbf397a768`, already an ancestor;
+no merge of main or rewrite of the prerequisite stack was needed. No review
+comments were present. This repair changes only latest-core interpreter lookup,
+its contract regression, and documentation. The full optional environment,
+complete test-tree discovery, package metadata and #170 prerequisites are unchanged.
+
+### Historical hosted evidence does not establish current latest-Python coverage
+
+The original [CI run 39922068397](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39922068397)
+was green on October 23. Its checkout was synthetic merge
+`fb89ff132e5ed8300a65753914f4f983c540f841` into #170, not a merge into main.
+The [latest-core log](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39922068397/job/120309420561)
+shows `check-latest: false`, CPython **3.14.8**, and 40 passed.
+Thus this green run does not demonstrate CPython 3.15 core execution.
+
+The [full optional job](https://github.com/zhangyang-crazy-one/academic-research-workbench/actions/runs/39922068397/job/120311259387)
+also used CPython 3.14.8 and installed `knowledge-storm==1.1.1`,
+`litellm==1.80.0` and `fastuuid==0.14.0`. Its recorded results were:
+
+- Source verification: 4 passed, 1 skipped.
+- Compatibility baseline: 74 passed, 3 skipped.
+- Complete non-host tree: 2731 passed, 95 skipped, 80 deselected.
+- Bundled ARS self-tests: 10106 passed, 2 skipped, 430 subtests passed.
+
+These are historical observations of that exact stack, not fresh evidence for
+newly resolved dependencies, a revised head, or the current newest interpreter.
+
+### Repair and local regression results
+
+Enable `check-latest: true` only in `python-core-latest`; `3.x` continues to
+exclude prereleases by default. A new regression requires that setting, rejects
+conditional or error-tolerant core steps, preserves isolated/offline test
+execution, and prohibits the PyO3 forward-compatibility bypass in the workflow.
+The regression failed before the workflow edit: **1 failed, 3 passed**, with
+`check-latest` absent. It passed after the edit.
+
+In a new isolated core+dev environment on existing **CPython 3.13.5**:
+
+```text
+tests/unit/test_ci_python_compatibility.py
+tests/unit/test_ci_test_discovery.py
+tests/unit/test_ci_native_sanitizer_workflow.py
+tests/unit/test_ci_release_native_qualification.py
+tests/unit/test_release_workflow_contract.py
+tests/unit/test_canonical.py
+tests/unit/test_manifests.py
+tests/unit/test_recovery_scan.py
+tests/unit/test_platform_support.py
+
+98 passed in 5.61s
+```
+
+The actual latest-core command was extracted from workflow YAML and executed
+with its declared environment: **41 passed**. The import probe identified this
+worktree's `src/arw/kernel/core/canonical.py`; `torch`, `docling`,
+`knowledge-storm`, `sentence-transformers`, and `fastuuid` were absent.
+CI-scoped Ruff lint, Ruff format-check and `git diff --check` passed after
+formatting the new test.
+
+An independent temporary worktree applied only the original #177 commit to
+main, excluding #170: the same original focused set passed **97 tests** on
+3.13.5. This proves that the lane-separation patch applies cleanly and its
+focused regressions do not depend on #170. It does not qualify source
+verification without #170: the unstacked Python job still lacks the pinned
+receipt restoration and the source-verification test still lacks its required
+retained native/notice prerequisites. No hosted unstacked run was triggered.
+
+### Remaining limits and handoff
+
+- No local Python 3.14 or 3.15 execution was available. A fresh exact-head hosted
+  run must establish the selected latest version and its real installation and
+  test result. No updated hosted result is claimed here.
+- An exploratory resolver check with source builds disabled was too strict for
+  these declarations: target-3.15 core needs a PyYAML source build, and the
+  target-3.14 optional scope includes source-only `wikipedia==1.4.0`. These checks
+  are not equivalent to the normal CI installer and are not CI-failure evidence.
+  No new complete optional installation or execution was performed locally.
+- Local source-materialization tests reported **1 passed, 4 skipped** because
+  this clean worktree has no materialized snapshots, retained native evidence,
+  or usable strace/ptrace confinement. No source/native qualification is claimed.
+- The OpenSpec CLI was unavailable in this environment, so the prior strict
+  validation result above does not cover these documentation edits.
+- #170 remains a separate prerequisite review and integration decision. This
+  repair neither merges it nor silently incorporates additional #170 changes.
+- No remote publication, branch retargeting, CI rerun, or merge was performed.
+
+Local logs are retained under `/workspace/shared/arw-ci-177-evidence/`, including
+`red.log`, `targeted-final-cp313.log`, and `without-170-cp313.log`.

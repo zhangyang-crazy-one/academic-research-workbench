@@ -14,6 +14,8 @@ Add `python-core-latest` on Linux using floating `3.x`, the same regular-event c
 
 Tests parse the actual workflow to assert the complete optional install remains on 3.14, the independent latest core lane retains runnable tests without optional installs, both lanes use the same event policy, and runtime/dependency ranges remain open. Run these tests before changing the workflow, then rerun after the smallest fix.
 
+The latest-core setup explicitly enables `check-latest: true` with prereleases disabled by default. A floating range alone may select an older cached minor: the original green hosted core run selected Python 3.14.8. Regression tests require current stable lookup and reject conditional or error-tolerant core steps and PyO3 forward-compatibility bypasses.
+
 ## Risks / Trade-offs
 
 - Open dependency resolution can change → record an actual 3.14 dry-run resolution separately from runtime tests; a resolver PASS is not an ML inference PASS.
