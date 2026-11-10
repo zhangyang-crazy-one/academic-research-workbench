@@ -157,7 +157,18 @@ def test_actual_namespace_blocks_answers_cwd_logs_resume_and_network(
 ):
     # This test owns its exact boundary probe rather than the broader harness
     # prerequisite marker, which could skip before required-mode checks execute.
-    require_actual_boundary(pilot.execute(b"print('ready')", b"{}"))
+    probe = pilot.execute(b"print('ready')", b"{}")
+    for channel in ("stdout", "stderr"):
+        (tmp_path / f"boundary-probe.{channel}").write_bytes(probe[channel])
+    (tmp_path / "boundary-probe.json").write_bytes(
+        evaluator.canonical(
+            {
+                "status": probe["status"],
+                "elapsed_ms": probe["elapsed_ms"],
+            }
+        )
+    )
+    require_actual_boundary(probe)
     monkeypatch.chdir(tmp_path)
     secret = tmp_path / "hidden-reference.json"
     secret.write_text("ANSWER_CANARY")
@@ -165,7 +176,7 @@ def test_actual_namespace_blocks_answers_cwd_logs_resume_and_network(
     (tmp_path / "stdout.log").write_text("ANSWER_CANARY")
     monkeypatch.setenv("ANSWER_CANARY", "secret")
     source = f"""
-import os, pathlib, socket
+import itertools, json, os, pathlib, socket, sys
 assert os.getcwd() == '/work'
 assert not os.environ.get('ANSWER_CANARY')
 for path in {list(map(str, [secret, tmp_path / "resume.json", tmp_path / "stdout.log", evaluator.FIXTURE / "hidden-reference.json"]))!r}:
@@ -175,12 +186,31 @@ s = socket.socket()
 s.settimeout(0.1)
 assert s.connect_ex(('1.1.1.1', 443)) != 0
 pathlib.Path('/work/resume.json').write_text('private prior attempt')
-print('isolated')
+with open(sys.argv[1]) as stream:
+    public = json.load(stream)
+mean = sum(row['value'] for row in public['observations']) / len(public['observations'])
+print(json.dumps({{
+    'selected_config': '0000',
+    'responses': [{{'config': ''.join(bits), 'value': mean}}
+                  for bits in itertools.product('01', repeat=4)],
+}}))
 """.encode()
-    first = pilot.execute(source, b"{}")
-    second = pilot.execute(source, b"{}")
-    assert first["status"] == second["status"] == "completed"
-    assert first["stdout"] == second["stdout"] == b"isolated\n"
+    method = tmp_path / "boundary-method.py"
+    method.write_bytes(source)
+    frozen = evaluator.canonical(pilot.freeze(method))
+    freeze_path = tmp_path / "boundary-freeze.json"
+    freeze_path.write_bytes(frozen)
+    output = tmp_path / "actual-boundary-run"
+    report = pilot.run(method, freeze_path, evaluator.sha(frozen), output)
+    assert report["status"] == "completed"
+    assert len(report["executions"]) == 3
+    assert all(row["status"] == "completed" for row in report["executions"])
+    receipt_raw = (output / "receipt.json").read_bytes()
+    receipt = evaluator._parse(receipt_raw)
+    assert receipt["summary"]["all_routes"]["delivered_count"] == 3
+    assert evaluator.verify_receipt(
+        receipt_raw, evaluator.load_fixtures(), (output / "attempts.json").read_bytes()
+    )
 
 
 def test_successful_execution_is_still_numerically_scored(frozen, monkeypatch):
@@ -377,3 +407,30 @@ def test_unavailable_boundary_fails_only_in_required_mode(monkeypatch, required)
 def test_required_boundary_accepts_successful_probe(monkeypatch):
     monkeypatch.setenv("ARW_REQUIRE_INDEPENDENT_ISOLATION", "1")
     require_actual_boundary({"status": "completed", "stderr": b""})
+
+
+def test_boundary_artifact_layout_with_mocked_execution(tmp_path, monkeypatch):
+    """Exercise retention wiring only; this is not namespace evidence."""
+
+    def execute(method, public):
+        compile(method, "boundary-candidate", "exec")
+        return {**fake_execute(None, None), "stdout": numeric_output(0)}
+
+    monkeypatch.setattr(pilot, "execute", execute)
+    test_actual_namespace_blocks_answers_cwd_logs_resume_and_network(
+        tmp_path, monkeypatch
+    )
+    output = tmp_path / "actual-boundary-run"
+    for name in (
+        "method.py",
+        "freeze.json",
+        "attempts.json",
+        "executions.json",
+        "controls.json",
+        "receipt.json",
+        "report.json",
+    ):
+        assert (output / name).is_file()
+    for task in ("cpu-batch-v1", "cpu-graph-v1", "cpu-buffer-v1"):
+        for suffix in ("input.json", "stdout", "stderr"):
+            assert (output / f"{task}.{suffix}").is_file()

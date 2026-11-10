@@ -414,7 +414,16 @@ jobs:
         env:
           ARW_REQUIRE_INDEPENDENT_ISOLATION: '1'
           PYTHONPATH: 'src:.'
-        run: .venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py
+        run: |
+          mkdir -p build/evidence
+          .venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py --basetemp=build/evidence/ci-independent-pilot
+      - name: Retain independent CPU pilot evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-independent-pilot
+          path: build/evidence/ci-independent-pilot
+          if-no-files-found: warn
       - name: Restore legal receipt and materialize pinned native source
         run: |
           mkdir -p build

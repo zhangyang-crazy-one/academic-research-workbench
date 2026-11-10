@@ -118,3 +118,14 @@ Linux job's bubblewrap setup. On the locally restricted evidence host the
 required-mode command was verified to return exit 1 with one boundary failure
 and 31 passing tests, rather than skip. A green actual CI boundary run is still
 required before claiming enforced-isolation validation.
+
+The forced CI command uses the fixed pytest base directory
+`build/evidence/ci-independent-pilot`; an `always()` upload retains only that
+path as artifact `ci-independent-pilot`, including failures. The actual-boundary
+test now runs all three tasks through `freeze`/`run` with its answer/cwd/log/
+resume/environment/network assertions inside the candidate. Its pytest directory
+contains `actual-boundary-run/` with method, public inputs, freeze, all attempts,
+measured elapsed costs, raw logs, scorer controls and replayable receipt. Probe
+failure logs are retained even when candidate execution cannot start. Other
+pytest directories include clearly named mocked fault-injection cases; those
+must not be mistaken for actual isolation evidence.

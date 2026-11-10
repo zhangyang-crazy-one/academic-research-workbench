@@ -26,7 +26,15 @@ def test_native_security_requires_real_cpu_boundary_before_source_materializatio
     assert "if" not in step and "continue-on-error" not in step
     assert step["env"]["ARW_REQUIRE_INDEPENDENT_ISOLATION"] == "1"
     assert step["env"]["PYTHONPATH"] == "src:."
-    assert (
-        step["run"]
-        == ".venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py"
-    )
+    assert step["run"].splitlines() == [
+        "mkdir -p build/evidence",
+        ".venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py --basetemp=build/evidence/ci-independent-pilot",
+    ]
+
+    retained = steps[index + 1]
+    assert retained["name"] == "Retain independent CPU pilot evidence"
+    assert retained["if"] == "always()"
+    assert retained["uses"] == "actions/upload-artifact@v7"
+    assert retained["with"]["name"] == "ci-independent-pilot"
+    assert retained["with"]["path"] == "build/evidence/ci-independent-pilot"
+    assert retained["with"]["if-no-files-found"] == "warn"
