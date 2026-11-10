@@ -98,3 +98,23 @@ The [final hardened-source evidence](evidence/20261110-independent-hardened/READ
 records a fresh fail-closed host run after parser and runtime-mount fixes, not a
 successful isolated candidate trial. The earlier trial remains separately
 retained in `evidence/20261110-independent/` for history.
+
+## Required CI boundary gate
+
+The existing Linux native-confinement job runs the focused pilot tests directly
+after installing its existing native prerequisites and before source
+materialization. It sets `ARW_REQUIRE_INDEPENDENT_ISOLATION=1`, so an unavailable
+actual namespace is a test failure, never a successful skip. No broad Python
+qualification job is a prerequisite for this gate. Local runs without that flag
+retain the explicit skip when namespaces are unavailable.
+
+```bash
+ARW_REQUIRE_INDEPENDENT_ISOLATION=1 PYTHONPATH=src:. \
+  .venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py
+```
+
+The flag does not create or enable namespaces; the gate uses the existing
+Linux job's bubblewrap setup. On the locally restricted evidence host the
+required-mode command was verified to return exit 1 with one boundary failure
+and 31 passing tests, rather than skip. A green actual CI boundary run is still
+required before claiming enforced-isolation validation.

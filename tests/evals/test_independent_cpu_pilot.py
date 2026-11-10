@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -141,16 +142,22 @@ def test_no_bwrap_never_cooperative_fallback(monkeypatch):
     assert result["stdout"] == b""
 
 
-@pytest.mark.requires_harness_isolation
+def require_actual_boundary(probe):
+    if probe["status"] != "completed":
+        reason = "actual bubblewrap boundary unavailable: " + probe["stderr"].decode(
+            errors="replace"
+        )
+        if os.environ.get("ARW_REQUIRE_INDEPENDENT_ISOLATION") == "1":
+            pytest.fail(reason, pytrace=False)
+        pytest.skip(reason)
+
+
 def test_actual_namespace_blocks_answers_cwd_logs_resume_and_network(
     tmp_path, monkeypatch
 ):
-    probe = pilot.execute(b"print('ready')", b"{}")
-    if probe["status"] != "completed":
-        pytest.skip(
-            "actual bubblewrap boundary unavailable: "
-            + probe["stderr"].decode(errors="replace")
-        )
+    # This test owns its exact boundary probe rather than the broader harness
+    # prerequisite marker, which could skip before required-mode checks execute.
+    require_actual_boundary(pilot.execute(b"print('ready')", b"{}"))
     monkeypatch.chdir(tmp_path)
     secret = tmp_path / "hidden-reference.json"
     secret.write_text("ANSWER_CANARY")
@@ -351,3 +358,22 @@ def test_python_invocation_disables_system_site_hooks(monkeypatch):
     command = seen[0]
     python = command.index("/usr/bin/python3")
     assert command[python + 1 : python + 4] == ["-I", "-S", "/input/method.py"]
+
+
+@pytest.mark.parametrize("required", [False, True])
+def test_unavailable_boundary_fails_only_in_required_mode(monkeypatch, required):
+    monkeypatch.delenv("ARW_REQUIRE_INDEPENDENT_ISOLATION", raising=False)
+    if required:
+        monkeypatch.setenv("ARW_REQUIRE_INDEPENDENT_ISOLATION", "1")
+    expected = pytest.fail.Exception if required else pytest.skip.Exception
+    with pytest.raises(
+        expected, match="actual bubblewrap boundary unavailable: denied"
+    ):
+        require_actual_boundary(
+            {"status": "isolation_unavailable", "stderr": b"denied"}
+        )
+
+
+def test_required_boundary_accepts_successful_probe(monkeypatch):
+    monkeypatch.setenv("ARW_REQUIRE_INDEPENDENT_ISOLATION", "1")
+    require_actual_boundary({"status": "completed", "stderr": b""})

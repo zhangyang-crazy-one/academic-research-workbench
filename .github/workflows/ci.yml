@@ -410,6 +410,11 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev
+      - name: Require independent CPU pilot isolation boundary
+        env:
+          ARW_REQUIRE_INDEPENDENT_ISOLATION: '1'
+          PYTHONPATH: 'src:.'
+        run: .venv/bin/python -m pytest -q tests/evals/test_independent_cpu_pilot.py
       - name: Restore legal receipt and materialize pinned native source
         run: |
           mkdir -p build
