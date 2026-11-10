@@ -90,6 +90,31 @@ def test_latest_python_core_is_independent_of_optional_ecosystem() -> None:
     assert all((ROOT / path).is_file() for path in CORE_TESTS)
 
 
+def test_latest_python_core_checks_current_stable_release() -> None:
+    job = _jobs()["python-core-latest"]
+    setup = next(
+        step
+        for step in job["steps"]
+        if step.get("uses", "").startswith("actions/setup-python@")
+    )
+    assert setup["with"].get("check-latest") is True, (
+        "A cached older minor must not satisfy latest-Python core coverage"
+    )
+    assert not setup["with"].get("allow-prereleases", False)
+    for step in job["steps"]:
+        assert not step.get("if"), "Core setup and tests must always run together"
+        assert not step.get("continue-on-error", False)
+    test_step = next(
+        step for step in job["steps"] if "-m pytest" in step.get("run", "")
+    )
+    assert test_step["env"]["PYTHONNOUSERSITE"] == "1"
+    assert test_step["env"]["UV_OFFLINE"] == "1"
+    assert (
+        "PYO3_USE_ABI3_FORWARD_COMPATIBILITY"
+        not in (ROOT / ".github/workflows/ci.yml").read_text()
+    )
+
+
 def test_ci_environment_choice_does_not_restrict_runtime_ranges() -> None:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert metadata["project"]["requires-python"] == ">=3.13"
