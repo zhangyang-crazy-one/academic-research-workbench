@@ -1,0 +1,322 @@
+{
+  "description": "Public synthetic dependency-routing labels and scripted reviewer text, not hidden evaluation or scientific truth. Accepted records never change between rounds.",
+  "records": [
+    {
+      "entity_id": "source-alpha",
+      "entity_type": "Source",
+      "payload": {
+        "text": "Synthetic source alpha"
+      },
+      "edges": []
+    },
+    {
+      "entity_id": "source-beta",
+      "entity_type": "Source",
+      "payload": {
+        "text": "Synthetic source beta"
+      },
+      "edges": []
+    },
+    {
+      "entity_id": "source-shared",
+      "entity_type": "Source",
+      "payload": {
+        "text": "Synthetic source shared"
+      },
+      "edges": []
+    },
+    {
+      "entity_id": "source-unrelated",
+      "entity_type": "Source",
+      "payload": {
+        "text": "Synthetic source unrelated"
+      },
+      "edges": []
+    },
+    {
+      "entity_id": "claim-alpha",
+      "entity_type": "Claim",
+      "payload": {
+        "text": "alpha has preliminary support."
+      },
+      "edges": [
+        {
+          "edge_type": "supported_by",
+          "to_entity_id": "source-alpha"
+        },
+        {
+          "edge_type": "supported_by",
+          "to_entity_id": "source-shared"
+        }
+      ]
+    },
+    {
+      "entity_id": "artifact-plan-alpha",
+      "entity_type": "Artifact",
+      "payload": {
+        "text": "Test alpha under the original controls.",
+        "revision_kind": "plan"
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "claim-alpha"
+        }
+      ]
+    },
+    {
+      "entity_id": "experiment-alpha",
+      "entity_type": "Experiment",
+      "payload": {
+        "text": "Original alpha experiment design."
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "artifact-plan-alpha"
+        }
+      ]
+    },
+    {
+      "entity_id": "artifact-paragraph-alpha",
+      "entity_type": "Artifact",
+      "payload": {
+        "text": "Preliminary alpha conclusion.",
+        "revision_kind": "paragraph"
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "experiment-alpha"
+        }
+      ]
+    },
+    {
+      "entity_id": "claim-beta",
+      "entity_type": "Claim",
+      "payload": {
+        "text": "beta has preliminary support."
+      },
+      "edges": [
+        {
+          "edge_type": "supported_by",
+          "to_entity_id": "source-beta"
+        },
+        {
+          "edge_type": "supported_by",
+          "to_entity_id": "source-shared"
+        }
+      ]
+    },
+    {
+      "entity_id": "artifact-plan-beta",
+      "entity_type": "Artifact",
+      "payload": {
+        "text": "Test beta under the original controls.",
+        "revision_kind": "plan"
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "claim-beta"
+        }
+      ]
+    },
+    {
+      "entity_id": "experiment-beta",
+      "entity_type": "Experiment",
+      "payload": {
+        "text": "Original beta experiment design."
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "artifact-plan-beta"
+        }
+      ]
+    },
+    {
+      "entity_id": "artifact-paragraph-beta",
+      "entity_type": "Artifact",
+      "payload": {
+        "text": "Preliminary beta conclusion.",
+        "revision_kind": "paragraph"
+      },
+      "edges": [
+        {
+          "edge_type": "derived_from",
+          "to_entity_id": "experiment-beta"
+        }
+      ]
+    },
+    {
+      "entity_id": "claim-unrelated",
+      "entity_type": "Claim",
+      "payload": {
+        "text": "Unrelated conclusion stays unchanged."
+      },
+      "edges": [
+        {
+          "edge_type": "supported_by",
+          "to_entity_id": "source-shared"
+        }
+      ]
+    },
+    {
+      "entity_id": "artifact-declared",
+      "entity_type": "Artifact",
+      "payload": {
+        "text": "A manually linked sensitivity plan.",
+        "revision_kind": "plan"
+      },
+      "edges": []
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "updates": [
+        {
+          "update": {
+            "update_id": "update-support",
+            "source_id": "source-alpha",
+            "relation": "support",
+            "affected_records": [],
+            "note": "Synthetic operator-labeled support; not a real literature result."
+          },
+          "proposed_text": {
+            "claim-alpha": "Round 1: review support for claim-alpha; retain scope limitations.",
+            "artifact-plan-alpha": "Round 1: review support for artifact-plan-alpha; retain scope limitations.",
+            "experiment-alpha": "Round 1: review support for experiment-alpha; retain scope limitations.",
+            "artifact-paragraph-alpha": "Round 1: review support for artifact-paragraph-alpha; retain scope limitations."
+          },
+          "labels": {
+            "required_revisions": [
+              "claim-alpha",
+              "artifact-plan-alpha",
+              "experiment-alpha",
+              "artifact-paragraph-alpha"
+            ],
+            "expected_candidate_text": {
+              "claim-alpha": "Round 1: review support for claim-alpha; retain scope limitations.",
+              "artifact-plan-alpha": "Round 1: review support for artifact-plan-alpha; retain scope limitations.",
+              "experiment-alpha": "Round 1: review support for experiment-alpha; retain scope limitations.",
+              "artifact-paragraph-alpha": "Round 1: review support for artifact-paragraph-alpha; retain scope limitations."
+            }
+          }
+        },
+        {
+          "update": {
+            "update_id": "update-counter",
+            "source_id": "source-beta",
+            "relation": "counterevidence",
+            "affected_records": [],
+            "note": "Synthetic operator-labeled counterevidence; not a real literature result."
+          },
+          "proposed_text": {
+            "claim-beta": "Round 1: review counterevidence for claim-beta; retain scope limitations.",
+            "artifact-plan-beta": "Round 1: review counterevidence for artifact-plan-beta; retain scope limitations.",
+            "experiment-beta": "Round 1: review counterevidence for experiment-beta; retain scope limitations.",
+            "artifact-paragraph-beta": "Round 1: review counterevidence for artifact-paragraph-beta; retain scope limitations."
+          },
+          "labels": {
+            "required_revisions": [
+              "claim-beta",
+              "artifact-plan-beta",
+              "experiment-beta",
+              "artifact-paragraph-beta"
+            ],
+            "expected_candidate_text": {
+              "claim-beta": "Round 1: review counterevidence for claim-beta; retain scope limitations.",
+              "artifact-plan-beta": "Round 1: review counterevidence for artifact-plan-beta; retain scope limitations.",
+              "experiment-beta": "Round 1: review counterevidence for experiment-beta; retain scope limitations.",
+              "artifact-paragraph-beta": "Round 1: review counterevidence for artifact-paragraph-beta; retain scope limitations."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "updates": [
+        {
+          "update": {
+            "update_id": "update-withdraw",
+            "source_id": "source-alpha",
+            "relation": "withdrawal",
+            "affected_records": [
+              "artifact-declared"
+            ],
+            "note": "Synthetic operator-labeled withdrawal; not a real literature result."
+          },
+          "proposed_text": {
+            "claim-alpha": "Round 2: review withdrawal for claim-alpha; retain scope limitations.",
+            "artifact-plan-alpha": "Round 2: review withdrawal for artifact-plan-alpha; retain scope limitations.",
+            "experiment-alpha": "Round 2: review withdrawal for experiment-alpha; retain scope limitations.",
+            "artifact-paragraph-alpha": "Round 2: review withdrawal for artifact-paragraph-alpha; retain scope limitations.",
+            "artifact-declared": "Round 2: review withdrawal for artifact-declared; retain scope limitations."
+          },
+          "labels": {
+            "required_revisions": [
+              "claim-alpha",
+              "artifact-plan-alpha",
+              "experiment-alpha",
+              "artifact-paragraph-alpha",
+              "artifact-declared"
+            ],
+            "expected_candidate_text": {
+              "claim-alpha": "Round 2: review withdrawal for claim-alpha; retain scope limitations.",
+              "artifact-plan-alpha": "Round 2: review withdrawal for artifact-plan-alpha; retain scope limitations.",
+              "experiment-alpha": "Round 2: review withdrawal for experiment-alpha; retain scope limitations.",
+              "artifact-paragraph-alpha": "Round 2: review withdrawal for artifact-paragraph-alpha; retain scope limitations.",
+              "artifact-declared": "Round 2: review withdrawal for artifact-declared; retain scope limitations."
+            }
+          }
+        },
+        {
+          "update": {
+            "update_id": "update-replicate",
+            "source_id": "source-beta",
+            "relation": "support",
+            "affected_records": [],
+            "note": "Synthetic operator-labeled support; not a real literature result."
+          },
+          "proposed_text": {
+            "claim-beta": "Round 2: review support for claim-beta; retain scope limitations.",
+            "artifact-plan-beta": "Round 2: review support for artifact-plan-beta; retain scope limitations.",
+            "experiment-beta": "Round 2: review support for experiment-beta; retain scope limitations.",
+            "artifact-paragraph-beta": "Round 2: review support for artifact-paragraph-beta; retain scope limitations."
+          },
+          "labels": {
+            "required_revisions": [
+              "claim-beta",
+              "artifact-plan-beta",
+              "experiment-beta",
+              "artifact-paragraph-beta"
+            ],
+            "expected_candidate_text": {
+              "claim-beta": "Round 2: review support for claim-beta; retain scope limitations.",
+              "artifact-plan-beta": "Round 2: review support for artifact-plan-beta; retain scope limitations.",
+              "experiment-beta": "Round 2: review support for experiment-beta; retain scope limitations.",
+              "artifact-paragraph-beta": "Round 2: review support for artifact-paragraph-beta; retain scope limitations."
+            }
+          }
+        },
+        {
+          "update": {
+            "update_id": "update-unrelated",
+            "source_id": "source-unrelated",
+            "relation": "irrelevant",
+            "affected_records": [],
+            "note": "Synthetic operator-labeled irrelevant; not a real literature result."
+          },
+          "proposed_text": {},
+          "labels": {
+            "required_revisions": [],
+            "expected_candidate_text": {}
+          }
+        }
+      ]
+    }
+  ]
+}

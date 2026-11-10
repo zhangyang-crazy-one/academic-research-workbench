@@ -1,0 +1,597 @@
+{
+  "accepted_records_sha256": "bc62de560821a434bab24bbf1a1d25a9df5d76b3b9fce0371938e84c18a4fbfc",
+  "accepted_records_unchanged": true,
+  "costs": {
+    "external_retrieval_calls": 0,
+    "graph_queries": 27,
+    "graph_response_bytes": 26250,
+    "graph_rows": 27,
+    "model_calls": 0,
+    "model_input_tokens": 0,
+    "model_output_tokens": 0
+  },
+  "fixture_sha256": "b8791a90f743c597d5cef89f75cab7c4db306c2ca2371e59045dbd0f710f575a",
+  "limitations": [
+    "Public labels and scripted candidate text are not independent semantic evaluation.",
+    "No model, source retrieval, live literature reading, or accepted-output revision occurred.",
+    "Counts sum update-record pairs, including records revisited in round two.",
+    "Accepted stale items remain pending review; no automatic revocation or admission.",
+    "Missing dependency links may cause misses; declared irrelevant updates are still traced."
+  ],
+  "rounds": [
+    {
+      "checks": [
+        {
+          "checklist": {
+            "accepted_outputs_modified": false,
+            "blockers": [],
+            "candidates": [
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha",
+                    "derived_from",
+                    "experiment-alpha",
+                    "derived_from",
+                    "artifact-paragraph-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-support"
+                },
+                "kind": "paragraph",
+                "original_text": "Preliminary alpha conclusion.",
+                "proposed_text": "Round 1: review support for artifact-paragraph-alpha; retain scope limitations.",
+                "record_id": "artifact-paragraph-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "2d5ec62bf32439f2a59a0ffc53e0c4ed070f416544bbe32124a7460495b16644"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-support"
+                },
+                "kind": "plan",
+                "original_text": "Test alpha under the original controls.",
+                "proposed_text": "Round 1: review support for artifact-plan-alpha; retain scope limitations.",
+                "record_id": "artifact-plan-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "c8e60a89f376abba2cb02276bd577246811de6b587b38cd7b194dc30fe17e13a"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-support"
+                },
+                "kind": "claim",
+                "original_text": "alpha has preliminary support.",
+                "proposed_text": "Round 1: review support for claim-alpha; retain scope limitations.",
+                "record_id": "claim-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "368061365a40bf2b7b01e950e08c58d6dbc556035e4b3daf615ec4993fa0b943"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha",
+                    "derived_from",
+                    "experiment-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-support"
+                },
+                "kind": "experiment",
+                "original_text": "Original alpha experiment design.",
+                "proposed_text": "Round 1: review support for experiment-alpha; retain scope limitations.",
+                "record_id": "experiment-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "5a58eb263047459e658489eb016581f12a671afe2a78fcbc523986ce3ebf5184"
+              }
+            ],
+            "costs": {
+              "external_retrieval_calls": 0,
+              "graph_queries": 6,
+              "graph_response_bytes": 6085,
+              "graph_rows": 6,
+              "model_calls": 0,
+              "model_input_tokens": 0,
+              "model_output_tokens": 0
+            },
+            "human_review_required": true,
+            "ledger_watermark": 1,
+            "projection_generation_id": "graph-generation-1bd0afe7648f4579",
+            "projection_manifest_sha256": "f6c669f704110f16f02da4527d5ea05bc4573892f025766649477f54900c0345",
+            "schema_version": "arw.evidence-impact-checklist.v1",
+            "scope": "declared_dependencies_not_semantic_truth",
+            "status": "review_required",
+            "unapplied_proposals": [],
+            "update": {
+              "affected_records": [],
+              "note": "Synthetic operator-labeled support; not a real literature result.",
+              "relation": "support",
+              "source_id": "source-alpha",
+              "update_id": "update-support"
+            }
+          },
+          "metrics": {
+            "accepted_stale_items_pending_review": 4,
+            "false_revisions": 0,
+            "missed_required_revisions": 0,
+            "required_revisions": 4,
+            "stale_candidate_errors": 0
+          },
+          "previous_round_stale_candidate_errors": 4
+        },
+        {
+          "checklist": {
+            "accepted_outputs_modified": false,
+            "blockers": [],
+            "candidates": [
+              {
+                "action": "Review conflicting evidence and qualify only the affected inference.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta",
+                    "derived_from",
+                    "experiment-beta",
+                    "derived_from",
+                    "artifact-paragraph-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-counter"
+                },
+                "kind": "paragraph",
+                "original_text": "Preliminary beta conclusion.",
+                "proposed_text": "Round 1: review counterevidence for artifact-paragraph-beta; retain scope limitations.",
+                "record_id": "artifact-paragraph-beta",
+                "status": "review_required_not_false",
+                "supersedes": "896669b1231008157422fb4ffb3c8eebe647a0f612281fe455865af96f54ef6d"
+              },
+              {
+                "action": "Review conflicting evidence and qualify only the affected inference.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-counter"
+                },
+                "kind": "plan",
+                "original_text": "Test beta under the original controls.",
+                "proposed_text": "Round 1: review counterevidence for artifact-plan-beta; retain scope limitations.",
+                "record_id": "artifact-plan-beta",
+                "status": "review_required_not_false",
+                "supersedes": "59df3873e722155ca4839946800a7a8f19843c99fcff6f8f39b53264a95cdc58"
+              },
+              {
+                "action": "Review conflicting evidence and qualify only the affected inference.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-counter"
+                },
+                "kind": "claim",
+                "original_text": "beta has preliminary support.",
+                "proposed_text": "Round 1: review counterevidence for claim-beta; retain scope limitations.",
+                "record_id": "claim-beta",
+                "status": "review_required_not_false",
+                "supersedes": "b7ef16ffc4dc37147fdeae28c66cfc31835cdfdd5e2b09f98577482c101c6af8"
+              },
+              {
+                "action": "Review conflicting evidence and qualify only the affected inference.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta",
+                    "derived_from",
+                    "experiment-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-counter"
+                },
+                "kind": "experiment",
+                "original_text": "Original beta experiment design.",
+                "proposed_text": "Round 1: review counterevidence for experiment-beta; retain scope limitations.",
+                "record_id": "experiment-beta",
+                "status": "review_required_not_false",
+                "supersedes": "a8cd554eebdb797ba4bc869ff5095e3c67e2f57a2453d34e02720ba61546568a"
+              }
+            ],
+            "costs": {
+              "external_retrieval_calls": 0,
+              "graph_queries": 6,
+              "graph_response_bytes": 6064,
+              "graph_rows": 6,
+              "model_calls": 0,
+              "model_input_tokens": 0,
+              "model_output_tokens": 0
+            },
+            "human_review_required": true,
+            "ledger_watermark": 1,
+            "projection_generation_id": "graph-generation-1bd0afe7648f4579",
+            "projection_manifest_sha256": "f6c669f704110f16f02da4527d5ea05bc4573892f025766649477f54900c0345",
+            "schema_version": "arw.evidence-impact-checklist.v1",
+            "scope": "declared_dependencies_not_semantic_truth",
+            "status": "review_required",
+            "unapplied_proposals": [],
+            "update": {
+              "affected_records": [],
+              "note": "Synthetic operator-labeled counterevidence; not a real literature result.",
+              "relation": "counterevidence",
+              "source_id": "source-beta",
+              "update_id": "update-counter"
+            }
+          },
+          "metrics": {
+            "accepted_stale_items_pending_review": 4,
+            "false_revisions": 0,
+            "missed_required_revisions": 0,
+            "required_revisions": 4,
+            "stale_candidate_errors": 0
+          },
+          "previous_round_stale_candidate_errors": 4
+        }
+      ],
+      "round": 1
+    },
+    {
+      "checks": [
+        {
+          "checklist": {
+            "accepted_outputs_modified": false,
+            "blockers": [],
+            "candidates": [
+              {
+                "action": "Reassess remaining support; withdrawal alone does not prove the claim false.",
+                "decision_trace": {
+                  "path": [
+                    "declared:affected_records",
+                    "artifact-declared"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-withdraw"
+                },
+                "kind": "plan",
+                "original_text": "A manually linked sensitivity plan.",
+                "proposed_text": "Round 2: review withdrawal for artifact-declared; retain scope limitations.",
+                "record_id": "artifact-declared",
+                "status": "review_required_not_false",
+                "supersedes": "64e0969c5cfb984ebee6ee809d7380b14e27dc04269a9a20d03632cc9e7abbf0"
+              },
+              {
+                "action": "Reassess remaining support; withdrawal alone does not prove the claim false.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha",
+                    "derived_from",
+                    "experiment-alpha",
+                    "derived_from",
+                    "artifact-paragraph-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-withdraw"
+                },
+                "kind": "paragraph",
+                "original_text": "Preliminary alpha conclusion.",
+                "proposed_text": "Round 2: review withdrawal for artifact-paragraph-alpha; retain scope limitations.",
+                "record_id": "artifact-paragraph-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "2d5ec62bf32439f2a59a0ffc53e0c4ed070f416544bbe32124a7460495b16644"
+              },
+              {
+                "action": "Reassess remaining support; withdrawal alone does not prove the claim false.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-withdraw"
+                },
+                "kind": "plan",
+                "original_text": "Test alpha under the original controls.",
+                "proposed_text": "Round 2: review withdrawal for artifact-plan-alpha; retain scope limitations.",
+                "record_id": "artifact-plan-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "c8e60a89f376abba2cb02276bd577246811de6b587b38cd7b194dc30fe17e13a"
+              },
+              {
+                "action": "Reassess remaining support; withdrawal alone does not prove the claim false.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-withdraw"
+                },
+                "kind": "claim",
+                "original_text": "alpha has preliminary support.",
+                "proposed_text": "Round 2: review withdrawal for claim-alpha; retain scope limitations.",
+                "record_id": "claim-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "368061365a40bf2b7b01e950e08c58d6dbc556035e4b3daf615ec4993fa0b943"
+              },
+              {
+                "action": "Reassess remaining support; withdrawal alone does not prove the claim false.",
+                "decision_trace": {
+                  "path": [
+                    "source-alpha",
+                    "supported_by",
+                    "claim-alpha",
+                    "derived_from",
+                    "artifact-plan-alpha",
+                    "derived_from",
+                    "experiment-alpha"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-withdraw"
+                },
+                "kind": "experiment",
+                "original_text": "Original alpha experiment design.",
+                "proposed_text": "Round 2: review withdrawal for experiment-alpha; retain scope limitations.",
+                "record_id": "experiment-alpha",
+                "status": "review_required_not_false",
+                "supersedes": "5a58eb263047459e658489eb016581f12a671afe2a78fcbc523986ce3ebf5184"
+              }
+            ],
+            "costs": {
+              "external_retrieval_calls": 0,
+              "graph_queries": 7,
+              "graph_response_bytes": 6759,
+              "graph_rows": 7,
+              "model_calls": 0,
+              "model_input_tokens": 0,
+              "model_output_tokens": 0
+            },
+            "human_review_required": true,
+            "ledger_watermark": 1,
+            "projection_generation_id": "graph-generation-1bd0afe7648f4579",
+            "projection_manifest_sha256": "f6c669f704110f16f02da4527d5ea05bc4573892f025766649477f54900c0345",
+            "schema_version": "arw.evidence-impact-checklist.v1",
+            "scope": "declared_dependencies_not_semantic_truth",
+            "status": "review_required",
+            "unapplied_proposals": [],
+            "update": {
+              "affected_records": [
+                "artifact-declared"
+              ],
+              "note": "Synthetic operator-labeled withdrawal; not a real literature result.",
+              "relation": "withdrawal",
+              "source_id": "source-alpha",
+              "update_id": "update-withdraw"
+            }
+          },
+          "metrics": {
+            "accepted_stale_items_pending_review": 5,
+            "false_revisions": 0,
+            "missed_required_revisions": 0,
+            "required_revisions": 5,
+            "stale_candidate_errors": 0
+          },
+          "previous_round_stale_candidate_errors": 5
+        },
+        {
+          "checklist": {
+            "accepted_outputs_modified": false,
+            "blockers": [],
+            "candidates": [
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta",
+                    "derived_from",
+                    "experiment-beta",
+                    "derived_from",
+                    "artifact-paragraph-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-replicate"
+                },
+                "kind": "paragraph",
+                "original_text": "Preliminary beta conclusion.",
+                "proposed_text": "Round 2: review support for artifact-paragraph-beta; retain scope limitations.",
+                "record_id": "artifact-paragraph-beta",
+                "status": "review_required_not_false",
+                "supersedes": "896669b1231008157422fb4ffb3c8eebe647a0f612281fe455865af96f54ef6d"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-replicate"
+                },
+                "kind": "plan",
+                "original_text": "Test beta under the original controls.",
+                "proposed_text": "Round 2: review support for artifact-plan-beta; retain scope limitations.",
+                "record_id": "artifact-plan-beta",
+                "status": "review_required_not_false",
+                "supersedes": "59df3873e722155ca4839946800a7a8f19843c99fcff6f8f39b53264a95cdc58"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-replicate"
+                },
+                "kind": "claim",
+                "original_text": "beta has preliminary support.",
+                "proposed_text": "Round 2: review support for claim-beta; retain scope limitations.",
+                "record_id": "claim-beta",
+                "status": "review_required_not_false",
+                "supersedes": "b7ef16ffc4dc37147fdeae28c66cfc31835cdfdd5e2b09f98577482c101c6af8"
+              },
+              {
+                "action": "Review whether additional support warrants a bounded wording or plan update.",
+                "decision_trace": {
+                  "path": [
+                    "source-beta",
+                    "supported_by",
+                    "claim-beta",
+                    "derived_from",
+                    "artifact-plan-beta",
+                    "derived_from",
+                    "experiment-beta"
+                  ],
+                  "relation_basis": "operator_declaration",
+                  "update_id": "update-replicate"
+                },
+                "kind": "experiment",
+                "original_text": "Original beta experiment design.",
+                "proposed_text": "Round 2: review support for experiment-beta; retain scope limitations.",
+                "record_id": "experiment-beta",
+                "status": "review_required_not_false",
+                "supersedes": "a8cd554eebdb797ba4bc869ff5095e3c67e2f57a2453d34e02720ba61546568a"
+              }
+            ],
+            "costs": {
+              "external_retrieval_calls": 0,
+              "graph_queries": 6,
+              "graph_response_bytes": 6064,
+              "graph_rows": 6,
+              "model_calls": 0,
+              "model_input_tokens": 0,
+              "model_output_tokens": 0
+            },
+            "human_review_required": true,
+            "ledger_watermark": 1,
+            "projection_generation_id": "graph-generation-1bd0afe7648f4579",
+            "projection_manifest_sha256": "f6c669f704110f16f02da4527d5ea05bc4573892f025766649477f54900c0345",
+            "schema_version": "arw.evidence-impact-checklist.v1",
+            "scope": "declared_dependencies_not_semantic_truth",
+            "status": "review_required",
+            "unapplied_proposals": [],
+            "update": {
+              "affected_records": [],
+              "note": "Synthetic operator-labeled support; not a real literature result.",
+              "relation": "support",
+              "source_id": "source-beta",
+              "update_id": "update-replicate"
+            }
+          },
+          "metrics": {
+            "accepted_stale_items_pending_review": 4,
+            "false_revisions": 0,
+            "missed_required_revisions": 0,
+            "required_revisions": 4,
+            "stale_candidate_errors": 0
+          },
+          "previous_round_stale_candidate_errors": 4
+        },
+        {
+          "checklist": {
+            "accepted_outputs_modified": false,
+            "blockers": [],
+            "candidates": [],
+            "costs": {
+              "external_retrieval_calls": 0,
+              "graph_queries": 2,
+              "graph_response_bytes": 1278,
+              "graph_rows": 2,
+              "model_calls": 0,
+              "model_input_tokens": 0,
+              "model_output_tokens": 0
+            },
+            "human_review_required": true,
+            "ledger_watermark": 1,
+            "projection_generation_id": "graph-generation-1bd0afe7648f4579",
+            "projection_manifest_sha256": "f6c669f704110f16f02da4527d5ea05bc4573892f025766649477f54900c0345",
+            "schema_version": "arw.evidence-impact-checklist.v1",
+            "scope": "declared_dependencies_not_semantic_truth",
+            "status": "review_required",
+            "unapplied_proposals": [],
+            "update": {
+              "affected_records": [],
+              "note": "Synthetic operator-labeled irrelevant; not a real literature result.",
+              "relation": "irrelevant",
+              "source_id": "source-unrelated",
+              "update_id": "update-unrelated"
+            }
+          },
+          "metrics": {
+            "accepted_stale_items_pending_review": 0,
+            "false_revisions": 0,
+            "missed_required_revisions": 0,
+            "required_revisions": 0,
+            "stale_candidate_errors": 0
+          },
+          "previous_round_stale_candidate_errors": 0
+        }
+      ],
+      "round": 2
+    }
+  ],
+  "schema_version": "arw.evidence-revision-pilot.v1",
+  "scope": "synthetic_dependency_routing_and_scripted_candidates_only",
+  "status": "passed",
+  "totals": {
+    "accepted_stale_items_pending_review": 17,
+    "false_revisions": 0,
+    "missed_required_revisions": 0,
+    "required_revisions": 17,
+    "stale_candidate_errors": 0
+  }
+}
