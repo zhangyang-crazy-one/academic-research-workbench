@@ -90,14 +90,19 @@ Tests cover freeze/method/scorer tampering, omitted controls, constant-perfect
 scoring, rejected candidate scorer/cost fields, failed and interrupted attempt
 retention, hidden-read ordering, numerical scoring and replay. The actual
 namespace test additionally tries host answer paths, cwd, logs, resume,
-environment and network access across two fresh calls. A skipped namespace test
+environment and network access across three fresh task calls. A skipped namespace test
 is **not** a passed isolation test. Do not claim this pilot's isolation is
 validated until that test runs successfully on the intended host.
 
-The [final hardened-source evidence](evidence/20261110-independent-hardened/README.md)
-records a fresh fail-closed host run after parser and runtime-mount fixes, not a
-successful isolated candidate trial. The earlier trial remains separately
-retained in `evidence/20261110-independent/` for history.
+The [successful hosted trial](evidence/20261110-independent-hosted/README.md)
+retains all three actual CI task attempts, costs, logs, frozen inputs, scorer
+controls and replayable receipt from exact source head `a3acacdf43f58bc58973b1829d1d85e95d6424f1`.
+That run completed and delivered 3/3 while exercising the actual boundary.
+The [hardened local evidence](evidence/20261110-independent-hardened/README.md)
+remains a failed namespace-startup trial, not a success. The original local
+trial also remains in `evidence/20261110-independent/`. This distinguishes host
+capability from protocol correctness and does not generalize CI isolation to
+native model hosts or scientific quality.
 
 ## Required CI boundary gate
 
@@ -116,8 +121,9 @@ ARW_REQUIRE_INDEPENDENT_ISOLATION=1 PYTHONPATH=src:. \
 The flag does not create or enable namespaces; the gate uses the existing
 Linux job's bubblewrap setup. On the locally restricted evidence host the
 required-mode command was verified to return exit 1 with one boundary failure
-and 31 passing tests, rather than skip. A green actual CI boundary run is still
-required before claiming enforced-isolation validation.
+and passing companion tests, rather than skip. The separately retained hosted
+run above subsequently passed the real boundary gate. Future source changes
+still require the gate rather than relying on this historical success.
 
 The forced CI command uses the fixed pytest base directory
 `build/evidence/ci-independent-pilot`; an `always()` upload retains only that

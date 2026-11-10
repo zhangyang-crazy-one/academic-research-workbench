@@ -179,5 +179,7 @@ ledger, or promote a heuristic. The proposed paid-run protocol is in
 opt-in, fail-closed Linux Python-candidate runner over these same three tasks.
 It freezes method/public/scorer identities, excludes host answers/cwd/logs/resume
 from candidate mounts, and runs mandatory scorer controls after all outputs are
-sealed. This is not a native-model isolation claim. The retained first host run
-failed namespace startup (0/3 delivered); no isolation success is claimed.
+sealed. This is not a native-model isolation claim. Retained local trials failed
+namespace startup (0/3 delivered). The separately retained successful hosted
+trial completed all three real boundary-tested tasks; its full public synthetic
+packet includes frozen inputs, all attempts/costs/logs and a replayable receipt.
