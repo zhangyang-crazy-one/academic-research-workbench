@@ -406,7 +406,7 @@ jobs:
       - name: Install native test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap strace build-essential
+          sudo apt-get install -y bubblewrap strace build-essential iproute2
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev
@@ -445,6 +445,18 @@ jobs:
           PY
           python scripts/verify-pinned-notice
           ./scripts/verify-sources --inputs-only
+      - name: Verify real sudo and ordinary offline startup
+        run: |
+          ARW_TEST_SUDO=1 .venv/bin/python -m pytest -q \
+            tests/integration/test_offline_exec_identity.py \
+            --basetemp=build/evidence/ci-offline-startup
+      - name: Retain offline startup regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-startup-regression
+          path: build/evidence/ci-offline-startup
+          if-no-files-found: warn
       - name: Run nightly ASan and UBSan suite
         if: >-
           github.event_name == 'schedule' ||
@@ -531,7 +543,7 @@ jobs:
       - name: Install native test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap strace build-essential
+          sudo apt-get install -y bubblewrap strace build-essential iproute2
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           uv venv
           .venv/bin/python scripts/install-unmanaged-deps.py dev
