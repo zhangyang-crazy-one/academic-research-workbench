@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,23 @@ import pytest
 from tests import conftest as prerequisite_gate
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _assert_pytest_outcomes(
+    report: Path, *, passed: int = 0, skipped: int = 0, errors: int = 0
+) -> None:
+    """Check exact child outcomes without depending on warning summary text."""
+    suites = ET.parse(report).getroot().findall("testsuite")
+    assert len(suites) == 1
+    assert {
+        name: int(suites[0].attrib[name])
+        for name in ("tests", "failures", "errors", "skipped")
+    } == {
+        "tests": passed + skipped + errors,
+        "failures": 0,
+        "errors": errors,
+        "skipped": skipped,
+    }
 
 
 def test_missing_prerequisites_skip_locally_and_fail_in_qualification(
@@ -66,11 +84,14 @@ def test_offline_network():
     }
     environment.pop("ARW_STRICT_PREREQS", None)
 
+    local_report = tmp_path / "local-results.xml"
+    strict_report = tmp_path / "strict-results.xml"
     local = subprocess.run(
-        command, env=environment, capture_output=True, text=True, check=False
+        [*command, f"--junitxml={local_report}"],
+        env=environment, capture_output=True, text=True, check=False
     )
     assert local.returncode == 0, local.stdout + local.stderr
-    assert "5 skipped" in local.stdout
+    _assert_pytest_outcomes(local_report, skipped=5)
     for expected in (
         "scripts/build-file-base",
         "scripts/materialize-sources",
@@ -81,14 +102,14 @@ def test_offline_network():
         assert expected in local.stdout
 
     strict = subprocess.run(
-        command,
+        [*command, f"--junitxml={strict_report}"],
         env={**environment, "ARW_STRICT_PREREQS": "1"},
         capture_output=True,
         text=True,
         check=False,
     )
     assert strict.returncode != 0
-    assert "5 errors" in strict.stdout
+    _assert_pytest_outcomes(strict_report, errors=5)
     for expected in (
         ".file-base/bin/file-base",
         "vendor/sources",
@@ -180,17 +201,24 @@ def test_paper_method_prerequisite_checks_system_python_and_namespace(
         assert "python3 >=3.13" in missing[0]
 
 
-def test_paper_method_prerequisite_skip_and_strict_error(tmp_path):
+@pytest.mark.parametrize("emit_warning", [False, True])
+def test_paper_method_prerequisite_skip_and_strict_error(tmp_path, emit_warning):
     checkout_tests = tmp_path / "checkout/tests"
     checkout_tests.mkdir(parents=True)
     hook = (ROOT / "tests/conftest.py").read_text()
     hook += "\ndef _paper_method_isolation_missing():\n    return ['simulated unavailable paper-method isolation']\n"
     (checkout_tests / "conftest.py").write_text(hook)
+    warning = "prerequisite outcome warning regression"
+    warning_code = (
+        f"    import warnings\n    warnings.warn({warning!r}, RuntimeWarning)\n"
+        if emit_warning
+        else ""
+    )
     (checkout_tests / "test_probe.py").write_text(
         "import pytest\n\n"
         "@pytest.mark.requires_paper_method_isolation\n"
         "def test_worker():\n    assert False\n\n"
-        "def test_pure_contract():\n    assert True\n"
+        "def test_pure_contract():\n" + warning_code + "    assert True\n"
     )
     command = [
         sys.executable,
@@ -205,24 +233,30 @@ def test_paper_method_prerequisite_skip_and_strict_error(tmp_path):
     environment = dict(os.environ)
     environment.pop("PYTHONPATH", None)
     environment.pop("ARW_STRICT_PREREQS", None)
+    local_report = tmp_path / "local-results.xml"
+    strict_report = tmp_path / "strict-results.xml"
     local = subprocess.run(
-        command, env=environment, capture_output=True, text=True, check=False
+        [*command, f"--junitxml={local_report}"],
+        env=environment, capture_output=True, text=True, check=False
     )
     assert local.returncode == 0, local.stdout + local.stderr
-    assert "1 passed, 1 skipped" in local.stdout
+    _assert_pytest_outcomes(local_report, passed=1, skipped=1)
     strict = subprocess.run(
-        command,
+        [*command, f"--junitxml={strict_report}"],
         env={**environment, "ARW_STRICT_PREREQS": "1"},
         capture_output=True,
         text=True,
         check=False,
     )
     assert strict.returncode != 0
-    assert "1 passed, 1 error" in strict.stdout
+    _assert_pytest_outcomes(strict_report, passed=1, errors=1)
     assert "simulated unavailable paper-method isolation" in strict.stdout
+    if emit_warning:
+        assert warning in local.stdout
+        assert warning in strict.stdout
 
 
-def test_issue27_stage_acceptance_does_not_skip_in_strict_mode() -> None:
+def test_issue27_stage_acceptance_does_not_skip_in_strict_mode(tmp_path: Path) -> None:
     command = [
         sys.executable,
         "-m",
@@ -237,13 +271,16 @@ def test_issue27_stage_acceptance_does_not_skip_in_strict_mode() -> None:
         "ARW_STRICT_PREREQS",
     ):
         environment.pop(name, None)
+    local_report = tmp_path / "local-results.xml"
+    strict_report = tmp_path / "strict-results.xml"
     local = subprocess.run(
-        command, cwd=ROOT, env=environment, capture_output=True, text=True, check=False
+        [*command, f"--junitxml={local_report}"],
+        cwd=ROOT, env=environment, capture_output=True, text=True, check=False
     )
     assert local.returncode == 0, local.stdout + local.stderr
-    assert "2 skipped" in local.stdout
+    _assert_pytest_outcomes(local_report, skipped=2)
     strict = subprocess.run(
-        command,
+        [*command, f"--junitxml={strict_report}"],
         cwd=ROOT,
         env={**environment, "ARW_STRICT_PREREQS": "1"},
         capture_output=True,
@@ -251,6 +288,6 @@ def test_issue27_stage_acceptance_does_not_skip_in_strict_mode() -> None:
         check=False,
     )
     assert strict.returncode != 0
-    assert "2 errors" in strict.stdout
+    _assert_pytest_outcomes(strict_report, errors=2)
     assert "ARW_ISSUE27_CODEX_STAGE" in strict.stdout
     assert "ARW_ISSUE27_CLAUDE_STAGE" in strict.stdout
