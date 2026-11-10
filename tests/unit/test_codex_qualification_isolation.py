@@ -2,6 +2,7 @@
 
 import importlib.machinery
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -48,11 +49,17 @@ def _namespace_probe_skip(*, nested: bool = False) -> str | None:
     return None
 
 
+def _require_namespace(*, nested: bool = False) -> None:
+    reason = _namespace_probe_skip(nested=nested)
+    if reason:
+        if os.environ.get("ARW_STRICT_PREREQS") == "1":
+            pytest.fail(reason, pytrace=False)
+        pytest.skip(reason)
+
+
 @pytest.mark.parametrize("symlink", [None, "outside", "inside"])
 def test_real_namespace_executes_only_mounted_runtime_and_keeps_host_files_hidden(tmp_path, symlink):
-    reason = _namespace_probe_skip()
-    if reason:
-        pytest.skip(reason)
+    _require_namespace()
     code = module()
     package = tmp_path / "private-prefix/lib/node_modules/codex"
     (package / "bin").mkdir(parents=True)
@@ -104,9 +111,7 @@ def test_real_installed_codex_version_is_visible_without_authentication(tmp_path
 @pytest.mark.parametrize("visible", ["/usr/local/bin", "/etc"])
 @pytest.mark.parametrize("native", [False, True])
 def test_visible_launcher_through_hidden_middle_alias_executes_in_actual_namespace(tmp_path, visible, native):
-    reason = _namespace_probe_skip(nested=True)
-    if reason:
-        pytest.skip(reason)
+    _require_namespace(nested=True)
     package = tmp_path / "private-prefix/lib/node_modules/codex"
     (package / "bin").mkdir(parents=True)
     (package / "package.json").write_text('{"type":"module"}')
@@ -161,3 +166,37 @@ def test_missing_or_cyclic_launcher_is_clearly_blocked(tmp_path, invalid):
     launcher.symlink_to(tmp_path / "missing" if invalid == "missing" else launcher)
     with pytest.raises(code.CanaryError, match="missing|cycle"):
         code._codex_runtime_mounts(launcher)
+
+
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("nested", [False, True])
+def test_namespace_prerequisites_skip_locally_and_fail_in_qualification(
+    monkeypatch, tmp_path, strict, nested
+):
+    reason = "simulated unavailable bubblewrap namespace"
+    probes = []
+
+    def unavailable(*, nested=False):
+        probes.append(nested)
+        return reason
+
+    monkeypatch.setitem(globals(), "_namespace_probe_skip", unavailable)
+    if strict:
+        monkeypatch.setenv("ARW_STRICT_PREREQS", "1")
+    else:
+        monkeypatch.delenv("ARW_STRICT_PREREQS", raising=False)
+
+    with pytest.raises((pytest.skip.Exception, pytest.fail.Exception)) as outcome:
+        if nested:
+            test_visible_launcher_through_hidden_middle_alias_executes_in_actual_namespace(
+                tmp_path, "/etc", False
+            )
+        else:
+            test_real_namespace_executes_only_mounted_runtime_and_keeps_host_files_hidden(
+                tmp_path, None
+            )
+
+    expected = pytest.fail.Exception if strict else pytest.skip.Exception
+    assert isinstance(outcome.value, expected)
+    assert reason in str(outcome.value)
+    assert probes == [nested]
