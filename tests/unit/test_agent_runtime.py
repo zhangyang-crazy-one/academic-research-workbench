@@ -150,7 +150,8 @@ def test_agent_mode_health_json_without_codex_or_wheels(tmp_path: Path) -> None:
     assert len(payload["runtime_identity"]) == 64
     major, minor = (int(value) for value in payload["python"].split(".")[:2])
     assert (major, minor) >= (3, 13)
-    assert "codex" not in result.stdout.lower()
+    assert payload["file_base"]["native_binary"] == "missing"
+    assert payload["platform"]["tier"] in {"tier-1", "tier-2", "unsupported"}
     assert not (tmp_path / "home" / ".codex" / "arw" / "runtime").exists()
 
 
@@ -240,3 +241,27 @@ def test_agent_mode_without_interpreter_or_wheel_fails_explicitly(tmp_path: Path
     assert result.returncode == 66, result.stderr
     assert "agent-runtime-missing" in result.stderr
     assert "runtime-artifact-missing" not in result.stderr
+
+
+def test_all_health_entrypoints_share_capability_diagnostics(tmp_path: Path) -> None:
+    explicit_env = _agent_env(tmp_path)
+    automatic_env = explicit_env.copy()
+    automatic_env.pop("ARW_RUNTIME")
+    results = [
+        _run([str(LAUNCHER), "health", "--json"], env=explicit_env, cwd=tmp_path),
+        _run([str(LAUNCHER), "health", "--json"], env=automatic_env, cwd=tmp_path),
+        _run([sys.executable, "-m", "arw.cli", "health", "--json"],
+             env=automatic_env, cwd=tmp_path),
+    ]
+    for result in results:
+        assert result.returncode == 0, result.stderr
+    payloads = [json.loads(result.stdout) for result in results]
+    assert [payload["runtime_mode"] for payload in payloads] == ["agent", "agent", "direct"]
+    for key in ("command", "status", "file_base", "platform"):
+        assert payloads[0][key] == payloads[1][key] == payloads[2][key]
+    assert payloads[0]["status"] == "ok"
+    assert payloads[0]["file_base"]["native_binary"] == "missing"
+    assert "optional" in payloads[0]["file_base"]["recommendation"]
+    assert not (tmp_path / ".codex").exists()
+    assert not (tmp_path / ".mcp.json").exists()
+    assert not (tmp_path / "home").exists()

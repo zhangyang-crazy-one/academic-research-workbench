@@ -142,6 +142,7 @@ def test_installed_cli_bootstraps_unlocked_runtime_then_runs_offline(
     health = json.loads(launcher_stdout)
     assert health == {
         "command": "health",
+        "runtime_mode": "plugin",
         "python": health["python"],
         "runtime_identity": health["runtime_identity"],
         "status": "ok",
