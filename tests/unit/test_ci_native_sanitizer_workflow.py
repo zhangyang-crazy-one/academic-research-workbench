@@ -147,3 +147,28 @@ def test_nightly_shell_passes_sanitizer_runtime_and_user_identity_to_sudo(
         runtime = tmp_path / "build/sanitizer-runtime" / library
         assert runtime.resolve().is_file()
         assert runtime.is_symlink() is versioned_libraries
+
+
+def test_native_ci_requires_real_sudo_startup_and_retains_evidence() -> None:
+    steps = _workflow()["jobs"]["native-security"]["steps"]
+    startup = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify real sudo and ordinary offline startup"
+    )
+    assert "if" not in startup
+    assert "ARW_TEST_SUDO=1" in startup["run"]
+    assert "tests/integration/test_offline_exec_identity.py" in startup["run"]
+    assert "--basetemp=build/evidence/ci-offline-startup" in startup["run"]
+    retention = next(
+        step
+        for step in steps
+        if step.get("name") == "Retain offline startup regression evidence"
+    )
+    assert retention["if"] == "always()"
+    assert retention["with"]["path"] == "build/evidence/ci-offline-startup"
+    assert steps.index(startup) < next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Run nightly ASan and UBSan suite"
+    )
