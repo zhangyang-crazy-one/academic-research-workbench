@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import math
+import os
 import re
+import stat
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Literal
@@ -48,7 +52,7 @@ class PdfLocator(StrictModel):
 
 
 class PdfExtraction(StrictModel):
-    schema_version: Literal["arw.pdf-extraction.v1"] = "arw.pdf-extraction.v1"
+    schema_version: Literal["arw.pdf-extraction.v1", "arw.pdf-extraction.v2"] = "arw.pdf-extraction.v2"
     source_sha256: Sha256
     extracted_text_sha256: Sha256
     extractor_name: Literal["pypdf", "grobid", "docling"]
@@ -58,9 +62,17 @@ class PdfExtraction(StrictModel):
     page_count: int = Field(ge=0, le=MAX_PAGES)
     locators: tuple[PdfLocator, ...]
     references: tuple[ReferenceRecord, ...] = ()
+    configuration_sha256: Sha256 | None = None
+    model_manifest_sha256: Sha256 | None = None
+    unsupported_structures: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def coherent(self):
+        if self.schema_version == "arw.pdf-extraction.v2" and self.configuration_sha256 is None:
+            raise ValueError("v2 PDF extraction requires configuration identity")
+        if (self.schema_version == "arw.pdf-extraction.v2" and self.extractor_name == "docling"
+                and self.quality_state == "complete" and self.model_manifest_sha256 is None):
+            raise ValueError("complete Docling extraction requires model identity")
         if self.quality_state == "complete" and (not self.locators or self.review_reasons):
             raise ValueError("complete extraction needs text and no review reason")
         if self.quality_state != "complete" and not self.review_reasons:
@@ -129,7 +141,9 @@ def source_locator_from_pdf(extraction: PdfExtraction, text: bytes, locator: Pdf
 
 def _build(raw: bytes, pages: list[str], *, name: Literal["pypdf", "grobid", "docling"], version: str,
            warnings: tuple[str, ...] = (), structural: list[tuple[int, str, str | None, str, tuple[float, float, float, float] | None]] | None = None,
-           references: tuple[ReferenceRecord, ...] = ()) -> tuple[PdfExtraction, bytes]:
+           references: tuple[ReferenceRecord, ...] = (), configuration: dict | None = None,
+           model_manifest_sha256: str | None = None,
+           unsupported_structures: tuple[str, ...] = ()) -> tuple[PdfExtraction, bytes]:
     if len(pages) > MAX_PAGES:
         raise ValueError("PDF page limit exceeded")
     encoded = [page.encode("utf-8") for page in pages]
@@ -190,7 +204,13 @@ def _build(raw: bytes, pages: list[str], *, name: Literal["pypdf", "grobid", "do
                          extractor_name=name, extractor_version=version,
                          quality_state=quality,
                          review_reasons=tuple(dict.fromkeys(reasons)), page_count=len(pages),
-                         locators=tuple(locators), references=references), text
+                         locators=tuple(locators), references=references,
+                         configuration_sha256=sha256_hex(canonical_json_bytes({
+                             "provider": name, "adapter": "arw.pdf.v2",
+                             "max_pdf_bytes": MAX_PDF_BYTES, "max_text_bytes": MAX_TEXT_BYTES,
+                             "max_pages": MAX_PAGES, "options": configuration or {}})),
+                         model_manifest_sha256=model_manifest_sha256,
+                         unsupported_structures=unsupported_structures), text
 
 
 def extract_pdf_bytes(raw: bytes) -> tuple[PdfExtraction, bytes]:
@@ -309,8 +329,13 @@ def extract_grobid(raw_pdf: bytes, *, endpoint: str, allow_local_service: bool =
             tei = response.read(MAX_TEXT_BYTES + 1)
             version = response.headers.get("X-GROBID-Version", "service-unknown")
     except OSError:
-        return _build(raw_pdf, [], name="grobid", version="service-unknown", warnings=("service_unavailable",))
-    return extract_grobid_tei(raw_pdf, tei, version=version)
+        return _build(raw_pdf, [], name="grobid", version="service-unknown", warnings=("service_unavailable",),
+                      configuration={"endpoint": endpoint, "timeout_seconds": 15, "allow_local_service": True})
+    extraction, text = extract_grobid_tei(raw_pdf, tei, version=version)
+    extraction = extraction.model_copy(update={"configuration_sha256": sha256_hex(canonical_json_bytes({
+        "tei_configuration_sha256": extraction.configuration_sha256, "endpoint": endpoint,
+        "timeout_seconds": 15, "allow_local_service": True}))})
+    return extraction, text
 
 
 def extract_docling(raw_pdf: bytes, *, converter: object | None = None, version: str = "unknown") -> tuple[PdfExtraction, bytes]:
@@ -325,17 +350,192 @@ def extract_docling(raw_pdf: bytes, *, converter: object | None = None, version:
     pages = converter.extract_pages(raw_pdf)
     if not isinstance(pages, list) or not all(isinstance(p, str) for p in pages):
         raise ValueError("Docling converter returned invalid pages")
-    return _build(raw_pdf, pages, name="docling", version=version)
+    return _build(raw_pdf, pages, name="docling", version=version,
+                  warnings=("docling_model_identity_unverified",),
+                  unsupported_structures=("model_identity", "structured_items"))
+
+
+ASSET_MANIFEST = "arw-docling-assets.json"
+MAX_ASSET_BYTES = 8 * 1024**3
+MAX_ASSET_FILES = 512
+
+
+def verify_docling_assets(artifacts_path: Path) -> str:
+    """Verify a caller-supplied inventory, not a license or model-quality attestation."""
+    if artifacts_path.is_symlink() or not artifacts_path.is_dir() or not any(artifacts_path.iterdir()):
+        raise ValueError("Docling needs a nonempty local model artifacts directory")
+    from arw.kernel.core.canonical import strict_json_loads
+    raw = read_retained_bytes(artifacts_path, ASSET_MANIFEST, max_bytes=262_144)
+    manifest = strict_json_loads(raw)
+    if (not isinstance(manifest, dict) or set(manifest) != {"schema_version", "files"}
+            or manifest["schema_version"] != "arw.docling-assets.v1"
+            or not isinstance(manifest["files"], list)
+            or not 1 <= len(manifest["files"]) <= MAX_ASSET_FILES):
+        raise ValueError("invalid Docling asset manifest")
+    expected = set()
+    total = 0
+    for entry in manifest["files"]:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "size_bytes"}:
+            raise ValueError("invalid Docling asset entry")
+        relative = entry["path"]
+        if (not isinstance(relative, str) or not relative or relative.startswith("/")
+                or any(part in {"", ".", ".."} for part in relative.split("/"))
+                or relative == ASSET_MANIFEST or relative in expected):
+            raise ValueError("unsafe Docling asset path")
+        expected.add(relative)
+        size = entry["size_bytes"]
+        if (type(size) is not int or size < 1 or size > MAX_ASSET_BYTES
+                or not isinstance(entry["sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])):
+            raise ValueError("invalid Docling asset digest or size")
+        total += size
+        if total > MAX_ASSET_BYTES:
+            raise ValueError("Docling asset byte limit exceeded")
+        # Match retained-source reads: open every component relative to a held root,
+        # reject links/FIFOs, and stream weights instead of retaining gigabytes.
+        if os.open not in os.supports_dir_fd or not getattr(os, "O_NOFOLLOW", 0):
+            raise ValueError("safe Docling asset verification unsupported")
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+        directory = os.open(artifacts_path, flags | os.O_DIRECTORY)
+        content = None
+        digest = hashlib.sha256()
+        try:
+            parts = relative.split("/")
+            for part in parts[:-1]:
+                child = os.open(part, flags | os.O_DIRECTORY, dir_fd=directory)
+                os.close(directory)
+                directory = child
+            content = os.open(parts[-1], flags, dir_fd=directory)
+            before = os.fstat(content)
+            if not stat.S_ISREG(before.st_mode) or before.st_size != size:
+                raise ValueError("Docling asset size or file type mismatch")
+            remaining = size
+            while remaining:
+                chunk = os.read(content, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("Docling asset changed during verification")
+                digest.update(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(content)
+            if (os.read(content, 1) or before.st_size != after.st_size
+                    or before.st_mtime_ns != after.st_mtime_ns):
+                raise ValueError("Docling asset changed during verification")
+        except OSError as error:
+            raise ValueError("Docling asset unavailable or unsafe") from error
+        finally:
+            if content is not None:
+                os.close(content)
+            os.close(directory)
+        if digest.hexdigest() != entry["sha256"]:
+            raise ValueError("Docling asset digest mismatch")
+    # Reject hidden unlisted assets and symlink directories; never walk arbitrary roots.
+    actual = set()
+    count = 0
+    for directory, dirs, files in os.walk(artifacts_path, followlinks=False):
+        count += len(dirs) + len(files)
+        if count > 2 * MAX_ASSET_FILES:
+            raise ValueError("Docling asset inventory limit exceeded")
+        for name in dirs + files:
+            if (Path(directory) / name).is_symlink():
+                raise ValueError("symlink Docling asset is forbidden")
+        actual.update((Path(directory) / name).relative_to(artifacts_path).as_posix() for name in files)
+    if actual != expected | {ASSET_MANIFEST}:
+        raise ValueError("Docling asset inventory mismatch")
+    return sha256_hex(canonical_json_bytes(manifest))
+
+
+def _docling_structure(document):
+    """Retain item text/cells and physical provenance; never parse Markdown or bibliography prose."""
+    numbers = sorted(document.pages)
+    if len(numbers) > MAX_PAGES or numbers != list(range(1, len(numbers) + 1)):
+        raise ValueError("Docling returned nonconsecutive PDF page numbers")
+    pages = [[] for _ in numbers]
+    structural, unsupported, warnings = [], set(), set()
+    size = 0
+    count = 0
+    headings = []
+    if not callable(getattr(document, "iterate_items", None)):
+        raise TypeError("unsupported Docling structure API")
+    for item, _ in document.iterate_items():
+        count += 1
+        if count > 20_000:
+            raise ValueError("Docling item limit exceeded")
+        label = getattr(item.label, "value", item.label)
+        kind = {"section_header": "section", "title": "section", "reference": "reference",
+                "table": "table"}.get(label, "paragraph")
+        text = getattr(item, "text", "")
+        if label == "table":
+            cells = item.data.table_cells
+            if len(cells) > 20_000:
+                raise ValueError("Docling table cell limit exceeded")
+            text = "\t".join(cell.text for cell in cells)
+            unsupported.add("table_cell_locators")
+        if not isinstance(text, str):
+            raise TypeError("invalid Docling item text")
+        if not text.strip():
+            continue
+        provenance = item.prov
+        # Multi-page items require charspan partitioning; do not assign all text to the first page.
+        if len(provenance) != 1:
+            warnings.add("docling_item_page_mapping_unknown")
+            continue
+        prov = provenance[0]
+        if type(prov.page_no) is not int or prov.page_no not in document.pages:
+            raise ValueError("Docling item page is outside extraction")
+        page = document.pages[prov.page_no]
+        bbox = None
+        box, dimensions = prov.bbox, page.size
+        if box is not None and dimensions is not None:
+            width, height = dimensions.width, dimensions.height
+            origin = getattr(box.coord_origin, "value", box.coord_origin)
+            if origin == "BOTTOMLEFT":
+                coords = (box.l, height - box.t, box.r, height - box.b)
+            elif origin == "TOPLEFT":
+                coords = (box.l, box.t, box.r, box.b)
+            else:
+                coords = None
+            if coords is not None and width > 0 and height > 0:
+                bbox = (coords[0] / width, coords[1] / height, coords[2] / width, coords[3] / height)
+                if not (all(math.isfinite(x) and 0 <= x <= 1 for x in bbox)
+                        and bbox[0] < bbox[2] and bbox[1] < bbox[3]):
+                    raise ValueError("invalid Docling bbox")
+        if bbox is None:
+            unsupported.add("bbox")
+        if kind != "table" and getattr(prov, "charspan", (0, len(text))) != (0, len(text)):
+            warnings.add("docling_item_charspan_mapping_unknown")
+            continue
+        identity = item.self_ref
+        if kind == "section":
+            level = getattr(item, "level", 1)
+            while headings and headings[-1][0] >= level:
+                headings.pop()
+            headings.append((level, text))
+            identity = " / ".join(part for _, part in headings)
+        elif kind == "reference":
+            unsupported.add("reference_metadata")
+        elif label == "caption":
+            # A caption can belong to a table or picture. Only explicit picture parents qualify.
+            parent = getattr(item, "parent", None)
+            parent_label = getattr(parent.resolve(document), "label", None) if parent else None
+            if getattr(parent_label, "value", parent_label) == "picture":
+                kind = "figure"
+            else:
+                unsupported.add("figure_caption_identity")
+        size += len(text.encode("utf-8")) + 2
+        if size > MAX_TEXT_BYTES:
+            raise ValueError("PDF extraction output limit exceeded")
+        pages[prov.page_no - 1].append(text)
+        structural.append((prov.page_no, kind, identity, text, bbox))
+    return ["\n\n".join(page) for page in pages], structural, tuple(sorted(unsupported)), tuple(sorted(warnings))
 
 
 def extract_docling_local(raw_pdf: bytes, *, artifacts_path: Path) -> tuple[PdfExtraction, bytes]:
-    """Use only preinstalled local Docling models; never initialize its defaults."""
+    """Use only digest-verified local Docling assets; never initialize its defaults."""
     import importlib.metadata
 
-    if artifacts_path.is_symlink() or not artifacts_path.is_dir() or not any(artifacts_path.iterdir()):
-        raise ValueError("Docling needs a nonempty local model artifacts directory")
     if len(raw_pdf) > MAX_PDF_BYTES:
         raise ValueError("PDF source limit exceeded")
+    model_digest = verify_docling_assets(artifacts_path)
     try:
         from docling.datamodel.base_models import DocumentStream, InputFormat
         from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -346,20 +546,21 @@ def extract_docling_local(raw_pdf: bytes, *, artifacts_path: Path) -> tuple[PdfE
         )
     except ImportError as error:
         raise RuntimeError("optional Docling package is unavailable") from error
-
     options = PdfPipelineOptions(artifacts_path=artifacts_path.resolve(strict=True),
                                  enable_remote_services=False, allow_external_plugins=False,
                                  do_ocr=False)
+    configuration = options.model_dump(mode="json")
     converter = DocumentConverter(allowed_formats=[InputFormat.PDF],
                                   format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
     source = DocumentStream(name="source.pdf", stream=io.BytesIO(raw_pdf))
     result = converter.convert(source, max_num_pages=MAX_PAGES, max_file_size=MAX_PDF_BYTES)
-    page_numbers = sorted(result.document.pages)
-    if len(page_numbers) > MAX_PAGES or page_numbers != list(range(1, len(page_numbers) + 1)):
-        raise ValueError("Docling returned nonconsecutive PDF page numbers")
-    pages = [result.document.export_to_markdown(page_no=number) for number in page_numbers]
+    pages, structural, unsupported, warnings = _docling_structure(result.document)
+    if verify_docling_assets(artifacts_path) != model_digest:
+        raise ValueError("Docling asset manifest changed during conversion")
     return _build(raw_pdf, pages, name="docling", version=importlib.metadata.version("docling"),
-                  warnings=() if result.status == ConversionStatus.SUCCESS else ("docling_partial_or_failed",))
+                  warnings=warnings + (() if result.status == ConversionStatus.SUCCESS else ("docling_partial_or_failed",)),
+                  structural=structural, configuration=configuration,
+                  model_manifest_sha256=model_digest, unsupported_structures=unsupported)
 
 
 def extract_pdf_from_root(root: Path, relative_path: str) -> tuple[PdfExtraction, bytes]:
@@ -386,3 +587,164 @@ def register_pdf_extraction(service, root_id: str, source_file_id: str, relative
         path.write_bytes(text)
         service.register_extraction(root_id, registration, path)
     return registration
+
+
+PDF_WORKER_LIMITS = {"address_space_bytes": 4 * 1024**3, "cpu_seconds": 30,
+                     "file_bytes": 32 * 1024**2, "open_files": 64}
+PDF_WORKER_TIMEOUT = 45
+
+
+class PdfWorkerError(RuntimeError):
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+def extract_pdf_isolated(raw_pdf: bytes, *, provider: str = "pypdf",
+                         artifacts_path: Path | None = None, endpoint: str | None = None,
+                         allow_local_service: bool = False,
+                         timeout_seconds: float = PDF_WORKER_TIMEOUT) -> tuple[PdfExtraction, bytes]:
+    """Bytes-only parser child; the sole optional filesystem input is the explicit model root."""
+    import base64
+    import os
+    import signal
+    import subprocess
+    import sys
+    import tempfile
+
+    if len(raw_pdf) > MAX_PDF_BYTES:
+        raise ValueError("PDF source limit exceeded")
+    if provider not in {"pypdf", "docling", "grobid"}:
+        raise ValueError("unsupported PDF provider")
+    if os.name != "posix":
+        raise PdfWorkerError("pdf_resource_limits_unsupported")
+    if not 0 < timeout_seconds <= PDF_WORKER_TIMEOUT:
+        raise ValueError("PDF worker timeout outside allowed limit")
+    if artifacts_path is not None and any(path.is_symlink() for path in (artifacts_path, *artifacts_path.parents)):
+        raise ValueError("symlink Docling asset root is forbidden")
+    try:
+        model_root = str(artifacts_path.resolve(strict=True)) if artifacts_path else None
+    except OSError as error:
+        raise ValueError("Docling asset root is unavailable") from error
+    request = {"content": base64.b64encode(raw_pdf).decode("ascii"), "provider": provider,
+               "timeout_seconds": timeout_seconds,
+               "artifacts_path": model_root,
+               "endpoint": endpoint, "allow_local_service": allow_local_service}
+    # Model/network libraries see offline flags before import; no credentials are read or forwarded.
+    env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL", "LD_LIBRARY_PATH", "SYSTEMROOT")
+           if key in os.environ}
+    env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1",
+               OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
+    paths = [str(Path(__file__).resolve().parents[1])]
+    paths.extend(str(Path(part).resolve()) for part in os.environ.get("PYTHONPATH", "").split(os.pathsep) if part)
+    env["PYTHONPATH"] = os.pathsep.join(paths)
+    with tempfile.TemporaryDirectory(prefix="arw-pdf-") as directory:
+        env.update(HOME=directory, TMPDIR=directory, HF_HOME=directory)
+        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+            child = subprocess.Popen([sys.executable, "-m", "arw.pdf_extraction"],
+                                     stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
+                                     env=env, cwd=directory, start_new_session=True)
+            try:
+                child.communicate(canonical_json_bytes(request), timeout=timeout_seconds)
+            except subprocess.TimeoutExpired as error:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.communicate()
+                raise PdfWorkerError("pdf_worker_timeout") from error
+            finally:
+                # The worker has no legitimate descendants after conversion.
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if child.returncode:
+                raise PdfWorkerError("pdf_worker_resource_limit_or_failure")
+            stdout.seek(0)
+            response = stdout.read(PDF_WORKER_LIMITS["file_bytes"] + 1)
+            if len(response) > PDF_WORKER_LIMITS["file_bytes"]:
+                raise PdfWorkerError("pdf_worker_output_limit")
+    from arw.kernel.core.canonical import strict_json_loads
+    try:
+        result = strict_json_loads(response)
+        if result["status"] != "ok":
+            raise PdfWorkerError(result["reason"])
+        if result["limits"] != PDF_WORKER_LIMITS:
+            raise ValueError("PDF worker limits differ")
+        extraction = PdfExtraction.model_validate_json(json.dumps(result["extraction"]))
+        text = base64.b64decode(result["text"], validate=True)
+        if (len(text) > MAX_TEXT_BYTES or extraction.source_sha256 != sha256_hex(raw_pdf)
+                or extraction.extracted_text_sha256 != sha256_hex(text)
+                or extraction.extractor_name != provider):
+            raise ValueError("PDF worker identity mismatch")
+        # Membership and digest checks are already established by the enclosing model.
+        # Avoid quadratic locator membership scans on large structured output.
+        if any(locator.end > len(text) for locator in extraction.locators):
+            raise ValueError("PDF worker locator outside text")
+        return extraction, text
+    except (ValueError, KeyError, TypeError) as error:
+        raise PdfWorkerError("pdf_worker_invalid_response") from error
+
+
+def _pdf_worker_main():
+    import base64
+    import contextlib
+    import sys
+
+    wire = sys.stdout
+    try:
+        import resource
+        for name, key in (("RLIMIT_AS", "address_space_bytes"), ("RLIMIT_CPU", "cpu_seconds"),
+                          ("RLIMIT_FSIZE", "file_bytes"), ("RLIMIT_NOFILE", "open_files")):
+            limit = PDF_WORKER_LIMITS[key]
+            resource.setrlimit(getattr(resource, name), (limit, limit))
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        import signal
+
+        signal.signal(signal.SIGXFSZ, signal.SIG_DFL)
+    except (ImportError, AttributeError, OSError, ValueError):
+        wire.write(json.dumps({"status": "unsupported", "reason": "pdf_resource_limits_unsupported"}))
+        return
+    try:
+        from arw.kernel.core.canonical import strict_json_loads
+        raw = sys.stdin.buffer.read(2 * MAX_PDF_BYTES + 1)
+        if len(raw) > 2 * MAX_PDF_BYTES:
+            raise ValueError("oversized PDF request")
+        request = strict_json_loads(raw)
+        content = base64.b64decode(request["content"], validate=True)
+        if len(content) > MAX_PDF_BYTES:
+            raise ValueError("oversized PDF source")
+        provider = request["provider"]
+        if provider != "grobid":
+            def offline(event, args):
+                if event in {"socket.connect", "socket.getaddrinfo", "socket.sendto"}:
+                    raise PermissionError("PDF worker network is disabled")
+            sys.addaudithook(offline)
+        # Provider logging must not corrupt the bounded machine protocol.
+        with contextlib.redirect_stdout(sys.stderr):
+            if provider == "pypdf":
+                extraction, text = extract_pdf_bytes(content)
+            elif provider == "docling":
+                extraction, text = extract_docling_local(content, artifacts_path=Path(request["artifacts_path"]))
+            elif provider == "grobid":
+                extraction, text = extract_grobid(content, endpoint=request["endpoint"],
+                                                 allow_local_service=request["allow_local_service"])
+            else:
+                raise ValueError("unsupported provider")
+        extraction = extraction.model_copy(update={"configuration_sha256": sha256_hex(canonical_json_bytes({
+            "adapter_configuration_sha256": extraction.configuration_sha256,
+            "limits": PDF_WORKER_LIMITS, "wall_seconds": request["timeout_seconds"],
+            "offline": provider != "grobid"}))})
+        result = {"status": "ok", "limits": PDF_WORKER_LIMITS,
+                  "extraction": extraction.model_dump(mode="json"),
+                  "text": base64.b64encode(text).decode("ascii")}
+    except (ImportError, RuntimeError):
+        result = {"status": "unsupported", "reason": "pdf_provider_unavailable"}
+    except Exception:  # noqa: BLE001 -- never expose parser internals or input bytes.
+        result = {"status": "failed", "reason": "pdf_provider_input_or_conversion_failed"}
+    payload = canonical_json_bytes(result)
+    if len(payload) > PDF_WORKER_LIMITS["file_bytes"]:
+        payload = b'{"status":"failed","reason":"pdf_worker_output_limit"}'
+    wire.buffer.write(payload)
+
+
+if __name__ == "__main__":
+    _pdf_worker_main()

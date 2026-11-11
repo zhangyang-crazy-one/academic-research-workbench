@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import sys
 import types
 import urllib.request
@@ -131,7 +132,8 @@ def test_optional_providers_require_explicit_local_assets():
         def extract_pages(self, _raw):
             return ["A retained local paragraph with enough characters to pass quality."]
     extraction, text = extract_docling(raw, converter=LocalConverter(), version="2.0.0")
-    assert extraction.quality_state == "complete"
+    assert extraction.quality_state == "needs_review"
+    assert "docling_model_identity_unverified" in extraction.review_reasons
     assert verify_pdf_locator(extraction, text, extraction.locators[1]).startswith(b"A retained")
 
 
@@ -159,6 +161,10 @@ def test_docling_local_adapter_uses_offline_options(tmp_path, monkeypatch):
     artifacts = tmp_path / "models"
     artifacts.mkdir()
     (artifacts / "model.bin").write_bytes(b"fixture")
+    from arw.kernel.core.canonical import sha256_hex
+    (artifacts / "arw-docling-assets.json").write_text(json.dumps({
+        "schema_version": "arw.docling-assets.v1",
+        "files": [{"path": "model.bin", "sha256": sha256_hex(b"fixture"), "size_bytes": 7}]}))
     captured = {}
     for name in ("docling", "docling.datamodel", "docling.datamodel.base_models",
                  "docling.datamodel.pipeline_options", "docling.document_converter"):
@@ -170,7 +176,10 @@ def test_docling_local_adapter_uses_offline_options(tmp_path, monkeypatch):
     base.InputFormat = types.SimpleNamespace(PDF="pdf")
     base.DocumentStream = lambda **kwargs: kwargs
     options = sys.modules["docling.datamodel.pipeline_options"]
-    options.PdfPipelineOptions = lambda **kwargs: captured.update(kwargs) or kwargs
+    def pipeline_options(**kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(model_dump=lambda **unused: {**kwargs, "artifacts_path": str(kwargs["artifacts_path"])})
+    options.PdfPipelineOptions = pipeline_options
     converter_module = sys.modules["docling.document_converter"]
     converter_module.ConversionStatus = types.SimpleNamespace(SUCCESS="success")
     converter_module.PdfFormatOption = lambda **kwargs: kwargs
@@ -179,7 +188,11 @@ def test_docling_local_adapter_uses_offline_options(tmp_path, monkeypatch):
             captured["converter"] = kwargs
         def convert(self, source, **kwargs):
             captured["limits"] = kwargs
-            document = types.SimpleNamespace(pages={1: object()}, export_to_markdown=lambda page_no: "A complete local page with enough text for an exact locator.")
+            item = types.SimpleNamespace(
+                label="text", text="A complete local page with enough text for an exact locator.",
+                self_ref="#/texts/0", prov=[types.SimpleNamespace(page_no=1, bbox=None)])
+            document = types.SimpleNamespace(pages={1: types.SimpleNamespace(size=None)},
+                                             iterate_items=lambda: iter([(item, 0)]))
             return types.SimpleNamespace(document=document, status="success")
     converter_module.DocumentConverter = Converter
     monkeypatch.setattr("importlib.metadata.version", lambda name: "2.70.0")

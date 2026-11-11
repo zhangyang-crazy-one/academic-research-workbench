@@ -28,9 +28,7 @@ from arw.kernel.state.models import RuntimeCommandRequest
 from arw.kernel.state.orchestration_models import GateDecision
 from arw.pdf_extraction import (
     MAX_PDF_BYTES,
-    extract_docling_local,
-    extract_grobid,
-    extract_pdf_from_root,
+    extract_pdf_isolated,
     pdf_human_review_item,
     register_pdf_extraction,
 )
@@ -203,8 +201,8 @@ def handle(args) -> dict[str, object]:
         if not args.grobid_endpoint:
             raise ValueError("GROBID requires an explicit loopback endpoint")
         raw = read_retained_bytes(args.root, args.path, max_bytes=MAX_PDF_BYTES)
-        extraction, text = extract_grobid(
-            raw,
+        extraction, text = extract_pdf_isolated(
+            raw, provider="grobid",
             endpoint=args.grobid_endpoint,
             allow_local_service=args.allow_local_service,
         )
@@ -216,8 +214,8 @@ def handle(args) -> dict[str, object]:
         ):
             raise ValueError("Docling requires only an explicit local artifacts path")
         raw = read_retained_bytes(args.root, args.path, max_bytes=MAX_PDF_BYTES)
-        extraction, text = extract_docling_local(
-            raw, artifacts_path=args.docling_artifacts_path
+        extraction, text = extract_pdf_isolated(
+            raw, provider="docling", artifacts_path=args.docling_artifacts_path
         )
     else:
         if (
@@ -226,7 +224,8 @@ def handle(args) -> dict[str, object]:
             or args.docling_artifacts_path is not None
         ):
             raise ValueError("GROBID options require the grobid provider")
-        extraction, text = extract_pdf_from_root(args.root, args.path)
+        raw = read_retained_bytes(args.root, args.path, max_bytes=MAX_PDF_BYTES)
+        extraction, text = extract_pdf_isolated(raw)
     if args.control_root is not None:
         from arw.composition import files_admin_service
 
@@ -238,9 +237,10 @@ def handle(args) -> dict[str, object]:
     )
     text_path = _write_once(output / f"{extraction.extracted_text_sha256}.txt", text)
     document = canonical_json_bytes(extraction.model_dump(mode="json"))
-    manifest_path = _write_once(
-        output / f"{extraction.extracted_text_sha256}.json", document
-    )
+    from arw.kernel.core.canonical import sha256_hex
+
+    manifest_digest = sha256_hex(document)
+    manifest_path = _write_once(output / f"{manifest_digest}.json", document)
     result: dict[str, object] = {
         "extraction": extraction.model_dump(mode="json"),
         "text_path": str(text_path),
@@ -250,7 +250,7 @@ def handle(args) -> dict[str, object]:
     review = pdf_human_review_item(extraction)
     if review is not None:
         review_path = _write_once(
-            output / f"{extraction.extracted_text_sha256}.review.json",
+            output / f"{manifest_digest}.review.json",
             canonical_json_bytes(review.model_dump(mode="json")),
         )
         result["human_review"] = review.model_dump(mode="json")
