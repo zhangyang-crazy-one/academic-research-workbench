@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: >-
+  If you use Academic Research Workbench, please cite this software.
+  Component licenses and upstream attribution remain separately applicable.
+title: Academic Research Workbench
+authors:
+  - name: Academic Research Workbench contributors
+type: software
+version: 0.2.1
+abstract: Headless, auditable research-workflow control plane for Codex.
+repository-code: https://github.com/zhangyang-crazy-one/academic-research-workbench
+url: https://github.com/zhangyang-crazy-one/academic-research-workbench
+license-url: https://github.com/zhangyang-crazy-one/academic-research-workbench/blob/main/LICENSE
