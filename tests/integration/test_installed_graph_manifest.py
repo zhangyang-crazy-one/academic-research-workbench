@@ -387,3 +387,26 @@ def test_launcher_binds_plugin_manifest_env(command: str) -> None:
     assert "$PLUGIN_ROOT/.codex-plugin/plugin.json" in case_body
     # Installed commands refuse to run if the bundled manifest is missing.
     assert 'fail "plugin-manifest-missing"' in case_body
+
+
+def test_launcher_resume_binds_manifest_only_for_memory_handoff() -> None:
+    """``resume --memory-handoff`` uses the memory manifest binding.
+
+    Ordinary resume stays on the generic runtime arm and must not gain a
+    manifest requirement (#145).
+    """
+
+    script = LAUNCHER_PATH.read_text(encoding="utf-8")
+    dispatch = script[script.rfind('case "$COMMAND" in') :]
+    resume_start = dispatch.index("  resume)\n") + len("  resume)\n")
+    resume_body = dispatch[resume_start : dispatch.index("\n    ;;\n", resume_start)]
+    generic_start = dispatch.index("  *)\n") + len("  *)\n")
+    generic_body = dispatch[generic_start : dispatch.index("\n    ;;\n", generic_start)]
+
+    assert "--memory-handoff" in resume_body
+    assert resume_body.index("--memory-handoff") < resume_body.index(
+        "export ARW_PLUGIN_MANIFEST="
+    )
+    assert "$PLUGIN_ROOT/.codex-plugin/plugin.json" in resume_body
+    assert 'fail "plugin-manifest-missing"' in resume_body
+    assert "export ARW_PLUGIN_MANIFEST=" not in generic_body
