@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -19,7 +23,8 @@ from tests.file_plane_helpers import canonical_request, invoke_jsonrpc_process
 from .normalize import read_golden_json
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-NATIVE_BINARY = REPOSITORY_ROOT / ".file-base" / "bin" / "file-base"
+REAL_NATIVE_BINARY = REPOSITORY_ROOT / ".file-base" / "bin" / "file-base"
+NATIVE_BINARY = REAL_NATIVE_BINARY
 GOLDEN_DIR = Path(__file__).parent / "golden" / "filebase"
 
 pytestmark = [
@@ -28,33 +33,57 @@ pytestmark = [
 ]
 
 
-def test_native_binary_has_no_modern_discovery(tmp_path: Path) -> None:
-    """A probe must not mistake the pinned legacy C server for a modern one."""
-    result = invoke_jsonrpc_process(
-        [str(NATIVE_BINARY)],
-        [
-            canonical_request(
-                1,
-                "server/discover",
-                {
-                    "_meta": {
-                        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-                        "io.modelcontextprotocol/clientCapabilities": {},
-                    }
-                },
-            )
-        ],
-        cwd=tmp_path,
-        environment={
-            "CBM_ALLOWED_ROOT": str(tmp_path),
-            "CBM_ALLOWED_ROOT_ID": "research-root",
+@contextmanager
+def _isolated_native_environment(
+    tmp_path: Path, *, allowed_root: Path, allowed_root_id: str
+) -> Iterator[dict[str, str]]:
+    with tempfile.TemporaryDirectory(prefix="arw-fb-") as runtime_dir:
+        environment = {
+            "CBM_ALLOWED_ROOT": str(allowed_root),
+            "CBM_ALLOWED_ROOT_ID": allowed_root_id,
             "CBM_CACHE_DIR": str(tmp_path / "cache"),
+            "CBM_RUNTIME_DIR": runtime_dir,
             "CBM_DISABLE_UPDATE_CHECK": "1",
             "CBM_LOG_LEVEL": "error",
             "HOME": str(tmp_path / "home"),
             "PATH": os.environ["PATH"],
-        },
-    )
+        }
+        try:
+            yield environment
+        finally:
+            if REAL_NATIVE_BINARY.is_file() and os.access(REAL_NATIVE_BINARY, os.X_OK):
+                subprocess.run(
+                    [str(REAL_NATIVE_BINARY), "daemon", "stop"],
+                    cwd=tmp_path,
+                    env=environment,
+                    capture_output=True,
+                    check=False,
+                    timeout=5,
+                )
+
+
+def test_native_binary_has_no_modern_discovery(tmp_path: Path) -> None:
+    """A probe must not mistake the pinned legacy C server for a modern one."""
+    with _isolated_native_environment(
+        tmp_path, allowed_root=tmp_path, allowed_root_id="research-root"
+    ) as environment:
+        result = invoke_jsonrpc_process(
+            [str(NATIVE_BINARY)],
+            [
+                canonical_request(
+                    1,
+                    "server/discover",
+                    {
+                        "_meta": {
+                            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                            "io.modelcontextprotocol/clientCapabilities": {},
+                        }
+                    },
+                )
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        )
     assert result.completed.returncode == 0, result.completed.stderr[-500:]
     assert len(result.responses) == 1
     assert "result" not in result.responses[0]
@@ -63,33 +92,27 @@ def test_native_binary_has_no_modern_discovery(tmp_path: Path) -> None:
 
 def test_native_binary_surface_matches_golden(tmp_path: Path) -> None:
     """Protocol negotiation + tool list of the pinned binary are frozen."""
-    environment = {
-        "CBM_ALLOWED_ROOT": str(tmp_path),
-        "CBM_ALLOWED_ROOT_ID": "research-root",
-        "CBM_CACHE_DIR": str(tmp_path / "cache"),
-        "CBM_DISABLE_UPDATE_CHECK": "1",
-        "CBM_LOG_LEVEL": "error",
-        "HOME": str(tmp_path / "home"),
-        "PATH": os.environ["PATH"],
-    }
-    result = invoke_jsonrpc_process(
-        [str(NATIVE_BINARY)],
-        [
-            canonical_request(
-                1,
-                "initialize",
-                {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "v2-compat-baseline", "version": "1.0.0"},
-                },
-            ),
-            '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}',
-            canonical_request(2, "tools/list", {}),
-        ],
-        cwd=tmp_path,
-        environment=environment,
-    )
+    with _isolated_native_environment(
+        tmp_path, allowed_root=tmp_path, allowed_root_id="research-root"
+    ) as environment:
+        result = invoke_jsonrpc_process(
+            [str(NATIVE_BINARY)],
+            [
+                canonical_request(
+                    1,
+                    "initialize",
+                    {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "v2-compat-baseline", "version": "1.0.0"},
+                    },
+                ),
+                '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}',
+                canonical_request(2, "tools/list", {}),
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        )
     assert result.completed.returncode == 0, result.completed.stderr[-500:]
 
     golden = read_golden_json(GOLDEN_DIR / "native_surface.json")
@@ -129,15 +152,6 @@ def test_native_read_file_call_envelopes_match_golden(tmp_path: Path) -> None:
     these goldens pin actual native read_file behavior on the confinement
     fixture root.
     """
-    environment = {
-        "CBM_ALLOWED_ROOT": str(CONFINEMENT_ALLOWED),
-        "CBM_ALLOWED_ROOT_ID": "phase1-fixture",
-        "CBM_CACHE_DIR": str(tmp_path / "cache"),
-        "CBM_DISABLE_UPDATE_CHECK": "1",
-        "CBM_LOG_LEVEL": "error",
-        "HOME": str(tmp_path / "home"),
-        "PATH": os.environ["PATH"],
-    }
     read_args = {
         "schema_version": "1.0.0",
         "allowed_root": "phase1-fixture",
@@ -145,25 +159,28 @@ def test_native_read_file_call_envelopes_match_golden(tmp_path: Path) -> None:
         "max_bytes": 4096,
         "max_lines": 200,
     }
-    result = invoke_jsonrpc_process(
-        [str(NATIVE_BINARY)],
-        [
-            canonical_request(
-                1,
-                "initialize",
-                {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "v2-compat-baseline", "version": "1.0.0"},
-                },
-            ),
-            '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}',
-            _native_call(2, "read_file", read_args),
-            _native_call(3, "read_file", {**read_args, "relative_path": "../outside/secret.txt"}),
-        ],
-        cwd=tmp_path,
-        environment=environment,
-    )
+    with _isolated_native_environment(
+        tmp_path, allowed_root=CONFINEMENT_ALLOWED, allowed_root_id="phase1-fixture"
+    ) as environment:
+        result = invoke_jsonrpc_process(
+            [str(NATIVE_BINARY)],
+            [
+                canonical_request(
+                    1,
+                    "initialize",
+                    {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "v2-compat-baseline", "version": "1.0.0"},
+                    },
+                ),
+                '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}',
+                _native_call(2, "read_file", read_args),
+                _native_call(3, "read_file", {**read_args, "relative_path": "../outside/secret.txt"}),
+            ],
+            cwd=tmp_path,
+            environment=environment,
+        )
     assert result.completed.returncode == 0, result.completed.stderr[-500:]
 
     golden = read_golden_json(GOLDEN_DIR / "native_calls.json")

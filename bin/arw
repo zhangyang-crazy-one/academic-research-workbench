@@ -10,6 +10,7 @@ Commands:
   route --json   Emit the installed read-only ARS workflow route.
   version --json Report the installed packaged build identity.
   files          Administer registered roots and immutable file generations.
+  evidence       Produce read-only dependency impact checklists for source updates.
   writing        Prepare and record source-bound manuscript revisions.
   narrative      Register and select a fixed project paper argument strategy.
   review         Diagnose advisory concerns and export source-bound PROV.
@@ -63,7 +64,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-  health|route|version|files|writing|narrative|claims|disclosure|review|numeric|selection-audit|semantic|experiment|learn|memory|research|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
+  health|route|version|files|evidence|writing|narrative|claims|disclosure|review|numeric|selection-audit|semantic|experiment|learn|memory|research|submission|_memory-mcp|artifact|citation|pdf|provenance|_files-mcp|_files-store-mcp|_graph-mcp|storm|init|append|replay|status|transition|decision-request|decision-resolve|attempt-start|attempt-close|artifact-accept|checkpoint|resume|recover|passport-pointer-rebuild|orchestration-prepare|orchestration-dispatch|orchestration-panel|orchestration-gate|orchestration-hook|orchestration-recover|execution-context|execution-metadata|execution-bind|execution-provenance) ;;
   *)
     fail "unknown-command" "unsupported command: $COMMAND" 64
     ;;
@@ -272,11 +273,6 @@ bootstrap_wheel_runtime() {
     fi
     exit "$status"
   fi
-  PYTHON_VERSION="$("$PYTHON" -I -S -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')" \
-    || fail "interpreter-failed" "selected Python could not report its version" 78
-  if ! python_is_supported "$PYTHON"; then
-    fail "incompatible-interpreter" "requires Python >=3.13; got $PYTHON_VERSION" 78
-  fi
 
   unset PYTHONPATH PYTHONHOME
   export PYTHONNOUSERSITE=1
@@ -293,12 +289,18 @@ from pathlib import Path
 
 plugin_root = Path(sys.argv[1]).resolve()
 wheel_dir = Path(sys.argv[2]).resolve()
-def sha(path):
+digests: dict[Path, str] = {}
+def sha(path: Path) -> str:
+    cached = digests.get(path)
+    if cached is not None:
+        return cached
     value = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
-    return value.hexdigest()
+    result = value.hexdigest()
+    digests[path] = result
+    return result
 
 def object_at(relative):
     path = plugin_root / relative
@@ -338,11 +340,7 @@ if len(wheels) != 1 or wheels[0].is_symlink() or not wheels[0].is_file():
     raise SystemExit("staged first-party ARW wheel is missing or ambiguous")
 if not wheels[0].resolve().is_relative_to(plugin_root):
     raise SystemExit("staged ARW wheel escapes the plugin root")
-digest = hashlib.sha256()
-with wheels[0].open("rb") as stream:
-    for block in iter(lambda: stream.read(1024 * 1024), b""):
-        digest.update(block)
-observed = digest.hexdigest()
+observed = sha(wheels[0])
 identity_path = plugin_root / "share/arw/build-identity.json"
 try:
     binding = identity["runtime_artifact"]["first_party_wheel"]
@@ -700,12 +698,33 @@ PY
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli _graph-mcp "$@"
     ;;
-  writing|semantic|learn|memory|artifact|submission|claims|numeric|disclosure|review)
+  writing|semantic|learn|memory|artifact|submission|claims|numeric|disclosure|review|provenance|evidence)
     [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
       || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
     export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
     exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli "$COMMAND" "$@"
+    ;;
+  resume)
+    needs_manifest=0
+    help_requested=0
+    for arg in "$@"; do
+      case "$arg" in
+        -h|--help) help_requested=1 ;;
+        --memory-handoff|--memory-handoff=*) needs_manifest=1 ;;
+      esac
+    done
+    if [[ "$needs_manifest" -eq 1 && "$help_requested" -eq 0 ]]; then
+      [[ -f "$PLUGIN_ROOT/.codex-plugin/plugin.json" ]] \
+        || fail "plugin-manifest-missing" "installed plugin manifest is missing" 66
+      export ARW_PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
+    fi
+    export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"
+    export ARW_SCHEMA_ROOT="$PLUGIN_ROOT/share/arw/schemas"
+    if [[ "$ARW_RUNTIME_MODE" == "agent" ]]; then
+      export ARW_SCHEMA_ROOT="$SCHEMA_ROOT"
+    fi
+    exec "$RUNTIME_PYTHON" "${PYTHON_FLAGS[@]}" -m arw.cli resume "$@"
     ;;
   files)
     export ARW_PLUGIN_ROOT="$PLUGIN_ROOT"

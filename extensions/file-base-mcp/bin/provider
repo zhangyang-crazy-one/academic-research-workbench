@@ -86,6 +86,41 @@ fi
 mkdir -p -- "$CBM_CACHE_DIR"
 [[ -d "$CBM_CACHE_DIR" && ! -L "$CBM_CACHE_DIR" ]] \
   || { printf 'file-base-mcp: CBM_CACHE_DIR must be a non-symlink directory\n' >&2; exit 66; }
+if [[ -n "${CBM_RUNTIME_DIR:-}" ]]; then
+  [[ "$CBM_RUNTIME_DIR" == /* ]] \
+    || { printf 'file-base-mcp: CBM_RUNTIME_DIR must be absolute\n' >&2; exit 64; }
+  [[ -d "$CBM_RUNTIME_DIR" && ! -L "$CBM_RUNTIME_DIR" && -O "$CBM_RUNTIME_DIR" ]] \
+    || { printf 'file-base-mcp: CBM_RUNTIME_DIR must be an existing owner-private non-symlink directory\n' >&2; exit 66; }
+else
+  # Keep file-base off upstream codebase-memory-mcp's /tmp/cbm-daemon-<uid>
+  # rendezvous while staying within POSIX sun_path (~104 bytes on macOS).
+  candidate_rt="$CBM_CACHE_DIR/rt"
+  if [[ ${#candidate_rt} -le 56 ]]; then
+    mkdir -m 0700 -p -- "$candidate_rt"
+    [[ -d "$candidate_rt" && ! -L "$candidate_rt" && -O "$candidate_rt" ]] \
+      || { printf 'file-base-mcp: could not secure cache runtime directory\n' >&2; exit 66; }
+    chmod 0700 -- "$candidate_rt"
+    export CBM_RUNTIME_DIR="$candidate_rt"
+  else
+    if command -v sha256sum >/dev/null 2>&1; then
+      cache_tag="$(printf '%s' "$CBM_CACHE_DIR" | sha256sum | cut -c1-12)"
+    elif command -v shasum >/dev/null 2>&1; then
+      cache_tag="$(printf '%s' "$CBM_CACHE_DIR" | shasum -a 256 | cut -c1-12)"
+    else
+      cache_tag="$(printf '%s' "$CBM_CACHE_DIR" | cksum | awk '{print $1}')"
+    fi
+    tmp_base="/tmp"
+    [[ -d "/private/tmp" && ! -L "/private/tmp" ]] && tmp_base="/private/tmp"
+    candidate_rt="$tmp_base/arw-fb-$(id -u)-$cache_tag"
+    mkdir -m 0700 -- "$candidate_rt" 2>/dev/null || true
+    if [[ -d "$candidate_rt" && ! -L "$candidate_rt" && -O "$candidate_rt" ]]; then
+      chmod 0700 -- "$candidate_rt"
+      export CBM_RUNTIME_DIR="$candidate_rt"
+    else
+      export CBM_RUNTIME_DIR="$(mktemp -d "$tmp_base/arw-fb.XXXXXX")"
+    fi
+  fi
+fi
 [[ -x "$CBM_BIN" ]] \
   || { printf 'file-base-mcp: installed native executable is missing\n' >&2; exit 127; }
 

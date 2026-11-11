@@ -174,6 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
     configure_disclosure(subparsers)
     from arw.cli_claims import configure as configure_claims
     configure_claims(subparsers)
+    from arw.cli_evidence import configure as configure_evidence
+    configure_evidence(subparsers)
     from arw.cli_numeric import configure as configure_numeric
     configure_numeric(subparsers)
     from arw.cli_selection_audit import configure as configure_selection_audit
@@ -734,6 +736,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"arw: disclosure-error: {error}", file=sys.stderr)
             return 65
 
+    if args.command == "evidence":
+        from arw.cli_evidence import handle as handle_evidence
+        from arw.kernel.capabilities import CapabilityUnavailable
+
+        try:
+            result = handle_evidence(args)
+            _write_json(result)
+            return 0 if result.get("status") == "review_required" else 65
+        except (CapabilityUnavailable, ValidationError, ValueError, RuntimeError, OSError) as error:
+            _write_json(
+                {
+                    "status": "error",
+                    "code": (
+                        "CapabilityUnavailable"
+                        if isinstance(error, CapabilityUnavailable)
+                        else getattr(error, "code", "evidence_request_invalid")
+                    ),
+                    "message": str(error)[:256],
+                }
+            )
+            return 65
+
     if args.command in {"claims", "numeric"}:
         if args.command == "claims":
             from arw.cli_claims import handle
@@ -799,22 +823,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json({"status": "error", "code": ("CapabilityUnavailable" if isinstance(error, CapabilityUnavailable) else getattr(error, "code", "memory_request_invalid"))})
             return 65
     if args.command == "artifact":
-        from arw.composition import default_router
+        from arw.composition import default_router, resolve_plugin_manifest
         from arw.kernel.capabilities import CapabilityUnavailable
 
         try:
-            manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
-            if manifest_env:
-                manifest_path = Path(manifest_env)
-            elif os.environ.get("ARW_PLUGIN_ROOT"):
-                raise ValueError("plugin_manifest_missing")
-            else:
-                candidate = (
-                    Path(__file__).resolve().parents[2]
-                    / ".codex-plugin"
-                    / "plugin.json"
-                )
-                manifest_path = candidate if candidate.is_file() else None
+            manifest_path = resolve_plugin_manifest(fallback_anchor=Path(__file__))
             research_mode = args.artifact_command not in {"inspect", "sanitize"} or (args.artifact_command == "inspect" and args.artifact_id is not None)
             if research_mode:
                 from arw.cli_research_artifact import handle
@@ -1069,7 +1082,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         provider = router.resolve("knowledge.graph")
         return run_stdio(GraphMcpServer(provider._store))
     if args.command == "provenance":
-        from arw.composition import default_router
+        from arw.composition import (
+            declared_capabilities,
+            default_router,
+            resolve_plugin_manifest,
+        )
         from arw.kernel.capabilities import CapabilityUnavailable
         from arw.kernel.core.canonical import sha256_hex
         from arw.kernel.ledger.journal import locked_replay
@@ -1078,6 +1095,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         lock_stack = ExitStack()
         try:
+            manifest_path = resolve_plugin_manifest(fallback_anchor=Path(__file__))
+            if manifest_path is not None and "provenance" not in set(
+                declared_capabilities(manifest_path)
+            ):
+                raise CapabilityUnavailable("knowledge.provenance")
             _, replayed = lock_stack.enter_context(
                 locked_replay(args.run_root, lock_timeout=args.lock_timeout)
             )
@@ -1162,6 +1184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     record_id: record.checksum
                     for record_id, record in canonical_records.items()
                 },
+                plugin_manifest=manifest_path,
             )
             provider = router.resolve("knowledge.provenance")
             if args.provenance_action == "record":
@@ -1775,18 +1798,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                 try:
                     if args.memory_project_root is None:
                         raise ValueError("handoff resume requires explicit project root")
-                    from arw.composition import default_router
+                    from arw.composition import default_router, resolve_plugin_manifest
+                    from arw.kernel.capabilities import CapabilityUnavailable
                     from arw.kernel.state.research_memory import MemoryQuery
-                    manifest = os.environ.get("ARW_PLUGIN_MANIFEST")
-                    if os.environ.get("ARW_PLUGIN_ROOT") and not manifest:
-                        raise ValueError("plugin_manifest_missing")
-                    memory = default_router(memory_project_root=args.memory_project_root,
+
+                    manifest_path = resolve_plugin_manifest(
+                        fallback_anchor=Path(__file__)
+                    )
+                    memory = default_router(
+                        memory_project_root=args.memory_project_root,
                         memory_run_root=args.run_root,
-                        plugin_manifest=Path(manifest) if manifest else None).resolve("research.memory.handoff")
+                        plugin_manifest=manifest_path,
+                    ).resolve("research.memory.handoff")
                     handoff = memory.resume_handoff(args.memory_handoff,
                         query=MemoryQuery(max_tokens=args.memory_max_tokens))
                 except (ValueError, RuntimeError, OSError) as error:
-                    _write_json({"status": "error", "code": getattr(error, "code", "memory_request_invalid")})
+                    error_code = (
+                        "CapabilityUnavailable"
+                        if isinstance(error, CapabilityUnavailable)
+                        else str(error)
+                        if str(error) in {"plugin_manifest_missing", "plugin_manifest_unreadable"}
+                        else getattr(error, "code", "memory_request_invalid")
+                    )
+                    _write_json({"status": "error", "code": error_code})
                     return 65
             if args.command == "resume":
                 from arw.kernel.ledger.narrative import bound_trail_summary, guard_run

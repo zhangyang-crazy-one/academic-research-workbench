@@ -29,6 +29,7 @@ def core_provider_records(*, probe: bool = True) -> list[dict[str, object]]:
     candidates = (
         ("artifact.inspect", "arw_artifact_integrity.service", "local_artifact", False),
         ("artifact.sanitize", "arw_artifact_integrity.service", "local_artifact", True),
+        ("evidence.impact", "arw.evidence_revision", "evidence_revision", True),
         ("research.literature", "arw_ars", "bundled_ars", False),
         ("research.artifact.compile", "arw_research_artifact.service", "research_artifact", True),
         ("research.memory.search", "arw_research_memory.service", "research_memory", True),
@@ -159,6 +160,9 @@ def default_router(
 
     router.register_optional("artifact.inspect", _artifact_integrity)
     router.register_optional("artifact.sanitize", _artifact_integrity)
+    router.register_optional(
+        "evidence.impact", lambda: import_module("arw.evidence_revision")
+    )
 
     # Optional research engines degrade to capability-not-available receipts
     # when their extras are not installed (never an import error).
@@ -251,7 +255,7 @@ def default_router(
             "research": ("research.literature", "research.deep_survey"),
             "literature": ("research.literature",),
             "experiment": ("research.experiment",),
-            "evidence": (),
+            "evidence": ("evidence.impact",),
             "files": ("files.local", "files.search"),
             "graph": ("knowledge.graph",),
             "writing": (*WRITING_CAPABILITIES, AUDIT_CAPABILITY, "writing.narrative_fit"),
@@ -449,14 +453,49 @@ def initialize_memory_project(root, project_id=None):
         raise CapabilityUnavailable("research.memory.save") from error
 
 
-def configured_semantic_provider(store_path, run_root, model_path, model_digest):
+def resolve_plugin_manifest(*, fallback_anchor: Path | None = None) -> Path | None:
+    """Resolve the active plugin manifest fail-closed in installed mode.
+
+    1. Explicit ``ARW_PLUGIN_MANIFEST`` must name a readable regular file.
+    2. ``ARW_PLUGIN_ROOT`` without ``ARW_PLUGIN_MANIFEST`` fails closed so wheel
+       installations never skip capability gating.
+    3. Otherwise fall back to the source checkout's ``.codex-plugin/plugin.json``
+       when present, or ``None`` for out-of-tree development runs.
+    """
+    manifest_env = os.environ.get("ARW_PLUGIN_MANIFEST")
+    if manifest_env:
+        path = Path(manifest_env)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("plugin_manifest_unreadable")
+        return path
+    if os.environ.get("ARW_PLUGIN_ROOT"):
+        raise ValueError("plugin_manifest_missing")
+    anchor = fallback_anchor if fallback_anchor is not None else Path(__file__)
+    candidate = anchor.resolve().parents[2] / ".codex-plugin" / "plugin.json"
+    return candidate if candidate.is_file() and not candidate.is_symlink() else None
+
+
+def configured_semantic_provider(
+    store_path, run_root, model_path, model_digest, *, plugin_manifest: Path | None = None
+):
     from arw.kernel.capabilities import CapabilityUnavailable
+
+    manifest = (
+        plugin_manifest if plugin_manifest is not None else resolve_plugin_manifest()
+    )
+    if manifest is not None and "semantic" not in set(declared_capabilities(manifest)):
+        raise CapabilityUnavailable("knowledge.semantic_search")
     try:
         import_module("sqlite_vec")
         backend = import_module("arw_ext.local_store.local_embedding").LocalTokenEmbedding(model_path, expected_digest=model_digest)
     except ImportError as error:
         raise CapabilityUnavailable("knowledge.semantic_search (install semantic extra)") from error
-    return default_router(store_path=store_path, semantic_run_root=run_root, embedding_backend=backend).resolve("knowledge.semantic_search")
+    return default_router(
+        store_path=store_path,
+        semantic_run_root=run_root,
+        embedding_backend=backend,
+        plugin_manifest=manifest,
+    ).resolve("knowledge.semantic_search")
 
 
 def storm_components():

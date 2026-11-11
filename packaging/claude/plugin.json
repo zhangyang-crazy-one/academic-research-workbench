@@ -14,5 +14,23 @@
     "submission"
   ],
   "hooks": "./hooks/claude-hooks.json",
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "capabilities": [
+      "research",
+      "literature",
+      "experiment",
+      "evidence",
+      "files",
+      "graph",
+      "provenance",
+      "artifact",
+      "memory",
+      "learning",
+      "semantic",
+      "audit",
+      "writing",
+      "submission"
+    ]
+  }
 }
