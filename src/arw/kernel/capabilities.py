@@ -92,6 +92,7 @@ CAPABILITIES: tuple[str, ...] = (
     "submission.check_observe",
 
     "research.experiment",
+    "evidence.impact",
     "artifact.inspect",
     "artifact.sanitize",
     "audit.replay",

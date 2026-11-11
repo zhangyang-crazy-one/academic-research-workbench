@@ -351,6 +351,10 @@ def test_cli_graph_mcp_source_development_allows_missing_manifest(
         "submission",
         "claims",
         "numeric",
+        "disclosure",
+        "review",
+        "provenance",
+        "evidence",
     ],
 )
 def test_launcher_binds_plugin_manifest_env(command: str) -> None:

@@ -1,6 +1,7 @@
 """Physical provider locations and unchanged native wire surface through extension."""
 
 import ast
+import hashlib
 import os
 import shutil
 import subprocess
@@ -82,32 +83,52 @@ def test_native_surface_through_relocated_provider(tmp_path, monkeypatch):
         shutil.copy2(binary, plugin / "libexec/file-base-mcp")
     allowed = tmp_path / "allowed"
     allowed.mkdir()
+    cache_dir = tmp_path / "cache"
     environment = {
         "CBM_ALLOWED_ROOT": str(allowed),
         "CBM_ALLOWED_ROOT_ID": "research-root",
-        "CBM_CACHE_DIR": str(tmp_path / "cache"),
+        "CBM_CACHE_DIR": str(cache_dir),
         "CBM_DISABLE_UPDATE_CHECK": "1",
         "CBM_LOG_LEVEL": "error",
         "HOME": str(tmp_path / "home"),
         "PATH": os.environ["PATH"],
     }
-    result = invoke_jsonrpc_process(
-        [str(plugin / "scripts/file-base-mcp")],
-        [
-            canonical_request(
-                1,
-                "initialize",
-                {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "fixture", "version": "1"},
-                },
-            ),
-            canonical_request(2, "tools/list", {}),
-        ],
-        environment=environment,
-        cwd=tmp_path,
+    tmp_base = Path("/private/tmp") if Path("/private/tmp").is_dir() else Path("/tmp")
+    derived_rt = (
+        cache_dir / "rt"
+        if len(str(cache_dir / "rt")) <= 56
+        else tmp_base
+        / f"arw-fb-{os.geteuid()}-{hashlib.sha256(str(cache_dir).encode()).hexdigest()[:12]}"
     )
+    try:
+        result = invoke_jsonrpc_process(
+            [str(plugin / "scripts/file-base-mcp")],
+            [
+                canonical_request(
+                    1,
+                    "initialize",
+                    {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "fixture", "version": "1"},
+                    },
+                ),
+                canonical_request(2, "tools/list", {}),
+            ],
+            environment=environment,
+            cwd=tmp_path,
+        )
+    finally:
+        if derived_rt.is_dir():
+            subprocess.run(
+                [str(binary), "daemon", "stop"],
+                cwd=tmp_path,
+                env={**environment, "CBM_RUNTIME_DIR": str(derived_rt)},
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            shutil.rmtree(derived_rt, ignore_errors=True)
     golden = read_golden_json(ROOT / "tests/compat/golden/filebase/native_surface.json")
     responses = result.responses
     assert responses[0]["result"]["capabilities"] == golden["capabilities"]

@@ -150,30 +150,44 @@ def _write_evidence(
 
 
 def _invoke_native(case: ReadCase, tmp_path: Path) -> tuple[dict[str, Any], Path]:
+    import tempfile
+
     assert NATIVE_BINARY.is_file() and os.access(NATIVE_BINARY, os.X_OK)
-    environment = {
-        "CBM_ALLOWED_ROOT": str(ALLOWED_ROOT.resolve()),
-        "CBM_ALLOWED_ROOT_ID": ROOT_CAPABILITY,
-        "CBM_CACHE_DIR": str(tmp_path / "cache"),
-        "CBM_DISABLE_UPDATE_CHECK": "1",
-        "CBM_LOG_LEVEL": "error",
-        "HOME": str(tmp_path / "home"),
-        "PATH": os.environ["PATH"],
-    }
     requests = [
         _rpc(1, "tools/list", {}),
         _rpc(2, "tools/call", {"name": "read_file", "arguments": case.request}),
     ]
-    result = subprocess.run(
-        [str(NATIVE_BINARY)],
-        cwd=tmp_path,
-        env=environment,
-        input="\n".join(requests) + "\n",
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=15,
-    )
+    with tempfile.TemporaryDirectory(prefix="arw-fb-") as runtime_dir:
+        environment = {
+            "CBM_ALLOWED_ROOT": str(ALLOWED_ROOT.resolve()),
+            "CBM_ALLOWED_ROOT_ID": ROOT_CAPABILITY,
+            "CBM_CACHE_DIR": str(tmp_path / "cache"),
+            "CBM_RUNTIME_DIR": runtime_dir,
+            "CBM_DISABLE_UPDATE_CHECK": "1",
+            "CBM_LOG_LEVEL": "error",
+            "HOME": str(tmp_path / "home"),
+            "PATH": os.environ["PATH"],
+        }
+        try:
+            result = subprocess.run(
+                [str(NATIVE_BINARY)],
+                cwd=tmp_path,
+                env=environment,
+                input="\n".join(requests) + "\n",
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
+        finally:
+            subprocess.run(
+                [str(NATIVE_BINARY), "daemon", "stop"],
+                cwd=tmp_path,
+                env=environment,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
     try:
         responses = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
     except json.JSONDecodeError as error:
