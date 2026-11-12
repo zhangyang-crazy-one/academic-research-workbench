@@ -26,3 +26,9 @@ Snapshot digest reuse, cross-process preflight deduplication and installed-comma
 - [x] 5.1 Align package, plugin, launcher and release metadata; preserve old IntegrationLock readers and verify current identity consistency and mismatch rejection.
 - [ ] 5.2 Review the metadata PR, then generate signed main CI subjects and fresh portable installed-core qualification for the final release commit.
 - [ ] 5.3 Obtain the actual owner use/distribution declaration and independently verify publication authority before publishing the new tag.
+
+## 6. Build-identity schema inventory capacity (#166)
+
+- [x] 6.1 Admit the complete current registry within an explicit bounded capacity; add an always-collected complete-projection regression and preserve overflow, missing-entry and unknown-path rejection.
+- [ ] 6.2 Verify real portable installed-core qualification from the final approved release candidate after the capacity fix is merged; branch trial evidence alone cannot complete this publication gate.
+- [ ] 6.3 Obtain owner review before merge and regenerate final-source CI subjects and release evidence afterward.

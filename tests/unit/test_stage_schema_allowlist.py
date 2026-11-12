@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import jsonschema
 import pytest
+
+from arw.kernel.policy.core_stage_allowlist import allowed_stage_path
+from arw.kernel.policy.schema_registry import (
+    SCHEMA_NAMES,
+    aggregate_schema_sha256,
+    regenerate_schemas,
+)
 
 
 def test_direction_payload_is_admitted_by_producer_and_installed_reader():
@@ -30,9 +39,6 @@ def test_direction_payload_is_admitted_by_producer_and_installed_reader():
         assert relative in producer and relative in STATIC_STAGE_PATHS
         assert (root / relative).is_file()
 
-
-from arw.kernel.policy.core_stage_allowlist import allowed_stage_path
-from arw.kernel.policy.schema_registry import SCHEMA_NAMES, regenerate_schemas
 
 STAGE_SCRIPT = Path(__file__).resolve().parents[2] / "scripts/stage-plugin"
 
@@ -83,6 +89,35 @@ def test_stage_accepts_the_complete_registered_schema_projection(
         "schemas/v1/release-authority.schema.json",
         "academic_research_workbench-0.2.0-py3-none-any.whl",
     )
+
+
+def test_complete_schema_projection_fits_bounded_build_identity(
+    tmp_path: Path,
+) -> None:
+    entries = regenerate_schemas(tmp_path / "generated")
+    staged_entries = [
+        (path.replace("schemas/v1/", "share/arw/schemas/", 1), digest)
+        for path, digest in entries
+    ]
+    projection = {
+        "aggregate_sha256": aggregate_schema_sha256(staged_entries),
+        "files": [
+            {"path": path, "sha256": digest} for path, digest in staged_entries
+        ],
+    }
+    schema = json.loads(
+        (tmp_path / "generated/build-identity.schema.json").read_text()
+    )
+    validator = jsonschema.Draft202012Validator(
+        {"$ref": "#/$defs/schemaSet", "$defs": schema["$defs"]}
+    )
+    validator.validate(projection)
+    assert len(projection["files"]) == len(SCHEMA_NAMES)
+    limit = schema["$defs"]["schemaSet"]["properties"]["files"]["maxItems"]
+    assert isinstance(limit, int) and 0 < limit <= 256
+    overflow = {**projection, "files": [projection["files"][0]] * (limit + 1)}
+    with pytest.raises(jsonschema.ValidationError, match="too long"):
+        validator.validate(overflow)
 
 
 @pytest.mark.parametrize("extra", ("unregistered.schema.json", "private.txt"))
