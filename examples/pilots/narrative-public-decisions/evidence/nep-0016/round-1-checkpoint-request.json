@@ -1,0 +1,1 @@
+{"actor_id":"pilot.operator","actor_role":"parent_control_plane","checkpoint_kind":"explicit","command_id":"cmd-349e4f55-c20d-4b12-8ab8-89703ac077f3","event_id":"evt-d40f94f3-cbae-4c78-a968-51492abeee08","expected_revision":3,"fresh_until":null,"occurred_at":"2026-10-14T04:33:11Z","run_id":"run-f3e090cf-5302-4b22-b91b-fb5c36813b4f","schema_version":"1.0.0"}

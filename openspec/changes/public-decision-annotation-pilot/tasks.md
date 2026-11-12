@@ -6,6 +6,6 @@
 
 ## 2. Human pilot acceptance
 
-- [ ] 2.1 Owner supplies actual independent status/reason labels and source locators.
-- [ ] 2.2 Import source decisions through existing narrative commands, export trails and compare labels/reasons with counts.
-- [ ] 2.3 Execute two-round handoff/resume and retain abandoned-route notices and current-state equality.
+- [x] 2.1 Record actual owner-confirmed status labels and source locators; reasons remain unknown. Disclose source-explanation assistance and preserve the previous policy responses separately.
+- [x] 2.2 Import fixed public Status through real narrative CLI commands, retain ten trails and source bindings, and report 8 agreements, 1 disagreement, 1 explicit unknown; historical reasons remain unassessed/unknown.
+- [x] 2.3 Execute two real handoff/checkpoint/resume rounds each for NEP 16 and NEP 17; retain four accepted resume events, identical current-state summaries, abandoned-route notices and canonical memory/Passport artifacts.
