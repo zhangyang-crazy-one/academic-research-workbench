@@ -19,7 +19,10 @@
 
 - [x] 4.1 Stream build-identity, core and integration-lock hashes with unchanged digests and fail-closed behavior; verify empty/boundary/large inputs, bounded allocation, I/O failure, replacement, symlinks and fresh processes.
 
-Snapshot digest reuse, cross-process preflight deduplication and installed-command startup A/B remain separate follow-up scope in #150.
+- [x] 4.2 Harden PR171 invocation-local digest reuse with live descriptor/change identity, rejection on drift and end verification; preserve internal build-to-audit sharing while removing public caller-cache trust. Verify real filesystem mutations, FIFO/open races, read errors, fallback, independent public calls and bounded allocation.
+- [ ] 4.3 Measure installed `version`, `route` and memory/files MCP startup A/B wall time, process-tree RSS/PSS and idle/exit behavior before claiming #150 complete.
+
+Cross-process preflight deduplication remains separate follow-up scope. Existing PR171 launcher startup behavior is retained; these tests establish no installed performance result.
 
 ## 5. v0.2.1 release identity (#164)
 
