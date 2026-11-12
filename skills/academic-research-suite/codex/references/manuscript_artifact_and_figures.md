@@ -66,7 +66,7 @@ summaries, separate evidence tiers before making claims:
 When generating a main figure, overview figure, graphical abstract, or teaser
 figure for a paper, do not default to a rigid box-and-arrow architecture diagram.
 First test whether a richer paper visual grammar better communicates the research
-question, motivating example, protocol boundary, and evidence. Use
+question, motivating example, protocol boundary, and evidence. First apply [figure role routing](figure_role_routing.md); use matching sections of
 `ars/academic-paper/references/main_figure_table_standards.md` for the
 figure-narrative brief, style probes, critic gate, and finalization rules.
 
@@ -95,8 +95,9 @@ icons, color arrangement, or distinctive composition. Abstract the reusable
 principle, then design a new artifact from the user's own research question,
 data, evidence, labels, and manuscript argument.
 
-Framework boxes and pipeline arrows are acceptable only when the paper's central
-contribution is literally a system architecture or execution pipeline. For LLM
+Framework boxes and pipeline arrows are acceptable when they communicate the
+scientific objects and relations accurately, or the author explicitly selects
+the strict-box workflow. No diagram grammar is a universal requirement. For LLM
 event extraction, ontology abstraction, prompt optimization, or feasibility
 studies, prefer manuscript-safe visual narratives such as annotated examples,
 evidence dossiers, abstraction lenses, failure-to-protocol contrasts, or

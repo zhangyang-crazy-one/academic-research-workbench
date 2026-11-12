@@ -21,7 +21,9 @@
     "quality_gate_runner": "skills/academic-research-suite/codex/scripts/ars_codex_quality_gates.py",
     "runtime_planner": "skills/academic-research-suite/codex/scripts/ars_codex_full_runtime.py",
     "fact_locked_revision_checker": "skills/academic-research-suite/codex/scripts/check_fact_locked_revision.py",
-    "manuscript_hygiene_checker": "skills/academic-research-suite/codex/scripts/check_manuscript_hygiene.py"
+    "manuscript_hygiene_checker": "skills/academic-research-suite/codex/scripts/check_manuscript_hygiene.py",
+    "figure_role_router": "skills/academic-research-suite/codex/scripts/route_figure.py",
+    "figure_role_rules": "skills/academic-research-suite/codex/references/figure_role_rules.json"
   },
   "commands": [
     {"aliases": ["/ars-plan", "ars-plan"], "recipe": "ars/commands/ars-plan.md", "workflow": "academic-paper", "mode": "plan", "model_hint": "sonnet"},

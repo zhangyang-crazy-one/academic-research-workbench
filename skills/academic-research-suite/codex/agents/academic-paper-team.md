@@ -38,3 +38,11 @@ official source for every current deadline or format rule, and preserve
 `not_announced` values. The venue-year official page overrides a shared review
 schedule for venue-specific milestones. Re-browse official sources before any
 deadline-dependent action.
+
+## Figure tasks
+
+Before dispatching visualization work, run the role brief planner described in
+`codex/references/figure_role_routing.md`. Pass only the selected role rules,
+explicit exclusions, author/verified-venue format decisions and backend gaps
+to the figure task. Do not append the old global statistics or generic image
+style checklist. A supported plan is not a rendered or visually accepted figure.

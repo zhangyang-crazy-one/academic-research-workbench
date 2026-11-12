@@ -1,0 +1,107 @@
+{
+  "source": "ARW-authored public synthetic brief; no empirical outcome",
+  "license": "CC-BY-NC-4.0 (first-party ARS adapter synthetic fixture)",
+  "brief": {
+    "role": "quantitative",
+    "visual_argument": "Compare two exact toy point estimates without perspective.",
+    "scientific_objects": [
+      "public synthetic observation",
+      "public synthetic method"
+    ],
+    "relationship": "Compare the declared toy states; no empirical scientific claim.",
+    "target_mm": {
+      "width": 180,
+      "height": 90
+    },
+    "font_family": "Noto Sans CJK SC, sans-serif",
+    "backend": "v1_result_svg",
+    "requires": [
+      "point_estimates",
+      "intervals"
+    ]
+  },
+  "expected": {
+    "routing_version": "arw.figure-role-rules.v1",
+    "role": "quantitative",
+    "status": "backend_supported",
+    "brief": {
+      "role": "quantitative",
+      "visual_argument": "Compare two exact toy point estimates without perspective.",
+      "scientific_objects": [
+        "public synthetic observation",
+        "public synthetic method"
+      ],
+      "relationship": "Compare the declared toy states; no empirical scientific claim.",
+      "target_mm": {
+        "width": 180,
+        "height": 90
+      },
+      "font_family": "Noto Sans CJK SC, sans-serif",
+      "backend": "v1_result_svg",
+      "requires": [
+        "point_estimates",
+        "intervals"
+      ]
+    },
+    "priority": [
+      "scientific_truth_and_safety",
+      "verified_venue_and_explicit_author",
+      "matching_role",
+      "optional_style"
+    ],
+    "rules": {
+      "scientific_truth": "Every datum, object, relation and uncertainty must be source-grounded; conceptual elements must be labelled. No invented causal edge or result.",
+      "safe_output": "Use the selected backend contract; no scripts, external SVG references, arbitrary execution or admission bypass.",
+      "physical_readability": "Assess fonts and strokes at the declared physical size; pixels and a valid SVG do not establish publication readability.",
+      "caption_boundary": "Figure titles and explanations belong outside the canvas; panel tags and short object labels are allowed.",
+      "format_priority": "Verified venue constraints and explicit author choices apply within scope; report conflicts, retain factual/safety rules and use one font/title policy.",
+      "quantitative_axes": "Use honest axes/units when encoding values, preserving all data, intervals and precision.",
+      "uncertainty_semantics": "Distinguish raw points, precomputed intervals and distributions; never invent an interval.",
+      "fair_comparison": "No misleading comparison perspective or decorative depth that distorts numerical comparison."
+    },
+    "excluded_rules": [
+      "child_roles",
+      "evidence_status",
+      "flat_minimal_muted",
+      "panel_argument",
+      "sourced_depth",
+      "strict_box",
+      "typed_relations"
+    ],
+    "format": {
+      "font_family": "Noto Sans CJK SC, sans-serif",
+      "internal_figure_title": false,
+      "target_mm": {
+        "width": 180,
+        "height": 90
+      }
+    },
+    "backend": "v1_result_svg",
+    "backend_contract": {
+      "roles": [
+        "quantitative"
+      ],
+      "capabilities": [
+        "point_estimates",
+        "raw_points",
+        "intervals",
+        "single_panel",
+        "editable_text"
+      ],
+      "font_family": "Noto Sans CJK SC, sans-serif"
+    },
+    "capability_gaps": [],
+    "conflicts": [],
+    "panels": [],
+    "rendered": false,
+    "scientific_admission": "not_evaluated",
+    "visual_acceptance": "not_evaluated",
+    "load": [
+      "codex/references/figure_role_routing.md"
+    ],
+    "excluded_global_checklists": [
+      "visualization_agent.All Figures",
+      "ai_scientific_image_generation.generic_style_defaults"
+    ]
+  }
+}
